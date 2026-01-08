@@ -190,17 +190,37 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
       required this.zoomLevel});
 
   /// Handles tap on wires for selection, or clears selection if clicking empty space
+  /// Supports modifier keys: Ctrl to toggle, Shift to add
   void _handleWireTap(TapUpDetails details) {
     final painter =
         NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel);
     final hit = painter.findWireAtPosition(details.localPosition);
     if (hit != null) {
-      model.setSelectedWire(
-        hit.sourceNodeId,
-        hit.sourcePinIndex,
-        hit.destNodeId,
-        hit.destParamIndex,
-      );
+      if (HardwareKeyboard.instance.isControlPressed) {
+        // Ctrl+click: toggle wire selection
+        model.toggleWireSelection(
+          hit.sourceNodeId,
+          hit.sourcePinIndex.toInt(),
+          hit.destNodeId,
+          hit.destParamIndex,
+        );
+      } else if (HardwareKeyboard.instance.isShiftPressed) {
+        // Shift+click: add wire to selection
+        model.addWireToSelection(
+          hit.sourceNodeId,
+          hit.sourcePinIndex.toInt(),
+          hit.destNodeId,
+          hit.destParamIndex,
+        );
+      } else {
+        // Normal click: select only this wire
+        model.setSelectedWire(
+          hit.sourceNodeId,
+          hit.sourcePinIndex,
+          hit.destNodeId,
+          hit.destParamIndex,
+        );
+      }
     } else {
       // Clicked on empty space - clear selection
       model.clearSelection();
