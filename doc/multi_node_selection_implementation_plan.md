@@ -645,17 +645,34 @@ if (isSelected) {
 
 ---
 
-### Phase 4: Rectangle Selection (Nodes Only)
+### Phase 4: Rectangle Selection (Flutter-side Implementation)
 
-#### 4.1 Add rectangle selection state
+> **Design Note:** Rectangle selection is implemented entirely in the Flutter frontend. The Rust backend has no concept of rectangle selection—it only provides APIs for selecting multiple nodes and wires. The selection is computed on mouse release, not during drag.
+
+#### 4.0 Selection Criteria
+
+**Overlap-based selection:** Any node or wire that has *any overlap* with the selection rectangle should be selected (not just fully contained elements).
+
+- **Nodes:** Check if the node's bounding rectangle overlaps the selection rectangle
+- **Wires:** Check if the wire's Bezier curve intersects the selection rectangle (sample points along the curve or use bounding box approximation)
+
+#### 4.1 Modifier Key Behavior
+
+| Modifier | Behavior |
+|----------|----------|
+| None | Replace current selection with items in rectangle |
+| Ctrl | Toggle items in rectangle (add if not selected, remove if selected) |
+| Shift | Add items in rectangle to existing selection |
+
+#### 4.2 Add rectangle selection state
 
 **File:** `lib/structure_designer/node_network/node_network.dart`
 
 ```dart
 class NodeNetworkState extends State<NodeNetwork> {
   // Add:
-  Rect? _selectionRect;          // Current rectangle being drawn
-  Offset? _selectionRectStart;   // Start point of rectangle drag
+  Rect? _selectionRect;          // Current rectangle being drawn (screen coords)
+  Offset? _selectionRectStart;   // Start point of rectangle drag (screen coords)
   
   void _handleSelectionRectStart(Offset position) {
     setState(() {
@@ -669,59 +686,195 @@ class NodeNetworkState extends State<NodeNetwork> {
       setState(() {
         _selectionRect = Rect.fromPoints(_selectionRectStart!, position);
       });
+      // Note: No Rust calls during drag - just UI update
     }
   }
   
   void _handleSelectionRectEnd(StructureDesignerModel model) {
-    if (_selectionRect != null && model.nodeNetworkView != null) {
-      final scale = getZoomScale(_zoomLevel);
+    if (_selectionRect == null || model.nodeNetworkView == null) {
+      _clearSelectionRect();
+      return;
+    }
+    
+    final scale = getZoomScale(_zoomLevel);
+    final rect = _selectionRect!;
+    
+    // Find all nodes overlapping the rectangle
+    List<BigInt> nodesInRect = [];
+    for (final entry in model.nodeNetworkView!.nodes.entries) {
+      final node = entry.value;
+      final nodeScreenPos = logicalToScreen(
+        Offset(node.position.x, node.position.y),
+        _panOffset,
+        scale,
+      );
+      final nodeSize = getNodeSize(node, _zoomLevel);
+      final nodeRect = Rect.fromLTWH(
+        nodeScreenPos.dx,
+        nodeScreenPos.dy,
+        nodeSize.width,
+        nodeSize.height,
+      );
       
-      // Find all nodes within the rectangle
-      List<BigInt> nodesInRect = [];
-      for (final entry in model.nodeNetworkView!.nodes.entries) {
-        final node = entry.value;
-        final nodeScreenPos = logicalToScreen(
-          Offset(node.position.x, node.position.y),
-          _panOffset,
-          scale,
-        );
-        final nodeSize = getNodeSize(node, _zoomLevel);
-        final nodeRect = Rect.fromLTWH(
-          nodeScreenPos.dx,
-          nodeScreenPos.dy,
-          nodeSize.width,
-          nodeSize.height,
-        );
-        
-        if (_selectionRect!.overlaps(nodeRect)) {
-          nodesInRect.add(node.id);
-        }
-      }
-      
-      // Apply selection based on modifier keys
-      if (HardwareKeyboard.instance.isControlPressed) {
-        model.toggleNodesSelection(nodesInRect);
-      } else {
-        model.selectNodes(nodesInRect);
+      // Overlap check (any intersection counts)
+      if (rect.overlaps(nodeRect)) {
+        nodesInRect.add(node.id);
       }
     }
     
+    // Find all wires overlapping the rectangle
+    List<ApiWire> wiresInRect = [];
+    for (final wire in model.nodeNetworkView!.wires) {
+      if (_wireOverlapsRect(wire, rect, model, scale)) {
+        wiresInRect.add(wire);
+      }
+    }
+    
+    // Apply selection based on modifier keys
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+    
+    if (isCtrl) {
+      // Toggle: add unselected, remove selected
+      model.toggleNodesSelection(nodesInRect);
+      model.toggleWiresSelection(wiresInRect);
+    } else if (isShift) {
+      // Add to existing selection
+      model.addNodesToSelection(nodesInRect);
+      model.addWiresToSelection(wiresInRect);
+    } else {
+      // Replace selection
+      model.selectNodesAndWires(nodesInRect, wiresInRect);
+    }
+    
+    _clearSelectionRect();
+  }
+  
+  void _clearSelectionRect() {
     setState(() {
       _selectionRect = null;
       _selectionRectStart = null;
     });
   }
+  
+  /// Check if a wire's Bezier curve overlaps the selection rectangle
+  bool _wireOverlapsRect(ApiWire wire, Rect rect, StructureDesignerModel model, double scale) {
+    // Get source and destination pin positions
+    final sourceNode = model.nodeNetworkView!.nodes[wire.sourceNodeId];
+    final destNode = model.nodeNetworkView!.nodes[wire.destinationNodeId];
+    if (sourceNode == null || destNode == null) return false;
+    
+    final sourcePos = _getPinScreenPosition(sourceNode, wire.sourcePin, true, scale);
+    final destPos = _getPinScreenPosition(destNode, wire.destinationPin, false, scale);
+    
+    // Sample points along the Bezier curve and check if any are in rect
+    // or if wire bounding box overlaps rect
+    final wireBounds = _getWireBoundingBox(sourcePos, destPos);
+    if (!rect.overlaps(wireBounds)) return false;
+    
+    // More precise: sample points along curve
+    const samples = 20;
+    for (int i = 0; i <= samples; i++) {
+      final t = i / samples;
+      final point = _sampleBezierPoint(sourcePos, destPos, t);
+      if (rect.contains(point)) return true;
+    }
+    
+    // Also check if rect edges intersect the curve
+    return _bezierIntersectsRect(sourcePos, destPos, rect);
+  }
 }
 ```
 
-#### 4.2 Add rectangle selection gesture handling
+#### 4.3 Rust API Requirements
 
-Modify `_handlePointerDown` / `_handlePointerMove` / `_handlePointerUp` to handle left-click drag on empty space:
+The Rust backend does NOT implement rectangle selection logic. Instead, Flutter uses batch selection APIs to set the selection after computing what's in the rectangle.
+
+**File:** `rust/src/api/structure_designer/structure_designer_api.rs`
+
+##### Existing APIs (already implemented)
+
+| API Function | Purpose | Status |
+|--------------|---------|--------|
+| `select_nodes(node_ids: Vec<u64>)` | Replace selection with multiple nodes | ✅ Exists |
+| `toggle_nodes_selection(node_ids: Vec<u64>)` | Toggle multiple nodes in selection | ✅ Exists |
+| `add_node_to_selection(node_id: u64)` | Add single node to selection | ✅ Exists |
+| `toggle_wire_selection(...)` | Toggle single wire in selection | ✅ Exists |
+| `add_wire_to_selection(...)` | Add single wire to selection | ✅ Exists |
+| `clear_selection()` | Clear all selection | ✅ Exists |
+
+##### New APIs needed for Phase 4
+
+| API Function | Purpose | Status |
+|--------------|---------|--------|
+| `add_nodes_to_selection(node_ids: Vec<u64>)` | Add multiple nodes to selection (Shift+rect) | ❌ **NEW** |
+| `select_wires(wires: Vec<WireIdentifier>)` | Replace selection with multiple wires | ❌ **NEW** |
+| `add_wires_to_selection(wires: Vec<WireIdentifier>)` | Add multiple wires to selection (Shift+rect) | ❌ **NEW** |
+| `toggle_wires_selection(wires: Vec<WireIdentifier>)` | Toggle multiple wires in selection (Ctrl+rect) | ❌ **NEW** |
+| `select_nodes_and_wires(node_ids: Vec<u64>, wires: Vec<WireIdentifier>)` | Replace selection with nodes and wires together | ❌ **NEW** |
+
+##### Wire identifier type
+
+Since wires don't have a single ID, use this structure for batch wire operations:
+
+```rust
+pub struct WireIdentifier {
+    pub source_node_id: u64,
+    pub source_output_pin_index: i32,
+    pub destination_node_id: u64,
+    pub destination_argument_index: usize,
+}
+```
+
+##### Implementation notes
+
+The new batch APIs should follow the same pattern as `select_nodes()` and `toggle_nodes_selection()`:
+
+```rust
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_nodes_to_selection(node_ids: Vec<u64>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      instance.structure_designer.add_nodes_to_selection(node_ids);
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn select_nodes_and_wires(node_ids: Vec<u64>, wires: Vec<WireIdentifier>) {
+  unsafe {
+    with_mut_cad_instance(|instance| {
+      // Clear existing selection and add both nodes and wires
+      instance.structure_designer.clear_selection();
+      for id in node_ids {
+        instance.structure_designer.add_node_to_selection(id);
+      }
+      for wire in wires {
+        instance.structure_designer.add_wire_to_selection(
+          wire.source_node_id,
+          wire.source_output_pin_index,
+          wire.destination_node_id,
+          wire.destination_argument_index,
+        );
+      }
+      refresh_structure_designer_auto(instance);
+    });
+  }
+}
+```
+
+#### 4.4 Add rectangle selection gesture handling
+
+**File:** `lib/structure_designer/node_network/node_network.dart`
+
+Modify pointer handlers to handle left-click drag on empty space:
 
 ```dart
 void _handleLeftMouseDown(PointerDownEvent event) {
-  // Check if clicking on empty space (not on a node)
-  if (!_isClickOnNode(model, event.localPosition)) {
+  // Check if clicking on empty space (not on a node or wire)
+  if (!_isClickOnNode(model, event.localPosition) && 
+      !_isClickOnWire(model, event.localPosition)) {
     _handleSelectionRectStart(event.localPosition);
   }
 }
@@ -729,7 +882,7 @@ void _handleLeftMouseDown(PointerDownEvent event) {
 void _handlePointerMove(PointerMoveEvent event) {
   // ... existing panning code ...
   
-  // Rectangle selection
+  // Rectangle selection - just update the visual, no Rust calls
   if (_selectionRectStart != null && event.buttons == kPrimaryButton) {
     _handleSelectionRectUpdate(event.localPosition);
   }
@@ -738,14 +891,14 @@ void _handlePointerMove(PointerMoveEvent event) {
 void _handlePointerUp(PointerUpEvent event) {
   // ... existing panning code ...
   
-  // Rectangle selection
+  // Rectangle selection - compute and apply selection on release
   if (_selectionRectStart != null) {
     _handleSelectionRectEnd(widget.graphModel);
   }
 }
 ```
 
-#### 4.3 Draw selection rectangle
+#### 4.5 Draw selection rectangle
 
 Add a `CustomPainter` or overlay widget to draw the selection rectangle:
 
@@ -764,6 +917,60 @@ Widget _buildSelectionRectangle() {
       ),
     ),
   );
+}
+```
+
+#### 4.6 Wire intersection helpers
+
+```dart
+/// Get bounding box for a Bezier wire
+Rect _getWireBoundingBox(Offset start, Offset end) {
+  // Account for control points of the Bezier curve
+  final controlOffset = (end.dx - start.dx).abs() * 0.5;
+  final cp1 = Offset(start.dx + controlOffset, start.dy);
+  final cp2 = Offset(end.dx - controlOffset, end.dy);
+  
+  final minX = [start.dx, end.dx, cp1.dx, cp2.dx].reduce(min);
+  final maxX = [start.dx, end.dx, cp1.dx, cp2.dx].reduce(max);
+  final minY = [start.dy, end.dy, cp1.dy, cp2.dy].reduce(min);
+  final maxY = [start.dy, end.dy, cp1.dy, cp2.dy].reduce(max);
+  
+  return Rect.fromLTRB(minX, minY, maxX, maxY);
+}
+
+/// Sample a point on the Bezier curve at parameter t (0..1)
+Offset _sampleBezierPoint(Offset start, Offset end, double t) {
+  final controlOffset = (end.dx - start.dx).abs() * 0.5;
+  final cp1 = Offset(start.dx + controlOffset, start.dy);
+  final cp2 = Offset(end.dx - controlOffset, end.dy);
+  
+  // Cubic Bezier: B(t) = (1-t)³P0 + 3(1-t)²tP1 + 3(1-t)t²P2 + t³P3
+  final u = 1 - t;
+  final tt = t * t;
+  final uu = u * u;
+  final uuu = uu * u;
+  final ttt = tt * t;
+  
+  return Offset(
+    uuu * start.dx + 3 * uu * t * cp1.dx + 3 * u * tt * cp2.dx + ttt * end.dx,
+    uuu * start.dy + 3 * uu * t * cp1.dy + 3 * u * tt * cp2.dy + ttt * end.dy,
+  );
+}
+
+/// Check if Bezier curve intersects rectangle edges
+bool _bezierIntersectsRect(Offset start, Offset end, Rect rect) {
+  // Check if any segment of the sampled curve crosses rect boundary
+  const samples = 20;
+  Offset? prevPoint;
+  for (int i = 0; i <= samples; i++) {
+    final t = i / samples;
+    final point = _sampleBezierPoint(start, end, t);
+    if (prevPoint != null) {
+      if (_lineIntersectsRect(prevPoint, point, rect)) return true;
+    }
+    prevPoint = point;
+  }
+  return false;
 }
 ```
 
