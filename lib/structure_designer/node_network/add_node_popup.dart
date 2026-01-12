@@ -21,7 +21,14 @@ String getCategoryDisplayName(NodeTypeCategory category) {
 }
 
 class AddNodePopup extends StatefulWidget {
-  const AddNodePopup({super.key});
+  final String? filterByCompatibleType;
+  final bool? draggingFromOutput;
+
+  const AddNodePopup({
+    super.key,
+    this.filterByCompatibleType,
+    this.draggingFromOutput,
+  });
 
   @override
   _AddNodePopupState createState() => _AddNodePopupState();
@@ -36,7 +43,15 @@ class _AddNodePopupState extends State<AddNodePopup> {
   @override
   void initState() {
     super.initState();
-    final categories = getNodeTypeViews();
+    List<APINodeCategoryView>? categories;
+    if (widget.filterByCompatibleType != null) {
+      categories = getCompatibleNodeTypes(
+        sourceTypeStr: widget.filterByCompatibleType!,
+        draggingFromOutput: widget.draggingFromOutput ?? true,
+      );
+    } else {
+      categories = getNodeTypeViews();
+    }
     if (categories != null) {
       _allCategories = categories;
     }
@@ -265,10 +280,17 @@ class _AddNodePopupState extends State<AddNodePopup> {
 }
 
 // Function to show the modal popup
-Future<String?> showAddNodePopup(BuildContext context) {
+Future<String?> showAddNodePopup(
+  BuildContext context, {
+  String? filterByCompatibleType,
+  bool? draggingFromOutput,
+}) {
   return showDialog<String>(
     context: context,
     barrierDismissible: true, // Close when tapping outside
-    builder: (context) => AddNodePopup(),
+    builder: (context) => AddNodePopup(
+      filterByCompatibleType: filterByCompatibleType,
+      draggingFromOutput: draggingFromOutput,
+    ),
   );
 }
