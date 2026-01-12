@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
+import 'package:flutter_cad/structure_designer/node_network/comment_node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart' as sd_api;
@@ -709,9 +710,24 @@ class NodeNetworkState extends State<NodeNetwork> {
       // Wire layer at the bottom
       NodeNetworkInteractionLayer(
           model: model, panOffset: _panOffset, zoomLevel: _zoomLevel),
-      // Then all the nodes on top - NodeWidget now handles its own positioning with panOffset
-      ...model.nodeNetworkView!.nodes.entries.map((entry) => NodeWidget(
-          node: entry.value, panOffset: _panOffset, zoomLevel: _zoomLevel)),
+      // Then all the nodes on top - use CommentNodeWidget for Comment nodes
+      ...model.nodeNetworkView!.nodes.entries.map((entry) {
+        final node = entry.value;
+        if (node.nodeTypeName == 'Comment') {
+          return CommentNodeWidget(
+            key: ValueKey(node.id),
+            node: node,
+            panOffset: _panOffset,
+            zoomLevel: _zoomLevel,
+          );
+        } else {
+          return NodeWidget(
+            node: node,
+            panOffset: _panOffset,
+            zoomLevel: _zoomLevel,
+          );
+        }
+      }),
       // Selection rectangle on top of everything
       _buildSelectionRectangle(),
     ];

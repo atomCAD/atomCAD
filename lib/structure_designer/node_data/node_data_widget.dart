@@ -39,6 +39,7 @@ import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// A widget that displays and allows editing of node-specific data
@@ -94,6 +95,13 @@ class NodeDataWidget extends StatelessWidget {
   Widget _buildNodeEditor(NodeView selectedNode, StructureDesignerModel model) {
     // Based on the node type, show the appropriate editor
     switch (selectedNode.nodeTypeName) {
+      case 'Comment':
+        final commentData = getCommentData(nodeId: selectedNode.id);
+        return CommentEditor(
+          nodeId: selectedNode.id,
+          data: commentData,
+          model: model,
+        );
       case 'cuboid':
         // Fetch the cuboid data here in the parent widget
         final cuboidData = getCuboidData(

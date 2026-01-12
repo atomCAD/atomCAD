@@ -5,6 +5,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 // Helper function to get category display name
 String getCategoryDisplayName(NodeTypeCategory category) {
   switch (category) {
+    case NodeTypeCategory.annotation:
+      return 'Annotation';
     case NodeTypeCategory.mathAndProgramming:
       return 'Math and Programming';
     case NodeTypeCategory.geometry2D:
