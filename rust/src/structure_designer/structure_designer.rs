@@ -738,6 +738,92 @@ impl StructureDesigner {
     }
   }
 
+  /// Auto-connects a source pin to the first compatible pin on a target node.
+  /// 
+  /// - When `source_is_output` is true: connects source output to target's first compatible input
+  /// - When `source_is_output` is false: connects target's output to source input
+  /// 
+  /// Returns true if a connection was made, false otherwise.
+  pub fn auto_connect_to_node(
+    &mut self,
+    source_node_id: u64,
+    source_pin_index: i32,
+    source_is_output: bool,
+    target_node_id: u64,
+  ) -> bool {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return false,
+    };
+
+    // Get source and target node types to find compatible pins
+    let connection_info = {
+      let network = match self.node_type_registry.node_networks.get(&node_network_name) {
+        Some(network) => network,
+        None => return false,
+      };
+
+      let source_node = match network.nodes.get(&source_node_id) {
+        Some(node) => node,
+        None => return false,
+      };
+
+      let target_node = match network.nodes.get(&target_node_id) {
+        Some(node) => node,
+        None => return false,
+      };
+
+      let source_node_type = match self.node_type_registry.get_node_type_for_node(source_node) {
+        Some(nt) => nt,
+        None => return false,
+      };
+
+      let target_node_type = match self.node_type_registry.get_node_type_for_node(target_node) {
+        Some(nt) => nt,
+        None => return false,
+      };
+
+      if source_is_output {
+        // Source is output, find first compatible input on target
+        let source_output_type = source_node_type.get_output_pin_type(source_pin_index);
+        
+        // Find first compatible input parameter on target node
+        let mut compatible_param_index: Option<usize> = None;
+        for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
+          if DataType::can_be_converted_to(&source_output_type, &param.data_type) {
+            compatible_param_index = Some(param_idx);
+            break;
+          }
+        }
+
+        match compatible_param_index {
+          Some(param_idx) => Some((source_node_id, source_pin_index, target_node_id, param_idx)),
+          None => None,
+        }
+      } else {
+        // Source is input, connect target's output to source's input pin
+        let target_output_type = &target_node_type.output_type;
+        let source_param_type = self.node_type_registry.get_node_param_data_type(source_node, source_pin_index as usize);
+        
+        if DataType::can_be_converted_to(target_output_type, &source_param_type) {
+          // Connect target output (pin 0) to source input
+          Some((target_node_id, 0, source_node_id, source_pin_index as usize))
+        } else {
+          None
+        }
+      }
+    };
+
+    // Make the connection if we found compatible pins
+    if let Some((src_node, src_pin, dest_node, dest_param)) = connection_info {
+      self.connect_nodes(src_node, src_pin, dest_node, dest_param);
+      return true;
+    }
+
+    false
+  }
+
   pub fn set_node_network_data(&mut self, node_id: u64, mut data: Box<dyn NodeData>) {
     // Early return if active_node_network_name is None, clone to avoid borrow conflicts
     let network_name = match &self.active_node_network_name {

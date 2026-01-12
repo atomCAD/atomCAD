@@ -137,8 +137,18 @@ class PinWidget extends StatelessWidget {
               }
             },
             onDragEnd: (details) {
-              Provider.of<StructureDesignerModel>(context, listen: false)
-                  .cancelDragWire();
+              final model =
+                  Provider.of<StructureDesignerModel>(context, listen: false);
+              // Store the drag info before clearing
+              final dragInfo = model.draggedWire;
+              if (dragInfo != null) {
+                // Notify parent to handle the drop (will show popup if in empty space)
+                model.handleWireDropInEmptySpace(
+                  dragInfo.startPin,
+                  dragInfo.wireEndPosition,
+                );
+              }
+              model.cancelDragWire();
             },
           );
         },

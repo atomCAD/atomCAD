@@ -287,12 +287,48 @@ class NodeNetworkState extends State<NodeNetwork> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       updatePanOffsetForCurrentNetwork(forceUpdate: false);
     });
+    // Set up wire drop callback
+    widget.graphModel.onWireDroppedInEmptySpace = _handleWireDropInEmptySpace;
   }
 
   @override
   void dispose() {
+    // Clear the callback when disposing
+    widget.graphModel.onWireDroppedInEmptySpace = null;
     focusNode.dispose();
     super.dispose();
+  }
+
+  /// Handles wire dropped in empty space - shows filtered Add Node popup
+  void _handleWireDropInEmptySpace(PinReference startPin, Offset dropPosition) {
+    final isOutput = startPin.pinType == PinType.output;
+    final dataType = startPin.dataType;
+
+    // Show the filtered Add Node popup
+    showAddNodePopup(
+      context,
+      filterByCompatibleType: dataType,
+      draggingFromOutput: isOutput,
+    ).then((selectedNodeType) {
+      if (selectedNodeType != null && mounted) {
+        // Convert screen position to logical coordinates for node creation
+        final scale = getZoomScale(_zoomLevel);
+        final logicalPosition = screenToLogical(dropPosition, _panOffset, scale);
+
+        // Create the new node
+        final newNodeId = widget.graphModel.createNode(selectedNodeType, logicalPosition);
+
+        // Auto-connect the wire to the new node
+        if (newNodeId != BigInt.zero) {
+          widget.graphModel.autoConnectToNode(
+            startPin.nodeId,
+            startPin.pinIndex,
+            isOutput,
+            newNodeId,
+          );
+        }
+      }
+    });
   }
 
   /// Calculate an appropriate pan offset based on node positions

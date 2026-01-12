@@ -49,6 +49,26 @@ void connectNodes(
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
+/// Auto-connects a source pin to the first compatible pin on a target node.
+///
+/// - `source_node_id`: The node where the wire was dragged from
+/// - `source_pin_index`: The pin index on the source node
+/// - `source_is_output`: true if dragging from output pin, false if from input pin
+/// - `target_node_id`: The newly created node to connect to
+///
+/// Returns true if a connection was made, false otherwise.
+bool autoConnectToNode(
+        {required BigInt sourceNodeId,
+        required int sourcePinIndex,
+        required bool sourceIsOutput,
+        required BigInt targetNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAutoConnectToNode(
+            sourceNodeId: sourceNodeId,
+            sourcePinIndex: sourcePinIndex,
+            sourceIsOutput: sourceIsOutput,
+            targetNodeId: targetNodeId);
+
 List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews();
 

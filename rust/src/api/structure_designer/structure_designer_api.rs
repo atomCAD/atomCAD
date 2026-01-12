@@ -339,6 +339,38 @@ pub fn connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_nod
   }
 }
 
+/// Auto-connects a source pin to the first compatible pin on a target node.
+/// 
+/// - `source_node_id`: The node where the wire was dragged from
+/// - `source_pin_index`: The pin index on the source node
+/// - `source_is_output`: true if dragging from output pin, false if from input pin
+/// - `target_node_id`: The newly created node to connect to
+/// 
+/// Returns true if a connection was made, false otherwise.
+#[flutter_rust_bridge::frb(sync)]
+pub fn auto_connect_to_node(
+  source_node_id: u64,
+  source_pin_index: i32,
+  source_is_output: bool,
+  target_node_id: u64,
+) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let result = cad_instance.structure_designer.auto_connect_to_node(
+          source_node_id,
+          source_pin_index,
+          source_is_output,
+          target_node_id,
+        );
+        refresh_structure_designer_auto(cad_instance);
+        result
+      },
+      false
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
   unsafe {
