@@ -351,6 +351,32 @@ pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
   }
 }
 
+/// Returns node types that have at least one pin compatible with the given type.
+/// 
+/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Geometry", "Float")
+/// - `dragging_from_output`: true if dragging from output pin, false if from input pin
+/// 
+/// When dragging from OUTPUT: find nodes with compatible INPUT pins
+/// When dragging from INPUT: find nodes with compatible OUTPUT pins
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_compatible_node_types(
+  source_type_str: String,
+  dragging_from_output: bool,
+) -> Option<Vec<APINodeCategoryView>> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let source_type = DataType::from_string(&source_type_str).ok()?;
+        Some(cad_instance.structure_designer.node_type_registry.get_compatible_node_types(
+          &source_type,
+          dragging_from_output,
+        ))
+      },
+      None
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_names() -> Option<Vec<String>> {
   unsafe {

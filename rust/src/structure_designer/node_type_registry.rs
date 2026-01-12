@@ -120,6 +120,81 @@ impl NodeTypeRegistry {
     return ret;
   }
 
+  /// Returns node types that have at least one pin compatible with the given source type.
+  /// 
+  /// - When `dragging_from_output` is true: find nodes with compatible INPUT pins
+  ///   (any input that accepts the source type)
+  /// - When `dragging_from_output` is false: find nodes with compatible OUTPUT pins
+  ///   (output can be converted to the source type)
+  pub fn get_compatible_node_types(
+    &self,
+    source_type: &DataType,
+    dragging_from_output: bool,
+  ) -> Vec<APINodeCategoryView> {
+    // Create iterator of (node_type, category) for all public nodes
+    let built_in_iter = self.built_in_node_types.values()
+      .filter(|nt| nt.public)
+      .map(|nt| (nt, nt.category.clone()));
+    
+    let custom_iter = self.node_networks.values()
+      .map(|network| (&network.node_type, NodeTypeCategory::Custom));
+    
+    // Filter by compatibility and collect views
+    let all_views: Vec<APINodeTypeView> = built_in_iter.chain(custom_iter)
+      .filter(|(node_type, _)| {
+        if dragging_from_output {
+          node_type.parameters.iter().any(|param| {
+            DataType::can_be_converted_to(source_type, &param.data_type)
+          })
+        } else {
+          DataType::can_be_converted_to(&node_type.output_type, source_type)
+        }
+      })
+      .map(|(node_type, category)| APINodeTypeView {
+        name: node_type.name.clone(),
+        description: node_type.description.clone(),
+        category,
+      })
+      .collect();
+    
+    // Group by category
+    let mut category_map: HashMap<NodeTypeCategory, Vec<APINodeTypeView>> = HashMap::new();
+    for view in all_views {
+      category_map.entry(view.category.clone())
+        .or_insert_with(Vec::new)
+        .push(view);
+    }
+    
+    // Sort nodes within each category alphabetically
+    for nodes in category_map.values_mut() {
+      nodes.sort_by(|a, b| a.name.cmp(&b.name));
+    }
+    
+    // Build result in semantic order
+    let ordered_categories = vec![
+      NodeTypeCategory::MathAndProgramming,
+      NodeTypeCategory::Geometry2D,
+      NodeTypeCategory::Geometry3D,
+      NodeTypeCategory::AtomicStructure,
+      NodeTypeCategory::OtherBuiltin,
+      NodeTypeCategory::Custom,
+    ];
+    
+    let mut result: Vec<APINodeCategoryView> = Vec::new();
+    for category in ordered_categories {
+      if let Some(nodes) = category_map.get(&category) {
+        if !nodes.is_empty() {
+          result.push(APINodeCategoryView {
+            category: category.clone(),
+            nodes: nodes.clone(),
+          });
+        }
+      }
+    }
+    
+    result
+  }
+
   /// Retrieves views of all public node types available to users, grouped by category.
   /// Only built-in node types can be non-public; all node networks are considered public.
   pub fn get_node_type_views(&self) -> Vec<APINodeCategoryView> {
