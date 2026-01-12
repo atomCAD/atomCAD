@@ -109,6 +109,12 @@ class StructureDesignerModel extends ChangeNotifier {
     return structure_designer_api.isNodeTypeActive(nodeType: nodeType);
   }
 
+  List<APINodeCategoryView>? getCompatibleNodeTypes(
+      String sourceType, bool draggingFromOutput) {
+    return structure_designer_api.getCompatibleNodeTypes(
+        sourceTypeStr: sourceType, draggingFromOutput: draggingFromOutput);
+  }
+
   void setActiveEditAtomTool(APIEditAtomTool tool) {
     edit_atom_api.setActiveEditAtomTool(tool: tool);
     refreshFromKernel();

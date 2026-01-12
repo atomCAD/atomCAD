@@ -52,6 +52,20 @@ void connectNodes(
 List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews();
 
+/// Returns node types that have at least one pin compatible with the given type.
+///
+/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Geometry", "Float")
+/// - `dragging_from_output`: true if dragging from output pin, false if from input pin
+///
+/// When dragging from OUTPUT: find nodes with compatible INPUT pins
+/// When dragging from INPUT: find nodes with compatible OUTPUT pins
+List<APINodeCategoryView>? getCompatibleNodeTypes(
+        {required String sourceTypeStr, required bool draggingFromOutput}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetCompatibleNodeTypes(
+            sourceTypeStr: sourceTypeStr,
+            draggingFromOutput: draggingFromOutput);
+
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
 
