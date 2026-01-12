@@ -637,3 +637,26 @@ APIResult runCliSingle({required CliConfig config}) => RustLib.instance.api
 /// Run atomCAD in headless CLI batch mode
 APIResult runCliBatch({required BatchCliConfig config}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiRunCliBatch(config: config);
+
+/// Resize a comment node
+void resizeCommentNode(
+        {required BigInt nodeId,
+        required double width,
+        required double height}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiResizeCommentNode(
+            nodeId: nodeId, width: width, height: height);
+
+/// Update a comment node's label and text
+void updateCommentNode(
+        {required BigInt nodeId,
+        required String label,
+        required String text}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiUpdateCommentNode(
+            nodeId: nodeId, label: label, text: text);
+
+/// Get comment node data for property panel editing
+APICommentData? getCommentData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetCommentData(
+        nodeId: nodeId);

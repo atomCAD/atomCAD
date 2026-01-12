@@ -135,6 +135,34 @@ class APICircleData {
           radius == other.radius;
 }
 
+class APICommentData {
+  final String label;
+  final String text;
+  final double width;
+  final double height;
+
+  const APICommentData({
+    required this.label,
+    required this.text,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  int get hashCode =>
+      label.hashCode ^ text.hashCode ^ width.hashCode ^ height.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICommentData &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          text == other.text &&
+          width == other.width &&
+          height == other.height;
+}
+
 class APICuboidData {
   final APIIVec3 minCorner;
   final APIIVec3 extent;
@@ -1179,6 +1207,7 @@ class NodeNetworkView {
 }
 
 enum NodeTypeCategory {
+  annotation,
   mathAndProgramming,
   geometry2D,
   geometry3D,
@@ -1212,6 +1241,10 @@ class NodeView {
   final String? error;
   final String? outputString;
   final String? subtitle;
+  final String? commentLabel;
+  final String? commentText;
+  final double? commentWidth;
+  final double? commentHeight;
 
   NodeView({
     required this.id,
@@ -1227,6 +1260,10 @@ class NodeView {
     this.error,
     this.outputString,
     this.subtitle,
+    this.commentLabel,
+    this.commentText,
+    this.commentWidth,
+    this.commentHeight,
   });
 
   @override
@@ -1243,7 +1280,11 @@ class NodeView {
       returnNode.hashCode ^
       error.hashCode ^
       outputString.hashCode ^
-      subtitle.hashCode;
+      subtitle.hashCode ^
+      commentLabel.hashCode ^
+      commentText.hashCode ^
+      commentWidth.hashCode ^
+      commentHeight.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1262,7 +1303,11 @@ class NodeView {
           returnNode == other.returnNode &&
           error == other.error &&
           outputString == other.outputString &&
-          subtitle == other.subtitle;
+          subtitle == other.subtitle &&
+          commentLabel == other.commentLabel &&
+          commentText == other.commentText &&
+          commentWidth == other.commentWidth &&
+          commentHeight == other.commentHeight;
 }
 
 /// Wire identifier for batch selection operations

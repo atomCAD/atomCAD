@@ -61,6 +61,11 @@ pub struct InputPinView {
     pub error: Option<String>,
     pub output_string: Option<String>,
     pub subtitle: Option<String>,
+    // Comment node specific fields (only populated for Comment nodes)
+    pub comment_label: Option<String>,
+    pub comment_text: Option<String>,
+    pub comment_width: Option<f64>,
+    pub comment_height: Option<f64>,
   }
   
   pub struct WireView {
@@ -323,6 +328,13 @@ pub struct APIImportXYZData {
 
 pub struct APIExportXYZData {
   pub file_name: String,
+}
+
+pub struct APICommentData {
+  pub label: String,
+  pub text: String,
+  pub width: f64,
+  pub height: f64,
 }
 
 pub struct APIAtomCutData {

@@ -81,12 +81,14 @@ use crate::structure_designer::nodes::expr::ExprData;
 use crate::structure_designer::nodes::map::MapData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::atom_fill::AtomFillData;
+use crate::structure_designer::nodes::comment::CommentData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExportXYZData;
+use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::structure_designer::cli_runner;
@@ -240,6 +242,19 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
           // Generate subtitle using the node's get_subtitle method
           let subtitle = node.data.get_subtitle(&connected_input_pins);
 
+          // Extract comment-specific data if this is a Comment node
+          let (comment_label, comment_text, comment_width, comment_height) = 
+            if let Some(comment_data) = node.data.as_any_ref().downcast_ref::<CommentData>() {
+              (
+                Some(comment_data.label.clone()),
+                Some(comment_data.text.clone()),
+                Some(comment_data.width),
+                Some(comment_data.height),
+              )
+            } else {
+              (None, None, None, None)
+            };
+
           let output_type = node_type.output_type.clone();
           let function_type = node_type.get_function_type();
           node_network_view.nodes.insert(node.id, NodeView {
@@ -256,6 +271,10 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             error,
             output_string,
             subtitle,
+            comment_label,
+            comment_text,
+            comment_width,
+            comment_height,
           });
         }
 
@@ -2635,6 +2654,65 @@ pub fn run_cli_batch(config: super::structure_designer_api_types::BatchCliConfig
         success: false,
         error_message: "CAD instance not available".to_string(),
       }
+    )
+  }
+}
+
+/// Resize a comment node
+#[flutter_rust_bridge::frb(sync)]
+pub fn resize_comment_node(node_id: u64, width: f64, height: f64) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      if let Some(network_name) = &cad_instance.structure_designer.active_node_network_name.clone() {
+        if let Some(network) = cad_instance.structure_designer.node_type_registry.node_networks.get_mut(network_name) {
+          if let Some(node) = network.nodes.get_mut(&node_id) {
+            if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>() {
+              comment_data.width = width.max(100.0);
+              comment_data.height = height.max(60.0);
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+/// Update a comment node's label and text
+#[flutter_rust_bridge::frb(sync)]
+pub fn update_comment_node(node_id: u64, label: String, text: String) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      if let Some(network_name) = &cad_instance.structure_designer.active_node_network_name.clone() {
+        if let Some(network) = cad_instance.structure_designer.node_type_registry.node_networks.get_mut(network_name) {
+          if let Some(node) = network.nodes.get_mut(&node_id) {
+            if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>() {
+              comment_data.label = label;
+              comment_data.text = text;
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+/// Get comment node data for property panel editing
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_comment_data(node_id: u64) -> Option<APICommentData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+        let comment_data = node_data.as_any_ref().downcast_ref::<CommentData>()?;
+
+        Some(APICommentData {
+          label: comment_data.label.clone(),
+          text: comment_data.text.clone(),
+          width: comment_data.width,
+          height: comment_data.height,
+        })
+      },
+      None
     )
   }
 }

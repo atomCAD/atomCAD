@@ -61,6 +61,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICircleData dco_decode_api_circle_data(dynamic raw);
 
   @protected
+  APICommentData dco_decode_api_comment_data(dynamic raw);
+
+  @protected
   APICuboidData dco_decode_api_cuboid_data(dynamic raw);
 
   @protected
@@ -230,6 +233,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData dco_decode_box_autoadd_api_circle_data(dynamic raw);
+
+  @protected
+  APICommentData dco_decode_box_autoadd_api_comment_data(dynamic raw);
 
   @protected
   APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw);
@@ -488,6 +494,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICircleData? dco_decode_opt_box_autoadd_api_circle_data(dynamic raw);
 
   @protected
+  APICommentData? dco_decode_opt_box_autoadd_api_comment_data(dynamic raw);
+
+  @protected
   APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw);
 
   @protected
@@ -704,6 +713,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
 
   @protected
+  APICommentData sse_decode_api_comment_data(SseDeserializer deserializer);
+
+  @protected
   APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer);
 
   @protected
@@ -887,6 +899,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData sse_decode_box_autoadd_api_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APICommentData sse_decode_box_autoadd_api_comment_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1196,6 +1212,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICommentData? sse_decode_opt_box_autoadd_api_comment_data(
+      SseDeserializer deserializer);
+
+  @protected
   APICuboidData? sse_decode_opt_box_autoadd_api_cuboid_data(
       SseDeserializer deserializer);
 
@@ -1448,6 +1468,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_comment_data(
+      APICommentData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_cuboid_data(APICuboidData self, SseSerializer serializer);
 
   @protected
@@ -1647,6 +1671,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_circle_data(
       APICircleData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_comment_data(
+      APICommentData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_cuboid_data(
@@ -1960,6 +1988,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_circle_data(
       APICircleData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_comment_data(
+      APICommentData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_cuboid_data(
