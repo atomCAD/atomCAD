@@ -426,10 +426,18 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     for (final node in model.nodeNetworkView!.nodes.values) {
       final nodePos = Offset(node.position.x, node.position.y);
-      final nodeSize = getNodeSize(node, _zoomLevel);
-      // Node size is already in screen space, convert to logical space
-      final logicalNodeSize =
-          Size(nodeSize.width / scale, nodeSize.height / scale);
+      Size logicalNodeSize;
+
+      // Comment nodes have custom sizes stored in their data
+      if (node.nodeTypeName == 'Comment') {
+        final width = node.commentWidth ?? 200.0;
+        final height = node.commentHeight ?? 100.0;
+        logicalNodeSize = Size(width, height);
+      } else {
+        final nodeSize = getNodeSize(node, _zoomLevel);
+        // Node size is already in screen space, convert to logical space
+        logicalNodeSize = Size(nodeSize.width / scale, nodeSize.height / scale);
+      }
       final nodeRect = nodePos & logicalNodeSize;
 
       if (nodeRect.contains(logicalPosition)) {

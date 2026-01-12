@@ -137,13 +137,19 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
               Positioned(
                 right: 0,
                 bottom: 0,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.resizeDownRight,
-                  child: GestureDetector(
-                    onPanStart: (details) => _startResize(details),
-                    onPanUpdate: (details) => _updateResize(context, details),
-                    onPanEnd: (details) => _endResize(context),
-                    child: Container(
+                child: Listener(
+                  onPointerDown: (event) {
+                    // Stop propagation to prevent rectangle selection
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.resizeDownRight,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (details) => _startResize(details),
+                      onPanUpdate: (details) => _updateResize(context, details),
+                      onPanEnd: (details) => _endResize(context),
+                      child: Container(
                       width: COMMENT_RESIZE_HANDLE_SIZE * scale,
                       height: COMMENT_RESIZE_HANDLE_SIZE * scale,
                       decoration: BoxDecoration(
@@ -152,10 +158,11 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
                           bottomRight: Radius.circular(3.0),
                         ),
                       ),
-                      child: Icon(
-                        Icons.open_in_full,
-                        size: 8.0 * scale,
-                        color: Colors.white,
+                        child: Icon(
+                          Icons.open_in_full,
+                          size: 8.0 * scale,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
