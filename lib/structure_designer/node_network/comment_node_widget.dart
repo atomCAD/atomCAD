@@ -55,8 +55,8 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
     final scaledWidth = _width * scale;
     final scaledHeight = _height * scale;
 
-    final fontSize = 12.0 * math.sqrt(scale);
-    final headerFontSize = 11.0 * math.sqrt(scale);
+    final fontSize = 14.0 * math.sqrt(scale);
+    final headerFontSize = 14.0 * math.sqrt(scale);
 
     return Positioned(
       left: screenPos.dx,

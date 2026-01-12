@@ -24,3 +24,6 @@ mod network_evaluator_test;
 
 #[path = "structure_designer/node_type_registry_test.rs"]
 mod node_type_registry_test;
+
+#[path = "structure_designer/comment_node_test.rs"]
+mod comment_node_test;
