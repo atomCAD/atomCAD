@@ -371,6 +371,32 @@ pub fn auto_connect_to_node(
   }
 }
 
+/// Returns all compatible pins on the target node for auto-connection.
+/// Each element contains (pin_index, pin_name, data_type_string).
+/// When source_is_output is true, returns compatible INPUT pins on target.
+/// When source_is_output is false, returns the OUTPUT pin if compatible.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_compatible_pins_for_auto_connect(
+  source_node_id: u64,
+  source_pin_index: i32,
+  source_is_output: bool,
+  target_node_id: u64,
+) -> Vec<(i32, String, String)> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.get_compatible_pins_for_auto_connect(
+          source_node_id,
+          source_pin_index,
+          source_is_output,
+          target_node_id,
+        )
+      },
+      Vec::new()
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
   unsafe {

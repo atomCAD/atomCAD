@@ -433,6 +433,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(int, String, String)> dco_decode_list_record_i_32_string_string(
+      dynamic raw);
+
+  @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
@@ -625,6 +629,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APINodeCategoryView>? dco_decode_opt_list_api_node_category_view(
       dynamic raw);
+
+  @protected
+  (int, String, String) dco_decode_record_i_32_string_string(dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -1123,6 +1130,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(int, String, String)> sse_decode_list_record_i_32_string_string(
+      SseDeserializer deserializer);
+
+  @protected
   List<(String, String)> sse_decode_list_record_string_string(
       SseDeserializer deserializer);
 
@@ -1355,6 +1366,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeCategoryView>? sse_decode_opt_list_api_node_category_view(
+      SseDeserializer deserializer);
+
+  @protected
+  (int, String, String) sse_decode_record_i_32_string_string(
       SseDeserializer deserializer);
 
   @protected
@@ -1879,6 +1894,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_record_i_32_string_string(
+      List<(int, String, String)> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_record_string_string(
       List<(String, String)> self, SseSerializer serializer);
 
@@ -2114,6 +2133,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_api_node_category_view(
       List<APINodeCategoryView>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_i_32_string_string(
+      (int, String, String) self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

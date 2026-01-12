@@ -294,3 +294,187 @@ Future<String?> showAddNodePopup(
     ),
   );
 }
+
+/// Represents a compatible pin option for auto-connection
+class CompatiblePinOption {
+  final int pinIndex;
+  final String pinName;
+  final String dataType;
+
+  CompatiblePinOption({
+    required this.pinIndex,
+    required this.pinName,
+    required this.dataType,
+  });
+}
+
+/// Shows a dialog for selecting which pin to connect to when multiple are compatible.
+/// Returns the selected pin index, or null if cancelled.
+Future<int?> showPinSelectionDialog(
+  BuildContext context, {
+  required List<CompatiblePinOption> pins,
+  required String nodeTypeName,
+}) {
+  return showDialog<int>(
+    context: context,
+    barrierDismissible: true,
+    builder: (context) => PinSelectionDialog(
+      pins: pins,
+      nodeTypeName: nodeTypeName,
+    ),
+  );
+}
+
+class PinSelectionDialog extends StatelessWidget {
+  final List<CompatiblePinOption> pins;
+  final String nodeTypeName;
+
+  const PinSelectionDialog({
+    super.key,
+    required this.pins,
+    required this.nodeTypeName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF2D2D2D),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: Color(0xFF555555)),
+      ),
+      child: Container(
+        width: 280,
+        constraints: const BoxConstraints(maxHeight: 300),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF383838),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(8),
+                  topRight: Radius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Connect to $nodeTypeName',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Text(
+                'Select input pin:',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: pins.length,
+                itemBuilder: (context, index) {
+                  final pin = pins[index];
+                  return _PinListItem(
+                    pin: pin,
+                    onTap: () => Navigator.of(context).pop(pin.pinIndex),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinListItem extends StatefulWidget {
+  final CompatiblePinOption pin;
+  final VoidCallback onTap;
+
+  const _PinListItem({
+    required this.pin,
+    required this.onTap,
+  });
+
+  @override
+  State<_PinListItem> createState() => _PinListItemState();
+}
+
+class _PinListItemState extends State<_PinListItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: _isHovered ? const Color(0xFF404040) : Colors.transparent,
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _getDataTypeColor(widget.pin.dataType),
+                  border: Border.all(color: Colors.white54, width: 1),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.pin.pinName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              Text(
+                widget.pin.dataType,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getDataTypeColor(String dataType) {
+    switch (dataType.toLowerCase()) {
+      case 'float':
+        return const Color(0xFF7FCF7F);
+      case 'int':
+        return const Color(0xFF7F7FCF);
+      case 'vec2':
+      case 'vec3':
+        return const Color(0xFFCF7FCF);
+      case 'geometry':
+        return const Color(0xFFCFCF7F);
+      case 'atomic':
+        return const Color(0xFF7FCFCF);
+      default:
+        return const Color(0xFFAAAAAA);
+    }
+  }
+}

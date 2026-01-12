@@ -69,6 +69,22 @@ bool autoConnectToNode(
             sourceIsOutput: sourceIsOutput,
             targetNodeId: targetNodeId);
 
+/// Returns all compatible pins on the target node for auto-connection.
+/// Each element contains (pin_index, pin_name, data_type_string).
+/// When source_is_output is true, returns compatible INPUT pins on target.
+/// When source_is_output is false, returns the OUTPUT pin if compatible.
+List<(int, String, String)> getCompatiblePinsForAutoConnect(
+        {required BigInt sourceNodeId,
+        required int sourcePinIndex,
+        required bool sourceIsOutput,
+        required BigInt targetNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetCompatiblePinsForAutoConnect(
+            sourceNodeId: sourceNodeId,
+            sourcePinIndex: sourcePinIndex,
+            sourceIsOutput: sourceIsOutput,
+            targetNodeId: targetNodeId);
+
 List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews();
 

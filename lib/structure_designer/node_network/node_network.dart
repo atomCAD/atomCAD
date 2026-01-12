@@ -9,6 +9,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart' as sd_api;
 import 'package:flutter_cad/common/api_utils.dart';
 
 // Zoom levels
@@ -300,35 +301,76 @@ class NodeNetworkState extends State<NodeNetwork> {
   }
 
   /// Handles wire dropped in empty space - shows filtered Add Node popup
-  void _handleWireDropInEmptySpace(PinReference startPin, Offset dropPosition) {
+  void _handleWireDropInEmptySpace(PinReference startPin, Offset dropPosition) async {
     final isOutput = startPin.pinType == PinType.output;
     final dataType = startPin.dataType;
 
     // Show the filtered Add Node popup
-    showAddNodePopup(
+    final selectedNodeType = await showAddNodePopup(
       context,
       filterByCompatibleType: dataType,
       draggingFromOutput: isOutput,
-    ).then((selectedNodeType) {
-      if (selectedNodeType != null && mounted) {
-        // Convert screen position to logical coordinates for node creation
-        final scale = getZoomScale(_zoomLevel);
-        final logicalPosition = screenToLogical(dropPosition, _panOffset, scale);
+    );
 
-        // Create the new node
-        final newNodeId = widget.graphModel.createNode(selectedNodeType, logicalPosition);
+    if (selectedNodeType == null || !mounted) return;
 
-        // Auto-connect the wire to the new node
-        if (newNodeId != BigInt.zero) {
-          widget.graphModel.autoConnectToNode(
-            startPin.nodeId,
-            startPin.pinIndex,
-            isOutput,
-            newNodeId,
-          );
-        }
-      }
-    });
+    // Convert screen position to logical coordinates for node creation
+    final scale = getZoomScale(_zoomLevel);
+    final logicalPosition = screenToLogical(dropPosition, _panOffset, scale);
+
+    // Create the new node
+    final newNodeId = widget.graphModel.createNode(selectedNodeType, logicalPosition);
+    if (newNodeId == BigInt.zero) return;
+
+    // Get compatible pins on the target node
+    final compatiblePins = sd_api.getCompatiblePinsForAutoConnect(
+      sourceNodeId: startPin.nodeId,
+      sourcePinIndex: startPin.pinIndex,
+      sourceIsOutput: isOutput,
+      targetNodeId: newNodeId,
+    );
+
+    if (compatiblePins.isEmpty) return;
+
+    int targetPinIndex;
+    if (compatiblePins.length == 1) {
+      // Only one compatible pin - connect directly
+      targetPinIndex = compatiblePins.first.$1;
+    } else {
+      // Multiple compatible pins - let user choose
+      if (!mounted) return;
+      final pinOptions = compatiblePins
+          .map((p) => CompatiblePinOption(
+                pinIndex: p.$1,
+                pinName: p.$2,
+                dataType: p.$3,
+              ))
+          .toList();
+
+      final selectedPinIndex = await showPinSelectionDialog(
+        context,
+        pins: pinOptions,
+        nodeTypeName: selectedNodeType,
+      );
+
+      if (selectedPinIndex == null || !mounted) return;
+      targetPinIndex = selectedPinIndex;
+    }
+
+    // Make the connection
+    if (isOutput) {
+      // Source is output, target pin is input
+      widget.graphModel.connectPins(
+        startPin,
+        PinReference(newNodeId, PinType.input, targetPinIndex, ''),
+      );
+    } else {
+      // Source is input, target pin is output (pin 0)
+      widget.graphModel.connectPins(
+        PinReference(newNodeId, PinType.output, targetPinIndex, ''),
+        startPin,
+      );
+    }
   }
 
   /// Calculate an appropriate pan offset based on node positions

@@ -269,6 +269,125 @@ fn test_auto_connect_from_input_to_incompatible_output() {
     assert!(!result, "Geometry output should not connect to Float input");
 }
 
+// ===== GET COMPATIBLE PINS FOR AUTO-CONNECT TESTS =====
+
+#[test]
+fn test_get_compatible_pins_no_active_network() {
+    let designer = StructureDesigner::new();
+    let pins = designer.get_compatible_pins_for_auto_connect(1, 0, true, 2);
+    assert!(pins.is_empty());
+}
+
+#[test]
+fn test_get_compatible_pins_invalid_source_node() {
+    let designer = setup_designer_with_network("test_network");
+    let pins = designer.get_compatible_pins_for_auto_connect(999, 0, true, 1);
+    assert!(pins.is_empty());
+}
+
+#[test]
+fn test_get_compatible_pins_invalid_target_node() {
+    let mut designer = setup_designer_with_network("test_network");
+    let source_id = designer.add_node("sphere", DVec2::ZERO);
+    let pins = designer.get_compatible_pins_for_auto_connect(source_id, 0, true, 999);
+    assert!(pins.is_empty());
+}
+
+#[test]
+fn test_get_compatible_pins_geometry_to_geometry_input() {
+    let mut designer = setup_designer_with_network("test_network");
+    
+    // Sphere outputs Geometry
+    let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
+    // Union has a single shapes array input
+    let union_id = designer.add_node("union", DVec2::new(200.0, 0.0));
+    
+    // Dragging from Sphere's output (Geometry) to Union
+    let pins = designer.get_compatible_pins_for_auto_connect(sphere_id, 0, true, union_id);
+    
+    // Union has 1 Geometry array input (shapes)
+    assert_eq!(pins.len(), 1, "Expected 1 compatible pin (shapes), got {}", pins.len());
+    assert_eq!(pins[0].1, "shapes", "Expected 'shapes' pin");
+}
+
+#[test]
+fn test_get_compatible_pins_single_compatible_input() {
+    let mut designer = setup_designer_with_network("test_network");
+    
+    // Float node outputs Float
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    // Sphere has a 'radius' Float input
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    
+    // Dragging from Float's output to Sphere
+    let pins = designer.get_compatible_pins_for_auto_connect(float_id, 0, true, sphere_id);
+    
+    // Sphere should have at least one Float-compatible input (radius)
+    assert!(!pins.is_empty(), "Expected at least 1 compatible pin");
+    
+    // Check that radius is among the compatible pins
+    let has_radius = pins.iter().any(|(_, name, _)| name == "radius");
+    assert!(has_radius, "Expected 'radius' pin to be compatible");
+}
+
+#[test]
+fn test_get_compatible_pins_from_input_to_output() {
+    let mut designer = setup_designer_with_network("test_network");
+    
+    // Sphere has Geometry output
+    let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
+    // Union has Geometry inputs
+    let union_id = designer.add_node("union", DVec2::new(200.0, 0.0));
+    
+    // Dragging FROM Union's input (pin index 0, Geometry) to Sphere
+    // source_is_output = false means we're dragging from an input pin
+    let pins = designer.get_compatible_pins_for_auto_connect(union_id, 0, false, sphere_id);
+    
+    // Sphere's output should be compatible
+    assert_eq!(pins.len(), 1, "Expected exactly 1 compatible pin (output)");
+    assert_eq!(pins[0].0, 0, "Output pin should be index 0");
+    assert_eq!(pins[0].1, "output", "Pin name should be 'output'");
+    assert_eq!(pins[0].2, "Geometry", "Data type should be Geometry");
+}
+
+#[test]
+fn test_get_compatible_pins_no_compatible_types() {
+    let mut designer = setup_designer_with_network("test_network");
+    
+    // Sphere outputs Geometry
+    let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
+    // Float node has no Geometry inputs
+    let float_id = designer.add_node("float", DVec2::new(200.0, 0.0));
+    
+    // Dragging from Sphere's Geometry output to Float (which has no Geometry inputs)
+    let pins = designer.get_compatible_pins_for_auto_connect(sphere_id, 0, true, float_id);
+    
+    // Float node has no Geometry inputs, so should return empty
+    assert!(pins.is_empty(), "Expected no compatible pins, got {}", pins.len());
+}
+
+#[test]
+fn test_get_compatible_pins_returns_all_compatible_not_just_first() {
+    let mut designer = setup_designer_with_network("test_network");
+    
+    // Float outputs Float
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    // Vec3 has three Float inputs: x, y, z
+    let vec3_id = designer.add_node("vec3", DVec2::new(200.0, 0.0));
+    
+    // Dragging from Float's output to Vec3
+    let pins = designer.get_compatible_pins_for_auto_connect(float_id, 0, true, vec3_id);
+    
+    // Vec3 should have 3 compatible Float inputs
+    assert_eq!(pins.len(), 3, "Expected 3 compatible pins (x, y, z), got {}", pins.len());
+    
+    // Verify we get x, y, z pins
+    let pin_names: Vec<&str> = pins.iter().map(|(_, name, _)| name.as_str()).collect();
+    assert!(pin_names.contains(&"x"), "Expected 'x' pin");
+    assert!(pin_names.contains(&"y"), "Expected 'y' pin");
+    assert!(pin_names.contains(&"z"), "Expected 'z' pin");
+}
+
 // ===== RENAME NODE NETWORK TESTS =====
 
 #[test]

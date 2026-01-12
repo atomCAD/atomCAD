@@ -824,6 +824,80 @@ impl StructureDesigner {
     false
   }
 
+  /// Returns all compatible pins on the target node for auto-connection.
+  /// Each tuple contains (pin_index, pin_name, data_type_string).
+  /// When source_is_output is true, returns compatible INPUT pins on target.
+  /// When source_is_output is false, returns the OUTPUT pin if compatible.
+  pub fn get_compatible_pins_for_auto_connect(
+    &self,
+    source_node_id: u64,
+    source_pin_index: i32,
+    source_is_output: bool,
+    target_node_id: u64,
+  ) -> Vec<(i32, String, String)> {
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return Vec::new(),
+    };
+
+    let network = match self.node_type_registry.node_networks.get(&node_network_name) {
+      Some(network) => network,
+      None => return Vec::new(),
+    };
+
+    let source_node = match network.nodes.get(&source_node_id) {
+      Some(node) => node,
+      None => return Vec::new(),
+    };
+
+    let target_node = match network.nodes.get(&target_node_id) {
+      Some(node) => node,
+      None => return Vec::new(),
+    };
+
+    let source_node_type = match self.node_type_registry.get_node_type_for_node(source_node) {
+      Some(nt) => nt,
+      None => return Vec::new(),
+    };
+
+    let target_node_type = match self.node_type_registry.get_node_type_for_node(target_node) {
+      Some(nt) => nt,
+      None => return Vec::new(),
+    };
+
+    let mut compatible_pins = Vec::new();
+
+    if source_is_output {
+      // Source is output, find all compatible input parameters on target
+      let source_output_type = source_node_type.get_output_pin_type(source_pin_index);
+      
+      for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
+        if DataType::can_be_converted_to(&source_output_type, &param.data_type) {
+          compatible_pins.push((
+            param_idx as i32,
+            param.name.clone(),
+            param.data_type.to_string(),
+          ));
+        }
+      }
+    } else {
+      // Source is input, check if target's output is compatible
+      let target_output_type = &target_node_type.output_type;
+      let source_param_type = self.node_type_registry.get_node_param_data_type(source_node, source_pin_index as usize);
+      
+      if DataType::can_be_converted_to(target_output_type, &source_param_type) {
+        // Output pin is always index 0 with name "output"
+        compatible_pins.push((
+          0,
+          "output".to_string(),
+          target_output_type.to_string(),
+        ));
+      }
+    }
+
+    compatible_pins
+  }
+
   pub fn set_node_network_data(&mut self, node_id: u64, mut data: Box<dyn NodeData>) {
     // Early return if active_node_network_name is None, clone to avoid borrow conflicts
     let network_name = match &self.active_node_network_name {
