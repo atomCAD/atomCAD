@@ -13,6 +13,7 @@ use super::nodes::expr::get_node_type as expr_get_node_type;
 use super::nodes::value::get_node_type as value_get_node_type;
 use super::nodes::map::get_node_type as map_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
+use super::nodes::comment::get_node_type as comment_get_node_type;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
@@ -68,6 +69,9 @@ impl NodeTypeRegistry {
       node_networks: HashMap::new(),
       design_file_name: None,
     };
+
+    // Annotation nodes
+    ret.add_node_type(comment_get_node_type());
 
     ret.add_node_type(parameter_get_node_type());
 
@@ -172,6 +176,7 @@ impl NodeTypeRegistry {
     
     // Build result in semantic order
     let ordered_categories = vec![
+      NodeTypeCategory::Annotation,
       NodeTypeCategory::MathAndProgramming,
       NodeTypeCategory::Geometry2D,
       NodeTypeCategory::Geometry3D,
@@ -242,6 +247,7 @@ impl NodeTypeRegistry {
     // Build result in semantic order
     let mut result: Vec<APINodeCategoryView> = Vec::new();
     let ordered_categories = vec![
+      NodeTypeCategory::Annotation,
       NodeTypeCategory::MathAndProgramming,
       NodeTypeCategory::Geometry2D,
       NodeTypeCategory::Geometry3D,

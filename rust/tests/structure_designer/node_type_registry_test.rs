@@ -273,10 +273,10 @@ fn test_get_node_type_views_returns_categories_in_order() {
     let categories = registry.get_node_type_views();
     
     // Should have multiple categories
-    assert!(categories.len() >= 4, "Should have at least 4 categories");
+    assert!(categories.len() >= 5, "Should have at least 5 categories");
     
-    // First category should be MathAndProgramming
-    assert_eq!(categories[0].category, NodeTypeCategory::MathAndProgramming);
+    // First category should be Annotation
+    assert_eq!(categories[0].category, NodeTypeCategory::Annotation);
     
     // Categories should be in semantic order
     let category_order: Vec<NodeTypeCategory> = categories.iter()
@@ -284,11 +284,13 @@ fn test_get_node_type_views_returns_categories_in_order() {
         .collect();
     
     // Check expected order (only categories that have nodes)
+    let annotation_idx = category_order.iter().position(|c| *c == NodeTypeCategory::Annotation);
     let math_idx = category_order.iter().position(|c| *c == NodeTypeCategory::MathAndProgramming);
     let geo2d_idx = category_order.iter().position(|c| *c == NodeTypeCategory::Geometry2D);
     let geo3d_idx = category_order.iter().position(|c| *c == NodeTypeCategory::Geometry3D);
     let atomic_idx = category_order.iter().position(|c| *c == NodeTypeCategory::AtomicStructure);
     
+    assert!(annotation_idx < math_idx, "Annotation should come before MathAndProgramming");
     assert!(math_idx < geo2d_idx, "MathAndProgramming should come before Geometry2D");
     assert!(geo2d_idx < geo3d_idx, "Geometry2D should come before Geometry3D");
     assert!(geo3d_idx < atomic_idx, "Geometry3D should come before AtomicStructure");

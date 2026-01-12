@@ -1,4 +1,5 @@
 pub mod atom_trans;
+pub mod comment;
 pub mod geo_trans;
 pub mod parameter;
 pub mod cuboid;

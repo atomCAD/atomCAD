@@ -257,6 +257,7 @@ pub struct InputPinView {
   #[frb]
   #[derive(PartialEq, Eq, Hash, Clone, Debug)]
   pub enum NodeTypeCategory {
+    Annotation,
     MathAndProgramming,
     Geometry2D,
     Geometry3D,
@@ -268,17 +269,19 @@ pub struct InputPinView {
   impl NodeTypeCategory {
     pub fn order(&self) -> u8 {
       match self {
-        Self::MathAndProgramming => 0,
-        Self::Geometry2D => 1,
-        Self::Geometry3D => 2,
-        Self::AtomicStructure => 3,
-        Self::OtherBuiltin => 4,
-        Self::Custom => 5,
+        Self::Annotation => 0,
+        Self::MathAndProgramming => 1,
+        Self::Geometry2D => 2,
+        Self::Geometry3D => 3,
+        Self::AtomicStructure => 4,
+        Self::OtherBuiltin => 5,
+        Self::Custom => 6,
       }
     }
 
     pub fn display_name(&self) -> &str {
       match self {
+        Self::Annotation => "Annotation",
         Self::MathAndProgramming => "Math and Programming",
         Self::Geometry2D => "2D Geometry",
         Self::Geometry3D => "3D Geometry",

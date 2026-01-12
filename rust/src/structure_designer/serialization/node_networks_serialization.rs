@@ -43,6 +43,7 @@ fn default_category() -> String {
 fn category_to_string(category: &crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory) -> String {
     use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     match category {
+        NodeTypeCategory::Annotation => "Annotation".to_string(),
         NodeTypeCategory::MathAndProgramming => "MathAndProgramming".to_string(),
         NodeTypeCategory::Geometry2D => "Geometry2D".to_string(),
         NodeTypeCategory::Geometry3D => "Geometry3D".to_string(),
@@ -57,6 +58,7 @@ fn category_to_string(category: &crate::api::structure_designer::structure_desig
 fn category_from_string(category_str: &str) -> crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory {
     use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     match category_str {
+        "Annotation" => NodeTypeCategory::Annotation,
         "MathAndProgramming" => NodeTypeCategory::MathAndProgramming,
         "Geometry2D" => NodeTypeCategory::Geometry2D,
         "Geometry3D" => NodeTypeCategory::Geometry3D,
