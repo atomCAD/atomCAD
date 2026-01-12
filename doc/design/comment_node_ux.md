@@ -91,9 +91,32 @@ Comment nodes are resizable text boxes that allow users to document and explain 
 
 - No markdown rendering
 - No rich text formatting
-- Text wraps within the comment box boundaries
 
 **Rationale:** Plain text is simple to implement and covers the primary use case. Formatting can be added in a future version if users request it.
+
+### Text Overflow Behavior
+
+- **Word wrapping:** Text wraps at word boundaries to fit within the comment box width
+- **Vertical scrolling:** If text content exceeds the visible height, the comment box becomes vertically scrollable
+- The scrollbar should be subtle (thin, semi-transparent) to avoid visual clutter
+
+### Zoom Behavior
+
+- **Comment box scales with zoom:** Position and size transform uniformly with the canvas (same as regular nodes)
+- **Font uses non-linear scaling:** To keep text readable at low zoom levels, font size scales with the **square root** of the zoom factor:
+
+  ```
+  effective_font_scale = zoom^0.5
+  ```
+
+  | Canvas Zoom | Font Scale | Effect |
+  |-------------|------------|--------|
+  | 100% | 1.0 | Normal size |
+  | 50% | 0.71 | Relatively larger than box |
+  | 25% | 0.5 | Still readable |
+  | 10% | 0.32 | Legible at overview level |
+
+- **Trade-off:** At low zoom levels, text is relatively larger compared to the box, so vertical scrolling may be needed sooner. This is acceptable since users rarely edit comments while zoomed out.
 
 ## Serialization (.cnnd files)
 
