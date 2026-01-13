@@ -45,13 +45,6 @@ cargo insta review           # Review changes interactively
 
 ## Flutter Tests (integration_test/)
 
-Single FFI smoke test only. Full workflow tests run in Rust.
-
-**Why minimal Flutter tests:**
-- `StructureDesignerModel` is a thin wrapper around Rust APIs
-- wgpu/GPU initialization fails in test environments
-- Rust tests already cover CNND roundtrip, node evaluation, exports
-
 ## Test Coverage Reports
 
 Use `cargo-llvm-cov` to generate line-by-line coverage reports:
