@@ -39,6 +39,22 @@ class TestKeys {
 
   // Node network canvas
   static const Key nodeNetworkCanvas = Key('node_network_canvas');
+
+  // Rename elements
+  static const Key renameTextField = Key('rename_text_field');
+
+  // Dynamic keys for network list items
+  /// Returns a Key for a network item in the list view
+  static Key networkListItem(String networkName) =>
+      Key('network_item_$networkName');
+
+  /// Returns a Key for a network item in the tree view
+  static Key networkTreeItem(String networkName) =>
+      Key('network_tree_item_$networkName');
+
+  /// Returns a Key for a namespace folder in the tree view
+  static Key namespaceTreeItem(String namespacePath) =>
+      Key('namespace_tree_item_$namespacePath');
 }
 
 /// Initializes the Rust FFI library.
@@ -108,4 +124,19 @@ class TestFinders {
 
   /// Find the Tree tab
   static Finder get treeTab => find.byKey(TestKeys.networkTreeTab);
+
+  /// Find the delete confirmation dialog
+  static Finder get deleteConfirmDialog =>
+      find.byKey(TestKeys.deleteConfirmDialog);
+
+  /// Find the rename text field
+  static Finder get renameTextField => find.byKey(TestKeys.renameTextField);
+
+  /// Find a network item in the list view by name
+  static Finder networkListItem(String networkName) =>
+      find.byKey(TestKeys.networkListItem(networkName));
+
+  /// Find a network item in the tree view by name
+  static Finder networkTreeItem(String networkName) =>
+      find.byKey(TestKeys.networkTreeItem(networkName));
 }

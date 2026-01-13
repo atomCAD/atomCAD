@@ -116,6 +116,7 @@ class NodeNetworksActionBar extends StatelessWidget {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          key: const Key('delete_confirm_dialog'),
           title: const Text('Delete Network'),
           content: Text(
             'Are you sure you want to remove the node network "$networkName"?',

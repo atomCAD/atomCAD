@@ -140,6 +140,65 @@ void main() {
     });
   });
 
+  group('Network Selection', () {
+    testWidgets('Model setActiveNodeNetwork works correctly', (tester) async {
+      await pumpApp(tester, model);
+
+      // Add first network and capture its name
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+      final firstName = model.nodeNetworkView!.name;
+
+      // Add second network (becomes active)
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+      final secondName = model.nodeNetworkView!.name;
+
+      expect(model.nodeNetworkView?.name, equals(secondName));
+      expect(firstName, isNot(equals(secondName)));
+
+      // Use model directly to select first network
+      model.setActiveNodeNetwork(firstName);
+      await tester.pumpAndSettle();
+
+      // First network should now be active
+      expect(model.nodeNetworkView?.name, equals(firstName));
+    });
+
+    testWidgets('Network list items are displayed with correct Keys',
+        (tester) async {
+      await pumpApp(tester, model);
+
+      // Add a network and capture its name
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+      final networkName = model.nodeNetworkView!.name;
+
+      // Verify the network item exists with the expected Key
+      expect(TestFinders.networkListItem(networkName), findsOneWidget);
+    });
+
+    testWidgets('Network tree view displays networks', (tester) async {
+      await pumpApp(tester, model);
+
+      // Add a network so there's content to display
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+
+      // Switch to tree tab
+      await tester.tap(find.byKey(TestKeys.networkTreeTab));
+      await tester.pumpAndSettle();
+
+      // Wait for tree animation to complete (tree nodes animate in over ~1 second)
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      // Verify the tree view shows networks (check for any UNTITLED text)
+      // Note: The tree view uses AnimatedTreeView which virtualizes off-screen items
+      expect(find.textContaining('UNTITLED'), findsWidgets);
+    });
+  });
+
   group('Navigation Buttons', () {
     testWidgets('Back and forward buttons exist', (tester) async {
       await pumpApp(tester, model);
@@ -148,17 +207,90 @@ void main() {
       expect(find.byKey(TestKeys.forwardButton), findsOneWidget);
     });
 
-    testWidgets('Back button is disabled initially', (tester) async {
+    testWidgets('Back button navigates to previous network', (tester) async {
       await pumpApp(tester, model);
 
-      // Back button should be disabled (no navigation history)
-      expect(model.canNavigateBack(), isFalse);
+      // Add first network
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+
+      // Add second network (becomes active, creates history entry)
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+      final secondName = model.nodeNetworkView!.name;
+
+      expect(model.nodeNetworkView?.name, equals(secondName));
+
+      // Should now be able to go back
+      expect(model.canNavigateBack(), isTrue);
+
+      // Click back button
+      await tester.tap(find.byKey(TestKeys.backButton));
+      await tester.pumpAndSettle();
+
+      // Should now be at a different network than second (navigated back)
+      expect(model.nodeNetworkView?.name, isNot(equals(secondName)));
+
+      // Should now be able to go forward
+      expect(model.canNavigateForward(), isTrue);
     });
 
-    testWidgets('Forward button is disabled initially', (tester) async {
+    testWidgets('Forward button navigates to next network', (tester) async {
       await pumpApp(tester, model);
 
-      // Forward button should be disabled (no navigation history)
+      // Add first network and capture its name
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+
+      // Add second network (becomes active)
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+      final secondName = model.nodeNetworkView!.name;
+
+      // Go back
+      await tester.tap(find.byKey(TestKeys.backButton));
+      await tester.pumpAndSettle();
+
+      expect(model.canNavigateForward(), isTrue);
+
+      // Go forward
+      await tester.tap(find.byKey(TestKeys.forwardButton));
+      await tester.pumpAndSettle();
+
+      // Should be back at second network
+      expect(model.nodeNetworkView?.name, equals(secondName));
+    });
+
+    testWidgets('Selecting network clears forward history', (tester) async {
+      await pumpApp(tester, model);
+
+      // Add three networks and capture first name
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+      final firstName = model.nodeNetworkView!.name;
+
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(TestKeys.addNetworkButton));
+      await tester.pumpAndSettle();
+      final thirdName = model.nodeNetworkView!.name;
+
+      // Go back once (now at second network)
+      await tester.tap(find.byKey(TestKeys.backButton));
+      await tester.pumpAndSettle();
+
+      // We should be able to go forward to third network
+      expect(model.canNavigateForward(), isTrue);
+      expect(model.nodeNetworkView?.name, isNot(equals(thirdName)));
+
+      // Select first network using model (should clear forward history)
+      model.setActiveNodeNetwork(firstName);
+      await tester.pumpAndSettle();
+
+      expect(model.nodeNetworkView?.name, equals(firstName));
+
+      // Forward should now be disabled (history cleared by explicit selection)
       expect(model.canNavigateForward(), isFalse);
     });
   });

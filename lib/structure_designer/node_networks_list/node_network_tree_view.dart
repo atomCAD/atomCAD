@@ -261,6 +261,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         final isActive = node.isLeaf && node.fullName == activeNetworkName;
 
         return InkWell(
+          key: Key(node.isLeaf
+              ? 'network_tree_item_${node.fullName}'
+              : 'namespace_tree_item_${node.fullName}'),
           onTap: () {
             if (node.isLeaf) {
               // Leaf node - activate the network

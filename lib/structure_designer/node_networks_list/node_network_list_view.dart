@@ -128,6 +128,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                             )
                           : null,
                   child: ListTile(
+                    key: Key('network_item_$networkName'),
                     dense: true,
                     visualDensity: AppSpacing.compactVerticalDensity,
                     contentPadding:
@@ -151,6 +152,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                                 ),
                               ),
                               child: TextField(
+                                key: const Key('rename_text_field'),
                                 controller: _renameController,
                                 focusNode: _renameFocusNode,
                                 autofocus: true,

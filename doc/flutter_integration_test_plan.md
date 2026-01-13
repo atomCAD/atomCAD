@@ -81,27 +81,41 @@ The following features are intentionally skipped due to testing complexity:
 
 ---
 
-## Phase 2: Node Networks Panel
+## Phase 2: Node Networks Panel ✅ COMPLETED
 
 **Goal**: Test network management operations.
 
 ### Tasks
 
-- [ ] Add Keys to source code:
-  - Network list items (dynamic keys per network name)
-  - Rename dialog elements
+- [x] Add Keys to source code:
+  - Network list items (dynamic keys per network name): `network_item_$networkName`
+  - Tree view items: `network_tree_item_$networkName`, `namespace_tree_item_$namespacePath`
+  - Rename text field: `rename_text_field`
+  - Delete confirmation dialog: `delete_confirm_dialog`
 
-### Tests to Write
+### Tests Written
 
-| Test | File | Description |
-|------|------|-------------|
-| Add network button creates network | `network_list_test.dart` | Click add, verify network appears in list |
-| Delete network shows confirmation | `network_list_test.dart` | Click delete, verify dialog |
-| Confirm delete removes network | `network_list_test.dart` | Confirm dialog, verify network gone |
-| Cancel delete keeps network | `network_list_test.dart` | Cancel dialog, verify network remains |
-| Switch between List and Tree tabs | `network_list_test.dart` | Click tabs, verify content changes |
-| Select network in list | `network_list_test.dart` | Click network, verify it becomes active |
-| Back/Forward navigation works | `network_list_test.dart` | Navigate networks, use back button |
+| Test | File | Status |
+|------|------|--------|
+| Add network button creates network | `network_list_test.dart` | ✅ |
+| Add multiple networks and verify count | `network_list_test.dart` | ✅ |
+| Delete network shows confirmation dialog | `network_list_test.dart` | ✅ |
+| Confirm delete removes network | `network_list_test.dart` | ✅ |
+| Cancel delete keeps network | `network_list_test.dart` | ✅ |
+| Switch between List and Tree tabs | `network_list_test.dart` | ✅ |
+| Model setActiveNodeNetwork works correctly | `network_list_test.dart` | ✅ |
+| Network list items are displayed with correct Keys | `network_list_test.dart` | ✅ |
+| Network tree view displays networks | `network_list_test.dart` | ✅ |
+| Back and forward buttons exist | `network_list_test.dart` | ✅ |
+| Back button navigates to previous network | `network_list_test.dart` | ✅ |
+| Forward button navigates to next network | `network_list_test.dart` | ✅ |
+| Selecting network clears forward history | `network_list_test.dart` | ✅ |
+
+### Notes
+
+- The tree view uses `AnimatedTreeView` which virtualizes off-screen items, making specific Key-based item finding unreliable when there are many networks
+- Tests use the model's `setActiveNodeNetwork()` method directly for selection to ensure reliable testing
+- Navigation history tests verify relative behavior (navigated to a different network) rather than absolute names due to accumulated state across tests
 
 ---
 
@@ -241,6 +255,14 @@ static const Key networkListTab = Key('network_list_tab');
 static const Key networkTreeTab = Key('network_tree_tab');
 static const Key addNetworkButton = Key('add_network_button');
 static const Key deleteNetworkButton = Key('delete_network_button');
+static const Key backButton = Key('back_button');
+static const Key forwardButton = Key('forward_button');
+
+// Network list items (dynamic keys) - Phase 2
+static Key networkListItem(String networkName) => Key('network_item_$networkName');
+static Key networkTreeItem(String networkName) => Key('network_tree_item_$networkName');
+static Key namespaceTreeItem(String namespacePath) => Key('namespace_tree_item_$namespacePath');
+static const Key renameTextField = Key('rename_text_field');
 
 // Display panel keys
 static const Key geometryVisualizationDropdown = Key('geometry_vis_dropdown');
