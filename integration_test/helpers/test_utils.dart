@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/preferences_window.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:provider/provider.dart';
+
+// Re-export PreferencesKeys for test usage
+export 'package:flutter_cad/structure_designer/preferences_window.dart'
+    show PreferencesKeys;
 
 /// Key constants for integration testing.
 ///
@@ -188,4 +193,19 @@ class TestFinders {
       find.byKey(TestKeys.cameraPerspectiveButton);
   static Finder get cameraOrthographicButton =>
       find.byKey(TestKeys.cameraOrthographicButton);
+
+  // Preferences dialog finders
+  static Finder get preferencesDialog =>
+      find.byKey(PreferencesKeys.preferencesDialog);
+  static Finder get preferencesCloseButton =>
+      find.byKey(PreferencesKeys.closeButton);
+  static Finder get visualizationMethodDropdown =>
+      find.byKey(PreferencesKeys.visualizationMethodDropdown);
+  static Finder get displayCameraPivotCheckbox =>
+      find.byKey(PreferencesKeys.displayCameraPivotCheckbox);
+  static Finder get showGridCheckbox =>
+      find.byKey(PreferencesKeys.showGridCheckbox);
+  static Finder get backgroundColorInput =>
+      find.byKey(PreferencesKeys.backgroundColorInput);
+  static Finder get gridSizeInput => find.byKey(PreferencesKeys.gridSizeInput);
 }

@@ -26,7 +26,7 @@ integration_test/
 │   ├── camera_panel_test.dart         # Camera controls ✅
 │   └── properties_panel_test.dart     # Node property editors (Phase 7)
 ├── dialogs/
-│   ├── preferences_test.dart          # Preferences window (Phase 4)
+│   ├── preferences_test.dart          # Preferences window ✅
 │   └── add_node_popup_test.dart       # Add node filtering/selection (Phase 5)
 └── helpers/
     └── test_utils.dart                # Shared pumpApp, key constants ✅
@@ -161,25 +161,33 @@ The following features are intentionally skipped due to testing complexity:
 
 ---
 
-## Phase 4: Preferences Dialog
+## Phase 4: Preferences Dialog ✅ COMPLETED
 
 **Goal**: Test preferences window functionality.
 
 ### Tasks
 
-- [ ] Add Keys to source code:
-  - `preferences_window.dart`: All dropdowns, checkboxes, inputs
+- [x] Add Keys to source code:
+  - `preferences_window.dart`: All dropdowns, checkboxes, inputs (`PreferencesKeys` class)
 
-### Tests to Write
+### Tests Written
 
-| Test | File | Description |
-|------|------|-------------|
-| Preferences opens from Edit menu | `preferences_test.dart` | Edit > Preferences shows dialog |
-| Preferences closes on X button | `preferences_test.dart` | Click close, dialog dismissed |
-| Visualization method dropdown works | `preferences_test.dart` | Change selection |
-| Display camera pivot checkbox works | `preferences_test.dart` | Toggle checkbox |
-| Background color inputs work | `preferences_test.dart` | Change RGB values |
-| Show grid checkbox works | `preferences_test.dart` | Toggle checkbox |
+| Test | File | Status |
+|------|------|--------|
+| Preferences opens from Edit menu | `preferences_test.dart` | ✅ |
+| Preferences closes on X button | `preferences_test.dart` | ✅ |
+| Visualization method dropdown is visible | `preferences_test.dart` | ✅ |
+| Visualization method dropdown works | `preferences_test.dart` | ✅ |
+| Selecting Solid changes visualization method | `preferences_test.dart` | ✅ |
+| Selecting Wireframe changes visualization method | `preferences_test.dart` | ✅ |
+| Selecting Surface Splatting changes visualization method | `preferences_test.dart` | ✅ |
+| Display camera pivot checkbox is visible | `preferences_test.dart` | ✅ |
+| Display camera pivot checkbox works | `preferences_test.dart` | ✅ |
+| Background color input is visible | `preferences_test.dart` | ✅ |
+| Show grid checkbox is visible | `preferences_test.dart` | ✅ |
+| Show grid checkbox works | `preferences_test.dart` | ✅ |
+| Grid size input is visible | `preferences_test.dart` | ✅ |
+| Changes are applied immediately to model | `preferences_test.dart` | ✅ |
 
 ---
 
