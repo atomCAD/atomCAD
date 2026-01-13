@@ -4,6 +4,7 @@ import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/preferences_window.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
@@ -16,6 +17,10 @@ export 'package:flutter_cad/structure_designer/preferences_window.dart'
 // Re-export AddNodePopupKeys for test usage
 export 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart'
     show AddNodePopupKeys;
+
+// Re-export NodeWidgetKeys for test usage
+export 'package:flutter_cad/structure_designer/node_network/node_widget.dart'
+    show NodeWidgetKeys;
 
 /// Key constants for integration testing.
 ///
@@ -234,4 +239,24 @@ class TestFinders {
   /// Find a node item in the add node popup by name
   static Finder addNodeItem(String nodeName) =>
       find.byKey(AddNodePopupKeys.nodeItem(nodeName));
+
+  // Node widget finders
+  /// Find a node widget by its ID
+  static Finder nodeWidget(BigInt id) =>
+      find.byKey(NodeWidgetKeys.nodeWidget(id));
+
+  /// Find a node's visibility button by its ID
+  static Finder nodeVisibilityButton(BigInt id) =>
+      find.byKey(NodeWidgetKeys.visibilityButton(id));
+
+  /// Find an input pin by node ID and pin index
+  static Finder nodeInputPin(BigInt nodeId, int pinIndex) =>
+      find.byKey(NodeWidgetKeys.inputPin(nodeId, pinIndex));
+
+  /// Find an output pin by node ID
+  static Finder nodeOutputPin(BigInt nodeId) =>
+      find.byKey(NodeWidgetKeys.outputPin(nodeId));
+
+  /// Find the node network canvas
+  static Finder get nodeNetworkCanvas => find.byKey(TestKeys.nodeNetworkCanvas);
 }

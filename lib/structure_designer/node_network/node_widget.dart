@@ -7,6 +7,25 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 
+/// Key constants for node widget testing
+class NodeWidgetKeys {
+  /// Returns a Key for a node widget container by its ID
+  static Key nodeWidget(BigInt id) => Key('node_widget_$id');
+
+  /// Returns a Key for a node's visibility toggle button by its ID
+  static Key visibilityButton(BigInt id) => Key('node_visibility_$id');
+
+  /// Returns a Key for an input pin by node ID and pin index
+  static Key inputPin(BigInt nodeId, int pinIndex) =>
+      Key('node_${nodeId}_input_$pinIndex');
+
+  /// Returns a Key for an output pin by node ID
+  static Key outputPin(BigInt nodeId) => Key('node_${nodeId}_output');
+
+  /// Returns a Key for the function pin by node ID
+  static Key functionPin(BigInt nodeId) => Key('node_${nodeId}_function');
+}
+
 // Pin appearance constants
 const double PIN_SIZE = 14.0;
 const double PIN_BORDER_WIDTH = 5.0;
@@ -174,7 +193,7 @@ class NodeWidget extends StatelessWidget {
 
   NodeWidget(
       {required this.node, required this.panOffset, required this.zoomLevel})
-      : super(key: ValueKey(node.id));
+      : super(key: NodeWidgetKeys.nodeWidget(node.id));
 
   @override
   Widget build(BuildContext context) {
@@ -338,6 +357,7 @@ class NodeWidget extends StatelessWidget {
                   ),
                 ),
                 GestureDetector(
+                  key: NodeWidgetKeys.visibilityButton(node.id),
                   onTap: () {
                     final model = Provider.of<StructureDesignerModel>(context,
                         listen: false);
