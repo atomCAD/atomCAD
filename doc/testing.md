@@ -2,11 +2,11 @@
 
 ## Overview
 
-~450+ Rust tests + 1 Flutter smoke test. Run with:
+~450+ Rust tests + Flutter tests. Run with:
 
 ```bash
 cd rust && cargo test          # All Rust tests
-flutter test integration_test/ # Flutter smoke test
+flutter test integration_test/ # Flutter test
 
 # Coverage report (requires cargo-llvm-cov)
 .\scripts\coverage.ps1 -Open   # Windows: generate and open HTML report

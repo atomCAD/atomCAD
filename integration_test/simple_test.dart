@@ -7,7 +7,13 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  setUpAll(() async => await RustLib.init());
+  setUpAll(() async {
+    try {
+      await RustLib.init();
+    } catch (e) {
+      // Already initialized, ignore
+    }
+  });
 
   testWidgets('FFI initialization works', (WidgetTester tester) async {
     final nodeTypes = sd_api.getNodeTypeViews();
