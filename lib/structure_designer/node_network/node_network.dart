@@ -950,6 +950,7 @@ class NodeNetworkState extends State<NodeNetwork> {
                 onPointerPanZoomUpdate: _handlePointerPanZoomUpdate,
                 onPointerPanZoomEnd: _handlePointerPanZoomEnd,
                 child: GestureDetector(
+                  key: const Key('node_network_canvas'),
                   onTapDown: _handleTapDown,
                   onSecondaryTapDown: (details) =>
                       _handleSecondaryTapDown(details, context, model),

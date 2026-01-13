@@ -2,6 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
+/// Keys for the Add Node Popup used in integration testing.
+class AddNodePopupKeys {
+  static const Key dialog = Key('add_node_dialog');
+  static const Key filterField = Key('add_node_filter_field');
+  static const Key nodeListView = Key('add_node_list_view');
+  static const Key descriptionPanel = Key('add_node_description_panel');
+  static const Key descriptionTitle = Key('add_node_description_title');
+  static const Key descriptionText = Key('add_node_description_text');
+
+  /// Returns a Key for a category header in the node list
+  static Key categoryHeader(NodeTypeCategory category) =>
+      Key('add_node_category_${category.name}');
+
+  /// Returns a Key for a node type item in the list
+  static Key nodeItem(String nodeName) => Key('add_node_item_$nodeName');
+}
+
 // Helper function to get category display name
 String getCategoryDisplayName(NodeTypeCategory category) {
   switch (category) {
@@ -33,7 +50,7 @@ class AddNodePopup extends StatefulWidget {
   });
 
   @override
-  _AddNodePopupState createState() => _AddNodePopupState();
+  State<AddNodePopup> createState() => _AddNodePopupState();
 }
 
 class _AddNodePopupState extends State<AddNodePopup> {
@@ -106,6 +123,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      key: AddNodePopupKeys.dialog,
       backgroundColor: Colors.black,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Container(
@@ -121,6 +139,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
                     fontWeight: FontWeight.bold)),
             SizedBox(height: 10),
             TextField(
+              key: AddNodePopupKeys.filterField,
               controller: _filterController,
               decoration: InputDecoration(
                 hintText: 'Filter node types...',
@@ -147,6 +166,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: ListView.builder(
+                        key: AddNodePopupKeys.nodeListView,
                         itemCount: _buildListItems().length,
                         itemBuilder: (context, index) {
                           final items = _buildListItems();
@@ -156,6 +176,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
                           if (item is NodeTypeCategory) {
                             // Render category header
                             return Container(
+                              key: AddNodePopupKeys.categoryHeader(item),
                               padding: EdgeInsets.fromLTRB(8, 12, 8, 4),
                               child: Text(
                                 getCategoryDisplayName(item),
@@ -195,6 +216,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
                                     }
                                   },
                                   child: ListTile(
+                                    key: AddNodePopupKeys.nodeItem(nodeView.name),
                                     contentPadding: EdgeInsets.symmetric(
                                         vertical: 0, horizontal: 8),
                                     dense: true,
@@ -220,6 +242,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
                   // Right panel: Description
                   Expanded(
                     child: Container(
+                      key: AddNodePopupKeys.descriptionPanel,
                       padding: EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: Colors.grey[900],
@@ -236,6 +259,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
+                                      key: AddNodePopupKeys.descriptionTitle,
                                       _hoveredNode!.name,
                                       style: TextStyle(
                                         color: Colors.white,
@@ -247,6 +271,7 @@ class _AddNodePopupState extends State<AddNodePopup> {
                                         .description.isNotEmpty) ...[
                                       SizedBox(height: 8),
                                       Text(
+                                        key: AddNodePopupKeys.descriptionText,
                                         _hoveredNode!.description,
                                         style: TextStyle(
                                           color: Colors.white70,

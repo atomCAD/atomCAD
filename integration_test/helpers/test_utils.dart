@@ -3,13 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/preferences_window.dart';
+import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:provider/provider.dart';
 
 // Re-export PreferencesKeys for test usage
 export 'package:flutter_cad/structure_designer/preferences_window.dart'
     show PreferencesKeys;
+
+// Re-export AddNodePopupKeys for test usage
+export 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart'
+    show AddNodePopupKeys;
 
 /// Key constants for integration testing.
 ///
@@ -208,4 +214,24 @@ class TestFinders {
   static Finder get backgroundColorInput =>
       find.byKey(PreferencesKeys.backgroundColorInput);
   static Finder get gridSizeInput => find.byKey(PreferencesKeys.gridSizeInput);
+
+  // Add node popup finders
+  static Finder get addNodeDialog => find.byKey(AddNodePopupKeys.dialog);
+  static Finder get addNodeFilterField =>
+      find.byKey(AddNodePopupKeys.filterField);
+  static Finder get addNodeListView => find.byKey(AddNodePopupKeys.nodeListView);
+  static Finder get addNodeDescriptionPanel =>
+      find.byKey(AddNodePopupKeys.descriptionPanel);
+  static Finder get addNodeDescriptionTitle =>
+      find.byKey(AddNodePopupKeys.descriptionTitle);
+  static Finder get addNodeDescriptionText =>
+      find.byKey(AddNodePopupKeys.descriptionText);
+
+  /// Find a category header in the add node popup
+  static Finder addNodeCategoryHeader(NodeTypeCategory category) =>
+      find.byKey(AddNodePopupKeys.categoryHeader(category));
+
+  /// Find a node item in the add node popup by name
+  static Finder addNodeItem(String nodeName) =>
+      find.byKey(AddNodePopupKeys.nodeItem(nodeName));
 }
