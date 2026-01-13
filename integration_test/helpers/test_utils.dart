@@ -55,6 +55,26 @@ class TestKeys {
   /// Returns a Key for a namespace folder in the tree view
   static Key namespaceTreeItem(String namespacePath) =>
       Key('namespace_tree_item_$namespacePath');
+
+  // Geometry visualization keys
+  static const Key geometryVisSurfaceSplatting =
+      Key('geometry_vis_surface_splatting');
+  static const Key geometryVisWireframe = Key('geometry_vis_wireframe');
+  static const Key geometryVisSolid = Key('geometry_vis_solid');
+
+  // Node display policy keys
+  static const Key nodeDisplayManual = Key('node_display_manual');
+  static const Key nodeDisplayPreferSelected = Key('node_display_prefer_selected');
+  static const Key nodeDisplayPreferFrontier = Key('node_display_prefer_frontier');
+
+  // Atomic visualization keys
+  static const Key atomicVisBallAndStick = Key('atomic_vis_ball_and_stick');
+  static const Key atomicVisSpaceFilling = Key('atomic_vis_space_filling');
+
+  // Camera control keys
+  static const Key cameraViewDropdown = Key('camera_view_dropdown');
+  static const Key cameraPerspectiveButton = Key('camera_perspective_button');
+  static const Key cameraOrthographicButton = Key('camera_orthographic_button');
 }
 
 /// Initializes the Rust FFI library.
@@ -139,4 +159,33 @@ class TestFinders {
   /// Find a network item in the tree view by name
   static Finder networkTreeItem(String networkName) =>
       find.byKey(TestKeys.networkTreeItem(networkName));
+
+  // Geometry visualization finders
+  static Finder get geometryVisSurfaceSplatting =>
+      find.byKey(TestKeys.geometryVisSurfaceSplatting);
+  static Finder get geometryVisWireframe =>
+      find.byKey(TestKeys.geometryVisWireframe);
+  static Finder get geometryVisSolid => find.byKey(TestKeys.geometryVisSolid);
+
+  // Node display policy finders
+  static Finder get nodeDisplayManual =>
+      find.byKey(TestKeys.nodeDisplayManual);
+  static Finder get nodeDisplayPreferSelected =>
+      find.byKey(TestKeys.nodeDisplayPreferSelected);
+  static Finder get nodeDisplayPreferFrontier =>
+      find.byKey(TestKeys.nodeDisplayPreferFrontier);
+
+  // Atomic visualization finders
+  static Finder get atomicVisBallAndStick =>
+      find.byKey(TestKeys.atomicVisBallAndStick);
+  static Finder get atomicVisSpaceFilling =>
+      find.byKey(TestKeys.atomicVisSpaceFilling);
+
+  // Camera control finders
+  static Finder get cameraViewDropdown =>
+      find.byKey(TestKeys.cameraViewDropdown);
+  static Finder get cameraPerspectiveButton =>
+      find.byKey(TestKeys.cameraPerspectiveButton);
+  static Finder get cameraOrthographicButton =>
+      find.byKey(TestKeys.cameraOrthographicButton);
 }

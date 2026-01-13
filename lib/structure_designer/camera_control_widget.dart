@@ -19,6 +19,7 @@ class CameraControlWidget extends StatelessWidget {
               // Camera canonical view dropdown
               Expanded(
                 child: DropdownButton<APICameraCanonicalView>(
+                  key: const Key('camera_view_dropdown'),
                   isExpanded: true,
                   value: model.cameraCanonicalView,
                   onChanged: (APICameraCanonicalView? newValue) {
@@ -42,6 +43,7 @@ class CameraControlWidget extends StatelessWidget {
               const SizedBox(width: 8),
               // Perspective view button
               IconButton(
+                key: const Key('camera_perspective_button'),
                 icon: const Icon(Icons.panorama_horizontal),
                 tooltip: 'Perspective View',
                 color: model.isOrthographic ? Colors.grey : Theme.of(context).primaryColor,
@@ -53,6 +55,7 @@ class CameraControlWidget extends StatelessWidget {
               ),
               // Orthographic view button
               IconButton(
+                key: const Key('camera_orthographic_button'),
                 icon: const Icon(Icons.border_all_outlined),
                 tooltip: 'Orthographic View',
                 color: model.isOrthographic ? Theme.of(context).primaryColor : Colors.grey,

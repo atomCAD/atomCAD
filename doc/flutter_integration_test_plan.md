@@ -9,25 +9,27 @@ Existing tests in `integration_test/`:
 - **app_test.dart**: App launch, menu visibility, sidebar sections, tab switching, add network button
 - **node_network_test.dart**: Add/delete networks, confirmation dialogs, screenshots
 
-## Proposed File Structure
+## Current File Structure
 
 ```
 integration_test/
-├── smoke_test.dart                    # Basic app launch + FFI
-├── menu_test.dart                     # All menu interactions
+├── smoke_test.dart                    # Basic app launch + FFI ✅
+├── menu_test.dart                     # All menu interactions ✅
+├── app_test.dart                      # Legacy tests (being refactored)
+├── node_network_test.dart             # Legacy tests (being refactored)
 ├── node_network/
-│   ├── network_list_test.dart         # Add/delete/rename networks
-│   ├── node_operations_test.dart      # Add/select/delete nodes
-│   └── keyboard_shortcuts_test.dart   # Delete key, Ctrl+D, etc.
+│   ├── network_list_test.dart         # Add/delete/rename networks ✅
+│   ├── node_operations_test.dart      # Add/select/delete nodes (Phase 6)
+│   └── keyboard_shortcuts_test.dart   # Delete key, Ctrl+D, etc. (Phase 6)
 ├── panels/
-│   ├── display_panel_test.dart        # Geometry/atomic visualization
-│   ├── camera_panel_test.dart         # Camera controls
-│   └── properties_panel_test.dart     # Node property editors
+│   ├── display_panel_test.dart        # Geometry/atomic/node display ✅
+│   ├── camera_panel_test.dart         # Camera controls ✅
+│   └── properties_panel_test.dart     # Node property editors (Phase 7)
 ├── dialogs/
-│   ├── preferences_test.dart          # Preferences window
-│   └── add_node_popup_test.dart       # Add node filtering/selection
+│   ├── preferences_test.dart          # Preferences window (Phase 4)
+│   └── add_node_popup_test.dart       # Add node filtering/selection (Phase 5)
 └── helpers/
-    └── test_utils.dart                # Shared pumpApp, key constants
+    └── test_utils.dart                # Shared pumpApp, key constants ✅
 ```
 
 ## Skipped Functionality
@@ -119,26 +121,43 @@ The following features are intentionally skipped due to testing complexity:
 
 ---
 
-## Phase 3: Display & Camera Panels
+## Phase 3: Display & Camera Panels ✅ COMPLETED
 
 **Goal**: Test sidebar panel controls.
 
 ### Tasks
 
-- [ ] Add Keys to source code:
-  - `geometry_visualization_widget.dart`: Dropdown key
-  - `node_display_widget.dart`: Dropdown key
-  - `atomic_structure_visualization_widget.dart`: Dropdown key
-  - `camera_control_widget.dart`: Control elements
+- [x] Add Keys to source code:
+  - `geometry_visualization_widget.dart`: Button keys (`geometry_vis_surface_splatting`, `geometry_vis_wireframe`, `geometry_vis_solid`)
+  - `node_display_widget.dart`: Button keys (`node_display_manual`, `node_display_prefer_selected`, `node_display_prefer_frontier`)
+  - `atomic_structure_visualization_widget.dart`: Button keys (`atomic_vis_ball_and_stick`, `atomic_vis_space_filling`)
+  - `camera_control_widget.dart`: Control keys (`camera_view_dropdown`, `camera_perspective_button`, `camera_orthographic_button`)
 
-### Tests to Write
+### Tests Written
 
-| Test | File | Description |
-|------|------|-------------|
-| Geometry visualization dropdown works | `display_panel_test.dart` | Change mode, verify selection |
-| Node display policy dropdown works | `display_panel_test.dart` | Change policy, verify selection |
-| Atomic visualization dropdown works | `display_panel_test.dart` | Change mode, verify selection |
-| Camera control panel visible | `camera_panel_test.dart` | Verify panel and controls exist |
+| Test | File | Status |
+|------|------|--------|
+| Geometry visualization buttons are visible | `display_panel_test.dart` | ✅ |
+| Surface splatting button changes mode | `display_panel_test.dart` | ✅ |
+| Wireframe button changes mode | `display_panel_test.dart` | ✅ |
+| Solid button changes mode | `display_panel_test.dart` | ✅ |
+| Switching between geometry modes updates selection | `display_panel_test.dart` | ✅ |
+| Node display policy buttons are visible | `display_panel_test.dart` | ✅ |
+| Manual policy button changes mode | `display_panel_test.dart` | ✅ |
+| Prefer selected policy button changes mode | `display_panel_test.dart` | ✅ |
+| Prefer frontier policy button changes mode | `display_panel_test.dart` | ✅ |
+| Switching between policies updates selection | `display_panel_test.dart` | ✅ |
+| Atomic visualization buttons are visible | `display_panel_test.dart` | ✅ |
+| Ball and stick button changes mode | `display_panel_test.dart` | ✅ |
+| Space filling button changes mode | `display_panel_test.dart` | ✅ |
+| Switching between atomic modes updates selection | `display_panel_test.dart` | ✅ |
+| Camera control panel is visible | `camera_panel_test.dart` | ✅ |
+| Camera view dropdown has all view options | `camera_panel_test.dart` | ✅ |
+| Camera view dropdown selection changes model | `camera_panel_test.dart` | ✅ |
+| Can select different canonical views | `camera_panel_test.dart` | ✅ |
+| Perspective button sets perspective mode | `camera_panel_test.dart` | ✅ |
+| Orthographic button sets orthographic mode | `camera_panel_test.dart` | ✅ |
+| Switching between projection modes works | `camera_panel_test.dart` | ✅ |
 
 ---
 

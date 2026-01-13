@@ -27,6 +27,7 @@ class GeometryVisualizationWidget extends StatelessWidget {
                 context,
                 Icons.blur_on, // Using blur_on to represent point cloud
                 'Geometry visualization: Surface Splatting',
+                key: const Key('geometry_vis_surface_splatting'),
                 isSelected: model.preferences?.geometryVisualizationPreferences
                         .geometryVisualization ==
                     GeometryVisualization.surfaceSplatting,
@@ -45,6 +46,7 @@ class GeometryVisualizationWidget extends StatelessWidget {
                 context,
                 Icons.grid_3x3, // Using grid to represent wireframe
                 'Geometry visualization: Wireframe',
+                key: const Key('geometry_vis_wireframe'),
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
                         GeometryVisualization.explicitMesh &&
@@ -66,6 +68,7 @@ class GeometryVisualizationWidget extends StatelessWidget {
                 context,
                 Icons.view_in_ar, // Using 3D object icon for solid
                 'Geometry visualization: Solid',
+                key: const Key('geometry_vis_solid'),
                 isSelected: model.preferences?.geometryVisualizationPreferences
                             .geometryVisualization ==
                         GeometryVisualization.explicitMesh &&
@@ -89,10 +92,11 @@ class GeometryVisualizationWidget extends StatelessWidget {
   }
 
   Widget _buildIconButton(BuildContext context, IconData icon, String tooltip,
-      {required bool isSelected, required VoidCallback onPressed}) {
+      {required bool isSelected, required VoidCallback onPressed, Key? key}) {
     return Tooltip(
       message: tooltip,
       child: Material(
+        key: key,
         color: isSelected ? AppColors.primaryAccent : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
         child: InkWell(
