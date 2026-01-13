@@ -4,6 +4,7 @@ import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
 /// Editor widget for sphere nodes
 class SphereEditor extends StatefulWidget {
@@ -30,6 +31,7 @@ class SphereEditorState extends State<SphereEditor> {
     }
 
     return Padding(
+      key: PropertyEditorKeys.sphereEditor,
       padding: const EdgeInsets.all(8.0),
       child: SingleChildScrollView(
         child: Column(
@@ -43,6 +45,9 @@ class SphereEditorState extends State<SphereEditor> {
             IVec3Input(
               label: 'Center',
               value: widget.data!.center,
+              xInputKey: PropertyEditorKeys.sphereCenterXInput,
+              yInputKey: PropertyEditorKeys.sphereCenterYInput,
+              zInputKey: PropertyEditorKeys.sphereCenterZInput,
               onChanged: (newValue) {
                 widget.model.setSphereData(
                   widget.nodeId,
@@ -58,6 +63,7 @@ class SphereEditorState extends State<SphereEditor> {
               label: 'Radius',
               value: widget.data!.radius,
               minimumValue: 1,
+              inputKey: PropertyEditorKeys.sphereRadiusInput,
               onChanged: (newValue) {
                 widget.model.setSphereData(
                   widget.nodeId,

@@ -42,6 +42,46 @@ import 'package:flutter_cad/structure_designer/node_data/network_description_edi
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
+/// Keys for property editor widgets used in integration testing.
+class PropertyEditorKeys {
+  // Main container
+  static const Key panel = Key('node_data_panel');
+
+  // Editor-specific keys
+  static const Key floatEditor = Key('property_float_editor');
+  static const Key intEditor = Key('property_int_editor');
+  static const Key boolEditor = Key('property_bool_editor');
+  static const Key stringEditor = Key('property_string_editor');
+  static const Key vec3Editor = Key('property_vec3_editor');
+  static const Key cuboidEditor = Key('property_cuboid_editor');
+  static const Key sphereEditor = Key('property_sphere_editor');
+
+  // Input field keys
+  static const Key floatValueInput = Key('property_float_value_input');
+  static const Key intValueInput = Key('property_int_value_input');
+  static const Key boolValueCheckbox = Key('property_bool_value_checkbox');
+  static const Key stringValueInput = Key('property_string_value_input');
+
+  // Vec3 input keys
+  static const Key vec3XInput = Key('property_vec3_x_input');
+  static const Key vec3YInput = Key('property_vec3_y_input');
+  static const Key vec3ZInput = Key('property_vec3_z_input');
+
+  // Cuboid-specific keys
+  static const Key cuboidMinCornerXInput = Key('property_cuboid_min_x_input');
+  static const Key cuboidMinCornerYInput = Key('property_cuboid_min_y_input');
+  static const Key cuboidMinCornerZInput = Key('property_cuboid_min_z_input');
+  static const Key cuboidExtentXInput = Key('property_cuboid_extent_x_input');
+  static const Key cuboidExtentYInput = Key('property_cuboid_extent_y_input');
+  static const Key cuboidExtentZInput = Key('property_cuboid_extent_z_input');
+
+  // Sphere-specific keys
+  static const Key sphereCenterXInput = Key('property_sphere_center_x_input');
+  static const Key sphereCenterYInput = Key('property_sphere_center_y_input');
+  static const Key sphereCenterZInput = Key('property_sphere_center_z_input');
+  static const Key sphereRadiusInput = Key('property_sphere_radius_input');
+}
+
 /// A widget that displays and allows editing of node-specific data
 /// based on the currently selected node in the graph.
 class NodeDataWidget extends StatelessWidget {

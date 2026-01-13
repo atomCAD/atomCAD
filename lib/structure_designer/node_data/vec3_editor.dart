@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
 /// Editor widget for vec3 nodes
 class Vec3Editor extends StatefulWidget {
@@ -31,6 +32,7 @@ class Vec3EditorState extends State<Vec3Editor> {
     }
 
     return Padding(
+      key: PropertyEditorKeys.vec3Editor,
       padding: const EdgeInsets.all(8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -43,6 +45,9 @@ class Vec3EditorState extends State<Vec3Editor> {
           Vec3Input(
             label: 'Value',
             value: widget.data!.value,
+            xInputKey: PropertyEditorKeys.vec3XInput,
+            yInputKey: PropertyEditorKeys.vec3YInput,
+            zInputKey: PropertyEditorKeys.vec3ZInput,
             onChanged: (newValue) {
               widget.model.setVec3Data(
                 widget.nodeId,

@@ -14,6 +14,11 @@ class IVec3Input extends StatefulWidget {
   final APIIVec3? minimumValue;
   final APIIVec3? maximumValue;
 
+  /// Optional keys for individual axis text fields (for testing)
+  final Key? xInputKey;
+  final Key? yInputKey;
+  final Key? zInputKey;
+
   const IVec3Input({
     super.key,
     required this.label,
@@ -21,6 +26,9 @@ class IVec3Input extends StatefulWidget {
     required this.onChanged,
     this.minimumValue,
     this.maximumValue,
+    this.xInputKey,
+    this.yInputKey,
+    this.zInputKey,
   });
 
   @override
@@ -85,13 +93,16 @@ class _IVec3InputState extends State<IVec3Input> {
   void didUpdateWidget(IVec3Input oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value.x != widget.value.x) {
-      updateTextControllerWithSelection(_xController, widget.value.x.toString());
+      updateTextControllerWithSelection(
+          _xController, widget.value.x.toString());
     }
     if (oldWidget.value.y != widget.value.y) {
-      updateTextControllerWithSelection(_yController, widget.value.y.toString());
+      updateTextControllerWithSelection(
+          _yController, widget.value.y.toString());
     }
     if (oldWidget.value.z != widget.value.z) {
-      updateTextControllerWithSelection(_zController, widget.value.z.toString());
+      updateTextControllerWithSelection(
+          _zController, widget.value.z.toString());
     }
   }
 
@@ -362,6 +373,7 @@ class _IVec3InputState extends State<IVec3Input> {
     required Color axisColor,
     required TextEditingController controller,
     required FocusNode focusNode,
+    Key? inputKey,
   }) {
     return ConstrainedBox(
       constraints: AppSpacing.inputFieldConstraints,
@@ -394,6 +406,7 @@ class _IVec3InputState extends State<IVec3Input> {
               }
             },
             child: TextField(
+              key: inputKey,
               decoration: AppInputDecorations.standard.copyWith(
                 labelText: axisLabel,
                 labelStyle: TextStyle(
@@ -430,6 +443,7 @@ class _IVec3InputState extends State<IVec3Input> {
                 axisColor: AppColors.xAxisColor,
                 controller: _xController,
                 focusNode: _xFocusNode,
+                inputKey: widget.xInputKey,
               ),
             ),
             const SizedBox(width: 4), // Reduced spacing from 8 to 4
@@ -440,6 +454,7 @@ class _IVec3InputState extends State<IVec3Input> {
                 axisColor: AppColors.yAxisColor,
                 controller: _yController,
                 focusNode: _yFocusNode,
+                inputKey: widget.yInputKey,
               ),
             ),
             const SizedBox(width: 4), // Reduced spacing from 8 to 4
@@ -450,6 +465,7 @@ class _IVec3InputState extends State<IVec3Input> {
                 axisColor: AppColors.zAxisColor,
                 controller: _zController,
                 focusNode: _zFocusNode,
+                inputKey: widget.zInputKey,
               ),
             ),
           ],

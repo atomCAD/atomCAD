@@ -5,6 +5,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/preferences_window.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
@@ -21,6 +22,10 @@ export 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart'
 // Re-export NodeWidgetKeys for test usage
 export 'package:flutter_cad/structure_designer/node_network/node_widget.dart'
     show NodeWidgetKeys;
+
+// Re-export PropertyEditorKeys for test usage
+export 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart'
+    show PropertyEditorKeys;
 
 /// Key constants for integration testing.
 ///
@@ -80,8 +85,10 @@ class TestKeys {
 
   // Node display policy keys
   static const Key nodeDisplayManual = Key('node_display_manual');
-  static const Key nodeDisplayPreferSelected = Key('node_display_prefer_selected');
-  static const Key nodeDisplayPreferFrontier = Key('node_display_prefer_frontier');
+  static const Key nodeDisplayPreferSelected =
+      Key('node_display_prefer_selected');
+  static const Key nodeDisplayPreferFrontier =
+      Key('node_display_prefer_frontier');
 
   // Atomic visualization keys
   static const Key atomicVisBallAndStick = Key('atomic_vis_ball_and_stick');
@@ -184,8 +191,7 @@ class TestFinders {
   static Finder get geometryVisSolid => find.byKey(TestKeys.geometryVisSolid);
 
   // Node display policy finders
-  static Finder get nodeDisplayManual =>
-      find.byKey(TestKeys.nodeDisplayManual);
+  static Finder get nodeDisplayManual => find.byKey(TestKeys.nodeDisplayManual);
   static Finder get nodeDisplayPreferSelected =>
       find.byKey(TestKeys.nodeDisplayPreferSelected);
   static Finder get nodeDisplayPreferFrontier =>
@@ -224,7 +230,8 @@ class TestFinders {
   static Finder get addNodeDialog => find.byKey(AddNodePopupKeys.dialog);
   static Finder get addNodeFilterField =>
       find.byKey(AddNodePopupKeys.filterField);
-  static Finder get addNodeListView => find.byKey(AddNodePopupKeys.nodeListView);
+  static Finder get addNodeListView =>
+      find.byKey(AddNodePopupKeys.nodeListView);
   static Finder get addNodeDescriptionPanel =>
       find.byKey(AddNodePopupKeys.descriptionPanel);
   static Finder get addNodeDescriptionTitle =>
@@ -259,4 +266,65 @@ class TestFinders {
 
   /// Find the node network canvas
   static Finder get nodeNetworkCanvas => find.byKey(TestKeys.nodeNetworkCanvas);
+
+  // Property editor finders
+  /// Find the float editor
+  static Finder get floatEditor => find.byKey(PropertyEditorKeys.floatEditor);
+
+  /// Find the int editor
+  static Finder get intEditor => find.byKey(PropertyEditorKeys.intEditor);
+
+  /// Find the bool editor
+  static Finder get boolEditor => find.byKey(PropertyEditorKeys.boolEditor);
+
+  /// Find the string editor
+  static Finder get stringEditor => find.byKey(PropertyEditorKeys.stringEditor);
+
+  /// Find the vec3 editor
+  static Finder get vec3Editor => find.byKey(PropertyEditorKeys.vec3Editor);
+
+  /// Find the cuboid editor
+  static Finder get cuboidEditor => find.byKey(PropertyEditorKeys.cuboidEditor);
+
+  /// Find the sphere editor
+  static Finder get sphereEditor => find.byKey(PropertyEditorKeys.sphereEditor);
+
+  // Property input field finders
+  static Finder get floatValueInput =>
+      find.byKey(PropertyEditorKeys.floatValueInput);
+  static Finder get intValueInput =>
+      find.byKey(PropertyEditorKeys.intValueInput);
+  static Finder get boolValueCheckbox =>
+      find.byKey(PropertyEditorKeys.boolValueCheckbox);
+  static Finder get stringValueInput =>
+      find.byKey(PropertyEditorKeys.stringValueInput);
+
+  // Vec3 input finders
+  static Finder get vec3XInput => find.byKey(PropertyEditorKeys.vec3XInput);
+  static Finder get vec3YInput => find.byKey(PropertyEditorKeys.vec3YInput);
+  static Finder get vec3ZInput => find.byKey(PropertyEditorKeys.vec3ZInput);
+
+  // Cuboid input finders
+  static Finder get cuboidMinCornerXInput =>
+      find.byKey(PropertyEditorKeys.cuboidMinCornerXInput);
+  static Finder get cuboidMinCornerYInput =>
+      find.byKey(PropertyEditorKeys.cuboidMinCornerYInput);
+  static Finder get cuboidMinCornerZInput =>
+      find.byKey(PropertyEditorKeys.cuboidMinCornerZInput);
+  static Finder get cuboidExtentXInput =>
+      find.byKey(PropertyEditorKeys.cuboidExtentXInput);
+  static Finder get cuboidExtentYInput =>
+      find.byKey(PropertyEditorKeys.cuboidExtentYInput);
+  static Finder get cuboidExtentZInput =>
+      find.byKey(PropertyEditorKeys.cuboidExtentZInput);
+
+  // Sphere input finders
+  static Finder get sphereCenterXInput =>
+      find.byKey(PropertyEditorKeys.sphereCenterXInput);
+  static Finder get sphereCenterYInput =>
+      find.byKey(PropertyEditorKeys.sphereCenterYInput);
+  static Finder get sphereCenterZInput =>
+      find.byKey(PropertyEditorKeys.sphereCenterZInput);
+  static Finder get sphereRadiusInput =>
+      find.byKey(PropertyEditorKeys.sphereRadiusInput);
 }
