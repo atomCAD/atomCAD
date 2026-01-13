@@ -51,8 +51,8 @@ class _NodeNetworksPanelState extends State<NodeNetworksPanel>
               TabBar(
                 controller: _tabController,
                 tabs: const [
-                  Tab(text: 'List'),
-                  Tab(text: 'Tree'),
+                  Tab(key: Key('network_list_tab'), text: 'List'),
+                  Tab(key: Key('network_tree_tab'), text: 'Tree'),
                 ],
               ),
               // Tab views

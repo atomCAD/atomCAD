@@ -21,6 +21,7 @@ class NodeNetworksActionBar extends StatelessWidget {
           Tooltip(
             message: 'Go Back',
             child: IconButton(
+              key: const Key('back_button'),
               onPressed:
                   model.canNavigateBack() ? () => model.navigateBack() : null,
               icon: Icon(
@@ -35,6 +36,7 @@ class NodeNetworksActionBar extends StatelessWidget {
           Tooltip(
             message: 'Go Forward',
             child: IconButton(
+              key: const Key('forward_button'),
               onPressed: model.canNavigateForward()
                   ? () => model.navigateForward()
                   : null,
@@ -54,6 +56,7 @@ class NodeNetworksActionBar extends StatelessWidget {
             child: Tooltip(
               message: 'Add network',
               child: IconButton(
+                key: const Key('add_network_button'),
                 onPressed: () {
                   model.addNewNodeNetwork();
                 },
@@ -72,6 +75,7 @@ class NodeNetworksActionBar extends StatelessWidget {
             child: Tooltip(
               message: 'Delete network',
               child: IconButton(
+                key: const Key('delete_network_button'),
                 onPressed: model.nodeNetworkView != null
                     ? () => _handleDeleteNetwork(context, model)
                     : null,

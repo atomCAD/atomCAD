@@ -46,38 +46,38 @@ The following features are intentionally skipped due to testing complexity:
 
 ---
 
-## Phase 1: Foundation & Refactoring
+## Phase 1: Foundation & Refactoring ✅ COMPLETED
 
 **Goal**: Establish testing patterns, shared utilities, and reorganize existing tests.
 
 ### Tasks
 
-- [ ] Create `integration_test/helpers/test_utils.dart` with:
+- [x] Create `integration_test/helpers/test_utils.dart` with:
   - Shared `pumpApp()` helper function
   - Key constants class (`TestKeys`)
   - Common finder helpers
 
-- [ ] Refactor existing tests:
+- [x] Refactor existing tests:
   - Move FFI test from `simple_test.dart` to `smoke_test.dart`
   - Extract menu tests from `app_test.dart` to `menu_test.dart`
   - Move network list tests from `node_network_test.dart` to `node_network/network_list_test.dart`
 
-- [ ] Add Keys to source code:
+- [x] Add Keys to source code:
   - `structure_designer.dart`: Menu items (`fileMenu`, `viewMenu`, `editMenu`)
   - `node_networks_panel.dart`: Panel elements (`addNetworkButton`, `deleteNetworkButton`, `networkListTab`, `networkTreeTab`)
 
 ### Tests to Write
 
-| Test | File | Description |
-|------|------|-------------|
-| App launches successfully | `smoke_test.dart` | Verify main UI elements visible |
-| FFI initialization works | `smoke_test.dart` | Call Rust API, verify response |
-| File menu opens | `menu_test.dart` | Tap File, verify menu items |
-| View menu opens | `menu_test.dart` | Tap View, verify menu items |
-| Edit menu opens | `menu_test.dart` | Tap Edit, verify Preferences item |
-| Load Design dialog appears | `menu_test.dart` | File > Load Design shows picker |
-| Save Design As dialog appears | `menu_test.dart` | File > Save Design As shows picker |
-| Export visible dialog appears | `menu_test.dart` | File > Export shows format selection |
+| Test | File | Status |
+|------|------|--------|
+| App launches successfully | `smoke_test.dart` | ✅ |
+| FFI initialization works | `smoke_test.dart` | ✅ |
+| File menu opens | `menu_test.dart` | ✅ |
+| View menu opens | `menu_test.dart` | ✅ |
+| Edit menu opens | `menu_test.dart` | ✅ |
+| Load Design dialog appears | `menu_test.dart` | ✅ |
+| Save Design As dialog appears | `menu_test.dart` | ✅ |
+| Export visible dialog appears | `menu_test.dart` | ✅ |
 
 ---
 
