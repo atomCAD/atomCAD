@@ -29,6 +29,18 @@ The following components already exist and return stub responses:
 
 See [Phase 1 Design Doc](./ai_assistant_integration_phase1_design.md) for details on existing implementation.
 
+### Key Source Files (Prerequisites)
+
+Before implementing any phase, agents should understand these core source files:
+
+| File | Description |
+|------|-------------|
+| `rust/src/structure_designer/node_network.rs` | Core data structures: `Node`, `NodeNetwork`, `Wire`, `Argument`. Contains node/wire operations, selection, connections. |
+| `rust/src/structure_designer/node_type.rs` | `NodeType` and `Parameter` definitions. Defines how node types are structured with parameters, output types, and data handlers. |
+| `rust/src/structure_designer/node_data.rs` | `NodeData` trait that all node data types implement. Will be extended with `get_text_properties()` and `set_text_properties()`. |
+| `rust/src/structure_designer/data_type.rs` | `DataType` enum defining all supported data types (Int, Float, Vec3, Geometry, etc.). |
+| `rust/src/structure_designer/nodes/` | Individual node implementations. Each file contains a node's data struct and `NodeData` impl. |
+
 ---
 
 ## Phase 1: Core Text Format Infrastructure
@@ -265,7 +277,7 @@ pub use serializer::Serializer;
 ### 2.1 Design Decisions (from user feedback)
 
 - **Primitive value nodes** (ivec3, vec3, etc.): Use parameter names (`x: 1, y: 2, z: 3`) not compound value
-- **Connected parameters**: Output both stored default AND connection
+- **Connected parameters**: Omit the stored property value; only show the connection (cleaner for LLMs, connection is the runtime value)
 - **Input-only parameters**: Show when connected, omit when using default
 
 ### 2.2 Node Categories
@@ -542,7 +554,7 @@ impl<'a> NetworkSerializer<'a> {
    c. Combine properties and connections:
       - Properties: "prop_name: literal_value"
       - Connections: "param_name: source_node_name" or "param_name: @source_node_name"
-      - Per design decision: output BOTH if param has stored value AND connection
+      - If a parameter has both stored value AND connection, only output the connection (omit the stored value)
 
    d. Format: "node_name = node_type { prop1: val1, prop2: val2, ... }"
 
@@ -562,7 +574,7 @@ impl<'a> NetworkSerializer<'a> {
 - [ ] Implement name generation (type + counter)
 - [ ] Implement node serialization
 - [ ] Handle wire connections (regular and function pins)
-- [ ] Handle the "both values" case for connected parameters
+- [ ] Omit stored property values when parameter has a connection
 - [ ] Handle output statement
 - [ ] Add blank lines / formatting for readability
 - [ ] Create public API function

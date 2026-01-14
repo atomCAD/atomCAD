@@ -155,7 +155,9 @@ cuboid1 = cuboid {
 
 The parser determines whether a key corresponds to a property or input pin based on the node type definition. Values that are node references create wire connections; literal values set properties.
 
-**Precedence rule**: If both a property and an input connection are specified for the same parameter, the input connection takes precedence at evaluation time.
+**Serialization rule**: When a parameter has both a stored default value and an input connection, only the connection is serialized (the stored value is omitted). This keeps the format clean and unambiguous for LLM consumption. The connection represents the actual runtime value.
+
+**Edit semantics**: Setting a parameter to a node reference (e.g., `radius: int1`) creates a connection. Setting it to a literal (e.g., `radius: 5`) removes any existing connection and sets the stored value.
 
 ## Type Annotations
 
