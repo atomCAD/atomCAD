@@ -40,43 +40,32 @@ The Flutter server solves the Rust→Flutter UI refresh problem: after processin
 
 The same format is used for both query results and edit commands.
 
-### Grammar
+**See [Node Network Text Format](./node_network_text_format.md) for the complete specification.**
+
+### Quick Example
 
 ```
-line       := assignment | statement
-assignment := name '=' type '{' params '}'
-statement  := 'output' name | 'delete' name
-params     := (name ':' value ',')*
-name       := identifier (e.g., sphere1, box1)
-type       := PascalCase node type (e.g., Sphere, Union)
-value      := literal | name
+# Query result / Edit command
+sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+box1 = cuboid { min_corner: (-2, -2, -2), extent: (4, 4, 4) }
+diff1 = diff { base: sphere1, sub: box1 }
+output diff1
 ```
 
-### Example: Query Result
+### Key Features
 
-```
-sphere1 = Sphere { radius: 2.0 }
-box1 = Box { size: [1, 2, 3] }
-union1 = Union { a: sphere1, b: box1 }
-output union1
-```
-
-### Example: Edit Command
-
-```
-sphere1 = Sphere { radius: 4.0 }
-cylinder1 = Cylinder { radius: 1.0, height: 3.0 }
-union1 = Union { a: sphere1, b: cylinder1 }
-delete box1
-```
+- **Unified syntax** for properties and input connections
+- **Function pin references** with `@` prefix (e.g., `f: @pattern` for `map` node)
+- **Multi-line strings** with triple quotes for `expr` and `motif` definitions
+- **Type annotations** where required (e.g., `parameter`, `expr`, `map` nodes)
 
 ### Edit Semantics
 
 | Statement | Name Exists? | Effect |
 |-----------|--------------|--------|
-| `sphere1 = Sphere { radius: 4.0 }` | Yes | Update params |
-| `cylinder1 = Cylinder { ... }` | No | Create node |
-| `union1 = Union { a: sphere1, b: cylinder1 }` | Yes, inputs changed | Rewire connections |
+| `sphere1 = sphere { radius: 4 }` | Yes | Update properties |
+| `cylinder1 = cylinder { ... }` | No | Create node |
+| `union1 = union { shapes: [a, b] }` | Yes, inputs changed | Rewire connections |
 | `delete box1` | Yes | Remove node and connections |
 
 Nodes not mentioned in an edit command remain unchanged.
@@ -102,20 +91,30 @@ Nodes not mentioned in an edit command remain unchanged.
 atomcad-cli query
 # → outputs text to stdout
 
-# Edit network (multiline via tool parameter)
-atomcad-cli edit --code="sphere1 = Sphere { radius: 3.0 }"
+# Edit network (incremental - merges with existing)
+atomcad-cli edit --code="sphere1 = sphere { radius: 3.0 }"
+# → outputs JSON result to stdout
+
+# Edit network (replace - clears and rebuilds entire network)
+atomcad-cli edit --replace --code="sphere1 = sphere { radius: 3.0 }"
 # → outputs JSON result to stdout
 ```
 
 The `--code` parameter receives multiline text from the AI tool framework (not shell pipes/heredocs).
+
+| Flag | Description |
+|------|-------------|
+| `--code` | The edit commands (required) |
+| `--replace` | Replace entire network instead of incremental merge |
 
 ## HTTP API
 
 Flutter runs an HTTP server on localhost (e.g., port 19847).
 
 ```
-GET  /query  → returns text representation
-POST /edit   → body is edit commands, returns JSON result
+GET  /query              → returns text representation
+POST /edit               → body is edit commands, returns JSON result
+POST /edit?replace=true  → full replace mode
 ```
 
 ## Open Questions
