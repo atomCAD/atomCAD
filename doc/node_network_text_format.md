@@ -205,8 +205,8 @@ int1 = int { value: 42 }
 float1 = float { value: 3.14 }
 bool1 = bool { value: true }
 string1 = string { value: "hello" }
-ivec2_1 = ivec2 { value: (1, 2) }
-ivec3_1 = ivec3 { value: (1, 2, 3) }
+ivec2_1 = ivec2 { x: 1, y: 2 }
+ivec3_1 = ivec3 { x: 1, y: 2, z: 3 }
 vec2_1 = vec2 { x: 1.0, y: 2.0 }
 vec3_1 = vec3 { x: 1.0, y: 2.0, z: 3.0 }
 

@@ -1,5 +1,7 @@
 # AI Support in atomCAD
 
+Update: This document is deprecated: please refer to the new document at doc/ai_support.md We keep this here because it might include good ideas for the future, but our current implmeentation is very different.
+
 This document explores how AI can be integrated into atomCAD to improve the design process.
 As the extent to which AI can be useful and accurate in this context is unknown, it
 would be beneficial to find an initial solution that we can use to validate this idea
