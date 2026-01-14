@@ -49,6 +49,10 @@ dependencies:
   flutter_window_close: ^1.0.0
   flutter_fancy_tree_view: ^1.5.0
 
+  # CLI dependencies (also used by bin/atomcad_cli.dart)
+  args: ^2.4.0
+  http: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

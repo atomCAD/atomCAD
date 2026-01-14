@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:flutter_window_close/flutter_window_close.dart';
+import 'package:flutter_cad/ai_assistant/http_server.dart';
 
 Future<void> main(List<String> args) async {
   await RustLib.init();
@@ -23,6 +24,15 @@ Future<void> main(List<String> args) async {
   // Normal GUI mode
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
+
+  // Start AI assistant HTTP server
+  final aiServer = AiAssistantServer();
+  try {
+    await aiServer.start();
+  } catch (e) {
+    // Server failed to start (e.g., port in use) - continue without it
+    print('[AI Assistant] Warning: Server failed to start: $e');
+  }
 
   runApp(const MyApp());
 }
