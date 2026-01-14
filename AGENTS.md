@@ -85,6 +85,7 @@ See `doc/testing.md` for test coverage details.
 - Edition 2024 (Rust 1.85+), stable toolchain only
 - Use `thiserror` for errors, `glam` for math
 - Keep modules independent; dependencies form a DAG
+- **Tests go in `rust/tests/`, never inline with `#[cfg(test)]`**
 
 ### Flutter Rust Bridge
 - API types in `rust/src/api/`, config in `flutter_rust_bridge.yaml`

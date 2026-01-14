@@ -19,6 +19,7 @@ pub mod implicit_eval;
 pub mod node_networks_import_manager;
 pub mod cli_runner;
 pub mod navigation_history;
+pub mod text_format;
 
 
 

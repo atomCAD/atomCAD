@@ -57,11 +57,21 @@ Dependencies flow downward (no circular dependencies):
 
 ## Testing
 
+**⚠️ IMPORTANT: Never use `#[cfg(test)]` inline test modules in source files.**
+
 When adding new functionality to the Rust codebase:
 
 1. **Write tests for new core logic** - especially for functions in `structure_designer/`, `crystolecule/`, `geo_tree/`, `expr/`, etc.
-2. **Tests go in `rust/tests/`**, NOT inline in source files with `#[cfg(test)]`
-3. Follow the existing folder structure:
+2. **Tests go in `rust/tests/`**, NOT inline in source files
+3. **Mirror the source file hierarchy** in the test directory:
+   - Source: `src/structure_designer/text_format/`
+   - Test: `tests/structure_designer/text_format_test.rs`
+4. **Register test modules** in the parent test file (e.g., add to `tests/structure_designer.rs`):
+   ```rust
+   #[path = "structure_designer/text_format_test.rs"]
+   mod text_format_test;
+   ```
+5. Follow the existing folder structure:
    - `rust/tests/structure_designer/` - Structure designer tests
    - `rust/tests/crystolecule/` - Atomic structure tests
    - `rust/tests/geo_tree/` - Geometry tests

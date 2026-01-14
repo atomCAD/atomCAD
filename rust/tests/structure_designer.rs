@@ -27,3 +27,6 @@ mod node_type_registry_test;
 
 #[path = "structure_designer/comment_node_test.rs"]
 mod comment_node_test;
+
+#[path = "structure_designer/text_format_test.rs"]
+mod text_format_test;
