@@ -1,0 +1,43 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+motif1 = motif { definition: """# cubic zincblende motif
+
+PARAM PRIMARY Zn
+PARAM SECONDARY S
+
+SITE CORNER PRIMARY 0 0 0
+
+SITE FACE_Z PRIMARY 0.5 0.5 0
+SITE FACE_Y PRIMARY 0.5 0 0.5
+SITE FACE_X PRIMARY 0 0.5 0.5
+
+SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+SITE INTERIOR2 SECONDARY 0.25 0.75 0.75
+SITE INTERIOR3 SECONDARY 0.75 0.25 0.75
+SITE INTERIOR4 SECONDARY 0.75 0.75 0.25
+
+BOND INTERIOR1 ...CORNER
+BOND INTERIOR1 ...FACE_Z
+BOND INTERIOR1 ...FACE_Y
+BOND INTERIOR1 ...FACE_X
+
+BOND INTERIOR2 .++CORNER
+BOND INTERIOR2 ..+FACE_Z
+BOND INTERIOR2 .+.FACE_Y
+BOND INTERIOR2 ...FACE_X
+
+BOND INTERIOR3 +.+CORNER
+BOND INTERIOR3 ..+FACE_Z
+BOND INTERIOR3 ...FACE_Y
+BOND INTERIOR3 +..FACE_X
+
+BOND INTERIOR4 ++.CORNER
+BOND INTERIOR4 ...FACE_Z
+BOND INTERIOR4 .+.FACE_Y
+BOND INTERIOR4 +..FACE_X""" }
+cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1) }
+atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false }
+atom_fill_halfshift1 = atom_fill_halfshift { geometry: cuboid1, motif: motif1 }
+output motif1

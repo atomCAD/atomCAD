@@ -1,0 +1,10 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+unit_cell_MOF51 = unit_cell_MOF5
+motif_MOF51 = motif_MOF5
+cuboid1 = cuboid { unit_cell: unit_cell_MOF51, min_corner: (-1, -1, -1), extent: (2, 2, 2) }
+atom_fill1 = atom_fill { shape: cuboid1, motif: motif_MOF51, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: false, rm_single: false, surf_recon: false, invert_phase: false }
+half_space1 = half_space { unit_cell: unit_cell_MOF51, max_miller_index: 1, m_index: (1, 1, 1), center: (0, 0, 0), shift: 3, subdivision: 1 }
+intersect1 = intersect { shapes: [cuboid1, half_space1] }

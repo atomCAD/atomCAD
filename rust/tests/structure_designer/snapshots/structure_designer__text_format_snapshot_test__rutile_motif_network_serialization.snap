@@ -1,0 +1,35 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+unit_cell_rutile1 = unit_cell_rutile
+cuboid1 = cuboid { unit_cell: unit_cell_rutile1, min_corner: (0, 0, 0), extent: (1, 1, 1) }
+motif1 = motif { definition: """#_cell_length_a   4.65327200
+#_cell_length_b   4.65327200
+#_cell_length_c   2.96920300
+PARAM PRIMARY Ti
+PARAM SECONDARY	O
+SITE Ti0 PRIMARY 0.5 0.5 0.5
+SITE Ti1 PRIMARY 0.0 0.0 0.0
+SITE O2 SECONDARY 0.19542000 0.80458000 0.50000000
+SITE O3	SECONDARY 0.80458000 0.19542000 0.50000000
+SITE O4 SECONDARY 0.30458000 0.30458000 0.00000000
+SITE O5	SECONDARY 0.69542000  0.69542000  0.00000000
+
+BOND Ti0 ...O2
+BOND Ti0 ...O3
+BOND Ti0 ...O4
+BOND Ti0 ...O5
+
+BOND Ti1 ...O4
+
+BOND O3	+..Ti1
+BOND O3	+.+Ti1
+BOND O5 ++.Ti1
+BOND Ti0 ..+O5
+BOND O2	.+.Ti1
+BOND O2	.++Ti1
+BOND Ti0 ..+O4
+""", name: "rutile" }
+atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: false, rm_single: false, surf_recon: false, invert_phase: false }
+output motif1

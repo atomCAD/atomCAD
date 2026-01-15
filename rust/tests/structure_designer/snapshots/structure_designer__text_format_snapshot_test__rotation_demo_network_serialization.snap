@@ -1,0 +1,13 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+cuboid1 = cuboid { min_corner: (16, -2, -2), extent: (4, 10, 4) }
+cuboid2 = cuboid { min_corner: (13, 4, -2), extent: (10, 4, 4) }
+union1 = union { shapes: [cuboid1, cuboid2] }
+lattice_move1 = lattice_move { shape: union1, translation: (5, 5, 0), subdivision: 1 }
+int1 = int { value: 0 }
+parameter1 = parameter { default: int1, param_index: 0, param_name: "change_this_value", data_type: Int, sort_order: 0 }
+int2 = int { value: 4 }
+polar_pattern1 = polar_pattern { shape: lattice_move1, axis_index: parameter1, count: int2 }
+output polar_pattern1

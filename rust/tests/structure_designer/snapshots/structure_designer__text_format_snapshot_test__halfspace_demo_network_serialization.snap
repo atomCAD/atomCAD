@@ -1,0 +1,29 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+motif1 = motif { definition: """PARAM POLO Po
+SITE Po1 POLO 0.0 0.0 0.0
+SITE Po2 POLO 1.0 0.0 0.0
+SITE Po3 POLO 0.0 1.0 0.0
+SITE Po4 POLO 0.0 0.0 1.0
+SITE Po5 POLO 1.0 1.0 0.0
+SITE Po6 POLO 0.0 1.0 1.0
+SITE Po7 POLO 1.0 0.0 1.0
+SITE Po8 POLO 1.0 1.0 1.0
+BOND Po1 ...Po2
+BOND Po1 ...Po3
+BOND Po1 ...Po4
+BOND Po2 ...Po5
+BOND Po5 ...Po3
+BOND Po3 ...Po6
+BOND Po2 ...Po7
+BOND Po4 ...Po6
+BOND Po4 ...Po7
+BOND Po8 ...Po6
+BOND Po8 ...Po7
+""", name: "α_polonium" }
+α_polonium_unit_cell1 = α_polonium_unit_cell
+cuboid1 = cuboid { unit_cell: α_polonium_unit_cell1, min_corner: (0, 0, 0), extent: (4, 4, 3) }
+atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: false, rm_single: false, surf_recon: false, invert_phase: false }
+output motif1

@@ -80,8 +80,12 @@ impl<'a> NetworkSerializer<'a> {
         let mut visited = HashSet::new();
         let mut temp_mark = HashSet::new();
 
-        // Visit all nodes
-        for &node_id in self.network.nodes.keys() {
+        // Get all node IDs sorted for deterministic output
+        let mut node_ids: Vec<u64> = self.network.nodes.keys().copied().collect();
+        node_ids.sort();
+
+        // Visit all nodes in sorted order
+        for node_id in node_ids {
             if !visited.contains(&node_id) {
                 self.dfs_visit(node_id, &mut result, &mut visited, &mut temp_mark)?;
             }
@@ -116,7 +120,10 @@ impl<'a> NetworkSerializer<'a> {
         // Visit dependencies first (nodes that this node depends on)
         if let Some(node) = self.network.nodes.get(&node_id) {
             for argument in &node.arguments {
-                for &source_node_id in argument.argument_output_pins.keys() {
+                // Sort dependency node IDs for deterministic output
+                let mut dep_ids: Vec<u64> = argument.argument_output_pins.keys().copied().collect();
+                dep_ids.sort();
+                for source_node_id in dep_ids {
                     self.dfs_visit(source_node_id, result, visited, temp_mark)?;
                 }
             }
@@ -189,10 +196,13 @@ impl<'a> NetworkSerializer<'a> {
 
                     if is_multi {
                         // Multi-input: format as array of references
-                        let refs: Vec<String> = argument.argument_output_pins.iter()
-                            .filter_map(|(&source_id, &pin_index)| {
-                                let source_name = self.get_node_name(source_id)?;
-                                Some(self.format_reference(source_name, pin_index))
+                        // Sort by source node ID for deterministic output
+                        let mut entries: Vec<_> = argument.argument_output_pins.iter().collect();
+                        entries.sort_by_key(|(id, _)| **id);
+                        let refs: Vec<String> = entries.iter()
+                            .filter_map(|(source_id, pin_index)| {
+                                let source_name = self.get_node_name(**source_id)?;
+                                Some(self.format_reference(source_name, **pin_index))
                             })
                             .collect();
                         properties.push((param_name.clone(), format!("[{}]", refs.join(", "))));
