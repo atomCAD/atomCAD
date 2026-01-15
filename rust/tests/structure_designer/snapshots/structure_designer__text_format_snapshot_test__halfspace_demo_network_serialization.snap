@@ -24,6 +24,6 @@ BOND Po8 ...Po6
 BOND Po8 ...Po7
 """, name: "α_polonium" }
 α_polonium_unit_cell1 = α_polonium_unit_cell
-cuboid1 = cuboid { unit_cell: α_polonium_unit_cell1, min_corner: (0, 0, 0), extent: (4, 4, 3) }
+cuboid1 = cuboid { unit_cell: α_polonium_unit_cell1, min_corner: (0, 0, 0), extent: (4, 4, 3), visible: true }
 atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: false, rm_single: false, surf_recon: false, invert_phase: false }
 output motif1

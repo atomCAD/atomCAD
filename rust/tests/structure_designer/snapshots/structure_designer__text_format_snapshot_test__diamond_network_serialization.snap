@@ -24,6 +24,6 @@ lattice_rot5 = lattice_rot { shape: intersect2, axis_index: 2, step: 1, pivot_po
 lattice_rot6 = lattice_rot { shape: intersect2, axis_index: 2, step: 2, pivot_point: (0, 0, 0) }
 lattice_rot7 = lattice_rot { shape: intersect2, axis_index: 2, step: 3, pivot_point: (0, 0, 0) }
 intersect3 = intersect { shapes: [intersect1, lattice_rot4, half_space3, half_space4, half_space5, half_space6, half_space7, intersect2, lattice_rot5, lattice_rot6, lattice_rot7] }
-lattice_move1 = lattice_move { shape: intersect3, translation: (0, 0, 5), subdivision: 1 }
-atom_fill1 = atom_fill { shape: lattice_move1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false }
+lattice_move1 = lattice_move { shape: intersect3, translation: (0, 0, 5), subdivision: 1, visible: true }
+atom_fill1 = atom_fill { shape: lattice_move1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 output lattice_move1

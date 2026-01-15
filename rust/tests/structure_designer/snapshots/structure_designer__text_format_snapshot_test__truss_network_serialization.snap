@@ -30,5 +30,5 @@ lattice_move1 = lattice_move { shape: lattice_rot1, translation: (0, 0, 14), sub
 diff1 = diff { base: intersect1, sub: [intersect2, intersect3, lattice_move1] }
 lattice_rot2 = lattice_rot { shape: diff1, axis_index: 9, step: 1, pivot_point: (0, 0, 0) }
 lattice_rot3 = lattice_rot { shape: lattice_rot2, axis_index: 12, step: 1, pivot_point: (0, 0, 0) }
-union1 = union { shapes: [lattice_rot3, lattice_rot2] }
-atom_fill1 = atom_fill { shape: union1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.5), passivate: true, rm_single: false, surf_recon: false, invert_phase: false }
+union1 = union { shapes: [lattice_rot3, lattice_rot2], visible: true }
+atom_fill1 = atom_fill { shape: union1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.5), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }

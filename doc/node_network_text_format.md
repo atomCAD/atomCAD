@@ -159,6 +159,27 @@ The parser determines whether a key corresponds to a property or input pin based
 
 **Edit semantics**: Setting a parameter to a node reference (e.g., `radius: int1`) creates a connection. Setting it to a literal (e.g., `radius: 5`) removes any existing connection and sets the stored value.
 
+## Visibility
+
+The `visible` property controls whether a node's output is rendered in the viewport:
+
+```
+# Visible node - rendered in the 3D viewport
+sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+
+# Invisible node - participates in computations but not rendered
+int1 = int { value: 42 }
+```
+
+**Query behavior**: Only visible nodes include `visible: true`. Invisible nodes omit the property entirely.
+
+**Edit behavior**:
+- `visible: true` → Node is displayed (added to `displayed_node_ids`)
+- `visible` property omitted → Node is invisible (default)
+- `visible: false` → Explicitly invisible (same as omitting)
+
+**Design rationale**: Defaulting to invisible keeps the format compact. The AI must be deliberate when it wants to display something. This avoids cluttering the viewport with intermediate computation nodes.
+
 ## Type Annotations
 
 Some nodes have dynamic types that must be specified explicitly:
@@ -379,12 +400,12 @@ number       := int | float
 ### Simple Geometry with Boolean Operations
 
 ```
-# Create two shapes
+# Create two shapes (invisible - intermediate computation)
 sphere1 = sphere { center: (0, 0, 0), radius: 8 }
 box1 = cuboid { min_corner: (-3, -3, -3), extent: (6, 6, 6) }
 
-# Subtract box from sphere
-diff1 = diff { base: sphere1, sub: box1 }
+# Subtract box from sphere (visible - final result)
+diff1 = diff { base: sphere1, sub: box1, visible: true }
 
 output diff1
 ```
@@ -398,14 +419,15 @@ uc1 = unit_cell { a: 5.43, b: 5.43, c: 5.43, alpha: 90, beta: 90, gamma: 90 }
 # Geometry
 sphere1 = sphere { center: (0, 0, 0), radius: 5, unit_cell: uc1 }
 
-# Fill with silicon
+# Fill with silicon (visible - final atomic structure)
 fill1 = atom_fill {
   shape: sphere1,
   parameter_element_value_definition: """
     PRIMARY Si
     SECONDARY Si
   """,
-  passivate: true
+  passivate: true,
+  visible: true
 }
 
 output fill1

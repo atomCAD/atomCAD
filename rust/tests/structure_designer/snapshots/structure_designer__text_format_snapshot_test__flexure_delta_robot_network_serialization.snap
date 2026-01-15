@@ -36,8 +36,8 @@ BOND INTERIOR3 +..FACE_X
 BOND INTERIOR4 ++.CORNER
 BOND INTERIOR4 ...FACE_Z
 BOND INTERIOR4 .+.FACE_Y
-BOND INTERIOR4 +..FACE_X""" }
+BOND INTERIOR4 +..FACE_X""", visible: true }
 cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1) }
-atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false }
+atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 atom_fill_halfshift1 = atom_fill_halfshift { geometry: cuboid1, motif: motif1 }
 output motif1

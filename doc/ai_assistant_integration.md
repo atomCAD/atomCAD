@@ -48,7 +48,7 @@ The same format is used for both query results and edit commands.
 # Query result / Edit command
 sphere1 = sphere { center: (0, 0, 0), radius: 5 }
 box1 = cuboid { min_corner: (-2, -2, -2), extent: (4, 4, 4) }
-diff1 = diff { base: sphere1, sub: box1 }
+diff1 = diff { base: sphere1, sub: box1, visible: true }
 output diff1
 ```
 
@@ -58,6 +58,7 @@ output diff1
 - **Function pin references** with `@` prefix (e.g., `f: @pattern` for `map` node)
 - **Multi-line strings** with triple quotes for `expr` and `motif` definitions
 - **Type annotations** where required (e.g., `parameter`, `expr`, `map` nodes)
+- **Visibility control** with `visible: true` (default is invisible)
 
 ### Edit Semantics
 
@@ -83,6 +84,23 @@ Nodes not mentioned in an edit command remain unchanged.
 - LLM edits semantics (data flow), not layout
 - New nodes placed automatically (simple algorithm, known limitation)
 - Users can manually organize layout after AI edits
+
+### Node Visibility
+
+Controls whether a node's output is rendered in the viewport:
+
+- **Query**: Visible nodes have `visible: true`, invisible nodes have no `visible` property
+- **Edit**: `visible: true` makes a node visible, omitting `visible` makes it invisible (default)
+
+```
+# Visible node (rendered in viewport)
+sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+
+# Invisible node (default, participates in computations but not rendered)
+int1 = int { value: 42 }
+```
+
+**Design rationale**: Defaulting to invisible keeps the format compact. The AI must be deliberate when it wants to display something.
 
 ## CLI Interface
 

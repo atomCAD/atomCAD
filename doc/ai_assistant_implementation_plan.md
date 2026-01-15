@@ -569,16 +569,17 @@ impl<'a> NetworkSerializer<'a> {
 
 ### 3.4 Implementation Tasks
 
-- [ ] Create `NetworkSerializer` struct
-- [ ] Implement topological sort (handle cycles)
-- [ ] Implement name generation (type + counter)
-- [ ] Implement node serialization
-- [ ] Handle wire connections (regular and function pins)
-- [ ] Omit stored property values when parameter has a connection
-- [ ] Handle output statement
+- [x] Create `NetworkSerializer` struct
+- [x] Implement topological sort (handle cycles)
+- [x] Implement name generation (type + counter)
+- [x] Implement node serialization
+- [x] Handle wire connections (regular and function pins)
+- [x] Omit stored property values when parameter has a connection
+- [x] Handle output statement
+- [x] Serialize visibility (`visible: true` only for displayed nodes, omit for invisible)
 - [ ] Add blank lines / formatting for readability
-- [ ] Create public API function
-- [ ] Unit tests with snapshot testing
+- [x] Create public API function
+- [x] Unit tests with snapshot testing
 
 ### 3.5 Edge Cases
 
@@ -724,7 +725,15 @@ impl<'a> NetworkEditor<'a> {
    - Resolve name → node ID
    - Set as network's return node
 
-8. TRIGGER UI REFRESH
+8. PROCESS VISIBILITY
+   For each node processed:
+   - Check for `visible` property in the statement
+   - If `visible: true`: Add node ID to `displayed_node_ids` (with NodeDisplayType::Normal)
+   - If `visible: false` or `visible` not specified: Remove from `displayed_node_ids` (invisible by default)
+
+   **Design Decision:** Visibility defaults to `false` (invisible). The AI must explicitly set `visible: true` to display a node. This keeps the format compact and requires deliberate action for visibility.
+
+9. TRIGGER UI REFRESH
    - Notify listeners of network change
    - Recalculate evaluation
 ```
@@ -770,6 +779,7 @@ pub fn calculate_new_node_position(
 - [ ] Implement wire removal (for rewiring)
 - [ ] Implement node deletion
 - [ ] Implement output statement handling
+- [ ] Implement visibility handling (`visible: true` adds to displayed_node_ids)
 - [ ] Implement auto-layout algorithm
 - [ ] Create public API function
 - [ ] Return detailed EditResult
@@ -1058,6 +1068,18 @@ union1 = union { shapes: [sphere1, box1] }
 map1 = map { f: @pattern }
 ```
 
+### Visibility
+
+```
+# Nodes are invisible by default
+# Use visible: true to display a node in the viewport
+sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+
+# Invisible nodes (visible: false or omitted) are not rendered
+# but participate in computations
+int1 = int { value: 42 }  # invisible (default)
+```
+
 ---
 
 ## Appendix B: Node Property Reference
@@ -1086,6 +1108,14 @@ Quick reference for what properties each node exposes:
 | `atom_fill` | `parameter_element_value_definition: String, m_offset: Vec3, passivate: Bool, rm_single: Bool, surf_recon: Bool` |
 | `union`, `intersect` | (no stored properties, only connections) |
 | `diff` | (no stored properties, only connections) |
+
+**Universal Meta-Property:**
+
+All nodes support the `visible` property:
+- `visible: true` - Node output is rendered in the viewport
+- `visible` omitted or `false` - Node is invisible (default)
+
+This is a meta-property that affects display, not node data. It maps to `NodeNetwork.displayed_node_ids`.
 
 ---
 
