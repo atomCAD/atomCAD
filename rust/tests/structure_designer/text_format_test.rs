@@ -554,3 +554,389 @@ mod network_serializer_tests {
         assert!(result.contains("bool1 = bool"));
     }
 }
+
+// ============================================================================
+// Network Editor Tests
+// ============================================================================
+
+mod network_editor_tests {
+    use super::*;
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
+    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+
+    fn create_test_registry() -> NodeTypeRegistry {
+        NodeTypeRegistry::new()
+    }
+
+    fn create_test_network() -> NodeNetwork {
+        let node_type = NodeType {
+            name: "test".to_string(),
+            description: "Test network".to_string(),
+            category: NodeTypeCategory::Custom,
+            parameters: vec![],
+            output_type: DataType::Geometry,
+            public: true,
+            node_data_creator: || Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
+            node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
+            node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
+        };
+        NodeNetwork::new(node_type)
+    }
+
+    #[test]
+    fn test_edit_create_single_node() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.nodes_created.len(), 1);
+        assert!(result.nodes_created.contains(&"sphere1".to_string()));
+        assert_eq!(network.nodes.len(), 1);
+    }
+
+    #[test]
+    fn test_edit_create_multiple_nodes() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+            float1 = float { value: 3.14 }
+            bool1 = bool { value: true }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.nodes_created.len(), 3);
+        assert_eq!(network.nodes.len(), 3);
+    }
+
+    #[test]
+    fn test_edit_with_connections() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 5 }
+            sphere1 = sphere { center: (0, 0, 0), radius: int1 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.nodes_created.len(), 2);
+        assert!(!result.connections_made.is_empty(), "Should have made connections");
+
+        // Verify the connection exists
+        let sphere_node = network.nodes.values()
+            .find(|n| n.node_type_name == "sphere")
+            .expect("Should find sphere node");
+
+        // Radius is parameter index 1
+        assert!(!sphere_node.arguments[1].argument_output_pins.is_empty(),
+            "Sphere radius should be connected");
+    }
+
+    #[test]
+    fn test_edit_with_output_statement() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+            output sphere1
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert!(network.return_node_id.is_some(), "Should have return node set");
+    }
+
+    #[test]
+    fn test_edit_with_visibility() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+            sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Find the sphere node and check visibility
+        let sphere_node = network.nodes.values()
+            .find(|n| n.node_type_name == "sphere")
+            .expect("Should find sphere node");
+
+        assert!(network.displayed_node_ids.contains_key(&sphere_node.id),
+            "Sphere should be visible");
+
+        // Int should not be visible (no visible: true)
+        let int_node = network.nodes.values()
+            .find(|n| n.node_type_name == "int")
+            .expect("Should find int node");
+
+        assert!(!network.displayed_node_ids.contains_key(&int_node.id),
+            "Int should not be visible");
+    }
+
+    #[test]
+    fn test_edit_delete_node() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // First create nodes
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+            int1 = int { value: 42 }
+        "#, true);
+        assert!(result.success);
+        assert_eq!(network.nodes.len(), 2);
+
+        // Now delete one
+        let result = edit_network(&mut network, &registry, r#"
+            delete sphere1
+        "#, false);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.nodes_deleted.len(), 1);
+        assert!(result.nodes_deleted.contains(&"sphere1".to_string()));
+        assert_eq!(network.nodes.len(), 1);
+
+        // Remaining node should be int
+        let remaining = network.nodes.values().next().expect("Should have one node");
+        assert_eq!(remaining.node_type_name, "int");
+    }
+
+    #[test]
+    fn test_edit_replace_mode() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create initial nodes
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+        "#, true);
+        assert!(result.success);
+        assert_eq!(network.nodes.len(), 1);
+
+        // Replace with different nodes
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+            float1 = float { value: 3.14 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(network.nodes.len(), 2);
+
+        // Should have int and float, not sphere
+        let type_names: Vec<_> = network.nodes.values()
+            .map(|n| n.node_type_name.as_str())
+            .collect();
+        assert!(type_names.contains(&"int"));
+        assert!(type_names.contains(&"float"));
+        assert!(!type_names.contains(&"sphere"));
+    }
+
+    #[test]
+    fn test_edit_incremental_mode() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create initial node
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+        "#, true);
+        assert!(result.success);
+        assert_eq!(network.nodes.len(), 1);
+
+        // Add more nodes incrementally (replace = false)
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+        "#, false);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(network.nodes.len(), 2, "Should have both original and new node");
+    }
+
+    #[test]
+    fn test_edit_update_existing_node() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create initial node
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+        "#, true);
+        assert!(result.success);
+
+        // Update the same node (incremental mode)
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 100 }
+        "#, false);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.nodes_updated.len(), 1);
+        assert!(result.nodes_updated.contains(&"int1".to_string()));
+        assert_eq!(network.nodes.len(), 1, "Should still have only one node");
+    }
+
+    #[test]
+    fn test_edit_unknown_node_type_error() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            unknown1 = nonexistent_type { prop: 42 }
+        "#, true);
+
+        assert!(!result.success, "Edit should fail for unknown node type");
+        assert!(!result.errors.is_empty());
+        assert!(result.errors[0].contains("nonexistent_type"));
+    }
+
+    #[test]
+    fn test_edit_parse_error() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { invalid syntax here
+        "#, true);
+
+        assert!(!result.success, "Edit should fail for parse errors");
+        assert!(!result.errors.is_empty());
+    }
+
+    #[test]
+    fn test_edit_roundtrip() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create a network via edit
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+            sphere1 = sphere { center: (0, 0, 0), radius: int1, visible: true }
+            output sphere1
+        "#, true);
+        assert!(result.success, "Initial edit should succeed: {:?}", result.errors);
+
+        // Serialize it
+        let serialized = serialize_network(&network, &registry);
+
+        // Create a new network and edit it with the serialized text
+        let mut network2 = create_test_network();
+        let result2 = edit_network(&mut network2, &registry, &serialized, true);
+
+        assert!(result2.success, "Roundtrip edit should succeed: {:?}", result2.errors);
+        assert_eq!(network.nodes.len(), network2.nodes.len(),
+            "Networks should have same number of nodes");
+        assert_eq!(network.return_node_id.is_some(), network2.return_node_id.is_some(),
+            "Networks should both have or not have return node");
+    }
+
+    #[test]
+    fn test_edit_multi_input_connection() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+            sphere2 = sphere { center: (10, 0, 0), radius: 3, visible: true }
+            union1 = union { shapes: [sphere1, sphere2], visible: true }
+            output union1
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.nodes_created.len(), 3);
+
+        // Find the union node and verify it has two inputs
+        let union_node = network.nodes.values()
+            .find(|n| n.node_type_name == "union")
+            .expect("Should find union node");
+
+        // shapes is parameter index 0
+        assert_eq!(union_node.arguments[0].argument_output_pins.len(), 2,
+            "Union should have two inputs connected");
+    }
+
+    #[test]
+    fn test_edit_function_ref_connection() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create a pattern with map and function reference
+        // map node parameters: xs (index 0) and f (index 1)
+        // input_type and output_type are node data properties, not input parameters
+        let result = edit_network(&mut network, &registry, r#"
+            range1 = range { start: 0, step: 1, count: 5 }
+            expr1 = expr { expression: "x * 2", parameters: [{ name: "x", type: Int }] }
+            map1 = map { input_type: Int, output_type: Int, xs: range1, f: @expr1 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.nodes_created.len(), 3);
+
+        // Find the map node and check function reference
+        let map_node = network.nodes.values()
+            .find(|n| n.node_type_name == "map")
+            .expect("Should find map node");
+
+        // f parameter is at index 1 (xs=0, f=1)
+        let f_param_index = 1;
+        let f_arg = &map_node.arguments[f_param_index];
+        assert!(!f_arg.argument_output_pins.is_empty(), "f parameter should be connected");
+
+        // Verify it's a function pin connection (output_pin_index = -1)
+        let (_, &pin_index) = f_arg.argument_output_pins.iter().next().unwrap();
+        assert_eq!(pin_index, -1, "Should be a function pin reference");
+    }
+
+    #[test]
+    fn test_edit_preserves_unmentioned_nodes_in_incremental() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create initial nodes
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+            int1 = int { value: 42 }
+        "#, true);
+        assert!(result.success);
+
+        // Edit only one of them (incremental)
+        let result = edit_network(&mut network, &registry, r#"
+            float1 = float { value: 3.14 }
+        "#, false);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(network.nodes.len(), 3, "All three nodes should exist");
+
+        let type_names: Vec<_> = network.nodes.values()
+            .map(|n| n.node_type_name.as_str())
+            .collect();
+        assert!(type_names.contains(&"sphere"));
+        assert!(type_names.contains(&"int"));
+        assert!(type_names.contains(&"float"));
+    }
+
+    #[test]
+    fn test_edit_comments_are_ignored() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            # This is a comment
+            int1 = int { value: 42 }
+            # Another comment
+            float1 = float { value: 3.14 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(network.nodes.len(), 2);
+    }
+}
