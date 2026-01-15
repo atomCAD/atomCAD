@@ -139,7 +139,7 @@ impl NodeData for LatticeMoveData {
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
             ("translation".to_string(), TextValue::IVec3(self.translation)),
-            ("lattice_subdivision".to_string(), TextValue::Int(self.lattice_subdivision)),
+            ("subdivision".to_string(), TextValue::Int(self.lattice_subdivision)),
         ]
     }
 
@@ -147,8 +147,8 @@ impl NodeData for LatticeMoveData {
         if let Some(v) = props.get("translation") {
             self.translation = v.as_ivec3().ok_or_else(|| "translation must be an IVec3".to_string())?;
         }
-        if let Some(v) = props.get("lattice_subdivision") {
-            self.lattice_subdivision = v.as_int().ok_or_else(|| "lattice_subdivision must be an integer".to_string())?;
+        if let Some(v) = props.get("subdivision") {
+            self.lattice_subdivision = v.as_int().ok_or_else(|| "subdivision must be an integer".to_string())?;
         }
         Ok(())
     }

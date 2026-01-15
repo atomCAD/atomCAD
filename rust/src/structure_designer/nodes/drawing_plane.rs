@@ -184,7 +184,7 @@ impl NodeData for DrawingPlaneData {
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
             ("max_miller_index".to_string(), TextValue::Int(self.max_miller_index)),
-            ("miller_index".to_string(), TextValue::IVec3(self.miller_index)),
+            ("m_index".to_string(), TextValue::IVec3(self.miller_index)),
             ("center".to_string(), TextValue::IVec3(self.center)),
             ("shift".to_string(), TextValue::Int(self.shift)),
             ("subdivision".to_string(), TextValue::Int(self.subdivision)),
@@ -195,8 +195,8 @@ impl NodeData for DrawingPlaneData {
         if let Some(v) = props.get("max_miller_index") {
             self.max_miller_index = v.as_int().ok_or_else(|| "max_miller_index must be an integer".to_string())?;
         }
-        if let Some(v) = props.get("miller_index") {
-            self.miller_index = v.as_ivec3().ok_or_else(|| "miller_index must be an IVec3".to_string())?;
+        if let Some(v) = props.get("m_index") {
+            self.miller_index = v.as_ivec3().ok_or_else(|| "m_index must be an IVec3".to_string())?;
         }
         if let Some(v) = props.get("center") {
             self.center = v.as_ivec3().ok_or_else(|| "center must be an IVec3".to_string())?;
