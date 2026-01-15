@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -61,6 +63,31 @@ impl NodeData for CommentData {
         } else {
             Some(self.label.clone())
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("label".to_string(), TextValue::String(self.label.clone())),
+            ("text".to_string(), TextValue::String(self.text.clone())),
+            ("width".to_string(), TextValue::Float(self.width)),
+            ("height".to_string(), TextValue::Float(self.height)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("label") {
+            self.label = v.as_string().ok_or_else(|| "label must be a string".to_string())?.to_string();
+        }
+        if let Some(v) = props.get("text") {
+            self.text = v.as_string().ok_or_else(|| "text must be a string".to_string())?.to_string();
+        }
+        if let Some(v) = props.get("width") {
+            self.width = v.as_float().ok_or_else(|| "width must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("height") {
+            self.height = v.as_float().ok_or_else(|| "height must be a float".to_string())?;
+        }
+        Ok(())
     }
 }
 

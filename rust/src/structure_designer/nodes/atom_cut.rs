@@ -6,7 +6,9 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::geo_tree::GeoNode;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::structure_designer::text_format::TextValue;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_data::NodeData;
@@ -101,6 +103,23 @@ impl NodeData for AtomCutData {
 
   fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
       None
+  }
+
+  fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+      vec![
+          ("cut_sdf_value".to_string(), TextValue::Float(self.cut_sdf_value)),
+          ("unit_cell_size".to_string(), TextValue::Float(self.unit_cell_size)),
+      ]
+  }
+
+  fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+      if let Some(v) = props.get("cut_sdf_value") {
+          self.cut_sdf_value = v.as_float().ok_or_else(|| "cut_sdf_value must be a float".to_string())?;
+      }
+      if let Some(v) = props.get("unit_cell_size") {
+          self.unit_cell_size = v.as_float().ok_or_else(|| "unit_cell_size must be a float".to_string())?;
+      }
+      Ok(())
   }
 }
 

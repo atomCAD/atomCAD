@@ -3,6 +3,8 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -90,6 +92,23 @@ impl NodeData for RegPolyData {
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         None
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("num_sides".to_string(), TextValue::Int(self.num_sides)),
+            ("radius".to_string(), TextValue::Int(self.radius)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("num_sides") {
+            self.num_sides = v.as_int().ok_or_else(|| "num_sides must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("radius") {
+            self.radius = v.as_int().ok_or_else(|| "radius must be an integer".to_string())?;
+        }
+        Ok(())
     }
 }
 

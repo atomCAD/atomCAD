@@ -9,7 +9,9 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::f64::DVec3;
@@ -143,6 +145,27 @@ impl NodeData for GeoTransData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("translation".to_string(), TextValue::IVec3(self.translation)),
+            ("rotation".to_string(), TextValue::IVec3(self.rotation)),
+            ("transform_only_frame".to_string(), TextValue::Bool(self.transform_only_frame)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("translation") {
+            self.translation = v.as_ivec3().ok_or_else(|| "translation must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("rotation") {
+            self.rotation = v.as_ivec3().ok_or_else(|| "rotation must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("transform_only_frame") {
+            self.transform_only_frame = v.as_bool().ok_or_else(|| "transform_only_frame must be a boolean".to_string())?;
+        }
+        Ok(())
     }
 
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {

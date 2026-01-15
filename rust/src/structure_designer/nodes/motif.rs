@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -90,6 +92,26 @@ impl NodeData for MotifData {
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         self.name.clone()
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        let mut props = vec![
+            ("definition".to_string(), TextValue::String(self.definition.clone())),
+        ];
+        if let Some(ref name) = self.name {
+            props.push(("name".to_string(), TextValue::String(name.clone())));
+        }
+        props
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("definition") {
+            self.definition = v.as_string().ok_or_else(|| "definition must be a string".to_string())?.to_string();
+        }
+        if let Some(v) = props.get("name") {
+            self.name = Some(v.as_string().ok_or_else(|| "name must be a string".to_string())?.to_string());
+        }
+        Ok(())
     }
 }
 

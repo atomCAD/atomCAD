@@ -3,6 +3,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use serde::de::Deserializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::crystolecule::atomic_structure::AtomicStructure;
@@ -247,6 +248,39 @@ impl NodeData for AtomFillData {
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         None
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("parameter_element_value_definition".to_string(), TextValue::String(self.parameter_element_value_definition.clone())),
+            ("motif_offset".to_string(), TextValue::Vec3(self.motif_offset)),
+            ("hydrogen_passivation".to_string(), TextValue::Bool(self.hydrogen_passivation)),
+            ("remove_single_bond_atoms_before_passivation".to_string(), TextValue::Bool(self.remove_single_bond_atoms_before_passivation)),
+            ("surface_reconstruction".to_string(), TextValue::Bool(self.surface_reconstruction)),
+            ("invert_phase".to_string(), TextValue::Bool(self.invert_phase)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("parameter_element_value_definition") {
+            self.parameter_element_value_definition = v.as_string().ok_or_else(|| "parameter_element_value_definition must be a string".to_string())?.to_string();
+        }
+        if let Some(v) = props.get("motif_offset") {
+            self.motif_offset = v.as_vec3().ok_or_else(|| "motif_offset must be a Vec3".to_string())?;
+        }
+        if let Some(v) = props.get("hydrogen_passivation") {
+            self.hydrogen_passivation = v.as_bool().ok_or_else(|| "hydrogen_passivation must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("remove_single_bond_atoms_before_passivation") {
+            self.remove_single_bond_atoms_before_passivation = v.as_bool().ok_or_else(|| "remove_single_bond_atoms_before_passivation must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("surface_reconstruction") {
+            self.surface_reconstruction = v.as_bool().ok_or_else(|| "surface_reconstruction must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("invert_phase") {
+            self.invert_phase = v.as_bool().ok_or_else(|| "invert_phase must be a boolean".to_string())?;
+        }
+        Ok(())
     }
 }
 

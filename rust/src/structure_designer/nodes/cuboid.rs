@@ -4,7 +4,9 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -101,17 +103,34 @@ impl NodeData for CuboidData {
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         let show_min_corner = !connected_input_pins.contains("min_corner");
         let show_extent = !connected_input_pins.contains("extent");
-        
+
         match (show_min_corner, show_extent) {
-            (true, true) => Some(format!("mc: ({},{},{}) e: ({},{},{})", 
+            (true, true) => Some(format!("mc: ({},{},{}) e: ({},{},{})",
                 self.min_corner.x, self.min_corner.y, self.min_corner.z,
                 self.extent.x, self.extent.y, self.extent.z)),
-            (true, false) => Some(format!("mc: ({},{},{})", 
+            (true, false) => Some(format!("mc: ({},{},{})",
                 self.min_corner.x, self.min_corner.y, self.min_corner.z)),
-            (false, true) => Some(format!("e: ({},{},{})", 
+            (false, true) => Some(format!("e: ({},{},{})",
                 self.extent.x, self.extent.y, self.extent.z)),
             (false, false) => None,
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("min_corner".to_string(), TextValue::IVec3(self.min_corner)),
+            ("extent".to_string(), TextValue::IVec3(self.extent)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("min_corner") {
+            self.min_corner = v.as_ivec3().ok_or_else(|| "min_corner must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("extent") {
+            self.extent = v.as_ivec3().ok_or_else(|| "extent must be an IVec3".to_string())?;
+        }
+        Ok(())
     }
 }
 

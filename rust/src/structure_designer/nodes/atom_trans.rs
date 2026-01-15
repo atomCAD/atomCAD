@@ -3,7 +3,9 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::dvec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::display::gadget::Gadget;
@@ -117,6 +119,23 @@ impl NodeData for AtomTransData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("translation".to_string(), TextValue::Vec3(self.translation)),
+            ("rotation".to_string(), TextValue::Vec3(self.rotation)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("translation") {
+            self.translation = v.as_vec3().ok_or_else(|| "translation must be a Vec3".to_string())?;
+        }
+        if let Some(v) = props.get("rotation") {
+            self.rotation = v.as_vec3().ok_or_else(|| "rotation must be a Vec3".to_string())?;
+        }
+        Ok(())
     }
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {

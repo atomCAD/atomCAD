@@ -11,7 +11,9 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use glam::f64::DVec3;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -132,6 +134,23 @@ impl NodeData for LatticeMoveData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("translation".to_string(), TextValue::IVec3(self.translation)),
+            ("lattice_subdivision".to_string(), TextValue::Int(self.lattice_subdivision)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("translation") {
+            self.translation = v.as_ivec3().ok_or_else(|| "translation must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("lattice_subdivision") {
+            self.lattice_subdivision = v.as_int().ok_or_else(|| "lattice_subdivision must be an integer".to_string())?;
+        }
+        Ok(())
     }
 }
 

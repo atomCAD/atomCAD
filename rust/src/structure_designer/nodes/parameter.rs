@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -81,7 +83,38 @@ impl NodeData for ParameterData {
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         Some(self.param_name.clone())
     }
-    
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        let mut props = vec![
+            ("param_index".to_string(), TextValue::Int(self.param_index as i32)),
+            ("param_name".to_string(), TextValue::String(self.param_name.clone())),
+            ("data_type".to_string(), TextValue::DataType(self.data_type.clone())),
+            ("sort_order".to_string(), TextValue::Int(self.sort_order)),
+        ];
+        if let Some(ref dt_str) = self.data_type_str {
+            props.push(("data_type_str".to_string(), TextValue::String(dt_str.clone())));
+        }
+        props
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("param_index") {
+            self.param_index = v.as_int().ok_or_else(|| "param_index must be an integer".to_string())? as usize;
+        }
+        if let Some(v) = props.get("param_name") {
+            self.param_name = v.as_string().ok_or_else(|| "param_name must be a string".to_string())?.to_string();
+        }
+        if let Some(v) = props.get("data_type") {
+            self.data_type = v.as_data_type().ok_or_else(|| "data_type must be a DataType".to_string())?.clone();
+        }
+        if let Some(v) = props.get("sort_order") {
+            self.sort_order = v.as_int().ok_or_else(|| "sort_order must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("data_type_str") {
+            self.data_type_str = Some(v.as_string().ok_or_else(|| "data_type_str must be a string".to_string())?.to_string());
+        }
+        Ok(())
+    }
 }
 
 fn eval_default<'a>(

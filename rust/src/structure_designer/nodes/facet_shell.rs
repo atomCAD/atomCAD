@@ -4,7 +4,9 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
 use std::collections::HashSet;
@@ -537,13 +539,63 @@ impl NodeData for FacetShellData {
       fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
           let show_center = !connected_input_pins.contains("center");
           let num_facets = self.facets.len();
-          
+
           if show_center {
-              Some(format!("c: ({},{},{}) f: {}", 
+              Some(format!("c: ({},{},{}) f: {}",
                   self.center.x, self.center.y, self.center.z, num_facets))
           } else {
               Some(format!("f: {}", num_facets))
           }
+      }
+
+      fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+          // Serialize facets as an array of objects
+          let facets_arr: Vec<TextValue> = self.facets.iter().map(|f| {
+              TextValue::Object(vec![
+                  ("miller_index".to_string(), TextValue::IVec3(f.miller_index)),
+                  ("shift".to_string(), TextValue::Int(f.shift)),
+                  ("symmetrize".to_string(), TextValue::Bool(f.symmetrize)),
+                  ("visible".to_string(), TextValue::Bool(f.visible)),
+              ])
+          }).collect();
+
+          vec![
+              ("max_miller_index".to_string(), TextValue::Int(self.max_miller_index)),
+              ("center".to_string(), TextValue::IVec3(self.center)),
+              ("facets".to_string(), TextValue::Array(facets_arr)),
+          ]
+      }
+
+      fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+          if let Some(v) = props.get("max_miller_index") {
+              self.max_miller_index = v.as_int().ok_or_else(|| "max_miller_index must be an integer".to_string())?;
+          }
+          if let Some(v) = props.get("center") {
+              self.center = v.as_ivec3().ok_or_else(|| "center must be an IVec3".to_string())?;
+          }
+          if let Some(TextValue::Array(facets_arr)) = props.get("facets") {
+              let mut new_facets = Vec::new();
+              for facet_val in facets_arr {
+                  if let TextValue::Object(obj) = facet_val {
+                      let miller_index = obj.iter().find(|(k, _)| k == "miller_index")
+                          .and_then(|(_, v)| v.as_ivec3())
+                          .ok_or_else(|| "facet miller_index must be an IVec3".to_string())?;
+                      let shift = obj.iter().find(|(k, _)| k == "shift")
+                          .and_then(|(_, v)| v.as_int())
+                          .ok_or_else(|| "facet shift must be an integer".to_string())?;
+                      let symmetrize = obj.iter().find(|(k, _)| k == "symmetrize")
+                          .and_then(|(_, v)| v.as_bool())
+                          .unwrap_or(false);
+                      let visible = obj.iter().find(|(k, _)| k == "visible")
+                          .and_then(|(_, v)| v.as_bool())
+                          .unwrap_or(true);
+                      new_facets.push(Facet { miller_index, shift, symmetrize, visible });
+                  }
+              }
+              self.facets = new_facets;
+              self.ensure_cached_facets();
+          }
+          Ok(())
       }
 }
 

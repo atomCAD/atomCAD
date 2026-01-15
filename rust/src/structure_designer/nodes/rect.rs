@@ -3,7 +3,9 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec2_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -98,17 +100,34 @@ impl NodeData for RectData {
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         let show_min_corner = !connected_input_pins.contains("min_corner");
         let show_extent = !connected_input_pins.contains("extent");
-        
+
         match (show_min_corner, show_extent) {
-            (true, true) => Some(format!("mc: ({},{}) e: ({},{})", 
+            (true, true) => Some(format!("mc: ({},{}) e: ({},{})",
                 self.min_corner.x, self.min_corner.y,
                 self.extent.x, self.extent.y)),
-            (true, false) => Some(format!("mc: ({},{})", 
+            (true, false) => Some(format!("mc: ({},{})",
                 self.min_corner.x, self.min_corner.y)),
-            (false, true) => Some(format!("e: ({},{})", 
+            (false, true) => Some(format!("e: ({},{})",
                 self.extent.x, self.extent.y)),
             (false, false) => None,
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("min_corner".to_string(), TextValue::IVec2(self.min_corner)),
+            ("extent".to_string(), TextValue::IVec2(self.extent)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("min_corner") {
+            self.min_corner = v.as_ivec2().ok_or_else(|| "min_corner must be an IVec2".to_string())?;
+        }
+        if let Some(v) = props.get("extent") {
+            self.extent = v.as_ivec2().ok_or_else(|| "extent must be an IVec2".to_string())?;
+        }
+        Ok(())
     }
 }
 

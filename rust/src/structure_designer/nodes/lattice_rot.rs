@@ -9,7 +9,9 @@ use crate::geo_tree::GeoNode;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use glam::f64::DVec3;
+use crate::structure_designer::text_format::TextValue;
 use glam::i32::IVec3;
 use crate::util::serialization_utils::ivec3_serializer;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -188,6 +190,30 @@ impl NodeData for LatticeRotData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        let mut props = vec![
+            ("step".to_string(), TextValue::Int(self.step)),
+            ("pivot_point".to_string(), TextValue::IVec3(self.pivot_point)),
+        ];
+        if let Some(axis_idx) = self.axis_index {
+            props.insert(0, ("axis_index".to_string(), TextValue::Int(axis_idx)));
+        }
+        props
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("axis_index") {
+            self.axis_index = Some(v.as_int().ok_or_else(|| "axis_index must be an integer".to_string())?);
+        }
+        if let Some(v) = props.get("step") {
+            self.step = v.as_int().ok_or_else(|| "step must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("pivot_point") {
+            self.pivot_point = v.as_ivec3().ok_or_else(|| "pivot_point must be an IVec3".to_string())?;
+        }
+        Ok(())
     }
 }
 

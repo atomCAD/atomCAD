@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -87,7 +89,7 @@ impl NodeData for RangeData {
         let start_connected = connected_input_pins.contains("start");
         let step_connected = connected_input_pins.contains("step");
         let count_connected = connected_input_pins.contains("count");
-        
+
         if start_connected && step_connected && count_connected {
             None
         } else {
@@ -96,6 +98,27 @@ impl NodeData for RangeData {
             let count_display = if count_connected { CONNECTED_PIN_SYMBOL } else { &self.count.to_string() };
             Some(format!("[{}:{}:{}]", start_display, step_display, count_display))
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("start".to_string(), TextValue::Int(self.start)),
+            ("step".to_string(), TextValue::Int(self.step)),
+            ("count".to_string(), TextValue::Int(self.count)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("start") {
+            self.start = v.as_int().ok_or_else(|| "start must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("step") {
+            self.step = v.as_int().ok_or_else(|| "step must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("count") {
+            self.count = v.as_int().ok_or_else(|| "count must be an integer".to_string())?;
+        }
+        Ok(())
     }
 }
 

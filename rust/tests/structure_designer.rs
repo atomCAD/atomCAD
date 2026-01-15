@@ -30,3 +30,6 @@ mod comment_node_test;
 
 #[path = "structure_designer/text_format_test.rs"]
 mod text_format_test;
+
+#[path = "structure_designer/text_properties_test.rs"]
+mod text_properties_test;

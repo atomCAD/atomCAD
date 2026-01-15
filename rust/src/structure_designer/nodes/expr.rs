@@ -9,6 +9,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::expr::validation::{get_function_signatures, get_function_implementations};
 use std::collections::HashMap;
+use crate::structure_designer::text_format::TextValue;
 use crate::expr::parser::parse;
 use crate::structure_designer::node_network::ValidationError;
 use crate::expr::expr::Expr;
@@ -167,6 +168,52 @@ impl NodeData for ExprData {
         } else {
             Some(self.expression.clone())
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        // Serialize parameters as an array of objects
+        let params: Vec<TextValue> = self.parameters.iter().map(|p| {
+            let mut obj = vec![
+                ("name".to_string(), TextValue::String(p.name.clone())),
+                ("data_type".to_string(), TextValue::DataType(p.data_type.clone())),
+            ];
+            if let Some(ref dt_str) = p.data_type_str {
+                obj.push(("data_type_str".to_string(), TextValue::String(dt_str.clone())));
+            }
+            TextValue::Object(obj)
+        }).collect();
+
+        vec![
+            ("expression".to_string(), TextValue::String(self.expression.clone())),
+            ("parameters".to_string(), TextValue::Array(params)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("expression") {
+            self.expression = v.as_string().ok_or_else(|| "expression must be a string".to_string())?.to_string();
+        }
+        if let Some(TextValue::Array(params_arr)) = props.get("parameters") {
+            let mut new_params = Vec::new();
+            for param_val in params_arr {
+                if let TextValue::Object(obj) = param_val {
+                    let name = obj.iter().find(|(k, _)| k == "name")
+                        .and_then(|(_, v)| v.as_string())
+                        .ok_or_else(|| "parameter name must be a string".to_string())?
+                        .to_string();
+                    let data_type = obj.iter().find(|(k, _)| k == "data_type")
+                        .and_then(|(_, v)| v.as_data_type())
+                        .ok_or_else(|| "parameter data_type must be a DataType".to_string())?
+                        .clone();
+                    let data_type_str = obj.iter().find(|(k, _)| k == "data_type_str")
+                        .and_then(|(_, v)| v.as_string())
+                        .map(|s| s.to_string());
+                    new_params.push(ExprParameter { name, data_type, data_type_str });
+                }
+            }
+            self.parameters = new_params;
+        }
+        Ok(())
     }
 }
 

@@ -2,7 +2,9 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -147,6 +149,39 @@ impl NodeData for UnitCellData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("cell_length_a".to_string(), TextValue::Float(self.cell_length_a)),
+            ("cell_length_b".to_string(), TextValue::Float(self.cell_length_b)),
+            ("cell_length_c".to_string(), TextValue::Float(self.cell_length_c)),
+            ("cell_angle_alpha".to_string(), TextValue::Float(self.cell_angle_alpha)),
+            ("cell_angle_beta".to_string(), TextValue::Float(self.cell_angle_beta)),
+            ("cell_angle_gamma".to_string(), TextValue::Float(self.cell_angle_gamma)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("cell_length_a") {
+            self.cell_length_a = v.as_float().ok_or_else(|| "cell_length_a must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("cell_length_b") {
+            self.cell_length_b = v.as_float().ok_or_else(|| "cell_length_b must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("cell_length_c") {
+            self.cell_length_c = v.as_float().ok_or_else(|| "cell_length_c must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("cell_angle_alpha") {
+            self.cell_angle_alpha = v.as_float().ok_or_else(|| "cell_angle_alpha must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("cell_angle_beta") {
+            self.cell_angle_beta = v.as_float().ok_or_else(|| "cell_angle_beta must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("cell_angle_gamma") {
+            self.cell_angle_gamma = v.as_float().ok_or_else(|| "cell_angle_gamma must be a float".to_string())?;
+        }
+        Ok(())
     }
 
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
