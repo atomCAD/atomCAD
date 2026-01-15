@@ -1,5 +1,5 @@
 use rust_lib_flutter_cad::structure_designer::text_format::{
-    TextValue, Parser, Lexer, Statement, PropertyValue, Token,
+    TextValue, Parser, Lexer, Statement, PropertyValue, Token, serialize_network,
 };
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use glam::{IVec2, IVec3, DVec2, DVec3};
@@ -404,5 +404,153 @@ output sphere1
         } else {
             panic!("Expected assignment");
         }
+    }
+}
+
+// ============================================================================
+// Network Serializer Tests
+// ============================================================================
+
+mod network_serializer_tests {
+    use super::*;
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+    use glam::f64::DVec2;
+
+    fn create_test_registry() -> NodeTypeRegistry {
+        NodeTypeRegistry::new()
+    }
+
+    fn create_test_network() -> NodeNetwork {
+        let node_type = NodeType {
+            name: "test".to_string(),
+            description: "Test network".to_string(),
+            category: NodeTypeCategory::Custom,
+            parameters: vec![],
+            output_type: DataType::Geometry,
+            public: true,
+            node_data_creator: || Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
+            node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
+            node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
+        };
+        NodeNetwork::new(node_type)
+    }
+
+    #[test]
+    fn test_serialize_empty_network() {
+        let registry = create_test_registry();
+        let network = create_test_network();
+
+        let result = serialize_network(&network, &registry);
+        assert!(result.contains("Empty network"));
+    }
+
+    #[test]
+    fn test_serialize_single_node() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Add a sphere node
+        let node_type = registry.get_node_type("sphere").unwrap();
+        let node_data = (node_type.node_data_creator)();
+        network.add_node("sphere", DVec2::new(0.0, 0.0), node_type.parameters.len(), node_data);
+
+        let result = serialize_network(&network, &registry);
+
+        // Check that the result contains a sphere definition
+        assert!(result.contains("sphere1 = sphere"));
+        assert!(result.contains("center:"));
+        assert!(result.contains("radius:"));
+    }
+
+    #[test]
+    fn test_serialize_multiple_nodes() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Add two sphere nodes
+        let node_type = registry.get_node_type("sphere").unwrap();
+        let node_data1 = (node_type.node_data_creator)();
+        let node_data2 = (node_type.node_data_creator)();
+        network.add_node("sphere", DVec2::new(0.0, 0.0), node_type.parameters.len(), node_data1);
+        network.add_node("sphere", DVec2::new(100.0, 0.0), node_type.parameters.len(), node_data2);
+
+        let result = serialize_network(&network, &registry);
+
+        // Check that we have sphere1 and sphere2
+        assert!(result.contains("sphere1 = sphere"));
+        assert!(result.contains("sphere2 = sphere"));
+    }
+
+    #[test]
+    fn test_serialize_with_output() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Add a sphere node
+        let node_type = registry.get_node_type("sphere").unwrap();
+        let node_data = (node_type.node_data_creator)();
+        let node_id = network.add_node("sphere", DVec2::new(0.0, 0.0), node_type.parameters.len(), node_data);
+
+        // Set as return node
+        network.return_node_id = Some(node_id);
+
+        let result = serialize_network(&network, &registry);
+
+        // Check that there's an output statement
+        assert!(result.contains("output sphere1"));
+    }
+
+    #[test]
+    fn test_serialize_connected_nodes() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Add an int node
+        let int_type = registry.get_node_type("int").unwrap();
+        let int_data = (int_type.node_data_creator)();
+        let int_id = network.add_node("int", DVec2::new(0.0, 0.0), int_type.parameters.len(), int_data);
+
+        // Add a sphere node
+        let sphere_type = registry.get_node_type("sphere").unwrap();
+        let sphere_data = (sphere_type.node_data_creator)();
+        let sphere_id = network.add_node("sphere", DVec2::new(100.0, 0.0), sphere_type.parameters.len(), sphere_data);
+
+        // Connect int to sphere's radius parameter (index 1)
+        network.connect_nodes(int_id, 0, sphere_id, 1, false);
+
+        let result = serialize_network(&network, &registry);
+
+        // Check that the connection is shown
+        assert!(result.contains("int1 = int"));
+        assert!(result.contains("sphere1 = sphere"));
+        assert!(result.contains("radius: int1"));
+    }
+
+    #[test]
+    fn test_serialize_different_node_types() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Add nodes of different types
+        let int_type = registry.get_node_type("int").unwrap();
+        let int_data = (int_type.node_data_creator)();
+        network.add_node("int", DVec2::new(0.0, 0.0), int_type.parameters.len(), int_data);
+
+        let float_type = registry.get_node_type("float").unwrap();
+        let float_data = (float_type.node_data_creator)();
+        network.add_node("float", DVec2::new(0.0, 100.0), float_type.parameters.len(), float_data);
+
+        let bool_type = registry.get_node_type("bool").unwrap();
+        let bool_data = (bool_type.node_data_creator)();
+        network.add_node("bool", DVec2::new(0.0, 200.0), bool_type.parameters.len(), bool_data);
+
+        let result = serialize_network(&network, &registry);
+
+        assert!(result.contains("int1 = int"));
+        assert!(result.contains("float1 = float"));
+        assert!(result.contains("bool1 = bool"));
     }
 }

@@ -7,6 +7,7 @@
 //!
 //! - [`TextValue`] - Enum representing typed values in the text format
 //! - [`Parser`] - Parses text format input into statements
+//! - [`NetworkSerializer`] - Serializes a node network to text format
 //! - Serialization functions in the [`serializer`] module
 //!
 //! # Text Format Overview
@@ -24,7 +25,7 @@
 //! # Example Usage
 //!
 //! ```rust,ignore
-//! use crate::structure_designer::text_format::{Parser, TextValue, Statement};
+//! use crate::structure_designer::text_format::{Parser, TextValue, Statement, serialize_network};
 //!
 //! // Parse text format input
 //! let statements = Parser::parse("sphere1 = sphere { radius: 5 }")?;
@@ -32,11 +33,15 @@
 //! // Serialize a value to text
 //! let value = TextValue::Int(42);
 //! let text = value.to_text(); // "42"
+//!
+//! // Serialize a network to text
+//! let text = serialize_network(&network, &registry);
 //! ```
 
 mod text_value;
 mod serializer;
 mod parser;
+mod network_serializer;
 
 pub use text_value::TextValue;
 pub use parser::{
@@ -49,3 +54,4 @@ pub use parser::{
     TokenInfo,
 };
 pub use serializer::TextFormatter;
+pub use network_serializer::{NetworkSerializer, serialize_network};
