@@ -9,15 +9,16 @@ This document provides a detailed implementation plan for the AI assistant integ
 
 ## Overview
 
-The implementation is divided into 5 phases:
+The implementation is divided into 6 phases:
 
 | Phase | Description | Dependencies | Status |
 |-------|-------------|--------------|--------|
 | 1 | Core text format infrastructure | None | New |
 | 2 | Node text property implementations | Phase 1 | New |
 | 3 | Query command (serialize network → text) | Phase 1, 2 | New |
-| 4 | Edit command (parse text → modify network) | Phase 1, 2 | New |
-| 5 | Integration with HTTP server and CLI | Phase 3, 4 | **Partial** - HTTP server & CLI exist with stubs |
+| 4A | Edit command core (parse text → modify network) | Phase 1, 2 | New |
+| 4B | Edit command auto-layout (smart node positioning) | Phase 4A | New |
+| 5 | Integration with HTTP server and CLI | Phase 3, 4A | **Partial** - HTTP server & CLI exist with stubs |
 
 ### Existing Infrastructure (from Phase 1 stub implementation)
 
@@ -592,11 +593,11 @@ impl<'a> NetworkSerializer<'a> {
 
 ---
 
-## Phase 4: Edit Command
+## Phase 4A: Edit Command Core
 
-**Goal:** Implement the edit API that parses text format and modifies the node network.
+**Goal:** Implement the core edit API that parses text format and modifies the node network. Uses placeholder positioning for new nodes (smart layout deferred to Phase 4B).
 
-### 4.1 Edit API Function
+### 4A.1 Edit API Function
 
 **File:** `rust/src/api/structure_designer/ai_assistant_api.rs`
 
@@ -628,7 +629,7 @@ pub fn edit_network(
 }
 ```
 
-### 4.2 Network Editor
+### 4A.2 Network Editor
 
 **File:** `rust/src/structure_designer/text_format/network_editor.rs`
 
@@ -637,6 +638,8 @@ pub struct NetworkEditor<'a> {
     structure_designer: &'a mut StructureDesigner,
     /// Maps text names to node IDs (existing + newly created)
     name_to_id: HashMap<String, u64>,
+    /// Counter for placeholder positioning
+    new_node_count: usize,
     /// Result tracking
     result: EditResult,
 }
@@ -664,7 +667,7 @@ impl<'a> NetworkEditor<'a> {
 }
 ```
 
-### 4.3 Edit Algorithm
+### 4A.3 Edit Algorithm
 
 ```
 1. PARSE INPUT
@@ -691,7 +694,7 @@ impl<'a> NetworkEditor<'a> {
    b. For new nodes:
       - Look up node type in registry
       - Create node with default data
-      - Generate position (simple auto-layout)
+      - Generate position (placeholder layout - see 4A.4)
       - Add to name map
 
    c. For all nodes (new and existing):
@@ -738,54 +741,46 @@ impl<'a> NetworkEditor<'a> {
    - Recalculate evaluation
 ```
 
-### 4.4 Auto-Layout for New Nodes
+### 4A.4 Placeholder Layout for New Nodes
 
-**File:** `rust/src/structure_designer/text_format/auto_layout.rs`
-
-Simple algorithm for placing new nodes:
+For Phase 4A, use a simple placeholder positioning strategy. Smart layout will be implemented in Phase 4B.
 
 ```rust
-/// Calculate position for a new node
-pub fn calculate_new_node_position(
-    network: &NodeNetwork,
-    node_type: &str,
-    input_connections: &[(u64, usize)], // (source_node_id, input_pin_index)
-) -> (f64, f64) {
-    // Strategy 1: Place to the right of input nodes
-    if !input_connections.is_empty() {
-        let max_x = input_connections.iter()
-            .filter_map(|(id, _)| network.get_node(*id))
-            .map(|n| n.position.0 + NODE_WIDTH + HORIZONTAL_GAP)
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap_or(0.0);
+/// Simple placeholder positioning for new nodes.
+/// Places nodes in a vertical column at a fixed X position.
+/// This will be replaced by smart auto-layout in Phase 4B.
+fn placeholder_node_position(new_node_index: usize) -> (f64, f64) {
+    const START_X: f64 = 100.0;
+    const START_Y: f64 = 100.0;
+    const VERTICAL_SPACING: f64 = 150.0;
 
-        let avg_y = /* calculate average Y of inputs */;
-        return (max_x, avg_y);
-    }
-
-    // Strategy 2: Find empty space
-    find_empty_position(network)
+    (START_X, START_Y + (new_node_index as f64 * VERTICAL_SPACING))
 }
 ```
 
-### 4.5 Implementation Tasks
+**Rationale for deferring smart layout:**
+- Core edit functionality can be tested end-to-end with placeholder positions
+- Layout quality doesn't affect correctness of node creation, wiring, or evaluation
+- Smart layout is an independent concern that can be iterated separately
+- Users can manually reposition nodes in the UI if needed
+
+### 4A.5 Implementation Tasks
 
 - [ ] Create `NetworkEditor` struct
 - [ ] Implement name map building from existing network
 - [ ] Implement replace mode (clear network)
-- [ ] Implement node creation
+- [ ] Implement node creation with placeholder positioning
 - [ ] Implement node update (set_text_properties)
 - [ ] Implement wire creation
 - [ ] Implement wire removal (for rewiring)
 - [ ] Implement node deletion
 - [ ] Implement output statement handling
 - [ ] Implement visibility handling (`visible: true` adds to displayed_node_ids)
-- [ ] Implement auto-layout algorithm
 - [ ] Create public API function
 - [ ] Return detailed EditResult
 - [ ] Unit tests for all edit operations
 
-### 4.6 Edge Cases
+### 4A.6 Edge Cases
 
 - **Forward references:** Node A references Node B, but B defined later in code
   - Solution: Two-pass algorithm (create nodes first, wire second)
@@ -799,6 +794,181 @@ pub fn calculate_new_node_position(
   - Solution: Error (or warning if soft type system)
 - **Duplicate names:** Same name defined twice in edit
   - Solution: Second definition updates the first
+
+---
+
+## Phase 4B: Edit Command Auto-Layout
+
+**Goal:** Implement smart auto-layout for new nodes created via the edit command. Replaces the placeholder positioning from Phase 4A.
+
+### 4B.1 Auto-Layout Strategy
+
+When new nodes are created, they should be positioned intelligently based on:
+1. Their input connections (place to the right of source nodes)
+2. Avoiding overlap with existing nodes
+3. Maintaining visual flow (left-to-right for data flow)
+
+### 4B.2 Auto-Layout Module
+
+**File:** `rust/src/structure_designer/text_format/auto_layout.rs`
+
+```rust
+/// Constants for layout calculations
+const NODE_WIDTH: f64 = 200.0;
+const NODE_HEIGHT: f64 = 100.0;
+const HORIZONTAL_GAP: f64 = 50.0;
+const VERTICAL_GAP: f64 = 30.0;
+
+/// Calculate position for a new node based on its connections
+pub fn calculate_new_node_position(
+    network: &NodeNetwork,
+    node_type: &str,
+    input_connections: &[(u64, usize)], // (source_node_id, input_pin_index)
+) -> (f64, f64) {
+    // Strategy 1: Place to the right of input nodes
+    if !input_connections.is_empty() {
+        let source_positions: Vec<(f64, f64)> = input_connections.iter()
+            .filter_map(|(id, _)| network.get_node(*id))
+            .map(|n| n.position)
+            .collect();
+
+        if !source_positions.is_empty() {
+            // X: to the right of rightmost source
+            let max_x = source_positions.iter()
+                .map(|(x, _)| x + NODE_WIDTH + HORIZONTAL_GAP)
+                .max_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap();
+
+            // Y: average Y of all sources
+            let avg_y = source_positions.iter()
+                .map(|(_, y)| y)
+                .sum::<f64>() / source_positions.len() as f64;
+
+            let proposed = (max_x, avg_y);
+
+            // Check for overlap and adjust if needed
+            return find_non_overlapping_position(network, proposed);
+        }
+    }
+
+    // Strategy 2: Find empty space for nodes with no inputs
+    find_empty_position(network)
+}
+
+/// Find a position near the proposed location that doesn't overlap existing nodes
+fn find_non_overlapping_position(
+    network: &NodeNetwork,
+    proposed: (f64, f64),
+) -> (f64, f64) {
+    let (x, y) = proposed;
+
+    // Check if proposed position overlaps any existing node
+    if !overlaps_any_node(network, x, y) {
+        return (x, y);
+    }
+
+    // Try positions below the proposed location
+    for offset in 1..20 {
+        let new_y = y + (offset as f64 * (NODE_HEIGHT + VERTICAL_GAP));
+        if !overlaps_any_node(network, x, new_y) {
+            return (x, new_y);
+        }
+    }
+
+    // Fallback: just return proposed position
+    proposed
+}
+
+/// Check if a position overlaps any existing node
+fn overlaps_any_node(network: &NodeNetwork, x: f64, y: f64) -> bool {
+    for node in network.nodes.values() {
+        let (nx, ny) = node.position;
+        // Simple bounding box overlap check
+        if x < nx + NODE_WIDTH + HORIZONTAL_GAP &&
+           x + NODE_WIDTH > nx - HORIZONTAL_GAP &&
+           y < ny + NODE_HEIGHT + VERTICAL_GAP &&
+           y + NODE_HEIGHT > ny - VERTICAL_GAP {
+            return true;
+        }
+    }
+    false
+}
+
+/// Find an empty position in the canvas (for nodes with no inputs)
+fn find_empty_position(network: &NodeNetwork) -> (f64, f64) {
+    if network.nodes.is_empty() {
+        return (100.0, 100.0);
+    }
+
+    // Find the rightmost node and place to the right of it
+    let max_x = network.nodes.values()
+        .map(|n| n.position.0)
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap_or(0.0);
+
+    let avg_y = network.nodes.values()
+        .map(|n| n.position.1)
+        .sum::<f64>() / network.nodes.len() as f64;
+
+    (max_x + NODE_WIDTH + HORIZONTAL_GAP * 2.0, avg_y)
+}
+```
+
+### 4B.3 Integration with NetworkEditor
+
+Update `NetworkEditor` to use smart layout:
+
+```rust
+impl<'a> NetworkEditor<'a> {
+    fn create_node(&mut self, name: &str, node_type: &str,
+                   pending_connections: &[(String, String)]) -> Result<u64, String> {
+        // ... create node ...
+
+        // Calculate position based on connections that will be made
+        let input_connections: Vec<(u64, usize)> = pending_connections.iter()
+            .filter_map(|(param_name, source_name)| {
+                let source_id = self.name_to_id.get(source_name)?;
+                let pin_index = /* resolve param name to pin index */;
+                Some((*source_id, pin_index))
+            })
+            .collect();
+
+        let position = auto_layout::calculate_new_node_position(
+            &self.network,
+            node_type,
+            &input_connections,
+        );
+
+        node.position = position;
+        // ...
+    }
+}
+```
+
+### 4B.4 Implementation Tasks
+
+- [ ] Create `auto_layout.rs` module
+- [ ] Implement `calculate_new_node_position()`
+- [ ] Implement `find_non_overlapping_position()`
+- [ ] Implement `overlaps_any_node()`
+- [ ] Implement `find_empty_position()`
+- [ ] Integrate with `NetworkEditor.create_node()`
+- [ ] Unit tests for layout calculations
+- [ ] Visual testing with various network topologies
+
+### 4B.5 Future Enhancements (Out of Scope)
+
+These could be added later but are not part of Phase 4B:
+
+- **Reorganizing layout mode:** A layout mode that moves existing nodes to make space for new nodes, maintaining optimal visual flow. This would require:
+  - A user preference setting to choose between "non-disruptive" (current 4B behavior) and "reorganizing" modes
+  - Algorithm to determine which nodes to shift and by how much
+  - Handling of cascading shifts (moving node A may require moving node B)
+
+- **Full network re-layout:** Reposition all nodes for optimal layout
+- **User-adjustable layout parameters:** Allow customizing spacing, direction
+- **Layout presets:** Horizontal, vertical, hierarchical, force-directed
+- **Group-aware layout:** Keep related nodes clustered together
 
 ---
 
@@ -1125,26 +1295,26 @@ This is a meta-property that affects display, not node data. It maps to `NodeNet
 rust/src/structure_designer/
 ├── text_format/                      # NEW DIRECTORY
 │   ├── mod.rs
-│   ├── text_value.rs                 # TextValue enum
-│   ├── serializer.rs                 # TextValue → String
-│   ├── parser.rs                     # String → Statements
-│   ├── network_serializer.rs         # Network → Text (query)
-│   ├── network_editor.rs             # Text → Network changes (edit)
-│   └── auto_layout.rs                # Position calculation for new nodes
-├── node_data.rs                      # Updated with new trait methods
+│   ├── text_value.rs                 # TextValue enum (Phase 1)
+│   ├── serializer.rs                 # TextValue → String (Phase 1)
+│   ├── parser.rs                     # String → Statements (Phase 1)
+│   ├── network_serializer.rs         # Network → Text (Phase 3: query)
+│   ├── network_editor.rs             # Text → Network changes (Phase 4A: edit)
+│   └── auto_layout.rs                # Smart node positioning (Phase 4B)
+├── node_data.rs                      # Updated with new trait methods (Phase 1)
 └── nodes/
-    ├── *.rs                          # Each updated with get/set_text_properties
+    ├── *.rs                          # Each updated with get/set_text_properties (Phase 2)
 
 rust/src/api/structure_designer/
-├── ai_assistant_api.rs               # NEW: query_network, edit_network
-└── structure_designer_api.rs         # Updated: ai_query_network, ai_edit_network
+├── ai_assistant_api.rs               # NEW: query_network, edit_network (Phase 5)
+└── structure_designer_api.rs         # Updated: ai_query_network, ai_edit_network (Phase 5)
 
-lib/ai_assistant/                     # EXISTING (Phase 1)
-├── http_server.dart                  # Update: call Rust instead of stubs
+lib/ai_assistant/                     # EXISTING (Phase 1 stub)
+├── http_server.dart                  # Update: call Rust instead of stubs (Phase 5)
 └── constants.dart                    # Existing: port, stub responses (can remove stubs later)
 
 bin/
-└── atomcad_cli.dart                  # EXISTING (Phase 1) - no changes needed
+└── atomcad_cli.dart                  # EXISTING (Phase 1 stub) - no changes needed
 ```
 
 ---
