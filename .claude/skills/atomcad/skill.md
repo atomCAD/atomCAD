@@ -1,3 +1,13 @@
+---
+name: atomcad
+description: Interact with atomCAD node networks programmatically. Query, edit, and replace CAD geometry nodes for atomic/molecular structure design. Use when working with atomCAD projects or when the user wants to manipulate node networks, create CSG shapes, or design atomic structures.
+license: MIT
+metadata:
+  author: atomCAD
+  version: "1.0"
+allowed-tools: Bash(atomcad-cli:*)
+---
+
 # atomCAD Skill
 
 Interact with atomCAD node networks programmatically. Requires atomCAD to be running.
@@ -5,7 +15,7 @@ Interact with atomCAD node networks programmatically. Requires atomCAD to be run
 ## Prerequisites
 
 - atomCAD installed and running
-- `atomcad-cli` in PATH (included with atomCAD installation)
+- `atomcad-cli` on PATH (if running atomCAD from the repo, add the repo root to your PATH)
 
 ## Commands
 

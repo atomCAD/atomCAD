@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(flutter test:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo insta:*)",
+      "Bash(ls -la \"c:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\\\\structure_designer\\\\text_format\"\" | findstr \".rs \")",
+      "Bash(cargo check:*)",
+      "Bash(flutter_rust_bridge_codegen generate:*)",
+      "Bash(dart format:*)",
+      "Bash(dart run:*)",
+      "Skill(atomcad)",
+      "Bash(./atomcad-cli query:*)",
+      "Bash(C:/machine_phase_systems/flutter_cad/atomcad-cli query:*)"
+    ]
+  }
+}

@@ -151,6 +151,10 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 // Put the network back into the registry
                 structure_designer.node_type_registry.node_networks.insert(network_name, network);
 
+                // Mark that a full refresh is needed since the network was edited directly
+                // (bypassing StructureDesigner change tracking)
+                cad_instance.structure_designer.mark_full_refresh();
+
                 // Trigger a refresh after editing
                 refresh_structure_designer_auto(cad_instance);
 
