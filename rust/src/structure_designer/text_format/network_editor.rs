@@ -22,13 +22,13 @@
 //! ```
 
 use std::collections::HashMap;
-use glam::DVec2;
 use serde::Serialize;
 
 use crate::structure_designer::node_network::{NodeNetwork, Argument};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::text_format::{Parser, Statement, PropertyValue};
 use crate::structure_designer::text_format::TextValue;
+use crate::structure_designer::text_format::auto_layout;
 
 /// Result of an edit operation.
 #[derive(Debug, Clone, Serialize)]
@@ -317,8 +317,16 @@ impl<'a> NetworkEditor<'a> {
         // Create node data using the factory
         let node_data = (node_type.node_data_creator)();
 
-        // Calculate position (placeholder layout)
-        let position = self.placeholder_node_position();
+        // Extract input connections from properties for smart layout positioning
+        let input_connections = self.extract_input_connections_for_layout(properties);
+
+        // Calculate position using smart auto-layout
+        let position = auto_layout::calculate_new_node_position(
+            self.network,
+            self.registry,
+            node_type_name,
+            &input_connections,
+        );
         self.new_node_count += 1;
 
         // Add node to network
@@ -342,6 +350,50 @@ impl<'a> NetworkEditor<'a> {
 
         self.result.nodes_created.push(name.to_string());
         Ok(node_id)
+    }
+
+    /// Extract source node IDs from properties for layout positioning.
+    ///
+    /// Returns a list of (source_node_id, output_pin_index) for each connection
+    /// reference found in the properties. Only returns connections to nodes that
+    /// already exist in the name map.
+    fn extract_input_connections_for_layout(
+        &self,
+        properties: &[(String, PropertyValue)],
+    ) -> Vec<(u64, i32)> {
+        let mut connections = Vec::new();
+
+        for (_prop_name, prop_value) in properties {
+            self.collect_source_refs_for_layout(prop_value, &mut connections);
+        }
+
+        connections
+    }
+
+    /// Recursively collect source node references from a property value.
+    fn collect_source_refs_for_layout(
+        &self,
+        prop_value: &PropertyValue,
+        connections: &mut Vec<(u64, i32)>,
+    ) {
+        match prop_value {
+            PropertyValue::NodeRef(name) => {
+                if let Some(&node_id) = self.name_to_id.get(name) {
+                    connections.push((node_id, 0)); // Regular output pin
+                }
+            }
+            PropertyValue::FunctionRef(name) => {
+                if let Some(&node_id) = self.name_to_id.get(name) {
+                    connections.push((node_id, -1)); // Function pin
+                }
+            }
+            PropertyValue::Array(items) => {
+                for item in items {
+                    self.collect_source_refs_for_layout(item, connections);
+                }
+            }
+            PropertyValue::Literal(_) => {}
+        }
     }
 
     /// Update an existing node.
@@ -577,19 +629,6 @@ impl<'a> NetworkEditor<'a> {
 
         self.network.set_return_node(node_id);
         Ok(())
-    }
-
-    /// Calculate placeholder position for a new node.
-    /// Places nodes in a vertical column at a fixed X position.
-    fn placeholder_node_position(&self) -> DVec2 {
-        const START_X: f64 = 100.0;
-        const START_Y: f64 = 100.0;
-        const VERTICAL_SPACING: f64 = 150.0;
-
-        DVec2::new(
-            START_X,
-            START_Y + (self.new_node_count as f64 * VERTICAL_SPACING),
-        )
     }
 }
 

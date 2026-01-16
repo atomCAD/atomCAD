@@ -1,5 +1,14 @@
 # atomCAD - Agent Instructions
 
+## Subdirectory Instructions
+
+**IMPORTANT:** When working on files in these directories (or any of their subdirectories), always read the corresponding AGENTS.md file first:
+
+- Working in `rust/` or any descendant (e.g., `rust/src/`, `rust/src/structure_designer/`, etc.) → Read `rust/AGENTS.md`
+- Working in `lib/` or any descendant (e.g., `lib/common/`, `lib/structure_designer/`, etc.) → Read `lib/AGENTS.md` (if it exists)
+
+These files contain directory-specific conventions, testing requirements, and coding standards that must be followed.
+
 ## Project Overview
 
 atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enables designing covalently bonded atomic structures constrained to crystal lattices. The application uses a **Rust backend** for high-performance CAD operations and a **Flutter frontend** for cross-platform UI.

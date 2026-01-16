@@ -940,3 +940,248 @@ mod network_editor_tests {
         assert_eq!(network.nodes.len(), 2);
     }
 }
+
+// ============================================================================
+// Auto-Layout Tests
+// ============================================================================
+
+mod auto_layout_tests {
+    use super::*;
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, auto_layout};
+    use rust_lib_flutter_cad::structure_designer::node_layout;
+    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+    use glam::f64::DVec2;
+
+    fn create_test_registry() -> NodeTypeRegistry {
+        NodeTypeRegistry::new()
+    }
+
+    fn create_test_network() -> NodeNetwork {
+        let node_type = NodeType {
+            name: "test".to_string(),
+            description: "Test network".to_string(),
+            category: NodeTypeCategory::Custom,
+            parameters: vec![],
+            output_type: DataType::Geometry,
+            public: true,
+            node_data_creator: || Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
+            node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
+            node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
+        };
+        NodeNetwork::new(node_type)
+    }
+
+    #[test]
+    fn test_get_node_size_unknown_type() {
+        let registry = create_test_registry();
+        // Unknown type should return default size (0 params)
+        let size = auto_layout::get_node_size(&registry, "unknown_type");
+        assert_eq!(size.x, node_layout::NODE_WIDTH);
+        // With 0 params and subtitle, height should be minimal
+        assert!(size.y > 0.0);
+    }
+
+    #[test]
+    fn test_get_node_size_known_type() {
+        let registry = create_test_registry();
+        // sphere has center, radius, and unit_cell parameters
+        let size = auto_layout::get_node_size(&registry, "sphere");
+        assert_eq!(size.x, node_layout::NODE_WIDTH);
+        // Should have height for 3 parameters
+        let expected_size = node_layout::estimate_node_size(3, true);
+        assert_eq!(size, expected_size);
+    }
+
+    #[test]
+    fn test_empty_network_positions_at_default() {
+        let registry = create_test_registry();
+        let network = create_test_network();
+
+        // Calculate position for a new node with no inputs
+        let position = auto_layout::calculate_new_node_position(
+            &network,
+            &registry,
+            "sphere",
+            &[], // no connections
+        );
+
+        // Should be at the default starting position (100, 100)
+        assert_eq!(position.x, 100.0);
+        assert_eq!(position.y, 100.0);
+    }
+
+    #[test]
+    fn test_node_positions_to_right_of_source() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create a source node at a known position
+        let int_type = registry.get_node_type("int").unwrap();
+        let int_data = (int_type.node_data_creator)();
+        let int_id = network.add_node("int", DVec2::new(200.0, 300.0), int_type.parameters.len(), int_data);
+
+        // Calculate position for a node connected to int
+        let position = auto_layout::calculate_new_node_position(
+            &network,
+            &registry,
+            "sphere",
+            &[(int_id, 0)], // connected to int node
+        );
+
+        // Should be to the right of the int node
+        let int_size = node_layout::estimate_node_size(int_type.parameters.len(), true);
+        let expected_min_x = 200.0 + int_size.x + node_layout::DEFAULT_HORIZONTAL_GAP;
+        assert!(position.x >= expected_min_x, "Node should be placed to the right of source");
+
+        // Y should be approximately the same as source
+        assert!((position.y - 300.0).abs() < 1.0, "Node should be at similar Y as source");
+    }
+
+    #[test]
+    fn test_node_positions_with_multiple_sources() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create two source nodes at different positions
+        let int_type = registry.get_node_type("int").unwrap();
+        let int_data1 = (int_type.node_data_creator)();
+        let int_data2 = (int_type.node_data_creator)();
+        let int_id1 = network.add_node("int", DVec2::new(100.0, 100.0), int_type.parameters.len(), int_data1);
+        let int_id2 = network.add_node("int", DVec2::new(100.0, 300.0), int_type.parameters.len(), int_data2);
+
+        // Calculate position for a node connected to both
+        let position = auto_layout::calculate_new_node_position(
+            &network,
+            &registry,
+            "sphere",
+            &[(int_id1, 0), (int_id2, 0)],
+        );
+
+        // Y should be average of the two sources
+        let expected_y = (100.0 + 300.0) / 2.0;
+        assert!((position.y - expected_y).abs() < 1.0, "Y should be average of source Y positions");
+    }
+
+    #[test]
+    fn test_nodes_placed_without_overlap() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create multiple nodes via edit
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 1 }
+            int2 = int { value: 2 }
+            int3 = int { value: 3 }
+            int4 = int { value: 4 }
+            int5 = int { value: 5 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(network.nodes.len(), 5);
+
+        // Verify no overlaps
+        let nodes: Vec<_> = network.nodes.values().collect();
+        let int_type = registry.get_node_type("int").unwrap();
+        let node_size = node_layout::estimate_node_size(int_type.parameters.len(), true);
+
+        for i in 0..nodes.len() {
+            for j in (i + 1)..nodes.len() {
+                let pos1 = DVec2::new(nodes[i].position.x, nodes[i].position.y);
+                let pos2 = DVec2::new(nodes[j].position.x, nodes[j].position.y);
+
+                let overlap = node_layout::nodes_overlap(
+                    pos1, node_size,
+                    pos2, node_size,
+                    node_layout::DEFAULT_VERTICAL_GAP
+                );
+
+                assert!(!overlap,
+                    "Nodes {} and {} should not overlap (pos1: {:?}, pos2: {:?})",
+                    i, j, pos1, pos2);
+            }
+        }
+    }
+
+    #[test]
+    fn test_connected_nodes_flow_left_to_right() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create a chain of connected nodes
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 5 }
+            sphere1 = sphere { radius: int1 }
+            union1 = union { shapes: [sphere1] }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Find nodes by type
+        let int_node = network.nodes.values()
+            .find(|n| n.node_type_name == "int")
+            .expect("Should find int node");
+        let sphere_node = network.nodes.values()
+            .find(|n| n.node_type_name == "sphere")
+            .expect("Should find sphere node");
+        let union_node = network.nodes.values()
+            .find(|n| n.node_type_name == "union")
+            .expect("Should find union node");
+
+        // Verify left-to-right flow: int < sphere < union
+        assert!(sphere_node.position.x > int_node.position.x,
+            "Sphere should be to the right of int");
+        assert!(union_node.position.x > sphere_node.position.x,
+            "Union should be to the right of sphere");
+    }
+
+    #[test]
+    fn test_nodes_without_connections_placed_in_empty_space() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // First create some nodes to occupy space
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+            sphere2 = sphere { center: (0, 0, 0), radius: 3 }
+        "#, true);
+        assert!(result.success);
+
+        // Now add a node with no connections
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+        "#, false);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // The int node should be placed without overlapping existing nodes
+        let int_node = network.nodes.values()
+            .find(|n| n.node_type_name == "int")
+            .expect("Should find int node");
+
+        let int_pos = DVec2::new(int_node.position.x, int_node.position.y);
+        let int_type = registry.get_node_type("int").unwrap();
+        let int_size = node_layout::estimate_node_size(int_type.parameters.len(), true);
+
+        // Check no overlap with sphere nodes
+        for node in network.nodes.values() {
+            if node.node_type_name == "int" {
+                continue;
+            }
+            let node_pos = DVec2::new(node.position.x, node.position.y);
+            let node_type = registry.get_node_type(&node.node_type_name).unwrap();
+            let node_size = node_layout::estimate_node_size(node_type.parameters.len(), true);
+
+            let overlap = node_layout::nodes_overlap(
+                int_pos, int_size,
+                node_pos, node_size,
+                node_layout::DEFAULT_VERTICAL_GAP
+            );
+
+            assert!(!overlap, "Int node should not overlap with {}",
+                node.node_type_name);
+        }
+    }
+}

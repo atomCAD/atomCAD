@@ -13,11 +13,11 @@ The implementation is divided into 6 phases:
 
 | Phase | Description | Dependencies | Status |
 |-------|-------------|--------------|--------|
-| 1 | Core text format infrastructure | None | New |
-| 2 | Node text property implementations | Phase 1 | New |
-| 3 | Query command (serialize network → text) | Phase 1, 2 | New |
-| 4A | Edit command core (parse text → modify network) | Phase 1, 2 | New |
-| 4B | Edit command auto-layout (smart node positioning) | Phase 4A | New |
+| 1 | Core text format infrastructure | None | **Complete** |
+| 2 | Node text property implementations | Phase 1 | **Complete** |
+| 3 | Query command (serialize network → text) | Phase 1, 2 | **Complete** |
+| 4A | Edit command core (parse text → modify network) | Phase 1, 2 | **Complete** |
+| 4B | Edit command auto-layout (smart node positioning) | Phase 4A | **Complete** (visual testing remaining) |
 | 5 | Integration with HTTP server and CLI | Phase 3, 4A | **Partial** - HTTP server & CLI exist with stubs |
 
 ### Existing Infrastructure (from Phase 1 stub implementation)
@@ -986,12 +986,12 @@ impl<'a> NetworkEditor<'a> {
 
 ### 4B.4 Implementation Tasks
 
-- [ ] Create `auto_layout.rs` module (uses existing `node_layout` module for size calculations)
-- [ ] Implement `calculate_new_node_position()` using `node_layout::estimate_node_size()`
-- [ ] Implement `find_non_overlapping_position()` using `node_layout::overlaps_any()`
-- [ ] Implement `find_empty_position()`
-- [ ] Integrate with `NetworkEditor.create_node()`
-- [ ] Unit tests for layout calculations
+- [x] Create `auto_layout.rs` module (uses existing `node_layout` module for size calculations)
+- [x] Implement `calculate_new_node_position()` using `node_layout::estimate_node_size()`
+- [x] Implement `find_non_overlapping_position()` using `node_layout::overlaps_any()`
+- [x] Implement `find_empty_position()`
+- [x] Integrate with `NetworkEditor.create_node()`
+- [x] Unit tests for layout calculations
 - [ ] Visual testing with various network topologies
 
 ### 4B.5 Future Enhancements (Out of Scope)

@@ -43,6 +43,7 @@ mod serializer;
 mod parser;
 mod network_serializer;
 mod network_editor;
+pub mod auto_layout;
 
 pub use text_value::TextValue;
 pub use parser::{
