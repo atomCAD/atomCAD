@@ -6,6 +6,7 @@ This document provides a detailed implementation plan for the AI assistant integ
 - [AI Assistant Integration](./ai_assistant_integration.md) - High-level architecture and requirements
 - [Node Network Text Format](./node_network_text_format.md) - Text format specification
 - [Phase 1 Design](./ai_assistant_integration_phase1_design.md) - Stub implementation (already completed)
+- [atomCAD Skill Plan](./atomcad_skill_plan.md) - CLI distribution and AI skill file
 
 ## Overview
 
