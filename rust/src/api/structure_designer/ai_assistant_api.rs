@@ -7,130 +7,203 @@
 //!
 //! The API provides two main operations:
 //! - **Query**: Serialize the active node network to text format
-//! - **Edit**: Parse text format commands and apply changes to the network (Phase 4)
+//! - **Edit**: Parse text format commands and apply changes to the network
 //!
-//! # Example Usage
+//! # Example Usage (via HTTP server)
 //!
-//! ```rust,ignore
-//! use crate::api::structure_designer::ai_assistant_api::query_network;
+//! ```text
+//! # Query the network
+//! GET http://localhost:19847/query
 //!
-//! let text = query_network(&structure_designer);
-//! // Returns text like:
-//! // sphere1 = sphere { center: (0, 0, 0), radius: 5 }
-//! // output sphere1
+//! # Edit the network
+//! POST http://localhost:19847/edit
+//! Content-Type: text/plain
+//!
+//! sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+//! output sphere1
 //! ```
 
-use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::text_format::serialize_network;
+use crate::api::api_common::{
+    refresh_structure_designer_auto,
+    with_cad_instance_or,
+    with_mut_cad_instance_or,
+};
+use crate::structure_designer::text_format::{serialize_network, edit_network as text_edit_network, EditResult};
 
-/// Serializes the active node network to text format.
+// =============================================================================
+// FFI Functions (exposed to Flutter via flutter_rust_bridge)
+// =============================================================================
+
+/// Query the active node network and return its text format representation.
 ///
-/// This function returns a human-readable text representation of the currently
-/// active node network, suitable for AI assistant consumption and editing.
-///
-/// # Arguments
-/// * `structure_designer` - The structure designer instance containing the network
+/// This function serializes the currently active node network to the text format
+/// used by AI assistants for understanding and editing the network.
 ///
 /// # Returns
-/// A string containing the text format representation of the active network.
-/// If no network is active, returns an appropriate message.
+/// A string containing the text format representation of the network.
+/// If no network is active, returns an error message starting with "#".
 ///
-/// # Text Format
-///
-/// The output follows this format:
+/// # Example Output
 /// ```text
-/// # Node definitions (in topological order)
-/// name = type { property: value, property: value }
-///
-/// # Connections use node names
-/// union1 = union { shapes: [sphere1, box1] }
-///
-/// # Function pin references use @ prefix
-/// map1 = map { f: @pattern }
-///
-/// # Output declaration
-/// output final_node
+/// sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+/// cuboid1 = cuboid { min_corner: (-5, -5, -5), extent: (10, 10, 10) }
+/// union1 = union { shapes: [sphere1, cuboid1] }
+/// output union1
 /// ```
-///
-/// # Example
-/// ```rust,ignore
-/// let text = query_network(&designer);
-/// println!("{}", text);
-/// // Output:
-/// // sphere1 = sphere { center: (0, 0, 0), radius: 5 }
-/// // cuboid1 = cuboid { min_corner: (-5, -5, -5), extent: (10, 10, 10) }
-/// // union1 = union { shapes: [sphere1, cuboid1] }
-/// // output union1
-/// ```
-pub fn query_network(structure_designer: &StructureDesigner) -> String {
-    // Get the active network name
-    let network_name = match &structure_designer.active_node_network_name {
-        Some(name) => name,
-        None => return "# No active node network\n".to_string(),
-    };
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_query_network() -> String {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let structure_designer = &cad_instance.structure_designer;
 
-    // Get the network from the registry
-    let network = match structure_designer.node_type_registry.node_networks.get(network_name) {
-        Some(network) => network,
-        None => return format!("# Network '{}' not found\n", network_name),
-    };
+                // Get the active network name
+                let network_name = match &structure_designer.active_node_network_name {
+                    Some(name) => name,
+                    None => return "# No active node network\n".to_string(),
+                };
 
-    // Serialize the network
-    serialize_network(network, &structure_designer.node_type_registry)
+                // Get the network from the registry
+                let network = match structure_designer.node_type_registry.node_networks.get(network_name) {
+                    Some(network) => network,
+                    None => return format!("# Network '{}' not found\n", network_name),
+                };
+
+                // Serialize the network
+                serialize_network(network, &structure_designer.node_type_registry)
+            },
+            "# Error: Could not access structure designer\n".to_string()
+        )
+    }
 }
 
-/// Query a specific node network by name.
+/// Edit the active node network using text format commands.
 ///
-/// This function allows querying a specific network by name, rather than
-/// the currently active network.
+/// This function parses text format commands and applies changes to the currently
+/// active node network. Changes may include creating nodes, updating properties,
+/// making wire connections, and deleting nodes.
 ///
 /// # Arguments
-/// * `structure_designer` - The structure designer instance
-/// * `network_name` - The name of the network to query
+/// * `code` - The edit commands in text format
+/// * `replace` - If true, replace entire network; if false, incremental merge
 ///
 /// # Returns
-/// A string containing the text format representation of the specified network.
-/// Returns an error message if the network is not found.
-pub fn query_network_by_name(structure_designer: &StructureDesigner, network_name: &str) -> String {
-    // Get the network from the registry
-    let network = match structure_designer.node_type_registry.node_networks.get(network_name) {
-        Some(network) => network,
-        None => return format!("# Network '{}' not found\n", network_name),
-    };
+/// A JSON string containing the `EditResult` with details of what was changed:
+/// - `success` - Whether the operation succeeded
+/// - `nodes_created` - Names of newly created nodes
+/// - `nodes_updated` - Names of modified nodes
+/// - `nodes_deleted` - Names of deleted nodes
+/// - `connections_made` - Descriptions of wire connections
+/// - `errors` - Error messages if any
+/// - `warnings` - Warning messages if any
+///
+/// # Example Input
+/// ```text
+/// sphere1 = sphere { center: (0, 0, 0), radius: 10, visible: true }
+/// output sphere1
+/// ```
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_edit_network(code: String, replace: bool) -> String {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let structure_designer = &mut cad_instance.structure_designer;
 
-    // Serialize the network
-    serialize_network(network, &structure_designer.node_type_registry)
+                // Get the active network name
+                let network_name = match &structure_designer.active_node_network_name {
+                    Some(name) => name.clone(),
+                    None => {
+                        return serde_json::to_string(&EditResult {
+                            success: false,
+                            nodes_created: vec![],
+                            nodes_updated: vec![],
+                            nodes_deleted: vec![],
+                            connections_made: vec![],
+                            errors: vec!["No active node network".to_string()],
+                            warnings: vec![],
+                        }).unwrap_or_else(|_| r#"{"success":false,"errors":["No active node network"]}"#.to_string());
+                    }
+                };
+
+                // Temporarily remove the network from the registry to avoid borrow conflicts.
+                // This is necessary because text_edit_network needs:
+                // - &mut NodeNetwork (the network we're editing)
+                // - &NodeTypeRegistry (for looking up node types)
+                // And the network lives inside the registry's node_networks HashMap.
+                let mut network = match structure_designer.node_type_registry.node_networks.remove(&network_name) {
+                    Some(network) => network,
+                    None => {
+                        return serde_json::to_string(&EditResult {
+                            success: false,
+                            nodes_created: vec![],
+                            nodes_updated: vec![],
+                            nodes_deleted: vec![],
+                            connections_made: vec![],
+                            errors: vec![format!("Network '{}' not found", network_name)],
+                            warnings: vec![],
+                        }).unwrap_or_else(|_| r#"{"success":false,"errors":["Network not found"]}"#.to_string());
+                    }
+                };
+
+                // Apply the edit commands
+                let result = text_edit_network(&mut network, &structure_designer.node_type_registry, &code, replace);
+
+                // Put the network back into the registry
+                structure_designer.node_type_registry.node_networks.insert(network_name, network);
+
+                // Trigger a refresh after editing
+                refresh_structure_designer_auto(cad_instance);
+
+                // Return the result as JSON
+                serde_json::to_string(&result).unwrap_or_else(|e| {
+                    format!(r#"{{"success":false,"errors":["Failed to serialize result: {}"]}}"#, e)
+                })
+            },
+            r#"{"success":false,"errors":["Could not access structure designer"]}"#.to_string()
+        )
+    }
 }
 
-/// Returns a list of all available node network names.
+/// List all available node network names.
 ///
-/// This can be used by AI assistants to discover what networks are available
-/// for querying.
-///
-/// # Arguments
-/// * `structure_designer` - The structure designer instance
+/// This function returns a list of all node networks available in the current design.
+/// Useful for AI assistants to discover what networks can be queried.
 ///
 /// # Returns
-/// A vector of network names in alphabetical order.
-pub fn list_networks(structure_designer: &StructureDesigner) -> Vec<String> {
-    structure_designer.node_type_registry.get_node_network_names()
+/// A vector of network names, or empty vector if no networks exist.
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_list_networks() -> Vec<String> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance.structure_designer.node_type_registry.get_node_network_names()
+            },
+            vec![]
+        )
+    }
 }
 
-/// Returns information about the active network.
-///
-/// # Arguments
-/// * `structure_designer` - The structure designer instance
+/// Get information about the currently active node network.
 ///
 /// # Returns
 /// A tuple of (network_name, node_count, has_output) if a network is active,
 /// or None if no network is active.
-pub fn get_active_network_info(structure_designer: &StructureDesigner) -> Option<(String, usize, bool)> {
-    let network_name = structure_designer.active_node_network_name.as_ref()?;
-    let network = structure_designer.node_type_registry.node_networks.get(network_name)?;
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_get_active_network_info() -> Option<(String, usize, bool)> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let structure_designer = &cad_instance.structure_designer;
+                let network_name = structure_designer.active_node_network_name.as_ref()?;
+                let network = structure_designer.node_type_registry.node_networks.get(network_name)?;
 
-    Some((
-        network_name.clone(),
-        network.nodes.len(),
-        network.return_node_id.is_some(),
-    ))
+                Some((
+                    network_name.clone(),
+                    network.nodes.len(),
+                    network.return_node_id.is_some(),
+                ))
+            },
+            None
+        )
+    }
 }

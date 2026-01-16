@@ -18,7 +18,7 @@ The implementation is divided into 6 phases:
 | 3 | Query command (serialize network → text) | Phase 1, 2 | **Complete** |
 | 4A | Edit command core (parse text → modify network) | Phase 1, 2 | **Complete** |
 | 4B | Edit command auto-layout (smart node positioning) | Phase 4A | **Complete** (visual testing remaining) |
-| 5 | Integration with HTTP server and CLI | Phase 3, 4A | **Partial** - HTTP server & CLI exist with stubs |
+| 5 | Integration with HTTP server and CLI | Phase 3, 4A | **Complete** |
 
 ### Existing Infrastructure (from Phase 1 stub implementation)
 
@@ -1180,15 +1180,13 @@ The CLI will automatically get real results once the HTTP server returns real da
 
 ### 5.7 Implementation Tasks
 
-- [ ] Create `rust/src/api/structure_designer/ai_assistant_api.rs`
-- [ ] Add `ai_query_network` and `ai_edit_network` to structure_designer_api.rs
-- [ ] Export new functions in `rust/src/api/structure_designer/mod.rs`
-- [ ] Run `flutter_rust_bridge_codegen generate`
-- [ ] Update `AiAssistantServer` to accept StructureDesigner reference
-- [ ] Update `_handleQuery` to call Rust API
-- [ ] Update `_handleEdit` to call Rust API and trigger UI refresh
-- [ ] Update server initialization to pass StructureDesigner
-- [ ] Remove stub constants (or keep as fallback)
+- [x] Create FFI functions in `rust/src/api/structure_designer/ai_assistant_api.rs` (`ai_query_network`, `ai_edit_network`, `ai_list_networks`, `ai_get_active_network_info`)
+- [x] Add `ai_assistant_api` to `flutter_rust_bridge.yaml` rust_input list
+- [x] Run `flutter_rust_bridge_codegen generate`
+- [x] Update `AiAssistantServer` to call Rust API via generated bindings
+- [x] Update `_handleQuery` to call `ai_api.aiQueryNetwork()`
+- [x] Update `_handleEdit` to call `ai_api.aiEditNetwork()` with UI refresh callback
+- [x] Update `main.dart` to connect AI server callback to `structureDesignerModel.refreshFromKernel()`
 
 ### 5.8 Testing Strategy
 

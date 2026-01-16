@@ -8,6 +8,7 @@
 
 import 'api/common_api.dart';
 import 'api/common_api_types.dart';
+import 'api/structure_designer/ai_assistant_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/import_api.dart';
@@ -368,6 +369,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView dco_decode_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  (String, BigInt, bool) dco_decode_box_autoadd_record_string_usize_bool(
+      dynamic raw);
+
+  @protected
   StructureDesignerPreferences
       dco_decode_box_autoadd_structure_designer_preferences(dynamic raw);
 
@@ -618,6 +623,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  (String, BigInt, bool)? dco_decode_opt_box_autoadd_record_string_usize_bool(
+      dynamic raw);
+
+  @protected
   StructureDesignerPreferences?
       dco_decode_opt_box_autoadd_structure_designer_preferences(dynamic raw);
 
@@ -646,6 +655,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
+
+  @protected
+  (String, BigInt, bool) dco_decode_record_string_usize_bool(dynamic raw);
 
   @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
@@ -1066,6 +1078,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  (String, BigInt, bool) sse_decode_box_autoadd_record_string_usize_bool(
+      SseDeserializer deserializer);
+
+  @protected
   StructureDesignerPreferences
       sse_decode_box_autoadd_structure_designer_preferences(
           SseDeserializer deserializer);
@@ -1365,6 +1381,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  (String, BigInt, bool)? sse_decode_opt_box_autoadd_record_string_usize_bool(
+      SseDeserializer deserializer);
+
+  @protected
   StructureDesignerPreferences?
       sse_decode_opt_box_autoadd_structure_designer_preferences(
           SseDeserializer deserializer);
@@ -1396,6 +1416,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (String, String) sse_decode_record_string_string(
+      SseDeserializer deserializer);
+
+  @protected
+  (String, BigInt, bool) sse_decode_record_string_usize_bool(
       SseDeserializer deserializer);
 
   @protected
@@ -1842,6 +1866,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_record_string_usize_bool(
+      (String, BigInt, bool) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_structure_designer_preferences(
       StructureDesignerPreferences self, SseSerializer serializer);
 
@@ -2145,6 +2173,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_record_string_usize_bool(
+      (String, BigInt, bool)? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_structure_designer_preferences(
       StructureDesignerPreferences? self, SseSerializer serializer);
 
@@ -2175,6 +2207,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_string_string(
       (String, String) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_string_usize_bool(
+      (String, BigInt, bool) self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_u_64_node_view(

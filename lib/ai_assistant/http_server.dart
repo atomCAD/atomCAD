@@ -3,14 +3,45 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'constants.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dart'
+    as ai_api;
 
 /// HTTP server for AI assistant integration.
 ///
-/// Provides endpoints for querying and editing node networks.
-/// In Phase 1, returns stub responses without actual node network interaction.
+/// Provides endpoints for querying and editing node networks via the
+/// text format used by AI assistants.
+///
+/// ## Endpoints
+///
+/// - `GET /health` - Health check, returns `{"status": "ok"}`
+/// - `GET /query` - Returns the active node network in text format
+/// - `POST /edit?replace=true|false` - Applies text format edits to the network
+///
+/// ## Example Usage
+///
+/// ```bash
+/// # Query the network
+/// curl http://localhost:19847/query
+///
+/// # Edit the network (incremental)
+/// curl -X POST http://localhost:19847/edit \
+///   -H "Content-Type: text/plain" \
+///   -d 'sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+/// output sphere1'
+///
+/// # Edit the network (replace mode)
+/// curl -X POST "http://localhost:19847/edit?replace=true" \
+///   -H "Content-Type: text/plain" \
+///   -d 'sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
+/// output sphere1'
+/// ```
 class AiAssistantServer {
   HttpServer? _server;
   final int port;
+
+  /// Callback to notify the UI when edits have been made.
+  /// Set this to trigger a UI refresh after successful edits.
+  void Function()? onNetworkEdited;
 
   AiAssistantServer({this.port = aiAssistantPort});
 
@@ -107,9 +138,11 @@ class AiAssistantServer {
       return;
     }
 
-    // Phase 1: Return stub response
+    // Call Rust API to get network text representation
+    final result = ai_api.aiQueryNetwork();
+
     request.response.headers.contentType = ContentType.text;
-    request.response.write(stubQueryResponse);
+    request.response.write(result);
   }
 
   Future<void> _handleEdit(HttpRequest request) async {
@@ -122,13 +155,13 @@ class AiAssistantServer {
     final body = await utf8.decoder.bind(request).join();
     final replace = request.uri.queryParameters['replace'] == 'true';
 
-    // Phase 1: Ignore the code, return success
+    // Call Rust API to apply edits
+    final resultJson = ai_api.aiEditNetwork(code: body, replace: replace);
+
+    // Notify UI if callback is set
+    onNetworkEdited?.call();
+
     request.response.headers.contentType = ContentType.json;
-    request.response.write(jsonEncode({
-      'success': true,
-      'message': 'Edit received (stub - no changes applied)',
-      'replace': replace,
-      'code_length': body.length,
-    }));
+    request.response.write(resultJson);
   }
 }
