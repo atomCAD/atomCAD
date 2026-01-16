@@ -9,6 +9,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 
 use super::data_type::DataType;
+use super::node_layout;
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeDisplayType {
@@ -802,7 +803,12 @@ impl NodeNetwork {
     // Clone the arguments (connections)
     let cloned_arguments = original_node.arguments.clone();
     
-    let vert_offset = 73.0 + max(cloned_arguments.len(), 1) as f64 * 22.0;
+    // Use node_layout module for consistent size estimation across the codebase.
+    // The subtitle parameter is set to true as most nodes display a subtitle.
+    let vert_offset = node_layout::duplicate_node_vertical_offset(
+        max(cloned_arguments.len(), 1),
+        true, // has_subtitle - assume yes for conservative spacing
+    );
     let new_position = DVec2::new(original_node.position.x, original_node.position.y + vert_offset);
 
     // Create the duplicated node

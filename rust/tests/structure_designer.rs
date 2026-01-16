@@ -36,3 +36,6 @@ mod text_properties_test;
 
 #[path = "structure_designer/text_format_snapshot_test.rs"]
 mod text_format_snapshot_test;
+
+#[path = "structure_designer/node_layout_test.rs"]
+mod node_layout_test;

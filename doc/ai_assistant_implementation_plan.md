@@ -801,6 +801,28 @@ fn placeholder_node_position(new_node_index: usize) -> (f64, f64) {
 
 **Goal:** Implement smart auto-layout for new nodes created via the edit command. Replaces the placeholder positioning from Phase 4A.
 
+### 4B.0 Prerequisites: Node Layout Module
+
+**IMPORTANT:** Before implementing Phase 4B, use the existing `node_layout` module which provides reusable node size estimation functions.
+
+**File:** `rust/src/structure_designer/node_layout.rs`
+
+This module was created as a preparatory refactoring and provides:
+- `NODE_WIDTH` (160.0) - constant matching Flutter's `BASE_NODE_WIDTH`
+- `PER_PARAM_HEIGHT` (22.0) - matches Flutter's `BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM`
+- `DEFAULT_VERTICAL_GAP` (20.0) and `DEFAULT_HORIZONTAL_GAP` (50.0)
+- `estimate_node_height(num_input_pins, has_subtitle)` - estimates node height
+- `estimate_node_size(num_input_pins, has_subtitle)` - returns DVec2(width, height)
+- `nodes_overlap(pos1, size1, pos2, size2, gap)` - bounding box overlap check
+- `overlaps_any(proposed_pos, proposed_size, existing_nodes, gap)` - checks against multiple nodes
+
+**Usage in Phase 4B:** The auto-layout implementation should use these functions instead of hardcoded constants. To get accurate node sizes:
+1. Look up the node type in the registry to get its parameter count
+2. Call `node_layout::estimate_node_size(num_params, true)` for the size
+3. Use `node_layout::overlaps_any()` for overlap detection
+
+This ensures consistency with the `duplicate_node()` function which also uses this module.
+
 ### 4B.1 Auto-Layout Strategy
 
 When new nodes are created, they should be positioned intelligently based on:
@@ -812,105 +834,117 @@ When new nodes are created, they should be positioned intelligently based on:
 
 **File:** `rust/src/structure_designer/text_format/auto_layout.rs`
 
-```rust
-/// Constants for layout calculations
-const NODE_WIDTH: f64 = 200.0;
-const NODE_HEIGHT: f64 = 100.0;
-const HORIZONTAL_GAP: f64 = 50.0;
-const VERTICAL_GAP: f64 = 30.0;
+This module should use the `node_layout` module for size calculations:
 
-/// Calculate position for a new node based on its connections
+```rust
+use crate::structure_designer::node_layout;
+use crate::structure_designer::node_network::NodeNetwork;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use glam::DVec2;
+
+/// Calculate position for a new node based on its connections.
+/// Uses node_layout module for accurate size estimation.
 pub fn calculate_new_node_position(
     network: &NodeNetwork,
-    node_type: &str,
-    input_connections: &[(u64, usize)], // (source_node_id, input_pin_index)
-) -> (f64, f64) {
+    registry: &NodeTypeRegistry,
+    node_type_name: &str,
+    num_input_pins: usize,
+    input_connections: &[(u64, usize)], // (source_node_id, source_output_pin)
+) -> DVec2 {
+    let new_node_size = node_layout::estimate_node_size(num_input_pins, true);
+
     // Strategy 1: Place to the right of input nodes
     if !input_connections.is_empty() {
-        let source_positions: Vec<(f64, f64)> = input_connections.iter()
-            .filter_map(|(id, _)| network.get_node(*id))
-            .map(|n| n.position)
+        let source_data: Vec<(DVec2, DVec2)> = input_connections.iter()
+            .filter_map(|(id, _)| {
+                let node = network.nodes.get(id)?;
+                let source_num_pins = node.arguments.len();
+                let source_size = node_layout::estimate_node_size(source_num_pins, true);
+                Some((DVec2::new(node.position.x, node.position.y), source_size))
+            })
             .collect();
 
-        if !source_positions.is_empty() {
-            // X: to the right of rightmost source
-            let max_x = source_positions.iter()
-                .map(|(x, _)| x + NODE_WIDTH + HORIZONTAL_GAP)
+        if !source_data.is_empty() {
+            // X: to the right of rightmost source (accounting for source width)
+            let max_x = source_data.iter()
+                .map(|(pos, size)| pos.x + size.x + node_layout::DEFAULT_HORIZONTAL_GAP)
                 .max_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
 
             // Y: average Y of all sources
-            let avg_y = source_positions.iter()
-                .map(|(_, y)| y)
-                .sum::<f64>() / source_positions.len() as f64;
+            let avg_y = source_data.iter()
+                .map(|(pos, _)| pos.y)
+                .sum::<f64>() / source_data.len() as f64;
 
-            let proposed = (max_x, avg_y);
+            let proposed = DVec2::new(max_x, avg_y);
 
             // Check for overlap and adjust if needed
-            return find_non_overlapping_position(network, proposed);
+            return find_non_overlapping_position(network, registry, proposed, new_node_size);
         }
     }
 
     // Strategy 2: Find empty space for nodes with no inputs
-    find_empty_position(network)
+    find_empty_position(network, registry, new_node_size)
 }
 
 /// Find a position near the proposed location that doesn't overlap existing nodes
 fn find_non_overlapping_position(
     network: &NodeNetwork,
-    proposed: (f64, f64),
-) -> (f64, f64) {
-    let (x, y) = proposed;
+    registry: &NodeTypeRegistry,
+    proposed: DVec2,
+    new_node_size: DVec2,
+) -> DVec2 {
+    let existing_nodes = get_existing_node_bounds(network, registry);
 
     // Check if proposed position overlaps any existing node
-    if !overlaps_any_node(network, x, y) {
-        return (x, y);
+    if !node_layout::overlaps_any(proposed, new_node_size, existing_nodes.iter().copied(),
+                                   node_layout::DEFAULT_VERTICAL_GAP) {
+        return proposed;
     }
 
     // Try positions below the proposed location
     for offset in 1..20 {
-        let new_y = y + (offset as f64 * (NODE_HEIGHT + VERTICAL_GAP));
-        if !overlaps_any_node(network, x, new_y) {
-            return (x, new_y);
+        let offset_y = offset as f64 * (new_node_size.y + node_layout::DEFAULT_VERTICAL_GAP);
+        let new_pos = DVec2::new(proposed.x, proposed.y + offset_y);
+        if !node_layout::overlaps_any(new_pos, new_node_size, existing_nodes.iter().copied(),
+                                       node_layout::DEFAULT_VERTICAL_GAP) {
+            return new_pos;
         }
     }
 
-    // Fallback: just return proposed position
+    // Fallback: just return proposed position (will overlap)
     proposed
 }
 
-/// Check if a position overlaps any existing node
-fn overlaps_any_node(network: &NodeNetwork, x: f64, y: f64) -> bool {
-    for node in network.nodes.values() {
-        let (nx, ny) = node.position;
-        // Simple bounding box overlap check
-        if x < nx + NODE_WIDTH + HORIZONTAL_GAP &&
-           x + NODE_WIDTH > nx - HORIZONTAL_GAP &&
-           y < ny + NODE_HEIGHT + VERTICAL_GAP &&
-           y + NODE_HEIGHT > ny - VERTICAL_GAP {
-            return true;
-        }
-    }
-    false
+/// Get bounds (position, size) for all existing nodes
+fn get_existing_node_bounds(network: &NodeNetwork, registry: &NodeTypeRegistry) -> Vec<(DVec2, DVec2)> {
+    network.nodes.values()
+        .map(|node| {
+            let num_pins = node.arguments.len();
+            let size = node_layout::estimate_node_size(num_pins, true);
+            (DVec2::new(node.position.x, node.position.y), size)
+        })
+        .collect()
 }
 
 /// Find an empty position in the canvas (for nodes with no inputs)
-fn find_empty_position(network: &NodeNetwork) -> (f64, f64) {
+fn find_empty_position(network: &NodeNetwork, registry: &NodeTypeRegistry, new_node_size: DVec2) -> DVec2 {
     if network.nodes.is_empty() {
-        return (100.0, 100.0);
+        return DVec2::new(100.0, 100.0);
     }
 
     // Find the rightmost node and place to the right of it
-    let max_x = network.nodes.values()
-        .map(|n| n.position.0)
+    let existing_bounds = get_existing_node_bounds(network, registry);
+    let max_right = existing_bounds.iter()
+        .map(|(pos, size)| pos.x + size.x)
         .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap_or(0.0);
 
     let avg_y = network.nodes.values()
-        .map(|n| n.position.1)
+        .map(|n| n.position.y)
         .sum::<f64>() / network.nodes.len() as f64;
 
-    (max_x + NODE_WIDTH + HORIZONTAL_GAP * 2.0, avg_y)
+    DVec2::new(max_right + node_layout::DEFAULT_HORIZONTAL_GAP * 2.0, avg_y)
 }
 ```
 
@@ -920,26 +954,31 @@ Update `NetworkEditor` to use smart layout:
 
 ```rust
 impl<'a> NetworkEditor<'a> {
-    fn create_node(&mut self, name: &str, node_type: &str,
+    fn create_node(&mut self, name: &str, node_type_name: &str,
                    pending_connections: &[(String, String)]) -> Result<u64, String> {
-        // ... create node ...
+        // Look up node type to get parameter count
+        let node_type = self.registry.get(node_type_name)
+            .ok_or_else(|| format!("Unknown node type: {}", node_type_name))?;
+        let num_input_pins = node_type.parameters.len();
 
         // Calculate position based on connections that will be made
         let input_connections: Vec<(u64, usize)> = pending_connections.iter()
             .filter_map(|(param_name, source_name)| {
                 let source_id = self.name_to_id.get(source_name)?;
-                let pin_index = /* resolve param name to pin index */;
-                Some((*source_id, pin_index))
+                Some((*source_id, 0)) // output pin index
             })
             .collect();
 
         let position = auto_layout::calculate_new_node_position(
             &self.network,
-            node_type,
+            &self.registry,
+            node_type_name,
+            num_input_pins,
             &input_connections,
         );
 
-        node.position = position;
+        // Create node at calculated position
+        let node_id = self.network.create_node(node_type_name, position);
         // ...
     }
 }
@@ -947,10 +986,9 @@ impl<'a> NetworkEditor<'a> {
 
 ### 4B.4 Implementation Tasks
 
-- [ ] Create `auto_layout.rs` module
-- [ ] Implement `calculate_new_node_position()`
-- [ ] Implement `find_non_overlapping_position()`
-- [ ] Implement `overlaps_any_node()`
+- [ ] Create `auto_layout.rs` module (uses existing `node_layout` module for size calculations)
+- [ ] Implement `calculate_new_node_position()` using `node_layout::estimate_node_size()`
+- [ ] Implement `find_non_overlapping_position()` using `node_layout::overlaps_any()`
 - [ ] Implement `find_empty_position()`
 - [ ] Integrate with `NetworkEditor.create_node()`
 - [ ] Unit tests for layout calculations

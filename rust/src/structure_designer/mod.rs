@@ -8,6 +8,7 @@ pub mod node_dependency_analysis;
 pub mod node_type_registry;
 pub mod nodes;
 pub mod node_data;
+pub mod node_layout;
 pub mod evaluator;
 pub mod node_network_gadget;
 pub mod structure_designer_scene;
