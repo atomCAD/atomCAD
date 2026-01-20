@@ -80,17 +80,24 @@ List<String> aiListNetworks() => RustLib.instance.api
 ///
 /// # Arguments
 /// * `category` - Optional category filter (e.g., "Geometry3D", "AtomicStructure")
+/// * `verbose` - If true, include descriptions; if false, show only names (compact)
 ///
 /// # Returns
-/// Human-readable text listing all node types with their descriptions.
+/// Human-readable text listing all node types.
 ///
-/// # Example Output
+/// # Example Output (compact, verbose=false)
+/// ```text
+/// === Geometry3D ===
+///   cuboid, sphere, half_space, union, intersect, diff, ...
+/// ```
+///
+/// # Example Output (verbose=true)
 /// ```text
 /// === Geometry3D ===
 ///   cuboid       - Outputs a cuboid with integer corner and extent
 ///   sphere       - Outputs a sphere with integer center and radius
-///   union        - Boolean union of geometries
 ///   ...
 /// ```
-String aiListNodeTypes({String? category}) => RustLib.instance.api
-    .crateApiStructureDesignerAiAssistantApiAiListNodeTypes(category: category);
+String aiListNodeTypes({String? category, required bool verbose}) =>
+    RustLib.instance.api.crateApiStructureDesignerAiAssistantApiAiListNodeTypes(
+        category: category, verbose: verbose);

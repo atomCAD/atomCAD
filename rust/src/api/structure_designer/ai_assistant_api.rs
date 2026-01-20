@@ -218,20 +218,27 @@ pub fn ai_get_active_network_info() -> Option<(String, usize, bool)> {
 ///
 /// # Arguments
 /// * `category` - Optional category filter (e.g., "Geometry3D", "AtomicStructure")
+/// * `verbose` - If true, include descriptions; if false, show only names (compact)
 ///
 /// # Returns
-/// Human-readable text listing all node types with their descriptions.
+/// Human-readable text listing all node types.
 ///
-/// # Example Output
+/// # Example Output (compact, verbose=false)
 /// ```text
 /// === Geometry3D ===
-///   cuboid       - Outputs a cuboid with integer corner and extent
-///   sphere       - Outputs a sphere with integer center and radius
-///   union        - Boolean union of geometries
+///   cuboid, sphere, half_space, union, intersect, diff, ...
+/// ```
+///
+/// # Example Output (verbose=true)
+/// ```text
+/// === Geometry3D ===
+///   `cuboid`  - Outputs a cuboid with integer corner and extent
+///   `sphere`  - Outputs a sphere with integer center and radius
 ///   ...
 /// ```
+/// Note: In verbose mode, descriptions are truncated to first line/sentence (max ~150 chars).
 #[flutter_rust_bridge::frb(sync)]
-pub fn ai_list_node_types(category: Option<String>) -> String {
+pub fn ai_list_node_types(category: Option<String>, verbose: bool) -> String {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -240,7 +247,7 @@ pub fn ai_list_node_types(category: Option<String>) -> String {
                     .node_type_registry
                     .get_node_type_views();
 
-                format_node_type_list(&category_views, category.as_deref())
+                format_node_type_list(&category_views, category.as_deref(), verbose)
             },
             "# Error: Could not access structure designer\n".to_string(),
         )
@@ -251,6 +258,7 @@ pub fn ai_list_node_types(category: Option<String>) -> String {
 fn format_node_type_list(
     category_views: &[crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView],
     category_filter: Option<&str>,
+    verbose: bool,
 ) -> String {
     use std::fmt::Write;
 
@@ -300,24 +308,31 @@ fn format_node_type_list(
         let category_name = format!("{:?}", category_view.category);
         writeln!(output, "=== {} ===", category_name).unwrap();
 
-        // Find max name length for alignment
-        let max_name_len = category_view
-            .nodes
-            .iter()
-            .map(|n| n.name.len())
-            .max()
-            .unwrap_or(0);
+        if verbose {
+            // Verbose mode: one node per line with description
+            // Add 2 for backticks around name
+            let max_name_len = category_view
+                .nodes
+                .iter()
+                .map(|n| n.name.len() + 2)
+                .max()
+                .unwrap_or(0);
 
-        // Write each node
-        for node in &category_view.nodes {
-            writeln!(
-                output,
-                "  {:width$} - {}",
-                node.name,
-                node.description,
-                width = max_name_len
-            )
-            .unwrap();
+            for node in &category_view.nodes {
+                let truncated_desc = truncate_description(&node.description);
+                writeln!(
+                    output,
+                    "  {:width$} - {}",
+                    format!("`{}`", node.name),
+                    truncated_desc,
+                    width = max_name_len
+                )
+                .unwrap();
+            }
+        } else {
+            // Compact mode: comma-separated names
+            let names: Vec<&str> = category_view.nodes.iter().map(|n| n.name.as_str()).collect();
+            writeln!(output, "  {}", names.join(", ")).unwrap();
         }
 
         writeln!(output).unwrap();
@@ -331,4 +346,41 @@ fn format_node_type_list(
     }
 
     output
+}
+
+/// Truncate a description for display in verbose node listing.
+///
+/// Algorithm:
+/// 1. Take first line only (split on newline)
+/// 2. If > 150 chars, find first ". " and truncate there
+/// 3. If no ". " found within 150 chars, truncate at word boundary and add "..."
+fn truncate_description(description: &str) -> String {
+    const MAX_LEN: usize = 150;
+
+    // Step 1: Take first line only
+    let first_line = description.lines().next().unwrap_or("");
+
+    // If short enough, return as-is
+    if first_line.len() <= MAX_LEN {
+        return first_line.to_string();
+    }
+
+    // Step 2: Try to find first sentence ending (". ") within limit
+    if let Some(period_pos) = first_line[..MAX_LEN].find(". ") {
+        return first_line[..=period_pos].to_string();
+    }
+
+    // Also check for period at end of the truncation range
+    if first_line.as_bytes().get(MAX_LEN - 1) == Some(&b'.') {
+        return first_line[..MAX_LEN].to_string();
+    }
+
+    // Step 3: Truncate at word boundary and add "..."
+    let truncated = &first_line[..MAX_LEN];
+    if let Some(last_space) = truncated.rfind(' ') {
+        format!("{}...", &truncated[..last_space])
+    } else {
+        // No space found, just truncate
+        format!("{}...", truncated)
+    }
 }

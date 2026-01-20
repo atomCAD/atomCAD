@@ -133,7 +133,7 @@ abstract class RustLibApi extends BaseApi {
   List<String> crateApiStructureDesignerAiAssistantApiAiListNetworks();
 
   String crateApiStructureDesignerAiAssistantApiAiListNodeTypes(
-      {String? category});
+      {String? category, required bool verbose});
 
   String crateApiStructureDesignerAiAssistantApiAiQueryNetwork();
 
@@ -1048,11 +1048,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   String crateApiStructureDesignerAiAssistantApiAiListNodeTypes(
-      {String? category}) {
+      {String? category, required bool verbose}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_opt_String(category, serializer);
+        sse_encode_bool(verbose, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
       },
       codec: SseCodec(
@@ -1061,7 +1062,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerAiAssistantApiAiListNodeTypesConstMeta,
-      argValues: [category],
+      argValues: [category, verbose],
       apiImpl: this,
     ));
   }
@@ -1070,7 +1071,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerAiAssistantApiAiListNodeTypesConstMeta =>
           const TaskConstMeta(
             debugName: "ai_list_node_types",
-            argNames: ["category"],
+            argNames: ["category", "verbose"],
           );
 
   @override

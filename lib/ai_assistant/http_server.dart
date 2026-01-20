@@ -16,7 +16,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 /// - `GET /health` - Health check, returns `{"status": "ok"}`
 /// - `GET /query` - Returns the active node network in text format
 /// - `POST /edit?replace=true|false` - Applies text format edits to the network
-/// - `GET /nodes?category=<cat>` - List all available node types by category
+/// - `GET /nodes?category=<cat>&verbose=true` - List all available node types by category
 ///
 /// ## Example Usage
 ///
@@ -36,11 +36,14 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 ///   -d 'sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
 /// output sphere1'
 ///
-/// # List all node types
+/// # List all node types (compact)
 /// curl http://localhost:19847/nodes
 ///
 /// # List node types in a specific category
 /// curl "http://localhost:19847/nodes?category=Geometry3D"
+///
+/// # List all node types with descriptions (verbose)
+/// curl "http://localhost:19847/nodes?verbose=true"
 /// ```
 class AiAssistantServer {
   HttpServer? _server;
@@ -183,11 +186,12 @@ class AiAssistantServer {
       return;
     }
 
-    // Get optional category filter from query parameters
+    // Get optional query parameters
     final category = request.uri.queryParameters['category'];
+    final verbose = request.uri.queryParameters['verbose'] == 'true';
 
     // Call Rust API to get node types list
-    final result = ai_api.aiListNodeTypes(category: category);
+    final result = ai_api.aiListNodeTypes(category: category, verbose: verbose);
 
     request.response.headers.contentType = ContentType.text;
     request.response.write(result);

@@ -483,11 +483,13 @@ fn wire__crate__api__structure_designer__ai_assistant_api__ai_list_node_types_im
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_category = <Option<String>>::sse_decode(&mut deserializer);
+            let api_verbose = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::ai_assistant_api::ai_list_node_types(
                         api_category,
+                        api_verbose,
                     ),
                 )?;
                 Ok(output_ok)

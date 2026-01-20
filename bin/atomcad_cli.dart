@@ -21,7 +21,9 @@ Future<void> main(List<String> args) async {
     ..addOption('category',
         abbr: 'c',
         help:
-            'Filter by category (Annotation, MathAndProgramming, Geometry2D, Geometry3D, AtomicStructure, OtherBuiltin, Custom)');
+            'Filter by category (Annotation, MathAndProgramming, Geometry2D, Geometry3D, AtomicStructure, OtherBuiltin, Custom)')
+    ..addFlag('verbose',
+        abbr: 'v', defaultsTo: false, help: 'Include descriptions');
 
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
@@ -76,7 +78,8 @@ Future<void> main(List<String> args) async {
       break;
     case 'nodes':
       final category = command['category'] as String?;
-      await _runNodes(serverUrl, category);
+      final verbose = command['verbose'] as bool;
+      await _runNodes(serverUrl, category, verbose);
       break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
@@ -103,6 +106,8 @@ void _printUsage() {
       '  atomcad-cli nodes                     List all available node types');
   stdout.writeln(
       '  atomcad-cli nodes --category=<cat>    List nodes in specific category');
+  stdout
+      .writeln('  atomcad-cli nodes --verbose           Include descriptions');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -123,6 +128,7 @@ void _printReplHelp() {
   stdout.writeln("  replace, r        Same as 'edit --replace'");
   stdout.writeln('  nodes             List all available node types');
   stdout.writeln('  nodes <category>  List nodes in specific category');
+  stdout.writeln('  nodes -v          List with descriptions (verbose)');
   stdout.writeln('  help, ?           Show this help');
   stdout.writeln('  quit, exit        Exit REPL');
   stdout.writeln('');
@@ -165,11 +171,14 @@ Future<void> _runQuery(String serverUrl) async {
   }
 }
 
-Future<void> _runNodes(String serverUrl, String? category) async {
+Future<void> _runNodes(String serverUrl, String? category, bool verbose) async {
   try {
-    final uri = category != null
-        ? Uri.parse('$serverUrl/nodes?category=$category')
-        : Uri.parse('$serverUrl/nodes');
+    final params = <String, String>{};
+    if (category != null) params['category'] = category;
+    if (verbose) params['verbose'] = 'true';
+
+    final uri = Uri.parse('$serverUrl/nodes')
+        .replace(queryParameters: params.isEmpty ? null : params);
 
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
@@ -320,8 +329,14 @@ Future<void> _runRepl(String serverUrl) async {
       case 'nodes':
       case 'n':
         // Check if a category argument was provided
-        final category = parts.length > 1 ? parts[1] : null;
-        await _runNodes(serverUrl, category);
+        // Support: nodes, nodes <category>, nodes -v, nodes <category> -v
+        final hasVerbose = parts.contains('-v') || parts.contains('--verbose');
+        final categoryParts = parts
+            .where((p) =>
+                p != 'nodes' && p != 'n' && p != '-v' && p != '--verbose')
+            .toList();
+        final category = categoryParts.isNotEmpty ? categoryParts.first : null;
+        await _runNodes(serverUrl, category, hasVerbose);
         break;
 
       case 'help':
