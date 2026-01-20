@@ -76,6 +76,29 @@ Created by: `motif` node with motif definition language.
 
 Used by: `atom_fill` to populate geometry with atoms.
 
+**Motif Definition Language:**
+
+```
+# Define parameter elements (can be overridden in atom_fill)
+PARAM PRIMARY C
+PARAM SECONDARY C
+
+# Define atomic sites: SITE <id> <element> <frac_x> <frac_y> <frac_z>
+SITE CORNER PRIMARY 0 0 0
+SITE FACE_X PRIMARY 0 0.5 0.5
+SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+
+# Define bonds: BOND <site1> <relative_cell_prefix><site2>
+# Prefix: 3 chars for (x,y,z) direction: '.' = same cell, '+' = next, '-' = previous
+BOND INTERIOR1 ...CORNER      # same cell
+BOND INTERIOR2 .++CORNER      # y+1, z+1 cell
+BOND INTERIOR3 +..FACE_X      # x+1 cell
+```
+
+- Comments: lines starting with `#`
+- Fractional coordinates: 0 to 1, relative to unit cell
+- First site in BOND must be in current cell (prefix `...` or omitted)
+
 ## Compound Types
 
 ### Array Types `[T]`

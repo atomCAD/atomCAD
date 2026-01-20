@@ -30,6 +30,17 @@ atomCAD designs are parametric node networks (DAGs):
 
 Each network can have an **output node** (set via `output <node_id>`) that defines what value the network returns when used as a custom node.
 
+### Lattice Coordinates
+
+**Important:** Geometry coordinates (positions, sizes, radii) are in discrete **lattice units** (integers), not angstroms. The actual physical dimensions depend on the unit cell. This ensures all atomic structures are naturally lattice-aligned.
+
+### Unit Cell and Motif
+
+- **Default unit cell:** Cubic diamond (3.567Å lattice constant) if none specified
+- **Default motif:** Cubic zincblende with carbon atoms (pure diamond)
+- Geometry nodes accept a `unit_cell` input to specify different lattices
+- Non-cubic unit cells cause shapes like `cuboid` to become parallelepipeds
+
 ### Data Types
 
 | Type | Description |
@@ -148,15 +159,91 @@ result = diff { base: [base], sub: [hole], visible: true }
 "
 ```
 
-### Parametric design with custom nodes
+**Note:** `diff` and `diff_2d` accept arrays on both inputs. They implicitly union each array before computing the difference: `diff(base, sub) = base₁ ∪ base₂ ∪ ... − (sub₁ ∪ sub₂ ∪ ...)`
 
-1. Create a subnetwork named `my_shape` with `parameter` nodes for inputs
-2. Set the output node in `my_shape`
-3. Use `my_shape` as a node in other networks:
+### Creating realistic atomic structures
 
 ```bash
-atomcad-cli edit --code="part1 = my_shape { size: 10, visible: true }"
+# Passivate dangling bonds with hydrogen
+atomcad-cli edit --code="atoms = atom_fill { shape: geom, passivate: true, visible: true }"
+
+# Remove single-bond atoms recursively (cleaner structures)
+atomcad-cli edit --code="atoms = atom_fill { shape: geom, remove_single_bond: true, visible: true }"
+
+# Override motif elements (e.g., silicon carbide instead of diamond)
+atomcad-cli edit --code="atoms = atom_fill { shape: geom, element_values: \"PRIMARY Si\\nSECONDARY C\", visible: true }"
 ```
+
+**atom_fill options:**
+- `passivate: true` — Add hydrogen atoms to dangling bonds
+- `remove_single_bond: true` — Recursively remove atoms with only one bond
+- `reconstruct: true` — Enable surface reconstruction (cubic diamond (100) 2×1 only)
+- `element_values: "..."` — Override motif parameter elements (newline-separated `PARAM_NAME Element`)
+- `motif_offset: (x, y, z)` — Fractional offset (0-1) to adjust cut position
+
+### Parametric design with custom nodes
+
+Custom nodes are created by defining subnetworks:
+
+1. Create a node network named `my_shape`
+2. Add `parameter` nodes to define inputs (each parameter becomes an input pin)
+3. Set the network's output node via `output <node_id>`
+4. Use `my_shape` as a node type in other networks
+
+```bash
+# In network "scaled_sphere":
+atomcad-cli edit --code="
+size = parameter { name: \"size\", type: \"Int\", default: 5 }
+s = sphere { radius: size }
+output s
+"
+
+# Then use it elsewhere:
+atomcad-cli edit --code="part1 = scaled_sphere { size: 10, visible: true }"
+```
+
+### Functional programming with map
+
+The `map` node applies a function to each array element. Combined with partial application:
+
+```bash
+# range creates [0, 1, 2, ...] array
+# pattern is a custom node with inputs: index (Int), gap (Int)
+# When wired to map's f input, gap is bound; only index varies
+atomcad-cli edit --code="
+r = range { start: 0, count: 5, step: 1 }
+result = map { xs: r, f: pattern, gap: 3, visible: true }
+"
+```
+
+Extra parameters beyond the expected function signature are bound at wire-time (partial application), enabling parametric patterns.
+
+### Mathematical expressions with expr
+
+The `expr` node evaluates mathematical expressions with dynamic input pins:
+
+```bash
+atomcad-cli edit --code="
+x = int { value: 5 }
+y = int { value: 3 }
+result = expr { expression: \"x * 2 + y\", x: x, y: y }
+"
+```
+
+**Supported in expr:**
+- Arithmetic: `+`, `-`, `*`, `/`, `%`, `^` (exponent)
+- Comparisons: `==`, `!=`, `<`, `<=`, `>`, `>=`
+- Logic: `&&`, `||`, `!`
+- Conditionals: `if condition then value1 else value2`
+- Vectors: `vec2(x,y)`, `vec3(x,y,z)`, `ivec2`, `ivec3`, member access `.x`, `.y`, `.z`
+- Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `length2`, `length3`, `normalize2`, `normalize3`, `dot2`, `dot3`, `cross`, `distance2`, `distance3`
+
+## Important Notes
+
+- **facet_shell:** Currently only works correctly with cubic unit cells
+- **lattice_move/lattice_rot:** Discrete lattice transformations (integers only). For continuous transforms on atomic structures, use `atom_trans` instead
+- **half_space:** Creates infinite half-spaces; useful for clipping geometry via intersection
+- **Lone atoms:** `atom_fill` automatically removes atoms with zero bonds after the geometry cut
 
 ## See Also
 

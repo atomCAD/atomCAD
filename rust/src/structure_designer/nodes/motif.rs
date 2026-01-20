@@ -131,10 +131,41 @@ pub fn motif_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "motif".to_string(),
-      description: "The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.
-The motif is defined textually using atomCAD's motif definition language.
-The features of the language are basically parameterized fractional atom sites, explicit & periodic bond definitions.
-See the atomCAD reference guide for details on the motif definition language.".to_string(),
+      description: "Produces a `Motif` value for use with `atom_fill` to populate geometry with atoms.
+
+## Motif Definition Language
+
+Three commands define a motif:
+
+**PARAM** - Define parameter elements (can be overridden in atom_fill):
+```
+PARAM PRIMARY C
+PARAM SECONDARY C
+```
+
+**SITE** - Define atomic sites with fractional coordinates (0-1):
+```
+SITE <id> <element> <frac_x> <frac_y> <frac_z>
+SITE CORNER PRIMARY 0 0 0
+SITE FACE_X PRIMARY 0 0.5 0.5
+SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+```
+
+**BOND** - Define bonds between sites:
+```
+BOND <site1> <relative_cell_prefix><site2>
+```
+The prefix is 3 characters for (x,y,z) directions: `.` = same cell, `+` = next cell, `-` = previous cell.
+First site must be in current cell (prefix `...` or omitted).
+
+Examples:
+```
+BOND INTERIOR1 ...CORNER      # same cell
+BOND INTERIOR2 .++CORNER      # y+1, z+1 cell
+BOND INTERIOR3 +..FACE_X      # x+1 cell
+```
+
+Lines starting with `#` are comments.".to_string(),
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],
       output_type: DataType::Motif,
