@@ -16,6 +16,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 /// - `GET /health` - Health check, returns `{"status": "ok"}`
 /// - `GET /query` - Returns the active node network in text format
 /// - `POST /edit?replace=true|false` - Applies text format edits to the network
+/// - `GET /nodes?category=<cat>` - List all available node types by category
 ///
 /// ## Example Usage
 ///
@@ -34,6 +35,12 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 ///   -H "Content-Type: text/plain" \
 ///   -d 'sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
 /// output sphere1'
+///
+/// # List all node types
+/// curl http://localhost:19847/nodes
+///
+/// # List node types in a specific category
+/// curl "http://localhost:19847/nodes?category=Geometry3D"
 /// ```
 class AiAssistantServer {
   HttpServer? _server;
@@ -78,8 +85,10 @@ class AiAssistantServer {
   Future<void> _handleRequest(HttpRequest request) async {
     // Add CORS headers for local development
     request.response.headers.add('Access-Control-Allow-Origin', '*');
-    request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    request.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
+    request.response.headers
+        .add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    request.response.headers
+        .add('Access-Control-Allow-Headers', 'Content-Type');
 
     // Handle preflight requests
     if (request.method == 'OPTIONS') {
@@ -100,6 +109,9 @@ class AiAssistantServer {
           break;
         case '/edit':
           await _handleEdit(request);
+          break;
+        case '/nodes':
+          await _handleNodes(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -163,5 +175,21 @@ class AiAssistantServer {
 
     request.response.headers.contentType = ContentType.json;
     request.response.write(resultJson);
+  }
+
+  Future<void> _handleNodes(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Get optional category filter from query parameters
+    final category = request.uri.queryParameters['category'];
+
+    // Call Rust API to get node types list
+    final result = ai_api.aiListNodeTypes(category: category);
+
+    request.response.headers.contentType = ContentType.text;
+    request.response.write(result);
   }
 }

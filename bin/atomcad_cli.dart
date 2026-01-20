@@ -17,8 +17,15 @@ Future<void> main(List<String> args) async {
     ..addFlag('replace',
         abbr: 'r', defaultsTo: false, help: 'Replace entire network');
 
+  final nodesParser = ArgParser()
+    ..addOption('category',
+        abbr: 'c',
+        help:
+            'Filter by category (Annotation, MathAndProgramming, Geometry2D, Geometry3D, AtomicStructure, OtherBuiltin, Custom)');
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
+  parser.addCommand('nodes', nodesParser);
 
   ArgResults results;
   try {
@@ -67,6 +74,10 @@ Future<void> main(List<String> args) async {
         await _runMultilineEdit(serverUrl, replace);
       }
       break;
+    case 'nodes':
+      final category = command['category'] as String?;
+      await _runNodes(serverUrl, category);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -88,10 +99,18 @@ void _printUsage() {
       '  atomcad-cli edit                      Multi-line edit from stdin');
   stdout.writeln(
       '  atomcad-cli edit --replace            Multi-line replace from stdin');
+  stdout.writeln(
+      '  atomcad-cli nodes                     List all available node types');
+  stdout.writeln(
+      '  atomcad-cli nodes --category=<cat>    List nodes in specific category');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
   stdout.writeln('  -p, --port     Server port (default: $defaultPort)');
+  stdout.writeln('');
+  stdout.writeln('Categories:');
+  stdout.writeln('  Annotation, MathAndProgramming, Geometry2D, Geometry3D,');
+  stdout.writeln('  AtomicStructure, OtherBuiltin, Custom');
 }
 
 void _printReplHelp() {
@@ -102,6 +121,8 @@ void _printReplHelp() {
   stdout
       .writeln('  edit --replace    Enter edit mode (replace entire network)');
   stdout.writeln("  replace, r        Same as 'edit --replace'");
+  stdout.writeln('  nodes             List all available node types');
+  stdout.writeln('  nodes <category>  List nodes in specific category');
   stdout.writeln('  help, ?           Show this help');
   stdout.writeln('  quit, exit        Exit REPL');
   stdout.writeln('');
@@ -128,6 +149,29 @@ Future<void> _runQuery(String serverUrl) async {
     final response = await http
         .get(Uri.parse('$serverUrl/query'))
         .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.write(response.body);
+      // Ensure trailing newline
+      if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
+        stdout.writeln();
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runNodes(String serverUrl, String? category) async {
+  try {
+    final uri = category != null
+        ? Uri.parse('$serverUrl/nodes?category=$category')
+        : Uri.parse('$serverUrl/nodes');
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 200) {
       stdout.write(response.body);
@@ -271,6 +315,13 @@ Future<void> _runRepl(String serverUrl) async {
       case 'replace':
       case 'r':
         await _replEditMode(serverUrl, true);
+        break;
+
+      case 'nodes':
+      case 'n':
+        // Check if a category argument was provided
+        final category = parts.length > 1 ? parts[1] : null;
+        await _runNodes(serverUrl, category);
         break;
 
       case 'help':

@@ -6,6 +6,8 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `format_node_type_list`
+
 /// Query the active node network and return its text format representation.
 ///
 /// This function serializes the currently active node network to the text format
@@ -71,3 +73,24 @@ List<String> aiListNetworks() => RustLib.instance.api
 /// or None if no network is active.
 (String, BigInt, bool)? aiGetActiveNetworkInfo() => RustLib.instance.api
     .crateApiStructureDesignerAiAssistantApiAiGetActiveNetworkInfo();
+
+/// List all available node types in human-readable text format.
+///
+/// Returns node types grouped by category, with optional filtering.
+///
+/// # Arguments
+/// * `category` - Optional category filter (e.g., "Geometry3D", "AtomicStructure")
+///
+/// # Returns
+/// Human-readable text listing all node types with their descriptions.
+///
+/// # Example Output
+/// ```text
+/// === Geometry3D ===
+///   cuboid       - Outputs a cuboid with integer corner and extent
+///   sphere       - Outputs a sphere with integer center and radius
+///   union        - Boolean union of geometries
+///   ...
+/// ```
+String aiListNodeTypes({String? category}) => RustLib.instance.api
+    .crateApiStructureDesignerAiAssistantApiAiListNodeTypes(category: category);

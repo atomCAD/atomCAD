@@ -211,3 +211,124 @@ pub fn ai_get_active_network_info() -> Option<(String, usize, bool)> {
         )
     }
 }
+
+/// List all available node types in human-readable text format.
+///
+/// Returns node types grouped by category, with optional filtering.
+///
+/// # Arguments
+/// * `category` - Optional category filter (e.g., "Geometry3D", "AtomicStructure")
+///
+/// # Returns
+/// Human-readable text listing all node types with their descriptions.
+///
+/// # Example Output
+/// ```text
+/// === Geometry3D ===
+///   cuboid       - Outputs a cuboid with integer corner and extent
+///   sphere       - Outputs a sphere with integer center and radius
+///   union        - Boolean union of geometries
+///   ...
+/// ```
+#[flutter_rust_bridge::frb(sync)]
+pub fn ai_list_node_types(category: Option<String>) -> String {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let category_views = cad_instance
+                    .structure_designer
+                    .node_type_registry
+                    .get_node_type_views();
+
+                format_node_type_list(&category_views, category.as_deref())
+            },
+            "# Error: Could not access structure designer\n".to_string(),
+        )
+    }
+}
+
+/// Format node type views into human-readable text.
+fn format_node_type_list(
+    category_views: &[crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView],
+    category_filter: Option<&str>,
+) -> String {
+    use std::fmt::Write;
+
+    let mut output = String::new();
+
+    // Map category filter string to enum variant
+    let filter_category = category_filter.and_then(|s| {
+        use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+        match s.to_lowercase().as_str() {
+            "annotation" => Some(NodeTypeCategory::Annotation),
+            "mathandprogramming" | "math" | "programming" => {
+                Some(NodeTypeCategory::MathAndProgramming)
+            }
+            "geometry2d" | "2d" => Some(NodeTypeCategory::Geometry2D),
+            "geometry3d" | "3d" => Some(NodeTypeCategory::Geometry3D),
+            "atomicstructure" | "atomic" => Some(NodeTypeCategory::AtomicStructure),
+            "otherbuiltin" | "other" => Some(NodeTypeCategory::OtherBuiltin),
+            "custom" => Some(NodeTypeCategory::Custom),
+            _ => None,
+        }
+    });
+
+    // Check if filter was invalid
+    if category_filter.is_some() && filter_category.is_none() {
+        return format!(
+            "# Unknown category: '{}'\n# Valid categories: Annotation, MathAndProgramming, Geometry2D, Geometry3D, AtomicStructure, OtherBuiltin, Custom\n",
+            category_filter.unwrap()
+        );
+    }
+
+    let mut has_output = false;
+    for category_view in category_views {
+        // Apply category filter if specified
+        if let Some(ref filter) = filter_category {
+            if &category_view.category != filter {
+                continue;
+            }
+        }
+
+        if category_view.nodes.is_empty() {
+            continue;
+        }
+
+        has_output = true;
+
+        // Write category header
+        let category_name = format!("{:?}", category_view.category);
+        writeln!(output, "=== {} ===", category_name).unwrap();
+
+        // Find max name length for alignment
+        let max_name_len = category_view
+            .nodes
+            .iter()
+            .map(|n| n.name.len())
+            .max()
+            .unwrap_or(0);
+
+        // Write each node
+        for node in &category_view.nodes {
+            writeln!(
+                output,
+                "  {:width$} - {}",
+                node.name,
+                node.description,
+                width = max_name_len
+            )
+            .unwrap();
+        }
+
+        writeln!(output).unwrap();
+    }
+
+    if !has_output {
+        if let Some(filter) = category_filter {
+            return format!("# No nodes found in category '{}'\n", filter);
+        }
+        return "# No node types available\n".to_string();
+    }
+
+    output
+}
