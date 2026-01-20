@@ -1,5 +1,6 @@
 use rust_lib_flutter_cad::structure_designer::text_format::{
     TextValue, Parser, Lexer, Statement, PropertyValue, Token, serialize_network,
+    describe_node_type, truncate_description,
 };
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use glam::{IVec2, IVec3, DVec2, DVec3};
@@ -1183,5 +1184,163 @@ mod auto_layout_tests {
             assert!(!overlap, "Int node should not overlap with {}",
                 node.node_type_name);
         }
+    }
+}
+
+// ============================================================================
+// Node Type Introspection Tests
+// ============================================================================
+
+mod node_type_introspection_tests {
+    use super::*;
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+
+    fn create_test_registry() -> NodeTypeRegistry {
+        NodeTypeRegistry::new()
+    }
+
+    #[test]
+    fn test_describe_node_type_sphere() {
+        let registry = create_test_registry();
+        let result = describe_node_type("sphere", &registry);
+
+        // Check header
+        assert!(result.contains("Node: sphere"));
+        assert!(result.contains("Category: Geometry3D"));
+        assert!(result.contains("Description:"));
+
+        // Check parameters section
+        assert!(result.contains("Parameters (input pins):"));
+        assert!(result.contains("center"));
+        assert!(result.contains("radius"));
+        assert!(result.contains("IVec3"));
+        assert!(result.contains("Int"));
+
+        // Check output
+        assert!(result.contains("Output: Geometry"));
+    }
+
+    #[test]
+    fn test_describe_node_type_int() {
+        let registry = create_test_registry();
+        let result = describe_node_type("int", &registry);
+
+        assert!(result.contains("Node: int"));
+        assert!(result.contains("Category: MathAndProgramming"));
+        assert!(result.contains("Output: Int"));
+    }
+
+    #[test]
+    fn test_describe_node_type_atom_fill() {
+        let registry = create_test_registry();
+        let result = describe_node_type("atom_fill", &registry);
+
+        assert!(result.contains("Node: atom_fill"));
+        assert!(result.contains("Category: AtomicStructure"));
+
+        // Check for key parameters
+        assert!(result.contains("shape"));
+        assert!(result.contains("motif"));
+        assert!(result.contains("passivate"));
+
+        // Check output type
+        assert!(result.contains("Output: Atomic"));
+    }
+
+    #[test]
+    fn test_describe_node_type_shows_defaults() {
+        let registry = create_test_registry();
+        let result = describe_node_type("sphere", &registry);
+
+        // Sphere should show defaults for center and radius
+        assert!(result.contains("[default:"));
+        assert!(result.contains("(0, 0, 0)"));  // center default
+    }
+
+    #[test]
+    fn test_describe_node_type_shows_wire_only() {
+        let registry = create_test_registry();
+        let result = describe_node_type("sphere", &registry);
+
+        // unit_cell parameter has no default
+        assert!(result.contains("[no default - wire only]"));
+    }
+
+    #[test]
+    fn test_describe_node_type_unknown() {
+        let registry = create_test_registry();
+        let result = describe_node_type("nonexistent_node_type", &registry);
+
+        assert!(result.contains("# Node type 'nonexistent_node_type' not found"));
+    }
+
+    #[test]
+    fn test_describe_node_type_cuboid() {
+        let registry = create_test_registry();
+        let result = describe_node_type("cuboid", &registry);
+
+        assert!(result.contains("Node: cuboid"));
+        assert!(result.contains("min_corner"));
+        assert!(result.contains("extent"));
+        assert!(result.contains("Output: Geometry"));
+    }
+
+    #[test]
+    fn test_describe_node_type_expr() {
+        let registry = create_test_registry();
+        let result = describe_node_type("expr", &registry);
+
+        assert!(result.contains("Node: expr"));
+        assert!(result.contains("Category: MathAndProgramming"));
+        // expr node has properties that are not wirable
+        // (parameters and expression are stored properties)
+    }
+
+    // truncate_description tests
+    #[test]
+    fn test_truncate_description_short() {
+        let desc = "A short description.";
+        assert_eq!(truncate_description(desc), desc);
+    }
+
+    #[test]
+    fn test_truncate_description_first_line_only() {
+        let desc = "First line.\nSecond line with more detail.";
+        assert_eq!(truncate_description(desc), "First line.");
+    }
+
+    #[test]
+    fn test_truncate_description_at_sentence() {
+        let desc = "This is the first sentence. This is much longer text that goes on and on and would exceed the limit if we included everything here in this very long description.";
+        assert_eq!(truncate_description(desc), "This is the first sentence.");
+    }
+
+    #[test]
+    fn test_truncate_description_at_word_boundary() {
+        let desc = "This is a very long description without any sentence breaks that just keeps going and going and going until it exceeds the maximum length limit we have set";
+        let result = truncate_description(desc);
+        assert!(result.ends_with("..."));
+        assert!(result.len() <= 153); // 150 + "..."
+    }
+
+    #[test]
+    fn test_truncate_description_empty() {
+        assert_eq!(truncate_description(""), "");
+    }
+
+    #[test]
+    fn test_truncate_description_exactly_150_chars() {
+        // Create a string of exactly 150 characters
+        let desc = "a".repeat(150);
+        assert_eq!(truncate_description(&desc), desc);
+    }
+
+    #[test]
+    fn test_truncate_description_151_chars_no_space() {
+        // 151 characters with no spaces - should truncate and add ...
+        let desc = "a".repeat(151);
+        let result = truncate_description(&desc);
+        assert!(result.ends_with("..."));
+        assert_eq!(result.len(), 153); // 150 + "..."
     }
 }

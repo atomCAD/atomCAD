@@ -28,7 +28,13 @@ use crate::api::api_common::{
     with_cad_instance_or,
     with_mut_cad_instance_or,
 };
-use crate::structure_designer::text_format::{serialize_network, edit_network as text_edit_network, EditResult};
+use crate::structure_designer::text_format::{
+    serialize_network,
+    edit_network as text_edit_network,
+    EditResult,
+    describe_node_type,
+    truncate_description,
+};
 
 // =============================================================================
 // FFI Functions (exposed to Flutter via flutter_rust_bridge)
@@ -381,214 +387,9 @@ pub fn ai_describe_node_type(node_type_name: String) -> String {
         with_cad_instance_or(
             |cad_instance| {
                 let registry = &cad_instance.structure_designer.node_type_registry;
-                describe_node_type_impl(&node_type_name, registry)
+                describe_node_type(&node_type_name, registry)
             },
-            format!("# Error: Could not access structure designer\n"),
+            "# Error: Could not access structure designer\n".to_string(),
         )
-    }
-}
-
-/// Implementation of node type description.
-fn describe_node_type_impl(
-    node_type_name: &str,
-    registry: &crate::structure_designer::node_type_registry::NodeTypeRegistry,
-) -> String {
-    use std::collections::HashMap;
-    use std::fmt::Write;
-
-    // Look up the node type
-    let node_type = match registry.get_node_type(node_type_name) {
-        Some(nt) => nt,
-        None => return format!("# Node type '{}' not found\n", node_type_name),
-    };
-
-    // Create a default instance to get text properties
-    let default_data = (node_type.node_data_creator)();
-    let text_props = default_data.get_text_properties();
-
-    // Build a map of property name -> (inferred type, formatted value)
-    let prop_map: HashMap<String, (String, String)> = text_props
-        .iter()
-        .map(|(name, value)| {
-            (
-                name.clone(),
-                (value.inferred_data_type().to_string(), format_text_value(value)),
-            )
-        })
-        .collect();
-
-    // Get parameter names as a set for quick lookup
-    let param_names: std::collections::HashSet<&str> = node_type
-        .parameters
-        .iter()
-        .map(|p| p.name.as_str())
-        .collect();
-
-    // Find max parameter name length for alignment
-    let max_param_len = node_type
-        .parameters
-        .iter()
-        .map(|p| p.name.len())
-        .max()
-        .unwrap_or(0);
-
-    // Find max type length for alignment
-    let max_type_len = node_type
-        .parameters
-        .iter()
-        .map(|p| p.data_type.to_string().len())
-        .max()
-        .unwrap_or(0);
-
-    let mut output = String::new();
-
-    // Header
-    writeln!(output, "Node: {}", node_type.name).unwrap();
-    writeln!(output, "Category: {:?}", node_type.category).unwrap();
-    writeln!(output, "Description: {}", node_type.description).unwrap();
-    writeln!(output).unwrap();
-
-    // Parameters section
-    if !node_type.parameters.is_empty() {
-        writeln!(output, "Parameters (input pins):").unwrap();
-
-        for param in &node_type.parameters {
-            let type_str = param.data_type.to_string();
-            let default_info = if let Some((_, default_val)) = prop_map.get(&param.name) {
-                format!("[default: {}]", default_val)
-            } else {
-                "[no default - wire only]".to_string()
-            };
-
-            writeln!(
-                output,
-                "  {:name_width$} : {:type_width$}  {}",
-                param.name,
-                type_str,
-                default_info,
-                name_width = max_param_len,
-                type_width = max_type_len
-            )
-            .unwrap();
-        }
-
-        writeln!(output).unwrap();
-    }
-
-    // Properties section (stored-only, not in parameters)
-    let stored_only: Vec<_> = text_props
-        .iter()
-        .filter(|(name, _)| !param_names.contains(name.as_str()))
-        .collect();
-
-    if !stored_only.is_empty() {
-        writeln!(output, "Properties (not wirable):").unwrap();
-
-        let max_prop_len = stored_only.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
-        let max_prop_type_len = stored_only
-            .iter()
-            .map(|(_, value)| value.inferred_data_type().to_string().len())
-            .max()
-            .unwrap_or(0);
-
-        for (name, value) in stored_only {
-            let type_str = value.inferred_data_type().to_string();
-            let value_str = format_text_value(value);
-            writeln!(
-                output,
-                "  {:name_width$} : {:type_width$}  [default: {}]",
-                name,
-                type_str,
-                value_str,
-                name_width = max_prop_len,
-                type_width = max_prop_type_len
-            )
-            .unwrap();
-        }
-
-        writeln!(output).unwrap();
-    }
-
-    // Output type
-    writeln!(output, "Output: {}", node_type.output_type.to_string()).unwrap();
-
-    output
-}
-
-/// Format a TextValue for display in node description.
-fn format_text_value(value: &crate::structure_designer::text_format::TextValue) -> String {
-    use crate::structure_designer::text_format::TextValue;
-
-    match value {
-        TextValue::Bool(b) => b.to_string(),
-        TextValue::Int(i) => i.to_string(),
-        TextValue::Float(f) => {
-            // Format without trailing zeros for cleaner output
-            if f.fract() == 0.0 {
-                format!("{:.1}", f)
-            } else {
-                format!("{}", f)
-            }
-        }
-        TextValue::String(s) => {
-            if s.is_empty() {
-                "\"\"".to_string()
-            } else {
-                format!("\"{}\"", s)
-            }
-        }
-        TextValue::IVec2(v) => format!("({}, {})", v.x, v.y),
-        TextValue::IVec3(v) => format!("({}, {}, {})", v.x, v.y, v.z),
-        TextValue::Vec2(v) => format!("({}, {})", v.x, v.y),
-        TextValue::Vec3(v) => format!("({}, {}, {})", v.x, v.y, v.z),
-        TextValue::DataType(dt) => dt.to_string(),
-        TextValue::Array(arr) => {
-            let items: Vec<String> = arr.iter().map(format_text_value).collect();
-            format!("[{}]", items.join(", "))
-        }
-        TextValue::Object(obj) => {
-            let items: Vec<String> = obj
-                .iter()
-                .map(|(k, v)| format!("{}: {}", k, format_text_value(v)))
-                .collect();
-            format!("{{{}}}", items.join(", "))
-        }
-    }
-}
-
-/// Truncate a description for display in verbose node listing.
-///
-/// Algorithm:
-/// 1. Take first line only (split on newline)
-/// 2. If > 150 chars, find first ". " and truncate there
-/// 3. If no ". " found within 150 chars, truncate at word boundary and add "..."
-fn truncate_description(description: &str) -> String {
-    const MAX_LEN: usize = 150;
-
-    // Step 1: Take first line only
-    let first_line = description.lines().next().unwrap_or("");
-
-    // If short enough, return as-is
-    if first_line.len() <= MAX_LEN {
-        return first_line.to_string();
-    }
-
-    // Step 2: Try to find first sentence ending (". ") within limit
-    if let Some(period_pos) = first_line[..MAX_LEN].find(". ") {
-        return first_line[..=period_pos].to_string();
-    }
-
-    // Also check for period at end of the truncation range
-    if first_line.as_bytes().get(MAX_LEN - 1) == Some(&b'.') {
-        return first_line[..MAX_LEN].to_string();
-    }
-
-    // Step 3: Truncate at word boundary and add "..."
-    let truncated = &first_line[..MAX_LEN];
-    if let Some(last_space) = truncated.rfind(' ') {
-        format!("{}...", &truncated[..last_space])
-    } else {
-        // No space found, just truncate
-        format!("{}...", truncated)
     }
 }
