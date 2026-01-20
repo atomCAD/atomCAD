@@ -17,7 +17,13 @@
       "Bash(dart run:*)",
       "Skill(atomcad)",
       "Bash(./atomcad-cli query:*)",
-      "Bash(C:/machine_phase_systems/flutter_cad/atomcad-cli query:*)"
+      "Bash(C:/machine_phase_systems/flutter_cad/atomcad-cli query:*)",
+      "Bash(atomcad-cli query:*)",
+      "Bash(atomcad-cli nodes:*)",
+      "Bash(atomcad-cli describe:*)",
+      "Bash(atomcad-cli edit:*)",
+      "Bash(atomcad-cli:*)",
+      "Bash(echo:*)"
     ]
   }
 }
