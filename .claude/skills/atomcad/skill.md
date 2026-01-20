@@ -17,6 +17,13 @@ Interact with atomCAD node networks programmatically. Requires atomCAD to be run
 - atomCAD installed and running
 - `atomcad-cli` on PATH (if running atomCAD from the repo, add the repo root to your PATH)
 
+## Global Options
+
+```bash
+atomcad-cli --help       # or -h: Show help
+atomcad-cli --port=PORT  # or -p PORT: Use custom server port (default: 19847)
+```
+
 ## Commands
 
 ### Query the active network
@@ -27,13 +34,13 @@ Returns the node network in text format.
 
 ### Edit the network (single line)
 ```bash
-atomcad-cli edit --code="<text format code>"
+atomcad-cli edit --code="<text format code>"   # or -c "..."
 ```
 Adds/updates nodes without removing existing ones.
 
 ### Replace entire network (single line)
 ```bash
-atomcad-cli edit --code="<text format code>" --replace
+atomcad-cli edit --code="<text format code>" --replace   # or -c "..." -r
 ```
 Clears the network and creates only the specified nodes.
 
@@ -45,7 +52,7 @@ Reads text format from stdin until an empty line or `.` on its own line. Useful 
 
 ### Multi-line replace
 ```bash
-atomcad-cli edit --replace
+atomcad-cli edit --replace   # or -r
 ```
 Same as above, but replaces the entire network.
 
