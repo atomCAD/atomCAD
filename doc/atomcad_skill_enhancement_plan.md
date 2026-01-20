@@ -27,6 +27,82 @@ This document outlines the plan for enhancing the atomCAD skill to enable AI age
 | `atomcad-cli nodes --category=<cat>` | List nodes in specific category |
 | `atomcad-cli describe <node-name>` | Full details: description, inputs, output type |
 
+### Technical Challenge: Discovering All Text Property Names
+
+In atomCAD's text format, valid property names come from **two sources**:
+
+1. **NodeType.parameters** - Input pins that can be wired
+2. **NodeData.get_text_properties()** - Properties with stored default values
+
+These overlap but are not identical:
+
+| Category | Example (atom_fill) | Wirable? | Has Default? |
+|----------|---------------------|----------|--------------|
+| **Parameter + Property** | `m_offset`, `passivate` | Yes | Yes |
+| **Parameter only** | `shape`, `motif` | Yes | No (required) |
+| **Property only** | `parameter_element_value_definition` | No | Yes |
+
+**Solution: Runtime Introspection**
+
+Use `node_data_creator()` to create a default instance, then call `get_text_properties()`:
+
+```rust
+pub fn get_node_type_info(node_type: &NodeType, registry: &NodeTypeRegistry) -> NodeTypeInfo {
+    // 1. Get parameters from NodeType
+    let param_names: HashSet<_> = node_type.parameters.iter()
+        .map(|p| p.name.clone()).collect();
+
+    // 2. Create default instance and get text properties
+    let default_data = (node_type.node_data_creator)();
+    let text_props = default_data.get_text_properties();
+
+    // 3. Build property map: name -> (type, default_value)
+    let prop_map: HashMap<String, (DataType, String)> = text_props.iter()
+        .map(|(name, value)| {
+            (name.clone(), (value.inferred_data_type(), format_text_value(value)))
+        }).collect();
+
+    // 4. Build parameter info (mark which have defaults)
+    let parameters: Vec<ParameterInfo> = node_type.parameters.iter().map(|p| {
+        let default_info = prop_map.get(&p.name);
+        ParameterInfo {
+            name: p.name.clone(),
+            data_type: p.data_type.to_string(),
+            has_default: default_info.is_some(),
+            default_value: default_info.map(|(_, v)| v.clone()),
+        }
+    }).collect();
+
+    // 5. Find properties that are NOT parameters (stored-only)
+    let stored_only_properties: Vec<PropertyInfo> = text_props.iter()
+        .filter(|(name, _)| !param_names.contains(name))
+        .map(|(name, value)| PropertyInfo {
+            name: name.clone(),
+            data_type: value.inferred_data_type().to_string(),
+            default_value: format_text_value(value),
+        }).collect();
+
+    NodeTypeInfo {
+        name: node_type.name.clone(),
+        description: node_type.description.clone(),
+        category: format!("{:?}", node_type.category),
+        parameters,
+        stored_only_properties,
+        output_type: node_type.output_type.to_string(),
+    }
+}
+```
+
+**Key insight:** `TextValue::inferred_data_type()` returns the `DataType` for any text value, enabling type discovery without additional metadata.
+
+**Benefits:**
+- No changes to existing node definitions
+- Works for custom nodes (node networks)
+- Shows default values in documentation
+- Distinguishes required vs optional parameters
+
+---
+
 ### Implementation Tasks
 
 #### 1.1 Rust API Layer
@@ -113,12 +189,34 @@ Node: sphere
 Category: Geometry3D
 Description: Outputs a sphere with integer center coordinates and integer radius.
 
-Input Pins:
-  center    : IVec3     - Center position in lattice coordinates
-  radius    : Int       - Radius in lattice units
-  unit_cell : UnitCell  - (optional) Unit cell definition
+Parameters (input pins):
+  center    : IVec3     [default: (0, 0, 0)]
+  radius    : Int       [default: 1]
+  unit_cell : UnitCell  [no default - wire only]
 
 Output: Geometry
+```
+
+**`atomcad-cli describe atom_fill`:**
+```
+Node: atom_fill
+Category: AtomicStructure
+Description: Converts a 3D geometry into an atomic structure by carving out
+a crystal from an infinite crystal lattice using the geometry on its shape input.
+
+Parameters (input pins):
+  shape        : Geometry  [required]
+  motif        : Motif     [default: cubic zincblende]
+  m_offset     : Vec3      [default: (0, 0, 0)]
+  passivate    : Bool      [default: true]
+  rm_single    : Bool      [default: false]
+  surf_recon   : Bool      [default: false]
+  invert_phase : Bool      [default: false]
+
+Properties (not wirable):
+  parameter_element_value_definition : String  [default: ""]
+
+Output: Atomic
 ```
 
 ---
