@@ -4,93 +4,163 @@ description: Interact with atomCAD node networks programmatically. Query, edit, 
 license: MIT
 metadata:
   author: atomCAD
-  version: "1.0"
+  version: "2.0"
 allowed-tools: Bash(atomcad-cli:*)
 ---
 
 # atomCAD Skill
 
-Interact with atomCAD node networks programmatically. Requires atomCAD to be running.
+Programmatically interact with atomCAD node networks via CLI. Requires atomCAD to be running.
 
 ## Prerequisites
 
 - atomCAD installed and running
-- `atomcad-cli` on PATH (if running atomCAD from the repo, add the repo root to your PATH)
+- `atomcad-cli` on PATH (add repo root to PATH if running from source)
 
-## Global Options
+## Core Concepts
 
-```bash
-atomcad-cli --help       # or -h: Show help
-atomcad-cli --port=PORT  # or -p PORT: Use custom server port (default: 19847)
-```
+### Node Networks
 
-## Commands
+atomCAD designs are parametric node networks (DAGs):
 
-### Query the active network
-```bash
-atomcad-cli query
-```
-Returns the node network in text format.
+- **Nodes** have typed input pins (parameters) and one output pin
+- **Wires** connect output→input of compatible types
+- **Evaluation** is lazy: only visible nodes trigger computation
+- **Custom nodes** are subnetworks with matching names
 
-### Edit the network (single line)
-```bash
-atomcad-cli edit --code="<text format code>"   # or -c "..."
-```
-Adds/updates nodes without removing existing ones.
+Each network can have an **output node** (set via `output <node_id>`) that defines what value the network returns when used as a custom node.
 
-### Replace entire network (single line)
-```bash
-atomcad-cli edit --code="<text format code>" --replace   # or -c "..." -r
-```
-Clears the network and creates only the specified nodes.
+### Data Types
 
-### Multi-line edit
-```bash
-atomcad-cli edit
-```
-Reads text format from stdin until an empty line or `.` on its own line. Useful for multi-line edits.
+| Type | Description |
+|------|-------------|
+| `Bool`, `String`, `Int`, `Float` | Primitives |
+| `Vec2`, `Vec3`, `IVec2`, `IVec3` | 2D/3D vectors (float/int) |
+| `Geometry2D` | 2D shapes (for extrusion) |
+| `Geometry` | 3D geometry (SDF-based) |
+| `Atomic` | Atomic structure (atoms + bonds) |
+| `UnitCell` | Crystal lattice parameters |
+| `Motif` | Crystal motif definition |
+| `[T]` | Array of type T |
+| `A -> B` | Function type |
 
-### Multi-line replace
-```bash
-atomcad-cli edit --replace   # or -r
-```
-Same as above, but replaces the entire network.
+**Implicit conversions:** `Int`↔`Float`, `IVec`↔`Vec`, `T`→`[T]`
 
-### REPL mode
-```bash
-atomcad-cli
-```
-Enters interactive REPL mode. Available commands:
-- `query` or `q` - Show current network
-- `edit` - Enter edit mode (incremental)
-- `edit --replace` or `replace` or `r` - Enter edit mode (replace)
-- `help` or `?` - Show help
-- `quit` or `exit` - Exit REPL
+Array pins (marked with dot) accept multiple wires; values are concatenated.
 
-In edit mode, type text format commands, then:
-- Empty line to send
-- `.` on its own line to send
-- Ctrl+C to cancel
-
-## Text Format Quick Reference
+### Text Format Syntax
 
 ```
-# Create nodes
+# Create nodes: id = type { property: value, ... }
 sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
-cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (10, 10, 10) }
+cuboid1 = cuboid { min_corner: (-5, -5, -5), extent: (10, 10, 10) }
 
-# Connect nodes
+# Wire nodes by referencing IDs in properties
 union1 = union { shapes: [sphere1, cuboid1], visible: true }
 
-# Set output
+# Set network output node
 output union1
 
 # Delete a node
 delete sphere1
 ```
 
-## Example Workflow
+**Property values:**
+- Integers: `42`, `-10`
+- Floats: `3.14`, `1.5e-3`
+- Booleans: `true`, `false`
+- Strings: `"hello"`
+- Vectors: `(x, y)` or `(x, y, z)`
+- Arrays: `[a, b, c]`
+- Node references: use the node's ID
 
-1. Query current state: `atomcad-cli query`
-2. Make changes: `atomcad-cli edit --code="..."`
-3. Verify changes: `atomcad-cli query`
+## CLI Commands
+
+### Global Options
+
+```bash
+atomcad-cli --help       # Show help
+atomcad-cli --port=PORT  # Custom server port (default: 19847)
+```
+
+### Network Operations
+
+```bash
+# Query current network state
+atomcad-cli query
+
+# Edit network (add/update nodes, keeps existing)
+atomcad-cli edit --code="sphere1 = sphere { radius: 10 }"
+
+# Replace entire network (clears first)
+atomcad-cli edit --code="..." --replace
+
+# Multi-line edit (reads stdin until empty line or ".")
+atomcad-cli edit
+atomcad-cli edit --replace
+```
+
+### Node Discovery
+
+```bash
+# List all node types by category
+atomcad-cli nodes
+
+# List nodes in specific category
+atomcad-cli nodes --category=Geometry3D
+
+# List with descriptions (verbose mode, can combine with --category)
+atomcad-cli nodes --verbose
+
+# Get detailed info about any node type (built-in or custom)
+atomcad-cli describe <node-name>
+atomcad-cli describe sphere
+atomcad-cli describe atom_fill
+```
+
+Use `describe` to discover input pins, types, defaults, and behavior for any node.
+
+### REPL Mode
+
+```bash
+atomcad-cli              # Enter interactive mode
+```
+
+Commands: `query`/`q`, `edit`, `replace`/`r`, `nodes`, `describe <node>`, `help`/`?`, `quit`/`exit`
+
+## Common Patterns
+
+### Create a simple atomic structure
+
+```bash
+# Create sphere geometry and fill with atoms
+atomcad-cli edit --code="s = sphere { radius: 5, visible: true }"
+atomcad-cli edit --code="atoms = atom_fill { shape: s, visible: true }"
+```
+
+### Boolean operations on geometry
+
+```bash
+atomcad-cli edit --replace --code="
+base = cuboid { extent: (10, 10, 10), visible: false }
+hole = sphere { center: (5, 5, 5), radius: 4 }
+result = diff { base: [base], sub: [hole], visible: true }
+"
+```
+
+### Parametric design with custom nodes
+
+1. Create a subnetwork named `my_shape` with `parameter` nodes for inputs
+2. Set the output node in `my_shape`
+3. Use `my_shape` as a node in other networks:
+
+```bash
+atomcad-cli edit --code="part1 = my_shape { size: 10, visible: true }"
+```
+
+## See Also
+
+- `atomcad-cli describe <node>` for detailed node documentation
+- `atomcad-cli nodes` to browse available node types
+- `references/text-format.md` for complete text format specification
+- `references/data-types.md` for detailed type system documentation
