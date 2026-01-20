@@ -17,6 +17,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 /// - `GET /query` - Returns the active node network in text format
 /// - `POST /edit?replace=true|false` - Applies text format edits to the network
 /// - `GET /nodes?category=<cat>&verbose=true` - List all available node types by category
+/// - `GET /describe?node=<name>` - Get detailed information about a specific node type
 ///
 /// ## Example Usage
 ///
@@ -44,6 +45,9 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 ///
 /// # List all node types with descriptions (verbose)
 /// curl "http://localhost:19847/nodes?verbose=true"
+///
+/// # Describe a specific node type
+/// curl "http://localhost:19847/describe?node=sphere"
 /// ```
 class AiAssistantServer {
   HttpServer? _server;
@@ -115,6 +119,9 @@ class AiAssistantServer {
           break;
         case '/nodes':
           await _handleNodes(request);
+          break;
+        case '/describe':
+          await _handleDescribe(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -192,6 +199,30 @@ class AiAssistantServer {
 
     // Call Rust API to get node types list
     final result = ai_api.aiListNodeTypes(category: category, verbose: verbose);
+
+    request.response.headers.contentType = ContentType.text;
+    request.response.write(result);
+  }
+
+  Future<void> _handleDescribe(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Get required node name parameter
+    final nodeName = request.uri.queryParameters['node'];
+    if (nodeName == null || nodeName.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: node',
+      }));
+      return;
+    }
+
+    // Call Rust API to get node type description
+    final result = ai_api.aiDescribeNodeType(nodeTypeName: nodeName);
 
     request.response.headers.contentType = ContentType.text;
     request.response.write(result);

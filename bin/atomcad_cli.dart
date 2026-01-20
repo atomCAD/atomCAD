@@ -25,9 +25,12 @@ Future<void> main(List<String> args) async {
     ..addFlag('verbose',
         abbr: 'v', defaultsTo: false, help: 'Include descriptions');
 
+  final describeParser = ArgParser();
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('nodes', nodesParser);
+  parser.addCommand('describe', describeParser);
 
   ArgResults results;
   try {
@@ -81,6 +84,16 @@ Future<void> main(List<String> args) async {
       final verbose = command['verbose'] as bool;
       await _runNodes(serverUrl, category, verbose);
       break;
+    case 'describe':
+      // Get the node name from positional arguments (rest)
+      if (command.rest.isEmpty) {
+        stderr.writeln('Error: Missing node name');
+        stderr.writeln('Usage: atomcad-cli describe <node-name>');
+        exit(1);
+      }
+      final nodeName = command.rest.first;
+      await _runDescribe(serverUrl, nodeName);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -108,6 +121,8 @@ void _printUsage() {
       '  atomcad-cli nodes --category=<cat>    List nodes in specific category');
   stdout
       .writeln('  atomcad-cli nodes --verbose           Include descriptions');
+  stdout.writeln(
+      '  atomcad-cli describe <node-name>      Describe a specific node type');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -121,16 +136,17 @@ void _printUsage() {
 void _printReplHelp() {
   stdout.writeln('atomCAD REPL Commands:');
   stdout.writeln('');
-  stdout.writeln('  query, q          Show current node network');
-  stdout.writeln('  edit              Enter edit mode (incremental)');
+  stdout.writeln('  query, q            Show current node network');
+  stdout.writeln('  edit                Enter edit mode (incremental)');
   stdout
-      .writeln('  edit --replace    Enter edit mode (replace entire network)');
-  stdout.writeln("  replace, r        Same as 'edit --replace'");
-  stdout.writeln('  nodes             List all available node types');
-  stdout.writeln('  nodes <category>  List nodes in specific category');
-  stdout.writeln('  nodes -v          List with descriptions (verbose)');
-  stdout.writeln('  help, ?           Show this help');
-  stdout.writeln('  quit, exit        Exit REPL');
+      .writeln('  edit --replace      Enter edit mode (replace entire network)');
+  stdout.writeln("  replace, r          Same as 'edit --replace'");
+  stdout.writeln('  nodes               List all available node types');
+  stdout.writeln('  nodes <category>    List nodes in specific category');
+  stdout.writeln('  nodes -v            List with descriptions (verbose)');
+  stdout.writeln('  describe, d <node>  Describe a specific node type');
+  stdout.writeln('  help, ?             Show this help');
+  stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
   stdout.writeln('Edit mode:');
   stdout.writeln('  Type text format commands, then:');
@@ -179,6 +195,28 @@ Future<void> _runNodes(String serverUrl, String? category, bool verbose) async {
 
     final uri = Uri.parse('$serverUrl/nodes')
         .replace(queryParameters: params.isEmpty ? null : params);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.write(response.body);
+      // Ensure trailing newline
+      if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
+        stdout.writeln();
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runDescribe(String serverUrl, String nodeName) async {
+  try {
+    final uri = Uri.parse('$serverUrl/describe')
+        .replace(queryParameters: {'node': nodeName});
 
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
 
@@ -337,6 +375,16 @@ Future<void> _runRepl(String serverUrl) async {
             .toList();
         final category = categoryParts.isNotEmpty ? categoryParts.first : null;
         await _runNodes(serverUrl, category, hasVerbose);
+        break;
+
+      case 'describe':
+      case 'd':
+        // describe <node-name>
+        if (parts.length < 2) {
+          stdout.writeln('Usage: describe <node-name>');
+        } else {
+          await _runDescribe(serverUrl, parts[1]);
+        }
         break;
 
       case 'help':

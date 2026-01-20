@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `format_node_type_list`
+// These functions are ignored because they are not marked as `pub`: `describe_node_type_impl`, `format_node_type_list`, `format_text_value`, `truncate_description`
 
 /// Query the active node network and return its text format representation.
 ///
@@ -94,10 +94,43 @@ List<String> aiListNetworks() => RustLib.instance.api
 /// # Example Output (verbose=true)
 /// ```text
 /// === Geometry3D ===
-///   cuboid       - Outputs a cuboid with integer corner and extent
-///   sphere       - Outputs a sphere with integer center and radius
+///   `cuboid`  - Outputs a cuboid with integer corner and extent
+///   `sphere`  - Outputs a sphere with integer center and radius
 ///   ...
 /// ```
+/// Note: In verbose mode, descriptions are truncated to first line/sentence (max ~150 chars).
 String aiListNodeTypes({String? category, required bool verbose}) =>
     RustLib.instance.api.crateApiStructureDesignerAiAssistantApiAiListNodeTypes(
         category: category, verbose: verbose);
+
+/// Describe a specific node type in detail.
+///
+/// Returns a human-readable description of the node type including:
+/// - Name, category, and description
+/// - Parameters (input pins) with types and default values
+/// - Properties that are stored but not wirable (stored-only)
+/// - Output type
+///
+/// # Arguments
+/// * `node_type_name` - The name of the node type to describe
+///
+/// # Returns
+/// Human-readable text describing the node, or an error message if not found.
+///
+/// # Example Output
+/// ```text
+/// Node: sphere
+/// Category: Geometry3D
+/// Description: Outputs a sphere with integer center coordinates and integer radius.
+///
+/// Parameters (input pins):
+///   center    : IVec3     [default: (0, 0, 0)]
+///   radius    : Int       [default: 1]
+///   unit_cell : UnitCell  [no default - wire only]
+///
+/// Output: Geometry
+/// ```
+String aiDescribeNodeType({required String nodeTypeName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAiAssistantApiAiDescribeNodeType(
+            nodeTypeName: nodeTypeName);
