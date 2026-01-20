@@ -17,14 +17,77 @@ This document outlines the plan for enhancing the atomCAD skill to enable AI age
 
 ---
 
-## Phase 1: Implement Dynamic Node Documentation CLI Commands
+## Phase 1a: `nodes` Command (List Node Types)
 
-### New CLI Commands
+A simpler first step that uses the existing `get_node_type_views()` API.
+
+### New CLI Command
 
 | Command | Purpose |
 |---------|---------|
 | `atomcad-cli nodes` | List all available node types by category |
 | `atomcad-cli nodes --category=<cat>` | List nodes in specific category |
+
+### Implementation Tasks
+
+#### 1a.1 HTTP Server Endpoint
+
+**File:** `lib/ai_assistant/http_server.dart`
+
+Add endpoint:
+
+| Endpoint | Method | Handler |
+|----------|--------|---------|
+| `/nodes` | GET | List nodes, optional `?category=X` param |
+
+Uses existing `get_node_type_views()` from Rust API (already exposed via FFI).
+
+#### 1a.2 CLI Command
+
+**File:** `bin/atomcad_cli.dart`
+
+Add command parsing:
+
+```dart
+parser.addCommand('nodes');  // with --category option
+```
+
+### Expected Output
+
+**`atomcad-cli nodes`:**
+```
+=== MathAndProgramming ===
+  int          - Outputs an integer value
+  float        - Outputs a float value
+  vec3         - Outputs a Vec3 value
+  expr         - Evaluates a mathematical expression
+  range        - Creates an array of integers
+  map          - Applies function to array elements
+  ...
+
+=== Geometry3D ===
+  cuboid       - Outputs a cuboid with integer corner and extent
+  sphere       - Outputs a sphere with integer center and radius
+  union        - Boolean union of geometries
+  diff         - Boolean difference of geometries
+  ...
+
+=== AtomicStructure ===
+  atom_fill    - Fills geometry with atoms using a motif
+  atom_trans   - Transforms atomic structure in real space
+  ...
+```
+
+---
+
+## Phase 1b: `describe` Command (Node Details with Introspection)
+
+More complex - requires new Rust API with runtime introspection.
+
+### New CLI Command
+
+| Command | Purpose |
+|---------|---------|
 | `atomcad-cli describe <node-name>` | Full details: description, inputs, output type |
 
 ### Technical Challenge: Discovering All Text Property Names
@@ -101,87 +164,53 @@ pub fn get_node_type_info(node_type: &NodeType, registry: &NodeTypeRegistry) -> 
 - Shows default values in documentation
 - Distinguishes required vs optional parameters
 
----
-
 ### Implementation Tasks
 
-#### 1.1 Rust API Layer
+#### 1b.1 Rust API Layer
 
 **File:** `rust/src/api/structure_designer/ai_assistant_api.rs`
 
-Add new FFI functions:
+Add new FFI function:
 
 ```rust
-#[flutter_rust_bridge::frb(sync)]
-pub fn ai_list_node_types(category: Option<String>) -> String {
-    // Returns human-readable list of node types
-    // Groups by category, shows name + brief description
-}
-
 #[flutter_rust_bridge::frb(sync)]
 pub fn ai_describe_node_type(node_type_name: String) -> String {
     // Returns detailed human-readable description:
     // - Name, category, description
-    // - Input pins with names and types
+    // - Input pins with names, types, and defaults
+    // - Stored-only properties
     // - Output type
     // Works for both built-in AND custom nodes
 }
 ```
 
-#### 1.2 HTTP Server Endpoints
+#### 1b.2 Regenerate FFI Bindings
+
+```bash
+flutter_rust_bridge_codegen generate
+```
+
+#### 1b.3 HTTP Server Endpoint
 
 **File:** `lib/ai_assistant/http_server.dart`
 
-Add endpoints:
+Add endpoint:
 
 | Endpoint | Method | Handler |
 |----------|--------|---------|
-| `/nodes` | GET | List nodes, optional `?category=X` param |
 | `/describe?node=<name>` | GET | Describe specific node |
 
-#### 1.3 CLI Commands
+#### 1b.4 CLI Command
 
 **File:** `bin/atomcad_cli.dart`
 
 Add command parsing:
 
 ```dart
-// New commands
-parser.addCommand('nodes');      // with --category option
-parser.addCommand('describe');   // positional arg: node name
+parser.addCommand('describe');  // positional arg: node name
 ```
 
-#### 1.4 Regenerate FFI Bindings
-
-```bash
-flutter_rust_bridge_codegen generate
-```
-
-### Expected Output Examples
-
-**`atomcad-cli nodes`:**
-```
-=== MathAndProgramming ===
-  int          - Outputs an integer value
-  float        - Outputs a float value
-  vec3         - Outputs a Vec3 value
-  expr         - Evaluates a mathematical expression
-  range        - Creates an array of integers
-  map          - Applies function to array elements
-  ...
-
-=== Geometry3D ===
-  cuboid       - Outputs a cuboid with integer corner and extent
-  sphere       - Outputs a sphere with integer center and radius
-  union        - Boolean union of geometries
-  diff         - Boolean difference of geometries
-  ...
-
-=== AtomicStructure ===
-  atom_fill    - Fills geometry with atoms using a motif
-  atom_trans   - Transforms atomic structure in real space
-  ...
-```
+### Expected Output
 
 **`atomcad-cli describe sphere`:**
 ```
@@ -355,22 +384,24 @@ Detailed type system documentation:
 
 ## Implementation Order
 
-1. **Phase 1.1-1.4:** Implement CLI commands for dynamic documentation
-2. **Phase 2:** Rewrite skill.md with new structure
-3. **Phase 3:** Create references/ folder with detailed docs
-4. **Testing:** Verify skill works end-to-end with test prompts
+1. **Phase 1a:** `nodes` command (HTTP + CLI, uses existing API)
+2. **Phase 1b:** `describe` command (new Rust API + FFI + HTTP + CLI)
+3. **Phase 2:** Rewrite skill.md with new structure
+4. **Phase 3:** Create references/ folder with detailed docs
+5. **Testing:** Verify skill works end-to-end with test prompts
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `rust/src/api/structure_designer/ai_assistant_api.rs` | Add `ai_list_node_types`, `ai_describe_node_type` |
-| `rust/src/api/structure_designer/structure_designer_api_types.rs` | Add response types if needed |
-| `lib/ai_assistant/http_server.dart` | Add `/nodes`, `/describe` endpoints |
-| `bin/atomcad_cli.dart` | Add `nodes`, `describe` commands |
-| `.claude/skills/atomcad/skill.md` | Rewrite with new structure |
-| `.claude/skills/atomcad/references/text-format.md` | Create |
-| `.claude/skills/atomcad/references/data-types.md` | Create |
+| Phase | File | Changes |
+|-------|------|---------|
+| 1a | `lib/ai_assistant/http_server.dart` | Add `/nodes` endpoint |
+| 1a | `bin/atomcad_cli.dart` | Add `nodes` command |
+| 1b | `rust/src/api/structure_designer/ai_assistant_api.rs` | Add `ai_describe_node_type` |
+| 1b | `lib/ai_assistant/http_server.dart` | Add `/describe` endpoint |
+| 1b | `bin/atomcad_cli.dart` | Add `describe` command |
+| 2 | `.claude/skills/atomcad/skill.md` | Rewrite with new structure |
+| 3 | `.claude/skills/atomcad/references/text-format.md` | Create |
+| 3 | `.claude/skills/atomcad/references/data-types.md` | Create |
 
 ## Success Criteria
 
