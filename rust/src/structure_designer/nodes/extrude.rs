@@ -213,6 +213,9 @@ impl NodeData for ExtrudeData {
         let mut m = HashMap::new();
         m.insert("shape".to_string(), (true, None)); // required
         m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+        // Parameter names differ from property names: dir->extrude_direction, inf->infinite
+        m.insert("dir".to_string(), (false, Some("(0, 0, 1)".to_string())));
+        m.insert("inf".to_string(), (false, Some("false".to_string())));
         m
     }
 }

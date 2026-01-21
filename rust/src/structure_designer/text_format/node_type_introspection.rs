@@ -3,6 +3,73 @@
 //! This module provides functions to describe node types in detail, including
 //! their parameters, default values, and output types. Used by the AI assistant
 //! CLI to provide dynamic node documentation.
+//!
+//! # Algorithm for Determining Input Defaults
+//!
+//! The `describe` command must determine whether each input is required or optional,
+//! and what its default value is. This information comes from three sources:
+//!
+//! ## Input Patterns
+//!
+//! **Pattern A: Property-backed default**
+//! - The parameter name matches a property in `get_text_properties()`
+//! - Example: `sphere` has parameter `center` and property `center` with value `(0,0,0)`
+//! - The default value is read directly from the property
+//!
+//! **Pattern B: Hardcoded constant default**
+//! - The parameter has no matching property, but uses `evaluate_or_default()` in `eval()`
+//! - Example: `sphere` has parameter `unit_cell` with hardcoded default `UnitCellStruct::cubic_diamond()`
+//! - Must be documented via `get_parameter_metadata()` returning `(false, Some("description"))`
+//!
+//! **Pattern C: Required input**
+//! - The parameter uses `evaluate_arg_required()` in `eval()`
+//! - Example: `atom_fill` has parameter `shape` which must be wired
+//! - Must be documented via `get_parameter_metadata()` returning `(true, None)`
+//!
+//! ## Resolution Algorithm
+//!
+//! For each parameter in `get_node_type().parameters`:
+//!
+//! 1. **Check `prop_map`** (from `get_text_properties()`):
+//!    - If parameter name matches a property name → use property's default value
+//!    - This handles Pattern A automatically
+//!
+//! 2. **Check `param_metadata`** (from `get_parameter_metadata()`):
+//!    - If `(true, _)` → mark as "required" (Pattern C)
+//!    - If `(false, Some(desc))` → show "default: {desc}" (Pattern B)
+//!    - If `(false, None)` → show "has default" (Pattern B, no description)
+//!
+//! 3. **Fallback**:
+//!    - If no property match AND no metadata entry → assume "required"
+//!    - This is the safe default but may be incorrect!
+//!
+//! ## When to Implement `get_parameter_metadata()`
+//!
+//! Add entries for parameters that:
+//!
+//! 1. **Are required** (use `evaluate_arg_required()`):
+//!    ```ignore
+//!    m.insert("shape".to_string(), (true, None));
+//!    ```
+//!
+//! 2. **Have hardcoded defaults** (use `evaluate_or_default()` but no stored property):
+//!    ```ignore
+//!    m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+//!    ```
+//!
+//! 3. **Have different parameter vs property names**:
+//!    - Parameter `dir` maps to property `extrude_direction`
+//!    - Since names don't match, add metadata for the parameter name:
+//!    ```ignore
+//!    m.insert("dir".to_string(), (false, Some("(0, 0, 1)".to_string())));
+//!    ```
+//!
+//! ## Literal-Only Properties
+//!
+//! Properties in `get_text_properties()` that have NO matching parameter are "literal-only":
+//! - They can only be set via text format, not via wire connections
+//! - Example: `parameter_element_value_definition` in `atom_fill`
+//! - These are displayed with the `[literal-only]` marker
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
