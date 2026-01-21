@@ -237,6 +237,11 @@ impl NodeData for HalfPlaneData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("d_plane".to_string(), (false, Some("XY plane".to_string())));
+        // m_index is optional - if not connected, uses point1/point2 instead
+        m.insert("m_index".to_string(), (false, Some("uses point1/point2 if unconnected".to_string())));
+        m.insert("center".to_string(), (false, Some("(0, 0)".to_string())));
+        m.insert("shift".to_string(), (false, Some("0".to_string())));
+        m.insert("subdivision".to_string(), (false, Some("1".to_string())));
         m
     }
 }
