@@ -199,7 +199,7 @@ atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10), visible
 atomcad-cli edit --code="atoms = atom_fill { shape: geom, passivate: true, visible: true }"
 
 # Remove single-bond atoms recursively (cleaner structures)
-atomcad-cli edit --code="atoms = atom_fill { shape: geom, remove_single_bond: true, visible: true }"
+atomcad-cli edit --code="atoms = atom_fill { shape: geom, rm_single: true, visible: true }"
 
 # Override motif elements (e.g., silicon carbide instead of diamond)
 atomcad-cli edit --code="atoms = atom_fill { shape: geom, element_values: \"PRIMARY Si\\nSECONDARY C\", visible: true }"
@@ -207,10 +207,10 @@ atomcad-cli edit --code="atoms = atom_fill { shape: geom, element_values: \"PRIM
 
 **atom_fill options:**
 - `passivate: true` — Add hydrogen atoms to dangling bonds
-- `remove_single_bond: true` — Recursively remove atoms with only one bond
-- `reconstruct: true` — Enable surface reconstruction (cubic diamond (100) 2×1 only)
+- `rm_single: true` — Recursively remove atoms with only one bond
+- `surf_recon: true` — Enable surface reconstruction (cubic diamond (100) 2×1 only)
 - `element_values: "..."` — Override motif parameter elements (newline-separated `PARAM_NAME Element`)
-- `motif_offset: (x, y, z)` — Fractional offset (0-1) to adjust cut position
+- `m_offset: (x, y, z)` — Fractional offset (0-1) to adjust cut position
 
 ### Parametric design with custom nodes
 
