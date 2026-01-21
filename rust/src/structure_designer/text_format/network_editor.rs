@@ -460,6 +460,25 @@ impl<'a> NetworkEditor<'a> {
         node_id: u64,
         properties: &[(String, PropertyValue)],
     ) -> Result<(), String> {
+        // Get valid parameter names for this node type (for validation)
+        let (valid_params, node_type_name): (Vec<String>, String) = self
+            .network
+            .nodes
+            .get(&node_id)
+            .and_then(|node| {
+                self.registry
+                    .get_node_type_for_node(node)
+                    .map(|node_type| {
+                        let params = node_type
+                            .parameters
+                            .iter()
+                            .map(|p| p.name.clone())
+                            .collect();
+                        (params, node.node_type_name.clone())
+                    })
+            })
+            .unwrap_or_else(|| (Vec::new(), String::new()));
+
         // Collect literal properties into a HashMap
         let mut literal_props: HashMap<String, TextValue> = HashMap::new();
 
@@ -469,7 +488,14 @@ impl<'a> NetworkEditor<'a> {
                 continue;
             }
 
+            // Warn about unknown properties (only for literal values we're actually applying)
             if let PropertyValue::Literal(text_value) = prop_value {
+                if !valid_params.is_empty() && !valid_params.contains(prop_name) {
+                    self.result.add_warning(format!(
+                        "Unknown property '{}' on node type '{}'",
+                        prop_name, node_type_name
+                    ));
+                }
                 literal_props.insert(prop_name.clone(), text_value.clone());
             }
             // Skip NodeRef, FunctionRef, Array - handled in connection pass
