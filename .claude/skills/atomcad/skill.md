@@ -273,7 +273,7 @@ EOF
 **Supported in expr:**
 - Arithmetic: `+`, `-`, `*`, `/`, `%`, `^` (exponent)
 - Comparisons: `==`, `!=`, `<`, `<=`, `>`, `>=`
-- Logic: `&&`, `||`, `!`
+- Logic: `&&`, `||`, !
 - Conditionals: `if condition then value1 else value2`
 - Vectors: `vec2(x,y)`, `vec3(x,y,z)`, `ivec2`, `ivec3`, member access `.x`, `.y`, `.z`
 - Functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `length2`, `length3`, `normalize2`, `normalize3`, `dot2`, `dot3`, `cross`, `distance2`, `distance3`
