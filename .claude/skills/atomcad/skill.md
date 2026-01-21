@@ -111,6 +111,33 @@ atomcad-cli edit
 atomcad-cli edit --replace
 ```
 
+### Multi-line Input
+
+For multi-line code, **stdin piping is recommended** as it avoids shell quoting issues:
+
+```bash
+# Recommended: pipe multi-line code via stdin
+echo "base = cuboid { extent: (10, 10, 10) }
+hole = sphere { center: (5, 5, 5), radius: 4 }
+result = diff { base: [base], sub: [hole], visible: true }" | atomcad-cli edit --replace
+
+# Or use a heredoc
+atomcad-cli edit --replace <<'EOF'
+base = cuboid { extent: (10, 10, 10) }
+hole = sphere { center: (5, 5, 5), radius: 4 }
+result = diff { base: [base], sub: [hole], visible: true }
+EOF
+```
+
+**Alternative:** The `--code` flag supports `\n` escape sequences for newlines:
+
+```bash
+# Escape sequences: \n for newline, \t for tab, \\ for literal backslash
+atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10) }\nhole = sphere { radius: 4 }\nresult = diff { base: [base], sub: [hole], visible: true }"
+```
+
+**Note:** Avoid using literal newlines inside `--code="..."` as shell quoting behavior varies across platforms (bash, PowerShell, etc.).
+
 ### Node Discovery
 
 ```bash
@@ -152,11 +179,15 @@ atomcad-cli edit --code="atoms = atom_fill { shape: s, visible: true }"
 ### Boolean operations on geometry
 
 ```bash
-atomcad-cli edit --replace --code="
+# Using heredoc (recommended for multi-line)
+atomcad-cli edit --replace <<'EOF'
 base = cuboid { extent: (10, 10, 10), visible: false }
 hole = sphere { center: (5, 5, 5), radius: 4 }
 result = diff { base: [base], sub: [hole], visible: true }
-"
+EOF
+
+# Or using escape sequences
+atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10), visible: false }\nhole = sphere { center: (5, 5, 5), radius: 4 }\nresult = diff { base: [base], sub: [hole], visible: true }"
 ```
 
 **Note:** `diff` and `diff_2d` accept arrays on both inputs. They implicitly union each array before computing the difference: `diff(base, sub) = base₁ ∪ base₂ ∪ ... − (sub₁ ∪ sub₂ ∪ ...)`
@@ -191,12 +222,12 @@ Custom nodes are created by defining subnetworks:
 4. Use `my_shape` as a node type in other networks
 
 ```bash
-# In network "scaled_sphere":
-atomcad-cli edit --code="
-size = parameter { name: \"size\", type: \"Int\", default: 5 }
+# In network "scaled_sphere" (using heredoc):
+atomcad-cli edit <<'EOF'
+size = parameter { name: "size", type: "Int", default: 5 }
 s = sphere { radius: size }
 output s
-"
+EOF
 
 # Then use it elsewhere:
 atomcad-cli edit --code="part1 = scaled_sphere { size: 10, visible: true }"
@@ -210,10 +241,10 @@ The `map` node applies a function to each array element. Combined with partial a
 # range creates [0, 1, 2, ...] array
 # pattern is a custom node with inputs: index (Int), gap (Int)
 # When wired to map's f input, gap is bound; only index varies
-atomcad-cli edit --code="
+atomcad-cli edit <<'EOF'
 r = range { start: 0, count: 5, step: 1 }
 result = map { xs: r, f: pattern, gap: 3, visible: true }
-"
+EOF
 ```
 
 Extra parameters beyond the expected function signature are bound at wire-time (partial application), enabling parametric patterns.
@@ -223,11 +254,11 @@ Extra parameters beyond the expected function signature are bound at wire-time (
 The `expr` node evaluates mathematical expressions with dynamic input pins:
 
 ```bash
-atomcad-cli edit --code="
+atomcad-cli edit <<'EOF'
 x = int { value: 5 }
 y = int { value: 3 }
-result = expr { expression: \"x * 2 + y\", x: x, y: y }
-"
+result = expr { expression: "x * 2 + y", x: x, y: y }
+EOF
 ```
 
 **Supported in expr:**

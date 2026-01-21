@@ -72,8 +72,9 @@ Future<void> main(List<String> args) async {
       final code = command['code'] as String?;
       final replace = command['replace'] as bool;
       if (code != null) {
-        // Inline code provided
-        await _runEdit(serverUrl, code, replace);
+        // Inline code provided - process escape sequences
+        final processedCode = _processEscapeSequences(code);
+        await _runEdit(serverUrl, processedCode, replace);
       } else {
         // Multi-line mode: read from stdin
         await _runMultilineEdit(serverUrl, replace);
@@ -153,6 +154,37 @@ void _printReplHelp() {
   stdout.writeln('  - Empty line to send');
   stdout.writeln("  - '.' on its own line to send");
   stdout.writeln('  - Ctrl+C to cancel');
+}
+
+/// Process escape sequences in --code argument.
+///
+/// Converts `\n` to actual newlines and `\\` to literal backslashes.
+/// This allows multi-line input via --code without shell quoting issues.
+String _processEscapeSequences(String input) {
+  final buffer = StringBuffer();
+  var i = 0;
+  while (i < input.length) {
+    if (input[i] == '\\' && i + 1 < input.length) {
+      final next = input[i + 1];
+      switch (next) {
+        case 'n':
+          buffer.write('\n');
+          i += 2;
+          continue;
+        case 't':
+          buffer.write('\t');
+          i += 2;
+          continue;
+        case '\\':
+          buffer.write('\\');
+          i += 2;
+          continue;
+      }
+    }
+    buffer.write(input[i]);
+    i++;
+  }
+  return buffer.toString();
 }
 
 Future<bool> _checkHealth(String serverUrl) async {
