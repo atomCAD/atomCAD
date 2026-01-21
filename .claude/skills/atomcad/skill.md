@@ -5,7 +5,7 @@ license: MIT
 metadata:
   author: atomCAD
   version: "2.0"
-allowed-tools: Bash(atomcad-cli:*)
+allowed-tools: Bash(atomcad-cli:*), Bash(./atomcad-cli:*)
 ---
 
 # atomCAD Skill
@@ -14,8 +14,17 @@ Programmatically interact with atomCAD node networks via CLI. Requires atomCAD t
 
 ## Prerequisites
 
-- atomCAD installed and running
-- `atomcad-cli` on PATH (add repo root to PATH if running from source)
+- atomCAD running (the CLI connects to a running instance)
+
+**CLI access** (automatic detection):
+- **In atomCAD repo root**: `./atomcad-cli` works directly (no PATH setup needed)
+- **Elsewhere**: requires `atomcad-cli` on PATH
+
+## Command Resolution
+
+Before running CLI commands, detect the appropriate command:
+- If `./atomcad-cli` exists in current directory → use `./atomcad-cli`
+- Otherwise → use `atomcad-cli` (assumes PATH is configured)
 
 ## Core Concepts
 
