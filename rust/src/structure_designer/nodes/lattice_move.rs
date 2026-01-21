@@ -152,6 +152,12 @@ impl NodeData for LatticeMoveData {
         }
         Ok(())
     }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("shape".to_string(), (true, None)); // required
+        m
+    }
 }
 
 

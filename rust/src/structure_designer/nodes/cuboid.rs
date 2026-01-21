@@ -132,6 +132,12 @@ impl NodeData for CuboidData {
         }
         Ok(())
     }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+        m
+    }
 }
 
 /// Creates a parallelepiped in real space from lattice coordinates and unit cell basis vectors.

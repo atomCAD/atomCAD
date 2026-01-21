@@ -597,6 +597,12 @@ impl NodeData for FacetShellData {
           }
           Ok(())
       }
+
+      fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+          let mut m = HashMap::new();
+          m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+          m
+      }
 }
 
 

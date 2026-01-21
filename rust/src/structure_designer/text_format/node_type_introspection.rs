@@ -7,15 +7,38 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+
+/// Returns true if a data type can only be provided via wire connection (no literal representation).
+fn is_wire_only_type(data_type: &DataType) -> bool {
+    matches!(
+        data_type,
+        DataType::Geometry
+            | DataType::Geometry2D
+            | DataType::Atomic
+            | DataType::Motif
+            | DataType::UnitCell
+            | DataType::DrawingPlane
+            | DataType::Array(_)
+            | DataType::Function(_)
+    )
+}
 
 /// Describe a specific node type in detail.
 ///
 /// Returns a human-readable description of the node type including:
 /// - Name, category, and description
-/// - Parameters (input pins) with types and default values
-/// - Properties that are stored but not wirable (stored-only)
+/// - Inputs with types, default values, and access modifiers (wire-only, literal-only)
 /// - Output type
+///
+/// # Terminology
+///
+/// - **wire-only**: This input can only be connected to another node's output.
+///   There is no text literal representation for this type (e.g., Geometry, Atomic, Motif).
+/// - **literal-only**: This input can only be set as a literal value in the text format.
+///   It has no input pin and cannot be connected to other nodes.
+/// - Inputs without either marker can be set as a literal OR wired to another node.
 ///
 /// # Arguments
 /// * `node_type_name` - The name of the node type to describe
@@ -26,16 +49,18 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 ///
 /// # Example Output
 /// ```text
-/// Node: sphere
-/// Category: Geometry3D
-/// Description: Outputs a sphere with integer center coordinates and integer radius.
+/// Node: atom_fill
+/// Category: AtomicStructure
+/// Description: Converts a 3D geometry into an atomic structure...
 ///
-/// Parameters (input pins):
-///   center    : IVec3     [default: (0, 0, 0)]
-///   radius    : Int       [default: 1]
-///   unit_cell : UnitCell  [no default - wire only]
+/// Inputs:
+///   shape          : Geometry  [required, wire-only]
+///   motif          : Motif     [default: cubic zincblende, wire-only]
+///   m_offset       : Vec3      [default: (0.0, 0.0, 0.0)]
+///   passivate      : Bool      [default: true]
+///   element_values : String    [default: "", literal-only]
 ///
-/// Output: Geometry
+/// Output: Atomic
 /// ```
 pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> String {
     // Look up the node type
@@ -44,9 +69,10 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
         None => return format!("# Node type '{}' not found\n", node_type_name),
     };
 
-    // Create a default instance to get text properties
+    // Create a default instance to get text properties and parameter metadata
     let default_data = (node_type.node_data_creator)();
     let text_props = default_data.get_text_properties();
+    let param_metadata = default_data.get_parameter_metadata();
 
     // Build a map of property name -> (inferred type, formatted value)
     let prop_map: HashMap<String, (String, String)> = text_props
@@ -66,21 +92,39 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
         .map(|p| p.name.as_str())
         .collect();
 
-    // Find max parameter name length for alignment
-    let max_param_len = node_type
+    // Collect literal-only properties (in text_props but not in parameters)
+    let literal_only_props: Vec<_> = text_props
+        .iter()
+        .filter(|(name, _)| !param_names.contains(name.as_str()))
+        .collect();
+
+    // Find max name length for alignment (considering both parameters and literal-only props)
+    let max_param_name_len = node_type
         .parameters
         .iter()
         .map(|p| p.name.len())
         .max()
         .unwrap_or(0);
+    let max_literal_name_len = literal_only_props
+        .iter()
+        .map(|(name, _)| name.len())
+        .max()
+        .unwrap_or(0);
+    let max_name_len = max_param_name_len.max(max_literal_name_len);
 
     // Find max type length for alignment
-    let max_type_len = node_type
+    let max_param_type_len = node_type
         .parameters
         .iter()
         .map(|p| p.data_type.to_string().len())
         .max()
         .unwrap_or(0);
+    let max_literal_type_len = literal_only_props
+        .iter()
+        .map(|(_, value)| value.inferred_data_type().to_string().len())
+        .max()
+        .unwrap_or(0);
+    let max_type_len = max_param_type_len.max(max_literal_type_len);
 
     let mut output = String::new();
 
@@ -90,16 +134,40 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
     writeln!(output, "Description: {}", node_type.description).unwrap();
     writeln!(output).unwrap();
 
-    // Parameters section
-    if !node_type.parameters.is_empty() {
-        writeln!(output, "Parameters (input pins):").unwrap();
+    // Inputs section (unified parameters and literal-only properties)
+    let has_inputs = !node_type.parameters.is_empty() || !literal_only_props.is_empty();
+    if has_inputs {
+        writeln!(output, "Inputs:").unwrap();
 
+        // Process parameters (wirable inputs)
         for param in &node_type.parameters {
             let type_str = param.data_type.to_string();
+            let wire_only = is_wire_only_type(&param.data_type);
+
+            // Determine default info from: 1) stored property, 2) parameter metadata, 3) fallback
             let default_info = if let Some((_, default_val)) = prop_map.get(&param.name) {
-                format!("[default: {}]", default_val)
+                // Pattern A: Property-backed default
+                format!("default: {}", default_val)
+            } else if let Some((is_required, default_desc)) = param_metadata.get(&param.name) {
+                // Pattern B or C: from metadata
+                if *is_required {
+                    "required".to_string()
+                } else {
+                    match default_desc {
+                        Some(desc) => format!("default: {}", desc),
+                        None => "has default".to_string(),
+                    }
+                }
             } else {
-                "[no default - wire only]".to_string()
+                // Fallback: assume required if no property and no metadata
+                "required".to_string()
+            };
+
+            // Build the info string with optional wire-only marker
+            let info_str = if wire_only {
+                format!("[{}, wire-only]", default_info)
+            } else {
+                format!("[{}]", default_info)
             };
 
             writeln!(
@@ -107,43 +175,25 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
                 "  {:name_width$} : {:type_width$}  {}",
                 param.name,
                 type_str,
-                default_info,
-                name_width = max_param_len,
+                info_str,
+                name_width = max_name_len,
                 type_width = max_type_len
             )
             .unwrap();
         }
 
-        writeln!(output).unwrap();
-    }
-
-    // Properties section (stored-only, not in parameters)
-    let stored_only: Vec<_> = text_props
-        .iter()
-        .filter(|(name, _)| !param_names.contains(name.as_str()))
-        .collect();
-
-    if !stored_only.is_empty() {
-        writeln!(output, "Properties (not wirable):").unwrap();
-
-        let max_prop_len = stored_only.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
-        let max_prop_type_len = stored_only
-            .iter()
-            .map(|(_, value)| value.inferred_data_type().to_string().len())
-            .max()
-            .unwrap_or(0);
-
-        for (name, value) in stored_only {
+        // Process literal-only properties (not in parameters)
+        for (name, value) in &literal_only_props {
             let type_str = value.inferred_data_type().to_string();
             let value_str = value.to_text();
             writeln!(
                 output,
-                "  {:name_width$} : {:type_width$}  [default: {}]",
+                "  {:name_width$} : {:type_width$}  [default: {}, literal-only]",
                 name,
                 type_str,
                 value_str,
-                name_width = max_prop_len,
-                type_width = max_prop_type_len
+                name_width = max_name_len,
+                type_width = max_type_len
             )
             .unwrap();
         }

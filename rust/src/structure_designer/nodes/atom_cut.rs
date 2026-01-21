@@ -121,6 +121,12 @@ impl NodeData for AtomCutData {
       }
       Ok(())
   }
+
+  fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+      let mut m = HashMap::new();
+      m.insert("molecule".to_string(), (true, None)); // required
+      m
+  }
 }
 
 impl AtomCutData {

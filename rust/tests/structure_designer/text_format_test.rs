@@ -1209,8 +1209,8 @@ mod node_type_introspection_tests {
         assert!(result.contains("Category: Geometry3D"));
         assert!(result.contains("Description:"));
 
-        // Check parameters section
-        assert!(result.contains("Parameters (input pins):"));
+        // Check inputs section (unified, no longer "Parameters")
+        assert!(result.contains("Inputs:"));
         assert!(result.contains("center"));
         assert!(result.contains("radius"));
         assert!(result.contains("IVec3"));
@@ -1262,8 +1262,9 @@ mod node_type_introspection_tests {
         let registry = create_test_registry();
         let result = describe_node_type("sphere", &registry);
 
-        // unit_cell parameter has no default
-        assert!(result.contains("[no default - wire only]"));
+        // unit_cell parameter has hardcoded default and is wire-only
+        assert!(result.contains("wire-only"));
+        assert!(result.contains("default: cubic diamond"));
     }
 
     #[test]

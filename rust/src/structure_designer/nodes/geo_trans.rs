@@ -178,10 +178,16 @@ impl NodeData for GeoTransData {
                 self.translation.x, self.translation.y, self.translation.z)),
             (true, false) => Some(format!("r: ({},{},{})", 
                 self.rotation.x, self.rotation.y, self.rotation.z)),
-            (false, true) => Some(format!("t: ({},{},{})", 
+            (false, true) => Some(format!("t: ({},{},{})",
                 self.translation.x, self.translation.y, self.translation.z)),
             (false, false) => None,
         }
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("shape".to_string(), (true, None)); // required
+        m
     }
 }
 

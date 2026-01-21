@@ -110,6 +110,12 @@ impl NodeData for RegPolyData {
         }
         Ok(())
     }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("d_plane".to_string(), (false, Some("XY plane".to_string())));
+        m
+    }
 }
 
 /// Calculates the closest lattice point to a given floating point position

@@ -55,6 +55,20 @@ pub trait NodeData: Any + AsAny  {
     fn set_text_properties(&mut self, _props: &HashMap<String, TextValue>) -> Result<(), String> {
         Ok(())
     }
+
+    /// Returns metadata for input parameters that cannot be derived from get_text_properties().
+    ///
+    /// This is used by the `describe` command to provide accurate information about inputs.
+    /// Maps parameter name -> (is_required, default_description).
+    ///
+    /// - If a parameter has a matching property in get_text_properties(), no entry is needed here
+    /// - If a parameter is required (must be wired), return (true, None)
+    /// - If a parameter has a hardcoded default constant, return (false, Some("description"))
+    ///
+    /// Default implementation returns empty HashMap (assumes all non-property parameters are required).
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        HashMap::new()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

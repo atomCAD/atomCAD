@@ -110,6 +110,12 @@ impl NodeData for IntersectData {
   fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
       None
   }
+
+  fn get_parameter_metadata(&self) -> std::collections::HashMap<String, (bool, Option<String>)> {
+      let mut m = std::collections::HashMap::new();
+      m.insert("shapes".to_string(), (true, None)); // required
+      m
+  }
 }
 
 pub fn get_node_type() -> NodeType {

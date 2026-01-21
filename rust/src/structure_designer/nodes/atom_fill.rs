@@ -284,6 +284,13 @@ impl NodeData for AtomFillData {
         }
         Ok(())
     }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("shape".to_string(), (true, None)); // required
+        m.insert("motif".to_string(), (false, Some("cubic zincblende".to_string())));
+        m
+    }
 }
 
 pub fn get_node_type() -> NodeType {

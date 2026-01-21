@@ -122,6 +122,12 @@ impl NodeData for PolygonData {
         }
         Ok(())
     }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("d_plane".to_string(), (false, Some("XY plane".to_string())));
+        m
+    }
 }
 
 pub struct PolygonEvalCache {

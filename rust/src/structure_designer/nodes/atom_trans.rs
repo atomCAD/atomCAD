@@ -139,9 +139,15 @@ impl NodeData for AtomTransData {
     }
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-        Some(format!("r: ({:.2},{:.2},{:.2}) t: ({:.2},{:.2},{:.2})", 
+        Some(format!("r: ({:.2},{:.2},{:.2}) t: ({:.2},{:.2},{:.2})",
             self.rotation.x, self.rotation.y, self.rotation.z,
             self.translation.x, self.translation.y, self.translation.z))
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("molecule".to_string(), (true, None)); // required
+        m
     }
 }
 

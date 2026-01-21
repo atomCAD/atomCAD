@@ -135,6 +135,13 @@ impl NodeData for MapData {
         }
         Ok(())
     }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("xs".to_string(), (true, None)); // required
+        m.insert("f".to_string(), (true, None)); // required
+        m
+    }
 }
 
 pub fn get_node_type() -> NodeType {
