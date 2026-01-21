@@ -187,8 +187,9 @@ impl NodeData for ExtrudeData {
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
             ("height".to_string(), TextValue::Int(self.height)),
-            ("extrude_direction".to_string(), TextValue::IVec3(self.extrude_direction)),
-            ("infinite".to_string(), TextValue::Bool(self.infinite)),
+            // Property names must match parameter names for describe command
+            ("dir".to_string(), TextValue::IVec3(self.extrude_direction)),
+            ("inf".to_string(), TextValue::Bool(self.infinite)),
             ("subdivision".to_string(), TextValue::Int(self.subdivision)),
         ]
     }
@@ -197,11 +198,12 @@ impl NodeData for ExtrudeData {
         if let Some(v) = props.get("height") {
             self.height = v.as_int().ok_or_else(|| "height must be an integer".to_string())?;
         }
-        if let Some(v) = props.get("extrude_direction") {
-            self.extrude_direction = v.as_ivec3().ok_or_else(|| "extrude_direction must be an IVec3".to_string())?;
+        // Accept both old names (backward compat) and new names (matching parameters)
+        if let Some(v) = props.get("dir").or_else(|| props.get("extrude_direction")) {
+            self.extrude_direction = v.as_ivec3().ok_or_else(|| "dir must be an IVec3".to_string())?;
         }
-        if let Some(v) = props.get("infinite") {
-            self.infinite = v.as_bool().ok_or_else(|| "infinite must be a boolean".to_string())?;
+        if let Some(v) = props.get("inf").or_else(|| props.get("infinite")) {
+            self.infinite = v.as_bool().ok_or_else(|| "inf must be a boolean".to_string())?;
         }
         if let Some(v) = props.get("subdivision") {
             self.subdivision = v.as_int().ok_or_else(|| "subdivision must be an integer".to_string())?;
@@ -213,9 +215,6 @@ impl NodeData for ExtrudeData {
         let mut m = HashMap::new();
         m.insert("shape".to_string(), (true, None)); // required
         m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
-        // Parameter names differ from property names: dir->extrude_direction, inf->infinite
-        m.insert("dir".to_string(), (false, Some("(0, 0, 1)".to_string())));
-        m.insert("inf".to_string(), (false, Some("false".to_string())));
         m
     }
 }
