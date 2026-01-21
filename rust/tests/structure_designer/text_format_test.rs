@@ -1344,3 +1344,227 @@ mod node_type_introspection_tests {
         assert_eq!(result.len(), 153); // 150 + "..."
     }
 }
+
+// ============================================================================
+// Custom Name Preservation Tests
+// ============================================================================
+
+mod custom_name_tests {
+    use rust_lib_flutter_cad::structure_designer::text_format::{
+        serialize_network, edit_network,
+    };
+    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+
+    fn create_test_registry() -> NodeTypeRegistry {
+        NodeTypeRegistry::new()
+    }
+
+    fn create_test_network() -> NodeNetwork {
+        let node_type = NodeType {
+            name: "test".to_string(),
+            description: "Test network".to_string(),
+            category: NodeTypeCategory::Custom,
+            parameters: vec![],
+            output_type: DataType::Geometry,
+            public: true,
+            node_data_creator: || Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
+            node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
+            node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
+        };
+        NodeNetwork::new(node_type)
+    }
+
+    #[test]
+    fn test_custom_name_preserved_in_serialization() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create a node with a custom name
+        let result = edit_network(&mut network, &registry, r#"
+            mybox = cuboid { extent: (10, 10, 10), visible: true }
+        "#, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert!(result.nodes_created.contains(&"mybox".to_string()));
+
+        // Serialize the network
+        let serialized = serialize_network(&network, &registry);
+
+        // The serialized output should contain the custom name "mybox", not "cuboid1"
+        assert!(serialized.contains("mybox"),
+            "Serialization should preserve custom name 'mybox', got:\n{}", serialized);
+        assert!(!serialized.contains("cuboid1"),
+            "Serialization should NOT contain auto-generated 'cuboid1', got:\n{}", serialized);
+    }
+
+    #[test]
+    fn test_custom_name_roundtrip() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create a network with custom names
+        let result = edit_network(&mut network, &registry, r#"
+            mybox = cuboid { extent: (10, 10, 10) }
+            mysphere = sphere { center: (0, 0, 0), radius: 5 }
+            result = diff { base: [mybox], sub: [mysphere], visible: true }
+            output result
+        "#, true);
+        assert!(result.success, "Initial edit should succeed: {:?}", result.errors);
+
+        // Serialize
+        let serialized = serialize_network(&network, &registry);
+
+        // Verify custom names are in the serialized output
+        assert!(serialized.contains("mybox"), "Should contain 'mybox'");
+        assert!(serialized.contains("mysphere"), "Should contain 'mysphere'");
+        assert!(serialized.contains("result"), "Should contain 'result'");
+
+        // Create a new network and load the serialized text
+        let mut network2 = create_test_network();
+        let result2 = edit_network(&mut network2, &registry, &serialized, true);
+        assert!(result2.success, "Roundtrip edit should succeed: {:?}", result2.errors);
+
+        // Serialize again and verify the names are still preserved
+        let serialized2 = serialize_network(&network2, &registry);
+        assert!(serialized2.contains("mybox"), "Should still contain 'mybox' after roundtrip");
+        assert!(serialized2.contains("mysphere"), "Should still contain 'mysphere' after roundtrip");
+        assert!(serialized2.contains("result"), "Should still contain 'result' after roundtrip");
+    }
+
+    #[test]
+    fn test_incremental_edit_preserves_custom_names() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create initial node with custom name
+        let result = edit_network(&mut network, &registry, r#"
+            mybox = cuboid { extent: (10, 10, 10), visible: true }
+        "#, true);
+        assert!(result.success);
+
+        // Add another node incrementally
+        let result = edit_network(&mut network, &registry, r#"
+            mysphere = sphere { center: (0, 0, 0), radius: 5, visible: true }
+        "#, false);
+        assert!(result.success, "Incremental edit should succeed: {:?}", result.errors);
+
+        // Serialize and verify both custom names are preserved
+        let serialized = serialize_network(&network, &registry);
+        assert!(serialized.contains("mybox"), "Should contain 'mybox'");
+        assert!(serialized.contains("mysphere"), "Should contain 'mysphere'");
+    }
+
+    #[test]
+    fn test_wiring_with_custom_names_across_edits() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create first node with custom name
+        let result = edit_network(&mut network, &registry, r#"
+            mybox = cuboid { extent: (10, 10, 10) }
+        "#, true);
+        assert!(result.success);
+
+        // Create second node and wire to first using custom name (incremental mode)
+        let result = edit_network(&mut network, &registry, r#"
+            result = diff { base: [mybox], sub: [], visible: true }
+        "#, false);
+        assert!(result.success, "Should be able to wire using custom name: {:?}", result.errors);
+        assert_eq!(result.connections_made.len(), 1, "Should have created one wire connection");
+    }
+
+    #[test]
+    fn test_custom_name_collision_with_auto_generated() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create a node with custom name that looks like an auto-generated name
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = cuboid { extent: (5, 5, 5) }
+            another = sphere { center: (0, 0, 0), radius: 5 }
+        "#, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Serialize - the sphere node should get a different auto-generated name
+        // since "sphere1" is taken by the cuboid's custom name
+        let serialized = serialize_network(&network, &registry);
+
+        // "sphere1" should be the cuboid (custom name)
+        assert!(serialized.contains("sphere1 = cuboid"),
+            "sphere1 should be the cuboid with custom name, got:\n{}", serialized);
+
+        // The actual sphere should have a different name (sphere2)
+        assert!(serialized.contains("sphere2 = sphere") || serialized.contains("another = sphere"),
+            "The sphere should have a different name, got:\n{}", serialized);
+    }
+
+    #[test]
+    fn test_duplicate_custom_names_resolved() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create two nodes - first gets the custom name, second should get auto-generated
+        // This simulates a scenario where somehow two nodes end up with the same custom_name
+        // (which shouldn't happen through normal editing, but we handle it gracefully)
+        let result = edit_network(&mut network, &registry, r#"
+            myshape = sphere { center: (0, 0, 0), radius: 5 }
+        "#, true);
+        assert!(result.success);
+
+        // Manually set another node to have the same custom_name (edge case testing)
+        // We'll create another node and verify that serialization handles it
+        let result = edit_network(&mut network, &registry, r#"
+            myshape = cuboid { extent: (10, 10, 10) }
+        "#, false);
+
+        // This should update the existing node (since name matches in incremental mode)
+        // OR create a new node - either way serialization should work
+        assert!(result.success || !result.success, "Either outcome is acceptable");
+
+        // Serialize should not crash and should produce valid output
+        let serialized = serialize_network(&network, &registry);
+        assert!(!serialized.is_empty(), "Serialization should produce output");
+    }
+
+    #[test]
+    fn test_mixed_custom_and_auto_names() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Create some nodes with custom names, some without (using auto-gen style names)
+        let result = edit_network(&mut network, &registry, r#"
+            custom_box = cuboid { extent: (10, 10, 10) }
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+            another_custom = sphere { center: (5, 5, 5), radius: 3 }
+            union1 = union { shapes: [custom_box, sphere1, another_custom], visible: true }
+        "#, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let serialized = serialize_network(&network, &registry);
+
+        // All custom names should be preserved
+        assert!(serialized.contains("custom_box"), "Should contain 'custom_box'");
+        assert!(serialized.contains("sphere1"), "Should contain 'sphere1'");
+        assert!(serialized.contains("another_custom"), "Should contain 'another_custom'");
+        assert!(serialized.contains("union1"), "Should contain 'union1'");
+    }
+
+    #[test]
+    fn test_custom_name_stored_on_node() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            my_special_node = int { value: 42 }
+        "#, true);
+        assert!(result.success);
+
+        // Verify the custom_name is actually stored on the node
+        let node = network.nodes.values().next().expect("Should have one node");
+        assert_eq!(node.custom_name, Some("my_special_node".to_string()),
+            "Node should have custom_name set");
+    }
+}

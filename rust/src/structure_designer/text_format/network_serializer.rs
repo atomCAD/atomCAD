@@ -140,19 +140,52 @@ impl<'a> NetworkSerializer<'a> {
     }
 
     /// Generate names for all nodes in the given order.
+    ///
+    /// Prefers user-specified custom_name if available. Handles name collisions
+    /// by falling back to auto-generated names when necessary.
     fn generate_names(&mut self, sorted_ids: &[u64]) {
+        // First pass: collect all valid custom names and reserve them
+        let mut used_names: HashSet<String> = HashSet::new();
+        let mut nodes_with_valid_custom_names: HashSet<u64> = HashSet::new();
+
         for &node_id in sorted_ids {
             if let Some(node) = self.network.nodes.get(&node_id) {
-                let node_type = &node.node_type_name;
+                if let Some(ref custom_name) = node.custom_name {
+                    // Check if this custom name is already used by another node
+                    if !used_names.contains(custom_name) {
+                        used_names.insert(custom_name.clone());
+                        nodes_with_valid_custom_names.insert(node_id);
+                    }
+                    // If custom_name is already used, this node will get an auto-generated name
+                }
+            }
+        }
 
-                // Increment counter for this type
-                let counter = self.type_counters
-                    .entry(node_type.clone())
-                    .or_insert(0);
-                *counter += 1;
+        // Second pass: assign names to all nodes
+        for &node_id in sorted_ids {
+            if let Some(node) = self.network.nodes.get(&node_id) {
+                let name = if nodes_with_valid_custom_names.contains(&node_id) {
+                    // Use the custom name (we know it's valid and unique)
+                    node.custom_name.clone().unwrap()
+                } else {
+                    // Generate a unique name avoiding collisions with custom names
+                    let node_type = &node.node_type_name;
+                    loop {
+                        let counter = self.type_counters
+                            .entry(node_type.clone())
+                            .or_insert(0);
+                        *counter += 1;
+                        let generated_name = format!("{}{}", node_type, counter);
 
-                // Generate name: type + counter (e.g., "sphere1", "sphere2")
-                let name = format!("{}{}", node_type, counter);
+                        // Check if this generated name conflicts with a reserved custom name
+                        if !used_names.contains(&generated_name) {
+                            used_names.insert(generated_name.clone());
+                            break generated_name;
+                        }
+                        // If it conflicts, loop and try the next counter
+                    }
+                };
+
                 self.node_names.insert(node_id, name);
             }
         }

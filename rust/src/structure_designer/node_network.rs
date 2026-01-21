@@ -92,6 +92,9 @@ impl Eq for Wire {}
 pub struct Node {
   pub id: u64,
   pub node_type_name: String,
+  /// User-specified name for this node (e.g., "mybox" from "mybox = cuboid {...}").
+  /// If None, the node will be named using auto-generated names like "cuboid1".
+  pub custom_name: Option<String>,
   pub position: DVec2,
   pub arguments: Vec<Argument>,
   pub data: Box<dyn NodeData>,
@@ -259,6 +262,7 @@ impl NodeNetwork {
     let node = Node {
       id: node_id,
       node_type_name: node_type_name.to_string(),
+      custom_name: None,
       position,
       arguments,
       data: node_data,
@@ -812,9 +816,11 @@ impl NodeNetwork {
     let new_position = DVec2::new(original_node.position.x, original_node.position.y + vert_offset);
 
     // Create the duplicated node
+    // Note: custom_name is set to None for duplicates to avoid name conflicts
     let duplicated_node = Node {
       id: new_node_id,
       node_type_name: original_node.node_type_name.clone(),
+      custom_name: None,
       position: new_position,
       arguments: cloned_arguments,
       data: cloned_data,

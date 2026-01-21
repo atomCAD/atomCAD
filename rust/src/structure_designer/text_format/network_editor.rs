@@ -187,24 +187,58 @@ impl<'a> NetworkEditor<'a> {
         self.id_to_name.clear();
     }
 
-    /// Build name→id mapping from existing network using the same naming
-    /// convention as the serializer (type + counter).
+    /// Build name→id mapping from existing network.
+    ///
+    /// Prefers user-specified custom_name if available, otherwise uses the same
+    /// naming convention as the serializer (type + counter). Handles name
+    /// collisions by falling back to auto-generated names when necessary.
     fn build_existing_name_map(&mut self) {
+        use std::collections::HashSet;
+
         // We need to generate names in topological order like the serializer does
         let sorted_ids = self.topological_sort_existing();
 
         let mut type_counters: HashMap<String, u32> = HashMap::new();
 
+        // First pass: collect all valid custom names and reserve them
+        let mut used_names: HashSet<String> = HashSet::new();
+        let mut nodes_with_valid_custom_names: HashSet<u64> = HashSet::new();
+
+        for &node_id in &sorted_ids {
+            if let Some(node) = self.network.nodes.get(&node_id) {
+                if let Some(ref custom_name) = node.custom_name {
+                    // Check if this custom name is already used by another node
+                    if !used_names.contains(custom_name) {
+                        used_names.insert(custom_name.clone());
+                        nodes_with_valid_custom_names.insert(node_id);
+                    }
+                }
+            }
+        }
+
+        // Second pass: assign names to all nodes
         for node_id in sorted_ids {
             if let Some(node) = self.network.nodes.get(&node_id) {
-                let node_type = &node.node_type_name;
+                let name = if nodes_with_valid_custom_names.contains(&node_id) {
+                    // Use the custom name (we know it's valid and unique)
+                    node.custom_name.clone().unwrap()
+                } else {
+                    // Generate a unique name avoiding collisions with custom names
+                    let node_type = &node.node_type_name;
+                    loop {
+                        let counter = type_counters.entry(node_type.clone()).or_insert(0);
+                        *counter += 1;
+                        let generated_name = format!("{}{}", node_type, counter);
 
-                // Increment counter for this type
-                let counter = type_counters.entry(node_type.clone()).or_insert(0);
-                *counter += 1;
+                        // Check if this generated name conflicts with a reserved custom name
+                        if !used_names.contains(&generated_name) {
+                            used_names.insert(generated_name.clone());
+                            break generated_name;
+                        }
+                        // If it conflicts, loop and try the next counter
+                    }
+                };
 
-                // Generate name: type + counter (e.g., "sphere1", "sphere2")
-                let name = format!("{}{}", node_type, counter);
                 self.name_to_id.insert(name.clone(), node_id);
                 self.id_to_name.insert(node_id, name);
             }
@@ -339,6 +373,11 @@ impl<'a> NetworkEditor<'a> {
         // Update name maps
         self.name_to_id.insert(name.to_string(), node_id);
         self.id_to_name.insert(node_id, name.to_string());
+
+        // Store the user-specified custom name on the node for persistence
+        if let Some(node) = self.network.nodes.get_mut(&node_id) {
+            node.custom_name = Some(name.to_string());
+        }
 
         // Apply literal properties
         self.apply_literal_properties(node_id, properties)?;

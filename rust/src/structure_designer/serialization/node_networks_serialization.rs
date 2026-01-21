@@ -74,6 +74,10 @@ fn category_from_string(category_str: &str) -> crate::api::structure_designer::s
 pub struct SerializableNode {
     pub id: u64,
     pub node_type_name: String,
+    /// User-specified name for this node (e.g., "mybox" from "mybox = cuboid {...}").
+    /// If None, the node will be named using auto-generated names like "cuboid1".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_name: Option<String>,
     #[serde(with = "dvec2_serializer")]
     pub position: DVec2,
     pub arguments: Vec<Argument>,
@@ -183,6 +187,7 @@ pub fn node_to_serializable(id: u64, node: &mut Node, built_in_node_types: &std:
     Ok(SerializableNode {
         id,
         node_type_name: node.node_type_name.clone(),
+        custom_name: node.custom_name.clone(),
         position: node.position,
         arguments: node.arguments.clone(),
         data_type,
@@ -207,6 +212,7 @@ pub fn serializable_to_node(serializable: &SerializableNode, built_in_node_types
     Ok(Node {
         id: serializable.id,
         node_type_name: serializable.node_type_name.clone(),
+        custom_name: serializable.custom_name.clone(),
         position: serializable.position,
         arguments: serializable.arguments.clone(),
         data,
