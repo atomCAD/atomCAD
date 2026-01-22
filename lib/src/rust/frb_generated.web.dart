@@ -143,6 +143,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APINodeCategoryView dco_decode_api_node_category_view(dynamic raw);
 
   @protected
+  APINodeEvaluationResult dco_decode_api_node_evaluation_result(dynamic raw);
+
+  @protected
   APINodeTypeView dco_decode_api_node_type_view(dynamic raw);
 
   @protected
@@ -809,6 +812,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeCategoryView sse_decode_api_node_category_view(
+      SseDeserializer deserializer);
+
+  @protected
+  APINodeEvaluationResult sse_decode_api_node_evaluation_result(
       SseDeserializer deserializer);
 
   @protected
@@ -1588,6 +1595,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_node_category_view(
       APINodeCategoryView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_evaluation_result(
+      APINodeEvaluationResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_node_type_view(

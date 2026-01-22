@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -800,6 +800,69 @@ class APINodeCategoryView {
           runtimeType == other.runtimeType &&
           category == other.category &&
           nodes == other.nodes;
+}
+
+/// Result of evaluating a single node via CLI
+class APINodeEvaluationResult {
+  /// The node ID that was evaluated
+  final BigInt nodeId;
+
+  /// The node type name (e.g., "cuboid", "atom_fill")
+  final String nodeTypeName;
+
+  /// The custom name if assigned, otherwise None
+  final String? customName;
+
+  /// The output data type name (e.g., "Geometry", "Atomic", "Float")
+  final String outputType;
+
+  /// Brief display string (from to_display_string())
+  final String displayString;
+
+  /// Detailed string (from to_detailed_string()), only populated if verbose=true
+  final String? detailedString;
+
+  /// Whether the evaluation succeeded (no errors in this node's chain)
+  final bool success;
+
+  /// Error message if the node itself produced an error
+  final String? errorMessage;
+
+  const APINodeEvaluationResult({
+    required this.nodeId,
+    required this.nodeTypeName,
+    this.customName,
+    required this.outputType,
+    required this.displayString,
+    this.detailedString,
+    required this.success,
+    this.errorMessage,
+  });
+
+  @override
+  int get hashCode =>
+      nodeId.hashCode ^
+      nodeTypeName.hashCode ^
+      customName.hashCode ^
+      outputType.hashCode ^
+      displayString.hashCode ^
+      detailedString.hashCode ^
+      success.hashCode ^
+      errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeEvaluationResult &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          nodeTypeName == other.nodeTypeName &&
+          customName == other.customName &&
+          outputType == other.outputType &&
+          displayString == other.displayString &&
+          detailedString == other.detailedString &&
+          success == other.success &&
+          errorMessage == other.errorMessage;
 }
 
 class APINodeTypeView {

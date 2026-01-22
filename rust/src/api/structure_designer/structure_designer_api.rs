@@ -89,6 +89,7 @@ use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APICommentData;
+use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::structure_designer::cli_runner;
@@ -2717,9 +2718,37 @@ pub fn get_comment_data(node_id: u64) -> Option<APICommentData> {
   }
 }
 
+/// Evaluate a node and return its result string.
+///
+/// # Arguments
+/// * `node_identifier` - Either a numeric node ID or the node's custom name
+/// * `verbose` - If true, return detailed output for complex types
+///
+/// # Returns
+/// * `Ok(APINodeEvaluationResult)` - The evaluation result
+/// * `Err(String)` - If node not found or evaluation fails
+#[flutter_rust_bridge::frb(sync)]
+pub fn evaluate_node(
+  node_identifier: String,
+  verbose: bool,
+) -> Result<APINodeEvaluationResult, String> {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let designer = &mut cad_instance.structure_designer;
 
+        // Try parsing as numeric ID first, then fall back to name lookup
+        let node_id = node_identifier.parse::<u64>()
+          .ok()
+          .or_else(|| designer.find_node_id_by_name(&node_identifier))
+          .ok_or_else(|| format!("Node not found: {}", node_identifier))?;
 
-
+        designer.evaluate_node_for_cli(node_id, verbose)
+      },
+      Err("CAD instance not available".to_string())
+    )
+  }
+}
 
 
 

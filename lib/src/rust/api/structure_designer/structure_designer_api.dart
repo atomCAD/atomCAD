@@ -660,3 +660,18 @@ void updateCommentNode(
 APICommentData? getCommentData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCommentData(
         nodeId: nodeId);
+
+/// Evaluate a node and return its result string.
+///
+/// # Arguments
+/// * `node_identifier` - Either a numeric node ID or the node's custom name
+/// * `verbose` - If true, return detailed output for complex types
+///
+/// # Returns
+/// * `Ok(APINodeEvaluationResult)` - The evaluation result
+/// * `Err(String)` - If node not found or evaluation fails
+APINodeEvaluationResult evaluateNode(
+        {required String nodeIdentifier, required bool verbose}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiEvaluateNode(
+            nodeIdentifier: nodeIdentifier, verbose: verbose);

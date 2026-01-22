@@ -6,7 +6,7 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `describe_node_type_impl`, `format_node_type_list`, `format_text_value`, `truncate_description`
+// These functions are ignored because they are not marked as `pub`: `format_node_type_list`
 
 /// Query the active node network and return its text format representation.
 ///
