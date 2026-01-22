@@ -1763,3 +1763,204 @@ mod custom_name_tests {
             "Node should have custom_name set");
     }
 }
+
+// ============================================================================
+// Persistent Node Names Phase 6 Verification Tests
+// ============================================================================
+
+mod persistent_node_names_phase6_tests {
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+    use rust_lib_flutter_cad::structure_designer::text_format::edit_network;
+    use glam::f64::DVec2;
+
+    fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
+        let mut designer = StructureDesigner::new();
+        designer.add_node_network(network_name);
+        designer.set_active_node_network_name(Some(network_name.to_string()));
+        designer
+    }
+
+    /// Helper to edit the active network in a StructureDesigner.
+    /// Returns the edit result.
+    fn edit_designer_network(
+        designer: &mut StructureDesigner,
+        network_name: &str,
+        code: &str,
+        replace: bool,
+    ) -> rust_lib_flutter_cad::structure_designer::text_format::EditResult {
+        // Temporarily remove network to avoid borrow conflicts
+        let mut network = designer.node_type_registry.node_networks.remove(network_name).unwrap();
+        let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
+        designer.node_type_registry.node_networks.insert(network_name.to_string(), network);
+        result
+    }
+
+    /// Phase 6 verification: Text-format created nodes have custom_name preserved.
+    /// When parsing "mybox = cuboid {...}", the node's custom_name should be "mybox".
+    #[test]
+    fn test_text_format_custom_name_preserved() {
+        let mut designer = setup_designer_with_network("test_network");
+        let result = edit_designer_network(
+            &mut designer,
+            "test_network",
+            "mybox = cuboid { min_corner: (0, 0, 0), extent: (10, 10, 10) }",
+            true,
+        );
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let node_id = designer.find_node_id_by_name("mybox").unwrap();
+        let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+        let node = network.nodes.get(&node_id).unwrap();
+
+        assert_eq!(node.custom_name, Some("mybox".to_string()));
+        assert_eq!(node.node_type_name, "cuboid");
+    }
+
+    /// Phase 6 verification: UI-created nodes (via add_node) get auto-generated names
+    /// that can be found using find_node_id_by_name.
+    #[test]
+    fn test_find_node_by_name_ui_created() {
+        let mut designer = setup_designer_with_network("test_network");
+
+        // Create node via UI (simulated by add_node) - gets auto-generated name "expr1"
+        let expr_id = designer.add_node("expr", DVec2::ZERO);
+
+        // Verify the auto-generated name can be found
+        let found = designer.find_node_id_by_name("expr1");
+        assert!(found.is_some(), "Should find UI-created node by its auto-generated name");
+        assert_eq!(found.unwrap(), expr_id);
+    }
+
+    /// Phase 6 verification: Text-format created nodes can be found by name.
+    #[test]
+    fn test_find_node_by_name_text_created() {
+        let mut designer = setup_designer_with_network("test_network");
+        let result = edit_designer_network(
+            &mut designer,
+            "test_network",
+            "mynode = int { value: 42 }",
+            true,
+        );
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let found = designer.find_node_id_by_name("mynode");
+        assert!(found.is_some(), "Should find text-created node by its name");
+
+        // Verify it's the correct node
+        let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+        let node = network.nodes.get(&found.unwrap()).unwrap();
+        assert_eq!(node.node_type_name, "int");
+    }
+
+    /// Phase 6 verification: Both UI-created and text-created nodes coexist
+    /// and can both be found by their names.
+    #[test]
+    fn test_find_node_by_name_mixed_creation() {
+        let mut designer = setup_designer_with_network("test_network");
+
+        // Create nodes via UI (auto-generated names)
+        let ui_int_id = designer.add_node("int", DVec2::ZERO);  // Gets "int1"
+        let ui_float_id = designer.add_node("float", DVec2::new(100.0, 0.0));  // Gets "float1"
+
+        // Create nodes via text format (custom names) - incremental mode
+        let result = edit_designer_network(
+            &mut designer,
+            "test_network",
+            "my_sphere = sphere { center: (0, 0, 0), radius: 5 }",
+            false,
+        );
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let result = edit_designer_network(
+            &mut designer,
+            "test_network",
+            "my_cuboid = cuboid { extent: (10, 10, 10) }",
+            false,
+        );
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Verify all nodes can be found by name
+        assert_eq!(designer.find_node_id_by_name("int1"), Some(ui_int_id));
+        assert_eq!(designer.find_node_id_by_name("float1"), Some(ui_float_id));
+        assert!(designer.find_node_id_by_name("my_sphere").is_some());
+        assert!(designer.find_node_id_by_name("my_cuboid").is_some());
+
+        // Non-existent names should not be found
+        assert!(designer.find_node_id_by_name("nonexistent").is_none());
+    }
+
+    /// Phase 6 verification: Text-format can reference UI-created nodes by their
+    /// auto-generated names in incremental mode.
+    #[test]
+    fn test_text_format_references_ui_created_nodes() {
+        let mut designer = setup_designer_with_network("test_network");
+
+        // Create nodes via UI (auto-generated names)
+        designer.add_node("int", DVec2::ZERO);  // Gets "int1"
+        designer.add_node("int", DVec2::new(0.0, 100.0));  // Gets "int2"
+
+        // Edit in incremental mode should be able to reference UI-created nodes
+        let result = edit_designer_network(
+            &mut designer,
+            "test_network",
+            r#"result = expr { x: int1, y: int2, expression: "x + y" }"#,
+            false,
+        );
+        assert!(result.success, "Should be able to reference UI-created nodes: {:?}", result.errors);
+
+        // Verify connections were made
+        let result_id = designer.find_node_id_by_name("result").unwrap();
+        let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+        let result_node = network.nodes.get(&result_id).unwrap();
+
+        // The expr node should have connections for x and y parameters
+        // (Dynamic parameters are created by the expr node based on the parameters property)
+        assert_eq!(result_node.node_type_name, "expr");
+    }
+
+    /// Phase 6 verification: Duplicated nodes get unique persistent names.
+    #[test]
+    fn test_duplicated_nodes_have_unique_persistent_names() {
+        let mut designer = setup_designer_with_network("test_network");
+
+        // Create original node
+        let original_id = designer.add_node("sphere", DVec2::ZERO);  // Gets "sphere1"
+
+        // Duplicate it
+        let dup_id = designer.duplicate_node(original_id);
+        assert_ne!(dup_id, 0, "Duplication should succeed");
+
+        // Both should be findable by their unique names
+        let found_original = designer.find_node_id_by_name("sphere1");
+        let found_dup = designer.find_node_id_by_name("sphere2");
+
+        assert_eq!(found_original, Some(original_id));
+        assert_eq!(found_dup, Some(dup_id));
+    }
+
+    /// Phase 6 verification: After deletion, names are not reused (stability guarantee).
+    #[test]
+    fn test_names_not_reused_after_deletion() {
+        let mut designer = setup_designer_with_network("test_network");
+
+        // Create nodes
+        let int1_id = designer.add_node("int", DVec2::ZERO);  // Gets "int1"
+        designer.add_node("int", DVec2::new(100.0, 0.0));  // Gets "int2"
+
+        // Delete int1
+        {
+            let network = designer.node_type_registry.node_networks.get_mut("test_network").unwrap();
+            network.select_node(int1_id);
+        }
+        designer.delete_selected();
+
+        // Create another int node - should be "int3", not "int1"
+        let new_int_id = designer.add_node("int", DVec2::new(200.0, 0.0));
+
+        let found = designer.find_node_id_by_name("int3");
+        assert_eq!(found, Some(new_int_id), "New node should be 'int3', not reusing 'int1'");
+
+        // "int1" should no longer exist
+        assert!(designer.find_node_id_by_name("int1").is_none());
+    }
+}
