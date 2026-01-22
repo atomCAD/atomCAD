@@ -189,109 +189,18 @@ impl<'a> NetworkEditor<'a> {
 
     /// Build name→id mapping from existing network.
     ///
-    /// Prefers user-specified custom_name if available, otherwise uses the same
-    /// naming convention as the serializer (type + counter). Handles name
-    /// collisions by falling back to auto-generated names when necessary.
+    /// Since all nodes now have persistent names assigned at creation time,
+    /// this simply iterates through nodes and uses their custom_name directly.
     fn build_existing_name_map(&mut self) {
-        use std::collections::HashSet;
+        self.name_to_id.clear();
+        self.id_to_name.clear();
 
-        // We need to generate names in topological order like the serializer does
-        let sorted_ids = self.topological_sort_existing();
-
-        let mut type_counters: HashMap<String, u32> = HashMap::new();
-
-        // First pass: collect all valid custom names and reserve them
-        let mut used_names: HashSet<String> = HashSet::new();
-        let mut nodes_with_valid_custom_names: HashSet<u64> = HashSet::new();
-
-        for &node_id in &sorted_ids {
-            if let Some(node) = self.network.nodes.get(&node_id) {
-                if let Some(ref custom_name) = node.custom_name {
-                    // Check if this custom name is already used by another node
-                    if !used_names.contains(custom_name) {
-                        used_names.insert(custom_name.clone());
-                        nodes_with_valid_custom_names.insert(node_id);
-                    }
-                }
-            }
-        }
-
-        // Second pass: assign names to all nodes
-        for node_id in sorted_ids {
-            if let Some(node) = self.network.nodes.get(&node_id) {
-                let name = if nodes_with_valid_custom_names.contains(&node_id) {
-                    // Use the custom name (we know it's valid and unique)
-                    node.custom_name.clone().unwrap()
-                } else {
-                    // Generate a unique name avoiding collisions with custom names
-                    let node_type = &node.node_type_name;
-                    loop {
-                        let counter = type_counters.entry(node_type.clone()).or_insert(0);
-                        *counter += 1;
-                        let generated_name = format!("{}{}", node_type, counter);
-
-                        // Check if this generated name conflicts with a reserved custom name
-                        if !used_names.contains(&generated_name) {
-                            used_names.insert(generated_name.clone());
-                            break generated_name;
-                        }
-                        // If it conflicts, loop and try the next counter
-                    }
-                };
-
+        for (&node_id, node) in &self.network.nodes {
+            if let Some(ref name) = node.custom_name {
                 self.name_to_id.insert(name.clone(), node_id);
-                self.id_to_name.insert(node_id, name);
+                self.id_to_name.insert(node_id, name.clone());
             }
         }
-    }
-
-    /// Topological sort of existing nodes (same algorithm as serializer).
-    fn topological_sort_existing(&self) -> Vec<u64> {
-        use std::collections::HashSet;
-
-        let mut result = Vec::new();
-        let mut visited = HashSet::new();
-        let mut temp_mark = HashSet::new();
-
-        // Get all node IDs sorted for deterministic output
-        let mut node_ids: Vec<u64> = self.network.nodes.keys().copied().collect();
-        node_ids.sort();
-
-        for node_id in node_ids {
-            if !visited.contains(&node_id) {
-                self.dfs_visit_existing(node_id, &mut result, &mut visited, &mut temp_mark);
-            }
-        }
-
-        result
-    }
-
-    fn dfs_visit_existing(
-        &self,
-        node_id: u64,
-        result: &mut Vec<u64>,
-        visited: &mut std::collections::HashSet<u64>,
-        temp_mark: &mut std::collections::HashSet<u64>,
-    ) {
-        if temp_mark.contains(&node_id) || visited.contains(&node_id) {
-            return;
-        }
-
-        temp_mark.insert(node_id);
-
-        if let Some(node) = self.network.nodes.get(&node_id) {
-            for argument in &node.arguments {
-                let mut dep_ids: Vec<u64> = argument.argument_output_pins.keys().copied().collect();
-                dep_ids.sort();
-                for source_node_id in dep_ids {
-                    self.dfs_visit_existing(source_node_id, result, visited, temp_mark);
-                }
-            }
-        }
-
-        temp_mark.remove(&node_id);
-        visited.insert(node_id);
-        result.push(node_id);
     }
 
     /// Process a statement in the first pass (create/update nodes, collect connections).
