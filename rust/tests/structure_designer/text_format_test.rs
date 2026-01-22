@@ -1005,6 +1005,74 @@ mod network_editor_tests {
         assert_eq!(union_node.arguments[0].argument_output_pins.len(), 2,
             "Union should have two inputs connected");
     }
+
+    #[test]
+    fn test_no_spurious_warnings_for_literal_only_properties() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // parameter node has literal-only properties like param_name, data_type, etc.
+        // that are defined in get_text_properties() but NOT in the node's wirable parameters
+        let result = edit_network(&mut network, &registry, r#"
+            p = parameter { param_name: "size", data_type: Float, sort_order: 1 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Should have no warnings about param_name, data_type, or sort_order
+        for warning in &result.warnings {
+            assert!(!warning.contains("param_name"),
+                "Should not warn about param_name: {}", warning);
+            assert!(!warning.contains("data_type"),
+                "Should not warn about data_type: {}", warning);
+            assert!(!warning.contains("sort_order"),
+                "Should not warn about sort_order: {}", warning);
+        }
+    }
+
+    #[test]
+    fn test_warning_for_truly_unknown_properties() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // sphere has wirable parameters (center, radius, unit_cell) so unknown properties
+        // should trigger warnings. nonexistent_prop is not a valid property.
+        let result = edit_network(&mut network, &registry, r#"
+            s = sphere { center: (0, 0, 0), radius: 5, nonexistent_prop: 123 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed even with unknown properties");
+
+        // Should have a warning about the unknown property
+        let has_warning = result.warnings.iter()
+            .any(|w| w.contains("nonexistent_prop"));
+        assert!(has_warning, "Should warn about unknown property 'nonexistent_prop', got: {:?}",
+            result.warnings);
+    }
+
+    #[test]
+    fn test_no_warning_for_expr_literal_only_properties() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // expr node has literal-only properties: expression, parameters
+        let result = edit_network(&mut network, &registry, r#"
+            e = expr {
+                expression: "x + 1",
+                parameters: [{ name: "x", data_type: Int }]
+            }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Should have no warnings about expression or parameters
+        for warning in &result.warnings {
+            assert!(!warning.contains("expression"),
+                "Should not warn about expression: {}", warning);
+            assert!(!warning.contains("parameters"),
+                "Should not warn about parameters: {}", warning);
+        }
+    }
 }
 
 // ============================================================================

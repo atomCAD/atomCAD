@@ -495,6 +495,20 @@ impl<'a> NetworkEditor<'a> {
             })
             .unwrap_or_else(|| (Vec::new(), String::new()));
 
+        // Get text property names (for literal-only properties that aren't in parameters)
+        let text_prop_names: std::collections::HashSet<String> = self
+            .network
+            .nodes
+            .get(&node_id)
+            .map(|node| {
+                node.data
+                    .get_text_properties()
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         // Collect literal properties into a HashMap
         let mut literal_props: HashMap<String, TextValue> = HashMap::new();
 
@@ -507,7 +521,11 @@ impl<'a> NetworkEditor<'a> {
             // Try to convert PropertyValue to TextValue (handles literals and arrays of literals)
             if let Some(text_value) = Self::property_value_to_text_value(prop_value) {
                 // Warn about unknown properties (only for values we're actually applying)
-                if !valid_params.is_empty() && !valid_params.contains(prop_name) {
+                // A property is "known" if it's either a wirable parameter OR a text-only property
+                if !valid_params.is_empty()
+                    && !valid_params.contains(prop_name)
+                    && !text_prop_names.contains(prop_name)
+                {
                     self.result.add_warning(format!(
                         "Unknown property '{}' on node type '{}'",
                         prop_name, node_type_name
