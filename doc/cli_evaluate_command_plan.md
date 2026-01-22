@@ -338,7 +338,7 @@ End-to-end test:
 
 #### Step 5.1: Update atomCAD Skill Documentation
 
-**File:** `.claude/skills/atomcad.md`
+**File:** `.claude/skills/atomcad/skill.md`
 
 Add the evaluate command to the skill's available commands section:
 
@@ -379,7 +379,7 @@ Ensure `atomcad-cli --help` and `atomcad-cli evaluate --help` show proper usage.
 | `lib/structure_designer/cli/cli_server.dart` | Add evaluate command handling |
 | `lib/main.dart` | Add CLI argument parsing for evaluate |
 | `rust/tests/evaluate_node_tests.rs` | New test file |
-| `.claude/skills/atomcad.md` | Document new command |
+| `.claude/skills/atomcad/skill.md` | Document new command |
 
 ---
 
