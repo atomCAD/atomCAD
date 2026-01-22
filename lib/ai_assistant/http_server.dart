@@ -5,6 +5,8 @@ import 'dart:io';
 import 'constants.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dart'
     as ai_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as sd_api;
 
 /// HTTP server for AI assistant integration.
 ///
@@ -18,6 +20,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 /// - `POST /edit?replace=true|false` - Applies text format edits to the network
 /// - `GET /nodes?category=<cat>&verbose=true` - List all available node types by category
 /// - `GET /describe?node=<name>` - Get detailed information about a specific node type
+/// - `GET /evaluate?node=<id>&verbose=true` - Evaluate a node and return its result
 ///
 /// ## Example Usage
 ///
@@ -48,6 +51,12 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
 ///
 /// # Describe a specific node type
 /// curl "http://localhost:19847/describe?node=sphere"
+///
+/// # Evaluate a node (brief output)
+/// curl "http://localhost:19847/evaluate?node=sphere1"
+///
+/// # Evaluate a node (verbose output with detailed info)
+/// curl "http://localhost:19847/evaluate?node=sphere1&verbose=true"
 /// ```
 class AiAssistantServer {
   HttpServer? _server;
@@ -122,6 +131,9 @@ class AiAssistantServer {
           break;
         case '/describe':
           await _handleDescribe(request);
+          break;
+        case '/evaluate':
+          await _handleEvaluate(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -226,5 +238,49 @@ class AiAssistantServer {
 
     request.response.headers.contentType = ContentType.text;
     request.response.write(result);
+  }
+
+  Future<void> _handleEvaluate(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Get required node parameter
+    final nodeIdentifier = request.uri.queryParameters['node'];
+    if (nodeIdentifier == null || nodeIdentifier.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: node',
+      }));
+      return;
+    }
+
+    // Get optional verbose flag
+    final verbose = request.uri.queryParameters['verbose'] == 'true';
+
+    try {
+      // Call Rust API to evaluate the node
+      final result = sd_api.evaluateNode(
+        nodeIdentifier: nodeIdentifier,
+        verbose: verbose,
+      );
+
+      // Format output based on verbosity
+      if (verbose && result.detailedString != null) {
+        request.response.headers.contentType = ContentType.text;
+        request.response.write(result.detailedString!);
+      } else {
+        request.response.headers.contentType = ContentType.text;
+        request.response.write(result.displayString);
+      }
+    } catch (e) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': e.toString(),
+      }));
+    }
   }
 }
