@@ -77,6 +77,19 @@ use std::fmt::Write;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 
+/// Formats a DataType for display, showing "dynamic" instead of "None" for dynamic types.
+///
+/// Dynamic types are used by nodes like `expr` and `parameter` where the actual type
+/// is determined at runtime based on configuration (e.g., expression validation or
+/// the selected data_type property).
+fn format_data_type_for_display(dt: &DataType) -> String {
+    match dt {
+        DataType::None => "dynamic".to_string(),
+        DataType::Array(inner) if matches!(**inner, DataType::None) => "[dynamic]".to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// Returns true if a data type can only be provided via wire connection (no literal representation).
 fn is_wire_only_type(data_type: &DataType) -> bool {
     matches!(
@@ -208,7 +221,7 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
 
         // Process parameters (wirable inputs)
         for param in &node_type.parameters {
-            let type_str = param.data_type.to_string();
+            let type_str = format_data_type_for_display(&param.data_type);
             let wire_only = is_wire_only_type(&param.data_type);
 
             // Determine default info from: 1) stored property, 2) parameter metadata, 3) fallback
@@ -251,7 +264,7 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
 
         // Process literal-only properties (not in parameters)
         for (name, value) in &literal_only_props {
-            let type_str = value.inferred_data_type().to_string();
+            let type_str = format_data_type_for_display(&value.inferred_data_type());
             let value_str = value.to_text();
             writeln!(
                 output,
@@ -269,7 +282,42 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
     }
 
     // Output type
-    writeln!(output, "Output: {}", node_type.output_type.to_string()).unwrap();
+    writeln!(output, "Output: {}", format_data_type_for_display(&node_type.output_type)).unwrap();
+
+    // For nodes with dynamic pins (expr, parameter), show the calculated custom node type
+    let custom_node_type = default_data.calculate_custom_node_type(node_type);
+    if let Some(ref custom_type) = custom_node_type {
+        // Check if the custom type differs from the base type
+        let has_dynamic_params = custom_type.parameters != node_type.parameters;
+        let has_dynamic_output = custom_type.output_type != node_type.output_type;
+
+        if has_dynamic_params || has_dynamic_output {
+            writeln!(output).unwrap();
+            writeln!(output, "Dynamic Configuration (default instance):").unwrap();
+
+            if has_dynamic_params && !custom_type.parameters.is_empty() {
+                writeln!(output, "  Dynamic Inputs:").unwrap();
+                for param in &custom_type.parameters {
+                    writeln!(
+                        output,
+                        "    {} : {}  [required]",
+                        param.name,
+                        format_data_type_for_display(&param.data_type)
+                    )
+                    .unwrap();
+                }
+            }
+
+            if has_dynamic_output {
+                writeln!(
+                    output,
+                    "  Dynamic Output: {}",
+                    format_data_type_for_display(&custom_type.output_type)
+                )
+                .unwrap();
+            }
+        }
+    }
 
     output
 }

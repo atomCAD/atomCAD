@@ -1477,6 +1477,67 @@ mod node_type_introspection_tests {
         assert!(result.ends_with("..."));
         assert_eq!(result.len(), 153); // 150 + "..."
     }
+
+    #[test]
+    fn test_describe_expr_shows_dynamic_output() {
+        let registry = create_test_registry();
+        let result = describe_node_type("expr", &registry);
+
+        // The base output type is DataType::None, which should display as "dynamic"
+        // Should show "dynamic" instead of "None" for the base output type
+        assert!(result.contains("Output: dynamic"),
+            "Should show 'Output: dynamic' for expr base output type, got:\n{}", result);
+        // Should NOT show "Output: None"
+        assert!(!result.contains("Output: None"),
+            "Should NOT show 'Output: None', got:\n{}", result);
+    }
+
+    #[test]
+    fn test_describe_expr_shows_dynamic_configuration() {
+        let registry = create_test_registry();
+        let result = describe_node_type("expr", &registry);
+
+        // The default expr instance has a dynamic configuration section
+        // because calculate_custom_node_type returns a different type than the base
+        assert!(result.contains("Dynamic Configuration"),
+            "Should show 'Dynamic Configuration' section for expr, got:\n{}", result);
+        assert!(result.contains("Dynamic Inputs:"),
+            "Should show 'Dynamic Inputs' section for expr, got:\n{}", result);
+        // The default expr has parameter "x" of type Int
+        assert!(result.contains("x : Int"),
+            "Should show dynamic input 'x : Int' for expr, got:\n{}", result);
+        // The default expr has output type Int
+        assert!(result.contains("Dynamic Output: Int"),
+            "Should show 'Dynamic Output: Int' for expr, got:\n{}", result);
+    }
+
+    #[test]
+    fn test_describe_parameter_shows_dynamic() {
+        let registry = create_test_registry();
+        let result = describe_node_type("parameter", &registry);
+
+        // The parameter node has a data_type property of type DataType, which has
+        // inferred_data_type() returning DataType::None (displayed as "dynamic").
+        // This shows that the data_type can be any type, configured by the user.
+        // Note: The default instance has Int for both base and custom type, so no
+        // "Dynamic Configuration" section is shown, but the data_type property
+        // itself shows as "dynamic" type.
+        assert!(result.contains("data_type") && result.contains("dynamic"),
+            "Should show data_type property with dynamic type, got:\n{}", result);
+    }
+
+    #[test]
+    fn test_describe_shows_dynamic_array_type() {
+        let registry = create_test_registry();
+        let result = describe_node_type("expr", &registry);
+
+        // The expr node has a "parameters" property of type [None] which should display as [dynamic]
+        // Check that the parameters property shows [dynamic] not [None]
+        assert!(result.contains("[dynamic]"),
+            "Should show '[dynamic]' for array of dynamic types, got:\n{}", result);
+        assert!(!result.contains("[None]"),
+            "Should NOT show '[None]', should be '[dynamic]' instead, got:\n{}", result);
+    }
 }
 
 // ============================================================================
