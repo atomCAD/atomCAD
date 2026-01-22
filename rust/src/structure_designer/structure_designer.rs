@@ -2099,28 +2099,134 @@ impl StructureDesigner {
     })
   }
 
-  /// Find a node ID by its custom name in the active network.
-  /// Returns the first matching node if multiple have the same name.
+  /// Find a node ID by its name in the active network.
+  ///
+  /// This supports both user-assigned custom names and auto-generated display names
+  /// (like "expr1", "int2") that are shown in the query output. The name resolution
+  /// uses the same algorithm as NetworkSerializer::generate_names() to ensure
+  /// consistency between query output and evaluate input.
   ///
   /// # Arguments
-  /// * `name` - The custom name to search for
+  /// * `name` - The name to search for (custom name or auto-generated display name)
   ///
   /// # Returns
-  /// * `Some(node_id)` if a node with the given custom name exists
+  /// * `Some(node_id)` if a node with the given name exists
   /// * `None` if no node with the given name is found or no network is active
   pub fn find_node_id_by_name(&self, name: &str) -> Option<u64> {
     let network_name = self.active_node_network_name.as_ref()?;
     let network = self.node_type_registry.node_networks.get(network_name)?;
 
-    for (node_id, node) in &network.nodes {
-      if let Some(custom_name) = &node.custom_name {
-        if custom_name == name {
-          return Some(*node_id);
+    // Perform topological sort (same algorithm as NetworkSerializer)
+    let sorted_ids = Self::topological_sort_nodes(network);
+
+    // First pass: collect all valid custom names and track which nodes have them
+    // This mirrors NetworkSerializer::generate_names() algorithm
+    let mut used_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut nodes_with_valid_custom_names: std::collections::HashSet<u64> = std::collections::HashSet::new();
+
+    for &node_id in &sorted_ids {
+      if let Some(node) = network.nodes.get(&node_id) {
+        if let Some(ref custom_name) = node.custom_name {
+          if !used_names.contains(custom_name) {
+            used_names.insert(custom_name.clone());
+            nodes_with_valid_custom_names.insert(node_id);
+          }
+        }
+      }
+    }
+
+    // Second pass: generate names and look for match
+    let mut type_counters: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+
+    for &node_id in &sorted_ids {
+      if let Some(node) = network.nodes.get(&node_id) {
+        let display_name = if nodes_with_valid_custom_names.contains(&node_id) {
+          node.custom_name.clone().unwrap()
+        } else {
+          // Generate a unique name avoiding collisions with custom names
+          let node_type = &node.node_type_name;
+          loop {
+            let counter = type_counters.entry(node_type.clone()).or_insert(0);
+            *counter += 1;
+            let generated_name = format!("{}{}", node_type, counter);
+
+            if !used_names.contains(&generated_name) {
+              used_names.insert(generated_name.clone());
+              break generated_name;
+            }
+          }
+        };
+
+        if display_name == name {
+          return Some(node_id);
         }
       }
     }
 
     None
+  }
+
+  /// Perform topological sort of nodes in a network.
+  /// Returns nodes in dependency order (dependencies before dependents).
+  /// Uses the same algorithm as NetworkSerializer::topological_sort().
+  fn topological_sort_nodes(network: &crate::structure_designer::node_network::NodeNetwork) -> Vec<u64> {
+    let mut result = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    let mut temp_mark = std::collections::HashSet::new();
+
+    // Get all node IDs sorted for deterministic output
+    let mut node_ids: Vec<u64> = network.nodes.keys().copied().collect();
+    node_ids.sort();
+
+    // Visit all nodes in sorted order
+    for node_id in node_ids {
+      if !visited.contains(&node_id) {
+        Self::dfs_visit_for_sort(network, node_id, &mut result, &mut visited, &mut temp_mark);
+      }
+    }
+
+    result
+  }
+
+  /// DFS visit helper for topological sort.
+  fn dfs_visit_for_sort(
+    network: &crate::structure_designer::node_network::NodeNetwork,
+    node_id: u64,
+    result: &mut Vec<u64>,
+    visited: &mut std::collections::HashSet<u64>,
+    temp_mark: &mut std::collections::HashSet<u64>,
+  ) {
+    // Cycle detection (skip if cycle found)
+    if temp_mark.contains(&node_id) {
+      return;
+    }
+
+    // Already fully visited
+    if visited.contains(&node_id) {
+      return;
+    }
+
+    // Mark temporarily (for cycle detection)
+    temp_mark.insert(node_id);
+
+    // Visit dependencies first (nodes that this node depends on)
+    if let Some(node) = network.nodes.get(&node_id) {
+      for argument in &node.arguments {
+        // Sort dependency node IDs for deterministic output
+        let mut dep_ids: Vec<u64> = argument.argument_output_pins.keys().copied().collect();
+        dep_ids.sort();
+        for source_node_id in dep_ids {
+          Self::dfs_visit_for_sort(network, source_node_id, result, visited, temp_mark);
+        }
+      }
+    }
+
+    // Remove temp mark, add permanent mark
+    temp_mark.remove(&node_id);
+    visited.insert(node_id);
+
+    // Add to result (post-order)
+    result.push(node_id);
   }
 
   /// Exports all visible atomic structures as a single file (XYZ or MOL format)
