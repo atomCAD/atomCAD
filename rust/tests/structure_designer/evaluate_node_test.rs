@@ -282,15 +282,16 @@ fn test_evaluate_result_includes_custom_name() {
 }
 
 #[test]
-fn test_evaluate_result_no_custom_name() {
+fn test_evaluate_result_auto_generated_name() {
     let mut designer = setup_designer_with_network("test_network");
 
     let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
-    // Don't set custom name
+    // Node gets auto-generated name "float1"
 
     let result = designer.evaluate_node_for_cli(float_id, false).unwrap();
 
-    assert!(result.custom_name.is_none());
+    // Nodes now always have persistent names assigned at creation time
+    assert_eq!(result.custom_name, Some("float1".to_string()));
 }
 
 // ===== CONNECTED NETWORK EVALUATION TESTS =====
