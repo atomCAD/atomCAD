@@ -875,7 +875,7 @@ mod network_editor_tests {
         // input_type and output_type are node data properties, not input parameters
         let result = edit_network(&mut network, &registry, r#"
             range1 = range { start: 0, step: 1, count: 5 }
-            expr1 = expr { expression: "x * 2", parameters: [{ name: "x", type: Int }] }
+            expr1 = expr { expression: "x * 2", parameters: [{ name: "x", data_type: Int }] }
             map1 = map { input_type: Int, output_type: Int, xs: range1, f: @expr1 }
         "#, true);
 
@@ -939,6 +939,71 @@ mod network_editor_tests {
 
         assert!(result.success, "Edit should succeed: {:?}", result.errors);
         assert_eq!(network.nodes.len(), 2);
+    }
+
+    #[test]
+    fn test_edit_array_literal_properties() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            poly = polygon { vertices: [(0, 0), (10, 0), (5, 10)], visible: true }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Verify the vertices were actually set by serializing and checking output
+        let serialized = serialize_network(&network, &registry);
+        assert!(serialized.contains("(0, 0)"), "Should contain first vertex, got:\n{}", serialized);
+        assert!(serialized.contains("(10, 0)"), "Should contain second vertex, got:\n{}", serialized);
+        assert!(serialized.contains("(5, 10)"), "Should contain third vertex, got:\n{}", serialized);
+    }
+
+    #[test]
+    fn test_edit_expr_with_parameters_array() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            result = expr {
+                expression: "x + y",
+                parameters: [
+                    { name: "x", data_type: Int },
+                    { name: "y", data_type: Int }
+                ]
+            }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Verify the expression and parameters were set
+        let serialized = serialize_network(&network, &registry);
+        assert!(serialized.contains("expression:"), "Should contain expression property, got:\n{}", serialized);
+        assert!(serialized.contains("x + y"), "Should contain expression value, got:\n{}", serialized);
+    }
+
+    #[test]
+    fn test_edit_mixed_array_with_refs_falls_through() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Arrays with node refs should still work via connection pass
+        let result = edit_network(&mut network, &registry, r#"
+            sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+            sphere2 = sphere { center: (10, 0, 0), radius: 3 }
+            union1 = union { shapes: [sphere1, sphere2], visible: true }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Verify the union was connected properly
+        let union_node = network.nodes.values()
+            .find(|n| n.node_type_name == "union")
+            .expect("Should find union node");
+
+        // shapes is parameter index 0
+        assert_eq!(union_node.arguments[0].argument_output_pins.len(), 2,
+            "Union should have two inputs connected");
     }
 }
 

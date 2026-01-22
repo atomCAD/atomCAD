@@ -454,6 +454,22 @@ impl<'a> NetworkEditor<'a> {
         Ok(())
     }
 
+    /// Recursively converts a PropertyValue to a TextValue if all nested values are literals.
+    /// Returns None if any nested value is a NodeRef or FunctionRef (these are handled in the connection pass).
+    fn property_value_to_text_value(pv: &PropertyValue) -> Option<TextValue> {
+        match pv {
+            PropertyValue::Literal(tv) => Some(tv.clone()),
+            PropertyValue::Array(items) => {
+                let converted: Option<Vec<TextValue>> = items
+                    .iter()
+                    .map(Self::property_value_to_text_value)
+                    .collect();
+                converted.map(TextValue::Array)
+            }
+            PropertyValue::NodeRef(_) | PropertyValue::FunctionRef(_) => None,
+        }
+    }
+
     /// Apply literal properties to a node's data.
     fn apply_literal_properties(
         &mut self,
@@ -488,17 +504,18 @@ impl<'a> NetworkEditor<'a> {
                 continue;
             }
 
-            // Warn about unknown properties (only for literal values we're actually applying)
-            if let PropertyValue::Literal(text_value) = prop_value {
+            // Try to convert PropertyValue to TextValue (handles literals and arrays of literals)
+            if let Some(text_value) = Self::property_value_to_text_value(prop_value) {
+                // Warn about unknown properties (only for values we're actually applying)
                 if !valid_params.is_empty() && !valid_params.contains(prop_name) {
                     self.result.add_warning(format!(
                         "Unknown property '{}' on node type '{}'",
                         prop_name, node_type_name
                     ));
                 }
-                literal_props.insert(prop_name.clone(), text_value.clone());
+                literal_props.insert(prop_name.clone(), text_value);
             }
-            // Skip NodeRef, FunctionRef, Array - handled in connection pass
+            // Skip NodeRef, FunctionRef, and arrays containing them - handled in connection pass
         }
 
         // Apply to node data
