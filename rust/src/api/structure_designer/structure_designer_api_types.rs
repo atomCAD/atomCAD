@@ -389,6 +389,27 @@ pub struct BatchCliConfig {
   pub batch_file: String,
 }
 
+/// Result of evaluating a single node via CLI
+#[derive(Debug, Clone)]
+pub struct APINodeEvaluationResult {
+  /// The node ID that was evaluated
+  pub node_id: u64,
+  /// The node type name (e.g., "cuboid", "atom_fill")
+  pub node_type_name: String,
+  /// The custom name if assigned, otherwise None
+  pub custom_name: Option<String>,
+  /// The output data type name (e.g., "Geometry", "Atomic", "Float")
+  pub output_type: String,
+  /// Brief display string (from to_display_string())
+  pub display_string: String,
+  /// Detailed string (from to_detailed_string()), only populated if verbose=true
+  pub detailed_string: Option<String>,
+  /// Whether the evaluation succeeded (no errors in this node's chain)
+  pub success: bool,
+  /// Error message if the node itself produced an error
+  pub error_message: Option<String>,
+}
+
 
 
 
