@@ -199,14 +199,24 @@ The text format infers types from literal values:
 Use the CLI to discover types for any node:
 
 ```bash
-# See input pin types and output type
+# See inputs and output type
 atomcad-cli describe sphere
 
 # Output:
-# Parameters (input pins):
+# Node: sphere
+# Category: Geometry3D
+# Description: Creates a sphere...
+#
+# Inputs:
 #   center    : IVec3     [default: (0, 0, 0)]
 #   radius    : Int       [default: 1]
-#   unit_cell : UnitCell  [no default - wire only]
+#   unit_cell : UnitCell  [default: cubic diamond, wire-only]
 #
 # Output: Geometry
 ```
+
+**Input markers in describe output:**
+- `[required]` — Must be provided (wired or as literal)
+- `[default: value]` — Has a default; optional to specify
+- `[wire-only]` — Can only be connected via wire (no text literal for this type)
+- `[literal-only]` — Can only be set as a text literal (no input pin)

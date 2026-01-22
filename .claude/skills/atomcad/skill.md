@@ -71,11 +71,11 @@ Array pins (marked with dot) accept multiple wires; values are concatenated.
 ### Text Format Syntax
 
 ```
-# Create nodes: id = type { property: value, ... }
+# Create nodes: id = type { parameter: value, ... }
 sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
 cuboid1 = cuboid { min_corner: (-5, -5, -5), extent: (10, 10, 10) }
 
-# Wire nodes by referencing IDs in properties
+# Wire nodes by referencing node IDs as input values
 union1 = union { shapes: [sphere1, cuboid1], visible: true }
 
 # Set network output node
@@ -85,7 +85,7 @@ output union1
 delete sphere1
 ```
 
-**Property values:**
+**Parameter values:**
 - Integers: `42`, `-10`
 - Floats: `3.14`, `1.5e-3`
 - Booleans: `true`, `false`

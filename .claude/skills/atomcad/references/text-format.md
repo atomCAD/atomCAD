@@ -9,7 +9,7 @@ The text format enables programmatic creation and modification of node networks.
 ## Node Creation Syntax
 
 ```
-<node_id> = <node_type> { <properties> }
+<node_id> = <node_type> { <inputs> }
 ```
 
 ### Node ID Rules
@@ -22,19 +22,19 @@ The text format enables programmatic creation and modification of node networks.
 ### Examples
 
 ```
-# Minimal (no properties)
+# Minimal (no inputs specified, uses defaults)
 sphere1 = sphere {}
 
-# With properties
+# With inputs
 sphere1 = sphere { center: (0, 0, 0), radius: 5 }
 
 # With visibility
 sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
 ```
 
-## Property Syntax
+## Input Syntax
 
-Properties are key-value pairs inside braces, separated by commas.
+Inputs are specified as key-value pairs inside braces, separated by commas.
 
 ```
 { key1: value1, key2: value2, ... }
@@ -53,20 +53,20 @@ Properties are key-value pairs inside braces, separated by commas.
 | Array | Bracketed list | `[1, 2, 3]`, `[node1, node2]` |
 | Node reference | Node ID | `sphere1`, `my_shape` |
 
-### Special Properties
+### Special Inputs
 
 - `visible: true/false` - Controls whether the node's output is rendered in the viewport
 
 ## Wire Connections
 
-Wires are created implicitly by referencing node IDs in property values:
+Wires are created implicitly by referencing node IDs as input values:
 
 ```
 # Create two shapes
 sphere1 = sphere { radius: 5 }
 cuboid1 = cuboid { extent: (10, 10, 10) }
 
-# Wire them to a union node (shapes property references the nodes)
+# Wire them to a union node (shapes input references the nodes)
 result = union { shapes: [sphere1, cuboid1] }
 ```
 
@@ -139,7 +139,7 @@ result = union { shapes: [sphere1, cuboid1], visible: true }
 
 ### Edit Mode (default)
 - Adds new nodes to the existing network
-- Updates properties of existing nodes (matched by ID)
+- Updates inputs of existing nodes (matched by ID)
 - Does not remove nodes not mentioned
 
 ```bash
@@ -157,7 +157,7 @@ atomcad-cli edit --replace --code="sphere1 = sphere { radius: 10 }"
 ## Node ID Reuse
 
 When editing (not replacing), if a node ID already exists:
-- The existing node is updated with the new properties
+- The existing node is updated with the new input values
 - The node type cannot be changed (create a new node instead)
 - Existing wires to/from the node are preserved unless overwritten
 
@@ -168,8 +168,8 @@ Common errors and their causes:
 | Error | Cause |
 |-------|-------|
 | Unknown node type | Node type doesn't exist (check spelling, use `atomcad-cli nodes`) |
-| Unknown property | Property name not valid for this node type (use `atomcad-cli describe`) |
-| Type mismatch | Value type doesn't match expected property type |
+| Unknown input | Input name not valid for this node type (use `atomcad-cli describe`) |
+| Type mismatch | Value type doesn't match expected input type |
 | Unknown node reference | Referenced node ID doesn't exist |
 | Duplicate node ID | In replace mode, same ID used twice |
 | Cycle detected | Wire connections form a cycle (not allowed in DAG) |
