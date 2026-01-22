@@ -42,3 +42,6 @@ mod node_layout_test;
 
 #[path = "structure_designer/evaluate_node_test.rs"]
 mod evaluate_node_test;
+
+#[path = "structure_designer/serialization_test.rs"]
+mod serialization_test;

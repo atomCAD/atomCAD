@@ -250,29 +250,46 @@ pub fn node_network_to_serializable(network: &mut NodeNetwork, built_in_node_typ
 }
 
 /// Creates a NodeNetwork from a SerializableNodeNetwork
-/// 
+///
 /// # Returns
 /// * `io::Result<NodeNetwork>` - The deserialized network or an error if deserialization fails
 pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, built_in_node_types: &std::collections::HashMap<String, crate::structure_designer::node_type::NodeType>, design_dir: Option<&str>) -> io::Result<NodeNetwork> {
     // Create the node type from the serializable node type
     let node_type = serializable_to_node_type(&serializable.node_type)?;
-    
+
     // Create a new network
     let mut network = NodeNetwork::new(node_type);
-    
+
     // Set next_node_id and return_node_id
     network.next_node_id = serializable.next_node_id;
     network.return_node_id = serializable.return_node_id;
-    
+
     // Convert displayed_node_ids from Vec of tuples to HashMap without taking ownership
     network.displayed_node_ids = serializable.displayed_node_ids.iter().map(|(id, display_type)| (*id, *display_type)).collect();
-    
+
     // Process each node
     for serializable_node in &serializable.nodes {
         let node = serializable_to_node(serializable_node, built_in_node_types, design_dir)?;
         network.nodes.insert(node.id, node);
     }
-    
+
+    // Migration: assign names to nodes without custom_name (old files)
+    // This ensures that files created before persistent node names was implemented
+    // will get names assigned when loaded.
+    // Sort by node ID for deterministic name assignment order.
+    let mut nodes_needing_names: Vec<(u64, String)> = network.nodes.iter()
+        .filter(|(_, node)| node.custom_name.is_none())
+        .map(|(id, node)| (*id, node.node_type_name.clone()))
+        .collect();
+    nodes_needing_names.sort_by_key(|(id, _)| *id);
+
+    for (node_id, node_type_name) in nodes_needing_names {
+        let name = network.generate_unique_display_name(&node_type_name);
+        if let Some(node) = network.nodes.get_mut(&node_id) {
+            node.custom_name = Some(name);
+        }
+    }
+
     Ok(network)
 }
 
