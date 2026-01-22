@@ -12,7 +12,7 @@
 //! output union1
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 
@@ -20,10 +20,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 pub struct NetworkSerializer<'a> {
     network: &'a NodeNetwork,
     registry: &'a NodeTypeRegistry,
-    /// Maps node IDs to generated names
-    node_names: HashMap<u64, String>,
-    /// Counter per node type for name generation
-    type_counters: HashMap<String, u32>,
 }
 
 impl<'a> NetworkSerializer<'a> {
@@ -32,19 +28,17 @@ impl<'a> NetworkSerializer<'a> {
         Self {
             network,
             registry,
-            node_names: HashMap::new(),
-            type_counters: HashMap::new(),
         }
     }
 
     /// Serialize the network to text format.
-    pub fn serialize(&mut self) -> String {
+    pub fn serialize(&self) -> String {
         // Handle empty network
         if self.network.nodes.is_empty() {
             return "# Empty network\n".to_string();
         }
 
-        // Step 1: Topological sort
+        // Step 1: Topological sort (for output ordering)
         let sorted_ids = match self.topological_sort() {
             Ok(ids) => ids,
             Err(cycle_error) => {
@@ -52,10 +46,7 @@ impl<'a> NetworkSerializer<'a> {
             }
         };
 
-        // Step 2: Generate names for all nodes
-        self.generate_names(&sorted_ids);
-
-        // Step 3: Serialize each node
+        // Step 2: Serialize each node (names come from node.custom_name)
         let mut output = String::new();
         for node_id in &sorted_ids {
             let node_line = self.serialize_node(*node_id);
@@ -63,9 +54,9 @@ impl<'a> NetworkSerializer<'a> {
             output.push('\n');
         }
 
-        // Step 4: Output statement
+        // Step 3: Output statement
         if let Some(return_node_id) = self.network.return_node_id {
-            if let Some(return_name) = self.node_names.get(&return_node_id) {
+            if let Some(return_name) = self.get_node_name(return_node_id) {
                 output.push_str(&format!("output {}\n", return_name));
             }
         }
@@ -139,61 +130,13 @@ impl<'a> NetworkSerializer<'a> {
         Ok(())
     }
 
-    /// Generate names for all nodes in the given order.
+    /// Get the name for a node from its custom_name field.
     ///
-    /// Prefers user-specified custom_name if available. Handles name collisions
-    /// by falling back to auto-generated names when necessary.
-    fn generate_names(&mut self, sorted_ids: &[u64]) {
-        // First pass: collect all valid custom names and reserve them
-        let mut used_names: HashSet<String> = HashSet::new();
-        let mut nodes_with_valid_custom_names: HashSet<u64> = HashSet::new();
-
-        for &node_id in sorted_ids {
-            if let Some(node) = self.network.nodes.get(&node_id) {
-                if let Some(ref custom_name) = node.custom_name {
-                    // Check if this custom name is already used by another node
-                    if !used_names.contains(custom_name) {
-                        used_names.insert(custom_name.clone());
-                        nodes_with_valid_custom_names.insert(node_id);
-                    }
-                    // If custom_name is already used, this node will get an auto-generated name
-                }
-            }
-        }
-
-        // Second pass: assign names to all nodes
-        for &node_id in sorted_ids {
-            if let Some(node) = self.network.nodes.get(&node_id) {
-                let name = if nodes_with_valid_custom_names.contains(&node_id) {
-                    // Use the custom name (we know it's valid and unique)
-                    node.custom_name.clone().unwrap()
-                } else {
-                    // Generate a unique name avoiding collisions with custom names
-                    let node_type = &node.node_type_name;
-                    loop {
-                        let counter = self.type_counters
-                            .entry(node_type.clone())
-                            .or_insert(0);
-                        *counter += 1;
-                        let generated_name = format!("{}{}", node_type, counter);
-
-                        // Check if this generated name conflicts with a reserved custom name
-                        if !used_names.contains(&generated_name) {
-                            used_names.insert(generated_name.clone());
-                            break generated_name;
-                        }
-                        // If it conflicts, loop and try the next counter
-                    }
-                };
-
-                self.node_names.insert(node_id, name);
-            }
-        }
-    }
-
-    /// Get the generated name for a node.
+    /// Since all nodes now have persistent names assigned at creation,
+    /// this is a simple lookup of the custom_name field.
     fn get_node_name(&self, node_id: u64) -> Option<&str> {
-        self.node_names.get(&node_id).map(|s| s.as_str())
+        self.network.nodes.get(&node_id)
+            .and_then(|node| node.custom_name.as_deref())
     }
 
     /// Serialize a single node to text format.
@@ -311,6 +254,6 @@ impl<'a> NetworkSerializer<'a> {
 /// // output sphere1
 /// ```
 pub fn serialize_network(network: &NodeNetwork, registry: &NodeTypeRegistry) -> String {
-    let mut serializer = NetworkSerializer::new(network, registry);
+    let serializer = NetworkSerializer::new(network, registry);
     serializer.serialize()
 }
