@@ -39,3 +39,6 @@ mod text_format_snapshot_test;
 
 #[path = "structure_designer/node_layout_test.rs"]
 mod node_layout_test;
+
+#[path = "structure_designer/evaluate_node_test.rs"]
+mod evaluate_node_test;

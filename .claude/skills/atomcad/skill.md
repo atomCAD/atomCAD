@@ -147,6 +147,46 @@ atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10) }\nhole 
 
 **Note:** Avoid using literal newlines inside `--code="..."` as shell quoting behavior varies across platforms (bash, PowerShell, etc.).
 
+### Evaluate Node Results
+
+Evaluate a specific node and return its computed result (useful for verification and debugging).
+
+```bash
+# Evaluate a node by ID or custom name
+atomcad-cli evaluate <node_id>
+atomcad-cli evaluate sphere1
+
+# Verbose output (detailed info for complex types)
+atomcad-cli evaluate <node_id> --verbose
+atomcad-cli evaluate atoms1 --verbose
+```
+
+**Output formats:**
+- **Primitives** (Float, Int, Bool, String): Display the value directly (e.g., `42`, `3.140000`, `true`)
+- **Vectors** (Vec3, IVec3, etc.): Display coordinates (e.g., `(5.000000, 10.000000, 3.000000)`)
+- **Geometry/Geometry2D**: Display `Geometry` or `Geometry2D` (brief), CSG tree details (verbose)
+- **Atomic**: Display `Atomic` (brief), or atom/bond counts and sample atoms (verbose)
+
+**Examples:**
+```bash
+$ atomcad-cli evaluate sphere1
+Geometry
+
+$ atomcad-cli evaluate count1
+42
+
+$ atomcad-cli evaluate pos1
+(5.000000, 10.000000, 3.000000)
+
+$ atomcad-cli evaluate atoms1 --verbose
+Atomic:
+atoms: 968
+bonds: 1372
+first 10 atoms:
+  [1] Z=6 pos=(-6.242250, -6.242250, -4.458750) bonds=4
+  ...
+```
+
 ### Node Discovery
 
 ```bash
@@ -173,7 +213,7 @@ Use `describe` to discover input pins, types, defaults, and behavior for any nod
 atomcad-cli              # Enter interactive mode
 ```
 
-Commands: `query`/`q`, `edit`, `replace`/`r`, `nodes`, `describe <node>`, `help`/`?`, `quit`/`exit`
+Commands: `query`/`q`, `edit`, `replace`/`r`, `evaluate <node>`/`e`, `nodes`, `describe <node>`, `help`/`?`, `quit`/`exit`
 
 ## Common Patterns
 

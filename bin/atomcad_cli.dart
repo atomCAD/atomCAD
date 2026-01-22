@@ -27,10 +27,15 @@ Future<void> main(List<String> args) async {
 
   final describeParser = ArgParser();
 
+  final evaluateParser = ArgParser()
+    ..addFlag('verbose',
+        abbr: 'v', defaultsTo: false, help: 'Show detailed output');
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('nodes', nodesParser);
   parser.addCommand('describe', describeParser);
+  parser.addCommand('evaluate', evaluateParser);
 
   ArgResults results;
   try {
@@ -95,6 +100,17 @@ Future<void> main(List<String> args) async {
       final nodeName = command.rest.first;
       await _runDescribe(serverUrl, nodeName);
       break;
+    case 'evaluate':
+      // Get the node identifier from positional arguments (rest)
+      if (command.rest.isEmpty) {
+        stderr.writeln('Error: Missing node identifier');
+        stderr.writeln('Usage: atomcad-cli evaluate <node_id> [--verbose]');
+        exit(1);
+      }
+      final nodeId = command.rest.first;
+      final verbose = command['verbose'] as bool;
+      await _runEvaluate(serverUrl, nodeId, verbose);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -124,6 +140,10 @@ void _printUsage() {
       .writeln('  atomcad-cli nodes --verbose           Include descriptions');
   stdout.writeln(
       '  atomcad-cli describe <node-name>      Describe a specific node type');
+  stdout.writeln(
+      '  atomcad-cli evaluate <node_id>        Evaluate a node and show result');
+  stdout.writeln(
+      '  atomcad-cli evaluate <node_id> -v     Evaluate with detailed output');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -146,6 +166,8 @@ void _printReplHelp() {
   stdout.writeln('  nodes <category>    List nodes in specific category');
   stdout.writeln('  nodes -v            List with descriptions (verbose)');
   stdout.writeln('  describe, d <node>  Describe a specific node type');
+  stdout.writeln('  evaluate, e <node>  Evaluate a node and show result');
+  stdout.writeln('  evaluate -v <node>  Evaluate with detailed output');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -251,6 +273,32 @@ Future<void> _runDescribe(String serverUrl, String nodeName) async {
         .replace(queryParameters: {'node': nodeName});
 
     final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.write(response.body);
+      // Ensure trailing newline
+      if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
+        stdout.writeln();
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runEvaluate(
+    String serverUrl, String nodeIdentifier, bool verbose) async {
+  try {
+    final params = <String, String>{'node': nodeIdentifier};
+    if (verbose) params['verbose'] = 'true';
+
+    final uri = Uri.parse('$serverUrl/evaluate')
+        .replace(queryParameters: params);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 200) {
       stdout.write(response.body);
@@ -416,6 +464,22 @@ Future<void> _runRepl(String serverUrl) async {
           stdout.writeln('Usage: describe <node-name>');
         } else {
           await _runDescribe(serverUrl, parts[1]);
+        }
+        break;
+
+      case 'evaluate':
+      case 'e':
+        // evaluate <node_id> [-v]
+        // Support: evaluate <node>, evaluate -v <node>, evaluate <node> -v
+        final hasVerbose = parts.contains('-v') || parts.contains('--verbose');
+        final nodeParts = parts
+            .where((p) =>
+                p != 'evaluate' && p != 'e' && p != '-v' && p != '--verbose')
+            .toList();
+        if (nodeParts.isEmpty) {
+          stdout.writeln('Usage: evaluate <node_id> [-v]');
+        } else {
+          await _runEvaluate(serverUrl, nodeParts.first, hasVerbose);
         }
         break;
 
