@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:args/args.dart';
 import 'package:http/http.dart' as http;
@@ -41,12 +42,20 @@ Future<void> main(List<String> args) async {
         negatable: false, help: 'Use perspective projection')
     ..addOption('ortho-height', help: 'Orthographic half-height (zoom level)');
 
+  final screenshotParser = ArgParser()
+    ..addOption('output',
+        abbr: 'o', help: 'Output PNG file path', mandatory: true)
+    ..addOption('width', abbr: 'w', help: 'Image width in pixels')
+    ..addOption('height', abbr: 'h', help: 'Image height in pixels')
+    ..addOption('background', help: 'Background color as R,G,B (0-255)');
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('nodes', nodesParser);
   parser.addCommand('describe', describeParser);
   parser.addCommand('evaluate', evaluateParser);
   parser.addCommand('camera', cameraParser);
+  parser.addCommand('screenshot', screenshotParser);
 
   ArgResults results;
   try {
@@ -125,6 +134,9 @@ Future<void> main(List<String> args) async {
     case 'camera':
       await _runCamera(serverUrl, command);
       break;
+    case 'screenshot':
+      await _runScreenshot(serverUrl, command);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -168,6 +180,11 @@ void _printUsage() {
       '  atomcad-cli camera --perspective      Switch to perspective projection');
   stdout.writeln(
       '  atomcad-cli camera --ortho-height N   Set orthographic zoom level');
+  stdout.writeln(
+      '  atomcad-cli screenshot -o <path.png>  Capture viewport to PNG file');
+  stdout.writeln('  atomcad-cli screenshot -o <path.png> -w 800 -h 600');
+  stdout.writeln(
+      '                                        Capture with specific resolution');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -197,6 +214,10 @@ void _printReplHelp() {
   stdout.writeln('                      Set camera position');
   stdout.writeln('  camera --ortho      Switch to orthographic projection');
   stdout.writeln('  camera --persp      Switch to perspective projection');
+  stdout.writeln('  screenshot, s <path.png>');
+  stdout.writeln('                      Capture viewport to PNG');
+  stdout.writeln('  screenshot <path> -w 800 -h 600');
+  stdout.writeln('                      Capture with specific resolution');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -247,6 +268,17 @@ Future<bool> _checkHealth(String serverUrl) async {
   } catch (e) {
     return false;
   }
+}
+
+/// Resolves a potentially relative path to an absolute path.
+/// This ensures paths are resolved relative to the CLI's working directory,
+/// not atomCAD's working directory.
+String _resolveToAbsolutePath(String path) {
+  final file = File(path);
+  if (file.isAbsolute) {
+    return path;
+  }
+  return File(path).absolute.path;
 }
 
 Future<void> _runQuery(String serverUrl) async {
@@ -364,6 +396,50 @@ Future<void> _runCamera(String serverUrl, ArgResults args) async {
 
     if (response.statusCode == 200) {
       stdout.writeln(response.body);
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runScreenshot(String serverUrl, ArgResults args) async {
+  try {
+    // Resolve relative paths to absolute paths based on CLI's working directory
+    final outputPath = _resolveToAbsolutePath(args['output']);
+    final queryParams = <String, String>{
+      'output': outputPath,
+    };
+
+    if (args['width'] != null) queryParams['width'] = args['width'];
+    if (args['height'] != null) queryParams['height'] = args['height'];
+    if (args['background'] != null) {
+      queryParams['background'] = args['background'];
+    }
+
+    final uri = Uri.parse('$serverUrl/screenshot')
+        .replace(queryParameters: queryParams);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      // Parse the JSON response to show a nice message
+      try {
+        final result = jsonDecode(response.body);
+        if (result['success'] == true) {
+          stdout.writeln(
+              'Screenshot saved: ${result['output_path']} (${result['width']}x${result['height']})');
+        } else {
+          stderr.writeln('Error: ${result['error']}');
+          exit(1);
+        }
+      } catch (_) {
+        stdout.writeln(response.body);
+      }
     } else {
       stderr.writeln('Error: Server returned ${response.statusCode}');
       stderr.writeln(response.body);
@@ -548,6 +624,11 @@ Future<void> _runRepl(String serverUrl) async {
         await _runCameraRepl(serverUrl, parts);
         break;
 
+      case 'screenshot':
+      case 's':
+        await _runScreenshotRepl(serverUrl, parts);
+        break;
+
       case 'help':
       case '?':
         _printReplHelp();
@@ -595,6 +676,72 @@ Future<void> _runCameraRepl(String serverUrl, List<String> parts) async {
 
     if (response.statusCode == 200) {
       stdout.writeln(response.body);
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runScreenshotRepl(String serverUrl, List<String> parts) async {
+  // Parse REPL-style arguments: screenshot <path> [-w width] [-h height] [--background r,g,b]
+  String? outputPath;
+  String? width;
+  String? height;
+  String? background;
+
+  for (var i = 0; i < parts.length; i++) {
+    final part = parts[i];
+    if (part == 'screenshot' || part == 's') continue;
+
+    if ((part == '-w' || part == '--width') && i + 1 < parts.length) {
+      width = parts[++i];
+    } else if ((part == '-h' || part == '--height') && i + 1 < parts.length) {
+      height = parts[++i];
+    } else if ((part == '-b' || part == '--background') &&
+        i + 1 < parts.length) {
+      background = parts[++i];
+    } else if ((part == '-o' || part == '--output') && i + 1 < parts.length) {
+      outputPath = parts[++i];
+    } else if (!part.startsWith('-') && outputPath == null) {
+      // First non-flag argument is the output path
+      outputPath = part;
+    }
+  }
+
+  if (outputPath == null || outputPath.isEmpty) {
+    stdout.writeln('Usage: screenshot <output.png> [-w width] [-h height]');
+    return;
+  }
+
+  // Resolve relative paths to absolute paths
+  final absolutePath = _resolveToAbsolutePath(outputPath);
+
+  try {
+    final queryParams = <String, String>{'output': absolutePath};
+    if (width != null) queryParams['width'] = width;
+    if (height != null) queryParams['height'] = height;
+    if (background != null) queryParams['background'] = background;
+
+    final uri = Uri.parse('$serverUrl/screenshot')
+        .replace(queryParameters: queryParams);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      try {
+        final result = jsonDecode(response.body);
+        if (result['success'] == true) {
+          stdout.writeln(
+              'Screenshot saved: ${result['output_path']} (${result['width']}x${result['height']})');
+        } else {
+          stderr.writeln('Error: ${result['error']}');
+        }
+      } catch (_) {
+        stdout.writeln(response.body);
+      }
     } else {
       stderr.writeln('Error: Server returned ${response.statusCode}');
       stderr.writeln(response.body);

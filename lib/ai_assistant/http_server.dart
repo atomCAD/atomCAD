@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'dart:typed_data';
+
 import 'constants.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dart'
     as ai_api;
@@ -9,6 +11,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as sd_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
+import 'package:flutter_cad/src/rust/api/screenshot_api.dart' as screenshot_api;
 
 /// HTTP server for AI assistant integration.
 ///
@@ -24,6 +27,7 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 /// - `GET /describe?node=<name>` - Get detailed information about a specific node type
 /// - `GET /evaluate?node=<id>&verbose=true` - Evaluate a node and return its result
 /// - `GET /camera?eye=x,y,z&target=x,y,z&up=x,y,z&orthographic=true` - Control camera
+/// - `GET /screenshot?output=<path>&width=<w>&height=<h>` - Capture viewport to PNG
 ///
 /// ## Example Usage
 ///
@@ -60,6 +64,12 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 ///
 /// # Evaluate a node (verbose output with detailed info)
 /// curl "http://localhost:19847/evaluate?node=sphere1&verbose=true"
+///
+/// # Capture screenshot
+/// curl "http://localhost:19847/screenshot?output=viewport.png"
+///
+/// # Capture screenshot with custom resolution
+/// curl "http://localhost:19847/screenshot?output=hires.png&width=1920&height=1080"
 /// ```
 class AiAssistantServer {
   HttpServer? _server;
@@ -144,6 +154,9 @@ class AiAssistantServer {
           break;
         case '/camera':
           await _handleCamera(request);
+          break;
+        case '/screenshot':
+          await _handleScreenshot(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -355,6 +368,72 @@ class AiAssistantServer {
       request.response.write(jsonEncode({
         'success': false,
         'error': 'Camera not available',
+      }));
+    }
+  }
+
+  Future<void> _handleScreenshot(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final params = request.uri.queryParameters;
+
+    // Required: output path
+    final outputPath = params['output'];
+    if (outputPath == null || outputPath.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: output',
+      }));
+      return;
+    }
+
+    // Optional: width and height
+    final width =
+        params['width'] != null ? int.tryParse(params['width']!) : null;
+    final height =
+        params['height'] != null ? int.tryParse(params['height']!) : null;
+
+    // Optional: background color as R,G,B
+    Uint8List? bgColor;
+    if (params['background'] != null) {
+      try {
+        final parts = params['background']!
+            .split(',')
+            .map((s) => int.parse(s.trim()))
+            .toList();
+        if (parts.length == 3) {
+          bgColor = Uint8List.fromList(parts);
+        }
+      } catch (_) {
+        // Ignore parse errors, use default background
+      }
+    }
+
+    // Call Rust API
+    final result = screenshot_api.captureScreenshot(
+      outputPath: outputPath,
+      width: width,
+      height: height,
+      backgroundRgb: bgColor,
+    );
+
+    request.response.headers.contentType = ContentType.json;
+    if (result.success) {
+      request.response.write(jsonEncode({
+        'success': true,
+        'output_path': result.outputPath,
+        'width': result.width,
+        'height': result.height,
+      }));
+    } else {
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': result.errorMessage,
       }));
     }
   }
