@@ -8,6 +8,7 @@
 
 import 'api/common_api.dart';
 import 'api/common_api_types.dart';
+import 'api/screenshot_api.dart';
 import 'api/structure_designer/ai_assistant_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
@@ -654,6 +655,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
   (int, String, String) dco_decode_record_i_32_string_string(dynamic raw);
 
   @protected
@@ -664,6 +668,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
+
+  @protected
+  ScreenshotResult dco_decode_screenshot_result(dynamic raw);
 
   @protected
   SelectModifier dco_decode_select_modifier(dynamic raw);
@@ -1418,6 +1425,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
   (int, String, String) sse_decode_record_i_32_string_string(
       SseDeserializer deserializer);
 
@@ -1432,6 +1442,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
       SseDeserializer deserializer);
+
+  @protected
+  ScreenshotResult sse_decode_screenshot_result(SseDeserializer deserializer);
 
   @protected
   SelectModifier sse_decode_select_modifier(SseDeserializer deserializer);
@@ -2212,6 +2225,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINodeCategoryView>? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+      Uint8List? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_record_i_32_string_string(
       (int, String, String) self, SseSerializer serializer);
 
@@ -2226,6 +2243,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_64_node_view(
       (BigInt, NodeView) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_screenshot_result(
+      ScreenshotResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_select_modifier(
