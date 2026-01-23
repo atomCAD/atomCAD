@@ -337,7 +337,11 @@ EOF
 ## Important Notes
 
 - **facet_shell:** Currently only works correctly with cubic unit cells
-- **lattice_move/lattice_rot:** Discrete lattice transformations (integers only). For continuous transforms on atomic structures, use `atom_trans` instead
+- **lattice_move/lattice_rot:** Discrete lattice transformations (integers only). For continuous transforms on atomic structures, use `atom_trans` instead:
+  ```bash
+  atoms = atom_fill { shape: geom, visible: false }
+  moved = atom_trans { molecule: atoms, translation: (10.0, 0.0, 0.0), visible: true }
+  ```
 - **half_space:** Creates infinite half-spaces; useful for clipping geometry via intersection
 - **Lone atoms:** `atom_fill` automatically removes atoms with zero bonds after the geometry cut
 
