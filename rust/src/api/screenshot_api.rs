@@ -49,6 +49,9 @@ pub fn capture_screenshot(
     }
 }
 
+/// Maximum resolution allowed for screenshots (4096x4096)
+const MAX_RESOLUTION: u32 = 4096;
+
 fn capture_screenshot_impl(
     cad_instance: &mut CADInstance,
     output_path: &str,
@@ -64,6 +67,32 @@ fn capture_screenshot_impl(
     // Determine target size
     let target_width = width.unwrap_or(orig_width);
     let target_height = height.unwrap_or(orig_height);
+
+    // Validate resolution limits
+    if target_width == 0 || target_width > MAX_RESOLUTION {
+        return ScreenshotResult {
+            success: false,
+            output_path: output_path.to_string(),
+            width: target_width,
+            height: target_height,
+            error_message: Some(format!(
+                "Width must be between 1 and {}, got {}",
+                MAX_RESOLUTION, target_width
+            )),
+        };
+    }
+    if target_height == 0 || target_height > MAX_RESOLUTION {
+        return ScreenshotResult {
+            success: false,
+            output_path: output_path.to_string(),
+            width: target_width,
+            height: target_height,
+            error_message: Some(format!(
+                "Height must be between 1 and {}, got {}",
+                MAX_RESOLUTION, target_height
+            )),
+        };
+    }
 
     // Set viewport size if different
     let size_changed = target_width != orig_width || target_height != orig_height;

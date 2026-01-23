@@ -182,6 +182,8 @@ void _printUsage() {
       '  atomcad-cli camera --ortho-height N   Set orthographic zoom level');
   stdout.writeln(
       '  atomcad-cli screenshot -o <path.png>  Capture viewport to PNG file');
+  stdout.writeln(
+      '  atomcad-cli screenshot -o auto        Auto-generate timestamped filename');
   stdout.writeln('  atomcad-cli screenshot -o <path.png> -w 800 -h 600');
   stdout.writeln(
       '                                        Capture with specific resolution');
@@ -216,6 +218,7 @@ void _printReplHelp() {
   stdout.writeln('  camera --persp      Switch to perspective projection');
   stdout.writeln('  screenshot, s <path.png>');
   stdout.writeln('                      Capture viewport to PNG');
+  stdout.writeln('  screenshot auto     Auto-generate timestamped filename');
   stdout.writeln('  screenshot <path> -w 800 -h 600');
   stdout.writeln('                      Capture with specific resolution');
   stdout.writeln('  help, ?             Show this help');
@@ -279,6 +282,27 @@ String _resolveToAbsolutePath(String path) {
     return path;
   }
   return File(path).absolute.path;
+}
+
+/// Generates an auto-timestamped screenshot filename.
+/// Format: screenshot_YYYY-MM-DD_HHMMSS.png
+String _generateAutoScreenshotPath() {
+  final now = DateTime.now();
+  final timestamp = '${now.year.toString().padLeft(4, '0')}-'
+      '${now.month.toString().padLeft(2, '0')}-'
+      '${now.day.toString().padLeft(2, '0')}_'
+      '${now.hour.toString().padLeft(2, '0')}'
+      '${now.minute.toString().padLeft(2, '0')}'
+      '${now.second.toString().padLeft(2, '0')}';
+  return _resolveToAbsolutePath('screenshot_$timestamp.png');
+}
+
+/// Resolves the output path, handling 'auto' for auto-generated filenames.
+String _resolveScreenshotOutput(String output) {
+  if (output.toLowerCase() == 'auto') {
+    return _generateAutoScreenshotPath();
+  }
+  return _resolveToAbsolutePath(output);
 }
 
 Future<void> _runQuery(String serverUrl) async {
@@ -409,8 +433,8 @@ Future<void> _runCamera(String serverUrl, ArgResults args) async {
 
 Future<void> _runScreenshot(String serverUrl, ArgResults args) async {
   try {
-    // Resolve relative paths to absolute paths based on CLI's working directory
-    final outputPath = _resolveToAbsolutePath(args['output']);
+    // Resolve paths, handling 'auto' for auto-generated filenames
+    final outputPath = _resolveScreenshotOutput(args['output']);
     final queryParams = <String, String>{
       'output': outputPath,
     };
@@ -712,12 +736,13 @@ Future<void> _runScreenshotRepl(String serverUrl, List<String> parts) async {
   }
 
   if (outputPath == null || outputPath.isEmpty) {
-    stdout.writeln('Usage: screenshot <output.png> [-w width] [-h height]');
+    stdout.writeln(
+        'Usage: screenshot <output.png> [-w width] [-h height] (use "auto" for timestamped filename)');
     return;
   }
 
-  // Resolve relative paths to absolute paths
-  final absolutePath = _resolveToAbsolutePath(outputPath);
+  // Resolve paths, handling 'auto' for auto-generated filenames
+  final absolutePath = _resolveScreenshotOutput(outputPath);
 
   try {
     final queryParams = <String, String>{'output': absolutePath};

@@ -397,6 +397,25 @@ class AiAssistantServer {
     final height =
         params['height'] != null ? int.tryParse(params['height']!) : null;
 
+    // Validate resolution limits (max 4096x4096)
+    const maxResolution = 4096;
+    if (width != null && (width < 1 || width > maxResolution)) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Width must be between 1 and $maxResolution, got $width',
+      }));
+      return;
+    }
+    if (height != null && (height < 1 || height > maxResolution)) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Height must be between 1 and $maxResolution, got $height',
+      }));
+      return;
+    }
+
     // Optional: background color as R,G,B
     Uint8List? bgColor;
     if (params['background'] != null) {

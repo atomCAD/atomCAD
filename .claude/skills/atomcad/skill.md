@@ -213,13 +213,120 @@ atomcad-cli describe atom_fill
 
 Use `describe` to discover input pins, types, defaults, and behavior for any node.
 
+### Camera Control
+
+Control the viewport camera position and projection mode.
+
+```bash
+# Get current camera state (returns JSON)
+atomcad-cli camera
+
+# Set camera position and orientation
+atomcad-cli camera --eye x,y,z --target x,y,z --up x,y,z
+
+# Switch projection mode
+atomcad-cli camera --orthographic    # Orthographic projection (no perspective)
+atomcad-cli camera --perspective     # Perspective projection (default)
+
+# Set orthographic zoom level (half-height of viewport)
+atomcad-cli camera --ortho-height 50
+
+# Combined example: position camera and switch to orthographic
+atomcad-cli camera --eye 30,30,30 --target 0,0,0 --up 0,0,1 --orthographic
+```
+
+**Important:** Camera coordinates are in **angstroms**, while geometry node coordinates are in **lattice units**. For cubic diamond (default), 1 lattice unit ≈ 3.567 Å. A 20×20×20 lattice unit object is ~71 Å across, so position the camera 150-250 Å away to see the full object.
+
+**Parameters:**
+- `--eye x,y,z` — Camera position in angstroms (world coordinates)
+- `--target x,y,z` — Point the camera looks at (angstroms)
+- `--up x,y,z` — Up vector for camera orientation (typically `0,0,1`)
+- `--orthographic` — Enable orthographic projection (parallel rays, no perspective distortion)
+- `--perspective` — Enable perspective projection (default, realistic depth)
+- `--ortho-height N` — Half-height of orthographic viewport (controls zoom level)
+
+**Response:** Returns JSON with current camera state:
+```json
+{
+  "success": true,
+  "camera": {
+    "eye": [30.0, 30.0, 30.0],
+    "target": [0.0, 0.0, 0.0],
+    "up": [0.0, 0.0, 1.0],
+    "orthographic": true,
+    "ortho_half_height": 25.0
+  }
+}
+```
+
+### Screenshot Capture
+
+Capture the current viewport to a PNG image file.
+
+```bash
+# Capture with default resolution (current viewport size)
+atomcad-cli screenshot -o output.png
+
+# Auto-generate timestamped filename (screenshot_YYYY-MM-DD_HHMMSS.png)
+atomcad-cli screenshot -o auto
+
+# Capture with specific resolution
+atomcad-cli screenshot -o output.png -w 1920 -h 1080
+
+# Capture with custom background color (R,G,B values 0-255)
+atomcad-cli screenshot -o output.png --background 255,255,255
+```
+
+**Parameters:**
+- `-o, --output <path>` — Output PNG file path (required). Use `auto` to generate a timestamped filename
+- `-w, --width N` — Image width in pixels (optional, uses viewport size if not specified)
+- `-h, --height N` — Image height in pixels (optional, uses viewport size if not specified)
+- `--background R,G,B` — Background color as RGB values 0-255 (default: 30,30,30 dark gray)
+
+**Response:** Returns confirmation with file path and actual dimensions:
+```
+Screenshot saved: /path/to/output.png (1920x1080)
+```
+
+**Note:** Relative paths are resolved relative to the CLI's working directory, not atomCAD's.
+
+**Always verify screenshots:** After capturing, read the PNG file to check the result. If the view is too close (only atoms visible, no overall shape) or too far (object too small), adjust the camera and retake. Common issue: using small camera coordinates puts you inside the atomic structure.
+
+### Typical AI Agent Workflow
+
+Combine geometry creation, camera control, and screenshots for visual verification:
+
+```bash
+# 1. Create geometry
+atomcad-cli edit --code="s = sphere { radius: 10, visible: true }"
+
+# 2. Position camera for good viewing angle
+atomcad-cli camera --eye 30,30,30 --target 0,0,0 --up 0,0,1 --orthographic
+
+# 3. Capture screenshot for visual verification
+atomcad-cli screenshot -o sphere_check.png
+
+# 4. Verify result by viewing the image
+# (The AI agent can read the PNG file to see the rendered geometry)
+```
+
 ### REPL Mode
 
 ```bash
 atomcad-cli              # Enter interactive mode
 ```
 
-Commands: `query`/`q`, `edit`, `replace`/`r`, `evaluate <node>`/`e`, `nodes`, `describe <node>`, `help`/`?`, `quit`/`exit`
+Commands:
+- `query`/`q` — Show current node network
+- `edit` — Enter edit mode (incremental)
+- `replace`/`r` — Enter edit mode (replace entire network)
+- `evaluate`/`e <node>` — Evaluate a node
+- `nodes` — List available node types
+- `describe`/`d <node>` — Describe a node type
+- `camera`/`c` — Get/set camera state
+- `screenshot`/`s <path>` — Capture viewport to PNG
+- `help`/`?` — Show help
+- `quit`/`exit` — Exit REPL
 
 ## Common Patterns
 
