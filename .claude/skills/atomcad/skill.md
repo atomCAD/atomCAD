@@ -300,15 +300,31 @@ Extra parameters beyond the expected function signature are bound at wire-time (
 
 ### Mathematical expressions with expr
 
-The `expr` node evaluates mathematical expressions with dynamic input pins:
+The `expr` node evaluates mathematical expressions with dynamic input pins.
+
+**Important:** The `parameters` property defines which input pins the expression uses. Each parameter needs a `name` and `data_type`. The default expr node only has one parameter named `x` of type `Int`.
 
 ```bash
+# Simple case: using the default 'x' parameter
 atomcad-cli edit <<'EOF'
-x = int { value: 5 }
-y = int { value: 3 }
-result = expr { expression: "x * 2 + y", x: x, y: y }
+val = int { value: 5 }
+doubled = expr { expression: "x * 2", x: val }
+EOF
+
+# Multiple inputs: must define parameters explicitly
+atomcad-cli edit <<'EOF'
+a = int { value: 5 }
+b = int { value: 3 }
+sum = expr {
+  expression: "x + y",
+  parameters: [{ name: "x", data_type: Int }, { name: "y", data_type: Int }],
+  x: a,
+  y: b
+}
 EOF
 ```
+
+**Available data types for parameters:** `Int`, `Float`, `Bool`, `Vec2`, `Vec3`, `IVec2`, `IVec3`
 
 **Supported in expr:**
 - Arithmetic: `+`, `-`, `*`, `/`, `%`, `^` (exponent)

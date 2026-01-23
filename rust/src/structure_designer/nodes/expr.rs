@@ -236,8 +236,31 @@ pub fn expr_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result<
 pub fn get_node_type() -> NodeType {
   NodeType {
       name: "expr".to_string(),
-      description: r#"You can type in a mathematical expression and it will be evaluated on its output pin.
-The input pins can be dynamically added on the node editor panel, you can select the name and data type of the input parameters.
+      description: r#"Evaluates a mathematical expression with configurable input parameters.
+
+## Defining Input Parameters
+
+The `parameters` property defines which variables can be used in the expression. Each parameter becomes an input pin on the node.
+
+**Text format syntax:**
+```
+# Default: single parameter 'x' of type Int
+result = expr { expression: "x * 2", x: some_int_node }
+
+# Multiple parameters: must specify the parameters array
+result = expr {
+  expression: "a + b",
+  parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }],
+  a: node1,
+  b: node2
+}
+```
+
+**Available data types:** Int, Float, Bool, Vec2, Vec3, IVec2, IVec3
+
+In the node editor UI, input pins can be added dynamically via the node's property panel.
+
+## Expression Language Features
 
 The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
 
