@@ -94,6 +94,12 @@ delete sphere1
 - Arrays: `[a, b, c]`
 - Node references: use the node's ID
 
+**Note on vectors:** The tuple syntax `(x, y, z)` is for literal values in node parameters (e.g., `sphere { center: (5, 5, 5) }`). The vector constructor nodes (`vec2`, `vec3`, `ivec2`, `ivec3`) use separate component inputs instead:
+```
+vec3 { x: 1.5, y: 2.5, z: 3.5 }
+ivec3 { x: 1, y: 2, z: 3 }
+```
+
 ## CLI Commands
 
 ### Global Options
