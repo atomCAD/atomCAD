@@ -49,6 +49,16 @@ Future<void> main(List<String> args) async {
     ..addOption('height', abbr: 'h', help: 'Image height in pixels')
     ..addOption('background', help: 'Background color as R,G,B (0-255)');
 
+  final displayParser = ArgParser()
+    ..addOption('atomic-viz',
+        help: 'Atomic visualization mode (ball-and-stick, space-filling)')
+    ..addOption('geometry-viz',
+        help:
+            'Geometry visualization mode (surface-splatting, solid, wireframe)')
+    ..addOption('node-policy',
+        help: 'Node display policy (manual, prefer-selected, prefer-frontier)')
+    ..addOption('background', help: 'Background color as R,G,B (0-255)');
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('nodes', nodesParser);
@@ -56,6 +66,7 @@ Future<void> main(List<String> args) async {
   parser.addCommand('evaluate', evaluateParser);
   parser.addCommand('camera', cameraParser);
   parser.addCommand('screenshot', screenshotParser);
+  parser.addCommand('display', displayParser);
 
   ArgResults results;
   try {
@@ -137,6 +148,9 @@ Future<void> main(List<String> args) async {
     case 'screenshot':
       await _runScreenshot(serverUrl, command);
       break;
+    case 'display':
+      await _runDisplay(serverUrl, command);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -187,6 +201,20 @@ void _printUsage() {
   stdout.writeln('  atomcad-cli screenshot -o <path.png> -w 800 -h 600');
   stdout.writeln(
       '                                        Capture with specific resolution');
+  stdout.writeln(
+      '  atomcad-cli display                   Get current display settings');
+  stdout.writeln('  atomcad-cli display --atomic-viz <mode>');
+  stdout.writeln(
+      '                                        Set atomic visualization');
+  stdout.writeln('  atomcad-cli display --geometry-viz <mode>');
+  stdout.writeln(
+      '                                        Set geometry visualization');
+  stdout.writeln('  atomcad-cli display --node-policy <policy>');
+  stdout.writeln(
+      '                                        Set node display policy');
+  stdout.writeln('  atomcad-cli display --background R,G,B');
+  stdout
+      .writeln('                                        Set background color');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -221,6 +249,15 @@ void _printReplHelp() {
   stdout.writeln('  screenshot auto     Auto-generate timestamped filename');
   stdout.writeln('  screenshot <path> -w 800 -h 600');
   stdout.writeln('                      Capture with specific resolution');
+  stdout.writeln('  display             Get/set display preferences');
+  stdout.writeln('  display --atomic-viz <mode>');
+  stdout.writeln('                      Set atomic visualization');
+  stdout.writeln('  display --geometry-viz <mode>');
+  stdout.writeln('                      Set geometry visualization');
+  stdout.writeln('  display --node-policy <policy>');
+  stdout.writeln('                      Set node display policy');
+  stdout.writeln('  display --background R,G,B');
+  stdout.writeln('                      Set background color');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -475,6 +512,41 @@ Future<void> _runScreenshot(String serverUrl, ArgResults args) async {
   }
 }
 
+Future<void> _runDisplay(String serverUrl, ArgResults args) async {
+  try {
+    final queryParams = <String, String>{};
+
+    if (args['atomic-viz'] != null) {
+      queryParams['atomic-viz'] = args['atomic-viz'];
+    }
+    if (args['geometry-viz'] != null) {
+      queryParams['geometry-viz'] = args['geometry-viz'];
+    }
+    if (args['node-policy'] != null) {
+      queryParams['node-policy'] = args['node-policy'];
+    }
+    if (args['background'] != null) {
+      queryParams['background'] = args['background'];
+    }
+
+    final uri = Uri.parse('$serverUrl/display')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.writeln(response.body);
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
 Future<String?> _runEdit(String serverUrl, String code, bool replace) async {
   try {
     final uri = replace
@@ -653,6 +725,10 @@ Future<void> _runRepl(String serverUrl) async {
         await _runScreenshotRepl(serverUrl, parts);
         break;
 
+      case 'display':
+        await _runDisplayRepl(serverUrl, parts);
+        break;
+
       case 'help':
       case '?':
         _printReplHelp();
@@ -767,6 +843,42 @@ Future<void> _runScreenshotRepl(String serverUrl, List<String> parts) async {
       } catch (_) {
         stdout.writeln(response.body);
       }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runDisplayRepl(String serverUrl, List<String> parts) async {
+  try {
+    final queryParams = <String, String>{};
+
+    // Parse REPL-style arguments
+    for (var i = 0; i < parts.length; i++) {
+      final part = parts[i];
+      if (part == 'display') continue;
+
+      if (part == '--atomic-viz' && i + 1 < parts.length) {
+        queryParams['atomic-viz'] = parts[++i];
+      } else if (part == '--geometry-viz' && i + 1 < parts.length) {
+        queryParams['geometry-viz'] = parts[++i];
+      } else if (part == '--node-policy' && i + 1 < parts.length) {
+        queryParams['node-policy'] = parts[++i];
+      } else if (part == '--background' && i + 1 < parts.length) {
+        queryParams['background'] = parts[++i];
+      }
+    }
+
+    final uri = Uri.parse('$serverUrl/display')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.writeln(response.body);
     } else {
       stderr.writeln('Error: Server returned ${response.statusCode}');
       stderr.writeln(response.body);
