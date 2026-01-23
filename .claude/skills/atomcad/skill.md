@@ -259,6 +259,55 @@ atomcad-cli camera --eye 30,30,30 --target 0,0,0 --up 0,0,1 --orthographic
 }
 ```
 
+### Display Settings
+
+Control viewport display preferences including atomic visualization and geometry rendering.
+
+```bash
+# Get current display settings (returns JSON)
+atomcad-cli display
+
+# Set atomic visualization mode
+atomcad-cli display --atomic-viz ball-and-stick    # Small atoms with bond sticks
+atomcad-cli display --atomic-viz space-filling     # Large van der Waals spheres
+
+# Set geometry visualization mode
+atomcad-cli display --geometry-viz surface-splatting  # Implicit SDF rendering
+atomcad-cli display --geometry-viz solid              # Solid mesh (default)
+atomcad-cli display --geometry-viz wireframe          # Wireframe mesh
+
+# Set node display policy
+atomcad-cli display --node-policy manual           # User controls visibility
+atomcad-cli display --node-policy prefer-selected  # Show selected node (default)
+atomcad-cli display --node-policy prefer-frontier  # Show output nodes
+
+# Set background color
+atomcad-cli display --background 30,30,30          # Dark gray (default)
+atomcad-cli display --background 255,255,255       # White
+
+# Combine multiple settings
+atomcad-cli display --atomic-viz space-filling --geometry-viz wireframe
+```
+
+**Parameters:**
+- `--atomic-viz <mode>` — Atomic visualization: `ball-and-stick` (default) or `space-filling`
+- `--geometry-viz <mode>` — Geometry visualization: `solid` (default), `wireframe`, or `surface-splatting`
+- `--node-policy <policy>` — Node display: `prefer-selected` (default), `manual`, or `prefer-frontier`
+- `--background R,G,B` — Background color as RGB values 0-255 (default: 30,30,30)
+
+**Response:** Returns JSON with current display state:
+```json
+{
+  "success": true,
+  "display": {
+    "atomic_visualization": "ball-and-stick",
+    "geometry_visualization": "solid",
+    "node_display_policy": "prefer-selected",
+    "background_color": [30, 30, 30]
+  }
+}
+```
+
 ### Screenshot Capture
 
 Capture the current viewport to a PNG image file.
@@ -290,11 +339,15 @@ Screenshot saved: /path/to/output.png (1920x1080)
 
 **Note:** Relative paths are resolved relative to the CLI's working directory, not atomCAD's.
 
-**Always verify screenshots:** After capturing, read the PNG file to check the result. If the view is too close (only atoms visible, no overall shape) or too far (object too small), adjust the camera and retake. Common issue: using small camera coordinates puts you inside the atomic structure.
+**Always verify screenshots:** After capturing, read the PNG file to check the result. If the view is too close (only atoms visible, no overall shape) or too far (object too small), adjust the camera and retake. Common issue: using small camera coordinates puts you inside the atomic structure. If the entire screenshot appears green, you are too close to the objects (geometry is rendered in green).
+
+**Recommended visualization styles for attractive screenshots:**
+1. **Ball-and-stick with visible geometry:** Use `--atomic-viz ball-and-stick` and make the geometry node feeding into `atom_fill` visible (`visible: true`). This shows atoms running along the surface of the green geometry shape—a visually striking combination.
+2. **Space-filling only:** Use `--atomic-viz space-filling` and hide geometry nodes (`visible: false`). The large van der Waals spheres will mostly occlude any geometry anyway, so keeping geometry hidden produces cleaner results.
 
 ### Typical AI Agent Workflow
 
-Combine geometry creation, camera control, and screenshots for visual verification:
+Combine geometry creation, camera control, display settings, and screenshots for visual verification:
 
 ```bash
 # 1. Create geometry
@@ -303,10 +356,13 @@ atomcad-cli edit --code="s = sphere { radius: 10, visible: true }"
 # 2. Position camera for good viewing angle
 atomcad-cli camera --eye 30,30,30 --target 0,0,0 --up 0,0,1 --orthographic
 
-# 3. Capture screenshot for visual verification
+# 3. Adjust display settings for clear visualization
+atomcad-cli display --atomic-viz space-filling --background 255,255,255
+
+# 4. Capture screenshot for visual verification
 atomcad-cli screenshot -o sphere_check.png
 
-# 4. Verify result by viewing the image
+# 5. Verify result by viewing the image
 # (The AI agent can read the PNG file to see the rendered geometry)
 ```
 
@@ -324,6 +380,7 @@ Commands:
 - `nodes` — List available node types
 - `describe`/`d <node>` — Describe a node type
 - `camera`/`c` — Get/set camera state
+- `display` — Get/set display preferences
 - `screenshot`/`s <path>` — Capture viewport to PNG
 - `help`/`?` — Show help
 - `quit`/`exit` — Exit REPL
