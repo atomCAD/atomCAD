@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
@@ -161,6 +162,11 @@ class _MyAppState extends State<MyApp> {
       structureDesignerModel.refreshFromKernel();
     };
 
+    // Connect AI assistant server to request re-render (for camera changes)
+    _aiServer?.onRenderingNeeded = () {
+      SchedulerBinding.instance.scheduleFrame();
+    };
+
     // Listen to model changes to update window title
     structureDesignerModel.addListener(_updateWindowTitle);
     _updateWindowTitle(); // Set initial title
@@ -228,7 +234,8 @@ class _MyAppState extends State<MyApp> {
         builder: (context, child) {
           if (forceTextScaleFactor) {
             return MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(1.0)),
               child: child!,
             );
           }

@@ -31,11 +31,22 @@ Future<void> main(List<String> args) async {
     ..addFlag('verbose',
         abbr: 'v', defaultsTo: false, help: 'Show detailed output');
 
+  final cameraParser = ArgParser()
+    ..addOption('eye', help: 'Camera position as x,y,z')
+    ..addOption('target', help: 'Look-at point as x,y,z')
+    ..addOption('up', help: 'Up vector as x,y,z')
+    ..addFlag('orthographic',
+        negatable: false, help: 'Use orthographic projection')
+    ..addFlag('perspective',
+        negatable: false, help: 'Use perspective projection')
+    ..addOption('ortho-height', help: 'Orthographic half-height (zoom level)');
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('nodes', nodesParser);
   parser.addCommand('describe', describeParser);
   parser.addCommand('evaluate', evaluateParser);
+  parser.addCommand('camera', cameraParser);
 
   ArgResults results;
   try {
@@ -111,6 +122,9 @@ Future<void> main(List<String> args) async {
       final verbose = command['verbose'] as bool;
       await _runEvaluate(serverUrl, nodeId, verbose);
       break;
+    case 'camera':
+      await _runCamera(serverUrl, command);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -144,6 +158,16 @@ void _printUsage() {
       '  atomcad-cli evaluate <node_id>        Evaluate a node and show result');
   stdout.writeln(
       '  atomcad-cli evaluate <node_id> -v     Evaluate with detailed output');
+  stdout.writeln(
+      '  atomcad-cli camera                    Get current camera state');
+  stdout.writeln('  atomcad-cli camera --eye x,y,z --target x,y,z --up x,y,z');
+  stdout.writeln('                                        Set camera position');
+  stdout.writeln(
+      '  atomcad-cli camera --orthographic     Switch to orthographic projection');
+  stdout.writeln(
+      '  atomcad-cli camera --perspective      Switch to perspective projection');
+  stdout.writeln(
+      '  atomcad-cli camera --ortho-height N   Set orthographic zoom level');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -159,8 +183,8 @@ void _printReplHelp() {
   stdout.writeln('');
   stdout.writeln('  query, q            Show current node network');
   stdout.writeln('  edit                Enter edit mode (incremental)');
-  stdout
-      .writeln('  edit --replace      Enter edit mode (replace entire network)');
+  stdout.writeln(
+      '  edit --replace      Enter edit mode (replace entire network)');
   stdout.writeln("  replace, r          Same as 'edit --replace'");
   stdout.writeln('  nodes               List all available node types');
   stdout.writeln('  nodes <category>    List nodes in specific category');
@@ -168,6 +192,11 @@ void _printReplHelp() {
   stdout.writeln('  describe, d <node>  Describe a specific node type');
   stdout.writeln('  evaluate, e <node>  Evaluate a node and show result');
   stdout.writeln('  evaluate -v <node>  Evaluate with detailed output');
+  stdout.writeln('  camera, c           Get current camera state');
+  stdout.writeln('  camera --eye x,y,z --target x,y,z --up x,y,z');
+  stdout.writeln('                      Set camera position');
+  stdout.writeln('  camera --ortho      Switch to orthographic projection');
+  stdout.writeln('  camera --persp      Switch to perspective projection');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -295,8 +324,8 @@ Future<void> _runEvaluate(
     final params = <String, String>{'node': nodeIdentifier};
     if (verbose) params['verbose'] = 'true';
 
-    final uri = Uri.parse('$serverUrl/evaluate')
-        .replace(queryParameters: params);
+    final uri =
+        Uri.parse('$serverUrl/evaluate').replace(queryParameters: params);
 
     final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
@@ -312,6 +341,37 @@ Future<void> _runEvaluate(
     }
   } catch (e) {
     stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runCamera(String serverUrl, ArgResults args) async {
+  try {
+    final queryParams = <String, String>{};
+
+    if (args['eye'] != null) queryParams['eye'] = args['eye'];
+    if (args['target'] != null) queryParams['target'] = args['target'];
+    if (args['up'] != null) queryParams['up'] = args['up'];
+    if (args['orthographic'] as bool) queryParams['orthographic'] = 'true';
+    if (args['perspective'] as bool) queryParams['perspective'] = 'true';
+    if (args['ortho-height'] != null) {
+      queryParams['ortho_height'] = args['ortho-height'];
+    }
+
+    final uri = Uri.parse('$serverUrl/camera')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.writeln(response.body);
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
   }
 }
 
@@ -483,6 +543,11 @@ Future<void> _runRepl(String serverUrl) async {
         }
         break;
 
+      case 'camera':
+      case 'c':
+        await _runCameraRepl(serverUrl, parts);
+        break;
+
       case 'help':
       case '?':
         _printReplHelp();
@@ -496,6 +561,46 @@ Future<void> _runRepl(String serverUrl) async {
         stdout.writeln('Unknown command: $cmd');
         stdout.writeln("Type 'help' for available commands.");
     }
+  }
+}
+
+Future<void> _runCameraRepl(String serverUrl, List<String> parts) async {
+  try {
+    final queryParams = <String, String>{};
+
+    // Parse REPL-style arguments
+    for (var i = 0; i < parts.length; i++) {
+      final part = parts[i];
+      if (part == 'camera' || part == 'c') continue;
+
+      if (part == '--eye' && i + 1 < parts.length) {
+        queryParams['eye'] = parts[++i];
+      } else if (part == '--target' && i + 1 < parts.length) {
+        queryParams['target'] = parts[++i];
+      } else if (part == '--up' && i + 1 < parts.length) {
+        queryParams['up'] = parts[++i];
+      } else if (part == '--ortho' || part == '--orthographic') {
+        queryParams['orthographic'] = 'true';
+      } else if (part == '--persp' || part == '--perspective') {
+        queryParams['perspective'] = 'true';
+      } else if (part == '--ortho-height' && i + 1 < parts.length) {
+        queryParams['ortho_height'] = parts[++i];
+      }
+    }
+
+    final uri = Uri.parse('$serverUrl/camera')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.writeln(response.body);
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
   }
 }
 

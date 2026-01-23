@@ -7,6 +7,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/ai_assistant_api.dar
     as ai_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
+import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
+import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 
 /// HTTP server for AI assistant integration.
 ///
@@ -21,6 +23,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 /// - `GET /nodes?category=<cat>&verbose=true` - List all available node types by category
 /// - `GET /describe?node=<name>` - Get detailed information about a specific node type
 /// - `GET /evaluate?node=<id>&verbose=true` - Evaluate a node and return its result
+/// - `GET /camera?eye=x,y,z&target=x,y,z&up=x,y,z&orthographic=true` - Control camera
 ///
 /// ## Example Usage
 ///
@@ -65,6 +68,10 @@ class AiAssistantServer {
   /// Callback to notify the UI when edits have been made.
   /// Set this to trigger a UI refresh after successful edits.
   void Function()? onNetworkEdited;
+
+  /// Callback to request a viewport re-render (without re-evaluating nodes).
+  /// Used for camera changes that only need visual refresh.
+  void Function()? onRenderingNeeded;
 
   AiAssistantServer({this.port = aiAssistantPort});
 
@@ -134,6 +141,9 @@ class AiAssistantServer {
           break;
         case '/evaluate':
           await _handleEvaluate(request);
+          break;
+        case '/camera':
+          await _handleCamera(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -282,5 +292,85 @@ class AiAssistantServer {
         'error': e.toString(),
       }));
     }
+  }
+
+  Future<void> _handleCamera(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final params = request.uri.queryParameters;
+
+    var cameraChanged = false;
+
+    // Parse and apply eye, target, up vectors
+    if (params.containsKey('eye') &&
+        params.containsKey('target') &&
+        params.containsKey('up')) {
+      final eye = _parseVec3(params['eye']!);
+      final target = _parseVec3(params['target']!);
+      final up = _parseVec3(params['up']!);
+      common_api.moveCamera(eye: eye, target: target, up: up);
+      cameraChanged = true;
+    }
+
+    // Handle projection mode
+    if (params.containsKey('orthographic')) {
+      common_api.setOrthographicMode(orthographic: true);
+      cameraChanged = true;
+    } else if (params.containsKey('perspective')) {
+      common_api.setOrthographicMode(orthographic: false);
+      cameraChanged = true;
+    }
+
+    // Handle ortho height
+    if (params.containsKey('ortho_height')) {
+      final height = double.parse(params['ortho_height']!);
+      common_api.setOrthoHalfHeight(halfHeight: height);
+      cameraChanged = true;
+    }
+
+    // Request re-render if camera was changed (no need to re-evaluate nodes)
+    if (cameraChanged) {
+      onRenderingNeeded?.call();
+    }
+
+    // Return current camera state
+    final camera = common_api.getCamera();
+    request.response.headers.contentType = ContentType.json;
+    if (camera != null) {
+      request.response.write(jsonEncode({
+        'success': true,
+        'camera': {
+          'eye': [camera.eye.x, camera.eye.y, camera.eye.z],
+          'target': [camera.target.x, camera.target.y, camera.target.z],
+          'up': [camera.up.x, camera.up.y, camera.up.z],
+          'orthographic': camera.orthographic,
+          'ortho_half_height': camera.orthoHalfHeight,
+        }
+      }));
+    } else {
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': 'Camera not available',
+      }));
+    }
+  }
+
+  APIVec3 _parseVec3(String s) {
+    // Handle both comma-separated and space-separated values
+    // (URL encoding can convert commas to spaces in some cases)
+    final parts = s
+        .split(RegExp(r'[,\s]+'))
+        .where((p) => p.isNotEmpty)
+        .map((p) => double.parse(p.trim()))
+        .toList();
+    if (parts.length != 3) {
+      throw FormatException(
+          'Expected 3 values for vector, got ${parts.length}: "$s"');
+    }
+    return APIVec3(x: parts[0], y: parts[1], z: parts[2]);
   }
 }
