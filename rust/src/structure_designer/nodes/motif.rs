@@ -111,6 +111,9 @@ impl NodeData for MotifData {
         if let Some(v) = props.get("name") {
             self.name = Some(v.as_string().ok_or_else(|| "name must be a string".to_string())?.to_string());
         }
+        // Parse and validate motif after properties are set
+        // (matches what motif_data_loader does after deserializing)
+        let _validation_errors = self.parse_and_validate(0);
         Ok(())
     }
 }

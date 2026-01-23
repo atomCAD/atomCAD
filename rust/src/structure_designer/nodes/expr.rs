@@ -213,6 +213,9 @@ impl NodeData for ExprData {
             }
             self.parameters = new_params;
         }
+        // Parse and validate expression after properties are set
+        // (matches what expr_data_loader does after deserializing)
+        let _validation_errors = self.parse_and_validate(0);
         Ok(())
     }
 }

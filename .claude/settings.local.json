@@ -25,7 +25,10 @@
       "Bash(atomcad-cli:*)",
       "Bash(echo:*)",
       "Bash(.atomcad-cli nodes --category=Geometry3D)",
-      "Bash(pushd:*)"
+      "Bash(pushd:*)",
+      "Bash(./atomcad-cli edit --replace)",
+      "Bash(./atomcad-cli edit:*)",
+      "Bash(./atomcad-cli:*)"
     ]
   }
 }
