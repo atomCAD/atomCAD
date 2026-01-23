@@ -12,6 +12,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/screenshot_api.dart' as screenshot_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart'
+    as prefs_api;
 
 /// HTTP server for AI assistant integration.
 ///
@@ -28,6 +30,8 @@ import 'package:flutter_cad/src/rust/api/screenshot_api.dart' as screenshot_api;
 /// - `GET /evaluate?node=<id>&verbose=true` - Evaluate a node and return its result
 /// - `GET /camera?eye=x,y,z&target=x,y,z&up=x,y,z&orthographic=true` - Control camera
 /// - `GET /screenshot?output=<path>&width=<w>&height=<h>` - Capture viewport to PNG
+/// - `GET /display` - Get current display preferences as JSON
+/// - `GET /display?atomic-viz=...&geometry-viz=...` - Set display preferences
 ///
 /// ## Example Usage
 ///
@@ -157,6 +161,9 @@ class AiAssistantServer {
           break;
         case '/screenshot':
           await _handleScreenshot(request);
+          break;
+        case '/display':
+          await _handleDisplay(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -455,6 +462,189 @@ class AiAssistantServer {
         'error': result.errorMessage,
       }));
     }
+  }
+
+  Future<void> _handleDisplay(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final params = request.uri.queryParameters;
+
+    // Get current preferences
+    var prefs = sd_api.getStructureDesignerPreferences();
+    if (prefs == null) {
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': 'Display preferences not available',
+      }));
+      return;
+    }
+
+    var changed = false;
+
+    // Handle atomic-viz parameter
+    if (params.containsKey('atomic-viz')) {
+      final value = params['atomic-viz'];
+      prefs_api.AtomicStructureVisualization? viz;
+      switch (value) {
+        case 'ball-and-stick':
+          viz = prefs_api.AtomicStructureVisualization.ballAndStick;
+          break;
+        case 'space-filling':
+          viz = prefs_api.AtomicStructureVisualization.spaceFilling;
+          break;
+        default:
+          request.response.statusCode = HttpStatus.badRequest;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(jsonEncode({
+            'error':
+                'Invalid atomic-viz value: $value. Valid: ball-and-stick, space-filling',
+          }));
+          return;
+      }
+      prefs.atomicStructureVisualizationPreferences.visualization = viz;
+      changed = true;
+    }
+
+    // Handle geometry-viz parameter
+    if (params.containsKey('geometry-viz')) {
+      final value = params['geometry-viz'];
+      switch (value) {
+        case 'surface-splatting':
+          prefs.geometryVisualizationPreferences.geometryVisualization =
+              prefs_api.GeometryVisualization.surfaceSplatting;
+          prefs.geometryVisualizationPreferences.wireframeGeometry = false;
+          break;
+        case 'solid':
+          prefs.geometryVisualizationPreferences.geometryVisualization =
+              prefs_api.GeometryVisualization.explicitMesh;
+          prefs.geometryVisualizationPreferences.wireframeGeometry = false;
+          break;
+        case 'wireframe':
+          prefs.geometryVisualizationPreferences.geometryVisualization =
+              prefs_api.GeometryVisualization.explicitMesh;
+          prefs.geometryVisualizationPreferences.wireframeGeometry = true;
+          break;
+        default:
+          request.response.statusCode = HttpStatus.badRequest;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(jsonEncode({
+            'error':
+                'Invalid geometry-viz value: $value. Valid: surface-splatting, solid, wireframe',
+          }));
+          return;
+      }
+      changed = true;
+    }
+
+    // Handle node-policy parameter
+    if (params.containsKey('node-policy')) {
+      final value = params['node-policy'];
+      prefs_api.NodeDisplayPolicy? policy;
+      switch (value) {
+        case 'manual':
+          policy = prefs_api.NodeDisplayPolicy.manual;
+          break;
+        case 'prefer-selected':
+          policy = prefs_api.NodeDisplayPolicy.preferSelected;
+          break;
+        case 'prefer-frontier':
+          policy = prefs_api.NodeDisplayPolicy.preferFrontier;
+          break;
+        default:
+          request.response.statusCode = HttpStatus.badRequest;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write(jsonEncode({
+            'error':
+                'Invalid node-policy value: $value. Valid: manual, prefer-selected, prefer-frontier',
+          }));
+          return;
+      }
+      prefs.nodeDisplayPreferences.displayPolicy = policy;
+      changed = true;
+    }
+
+    // Handle background parameter (R,G,B)
+    if (params.containsKey('background')) {
+      try {
+        final parts = params['background']!
+            .split(',')
+            .map((s) => int.parse(s.trim()))
+            .toList();
+        if (parts.length != 3) {
+          throw FormatException('Expected 3 values');
+        }
+        for (final v in parts) {
+          if (v < 0 || v > 255) {
+            throw FormatException('Values must be 0-255');
+          }
+        }
+        prefs.backgroundPreferences.backgroundColor =
+            APIIVec3(x: parts[0], y: parts[1], z: parts[2]);
+        changed = true;
+      } catch (e) {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'error':
+              'Invalid background value: ${params['background']}. Expected R,G,B (0-255 each)',
+        }));
+        return;
+      }
+    }
+
+    // Apply changes if any
+    if (changed) {
+      sd_api.setStructureDesignerPreferences(preferences: prefs);
+      onNetworkEdited?.call();
+    }
+
+    // Build response with current state
+    final atomicViz =
+        prefs.atomicStructureVisualizationPreferences.visualization ==
+                prefs_api.AtomicStructureVisualization.ballAndStick
+            ? 'ball-and-stick'
+            : 'space-filling';
+
+    String geometryViz;
+    if (prefs.geometryVisualizationPreferences.geometryVisualization ==
+        prefs_api.GeometryVisualization.surfaceSplatting) {
+      geometryViz = 'surface-splatting';
+    } else if (prefs.geometryVisualizationPreferences.wireframeGeometry) {
+      geometryViz = 'wireframe';
+    } else {
+      geometryViz = 'solid';
+    }
+
+    String nodePolicy;
+    switch (prefs.nodeDisplayPreferences.displayPolicy) {
+      case prefs_api.NodeDisplayPolicy.manual:
+        nodePolicy = 'manual';
+        break;
+      case prefs_api.NodeDisplayPolicy.preferSelected:
+        nodePolicy = 'prefer-selected';
+        break;
+      case prefs_api.NodeDisplayPolicy.preferFrontier:
+        nodePolicy = 'prefer-frontier';
+        break;
+    }
+
+    final bgColor = prefs.backgroundPreferences.backgroundColor;
+
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'success': true,
+      'display': {
+        'atomic_visualization': atomicViz,
+        'geometry_visualization': geometryViz,
+        'node_display_policy': nodePolicy,
+        'background_color': [bgColor.x, bgColor.y, bgColor.z],
+      }
+    }));
   }
 
   APIVec3 _parseVec3(String s) {
