@@ -543,6 +543,35 @@ pub fn add_new_node_network() {
   }
 }
 
+/// Add a node network with a specific name.
+/// Returns success/error. Auto-activates the new network.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_node_network_with_name(name: String) -> APIResult {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        // Check if name already exists
+        if instance.structure_designer.node_type_registry
+            .node_networks.contains_key(&name) {
+          return APIResult {
+            success: false,
+            error_message: format!("Network '{}' already exists", name),
+          };
+        }
+        instance.structure_designer.add_node_network(&name);
+        instance.structure_designer.set_active_node_network_name(Some(name));
+        instance.structure_designer.set_dirty(true);
+        refresh_structure_designer_auto(instance);
+        APIResult { success: true, error_message: String::new() }
+      },
+      APIResult {
+        success: false,
+        error_message: "CAD instance not available".to_string(),
+      }
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_active_node_network(node_network_name: &str) {
   unsafe {

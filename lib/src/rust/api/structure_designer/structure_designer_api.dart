@@ -134,6 +134,12 @@ List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
 void addNewNodeNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
 
+/// Add a node network with a specific name.
+/// Returns success/error. Auto-activates the new network.
+APIResult addNodeNetworkWithName({required String name}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNodeNetworkWithName(
+        name: name);
+
 void setActiveNodeNetwork({required String nodeNetworkName}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiSetActiveNodeNetwork(
