@@ -59,6 +59,20 @@ Future<void> main(List<String> args) async {
         help: 'Node display policy (manual, prefer-selected, prefer-frontier)')
     ..addOption('background', help: 'Background color as R,G,B (0-255)');
 
+  // Networks command with subcommands
+  final networksParser = ArgParser();
+  final networksAddParser = ArgParser()
+    ..addOption('name',
+        abbr: 'n', help: 'Network name (auto-generated if not specified)');
+  final networksDeleteParser = ArgParser();
+  final networksActivateParser = ArgParser();
+  final networksRenameParser = ArgParser();
+
+  networksParser.addCommand('add', networksAddParser);
+  networksParser.addCommand('delete', networksDeleteParser);
+  networksParser.addCommand('activate', networksActivateParser);
+  networksParser.addCommand('rename', networksRenameParser);
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('nodes', nodesParser);
@@ -67,6 +81,7 @@ Future<void> main(List<String> args) async {
   parser.addCommand('camera', cameraParser);
   parser.addCommand('screenshot', screenshotParser);
   parser.addCommand('display', displayParser);
+  parser.addCommand('networks', networksParser);
 
   ArgResults results;
   try {
@@ -151,6 +166,9 @@ Future<void> main(List<String> args) async {
     case 'display':
       await _runDisplay(serverUrl, command);
       break;
+    case 'networks':
+      await _runNetworks(serverUrl, command);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -215,6 +233,16 @@ void _printUsage() {
   stdout.writeln('  atomcad-cli display --background R,G,B');
   stdout
       .writeln('                                        Set background color');
+  stdout.writeln(
+      '  atomcad-cli networks                  List all node networks');
+  stdout.writeln(
+      '  atomcad-cli networks add              Create new network (auto-named)');
+  stdout.writeln(
+      '  atomcad-cli networks add --name X     Create new network with name');
+  stdout.writeln('  atomcad-cli networks delete <name>    Delete a network');
+  stdout.writeln('  atomcad-cli networks activate <name>  Switch to a network');
+  stdout.writeln('  atomcad-cli networks rename <old> <new>');
+  stdout.writeln('                                        Rename a network');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -258,6 +286,15 @@ void _printReplHelp() {
   stdout.writeln('                      Set node display policy');
   stdout.writeln('  display --background R,G,B');
   stdout.writeln('                      Set background color');
+  stdout.writeln('  networks            List all node networks');
+  stdout.writeln('  networks add [--name X]');
+  stdout.writeln('                      Create new network');
+  stdout.writeln('  networks delete <name>');
+  stdout.writeln('                      Delete a network');
+  stdout.writeln('  networks activate <name>');
+  stdout.writeln('                      Switch to a network');
+  stdout.writeln('  networks rename <old> <new>');
+  stdout.writeln('                      Rename a network');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -547,6 +584,171 @@ Future<void> _runDisplay(String serverUrl, ArgResults args) async {
   }
 }
 
+Future<void> _runNetworks(String serverUrl, ArgResults args) async {
+  // No subcommand = list networks
+  if (args.command == null) {
+    await _runNetworksList(serverUrl);
+    return;
+  }
+
+  final subcommand = args.command!;
+  switch (subcommand.name) {
+    case 'add':
+      final name = subcommand['name'] as String?;
+      await _runNetworksAdd(serverUrl, name);
+      break;
+    case 'delete':
+      if (subcommand.rest.isEmpty) {
+        stderr.writeln('Error: Missing network name');
+        stderr.writeln('Usage: atomcad-cli networks delete <name>');
+        exit(1);
+      }
+      await _runNetworksDelete(serverUrl, subcommand.rest.first);
+      break;
+    case 'activate':
+      if (subcommand.rest.isEmpty) {
+        stderr.writeln('Error: Missing network name');
+        stderr.writeln('Usage: atomcad-cli networks activate <name>');
+        exit(1);
+      }
+      await _runNetworksActivate(serverUrl, subcommand.rest.first);
+      break;
+    case 'rename':
+      if (subcommand.rest.length < 2) {
+        stderr.writeln('Error: Missing old and/or new name');
+        stderr.writeln(
+            'Usage: atomcad-cli networks rename <old-name> <new-name>');
+        exit(1);
+      }
+      await _runNetworksRename(
+          serverUrl, subcommand.rest[0], subcommand.rest[1]);
+      break;
+    default:
+      stderr.writeln('Unknown networks subcommand: ${subcommand.name}');
+      exit(1);
+  }
+}
+
+Future<void> _runNetworksList(String serverUrl) async {
+  try {
+    final response = await http
+        .get(Uri.parse('$serverUrl/networks'))
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      stdout.write(response.body);
+      if (response.body.isNotEmpty && !response.body.endsWith('\n')) {
+        stdout.writeln();
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runNetworksAdd(String serverUrl, String? name) async {
+  try {
+    final body = name != null ? jsonEncode({'name': name}) : '';
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/add'),
+          headers: {'Content-Type': 'application/json'},
+          body: body,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runNetworksDelete(String serverUrl, String name) async {
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/delete'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'name': name}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runNetworksActivate(String serverUrl, String name) async {
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/activate'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'name': name}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runNetworksRename(
+    String serverUrl, String oldName, String newName) async {
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/rename'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'old': oldName, 'new': newName}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
 Future<String?> _runEdit(String serverUrl, String code, bool replace) async {
   try {
     final uri = replace
@@ -729,6 +931,10 @@ Future<void> _runRepl(String serverUrl) async {
         await _runDisplayRepl(serverUrl, parts);
         break;
 
+      case 'networks':
+        await _runNetworksRepl(serverUrl, parts);
+        break;
+
       case 'help':
       case '?':
         _printReplHelp();
@@ -882,6 +1088,151 @@ Future<void> _runDisplayRepl(String serverUrl, List<String> parts) async {
     } else {
       stderr.writeln('Error: Server returned ${response.statusCode}');
       stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runNetworksRepl(String serverUrl, List<String> parts) async {
+  // Parse: networks, networks add [--name X], networks delete <name>,
+  //        networks activate <name>, networks rename <old> <new>
+  if (parts.length == 1) {
+    // Just "networks" - list all
+    await _runNetworksList(serverUrl);
+    return;
+  }
+
+  final subcommand = parts[1].toLowerCase();
+  switch (subcommand) {
+    case 'add':
+      // networks add [--name X] or networks add [X]
+      String? name;
+      for (var i = 2; i < parts.length; i++) {
+        if ((parts[i] == '--name' || parts[i] == '-n') &&
+            i + 1 < parts.length) {
+          name = parts[++i];
+        } else if (!parts[i].startsWith('-')) {
+          name = parts[i];
+        }
+      }
+      await _runNetworksAddRepl(serverUrl, name);
+      break;
+
+    case 'delete':
+      if (parts.length < 3) {
+        stdout.writeln('Usage: networks delete <name>');
+        return;
+      }
+      await _runNetworksDeleteRepl(serverUrl, parts[2]);
+      break;
+
+    case 'activate':
+      if (parts.length < 3) {
+        stdout.writeln('Usage: networks activate <name>');
+        return;
+      }
+      await _runNetworksActivateRepl(serverUrl, parts[2]);
+      break;
+
+    case 'rename':
+      if (parts.length < 4) {
+        stdout.writeln('Usage: networks rename <old-name> <new-name>');
+        return;
+      }
+      await _runNetworksRenameRepl(serverUrl, parts[2], parts[3]);
+      break;
+
+    default:
+      stdout.writeln('Unknown networks subcommand: $subcommand');
+      stdout.writeln('Usage: networks [add|delete|activate|rename]');
+  }
+}
+
+Future<void> _runNetworksAddRepl(String serverUrl, String? name) async {
+  try {
+    final body = name != null ? jsonEncode({'name': name}) : '';
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/add'),
+          headers: {'Content-Type': 'application/json'},
+          body: body,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runNetworksDeleteRepl(String serverUrl, String name) async {
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/delete'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'name': name}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runNetworksActivateRepl(String serverUrl, String name) async {
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/activate'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'name': name}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runNetworksRenameRepl(
+    String serverUrl, String oldName, String newName) async {
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$serverUrl/networks/rename'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'old': oldName, 'new': newName}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      stdout.writeln(result['message']);
+    } else {
+      final result = jsonDecode(response.body);
+      stderr.writeln('Error: ${result['error']}');
     }
   } catch (e) {
     stderr.writeln('Error: Failed to connect to atomCAD: $e');

@@ -32,6 +32,11 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_p
 /// - `GET /screenshot?output=<path>&width=<w>&height=<h>` - Capture viewport to PNG
 /// - `GET /display` - Get current display preferences as JSON
 /// - `GET /display?atomic-viz=...&geometry-viz=...` - Set display preferences
+/// - `GET /networks` - List all node networks with validation status
+/// - `POST /networks/add` - Create a new node network (optional: name parameter)
+/// - `POST /networks/delete` - Delete a node network (required: name parameter)
+/// - `POST /networks/activate` - Switch to a different node network (required: name parameter)
+/// - `POST /networks/rename` - Rename a node network (required: old, new parameters)
 ///
 /// ## Example Usage
 ///
@@ -164,6 +169,21 @@ class AiAssistantServer {
           break;
         case '/display':
           await _handleDisplay(request);
+          break;
+        case '/networks':
+          await _handleNetworks(request);
+          break;
+        case '/networks/add':
+          await _handleNetworksAdd(request);
+          break;
+        case '/networks/delete':
+          await _handleNetworksDelete(request);
+          break;
+        case '/networks/activate':
+          await _handleNetworksActivate(request);
+          break;
+        case '/networks/rename':
+          await _handleNetworksRename(request);
           break;
         default:
           request.response.statusCode = HttpStatus.notFound;
@@ -660,5 +680,278 @@ class AiAssistantServer {
           'Expected 3 values for vector, got ${parts.length}: "$s"');
     }
     return APIVec3(x: parts[0], y: parts[1], z: parts[2]);
+  }
+
+  Future<void> _handleNetworks(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Get all networks with validation status
+    final networks = sd_api.getNodeNetworksWithValidation();
+    if (networks == null) {
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Networks not available',
+      }));
+      return;
+    }
+
+    // Get active network info
+    final activeInfo = ai_api.aiGetActiveNetworkInfo();
+    final activeName = activeInfo?.$1;
+
+    // Build text output matching the plan format
+    final buffer = StringBuffer();
+    buffer.writeln('Node Networks:');
+
+    var errorCount = 0;
+    for (final network in networks) {
+      final isActive = network.name == activeName;
+      final activeMarker = isActive ? '* ' : '  ';
+      final activeSuffix = isActive ? '  (active)' : '';
+
+      if (network.validationErrors != null) {
+        buffer.writeln(
+            '$activeMarker${network.name}$activeSuffix  [ERROR: ${network.validationErrors}]');
+        errorCount++;
+      } else {
+        buffer.writeln('$activeMarker${network.name}$activeSuffix');
+      }
+    }
+
+    buffer.writeln();
+    if (errorCount > 0) {
+      buffer.writeln('${networks.length} networks ($errorCount with errors)');
+    } else {
+      buffer.writeln('${networks.length} networks');
+    }
+
+    request.response.headers.contentType = ContentType.text;
+    request.response.write(buffer.toString());
+  }
+
+  Future<void> _handleNetworksAdd(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Read request body as JSON (optional)
+    final body = await utf8.decoder.bind(request).join();
+    String? name;
+    if (body.isNotEmpty) {
+      try {
+        final json = jsonDecode(body);
+        name = json['name'] as String?;
+      } catch (_) {
+        // Ignore parse errors, proceed with auto-naming
+      }
+    }
+
+    request.response.headers.contentType = ContentType.json;
+
+    if (name != null && name.isNotEmpty) {
+      // Create with specific name
+      final result = sd_api.addNodeNetworkWithName(name: name);
+      if (result.success) {
+        onNetworkEdited?.call();
+        request.response.write(jsonEncode({
+          'success': true,
+          'message': "Created network '$name' (now active)",
+          'name': name,
+        }));
+      } else {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': result.errorMessage,
+        }));
+      }
+    } else {
+      // Auto-name: generate unique name and use addNodeNetworkWithName
+      // (which auto-activates the new network)
+      final networks = sd_api.getNodeNetworksWithValidation();
+      final existingNames = networks?.map((n) => n.name).toSet() ?? <String>{};
+
+      var autoName = 'UNTITLED';
+      var i = 1;
+      while (existingNames.contains(autoName)) {
+        autoName = 'UNTITLED$i';
+        i++;
+      }
+
+      final result = sd_api.addNodeNetworkWithName(name: autoName);
+      if (result.success) {
+        onNetworkEdited?.call();
+        request.response.write(jsonEncode({
+          'success': true,
+          'message': "Created network '$autoName' (now active)",
+          'name': autoName,
+        }));
+      } else {
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': result.errorMessage,
+        }));
+      }
+    }
+  }
+
+  Future<void> _handleNetworksDelete(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Read request body as JSON
+    final body = await utf8.decoder.bind(request).join();
+    String? name;
+    if (body.isNotEmpty) {
+      try {
+        final json = jsonDecode(body);
+        name = json['name'] as String?;
+      } catch (_) {
+        // Ignore
+      }
+    }
+
+    if (name == null || name.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: name',
+      }));
+      return;
+    }
+
+    final result = sd_api.deleteNodeNetwork(networkName: name);
+    request.response.headers.contentType = ContentType.json;
+
+    if (result.success) {
+      onNetworkEdited?.call();
+      request.response.write(jsonEncode({
+        'success': true,
+        'message': "Deleted network '$name'",
+      }));
+    } else {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': result.errorMessage,
+      }));
+    }
+  }
+
+  Future<void> _handleNetworksActivate(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Read request body as JSON
+    final body = await utf8.decoder.bind(request).join();
+    String? name;
+    if (body.isNotEmpty) {
+      try {
+        final json = jsonDecode(body);
+        name = json['name'] as String?;
+      } catch (_) {
+        // Ignore
+      }
+    }
+
+    if (name == null || name.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: name',
+      }));
+      return;
+    }
+
+    // Check if network exists
+    final networks = sd_api.getNodeNetworksWithValidation();
+    final exists = networks?.any((n) => n.name == name) ?? false;
+
+    if (!exists) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': "Network '$name' not found",
+      }));
+      return;
+    }
+
+    sd_api.setActiveNodeNetwork(nodeNetworkName: name);
+    onNetworkEdited?.call();
+
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'success': true,
+      'message': "Switched to network '$name'",
+    }));
+  }
+
+  Future<void> _handleNetworksRename(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    // Read request body as JSON
+    final body = await utf8.decoder.bind(request).join();
+    String? oldName;
+    String? newName;
+    if (body.isNotEmpty) {
+      try {
+        final json = jsonDecode(body);
+        oldName = json['old'] as String?;
+        newName = json['new'] as String?;
+      } catch (_) {
+        // Ignore
+      }
+    }
+
+    if (oldName == null || oldName.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: old',
+      }));
+      return;
+    }
+
+    if (newName == null || newName.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'error': 'Missing required parameter: new',
+      }));
+      return;
+    }
+
+    final success =
+        sd_api.renameNodeNetwork(oldName: oldName, newName: newName);
+    request.response.headers.contentType = ContentType.json;
+
+    if (success) {
+      onNetworkEdited?.call();
+      request.response.write(jsonEncode({
+        'success': true,
+        'message': "Renamed '$oldName' to '$newName'",
+      }));
+    } else {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(jsonEncode({
+        'success': false,
+        'error':
+            "Failed to rename '$oldName' to '$newName' (name may already exist or network not found)",
+      }));
+    }
   }
 }
