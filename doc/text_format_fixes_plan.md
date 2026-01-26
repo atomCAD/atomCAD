@@ -230,7 +230,6 @@ fn test_no_spurious_warnings_for_literal_only_properties() {
     }
 }
 ```
-
 ### Verification Command
 
 ```bash
