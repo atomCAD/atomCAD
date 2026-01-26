@@ -94,7 +94,7 @@ Faceted shapes using half_space intersections or simple extrusions.
 | **Octahedron** | 8-faced shape from {111} planes | **Done** | Custom node created, 6415 atoms at size=8 |
 | **Truncated Cube** | Cube with chamfered corners | Not started | cuboid + half_spaces cutting corners |
 | **Hexagonal Prism** | 6-sided column | **Done** | Custom node created, ~20k atoms at radius=8, height=12 |
-| **Wedge** | Triangular prism | Not started | polygon(3) + extrude |
+| **Wedge** | Triangular prism | **Done** | half_plane + extrude, parametric size/height |
 | **L-Bracket** | Corner structural element | Not started | union of two cuboids |
 | **Channel/Groove** | U-shaped trough | Not started | diff(cuboid, cuboid) |
 
@@ -131,7 +131,7 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 | Node Name | Purpose | Parameters | Status |
 |-----------|---------|------------|--------|
-| `tetrahedron` | 4-faced solid from {111} planes | size, center | Not started |
+| `tetrahedron` | 4-faced solid from {111} planes | size, center | **Done** (center not impl) |
 | `octahedron` | 8-faced solid from {111} planes | size, center | **Done** (center not impl) |
 | `prism_n` | N-sided regular prism | n_sides, radius, height | Blocked (reg_poly literal-only) |
 | `pyramid_n` | N-sided pyramid | n_sides, base_radius, height | Not started |
@@ -144,6 +144,8 @@ As we build components, we should extract reusable patterns as custom nodes.
 |-----------|---------|------------|-------|
 | `octahedron` | 8-faced {111} solid | `size: Int` (default 10) | Works well, supports literal params |
 | `hexprism` | 6-sided prism | `height: Int` (default 12) | radius fixed at 8, see reg_poly limitation |
+| `tetrahedron` | 4-faced {111} solid | `size: Int` (default 10) | 4 half_spaces, fully parametric |
+| `wedge` | Triangular prism | `size: Int`, `height: Int` | 3 half_planes + extrude, fully parametric |
 
 ---
 
@@ -171,6 +173,12 @@ As we build components, we should extract reusable patterns as custom nodes.
 ---
 
 ## Session Log
+
+### Session 5 - 2026-01-26
+- Created **tetrahedron** custom node (4 {111} half_spaces) - fully parametric `size`
+- Created **wedge** custom node using `half_plane` + `extrude` - fully parametric `size` and `height`
+- **Key insight:** `half_plane` has wireable `m_index`/`shift`, workaround for literal-only `reg_poly`/`polygon`
+- This technique enables parametric 2D shapes that can be extruded
 
 ### Session 4 - 2026-01-26
 - **Fixed bug:** Custom node literal params now work (`octahedron { size: 5 }` works directly)
@@ -202,14 +210,16 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 ### Bugs Found
 
-No open bugs currently blocking work.
+| Bug | Description | Workaround |
+|-----|-------------|------------|
+| **Heredoc + comments** | Using `# comment` lines in heredoc input causes silent parse failure - subsequent nodes not created | Use `\n` escape sequences in `--code` flag, or add nodes incrementally |
 
 ### Feature Requests
 
 | Feature | Why Needed | Priority |
 |---------|------------|----------|
-| **Wireable reg_poly parameters** | `radius` and `num_sides` are literal-only, blocking parametric regular polygons | Medium |
-| **Wireable polygon vertices** | `vertices` is literal-only, can't compute vertices dynamically | Low |
+| **Wireable reg_poly parameters** | `radius` and `num_sides` are literal-only, blocking parametric regular polygons | Low (half_plane workaround exists) |
+| **Wireable polygon vertices** | `vertices` is literal-only, can't compute vertices dynamically | Low (half_plane workaround exists) |
 
 ---
 
@@ -220,6 +230,14 @@ No open bugs currently blocking work.
 - Use {110} half_spaces for rhombic/dodecahedral features
 - Combine {100} and {111} for truncated shapes (cuboctahedron)
 - Interlocking parts should mate along high-symmetry planes
+
+### Workaround: Parametric 2D Shapes via half_plane
+Since `reg_poly` and `polygon` have literal-only parameters, use `half_plane` nodes instead:
+- `half_plane` has wireable `m_index` (IVec2), `center`, and `shift`
+- Create ivec2 nodes for Miller indices, wire to half_plane.m_index
+- Intersect multiple half_planes with `intersect_2d` to create arbitrary polygons
+- Then `extrude` the result for prismatic shapes
+- Example: 3 half_planes → triangle → extrude → wedge (fully parametric)
 
 ### Future Exploration
 - Can we create interlocking parts that actually fit together atomically?
