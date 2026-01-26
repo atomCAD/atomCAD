@@ -444,7 +444,7 @@ mod network_serializer_tests {
         let registry = create_test_registry();
         let network = create_test_network();
 
-        let result = serialize_network(&network, &registry);
+        let result = serialize_network(&network, &registry, None);
         assert!(result.contains("Empty network"));
     }
 
@@ -458,7 +458,7 @@ mod network_serializer_tests {
         let node_data = (node_type.node_data_creator)();
         network.add_node("sphere", DVec2::new(0.0, 0.0), node_type.parameters.len(), node_data);
 
-        let result = serialize_network(&network, &registry);
+        let result = serialize_network(&network, &registry, None);
 
         // Check that the result contains a sphere definition
         assert!(result.contains("sphere1 = sphere"));
@@ -478,7 +478,7 @@ mod network_serializer_tests {
         network.add_node("sphere", DVec2::new(0.0, 0.0), node_type.parameters.len(), node_data1);
         network.add_node("sphere", DVec2::new(100.0, 0.0), node_type.parameters.len(), node_data2);
 
-        let result = serialize_network(&network, &registry);
+        let result = serialize_network(&network, &registry, None);
 
         // Check that we have sphere1 and sphere2
         assert!(result.contains("sphere1 = sphere"));
@@ -498,7 +498,7 @@ mod network_serializer_tests {
         // Set as return node
         network.return_node_id = Some(node_id);
 
-        let result = serialize_network(&network, &registry);
+        let result = serialize_network(&network, &registry, None);
 
         // Check that there's an output statement
         assert!(result.contains("output sphere1"));
@@ -522,7 +522,7 @@ mod network_serializer_tests {
         // Connect int to sphere's radius parameter (index 1)
         network.connect_nodes(int_id, 0, sphere_id, 1, false);
 
-        let result = serialize_network(&network, &registry);
+        let result = serialize_network(&network, &registry, None);
 
         // Check that the connection is shown
         assert!(result.contains("int1 = int"));
@@ -548,7 +548,7 @@ mod network_serializer_tests {
         let bool_data = (bool_type.node_data_creator)();
         network.add_node("bool", DVec2::new(0.0, 200.0), bool_type.parameters.len(), bool_data);
 
-        let result = serialize_network(&network, &registry);
+        let result = serialize_network(&network, &registry, None);
 
         assert!(result.contains("int1 = int"));
         assert!(result.contains("float1 = float"));
@@ -827,7 +827,7 @@ mod network_editor_tests {
         assert!(result.success, "Initial edit should succeed: {:?}", result.errors);
 
         // Serialize it
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
 
         // Create a new network and edit it with the serialized text
         let mut network2 = create_test_network();
@@ -953,7 +953,7 @@ mod network_editor_tests {
         assert!(result.success, "Edit should succeed: {:?}", result.errors);
 
         // Verify the vertices were actually set by serializing and checking output
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
         assert!(serialized.contains("(0, 0)"), "Should contain first vertex, got:\n{}", serialized);
         assert!(serialized.contains("(10, 0)"), "Should contain second vertex, got:\n{}", serialized);
         assert!(serialized.contains("(5, 10)"), "Should contain third vertex, got:\n{}", serialized);
@@ -977,7 +977,7 @@ mod network_editor_tests {
         assert!(result.success, "Edit should succeed: {:?}", result.errors);
 
         // Verify the expression and parameters were set
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
         assert!(serialized.contains("expression:"), "Should contain expression property, got:\n{}", serialized);
         assert!(serialized.contains("x + y"), "Should contain expression value, got:\n{}", serialized);
     }
@@ -1586,7 +1586,7 @@ mod custom_name_tests {
         assert!(result.nodes_created.contains(&"mybox".to_string()));
 
         // Serialize the network
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
 
         // The serialized output should contain the custom name "mybox", not "cuboid1"
         assert!(serialized.contains("mybox"),
@@ -1610,7 +1610,7 @@ mod custom_name_tests {
         assert!(result.success, "Initial edit should succeed: {:?}", result.errors);
 
         // Serialize
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
 
         // Verify custom names are in the serialized output
         assert!(serialized.contains("mybox"), "Should contain 'mybox'");
@@ -1623,7 +1623,7 @@ mod custom_name_tests {
         assert!(result2.success, "Roundtrip edit should succeed: {:?}", result2.errors);
 
         // Serialize again and verify the names are still preserved
-        let serialized2 = serialize_network(&network2, &registry);
+        let serialized2 = serialize_network(&network2, &registry, None);
         assert!(serialized2.contains("mybox"), "Should still contain 'mybox' after roundtrip");
         assert!(serialized2.contains("mysphere"), "Should still contain 'mysphere' after roundtrip");
         assert!(serialized2.contains("result"), "Should still contain 'result' after roundtrip");
@@ -1647,7 +1647,7 @@ mod custom_name_tests {
         assert!(result.success, "Incremental edit should succeed: {:?}", result.errors);
 
         // Serialize and verify both custom names are preserved
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
         assert!(serialized.contains("mybox"), "Should contain 'mybox'");
         assert!(serialized.contains("mysphere"), "Should contain 'mysphere'");
     }
@@ -1685,7 +1685,7 @@ mod custom_name_tests {
 
         // Serialize - the sphere node should get a different auto-generated name
         // since "sphere1" is taken by the cuboid's custom name
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
 
         // "sphere1" should be the cuboid (custom name)
         assert!(serialized.contains("sphere1 = cuboid"),
@@ -1720,7 +1720,7 @@ mod custom_name_tests {
         assert!(result.success || !result.success, "Either outcome is acceptable");
 
         // Serialize should not crash and should produce valid output
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
         assert!(!serialized.is_empty(), "Serialization should produce output");
     }
 
@@ -1738,7 +1738,7 @@ mod custom_name_tests {
         "#, true);
         assert!(result.success, "Edit should succeed: {:?}", result.errors);
 
-        let serialized = serialize_network(&network, &registry);
+        let serialized = serialize_network(&network, &registry, None);
 
         // All custom names should be preserved
         assert!(serialized.contains("custom_box"), "Should contain 'custom_box'");

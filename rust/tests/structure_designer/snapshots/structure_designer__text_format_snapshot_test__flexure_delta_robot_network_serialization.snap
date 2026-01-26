@@ -2,6 +2,8 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
+# Network: motif_zinkbkende_point-origin
+
 motif1 = motif { definition: """# cubic zincblende motif
 
 PARAM PRIMARY Zn
@@ -41,3 +43,5 @@ cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1) }
 atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 atom_fill_halfshift1 = atom_fill_halfshift { geometry: cuboid1, motif: motif1 }
 output motif1
+
+# 4 nodes

@@ -2,6 +2,8 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
+# Network: motif_rutile
+
 unit_cell_rutile1 = unit_cell_rutile
 cuboid1 = cuboid { unit_cell: unit_cell_rutile1, min_corner: (0, 0, 0), extent: (1, 1, 1), visible: true }
 motif1 = motif { definition: """#_cell_length_a   4.65327200
@@ -33,3 +35,5 @@ BOND Ti0 ..+O4
 """, name: "rutile" }
 atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: false, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 output motif1
+
+# 4 nodes

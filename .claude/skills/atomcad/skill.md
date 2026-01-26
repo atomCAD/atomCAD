@@ -126,6 +126,26 @@ atomcad-cli edit
 atomcad-cli edit --replace
 ```
 
+**Query output format:**
+```
+# Network: Main
+
+sphere1 = sphere { center: (0, 0, 0), radius: 5 }
+cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (10, 10, 10) }
+result = union { shapes: [sphere1, cuboid1], visible: true }
+output result
+
+# 3 nodes
+```
+
+The output includes:
+- Header with active network name
+- Node definitions in topological order
+- Output statement (if set)
+- Footer with node count
+
+The header and footer use comment syntax (`#`), so the output is valid input to `edit --replace`.
+
 ### Multi-line Input
 
 For multi-line code, **stdin piping is recommended** as it avoids shell quoting issues:

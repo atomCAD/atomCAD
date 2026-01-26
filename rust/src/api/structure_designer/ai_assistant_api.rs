@@ -75,8 +75,8 @@ pub fn ai_query_network() -> String {
                     None => return format!("# Network '{}' not found\n", network_name),
                 };
 
-                // Serialize the network
-                serialize_network(network, &structure_designer.node_type_registry)
+                // Serialize the network with its name
+                serialize_network(network, &structure_designer.node_type_registry, Some(network_name))
             },
             "# Error: Could not access structure designer\n".to_string()
         )

@@ -20,34 +20,44 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 pub struct NetworkSerializer<'a> {
     network: &'a NodeNetwork,
     registry: &'a NodeTypeRegistry,
+    network_name: Option<&'a str>,
 }
 
 impl<'a> NetworkSerializer<'a> {
     /// Create a new serializer for the given network.
-    pub fn new(network: &'a NodeNetwork, registry: &'a NodeTypeRegistry) -> Self {
+    pub fn new(network: &'a NodeNetwork, registry: &'a NodeTypeRegistry, network_name: Option<&'a str>) -> Self {
         Self {
             network,
             registry,
+            network_name,
         }
     }
 
     /// Serialize the network to text format.
     pub fn serialize(&self) -> String {
+        let mut output = String::new();
+
+        // Add header with network name (if provided)
+        if let Some(name) = self.network_name {
+            output.push_str(&format!("# Network: {}\n\n", name));
+        }
+
         // Handle empty network
         if self.network.nodes.is_empty() {
-            return "# Empty network\n".to_string();
+            output.push_str("# Empty network\n");
+            return output;
         }
 
         // Step 1: Topological sort (for output ordering)
         let sorted_ids = match self.topological_sort() {
             Ok(ids) => ids,
             Err(cycle_error) => {
-                return format!("# Error: {}\n", cycle_error);
+                output.push_str(&format!("# Error: {}\n", cycle_error));
+                return output;
             }
         };
 
         // Step 2: Serialize each node (names come from node.custom_name)
-        let mut output = String::new();
         for node_id in &sorted_ids {
             let node_line = self.serialize_node(*node_id);
             output.push_str(&node_line);
@@ -60,6 +70,11 @@ impl<'a> NetworkSerializer<'a> {
                 output.push_str(&format!("output {}\n", return_name));
             }
         }
+
+        // Add footer with node count
+        let node_count = sorted_ids.len();
+        let node_word = if node_count == 1 { "node" } else { "nodes" };
+        output.push_str(&format!("\n# {} {}\n", node_count, node_word));
 
         output
     }
@@ -241,19 +256,24 @@ impl<'a> NetworkSerializer<'a> {
 /// # Arguments
 /// * `network` - The node network to serialize
 /// * `registry` - The node type registry for looking up parameter information
+/// * `network_name` - Optional name to include in the header
 ///
 /// # Returns
 /// A string containing the text format representation of the network.
 ///
 /// # Example
 /// ```rust,ignore
-/// let text = serialize_network(&network, &registry);
+/// let text = serialize_network(&network, &registry, Some("Main"));
 /// println!("{}", text);
 /// // Output:
+/// // # Network: Main
+/// //
 /// // sphere1 = sphere { center: (0, 0, 0), radius: 5 }
 /// // output sphere1
+/// //
+/// // # 1 node
 /// ```
-pub fn serialize_network(network: &NodeNetwork, registry: &NodeTypeRegistry) -> String {
-    let serializer = NetworkSerializer::new(network, registry);
+pub fn serialize_network(network: &NodeNetwork, registry: &NodeTypeRegistry, network_name: Option<&str>) -> String {
+    let serializer = NetworkSerializer::new(network, registry, network_name);
     serializer.serialize()
 }

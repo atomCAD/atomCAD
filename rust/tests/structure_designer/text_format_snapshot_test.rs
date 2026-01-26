@@ -17,7 +17,7 @@ fn serialize_cnnd_file(file_path: &str) -> String {
     let network = registry.node_networks.get(&first_network_name)
         .expect("Network not found");
 
-    serialize_network(network, &registry)
+    serialize_network(network, &registry, Some(&first_network_name))
 }
 
 #[test]

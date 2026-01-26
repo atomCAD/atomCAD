@@ -2,6 +2,8 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
+# Network: sample
+
 int1 = int { value: 3 }
 parameter1 = parameter { default: int1, param_index: 0, param_name: "thick", data_type: Int, sort_order: 0 }
 half_space1 = half_space { shift: parameter1, max_miller_index: 2, m_index: (1, -1, 0), center: (0, 0, 0), subdivision: 1 }
@@ -32,3 +34,5 @@ lattice_rot3 = lattice_rot { shape: diff1, axis_index: 9, step: 1, pivot_point: 
 lattice_rot1 = lattice_rot { shape: lattice_rot3, axis_index: 12, step: 1, pivot_point: (0, 0, 0) }
 union1 = union { shapes: [lattice_rot1, lattice_rot3], visible: true }
 atom_fill1 = atom_fill { shape: union1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.5), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+
+# 30 nodes

@@ -2,6 +2,8 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
+# Network: sample
+
 int1 = int { value: 7 }
 half_space1 = half_space { shift: int1, max_miller_index: 1, m_index: (1, 1, 1), center: (0, 0, 0), subdivision: 1 }
 half_space2 = half_space { shift: int1, max_miller_index: 1, m_index: (-1, -1, -1), center: (0, 0, 0), subdivision: 1 }
@@ -27,3 +29,5 @@ intersect2 = intersect { shapes: [intersect1, lattice_rot4, half_space3, half_sp
 lattice_move1 = lattice_move { shape: intersect2, translation: (0, 0, 5), subdivision: 1, visible: true }
 atom_fill1 = atom_fill { shape: lattice_move1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 output lattice_move1
+
+# 24 nodes

@@ -2,6 +2,8 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
+# Network: α_polonium_motif
+
 motif1 = motif { definition: """PARAM POLO Po
 SITE Po1 POLO 0.0 0.0 0.0
 SITE Po2 POLO 1.0 0.0 0.0
@@ -27,3 +29,5 @@ BOND Po8 ...Po7
 cuboid1 = cuboid { unit_cell: α_polonium_unit_cell1, min_corner: (0, 0, 0), extent: (4, 4, 3), visible: true }
 atom_fill1 = atom_fill { shape: cuboid1, motif: motif1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: false, rm_single: false, surf_recon: false, invert_phase: false }
 output motif1
+
+# 4 nodes
