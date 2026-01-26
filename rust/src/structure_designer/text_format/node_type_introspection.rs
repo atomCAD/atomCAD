@@ -91,6 +91,9 @@ fn format_data_type_for_display(dt: &DataType) -> String {
 }
 
 /// Returns true if a data type can only be provided via wire connection (no literal representation).
+///
+/// Note: This only checks the type itself. A parameter can also be wire-only if it has
+/// no backing text property to store literal values (checked separately in `describe_node_type`).
 fn is_wire_only_type(data_type: &DataType) -> bool {
     matches!(
         data_type,
@@ -222,7 +225,11 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
         // Process parameters (wirable inputs)
         for param in &node_type.parameters {
             let type_str = format_data_type_for_display(&param.data_type);
-            let wire_only = is_wire_only_type(&param.data_type);
+            // A parameter is wire-only if:
+            // 1. Its data type has no literal representation (Geometry, Atomic, etc.), OR
+            // 2. It has no backing text property (no storage for literal values)
+            let wire_only = is_wire_only_type(&param.data_type)
+                || !prop_map.contains_key(&param.name);
 
             // Determine default info from: 1) stored property, 2) parameter metadata, 3) fallback
             let default_info = if let Some((_, default_val)) = prop_map.get(&param.name) {

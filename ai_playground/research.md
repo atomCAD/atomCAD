@@ -91,9 +91,9 @@ Faceted shapes using half_space intersections or simple extrusions.
 
 | Component | Description | Status | Notes |
 |-----------|-------------|--------|-------|
-| **Octahedron** | 8-faced shape from {111} planes | Not started | intersect 8 half_spaces, natural diamond form |
+| **Octahedron** | 8-faced shape from {111} planes | **Done** | Custom node created, 6415 atoms at size=8 |
 | **Truncated Cube** | Cube with chamfered corners | Not started | cuboid + half_spaces cutting corners |
-| **Hexagonal Prism** | 6-sided column | Not started | polygon(6) + extrude |
+| **Hexagonal Prism** | 6-sided column | **Done** | Custom node created, ~20k atoms at radius=8, height=12 |
 | **Wedge** | Triangular prism | Not started | polygon(3) + extrude |
 | **L-Bracket** | Corner structural element | Not started | union of two cuboids |
 | **Channel/Groove** | U-shaped trough | Not started | diff(cuboid, cuboid) |
@@ -132,15 +132,18 @@ As we build components, we should extract reusable patterns as custom nodes.
 | Node Name | Purpose | Parameters | Status |
 |-----------|---------|------------|--------|
 | `tetrahedron` | 4-faced solid from {111} planes | size, center | Not started |
-| `octahedron` | 8-faced solid from {111} planes | size, center | Not started |
-| `prism_n` | N-sided regular prism | n_sides, radius, height | Not started |
+| `octahedron` | 8-faced solid from {111} planes | size, center | **Done** (center not impl) |
+| `prism_n` | N-sided regular prism | n_sides, radius, height | Blocked (reg_poly literal-only) |
 | `pyramid_n` | N-sided pyramid | n_sides, base_radius, height | Not started |
 | `chamfered_cuboid` | Cuboid with cut corners | extent, chamfer | Not started |
 | `hollow_prism` | Prismatic tube | n_sides, outer_r, inner_r, height | Not started |
 
 ### Built Custom Nodes
 
-*None yet - to be populated as we create them*
+| Node Name | Purpose | Parameters | Notes |
+|-----------|---------|------------|-------|
+| `octahedron` | 8-faced {111} solid | `size: Int` (default 10) | Works well, must wire int node for size override |
+| `hexprism` | 6-sided prism | `height: Int` (default 12) | radius fixed at 8, see reg_poly limitation |
 
 ---
 
@@ -169,6 +172,14 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 ## Session Log
 
+### Session 3 - 2026-01-26
+- Created **octahedron** custom node (8 {111} half_spaces) - working, parametric `size`
+- Created **hexprism** custom node (reg_poly + extrude) - working, parametric `height` only
+- Found bug: literal params on custom nodes ignored (must wire int nodes as workaround)
+- Found bug: half_plane m_index silently ignored (blocked parametric hexagon approach)
+- Feature gap: reg_poly radius/num_sides are literal-only, limits parametric shapes
+- **Next:** Fix bugs above before continuing primitives library
+
 ### Session 2 - 2026-01-26
 - Tested octahedron using 8 {111} half_spaces - works great! (deleted after testing)
 - Found & fixed bug: custom nodes didn't render until save/reload
@@ -190,13 +201,21 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 | Issue | Severity | Workaround | Reported |
 |-------|----------|------------|----------|
-| *None yet* | | | |
+| **Custom node literal params ignored** | Medium | Wire an `int` node instead of using literal: `sz = int { value: 8 }` then `octahedron { size: sz }` | 2026-01-26 |
+| ~~**half_plane m_index not applied**~~ | ~~Medium~~ | **FIXED** - Now warns that m_index is wire-only | ~~2026-01-26~~ |
+
+**Details:**
+
+1. **Custom node literal params ignored**: When using a custom node like `octahedron { size: 8 }`, the literal value `8` doesn't override the default. The custom node always uses its internal default. Must explicitly wire: `sz = int { value: 8 }` + `octahedron { size: sz }`.
+
+2. ~~**half_plane m_index not applied**~~: **FIXED (2026-01-26)** - The `m_index` parameter on `half_plane` is wire-only by design (no text property backing). Now the text format parser warns: "Parameter 'm_index' on 'half_plane' is wire-only; literal value ignored (connect a node instead)". The `describe half_plane` command also correctly shows `[wire-only]` for this parameter. Use: `mi = ivec2 { value: (1, 2) }` then `half_plane { m_index: mi }`.
 
 ### Feature Requests
 
 | Feature | Why Needed | Priority |
 |---------|------------|----------|
-| *None yet* | | |
+| **Wireable reg_poly parameters** | `radius` and `num_sides` are literal-only, blocking parametric regular polygons | Medium |
+| **Wireable polygon vertices** | `vertices` is literal-only, can't compute vertices dynamically | Low |
 
 ---
 

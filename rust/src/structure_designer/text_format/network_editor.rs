@@ -440,6 +440,18 @@ impl<'a> NetworkEditor<'a> {
                         prop_name, node_type_name
                     ));
                 }
+                // Warn if trying to set a literal on a wire-only parameter
+                // (a parameter that exists but has no text property backing)
+                else if !valid_params.is_empty()
+                    && valid_params.contains(prop_name)
+                    && !text_prop_names.contains(prop_name)
+                {
+                    self.result.add_warning(format!(
+                        "Parameter '{}' on '{}' is wire-only; literal value ignored (connect a node instead)",
+                        prop_name, node_type_name
+                    ));
+                    continue; // Don't add to literal_props since it will be ignored anyway
+                }
                 literal_props.insert(prop_name.clone(), text_value);
             }
             // Skip NodeRef, FunctionRef, and arrays containing them - handled in connection pass

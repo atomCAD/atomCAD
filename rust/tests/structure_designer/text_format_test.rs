@@ -1073,6 +1073,46 @@ mod network_editor_tests {
                 "Should not warn about parameters: {}", warning);
         }
     }
+
+    #[test]
+    fn test_warning_for_wire_only_parameter_literal() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // half_plane has m_index as a parameter (wirable) but with no backing text property
+        // Trying to set a literal value should produce a warning
+        let result = edit_network(&mut network, &registry, r#"
+            hp = half_plane { m_index: (1, 2) }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed even with wire-only param literal");
+
+        // Should have a warning about m_index being wire-only
+        let has_wire_only_warning = result.warnings.iter()
+            .any(|w| w.contains("wire-only") && w.contains("m_index"));
+        assert!(has_wire_only_warning,
+            "Should warn about 'm_index' being wire-only, got: {:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_no_warning_for_wired_parameter() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // When m_index is properly wired (not a literal), there should be no warning
+        let result = edit_network(&mut network, &registry, r#"
+            mi = ivec2 { value: (1, 2) }
+            hp = half_plane { m_index: mi }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Should have no wire-only warnings
+        let has_wire_only_warning = result.warnings.iter()
+            .any(|w| w.contains("wire-only"));
+        assert!(!has_wire_only_warning,
+            "Should not warn about wire-only when properly wired, got: {:?}", result.warnings);
+    }
 }
 
 // ============================================================================
