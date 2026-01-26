@@ -155,7 +155,21 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 let result = text_edit_network(&mut network, &structure_designer.node_type_registry, &code, replace);
 
                 // Put the network back into the registry
-                structure_designer.node_type_registry.node_networks.insert(network_name, network);
+                structure_designer.node_type_registry.node_networks.insert(network_name.clone(), network);
+
+                // Validate the edited network to update output_type and repair arguments
+                // This is necessary because text_edit_network doesn't update network.node_type.output_type
+                // when the return node is set via "output <node>" statement.
+                // Without this, custom nodes using this network won't render correctly.
+                {
+                    use crate::structure_designer::network_validator::validate_network;
+                    let registry_ptr = &mut structure_designer.node_type_registry as *mut crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                    unsafe {
+                        if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name) {
+                            validate_network(network, &mut *registry_ptr, None);
+                        }
+                    }
+                }
 
                 // Mark that a full refresh is needed since the network was edited directly
                 // (bypassing StructureDesigner change tracking)

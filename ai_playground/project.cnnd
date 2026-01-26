@@ -1,0 +1,60 @@
+{
+  "node_networks": [
+    [
+      "sample",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "sample",
+          "description": "",
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "cuboid",
+            "custom_name": "cuboid1",
+            "position": [
+              30.0,
+              30.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}
