@@ -142,7 +142,7 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 | Node Name | Purpose | Parameters | Notes |
 |-----------|---------|------------|-------|
-| `octahedron` | 8-faced {111} solid | `size: Int` (default 10) | Works well, must wire int node for size override |
+| `octahedron` | 8-faced {111} solid | `size: Int` (default 10) | Works well, supports literal params |
 | `hexprism` | 6-sided prism | `height: Int` (default 12) | radius fixed at 8, see reg_poly limitation |
 
 ---
@@ -172,13 +172,16 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 ## Session Log
 
+### Session 4 - 2026-01-26
+- **Fixed bug:** Custom node literal params now work (`octahedron { size: 5 }` works directly)
+- Fix was in `node_networks_serialization.rs` - loaded networks now use `CustomNodeData`
+- **Next:** Continue building primitives library (tetrahedron, wedge, etc.)
+
 ### Session 3 - 2026-01-26
 - Created **octahedron** custom node (8 {111} half_spaces) - working, parametric `size`
 - Created **hexprism** custom node (reg_poly + extrude) - working, parametric `height` only
-- Found bug: literal params on custom nodes ignored (must wire int nodes as workaround)
-- Found bug: half_plane m_index silently ignored (blocked parametric hexagon approach)
+- Found bugs: literal params ignored, half_plane m_index silent (both now fixed)
 - Feature gap: reg_poly radius/num_sides are literal-only, limits parametric shapes
-- **Next:** Fix bugs above before continuing primitives library
 
 ### Session 2 - 2026-01-26
 - Tested octahedron using 8 {111} half_spaces - works great! (deleted after testing)
@@ -199,16 +202,7 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 ### Bugs Found
 
-| Issue | Severity | Workaround | Reported |
-|-------|----------|------------|----------|
-| **Custom node literal params ignored** | Medium | Wire an `int` node instead of using literal: `sz = int { value: 8 }` then `octahedron { size: sz }` | 2026-01-26 |
-| ~~**half_plane m_index not applied**~~ | ~~Medium~~ | **FIXED** - Now warns that m_index is wire-only | ~~2026-01-26~~ |
-
-**Details:**
-
-1. **Custom node literal params ignored**: When using a custom node like `octahedron { size: 8 }`, the literal value `8` doesn't override the default. The custom node always uses its internal default. Must explicitly wire: `sz = int { value: 8 }` + `octahedron { size: sz }`.
-
-2. ~~**half_plane m_index not applied**~~: **FIXED (2026-01-26)** - The `m_index` parameter on `half_plane` is wire-only by design (no text property backing). Now the text format parser warns: "Parameter 'm_index' on 'half_plane' is wire-only; literal value ignored (connect a node instead)". The `describe half_plane` command also correctly shows `[wire-only]` for this parameter. Use: `mi = ivec2 { value: (1, 2) }` then `half_plane { m_index: mi }`.
+No open bugs currently blocking work.
 
 ### Feature Requests
 
