@@ -28,7 +28,8 @@
       "Bash(pushd:*)",
       "Bash(./atomcad-cli edit --replace)",
       "Bash(./atomcad-cli edit:*)",
-      "Bash(./atomcad-cli:*)"
+      "Bash(./atomcad-cli:*)",
+      "Bash(find:*)"
     ]
   }
 }
