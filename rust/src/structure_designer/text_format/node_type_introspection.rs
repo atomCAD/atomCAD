@@ -152,6 +152,10 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
         None => return format!("# Node type '{}' not found\n", node_type_name),
     };
 
+    // Check if this is a custom node (user-defined node network)
+    // Custom nodes can accept literals for all parameters
+    let is_custom_node = registry.is_custom_node_type(node_type_name);
+
     // Create a default instance to get text properties and parameter metadata
     let default_data = (node_type.node_data_creator)();
     let text_props = default_data.get_text_properties();
@@ -228,8 +232,9 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
             // A parameter is wire-only if:
             // 1. Its data type has no literal representation (Geometry, Atomic, etc.), OR
             // 2. It has no backing text property (no storage for literal values)
+            // BUT: Custom nodes can accept literals for all parameters (via CustomNodeData)
             let wire_only = is_wire_only_type(&param.data_type)
-                || !prop_map.contains_key(&param.name);
+                || (!prop_map.contains_key(&param.name) && !is_custom_node);
 
             // Determine default info from: 1) stored property, 2) parameter metadata, 3) fallback
             let default_info = if let Some((_, default_val)) = prop_map.get(&param.name) {

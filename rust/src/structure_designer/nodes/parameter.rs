@@ -1,4 +1,5 @@
 use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::CustomNodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
@@ -48,7 +49,7 @@ impl NodeData for ParameterData {
       context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
       let evaled_in_isolation = network_stack.len() < 2;
-    
+
       if evaled_in_isolation {
         // Check if CLI parameter is provided (has precedence over default pin)
         if let Some(cli_value) = context.top_level_parameters.get(&self.param_name) {
@@ -57,23 +58,33 @@ impl NodeData for ParameterData {
         // Fall back to default pin
         return eval_default(network_evaluator, network_stack, node_id, registry, context);
       }
-    
+
       let parent_node_id = network_stack.last().unwrap().node_id;
       let mut parent_network_stack = network_stack.clone();
       parent_network_stack.pop();
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
-    
-      // evaluate all the arguments of the parent node if any
-      if parent_node.arguments[self.param_index].is_empty() {
-        return eval_default(network_evaluator, network_stack, node_id, registry, context);
+
+      // If wire is connected, evaluate it (highest priority)
+      if !parent_node.arguments[self.param_index].is_empty() {
+        return network_evaluator.evaluate_arg_required(
+          &parent_network_stack,
+          parent_node_id,
+          registry,
+          context,
+          self.param_index);
       }
-    
-      return network_evaluator.evaluate_arg_required(
-        &parent_network_stack,
-        parent_node_id,
-        registry,
-        context,
-        self.param_index);
+
+      // No wire connected - check for stored literal value in CustomNodeData
+      if let Some(custom_data) = parent_node.data.as_any_ref().downcast_ref::<CustomNodeData>() {
+        if let Some(text_value) = custom_data.literal_values.get(&self.param_name) {
+          if let Some(result) = text_value.to_network_result(&self.data_type) {
+            return result;
+          }
+        }
+      }
+
+      // Fall back to default pin (lowest priority)
+      eval_default(network_evaluator, network_stack, node_id, registry, context)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

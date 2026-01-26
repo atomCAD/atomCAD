@@ -11,6 +11,8 @@ use super::super::node_network::{NodeNetwork, Node, Argument};
 use super::super::node_type_registry::NodeTypeRegistry;
 use super::super::node_data::NodeData;
 use super::super::node_data::NoData;
+use super::super::node_data::CustomNodeData;
+use super::super::node_type::{generic_node_data_saver, generic_node_data_loader};
 use super::super::node_network::NodeDisplayType;
 
 // The current version of the serialization format
@@ -149,16 +151,16 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
     // Parse category from string
     let category = category_from_string(&serializable.category);
     
-    // Create the NodeType with a default node_data_creator
+    // Create the NodeType with CustomNodeData to support literal parameters
     Ok(NodeType {
         name: serializable.name.clone(),
         description: serializable.description.clone(),
         category,
         parameters,
         output_type,
-        node_data_creator: || Box::new(NoData {}), // Default, will be replaced with actual data
-        node_data_saver: crate::structure_designer::node_type::no_data_saver,
-        node_data_loader: crate::structure_designer::node_type::no_data_loader,
+        node_data_creator: || Box::new(CustomNodeData::default()),
+        node_data_saver: generic_node_data_saver::<CustomNodeData>,
+        node_data_loader: generic_node_data_loader::<CustomNodeData>,
         public: true, // TODO: we should save this info (with proper backward compatibility), but we do not save it yet
     })
 }

@@ -6,8 +6,8 @@ use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
-use crate::structure_designer::node_data::NoData;
-use crate::structure_designer::node_type::{no_data_saver, no_data_loader};
+use crate::structure_designer::node_data::CustomNodeData;
+use crate::structure_designer::node_type::{generic_node_data_saver, generic_node_data_loader};
 use super::evaluator::network_evaluator::{NetworkEvaluator, NetworkStackElement, NetworkEvaluationContext};
 use super::evaluator::network_result::NetworkResult;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
@@ -437,9 +437,9 @@ impl StructureDesigner {
         category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
         parameters: Vec::new(),
         output_type: DataType::None,
-        node_data_creator: || Box::new(NoData {}),
-        node_data_saver: no_data_saver,
-        node_data_loader: no_data_loader,
+        node_data_creator: || Box::new(CustomNodeData::default()),
+        node_data_saver: generic_node_data_saver::<CustomNodeData>,
+        node_data_loader: generic_node_data_loader::<CustomNodeData>,
         public: true,
       }
     ));

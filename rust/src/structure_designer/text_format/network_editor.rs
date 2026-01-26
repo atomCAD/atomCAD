@@ -418,6 +418,10 @@ impl<'a> NetworkEditor<'a> {
             })
             .unwrap_or_default();
 
+        // Check if this is a custom node (user-defined node network)
+        // Custom nodes can accept literal values for ALL their parameters
+        let is_custom_node = self.registry.is_custom_node_type(&node_type_name);
+
         // Collect literal properties into a HashMap
         let mut literal_props: HashMap<String, TextValue> = HashMap::new();
 
@@ -442,9 +446,11 @@ impl<'a> NetworkEditor<'a> {
                 }
                 // Warn if trying to set a literal on a wire-only parameter
                 // (a parameter that exists but has no text property backing)
+                // BUT: Custom nodes can accept literals for all parameters
                 else if !valid_params.is_empty()
                     && valid_params.contains(prop_name)
                     && !text_prop_names.contains(prop_name)
+                    && !is_custom_node
                 {
                     self.result.add_warning(format!(
                         "Parameter '{}' on '{}' is wire-only; literal value ignored (connect a node instead)",
