@@ -95,8 +95,8 @@ Faceted shapes using half_space intersections or simple extrusions.
 | **Truncated Cube** | Cube with chamfered corners | Not started | cuboid + half_spaces cutting corners |
 | **Hexagonal Prism** | 6-sided column | **Done** | Custom node created, ~20k atoms at radius=8, height=12 |
 | **Wedge** | Triangular prism | **Done** | half_plane + extrude, parametric size/height |
-| **L-Bracket** | Corner structural element | Not started | union of two cuboids |
-| **Channel/Groove** | U-shaped trough | Not started | diff(cuboid, cuboid) |
+| **L-Bracket** | Corner structural element | **Done** | union of cuboids, parametric length/width/thickness |
+| **Channel/Groove** | U-shaped trough | **Done** | diff(cuboid, cuboid), parametric with wall thickness |
 
 ### Tier 2: Medium Complexity
 Require multiple boolean ops or careful crystallographic alignment.
@@ -108,7 +108,7 @@ Require multiple boolean ops or careful crystallographic alignment.
 | **Rhombic Prism** | Diamond-shaped cross-section | Not started | polygon(4) + extrude, {110} alignment |
 | **Stepped Shaft** | Rod with diameter changes | Not started | Union of aligned prisms |
 | **Slot/Keyway** | Rectangular channel for alignment | Not started | diff with extruded rect |
-| **Pyramidal Tip** | 4-sided point | Not started | 4 half_spaces meeting at apex |
+| **Pyramidal Tip** | 4-sided point | **Done** | 4 {101}-family half_spaces, apex at origin |
 
 ### Tier 3: Advanced
 Complex crystallographic shapes or multi-part assemblies.
@@ -146,6 +146,9 @@ As we build components, we should extract reusable patterns as custom nodes.
 | `hexprism` | 6-sided prism | `height: Int` (default 12) | radius fixed at 8, see reg_poly limitation |
 | `tetrahedron` | 4-faced {111} solid | `size: Int` (default 10) | 4 half_spaces, fully parametric |
 | `wedge` | Triangular prism | `size: Int`, `height: Int` | 3 half_planes + extrude, fully parametric |
+| `l_bracket` | L-shaped corner bracket | `length`, `width`, `thickness: Int` | union of 2 cuboids via ivec3 wiring |
+| `pyramid_tip` | 4-sided pyramid point | `size: Int` | 4 {101} half_spaces + base, apex at origin |
+| `channel` | U-shaped trough | `length`, `width`, `height`, `wall: Int` | diff(cuboid, cuboid), uses expr for inner dims |
 
 ---
 
@@ -173,6 +176,13 @@ As we build components, we should extract reusable patterns as custom nodes.
 ---
 
 ## Session Log
+
+### Session 6 - 2026-01-26
+- Created **l_bracket** custom node - union of 2 cuboids with `ivec3` wiring for parametric extents
+- Created **pyramid_tip** custom node - 4 {101}-family half_spaces meeting at apex, single `size` param
+- Created **channel** custom node - diff(outer, inner) cuboid using `expr` nodes for inner dimensions
+- **Key technique:** Use `ivec3` nodes to wire parameters into `cuboid.extent` (tuple literals don't accept wires)
+- **Key technique:** Use `expr` nodes for arithmetic on parameters (e.g., `width - 2*wall` for inner width)
 
 ### Session 5 - 2026-01-26
 - Created **tetrahedron** custom node (4 {111} half_spaces) - fully parametric `size`
@@ -259,3 +269,7 @@ Since `reg_poly` and `polygon` have literal-only parameters, use `half_plane` no
 | File | Description | Created |
 |------|-------------|---------|
 | `research.md` | This file - project documentation | 2026-01-26 |
+| `l_bracket.png` | Screenshot of l_bracket custom node | 2026-01-26 |
+| `pyramid_tip.png` | Screenshot of pyramid_tip (flat angle) | 2026-01-26 |
+| `pyramid_tip3.png` | Screenshot of pyramid_tip (better angle) | 2026-01-26 |
+| `channel.png` | Screenshot of channel custom node | 2026-01-26 |
