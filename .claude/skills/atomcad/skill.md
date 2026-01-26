@@ -153,6 +153,45 @@ atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10) }\nhole 
 
 **Note:** Avoid using literal newlines inside `--code="..."` as shell quoting behavior varies across platforms (bash, PowerShell, etc.).
 
+### Node Network Management
+
+atomCAD designs can contain multiple node networks. Use these commands to manage them:
+
+```bash
+# List all node networks
+atomcad-cli networks
+
+# Create a new network
+atomcad-cli networks add                    # Auto-named (UNTITLED, UNTITLED1, ...)
+atomcad-cli networks add --name "my_shape"  # Specific name
+
+# Switch active network (query/edit will operate on this)
+atomcad-cli networks activate <name>
+
+# Delete a network
+atomcad-cli networks delete <name>
+
+# Rename a network
+atomcad-cli networks rename <old> <new>
+```
+
+**Output example for `networks`:**
+```
+Node Networks:
+  * Main              (active)
+    cube
+    pattern           [ERROR: Invalid parameter type]
+
+3 networks (1 with errors)
+```
+
+**Behavior notes:**
+- `networks add` auto-activates the new network
+- `networks delete` fails if the network is referenced by other networks
+- `networks rename` updates all references in other networks automatically
+
+**Note:** `query` and `edit` always operate on the active network.
+
 ### Evaluate Node Results
 
 Evaluate a specific node and return its computed result (useful for verification and debugging).
@@ -379,6 +418,11 @@ Commands:
 - `evaluate`/`e <node>` — Evaluate a node
 - `nodes` — List available node types
 - `describe`/`d <node>` — Describe a node type
+- `networks` — List all node networks
+- `networks add [--name X]` — Create new network
+- `networks delete <name>` — Delete a network
+- `networks activate <name>` — Switch to a network
+- `networks rename <old> <new>` — Rename a network
 - `camera`/`c` — Get/set camera state
 - `display` — Get/set display preferences
 - `screenshot`/`s <path>` — Capture viewport to PNG
@@ -435,20 +479,44 @@ atomcad-cli edit --code="atoms = atom_fill { shape: geom, element_values: \"PRIM
 
 Custom nodes are created by defining subnetworks:
 
-1. Create a node network named `my_shape`
+1. Create a node network named `my_shape` using `networks add --name "my_shape"`
 2. Add `parameter` nodes to define inputs (each parameter becomes an input pin)
 3. Set the network's output node via `output <node_id>`
-4. Use `my_shape` as a node type in other networks
+4. Switch to another network and use `my_shape` as a node type
 
 ```bash
-# In network "scaled_sphere" (using heredoc):
-atomcad-cli edit <<'EOF'
+# Create a custom node (subnetwork) for a parameterized shape
+atomcad-cli networks add --name "rounded_cube"
+atomcad-cli edit --replace <<'EOF'
+size = parameter { name: "size", type: Int, default: 10 }
+radius = parameter { name: "corner_radius", type: Int, default: 2 }
+base = cuboid { extent: (size, size, size) }
+corner = sphere { radius: radius }
+result = intersect { shapes: [base, corner] }
+output result
+EOF
+
+# Switch to Main and use the custom node
+atomcad-cli networks activate "Main"
+atomcad-cli edit --code="part = rounded_cube { size: 20, corner_radius: 3, visible: true }"
+
+# Fill with atoms
+atomcad-cli edit --code="atoms = atom_fill { shape: part, passivate: true, visible: true }"
+```
+
+**Simpler example:**
+
+```bash
+# Create a reusable scaled sphere node
+atomcad-cli networks add --name "scaled_sphere"
+atomcad-cli edit --replace <<'EOF'
 size = parameter { name: "size", type: "Int", default: 5 }
 s = sphere { radius: size }
 output s
 EOF
 
-# Then use it elsewhere:
+# Use it in Main
+atomcad-cli networks activate "Main"
 atomcad-cli edit --code="part1 = scaled_sphere { size: 10, visible: true }"
 ```
 
