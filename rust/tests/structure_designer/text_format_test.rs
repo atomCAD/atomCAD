@@ -1113,6 +1113,110 @@ mod network_editor_tests {
         assert!(!has_wire_only_warning,
             "Should not warn about wire-only when properly wired, got: {:?}", result.warnings);
     }
+
+    #[test]
+    fn test_edit_description_single_line() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            description "This is a test network"
+            int1 = int { value: 42 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert_eq!(result.description_set, Some("This is a test network".to_string()));
+        assert_eq!(network.node_type.description, "This is a test network");
+    }
+
+    #[test]
+    fn test_edit_description_multi_line() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(&mut network, &registry, r#"
+            description """
+This is a multi-line description.
+
+It can include:
+- Bullet points
+- Multiple paragraphs
+"""
+            int1 = int { value: 42 }
+        "#, true);
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+        assert!(result.description_set.is_some());
+        assert!(network.node_type.description.contains("multi-line"));
+        assert!(network.node_type.description.contains("Bullet points"));
+    }
+
+    #[test]
+    fn test_edit_description_roundtrip() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Set a description
+        let result = edit_network(&mut network, &registry, r#"
+            description "Test roundtrip description"
+            int1 = int { value: 42 }
+            output int1
+        "#, true);
+
+        assert!(result.success);
+
+        // Serialize the network
+        let text = serialize_network(&network, &registry, Some("test"));
+
+        // Should contain the description
+        assert!(text.contains("description \"Test roundtrip description\""),
+            "Serialized text should contain description: {}", text);
+    }
+
+    #[test]
+    fn test_edit_description_multiline_roundtrip() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Set a multi-line description
+        let result = edit_network(&mut network, &registry,
+            "description \"\"\"Line 1\nLine 2\nLine 3\"\"\"\nint1 = int { value: 42 }",
+            true);
+
+        assert!(result.success);
+        assert!(network.node_type.description.contains("Line 1"));
+        assert!(network.node_type.description.contains("Line 2"));
+
+        // Serialize the network
+        let text = serialize_network(&network, &registry, Some("test"));
+
+        // Should use triple-quotes for multi-line description
+        assert!(text.contains("\"\"\""), "Should use triple-quotes for multi-line: {}", text);
+    }
+
+    #[test]
+    fn test_serialize_empty_description_not_included() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // Clear the description (test network starts with "Test network")
+        network.node_type.description = String::new();
+
+        // Create a network without setting description
+        let result = edit_network(&mut network, &registry, r#"
+            int1 = int { value: 42 }
+        "#, true);
+
+        assert!(result.success);
+        assert!(network.node_type.description.is_empty());
+
+        // Serialize the network
+        let text = serialize_network(&network, &registry, Some("test"));
+
+        // Should NOT contain "description" statement
+        assert!(!text.contains("description \""),
+            "Empty description should not be serialized: {}", text);
+    }
 }
 
 // ============================================================================

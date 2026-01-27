@@ -43,6 +43,8 @@ pub struct EditResult {
     pub nodes_deleted: Vec<String>,
     /// Descriptions of wire connections that were made.
     pub connections_made: Vec<String>,
+    /// Network description if it was set.
+    pub description_set: Option<String>,
     /// Error messages encountered during editing.
     pub errors: Vec<String>,
     /// Warning messages (non-fatal issues).
@@ -57,6 +59,7 @@ impl EditResult {
             nodes_updated: Vec::new(),
             nodes_deleted: Vec::new(),
             connections_made: Vec::new(),
+            description_set: None,
             errors: Vec::new(),
             warnings: Vec::new(),
         }
@@ -208,6 +211,9 @@ impl<'a> NetworkEditor<'a> {
         match stmt {
             Statement::Assignment { name, node_type, properties } => {
                 self.process_assignment(name, node_type, properties)
+            }
+            Statement::Description { text } => {
+                self.process_description(text)
             }
             Statement::Comment(_) => Ok(()), // Skip comments
             Statement::Output { .. } | Statement::Delete { .. } => Ok(()), // Handled in second pass
@@ -655,6 +661,13 @@ impl<'a> NetworkEditor<'a> {
             .ok_or_else(|| format!("Cannot set output to '{}': node not found", node_name))?;
 
         self.network.set_return_node(node_id);
+        Ok(())
+    }
+
+    /// Process a description statement.
+    fn process_description(&mut self, text: &str) -> Result<(), String> {
+        self.network.node_type.description = text.to_string();
+        self.result.description_set = Some(text.to_string());
         Ok(())
     }
 }

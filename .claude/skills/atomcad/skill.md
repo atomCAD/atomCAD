@@ -71,6 +71,18 @@ Array pins (marked with dot) accept multiple wires; values are concatenated.
 ### Text Format Syntax
 
 ```
+# Set network description (single-line)
+description "A parametric gear assembly"
+
+# Or multi-line with triple quotes
+description """
+This network creates a parametric gear.
+
+Parameters:
+- teeth: number of teeth
+- radius: outer radius
+"""
+
 # Create nodes: id = type { parameter: value, ... }
 sphere1 = sphere { center: (0, 0, 0), radius: 5, visible: true }
 cuboid1 = cuboid { min_corner: (-5, -5, -5), extent: (10, 10, 10) }
@@ -89,7 +101,7 @@ delete sphere1
 - Integers: `42`, `-10`
 - Floats: `3.14`, `1.5e-3`
 - Booleans: `true`, `false`
-- Strings: `"hello"`
+- Strings: `"hello"` (single-line) or `"""multi\nline"""` (triple-quoted for multi-line)
 - Vectors: `(x, y)` or `(x, y, z)`
 - Arrays: `[a, b, c]`
 - Node references: use the node's ID
@@ -129,6 +141,7 @@ atomcad-cli edit --replace
 **Query output format:**
 ```
 # Network: Main
+description "A boolean union example"
 
 sphere1 = sphere { center: (0, 0, 0), radius: 5 }
 cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (10, 10, 10) }
@@ -140,6 +153,7 @@ output result
 
 The output includes:
 - Header with active network name
+- Description statement (if set)
 - Node definitions in topological order
 - Output statement (if set)
 - Footer with node count

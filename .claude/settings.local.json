@@ -30,7 +30,15 @@
       "Bash(./atomcad-cli edit:*)",
       "Bash(./atomcad-cli:*)",
       "Bash(find:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(powershell.exe -Command \"cd C:\\\\machine_phase_systems\\\\flutter_cad\\\\ai_playground; Get-ChildItem -Recurse -Filter ''atomcad*.exe'' -Path ''C:\\\\machine_phase_systems\\\\flutter_cad'' 2>$null | Select-Object -First 5 FullName\")",
+      "Bash(powershell.exe:*)",
+      "Bash(../atomcad-cli screenshot:*)",
+      "Bash(../atomcad-cli camera:*)",
+      "Bash(../atomcad-cli networks activate sample)",
+      "Bash(../atomcad-cli query)",
+      "Bash(../atomcad-cli networks:*)",
+      "Bash(../atomcad-cli:*)"
     ]
   }
 }

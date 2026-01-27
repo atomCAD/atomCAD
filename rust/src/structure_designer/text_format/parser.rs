@@ -59,6 +59,7 @@ pub enum Token {
     Hash,           // #
     Output,         // output keyword
     Delete,         // delete keyword
+    Description,    // description keyword
     Newline,
     Eof,
 }
@@ -91,6 +92,10 @@ pub enum Statement {
     /// Delete statement: `delete node_name`
     Delete {
         node_name: String,
+    },
+    /// Description statement: `description "text"` or `description """multi-line"""`
+    Description {
+        text: String,
     },
     /// Comment: `# comment text`
     Comment(String),
@@ -269,6 +274,7 @@ impl Lexer {
                     "false" => Token::False,
                     "output" => Token::Output,
                     "delete" => Token::Delete,
+                    "description" => Token::Description,
                     _ => Token::Identifier(ident),
                 };
                 Ok(TokenInfo { token, line, column })
@@ -554,6 +560,9 @@ impl Parser {
                 Token::Delete => {
                     statements.push(self.parse_delete_statement()?);
                 }
+                Token::Description => {
+                    statements.push(self.parse_description_statement()?);
+                }
                 Token::Identifier(_) => {
                     statements.push(self.parse_assignment()?);
                 }
@@ -596,6 +605,21 @@ impl Parser {
         self.expect(&Token::Delete)?;
         let node_name = self.expect_identifier()?;
         Ok(Statement::Delete { node_name })
+    }
+
+    /// Parse a description statement: `description "text"` or `description """multi-line"""`
+    fn parse_description_statement(&mut self) -> Result<Statement, ParseError> {
+        self.expect(&Token::Description)?;
+        let (line, col) = self.current_position();
+        match self.peek().clone() {
+            Token::String(text) => {
+                self.bump();
+                Ok(Statement::Description { text })
+            }
+            other => Err(ParseError::new(
+                format!("Expected string after 'description', found {:?}", other),
+                line, col))
+        }
     }
 
     /// Parse a property block: `{ prop: value, ... }`

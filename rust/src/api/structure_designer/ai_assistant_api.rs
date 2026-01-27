@@ -125,6 +125,7 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                             nodes_updated: vec![],
                             nodes_deleted: vec![],
                             connections_made: vec![],
+                            description_set: None,
                             errors: vec!["No active node network".to_string()],
                             warnings: vec![],
                         }).unwrap_or_else(|_| r#"{"success":false,"errors":["No active node network"]}"#.to_string());
@@ -145,6 +146,7 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                             nodes_updated: vec![],
                             nodes_deleted: vec![],
                             connections_made: vec![],
+                            description_set: None,
                             errors: vec![format!("Network '{}' not found", network_name)],
                             warnings: vec![],
                         }).unwrap_or_else(|_| r#"{"success":false,"errors":["Network not found"]}"#.to_string());

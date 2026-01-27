@@ -124,7 +124,7 @@ Complex crystallographic shapes or multi-part assemblies.
 | **Ratchet Tooth** | Asymmetric sawtooth profile | Not started | Extruded asymmetric polygon |
 | **Bearing Race** | Faceted "cylinder" approximation | Not started | High-N polygon prism, hollow |
 | **Sleeve Bearing Pair** | Concentric shaft + sleeve | Not started | Test m-fold/n-fold symmetry for superlubricity |
-| **Rod Logic Channel** | Hollow channel with sliding rod | Not started | Test clearance for mechanical logic |
+| **Rod Logic Channel** | Hollow channel with sliding rod | **Done** | rod_logic_channel node, fits rod_logic_knob |
 | **Simple Planetary Gear** | Sun gear + planets in casing | Not started | Complex assembly, ~12 lattice units diameter |
 | **Honeycomb Strut** | Lightweight structural frame element | Not started | For pressure vessel skeletons |
 | **Vee-Notch Gear** | Gear tooth nestled in race notch | Not started | Drexler/Goddard nanoscale gear concept |
@@ -159,6 +159,35 @@ As we build components, we should extract reusable patterns as custom nodes.
 | `channel` | U-shaped trough | `length`, `width`, `height`, `wall: Int` | diff(cuboid, cuboid), uses expr for inner dims |
 | `hollow_prism_n` | N-sided hollow tube | `n_sides`, `outer_radius`, `inner_radius`, `height: Int` | diff of two prism_n instances |
 | `rod_logic_knob` | Rod with knob | `rod_radius`, `rod_length`, `knob_size: Int` | union(prism_n, cuboid), knob at midpoint |
+| `rod_logic_channel` | Rectangular tube | `channel_length`, `inner_size`, `wall: Int` | diff(outer, inner) cuboid, hole along Z-axis |
+
+### Assembly Guide: Rod Logic (rod_logic_knob + rod_logic_channel)
+
+These two nodes are designed to fit together for mechanical rod logic assemblies.
+
+**Default parameters:**
+- `rod_logic_knob`: rod_radius=3, rod_length=35, knob_size=2
+- `rod_logic_channel`: channel_length=25, inner_size=8, wall=2
+
+**Fit calculation:**
+- Rod cross-section: octagon inscribed in circle of radius 3 → fits in ~6×6 square
+- Channel inner hole: 8×8 square
+- Clearance: ~1 lattice unit on each side
+
+**To assemble (in sample network):**
+```
+channel = rod_logic_channel { channel_length: 25, inner_size: 8, wall: 2, visible: true }
+rod = rod_logic_knob { rod_radius: 3, rod_length: 35, knob_size: 2 }
+rod_offset = ivec3 { x: wall + inner_size/2, y: wall + inner_size/2, z: -5 }  # Center rod in hole
+rod_moved = lattice_move { shape: rod, translation: rod_offset, visible: true }
+```
+
+**Key positioning:**
+- Channel outer size = inner_size + 2*wall = 12
+- Rod center should be at (wall + inner_size/2, wall + inner_size/2) = (6, 6)
+- Z offset of -5 makes rod extend beyond channel ends (35 > 25)
+
+**Verified:** Wireframe screenshots show rod passing through channel with clearance.
 
 ---
 
@@ -186,6 +215,13 @@ As we build components, we should extract reusable patterns as custom nodes.
 ---
 
 ## Session Log
+
+### Session 10 - 2026-01-27
+- **Created rod_logic_channel** custom node - rectangular tube with square hole along Z-axis
+- Parameters: `channel_length`, `inner_size`, `wall` (defaults: 25, 8, 2)
+- **Tested rod + channel assembly:** rod_logic_knob fits inside rod_logic_channel with ~1 lattice unit clearance
+- Added **Assembly Guide** section documenting how to position rod inside channel
+- Key: rod center at (wall + inner_size/2, wall + inner_size/2) = (6, 6) for default params
 
 ### Session 9 - 2026-01-27
 - **Generalized hexprism → prism_n:** Added `n_sides` parameter, renamed network (preserves composability)
@@ -427,3 +463,6 @@ The literature emphasizes specific surface properties:
 | `prism_n_oct.png` | Screenshot of prism_n with n_sides=8 | 2026-01-27 |
 | `hollow_prism_n_oct.png` | Screenshot of hollow_prism_n with n_sides=8 | 2026-01-27 |
 | `hollow_prism_n_atoms.png` | Screenshot of hollow_prism_n atoms (space-filling) | 2026-01-27 |
+| `test_rod_logic_channel.png` | Screenshot of rod_logic_channel alone | 2026-01-27 |
+| `test_rod_channel_xsection.png` | Rod+channel cross-section (end-on wireframe) | 2026-01-27 |
+| `test_rod_channel_fit.png` | Rod+channel 3D assembly (wireframe) | 2026-01-27 |

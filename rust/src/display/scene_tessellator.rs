@@ -133,8 +133,8 @@ fn tessellate_non_lightweight_content(
                         poly_mesh,
                         &mut wireframe_mesh,
                         preferences.geometry_visualization.mesh_smoothing.clone(),
-                        Vec3::new(0.0, 0.0, 0.0).to_array(),
-                        Vec3::new(0.0, 0.0, 0.0).to_array()
+                        Vec3::new(1.0, 1.0, 1.0).to_array(),
+                        Vec3::new(1.0, 1.0, 1.0).to_array()
                     );
                 } else {
                     tessellate_poly_mesh(

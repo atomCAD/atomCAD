@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use super::serializer::format_string;
 
 /// Serializes a node network to text format.
 pub struct NetworkSerializer<'a> {
@@ -39,7 +40,18 @@ impl<'a> NetworkSerializer<'a> {
 
         // Add header with network name (if provided)
         if let Some(name) = self.network_name {
-            output.push_str(&format!("# Network: {}\n\n", name));
+            output.push_str(&format!("# Network: {}\n", name));
+        }
+
+        // Add description (if non-empty)
+        let description = &self.network.node_type.description;
+        if !description.is_empty() {
+            output.push_str(&format!("description {}\n", format_string(description)));
+        }
+
+        // Add blank line after header/description
+        if self.network_name.is_some() || !description.is_empty() {
+            output.push('\n');
         }
 
         // Handle empty network
