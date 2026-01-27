@@ -2298,6 +2298,1605 @@
       }
     ],
     [
+      "crystal_castle",
+      {
+        "next_node_id": 60,
+        "node_type": {
+          "name": "crystal_castle",
+          "description": "Crystal Castle - A grand fortress with 4 corner towers, connecting walls, and central keep",
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 58,
+            "node_type_name": "union",
+            "custom_name": "castle_structure",
+            "position": [
+              13400.0,
+              168.66666666666666
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "55": 0,
+                  "27": 0,
+                  "42": 0,
+                  "56": 0,
+                  "32": 0,
+                  "57": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "crystal_tower",
+            "custom_name": "tower_nw_base",
+            "position": [
+              830.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 51,
+            "node_type_name": "lattice_move",
+            "custom_name": "turret_e",
+            "position": [
+              12250.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "49": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "50": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "lattice_move",
+            "custom_name": "tower_sw",
+            "position": [
+              2760.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 49,
+            "node_type_name": "prism_n",
+            "custom_name": "turret_e_base",
+            "position": [
+              11780.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 1,
+            "node_type_name": "crystal_tower",
+            "custom_name": "tower_ne_base",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 59,
+            "node_type_name": "atom_fill",
+            "custom_name": "castle_atoms",
+            "position": [
+              13610.0,
+              168.66666666666666
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "58": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "invert_phase": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": "",
+              "remove_single_bond_atoms_before_passivation": true,
+              "surface_reconstruction": false
+            }
+          },
+          {
+            "id": 25,
+            "node_type_name": "ivec3",
+            "custom_name": "keep_finial_offset",
+            "position": [
+              6040.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                55
+              ]
+            }
+          },
+          {
+            "id": 27,
+            "node_type_name": "union",
+            "custom_name": "keep",
+            "position": [
+              6460.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "23": 0,
+                  "17": 0,
+                  "20": 0,
+                  "26": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 33,
+            "node_type_name": "hollow_prism_n",
+            "custom_name": "fountain_basin",
+            "position": [
+              7920.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 37,
+            "node_type_name": "ivec3",
+            "custom_name": "fountain_pedestal_offset",
+            "position": [
+              8910.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                25,
+                3
+              ]
+            }
+          },
+          {
+            "id": 31,
+            "node_type_name": "lattice_move",
+            "custom_name": "gatehouse_arch_moved",
+            "position": [
+              7450.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "29": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "30": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 40,
+            "node_type_name": "ivec3",
+            "custom_name": "fountain_top_offset",
+            "position": [
+              9640.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                25,
+                9
+              ]
+            }
+          },
+          {
+            "id": 46,
+            "node_type_name": "prism_n",
+            "custom_name": "turret_s_base",
+            "position": [
+              11050.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 2,
+            "node_type_name": "ivec3",
+            "custom_name": "tower_ne_offset",
+            "position": [
+              360.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                50,
+                50,
+                0
+              ]
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "ivec3",
+            "custom_name": "tower_sw_offset",
+            "position": [
+              2550.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -50,
+                -50,
+                0
+              ]
+            }
+          },
+          {
+            "id": 14,
+            "node_type_name": "cuboid",
+            "custom_name": "wall_south",
+            "position": [
+              3280.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                60,
+                6,
+                30
+              ],
+              "min_corner": [
+                -30,
+                -53,
+                0
+              ]
+            }
+          },
+          {
+            "id": 52,
+            "node_type_name": "prism_n",
+            "custom_name": "turret_w_base",
+            "position": [
+              12510.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 39,
+            "node_type_name": "octahedron",
+            "custom_name": "fountain_top",
+            "position": [
+              9380.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "lattice_move",
+            "custom_name": "tower_se",
+            "position": [
+              2030.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 54,
+            "node_type_name": "lattice_move",
+            "custom_name": "turret_w",
+            "position": [
+              12980.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "52": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "53": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 21,
+            "node_type_name": "pyramid_tip",
+            "custom_name": "keep_spire_base",
+            "position": [
+              5050.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 32,
+            "node_type_name": "diff",
+            "custom_name": "gatehouse",
+            "position": [
+              7660.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "28": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "31": 0
+                }
+              }
+            ],
+            "data_type": "diff",
+            "data": {}
+          },
+          {
+            "id": 42,
+            "node_type_name": "union",
+            "custom_name": "fountain",
+            "position": [
+              10060.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "38": 0,
+                  "35": 0,
+                  "41": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 36,
+            "node_type_name": "prism_n",
+            "custom_name": "fountain_pedestal",
+            "position": [
+              8650.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 28,
+            "node_type_name": "cuboid",
+            "custom_name": "gatehouse_outer",
+            "position": [
+              6720.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                24,
+                12,
+                35
+              ],
+              "min_corner": [
+                -12,
+                47,
+                0
+              ]
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "lattice_move",
+            "custom_name": "keep_roof_moved",
+            "position": [
+              4790.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "18": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 44,
+            "node_type_name": "ivec3",
+            "custom_name": "turret_n_offset",
+            "position": [
+              10580.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                53,
+                30
+              ]
+            }
+          },
+          {
+            "id": 50,
+            "node_type_name": "ivec3",
+            "custom_name": "turret_e_offset",
+            "position": [
+              12040.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                53,
+                0,
+                30
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "crystal_tower",
+            "custom_name": "tower_sw_base",
+            "position": [
+              2290.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 34,
+            "node_type_name": "ivec3",
+            "custom_name": "fountain_basin_offset",
+            "position": [
+              8180.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                25,
+                0
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "ivec3",
+            "custom_name": "tower_nw_offset",
+            "position": [
+              1090.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -50,
+                50,
+                0
+              ]
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "hollow_prism_n",
+            "custom_name": "keep_base",
+            "position": [
+              4060.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 19,
+            "node_type_name": "ivec3",
+            "custom_name": "keep_roof_offset",
+            "position": [
+              4580.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                45
+              ]
+            }
+          },
+          {
+            "id": 53,
+            "node_type_name": "ivec3",
+            "custom_name": "turret_w_offset",
+            "position": [
+              12770.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -53,
+                0,
+                30
+              ]
+            }
+          },
+          {
+            "id": 55,
+            "node_type_name": "union",
+            "custom_name": "towers",
+            "position": [
+              2970.0,
+              306.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0,
+                  "12": 0,
+                  "3": 0,
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 35,
+            "node_type_name": "lattice_move",
+            "custom_name": "fountain_basin_moved",
+            "position": [
+              8390.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "33": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "34": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 22,
+            "node_type_name": "ivec3",
+            "custom_name": "keep_spire_offset",
+            "position": [
+              5310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                60
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "ivec3",
+            "custom_name": "tower_se_offset",
+            "position": [
+              1820.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                50,
+                -50,
+                0
+              ]
+            }
+          },
+          {
+            "id": 43,
+            "node_type_name": "prism_n",
+            "custom_name": "turret_n_base",
+            "position": [
+              10320.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 48,
+            "node_type_name": "lattice_move",
+            "custom_name": "turret_s",
+            "position": [
+              11520.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "46": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "47": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 30,
+            "node_type_name": "ivec3",
+            "custom_name": "gatehouse_arch_offset",
+            "position": [
+              7240.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                53,
+                0
+              ]
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "cuboid",
+            "custom_name": "wall_east",
+            "position": [
+              3540.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                6,
+                60,
+                30
+              ],
+              "min_corner": [
+                47,
+                -30,
+                0
+              ]
+            }
+          },
+          {
+            "id": 29,
+            "node_type_name": "prism_n",
+            "custom_name": "gatehouse_arch",
+            "position": [
+              6980.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 57,
+            "node_type_name": "union",
+            "custom_name": "turrets",
+            "position": [
+              13192.399999999998,
+              89.60000000000059
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "48": 0,
+                  "45": 0,
+                  "51": 0,
+                  "54": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 6,
+            "node_type_name": "lattice_move",
+            "custom_name": "tower_nw",
+            "position": [
+              1300.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 23,
+            "node_type_name": "lattice_move",
+            "custom_name": "keep_spire",
+            "position": [
+              5520.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "21": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 24,
+            "node_type_name": "octahedron",
+            "custom_name": "keep_finial_base",
+            "position": [
+              5780.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 56,
+            "node_type_name": "union",
+            "custom_name": "walls",
+            "position": [
+              4010.0,
+              306.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "13": 0,
+                  "15": 0,
+                  "14": 0,
+                  "16": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 38,
+            "node_type_name": "lattice_move",
+            "custom_name": "fountain_pedestal_moved",
+            "position": [
+              9120.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "36": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 41,
+            "node_type_name": "lattice_move",
+            "custom_name": "fountain_top_moved",
+            "position": [
+              9850.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "39": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "40": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 47,
+            "node_type_name": "ivec3",
+            "custom_name": "turret_s_offset",
+            "position": [
+              11310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                -53,
+                30
+              ]
+            }
+          },
+          {
+            "id": 26,
+            "node_type_name": "lattice_move",
+            "custom_name": "keep_finial",
+            "position": [
+              6250.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "cuboid",
+            "custom_name": "wall_north",
+            "position": [
+              3020.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                60,
+                6,
+                30
+              ],
+              "min_corner": [
+                -30,
+                47,
+                0
+              ]
+            }
+          },
+          {
+            "id": 45,
+            "node_type_name": "lattice_move",
+            "custom_name": "turret_n",
+            "position": [
+              10790.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "43": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "44": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "cuboid",
+            "custom_name": "wall_west",
+            "position": [
+              3800.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                6,
+                60,
+                30
+              ],
+              "min_corner": [
+                -53,
+                -30,
+                0
+              ]
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "prism_n",
+            "custom_name": "keep_roof",
+            "position": [
+              4320.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "crystal_tower",
+            "custom_name": "tower_se_base",
+            "position": [
+              1560.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 3,
+            "node_type_name": "lattice_move",
+            "custom_name": "tower_ne",
+            "position": [
+              570.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": 58,
+        "displayed_node_ids": [
+          [
+            59,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
       "channel",
       {
         "next_node_id": 17,

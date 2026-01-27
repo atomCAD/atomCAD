@@ -129,6 +129,7 @@ Complex crystallographic shapes or multi-part assemblies.
 | **Honeycomb Strut** | Lightweight structural frame element | Not started | For pressure vessel skeletons |
 | **Vee-Notch Gear** | Gear tooth nestled in race notch | Not started | Drexler/Goddard nanoscale gear concept |
 | **Crystal Observatory Tower** | Multi-level decorative tower | **Done** | 17 component instances, 206k atoms, showcases library |
+| **Crystal Castle** | 4-tower fortress with keep | **Done** | 1.75M atoms, 59 nodes, uses tower as reusable component |
 
 ---
 
@@ -216,6 +217,14 @@ rod_moved = lattice_move { shape: rod, translation: rod_offset, visible: true }
 ---
 
 ## Session Log
+
+### Session 12 - 2026-01-27
+- **Built Crystal Castle** - massive fortress assembly using `crystal_tower` as a reusable component
+- **1,754,233 atoms**, 3,063,590 bonds - **8.5× larger than previous record** (tower was 206k atoms)
+- Components: 4 corner towers (`crystal_tower` instances), 4 walls, 4 wall turrets, central keep, gatehouse with arch, courtyard fountain
+- Dimensions: ~140×140×70 lattice units (~50nm × 50nm × 25nm)
+- **Key achievement:** Hierarchical composition - the 206k-atom tower is now just one component in a larger assembly
+- Created `crystal_castle` network with 59 nodes demonstrating component reuse at scale
 
 ### Session 11 - 2026-01-27
 - **Built Crystal Observatory Tower** - first multi-component assembly using 17 instances of 8 different custom nodes
@@ -474,6 +483,12 @@ The literature emphasizes specific surface properties:
 | `test_rod_logic_channel.png` | Screenshot of rod_logic_channel alone | 2026-01-27 |
 | `test_rod_channel_xsection.png` | Rod+channel cross-section (end-on wireframe) | 2026-01-27 |
 | `test_rod_channel_fit.png` | Rod+channel 3D assembly (wireframe) | 2026-01-27 |
+| `tower_current.png` | Crystal Observatory Tower close-up | 2026-01-27 |
+| `tower_full_view.png` | Crystal Observatory Tower full view | 2026-01-27 |
+| `crystal_castle.png` | Crystal Castle 3/4 view (1.75M atoms) | 2026-01-27 |
+| `castle_front.png` | Crystal Castle front view showing gatehouse | 2026-01-27 |
+| `castle_aerial.png` | Crystal Castle aerial/top-down view | 2026-01-27 |
+| `castle_corner.png` | Crystal Castle corner view | 2026-01-27 |
 | `crystal_tower_final.png` | Crystal Observatory Tower - close-up detail | 2026-01-27 |
 | `crystal_tower_full.png` | Crystal Observatory Tower - full view | 2026-01-27 |
 | `tower_geometry.png` | Tower geometry wireframe | 2026-01-27 |
