@@ -93,7 +93,7 @@ Faceted shapes using half_space intersections or simple extrusions.
 |-----------|-------------|--------|-------|
 | **Octahedron** | 8-faced shape from {111} planes | **Done** | Custom node created, 6415 atoms at size=8 |
 | **Truncated Cube** | Cube with chamfered corners | Not started | cuboid + half_spaces cutting corners |
-| **Hexagonal Prism** | 6-sided column | **Done** | Custom node created, ~20k atoms at radius=8, height=12 |
+| **N-Sided Prism** | N-sided column | **Done** | Generalized as `prism_n` with n_sides param |
 | **Wedge** | Triangular prism | **Done** | half_plane + extrude, parametric size/height |
 | **L-Bracket** | Corner structural element | **Done** | union of cuboids, parametric length/width/thickness |
 | **Channel/Groove** | U-shaped trough | **Done** | diff(cuboid, cuboid), parametric with wall thickness |
@@ -111,7 +111,7 @@ Require multiple boolean ops or careful crystallographic alignment.
 | **Pyramidal Tip** | 4-sided point | **Done** | 4 {101}-family half_spaces, apex at origin |
 | **Rod Logic Knob** | Small protrusion on cylindrical rod | **Done** | hexprism + cuboid union, parametric rod/knob size |
 | **Gear Tooth** | Single triangular/trapezoidal tooth profile | Not started | Basic building block for gears |
-| **Hollow Hexprism** | Tube with hexagonal cross-section | **Done** | diff(outer, inner) hexprism, ~29k atoms at 10/6/15 |
+| **Hollow N-Prism** | Tube with N-sided cross-section | **Done** | Generalized as `hollow_prism_n`, ~29k atoms at n=8/outer=10/inner=6/h=15 |
 
 ### Tier 3: Advanced
 Complex crystallographic shapes or multi-part assemblies.
@@ -141,24 +141,24 @@ As we build components, we should extract reusable patterns as custom nodes.
 |-----------|---------|------------|--------|
 | `tetrahedron` | 4-faced solid from {111} planes | size, center | **Done** (center not impl) |
 | `octahedron` | 8-faced solid from {111} planes | size, center | **Done** (center not impl) |
-| `prism_n` | N-sided regular prism | n_sides, radius, height | Not started |
+| `prism_n` | N-sided regular prism | n_sides, radius, height | **Done** |
 | `pyramid_n` | N-sided pyramid | n_sides, base_radius, height | Not started |
 | `chamfered_cuboid` | Cuboid with cut corners | extent, chamfer | Not started |
-| `hollow_prism` | Prismatic tube | n_sides, outer_r, inner_r, height | Not started |
+| `hollow_prism_n` | Prismatic tube | n_sides, outer_r, inner_r, height | **Done** |
 
 ### Built Custom Nodes
 
 | Node Name | Purpose | Parameters | Notes |
 |-----------|---------|------------|-------|
 | `octahedron` | 8-faced {111} solid | `size: Int` (default 10) | Works well, supports literal params |
-| `hexprism` | 6-sided prism | `radius: Int`, `height: Int` | Fully parametric (reg_poly now wireable) |
+| `prism_n` | N-sided regular prism | `n_sides`, `radius`, `height: Int` | Generalized from hexprism, fully parametric |
 | `tetrahedron` | 4-faced {111} solid | `size: Int` (default 10) | 4 half_spaces, fully parametric |
 | `wedge` | Triangular prism | `size: Int`, `height: Int` | 3 half_planes + extrude, fully parametric |
 | `l_bracket` | L-shaped corner bracket | `length`, `width`, `thickness: Int` | union of 2 cuboids via ivec3 wiring |
 | `pyramid_tip` | 4-sided pyramid point | `size: Int` | 4 {101} half_spaces + base, apex at origin |
 | `channel` | U-shaped trough | `length`, `width`, `height`, `wall: Int` | diff(cuboid, cuboid), uses expr for inner dims |
-| `hollow_hexprism` | Hexagonal tube | `outer_radius`, `inner_radius`, `height: Int` | diff of two hexprism instances |
-| `rod_logic_knob` | Rod with knob | `rod_radius`, `rod_length`, `knob_size: Int` | union(hexprism, cuboid), knob at midpoint |
+| `hollow_prism_n` | N-sided hollow tube | `n_sides`, `outer_radius`, `inner_radius`, `height: Int` | diff of two prism_n instances |
+| `rod_logic_knob` | Rod with knob | `rod_radius`, `rod_length`, `knob_size: Int` | union(prism_n, cuboid), knob at midpoint |
 
 ---
 
@@ -186,6 +186,12 @@ As we build components, we should extract reusable patterns as custom nodes.
 ---
 
 ## Session Log
+
+### Session 9 - 2026-01-27
+- **Generalized hexprism → prism_n:** Added `n_sides` parameter, renamed network (preserves composability)
+- **Generalized hollow_hexprism → hollow_prism_n:** Now uses `prism_n` internally with `n_sides` param
+- Tested with hexagonal (n=6), octagonal (n=8), and square (n=4) prisms - all working
+- Updated all documentation to reflect generalized node names
 
 ### Session 8 - 2026-01-27
 - **reg_poly fix:** Another agent fixed wireable parameters - `radius` and `num_sides` now accept wires
@@ -417,3 +423,7 @@ The literature emphasizes specific surface properties:
 | `rod_logic_knob.png` | Screenshot of rod_logic_knob (front view) | 2026-01-27 |
 | `rod_logic_knob2.png` | Screenshot of rod_logic_knob (angle view) | 2026-01-27 |
 | `rod_logic_knob3.png` | Screenshot of rod_logic_knob (side view showing knob) | 2026-01-27 |
+| `prism_n_hex.png` | Screenshot of prism_n with n_sides=6 | 2026-01-27 |
+| `prism_n_oct.png` | Screenshot of prism_n with n_sides=8 | 2026-01-27 |
+| `hollow_prism_n_oct.png` | Screenshot of hollow_prism_n with n_sides=8 | 2026-01-27 |
+| `hollow_prism_n_atoms.png` | Screenshot of hollow_prism_n atoms (space-filling) | 2026-01-27 |
