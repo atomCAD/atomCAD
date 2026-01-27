@@ -109,6 +109,9 @@ Require multiple boolean ops or careful crystallographic alignment.
 | **Stepped Shaft** | Rod with diameter changes | Not started | Union of aligned prisms |
 | **Slot/Keyway** | Rectangular channel for alignment | Not started | diff with extruded rect |
 | **Pyramidal Tip** | 4-sided point | **Done** | 4 {101}-family half_spaces, apex at origin |
+| **Rod Logic Knob** | Small protrusion on cylindrical rod | Not started | For mechanical computing gates |
+| **Gear Tooth** | Single triangular/trapezoidal tooth profile | Not started | Basic building block for gears |
+| **Hollow Hexprism** | Tube with hexagonal cross-section | Not started | Bearing race or channel housing |
 
 ### Tier 3: Advanced
 Complex crystallographic shapes or multi-part assemblies.
@@ -120,6 +123,11 @@ Complex crystallographic shapes or multi-part assemblies.
 | **Interlocking Pair** | Male+female that fit atomically | Not started | Requires precise offset calculation |
 | **Ratchet Tooth** | Asymmetric sawtooth profile | Not started | Extruded asymmetric polygon |
 | **Bearing Race** | Faceted "cylinder" approximation | Not started | High-N polygon prism, hollow |
+| **Sleeve Bearing Pair** | Concentric shaft + sleeve | Not started | Test m-fold/n-fold symmetry for superlubricity |
+| **Rod Logic Channel** | Hollow channel with sliding rod | Not started | Test clearance for mechanical logic |
+| **Simple Planetary Gear** | Sun gear + planets in casing | Not started | Complex assembly, ~12 lattice units diameter |
+| **Honeycomb Strut** | Lightweight structural frame element | Not started | For pressure vessel skeletons |
+| **Vee-Notch Gear** | Gear tooth nestled in race notch | Not started | Drexler/Goddard nanoscale gear concept |
 
 ---
 
@@ -176,6 +184,13 @@ As we build components, we should extract reusable patterns as custom nodes.
 ---
 
 ## Session Log
+
+### Session 7 - 2026-01-27 (Research)
+- **Literature review:** Drexler's *Nanosystems*, Freitas's *Nanomedicine*, Merkle's bearing papers
+- Added "Nanomachine Design Research" section with component specifications from literature
+- **Key findings:** Sleeve bearings use symmetry mismatch (m-fold/n-fold) for zero-wear rotation; rod logic ~16nm³/gate; planetary gears ~4.3nm diameter
+- Added 8 new components to build lists: rod logic knob, gear tooth, hollow hexprism, sleeve bearing pair, rod logic channel, planetary gear, honeycomb strut, vee-notch gear
+- **Scale insight:** Most literature designs are 3-15nm (8-42 lattice units) - achievable but at upper atomCAD limits
 
 ### Session 6 - 2026-01-26
 - Created **l_bracket** custom node - union of 2 cuboids with `ivec3` wiring for parametric extents
@@ -261,6 +276,123 @@ Since `reg_poly` and `polygon` have literal-only parameters, use `half_plane` no
 - Best Miller indices for various cutting operations?
 - How to calculate offsets for interlocking parts at atomic precision?
 - Does facet_shell give better results than manual half_space intersection?
+
+---
+
+## Nanomachine Design Research (Literature Review)
+
+This section documents theoretical nanomachine designs from the molecular nanotechnology literature that could inform our atomCAD design work.
+
+### Key Sources
+
+| Source | Author(s) | Focus |
+|--------|-----------|-------|
+| *Nanosystems* (1992) | K. Eric Drexler | Comprehensive nanomechanical engineering textbook |
+| *Nanomedicine Vol. I* (1999) | Robert A. Freitas Jr. | Medical nanorobot design specifications |
+| Nanofactory Collaboration | Freitas, Merkle et al. | Diamond mechanosynthesis research |
+
+### Theoretical Nanomachine Components
+
+The following components have been designed computationally and could serve as design targets:
+
+#### Bearings
+
+| Design | Specifications | Key Features |
+|--------|---------------|--------------|
+| **Sleeve Bearing** (Merkle) | Two bent {111} diamond sheets as hoops | Inner hoop rotates inside outer; only C and H atoms |
+| **Superlubricity Bearing** | m-fold shaft in n-fold sleeve | Energy barrier period = GCD(m,n)/mn; zero wear if atomically precise |
+
+**Design insight:** Molecular bearings can "run dry" - atomically precise surfaces have zero wear if forces don't dislodge atoms. Symmetry mismatch between shaft and sleeve creates low-friction rotation.
+
+#### Gears
+
+| Design | Specifications | Notes |
+|--------|---------------|-------|
+| **Planetary Gear** (Drexler/Merkle) | 4.3nm × 4.4nm, 12 moving parts, ~51k daltons | Strained silicon shell, sulfur termination, 9 planet gears |
+| **2nd Gen Planetary** | 4,235 atoms, 47.6 nm³ volume | More stable but still has slip at high frequencies |
+
+**Design insight:** Nanoscale gears may look completely different from macroscale equivalents. Goddard proposed "Vee design" where gear tooth nestles in notch - impossible to assemble macroscopically but feasible at molecular scale.
+
+#### Rod Logic (Mechanical Computing)
+
+| Component | Specifications | Notes |
+|-----------|---------------|-------|
+| **Interlock Gate** | ~16 nm³/gate | Knobs on rods prevent/enable motion |
+| **Register** | ~40 nm³/register, 0.1ns switching | 1nm wide rods |
+| **Full Nanocomputer** | (400nm)³, 10⁶ gates, ~60nW | EMP-resistant, orders of magnitude lower power than CMOS |
+
+**Design insight:** Rod logic uses the principle that two objects can't occupy the same space. Rods slide in channels within a diamond matrix; "knobs" on crossing rods create logic gates.
+
+#### Pumps and Sorting Rotors
+
+| Design | Specifications | Application |
+|--------|---------------|-------------|
+| **Molecular Sorting Rotor** | 3-stage assemblies | Respirocyte O₂/CO₂ pumping |
+| **Simple Pump** (Drexler) | 6,165 atoms | Selective molecular transport |
+| **Respirocyte Pumping Station** | 12 stations per device | Glucose-powered, reversible pumping |
+
+**Design insight:** Sorting rotors have different binding site tips for different molecule types. Rotation moves bound molecules from low to high concentration against gradient.
+
+#### Tooltips and Manipulators
+
+| Design | Specifications | Notes |
+|--------|---------------|-------|
+| **DCB6Ge Tooltip** | First complete DMS tooltip | Successfully simulated C₂ dimer placement on C(110) |
+| **Handle Structure** | 0.1-10 μm diamond rod/cone | Grippable by SPM tip or MEMS manipulator |
+
+### Reference Designs: Respirocyte (Freitas, 1998)
+
+The respirocyte is the most detailed theoretical medical nanorobot design, providing concrete specifications:
+
+- **Size:** 1 μm diameter spherical
+- **Structure:** 18 billion atoms, diamondoid 1000 atm pressure vessel
+- **Capacity:** 3 billion O₂/CO₂ molecules
+- **Power:** Glucose metabolism, chemomechanical turbine
+- **Components:**
+  - 12 equatorial pumping stations (50% of surface)
+  - Molecular sorting rotor arrays (3-stage)
+  - Onboard nanocomputer with chemical/pressure sensors
+  - Glucose tanks and powerplants
+  - Surface "barcode" identification patterns
+
+### Component Mapping to atomCAD
+
+Based on the literature, here are components we could attempt in atomCAD at appropriate scales:
+
+| Literature Component | atomCAD Approach | Complexity | Notes |
+|---------------------|------------------|------------|-------|
+| Sleeve bearing inner/outer | Two concentric hex/oct prisms | Medium | Test superlubricity symmetry matching |
+| Rod logic knob | Small protrusion on shaft | Low | Simple diff/union geometry |
+| Rod logic channel | Hollow prism with rod inside | Medium | Test clearance tolerances |
+| Gear tooth profile | Asymmetric extruded polygon | Medium | Involute vs simple triangular |
+| Ratchet pawl | Asymmetric sawtooth | Medium | Already in Tier 3 list |
+| Pyramidal tooltip base | pyramid_tip variant | Low | Already built |
+| Sorting rotor binding pocket | Hemispherical cavity in rotor | High | Requires precise geometry |
+| Honeycomb/geodesic frame | Intersecting struts | High | For lightweight pressure vessels |
+
+### Crystallographic Considerations from Literature
+
+The literature emphasizes specific surface properties:
+
+| Surface | Properties | Applications |
+|---------|------------|--------------|
+| **(111)** | Most stable, 3-fold symmetric, lowest surface energy | Bearing surfaces, natural cleave planes |
+| **(100)** | 4-fold symmetric, can reconstruct (2×1), highest tensile strength | Structural members along cube axes |
+| **(110)** | 2-fold symmetric, better doping efficiency, higher C-H density | Electronic applications, alternative bearing surfaces |
+
+**Key finding:** Tensile strength is highest for [100] direction, lower for [110], lowest for [111]. Design load-bearing members along [100] axes.
+
+### Practical Scale Constraints
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| Diamond lattice constant | 3.567 Å | 1 lattice unit in atomCAD |
+| Planetary gear diameter | 4.3 nm | ~12 lattice units |
+| Rod logic gate | ~2.5 nm | ~7 lattice units |
+| Minimum viable bearing | ~2-3 nm | ~6-8 lattice units |
+| Respirocyte | 1000 nm | Way beyond atomCAD practical range |
+
+**Implication:** Most literature designs are 3-15nm scale, which maps to 8-42 lattice units - achievable in atomCAD but at the upper end of practical rendering.
 
 ---
 
