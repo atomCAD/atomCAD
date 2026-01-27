@@ -1,6 +1,1468 @@
 {
   "node_networks": [
     [
+      "crystal_tower",
+      {
+        "next_node_id": 54,
+        "node_type": {
+          "name": "crystal_tower",
+          "description": "Crystal Observatory Tower - A multi-level nanoscale tower assembly demonstrating component composition",
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 29,
+            "node_type_name": "lattice_move",
+            "custom_name": "bracket4",
+            "position": [
+              6880.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "27": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "28": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 44,
+            "node_type_name": "ivec3",
+            "custom_name": "wedge2_offset",
+            "position": [
+              10530.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -8,
+                0,
+                6
+              ]
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "l_bracket",
+            "custom_name": "bracket1_base",
+            "position": [
+              4220.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 12,
+            "node_type_name": "ivec3",
+            "custom_name": "col4_offset",
+            "position": [
+              2810.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                -14,
+                6
+              ]
+            }
+          },
+          {
+            "id": 23,
+            "node_type_name": "lattice_move",
+            "custom_name": "bracket2",
+            "position": [
+              5420.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "21": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "22": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 24,
+            "node_type_name": "l_bracket",
+            "custom_name": "bracket3_base",
+            "position": [
+              5680.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 6,
+            "node_type_name": "ivec3",
+            "custom_name": "col2_offset",
+            "position": [
+              1350.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -14,
+                0,
+                6
+              ]
+            }
+          },
+          {
+            "id": 25,
+            "node_type_name": "ivec3",
+            "custom_name": "bracket3_offset",
+            "position": [
+              5940.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -2,
+                10,
+                6
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "lattice_move",
+            "custom_name": "col3",
+            "position": [
+              2290.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 27,
+            "node_type_name": "l_bracket",
+            "custom_name": "bracket4_base",
+            "position": [
+              6410.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 17,
+            "node_type_name": "lattice_move",
+            "custom_name": "upper_deck",
+            "position": [
+              3960.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 30,
+            "node_type_name": "pyramid_tip",
+            "custom_name": "crown_base",
+            "position": [
+              7140.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 31,
+            "node_type_name": "ivec3",
+            "custom_name": "crown_offset",
+            "position": [
+              7400.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                54
+              ]
+            }
+          },
+          {
+            "id": 35,
+            "node_type_name": "lattice_move",
+            "custom_name": "finial",
+            "position": [
+              8340.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "33": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "34": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 21,
+            "node_type_name": "l_bracket",
+            "custom_name": "bracket2_base",
+            "position": [
+              4950.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 16,
+            "node_type_name": "ivec3",
+            "custom_name": "upper_deck_offset",
+            "position": [
+              3750.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                41
+              ]
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "lattice_move",
+            "custom_name": "col4",
+            "position": [
+              3020.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 37,
+            "node_type_name": "ivec3",
+            "custom_name": "centerpiece_offset",
+            "position": [
+              8860.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                22
+              ]
+            }
+          },
+          {
+            "id": 38,
+            "node_type_name": "lattice_move",
+            "custom_name": "centerpiece",
+            "position": [
+              9070.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "36": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "37": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 40,
+            "node_type_name": "wedge",
+            "custom_name": "wedge1_base",
+            "position": [
+              9540.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 41,
+            "node_type_name": "ivec3",
+            "custom_name": "wedge1_offset",
+            "position": [
+              9800.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                8,
+                0,
+                6
+              ]
+            }
+          },
+          {
+            "id": 45,
+            "node_type_name": "lattice_move",
+            "custom_name": "wedge2",
+            "position": [
+              10740.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "43": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "44": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "ivec3",
+            "custom_name": "col3_offset",
+            "position": [
+              2080.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                14,
+                6
+              ]
+            }
+          },
+          {
+            "id": 43,
+            "node_type_name": "wedge",
+            "custom_name": "wedge2_base",
+            "position": [
+              10270.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 47,
+            "node_type_name": "ivec3",
+            "custom_name": "wedge3_offset",
+            "position": [
+              11260.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                8,
+                6
+              ]
+            }
+          },
+          {
+            "id": 48,
+            "node_type_name": "lattice_move",
+            "custom_name": "wedge3",
+            "position": [
+              11470.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "46": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "47": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 49,
+            "node_type_name": "wedge",
+            "custom_name": "wedge4_base",
+            "position": [
+              11730.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 52,
+            "node_type_name": "union",
+            "custom_name": "tower_structure",
+            "position": [
+              12410.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "45": 0,
+                  "20": 0,
+                  "26": 0,
+                  "29": 0,
+                  "35": 0,
+                  "32": 0,
+                  "17": 0,
+                  "23": 0,
+                  "48": 0,
+                  "51": 0,
+                  "4": 0,
+                  "10": 0,
+                  "42": 0,
+                  "1": 0,
+                  "7": 0,
+                  "38": 0,
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 50,
+            "node_type_name": "ivec3",
+            "custom_name": "wedge4_offset",
+            "position": [
+              11990.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                -8,
+                6
+              ]
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "lattice_move",
+            "custom_name": "col2",
+            "position": [
+              1560.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "hollow_prism_n",
+            "custom_name": "base_platform",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 14,
+            "node_type_name": "union",
+            "custom_name": "columns",
+            "position": [
+              3230.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0,
+                  "10": 0,
+                  "7": 0,
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 22,
+            "node_type_name": "ivec3",
+            "custom_name": "bracket2_offset",
+            "position": [
+              5210.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -10,
+                -2,
+                6
+              ]
+            }
+          },
+          {
+            "id": 26,
+            "node_type_name": "lattice_move",
+            "custom_name": "bracket3",
+            "position": [
+              6150.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "ivec3",
+            "custom_name": "bracket1_offset",
+            "position": [
+              4480.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                10,
+                -2,
+                6
+              ]
+            }
+          },
+          {
+            "id": 32,
+            "node_type_name": "lattice_move",
+            "custom_name": "crown",
+            "position": [
+              7610.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "30": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "31": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 33,
+            "node_type_name": "octahedron",
+            "custom_name": "finial_base",
+            "position": [
+              7870.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 42,
+            "node_type_name": "lattice_move",
+            "custom_name": "wedge1",
+            "position": [
+              10010.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "40": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "41": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "prism_n",
+            "custom_name": "col2_base",
+            "position": [
+              1090.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 15,
+            "node_type_name": "hollow_prism_n",
+            "custom_name": "upper_deck_base",
+            "position": [
+              3490.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 51,
+            "node_type_name": "lattice_move",
+            "custom_name": "wedge4",
+            "position": [
+              12200.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "49": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "50": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 46,
+            "node_type_name": "wedge",
+            "custom_name": "wedge3_base",
+            "position": [
+              11000.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "lattice_move",
+            "custom_name": "col1",
+            "position": [
+              830.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "prism_n",
+            "custom_name": "col3_base",
+            "position": [
+              1820.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 11,
+            "node_type_name": "prism_n",
+            "custom_name": "col4_base",
+            "position": [
+              2550.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 36,
+            "node_type_name": "tetrahedron",
+            "custom_name": "centerpiece_base",
+            "position": [
+              8600.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 53,
+            "node_type_name": "atom_fill",
+            "custom_name": "tower_atoms",
+            "position": [
+              12620.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "52": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "invert_phase": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": "",
+              "remove_single_bond_atoms_before_passivation": true,
+              "surface_reconstruction": false
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "ivec3",
+            "custom_name": "col1_offset",
+            "position": [
+              620.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                14,
+                0,
+                6
+              ]
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "prism_n",
+            "custom_name": "col1_base",
+            "position": [
+              360.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 34,
+            "node_type_name": "ivec3",
+            "custom_name": "finial_offset",
+            "position": [
+              8130.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                48
+              ]
+            }
+          },
+          {
+            "id": 28,
+            "node_type_name": "ivec3",
+            "custom_name": "bracket4_offset",
+            "position": [
+              6670.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -2,
+                -10,
+                6
+              ]
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "lattice_move",
+            "custom_name": "bracket1",
+            "position": [
+              4690.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "18": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": 52,
+        "displayed_node_ids": [
+          [
+            52,
+            "Normal"
+          ],
+          [
+            1,
+            "Normal"
+          ],
+          [
+            53,
+            "Normal"
+          ],
+          [
+            14,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
       "tetrahedron",
       {
         "next_node_id": 8,

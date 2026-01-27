@@ -128,6 +128,7 @@ Complex crystallographic shapes or multi-part assemblies.
 | **Simple Planetary Gear** | Sun gear + planets in casing | Not started | Complex assembly, ~12 lattice units diameter |
 | **Honeycomb Strut** | Lightweight structural frame element | Not started | For pressure vessel skeletons |
 | **Vee-Notch Gear** | Gear tooth nestled in race notch | Not started | Drexler/Goddard nanoscale gear concept |
+| **Crystal Observatory Tower** | Multi-level decorative tower | **Done** | 17 component instances, 206k atoms, showcases library |
 
 ---
 
@@ -215,6 +216,13 @@ rod_moved = lattice_move { shape: rod, translation: rod_offset, visible: true }
 ---
 
 ## Session Log
+
+### Session 11 - 2026-01-27
+- **Built Crystal Observatory Tower** - first multi-component assembly using 17 instances of 8 different custom nodes
+- Components used: `hollow_prism_n` (2), `prism_n` (4 columns), `l_bracket` (4), `pyramid_tip` (1 crown), `octahedron` (1 finial), `tetrahedron` (1 centerpiece), `wedge` (4 buttresses)
+- **206,632 atoms**, 357,377 bonds - largest assembly yet
+- Tower dimensions: ~40 lattice units wide base, ~62 units tall (~22nm × 14nm)
+- **Key pattern:** Create base shape → use `ivec3` + `lattice_move` to position → `union` all parts → `atom_fill` with passivate
 
 ### Session 10 - 2026-01-27
 - **Created rod_logic_channel** custom node - rectangular tube with square hole along Z-axis
@@ -466,3 +474,8 @@ The literature emphasizes specific surface properties:
 | `test_rod_logic_channel.png` | Screenshot of rod_logic_channel alone | 2026-01-27 |
 | `test_rod_channel_xsection.png` | Rod+channel cross-section (end-on wireframe) | 2026-01-27 |
 | `test_rod_channel_fit.png` | Rod+channel 3D assembly (wireframe) | 2026-01-27 |
+| `crystal_tower_final.png` | Crystal Observatory Tower - close-up detail | 2026-01-27 |
+| `crystal_tower_full.png` | Crystal Observatory Tower - full view | 2026-01-27 |
+| `tower_geometry.png` | Tower geometry wireframe | 2026-01-27 |
+| `tower_top.png` | Tower top-down view | 2026-01-27 |
+| `tower_side.png` | Tower side view | 2026-01-27 |
