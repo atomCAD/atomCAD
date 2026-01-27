@@ -71,7 +71,7 @@ Design components that exploit these symmetries for:
 
 ### During Work
 1. **Use the atomcad skill** - All node network creation should go through `atomcad-cli`
-2. **Create custom nodes** - Prefer building reusable parameterized subnetworks over one-off designs
+2. **Create custom nodes** - Prefer building reusable parameterized subnetworks over one-off designs. Explore the possibility of building assemblies using these custom nodes.
 3. **Think crystallographically** - Use half_space, polygon+extrude, respect lattice symmetries
 4. **Take screenshots** - Visual documentation helps future sessions understand designs
 5. **Document learnings** - Add notes about what worked/didn't work
@@ -109,9 +109,9 @@ Require multiple boolean ops or careful crystallographic alignment.
 | **Stepped Shaft** | Rod with diameter changes | Not started | Union of aligned prisms |
 | **Slot/Keyway** | Rectangular channel for alignment | Not started | diff with extruded rect |
 | **Pyramidal Tip** | 4-sided point | **Done** | 4 {101}-family half_spaces, apex at origin |
-| **Rod Logic Knob** | Small protrusion on cylindrical rod | Not started | For mechanical computing gates |
+| **Rod Logic Knob** | Small protrusion on cylindrical rod | **Done** | hexprism + cuboid union, parametric rod/knob size |
 | **Gear Tooth** | Single triangular/trapezoidal tooth profile | Not started | Basic building block for gears |
-| **Hollow Hexprism** | Tube with hexagonal cross-section | Not started | Bearing race or channel housing |
+| **Hollow Hexprism** | Tube with hexagonal cross-section | **Done** | diff(outer, inner) hexprism, ~29k atoms at 10/6/15 |
 
 ### Tier 3: Advanced
 Complex crystallographic shapes or multi-part assemblies.
@@ -141,7 +141,7 @@ As we build components, we should extract reusable patterns as custom nodes.
 |-----------|---------|------------|--------|
 | `tetrahedron` | 4-faced solid from {111} planes | size, center | **Done** (center not impl) |
 | `octahedron` | 8-faced solid from {111} planes | size, center | **Done** (center not impl) |
-| `prism_n` | N-sided regular prism | n_sides, radius, height | Blocked (reg_poly literal-only) |
+| `prism_n` | N-sided regular prism | n_sides, radius, height | Not started |
 | `pyramid_n` | N-sided pyramid | n_sides, base_radius, height | Not started |
 | `chamfered_cuboid` | Cuboid with cut corners | extent, chamfer | Not started |
 | `hollow_prism` | Prismatic tube | n_sides, outer_r, inner_r, height | Not started |
@@ -151,12 +151,14 @@ As we build components, we should extract reusable patterns as custom nodes.
 | Node Name | Purpose | Parameters | Notes |
 |-----------|---------|------------|-------|
 | `octahedron` | 8-faced {111} solid | `size: Int` (default 10) | Works well, supports literal params |
-| `hexprism` | 6-sided prism | `height: Int` (default 12) | radius fixed at 8, see reg_poly limitation |
+| `hexprism` | 6-sided prism | `radius: Int`, `height: Int` | Fully parametric (reg_poly now wireable) |
 | `tetrahedron` | 4-faced {111} solid | `size: Int` (default 10) | 4 half_spaces, fully parametric |
 | `wedge` | Triangular prism | `size: Int`, `height: Int` | 3 half_planes + extrude, fully parametric |
 | `l_bracket` | L-shaped corner bracket | `length`, `width`, `thickness: Int` | union of 2 cuboids via ivec3 wiring |
 | `pyramid_tip` | 4-sided pyramid point | `size: Int` | 4 {101} half_spaces + base, apex at origin |
 | `channel` | U-shaped trough | `length`, `width`, `height`, `wall: Int` | diff(cuboid, cuboid), uses expr for inner dims |
+| `hollow_hexprism` | Hexagonal tube | `outer_radius`, `inner_radius`, `height: Int` | diff of two hexprism instances |
+| `rod_logic_knob` | Rod with knob | `rod_radius`, `rod_length`, `knob_size: Int` | union(hexprism, cuboid), knob at midpoint |
 
 ---
 
@@ -184,6 +186,13 @@ As we build components, we should extract reusable patterns as custom nodes.
 ---
 
 ## Session Log
+
+### Session 8 - 2026-01-27
+- **reg_poly fix:** Another agent fixed wireable parameters - `radius` and `num_sides` now accept wires
+- Updated **hexprism** to use parametric `radius` (was fixed at 8)
+- Created **hollow_hexprism** custom node - diff of two hexprism instances, ~29k atoms at outer=10/inner=6/height=15
+- Created **rod_logic_knob** custom node - hexprism rod + cuboid knob union, knob positioned at rod midpoint
+- Removed obsolete reg_poly limitation docs; `prism_n` now unblocked
 
 ### Session 7 - 2026-01-27 (Research)
 - **Literature review:** Drexler's *Nanosystems*, Freitas's *Nanomedicine*, Merkle's bearing papers
@@ -243,7 +252,6 @@ As we build components, we should extract reusable patterns as custom nodes.
 
 | Feature | Why Needed | Priority |
 |---------|------------|----------|
-| **Wireable reg_poly parameters** | `radius` and `num_sides` are literal-only, blocking parametric regular polygons | Low (half_plane workaround exists) |
 | **Wireable polygon vertices** | `vertices` is literal-only, can't compute vertices dynamically | Low (half_plane workaround exists) |
 
 ---
@@ -256,10 +264,9 @@ As we build components, we should extract reusable patterns as custom nodes.
 - Combine {100} and {111} for truncated shapes (cuboctahedron)
 - Interlocking parts should mate along high-symmetry planes
 
-### Workaround: Parametric 2D Shapes via half_plane
-Since `reg_poly` and `polygon` have literal-only parameters, use `half_plane` nodes instead:
+### Alternative: Parametric 2D Shapes via half_plane
+For shapes beyond regular polygons, `half_plane` nodes offer flexibility:
 - `half_plane` has wireable `m_index` (IVec2), `center`, and `shift`
-- Create ivec2 nodes for Miller indices, wire to half_plane.m_index
 - Intersect multiple half_planes with `intersect_2d` to create arbitrary polygons
 - Then `extrude` the result for prismatic shapes
 - Example: 3 half_planes → triangle → extrude → wedge (fully parametric)
@@ -405,3 +412,8 @@ The literature emphasizes specific surface properties:
 | `pyramid_tip.png` | Screenshot of pyramid_tip (flat angle) | 2026-01-26 |
 | `pyramid_tip3.png` | Screenshot of pyramid_tip (better angle) | 2026-01-26 |
 | `channel.png` | Screenshot of channel custom node | 2026-01-26 |
+| `hollow_hexprism.png` | Screenshot of hollow_hexprism geometry | 2026-01-27 |
+| `hollow_hexprism_atoms.png` | Screenshot of hollow_hexprism atoms (space-filling) | 2026-01-27 |
+| `rod_logic_knob.png` | Screenshot of rod_logic_knob (front view) | 2026-01-27 |
+| `rod_logic_knob2.png` | Screenshot of rod_logic_knob (angle view) | 2026-01-27 |
+| `rod_logic_knob3.png` | Screenshot of rod_logic_knob (side view showing knob) | 2026-01-27 |
