@@ -44,12 +44,27 @@ impl NodeData for RegPolyData {
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
-        context: &mut NetworkEvaluationContext) -> NetworkResult {    
-        let num_sides = max(3, self.num_sides);
-        let radius = max(1, self.radius);
-    
-        let drawing_plane = match network_evaluator.evaluate_or_default(
+        context: &mut NetworkEvaluationContext) -> NetworkResult {
+        let num_sides = match network_evaluator.evaluate_or_default(
             network_stack, node_id, registry, context, 0,
+            self.num_sides,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => max(3, value),
+            Err(error) => return error,
+        };
+
+        let radius = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 1,
+            self.radius,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => max(1, value),
+            Err(error) => return error,
+        };
+
+        let drawing_plane = match network_evaluator.evaluate_or_default(
+            network_stack, node_id, registry, context, 2,
             DrawingPlane::default(),
             NetworkResult::extract_drawing_plane,
         ) {
@@ -90,8 +105,16 @@ impl NodeData for RegPolyData {
         Box::new(self.clone())
     }
 
-    fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-        None
+    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+        let show_num_sides = !connected_input_pins.contains("num_sides");
+        let show_radius = !connected_input_pins.contains("radius");
+
+        match (show_num_sides, show_radius) {
+            (true, true) => Some(format!("sides: {} r: {}", self.num_sides, self.radius)),
+            (true, false) => Some(format!("sides: {}", self.num_sides)),
+            (false, true) => Some(format!("r: {}", self.radius)),
+            (false, false) => None,
+        }
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
@@ -147,6 +170,14 @@ pub fn get_node_type() -> NodeType {
 Now that we have general polygon node this node is less used.".to_string(),
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
+        Parameter {
+          name: "num_sides".to_string(),
+          data_type: DataType::Int,
+        },
+        Parameter {
+          name: "radius".to_string(),
+          data_type: DataType::Int,
+        },
         Parameter {
           name: "d_plane".to_string(),
           data_type: DataType::DrawingPlane,
