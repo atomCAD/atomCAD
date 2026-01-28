@@ -37,6 +37,21 @@ If you are new to atomCAD check out the [atomCAD Basic Tutorial](./doc/atomCAD_b
 
 For more details see [atomCAD Reference Guide](./doc/atomCAD_reference_guide.md).
 
+## Using with Claude Code
+
+atomCAD integrates with [Claude Code](https://claude.ai/claude-code) for AI-assisted atomic structure design.
+
+**Quick Setup** (after installing atomCAD):
+
+1. Run the setup script from your atomCAD installation:
+   - **Windows**: `.\setup\setup-skill.ps1 --global --add-to-path`
+   - **Linux/macOS**: `./setup/setup-skill.sh --global --add-to-path`
+2. Restart your terminal
+3. Start atomCAD
+4. Open Claude Code and use `/atomcad` or ask Claude to create atomic structures
+
+**Developer note**: When working in this repository, the skill is already at `.claude/skills/atomcad/`. Use `./atomcad-cli` directly.
+
 ## Demos
 
 Check out the [atomCAD Demo Files](./samples/demo_description.md) to see some examples of what you can do with atomCAD.
