@@ -44,7 +44,7 @@ atomCAD integrates with [Claude Code](https://claude.ai/claude-code) for AI-assi
 **Quick Setup** (after installing atomCAD):
 
 1. Run the setup script from your atomCAD installation:
-   - **Windows**: `.\setup\setup-skill.ps1 --global --add-to-path`
+   - **Windows**: `.\setup\setup-skill.bat -Global -AddToPath`
    - **Linux/macOS**: `./setup/setup-skill.sh --global --add-to-path`
 2. Restart your terminal
 3. Start atomCAD
