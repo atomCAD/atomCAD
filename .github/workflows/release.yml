@@ -150,32 +150,42 @@ jobs:
           prerelease: false
           body: |
             ## atomCAD v${{ inputs.version }}
-            
+
             ### Downloads
-            
+
             - **Windows**: atomCAD-windows-v${{ inputs.version }}.zip
             - **Linux**: atomCAD-linux-v${{ inputs.version }}.tar.gz
             - **macOS**: atomCAD-macos-v${{ inputs.version }}.zip
-            
+
             ### Installation Instructions
-            
+
             **Windows:**
             1. Download `atomCAD-windows-v${{ inputs.version }}.zip`
             2. Extract the zip file
             3. Run `atomCAD.exe`
-            
+
             **Linux:**
             1. Download `atomCAD-linux-v${{ inputs.version }}.tar.gz`
             2. Extract: `tar -xzf atomCAD-linux-v${{ inputs.version }}.tar.gz`
             3. Run: `cd bundle && ./atomCAD`
-            
+
             **macOS:**
             1. Download `atomCAD-macos-v${{ inputs.version }}.zip`
             2. Extract the zip file
             3. Right-click `atomCAD.app` and select "Open" (first time only)
-            
+
+            ### Claude Code Integration
+
+            This release includes support for AI-assisted atomic structure design with Claude Code.
+
+            **Quick Setup:**
+            - **Windows**: Run `.\setup\setup-skill.ps1 --global --add-to-path`
+            - **Linux/macOS**: Run `./setup/setup-skill.sh --global --add-to-path`
+
+            Then restart your terminal, start atomCAD, and use `/atomcad` in Claude Code.
+
             ---
-            
+
             *Add your release notes here before publishing*
           files: |
             artifacts/atomCAD-windows-v${{ inputs.version }}/atomCAD-windows-v${{ inputs.version }}.zip
