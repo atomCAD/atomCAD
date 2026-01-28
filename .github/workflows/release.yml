@@ -180,7 +180,7 @@ jobs:
 
             **Quick Setup:**
             - **Windows**: Run `.\setup\setup-skill.bat`
-            - **Linux/macOS**: Run `./setup/setup-skill.sh`
+            - **Linux/macOS**: Run `bash setup/setup-skill.sh`
 
             Then restart your terminal, start atomCAD, and use `/atomcad` in Claude Code.
 

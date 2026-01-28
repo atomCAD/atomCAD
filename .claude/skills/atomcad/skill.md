@@ -31,7 +31,7 @@ Before running CLI commands, detect the appropriate command:
 **Setup instructions** (if CLI not found):
 - Run the setup script from the atomCAD installation directory:
   - Windows: `.\setup\setup-skill.bat`
-  - Linux/macOS: `./setup/setup-skill.sh`
+  - Linux/macOS: `bash setup/setup-skill.sh`
 - Or add the CLI manually to PATH (the CLI is in the `cli/` folder of the atomCAD installation)
 
 ## Core Concepts
