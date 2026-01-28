@@ -179,7 +179,7 @@ jobs:
             This release includes support for AI-assisted atomic structure design with Claude Code.
 
             **Quick Setup:**
-            - **Windows**: Run `.\setup\setup-skill.ps1 --global --add-to-path`
+            - **Windows**: Run `.\setup\setup-skill.bat -Global -AddToPath`
             - **Linux/macOS**: Run `./setup/setup-skill.sh --global --add-to-path`
 
             Then restart your terminal, start atomCAD, and use `/atomcad` in Claude Code.

@@ -112,6 +112,7 @@ try {
     $SetupDir = "$ReleasePath\setup"
     New-Item -ItemType Directory -Path $SetupDir -Force | Out-Null
     Copy-Item "setup\setup-skill.ps1" "$SetupDir\"
+    Copy-Item "setup\setup-skill.bat" "$SetupDir\"
     Copy-Item "setup\setup-skill.sh" "$SetupDir\"
     Write-Host "Setup scripts copied" -ForegroundColor Green
     Write-Host ""
