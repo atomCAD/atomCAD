@@ -43,7 +43,12 @@
       "Bash(Select-Object FullName, Length, PSIsContainer)",
       "Bash(dart compile exe:*)",
       "Bash(.\\\\atomcad-cli.exe:*)",
-      "Bash(./atomcad-cli.exe:*)"
+      "Bash(./atomcad-cli.exe:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git stash:*)",
+      "Bash(git push:*)"
     ]
   }
 }
