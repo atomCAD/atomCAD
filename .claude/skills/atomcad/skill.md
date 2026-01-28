@@ -23,8 +23,16 @@ Programmatically interact with atomCAD node networks via CLI. Requires atomCAD t
 ## Command Resolution
 
 Before running CLI commands, detect the appropriate command:
-- If `./atomcad-cli` exists in current directory → use `./atomcad-cli`
-- Otherwise → use `atomcad-cli` (assumes PATH is configured)
+
+1. **Development mode**: If `./atomcad-cli` exists in current directory → use `./atomcad-cli`
+2. **Installed mode**: If `atomcad-cli` is in PATH → use `atomcad-cli`
+3. **Not found**: If neither works, inform the user they need to set up the CLI
+
+**Setup instructions** (if CLI not found):
+- Run the setup script from the atomCAD installation directory:
+  - Windows: `.\setup\setup-skill.ps1 --add-to-path`
+  - Linux/macOS: `./setup/setup-skill.sh --add-to-path`
+- Or add the CLI manually to PATH (the CLI is in the `cli/` folder of the atomCAD installation)
 
 ## Core Concepts
 
