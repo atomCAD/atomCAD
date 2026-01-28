@@ -119,6 +119,37 @@ fi
 echo "Release files verified"
 echo ""
 
+# Step 5.5: Compile CLI to native executable
+echo "Compiling atomcad-cli..."
+CLI_DIR="$RELEASE_PATH/cli"
+mkdir -p "$CLI_DIR"
+dart compile exe bin/atomcad_cli.dart -o "$CLI_DIR/atomcad-cli"
+if [ $? -ne 0 ]; then
+    echo "Error: CLI compilation failed"
+    exit 1
+fi
+chmod +x "$CLI_DIR/atomcad-cli"
+echo "CLI compiled successfully"
+echo ""
+
+# Step 5.6: Copy skill directory (entire structure)
+echo "Copying Claude skill directory..."
+SKILL_DIR="$RELEASE_PATH/claude-skill"
+mkdir -p "$SKILL_DIR"
+cp -r ".claude/skills/atomcad" "$SKILL_DIR/"
+echo "Skill directory copied (including references/)"
+echo ""
+
+# Step 5.7: Copy setup scripts
+echo "Copying setup scripts..."
+SETUP_DIR="$RELEASE_PATH/setup"
+mkdir -p "$SETUP_DIR"
+cp "setup/setup-skill.ps1" "$SETUP_DIR/"
+cp "setup/setup-skill.sh" "$SETUP_DIR/"
+chmod +x "$SETUP_DIR/setup-skill.sh"
+echo "Setup scripts copied"
+echo ""
+
 # Step 6: Create zip archive
 DIST_DIR="$PROJECT_ROOT/dist"
 if [ ! -d "$DIST_DIR" ]; then
@@ -137,10 +168,10 @@ fi
 
 echo "Creating zip archive: $ZIP_FILENAME"
 
-# Create zip from Release folder contents (including the .app bundle)
+# Create zip from Release folder contents (including the .app bundle, CLI, skill, and setup)
 # Use -y flag to preserve symlinks, required for proper macOS framework bundle format and code signing
 cd "$RELEASE_PATH"
-zip -ry "$ZIP_PATH" atomCAD.app
+zip -ry "$ZIP_PATH" atomCAD.app cli claude-skill setup
 cd "$PROJECT_ROOT"
 
 if [ ! -f "$ZIP_PATH" ]; then

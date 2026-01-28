@@ -88,6 +88,34 @@ try {
     Write-Host "Release files verified" -ForegroundColor Green
     Write-Host ""
 
+    # Step 5.5: Compile CLI to native executable
+    Write-Host "Compiling atomcad-cli..." -ForegroundColor Yellow
+    $CLIDir = "$ReleasePath\cli"
+    New-Item -ItemType Directory -Path $CLIDir -Force | Out-Null
+    dart compile exe bin/atomcad_cli.dart -o "$CLIDir\atomcad-cli.exe"
+    if ($LASTEXITCODE -ne 0) {
+        throw "CLI compilation failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "CLI compiled successfully" -ForegroundColor Green
+    Write-Host ""
+
+    # Step 5.6: Copy skill directory (entire structure)
+    Write-Host "Copying Claude skill directory..." -ForegroundColor Yellow
+    $SkillDir = "$ReleasePath\claude-skill"
+    New-Item -ItemType Directory -Path $SkillDir -Force | Out-Null
+    Copy-Item ".claude\skills\atomcad" "$SkillDir\" -Recurse
+    Write-Host "Skill directory copied (including references/)" -ForegroundColor Green
+    Write-Host ""
+
+    # Step 5.7: Copy setup scripts
+    Write-Host "Copying setup scripts..." -ForegroundColor Yellow
+    $SetupDir = "$ReleasePath\setup"
+    New-Item -ItemType Directory -Path $SetupDir -Force | Out-Null
+    Copy-Item "setup\setup-skill.ps1" "$SetupDir\"
+    Copy-Item "setup\setup-skill.sh" "$SetupDir\"
+    Write-Host "Setup scripts copied" -ForegroundColor Green
+    Write-Host ""
+
     # Step 6: Create zip archive
     $DistDir = Join-Path $ProjectRoot "dist"
     if (-not (Test-Path $DistDir)) {

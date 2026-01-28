@@ -40,7 +40,10 @@
       "Bash(../atomcad-cli networks:*)",
       "Bash(../atomcad-cli:*)",
       "Bash(Get-ChildItem -Path \"c:\\\\machine_phase_systems\\\\flutter_cad\\\\.claude\\\\skills\\\\atomcad\" -Recurse)",
-      "Bash(Select-Object FullName, Length, PSIsContainer)"
+      "Bash(Select-Object FullName, Length, PSIsContainer)",
+      "Bash(dart compile exe:*)",
+      "Bash(.\\\\atomcad-cli.exe:*)",
+      "Bash(./atomcad-cli.exe:*)"
     ]
   }
 }
