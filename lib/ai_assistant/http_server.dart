@@ -185,6 +185,18 @@ class AiAssistantServer {
         case '/networks/rename':
           await _handleNetworksRename(request);
           break;
+        case '/file':
+          await _handleFile(request);
+          break;
+        case '/load':
+          await _handleLoad(request);
+          break;
+        case '/save':
+          await _handleSave(request);
+          break;
+        case '/new':
+          await _handleNew(request);
+          break;
         default:
           request.response.statusCode = HttpStatus.notFound;
           request.response.headers.contentType = ContentType.json;
@@ -953,5 +965,163 @@ class AiAssistantServer {
             "Failed to rename '$oldName' to '$newName' (name may already exist or network not found)",
       }));
     }
+  }
+
+  Future<void> _handleFile(HttpRequest request) async {
+    if (request.method != 'GET') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final filePath = sd_api.getDesignFilePath();
+    final isDirty = sd_api.isDesignDirty();
+    final networkCount = sd_api.getNetworkCount();
+
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'success': true,
+      'file_path': filePath,
+      'modified': isDirty,
+      'network_count': networkCount,
+    }));
+  }
+
+  Future<void> _handleLoad(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final params = request.uri.queryParameters;
+    final filePath = params['path'];
+    final force = params['force'] == 'true';
+
+    request.response.headers.contentType = ContentType.json;
+
+    if (filePath == null || filePath.isEmpty) {
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': 'Missing required parameter: path',
+      }));
+      return;
+    }
+
+    // Check for unsaved changes
+    if (!force && sd_api.isDesignDirty()) {
+      request.response.write(jsonEncode({
+        'success': false,
+        'error':
+            "Unsaved changes exist. Use 'save <path>' to save first, or --force to discard.",
+      }));
+      return;
+    }
+
+    // Check if file exists
+    final file = File(filePath);
+    if (!await file.exists()) {
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': 'File not found: $filePath',
+      }));
+      return;
+    }
+
+    // Load the file
+    final result = sd_api.loadNodeNetworks(filePath: filePath);
+
+    if (result.success) {
+      final networkCount = sd_api.getNetworkCount();
+      onNetworkEdited?.call();
+      request.response.write(jsonEncode({
+        'success': true,
+        'file_path': filePath,
+        'network_count': networkCount,
+      }));
+    } else {
+      request.response.write(jsonEncode({
+        'success': false,
+        'error': 'Failed to load file: ${result.errorMessage}',
+      }));
+    }
+  }
+
+  Future<void> _handleSave(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final params = request.uri.queryParameters;
+    final filePath = params['path'];
+
+    request.response.headers.contentType = ContentType.json;
+
+    if (filePath == null || filePath.isEmpty) {
+      // Save to current file
+      final currentPath = sd_api.getDesignFilePath();
+      if (currentPath == null) {
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': 'No file loaded. Specify a path: atomcad-cli save <path>',
+        }));
+        return;
+      }
+
+      final success = sd_api.saveNodeNetworks();
+      if (success) {
+        request.response.write(jsonEncode({
+          'success': true,
+          'file_path': currentPath,
+        }));
+      } else {
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': 'Failed to save file.',
+        }));
+      }
+    } else {
+      // Save to specified path
+      final success = sd_api.saveNodeNetworksAs(filePath: filePath);
+      if (success) {
+        request.response.write(jsonEncode({
+          'success': true,
+          'file_path': filePath,
+        }));
+      } else {
+        request.response.write(jsonEncode({
+          'success': false,
+          'error': 'Failed to save file.',
+        }));
+      }
+    }
+  }
+
+  Future<void> _handleNew(HttpRequest request) async {
+    if (request.method != 'POST') {
+      request.response.statusCode = HttpStatus.methodNotAllowed;
+      return;
+    }
+
+    final params = request.uri.queryParameters;
+    final force = params['force'] == 'true';
+
+    request.response.headers.contentType = ContentType.json;
+
+    // Check for unsaved changes
+    if (!force && sd_api.isDesignDirty()) {
+      request.response.write(jsonEncode({
+        'success': false,
+        'error':
+            "Unsaved changes exist. Use 'save <path>' to save first, or --force to discard.",
+      }));
+      return;
+    }
+
+    sd_api.newProject();
+    onNetworkEdited?.call();
+
+    request.response.write(jsonEncode({
+      'success': true,
+    }));
   }
 }

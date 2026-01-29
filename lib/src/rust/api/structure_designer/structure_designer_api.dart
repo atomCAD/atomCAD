@@ -599,6 +599,20 @@ APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
         filePath: filePath);
 
+/// Creates a new empty project, clearing all networks and resetting state.
+///
+/// This is equivalent to File > New:
+/// - Clears all networks
+/// - Creates a fresh "Main" network
+/// - Clears the file path
+/// - Clears the dirty flag
+void newProject() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiNewProject();
+
+/// Returns the number of node networks in the current project.
+int getNetworkCount() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetNetworkCount();
+
 bool isNodeTypeActive({required String nodeType}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiIsNodeTypeActive(
         nodeType: nodeType);

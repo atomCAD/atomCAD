@@ -2515,6 +2515,36 @@ pub fn load_node_networks(file_path: String) -> APIResult {
   }
 }
 
+/// Creates a new empty project, clearing all networks and resetting state.
+///
+/// This is equivalent to File > New:
+/// - Clears all networks
+/// - Creates a fresh "Main" network
+/// - Clears the file path
+/// - Clears the dirty flag
+#[flutter_rust_bridge::frb(sync)]
+pub fn new_project() {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      cad_instance.structure_designer.new_project();
+      refresh_structure_designer_auto(cad_instance);
+    });
+  }
+}
+
+/// Returns the number of node networks in the current project.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_network_count() -> i32 {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.node_type_registry.node_networks.len() as i32
+      },
+      0
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn is_node_type_active(node_type: String) -> bool {
   unsafe {

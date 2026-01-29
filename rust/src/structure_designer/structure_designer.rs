@@ -1067,6 +1067,40 @@ impl StructureDesigner {
     self.file_path.as_ref()
   }
 
+  /// Clears all networks and creates a fresh project with a single "Main" network.
+  ///
+  /// This resets the state to match a newly opened application:
+  /// - Clears all networks
+  /// - Creates a new empty "Main" network
+  /// - Clears the file path (no file associated)
+  /// - Clears the dirty flag
+  /// - Clears navigation history
+  /// - Clears evaluation cache
+  pub fn new_project(&mut self) {
+    // Clear all networks
+    self.node_type_registry.node_networks.clear();
+
+    // Create a fresh "Main" network and set it as active
+    self.add_node_network("Main");
+    self.active_node_network_name = Some("Main".to_string());
+
+    // Clear file state
+    self.file_path = None;
+    self.is_dirty = false;
+
+    // Clear navigation history
+    self.navigation_history.clear();
+
+    // Clear evaluation cache
+    self.network_evaluator.clear_csg_cache();
+
+    // Clear the last generated scene
+    self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+
+    // Mark for full refresh
+    self.mark_full_refresh();
+  }
+
   /// Navigates back in network history
   /// Returns true if navigation was successful, false if can't go back
   pub fn navigate_back(&mut self) -> bool {
