@@ -45,6 +45,8 @@ pub struct EditResult {
     pub connections_made: Vec<String>,
     /// Network description if it was set.
     pub description_set: Option<String>,
+    /// Network summary if it was set.
+    pub summary_set: Option<String>,
     /// Error messages encountered during editing.
     pub errors: Vec<String>,
     /// Warning messages (non-fatal issues).
@@ -60,6 +62,7 @@ impl EditResult {
             nodes_deleted: Vec::new(),
             connections_made: Vec::new(),
             description_set: None,
+            summary_set: None,
             errors: Vec::new(),
             warnings: Vec::new(),
         }
@@ -214,6 +217,9 @@ impl<'a> NetworkEditor<'a> {
             }
             Statement::Description { text } => {
                 self.process_description(text)
+            }
+            Statement::Summary { text } => {
+                self.process_summary(text)
             }
             Statement::Comment(_) => Ok(()), // Skip comments
             Statement::Output { .. } | Statement::Delete { .. } => Ok(()), // Handled in second pass
@@ -668,6 +674,13 @@ impl<'a> NetworkEditor<'a> {
     fn process_description(&mut self, text: &str) -> Result<(), String> {
         self.network.node_type.description = text.to_string();
         self.result.description_set = Some(text.to_string());
+        Ok(())
+    }
+
+    /// Process a summary statement.
+    fn process_summary(&mut self, text: &str) -> Result<(), String> {
+        self.network.node_type.summary = Some(text.to_string());
+        self.result.summary_set = Some(text.to_string());
         Ok(())
     }
 }

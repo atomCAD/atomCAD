@@ -218,6 +218,9 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
     // Header
     writeln!(output, "Node: {}", node_type.name).unwrap();
     writeln!(output, "Category: {:?}", node_type.category).unwrap();
+    if let Some(ref summary) = node_type.summary {
+        writeln!(output, "Summary: {}", summary).unwrap();
+    }
     writeln!(output, "Description: {}", node_type.description).unwrap();
     writeln!(output).unwrap();
 

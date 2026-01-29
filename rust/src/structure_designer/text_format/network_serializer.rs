@@ -49,8 +49,16 @@ impl<'a> NetworkSerializer<'a> {
             output.push_str(&format!("description {}\n", format_string(description)));
         }
 
-        // Add blank line after header/description
-        if self.network_name.is_some() || !description.is_empty() {
+        // Add summary (if set)
+        if let Some(ref summary) = self.network.node_type.summary {
+            output.push_str(&format!("summary {}\n", format_string(summary)));
+        }
+
+        // Add blank line after header/description/summary
+        let has_header = self.network_name.is_some()
+            || !description.is_empty()
+            || self.network.node_type.summary.is_some();
+        if has_header {
             output.push('\n');
         }
 

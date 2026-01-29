@@ -60,6 +60,7 @@ pub enum Token {
     Output,         // output keyword
     Delete,         // delete keyword
     Description,    // description keyword
+    Summary,        // summary keyword
     Newline,
     Eof,
 }
@@ -95,6 +96,10 @@ pub enum Statement {
     },
     /// Description statement: `description "text"` or `description """multi-line"""`
     Description {
+        text: String,
+    },
+    /// Summary statement: `summary "text"` - short description for CLI listings
+    Summary {
         text: String,
     },
     /// Comment: `# comment text`
@@ -275,6 +280,7 @@ impl Lexer {
                     "output" => Token::Output,
                     "delete" => Token::Delete,
                     "description" => Token::Description,
+                    "summary" => Token::Summary,
                     _ => Token::Identifier(ident),
                 };
                 Ok(TokenInfo { token, line, column })
@@ -563,6 +569,9 @@ impl Parser {
                 Token::Description => {
                     statements.push(self.parse_description_statement()?);
                 }
+                Token::Summary => {
+                    statements.push(self.parse_summary_statement()?);
+                }
                 Token::Identifier(_) => {
                     statements.push(self.parse_assignment()?);
                 }
@@ -618,6 +627,21 @@ impl Parser {
             }
             other => Err(ParseError::new(
                 format!("Expected string after 'description', found {:?}", other),
+                line, col))
+        }
+    }
+
+    /// Parse a summary statement: `summary "text"`
+    fn parse_summary_statement(&mut self) -> Result<Statement, ParseError> {
+        self.expect(&Token::Summary)?;
+        let (line, col) = self.current_position();
+        match self.peek().clone() {
+            Token::String(text) => {
+                self.bump();
+                Ok(Statement::Summary { text })
+            }
+            other => Err(ParseError::new(
+                format!("Expected string after 'summary', found {:?}", other),
                 line, col))
         }
     }
