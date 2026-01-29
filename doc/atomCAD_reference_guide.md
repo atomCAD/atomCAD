@@ -82,6 +82,19 @@ Node networks in a design can be browsed in the **List** tab or in the **Tree** 
 
 In the node network editor panel: Node titles show only the simple name, with the full qualified name available on hover.
 
+#### Navigating between node networks
+
+When working with custom nodes (nodes defined by subnetworks), you can quickly navigate to their definitions:
+
+- **Go to Definition:** Right-click a custom node and select *Go to Definition* to open the subnetwork that implements it.
+
+The **Node Networks** panel includes browser-like navigation buttons at the top:
+
+- **Back (←):** Returns to the previously viewed node network.
+- **Forward (→):** Moves forward in the navigation history after going back.
+
+These buttons are grayed out when navigation in that direction is unavailable.
+
 ### Node network editor panel
 
 ![](./atomCAD_images/node_network_editor_panel.png)
