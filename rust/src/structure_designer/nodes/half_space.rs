@@ -396,6 +396,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
       name: "half_space".to_string(),
       description: "Outputs a half-space (the region on one side of an infinite plane).".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
         Parameter {

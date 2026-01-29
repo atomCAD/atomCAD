@@ -122,6 +122,7 @@ fn test_sphere_node_basic() {
     let output_type = NodeType {
         name: "test".to_string(),
         description: "Test network".to_string(),
+        summary: None,
         category: NodeTypeCategory::Custom,
         parameters: vec![],
         output_type: DataType::Geometry,

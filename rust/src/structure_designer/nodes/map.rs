@@ -148,6 +148,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "map".to_string(),
       description: "Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {

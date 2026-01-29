@@ -174,6 +174,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "rect".to_string(),
       description: "Outputs a rectangle with integer minimum corner coordinates and integer width and height.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {

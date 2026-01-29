@@ -189,6 +189,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "diff_2d".to_string(),
       description: "Computes the Boolean difference of two 2D geometries.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
           Parameter {

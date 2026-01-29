@@ -157,6 +157,7 @@ impl NodeTypeRegistry {
       .map(|(node_type, category)| APINodeTypeView {
         name: node_type.name.clone(),
         description: node_type.description.clone(),
+        summary: node_type.summary.clone(),
         category,
       })
       .collect();
@@ -216,6 +217,7 @@ impl NodeTypeRegistry {
             .map(|node| APINodeTypeView {
               name: node.name.clone(),
               description: node.description.clone(),
+              summary: node.summary.clone(),
               category: node.category.clone(),
             })
     );
@@ -227,6 +229,7 @@ impl NodeTypeRegistry {
             .map(|network| APINodeTypeView {
               name: network.node_type.name.clone(),
               description: network.node_type.description.clone(),
+              summary: network.node_type.summary.clone(),
               category: NodeTypeCategory::Custom,
             })
     );

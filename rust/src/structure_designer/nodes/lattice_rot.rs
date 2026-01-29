@@ -345,6 +345,7 @@ pub fn get_node_type() -> NodeType {
       description: "Rotates geometry in lattice space.
 Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
 You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {

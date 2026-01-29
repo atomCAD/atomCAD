@@ -100,6 +100,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "vec2".to_string(),
       description: "Outputs an Vec2 value.".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {

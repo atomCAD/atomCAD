@@ -126,6 +126,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "range".to_string(),
       description: "Creates an array of integers starting from an integer value and having a specified step between them. The number of integers in the array can also be specified (count).".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {

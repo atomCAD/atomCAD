@@ -36,6 +36,7 @@ fn create_serializable_network(nodes: Vec<SerializableNode>) -> SerializableNode
         node_type: SerializableNodeType {
             name: "test_network".to_string(),
             description: "Test network".to_string(),
+            summary: None,
             category: "Custom".to_string(),
             parameters: vec![],
             output_type: "Geometry".to_string(),

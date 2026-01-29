@@ -17,6 +17,9 @@ pub struct Parameter {
 pub struct NodeType {
   pub name: String,
   pub description: String,
+  /// Optional short summary for CLI verbose listings. If provided, this is
+  /// displayed instead of truncating the description.
+  pub summary: Option<String>,
   pub category: NodeTypeCategory,
   pub parameters: Vec<Parameter>,
   pub output_type: DataType,

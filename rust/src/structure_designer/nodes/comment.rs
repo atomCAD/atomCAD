@@ -95,6 +95,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
         name: "Comment".to_string(),
         description: "Add text annotations to document your node network.".to_string(),
+        summary: None,
         category: NodeTypeCategory::Annotation,
         parameters: vec![],
         output_type: DataType::None,

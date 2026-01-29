@@ -442,6 +442,7 @@ pub fn get_node_type() -> NodeType {
       description: "Outputs a half plane.
 You can manipulate the two integer coordinate vertices which define the boundary line of the half plane.
 Both vertices are displayed as a triangle-based prism. The direction of the half plane is indicated by the direction of the triangle.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {

@@ -369,6 +369,7 @@ sin(3.14159 / 4) * 2                // Trigonometry
 vec2(x, y).x + vec2(z, w).y         // Member access
 distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 ```"#.to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![],
       output_type: DataType::None, // will change based on the expression

@@ -65,6 +65,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "bool".to_string(),
       description: "Outputs a bool value.".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![],
       output_type: DataType::Bool,

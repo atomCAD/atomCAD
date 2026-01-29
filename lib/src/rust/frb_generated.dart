@@ -6456,12 +6456,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APINodeTypeView dco_decode_api_node_type_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APINodeTypeView(
       name: dco_decode_String(arr[0]),
       description: dco_decode_String(arr[1]),
-      category: dco_decode_node_type_category(arr[2]),
+      summary: dco_decode_opt_String(arr[2]),
+      category: dco_decode_node_type_category(arr[3]),
     );
   }
 
@@ -8308,9 +8309,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
     var var_description = sse_decode_String(deserializer);
+    var var_summary = sse_decode_opt_String(deserializer);
     var var_category = sse_decode_node_type_category(deserializer);
     return APINodeTypeView(
-        name: var_name, description: var_description, category: var_category);
+        name: var_name,
+        description: var_description,
+        summary: var_summary,
+        category: var_category);
   }
 
   @protected
@@ -10409,6 +10414,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.description, serializer);
+    sse_encode_opt_String(self.summary, serializer);
     sse_encode_node_type_category(self.category, serializer);
   }
 

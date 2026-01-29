@@ -176,6 +176,7 @@ pub fn get_node_type() -> NodeType {
       name: "import_xyz".to_string(),
       description: "Imports an atomic structure from an xyz file.
 It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.".to_string(),
+      summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
         Parameter {

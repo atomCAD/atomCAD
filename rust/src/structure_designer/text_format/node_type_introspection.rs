@@ -370,3 +370,14 @@ pub fn truncate_description(description: &str) -> String {
         format!("{}...", truncated)
     }
 }
+
+/// Returns the summary for display in verbose node listings.
+///
+/// If an explicit summary is provided, returns it as-is.
+/// Otherwise, falls back to truncating the description using `truncate_description`.
+pub fn get_display_summary(summary: Option<&str>, description: &str) -> String {
+    match summary {
+        Some(s) => s.to_string(),
+        None => truncate_description(description),
+    }
+}

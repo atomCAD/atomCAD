@@ -88,6 +88,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "relax".to_string(),
       description: "".to_string(),
+      summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
           Parameter {

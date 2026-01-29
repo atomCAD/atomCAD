@@ -301,6 +301,7 @@ pub struct InputPinView {
   pub struct APINodeTypeView {
     pub name: String,
     pub description: String,
+    pub summary: Option<String>,
     pub category: NodeTypeCategory,
   }
 

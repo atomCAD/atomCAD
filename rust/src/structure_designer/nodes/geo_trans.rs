@@ -336,6 +336,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "geo_trans".to_string(),
       description: "".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {

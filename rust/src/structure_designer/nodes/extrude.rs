@@ -223,6 +223,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "extrude".to_string(),
       description: "Extrudes a 2D geometry to a 3D geometry.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {

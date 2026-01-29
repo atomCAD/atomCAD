@@ -131,6 +131,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "sphere".to_string(),
       description: "Outputs a sphere with integer center coordinates and integer radius.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
         Parameter {

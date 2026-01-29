@@ -31,6 +31,8 @@ pub struct SerializableNodeType {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub summary: Option<String>,
     #[serde(default = "default_category")]
     pub category: String,
     pub parameters: Vec<SerializableParameter>,
@@ -118,6 +120,7 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
     SerializableNodeType {
         name: node_type.name.clone(),
         description: node_type.description.clone(),
+        summary: node_type.summary.clone(),
         category: category_to_string(&node_type.category),
         parameters: serializable_parameters,
         output_type: node_type.output_type.to_string(),
@@ -155,6 +158,7 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
     Ok(NodeType {
         name: serializable.name.clone(),
         description: serializable.description.clone(),
+        summary: serializable.summary.clone(),
         category,
         parameters,
         output_type,

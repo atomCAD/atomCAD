@@ -121,6 +121,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "intersect_2d".to_string(),
       description: "Computes the Boolean intersection of any number of 2D geometries. The `shapes` input pin accepts an array of `Geometry2D` values.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
           Parameter {

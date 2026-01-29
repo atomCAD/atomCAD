@@ -203,6 +203,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
       name: "unit_cell".to_string(),
       description: "Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.".to_string(),
+      summary: None,
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![
         Parameter {

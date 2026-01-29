@@ -214,6 +214,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "cuboid".to_string(),
       description: "Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. If the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
         Parameter {

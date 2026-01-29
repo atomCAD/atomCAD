@@ -148,6 +148,7 @@ pub fn get_node_type() -> NodeType {
       name: "parameter".to_string(),
       description: "To set up an input pin (parameter) of your custom node you need to use a parameter node in your subnetwork.
 The sort order property of a parameter determines the order of the parameters in the resulting custom node.".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
           Parameter {

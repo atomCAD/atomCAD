@@ -297,6 +297,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
       name: "atom_fill".to_string(),
       description: "Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its `shape` input.".to_string(),
+      summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
           Parameter {

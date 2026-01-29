@@ -51,6 +51,7 @@ fn create_test_node_type(name: &str) -> NodeType {
     NodeType {
         name: name.to_string(),
         description: "Test node type".to_string(),
+        summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
         output_type: DataType::None,

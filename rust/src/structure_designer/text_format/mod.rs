@@ -59,4 +59,4 @@ pub use parser::{
 pub use serializer::TextFormatter;
 pub use network_serializer::{NetworkSerializer, serialize_network};
 pub use network_editor::{NetworkEditor, EditResult, edit_network};
-pub use node_type_introspection::{describe_node_type, truncate_description};
+pub use node_type_introspection::{describe_node_type, truncate_description, get_display_summary};

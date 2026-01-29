@@ -169,6 +169,7 @@ BOND INTERIOR3 +..FACE_X      # x+1 cell
 ```
 
 Lines starting with `#` are comments.".to_string(),
+      summary: None,
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],
       output_type: DataType::Motif,

@@ -132,6 +132,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "circle".to_string(),
       description: "Outputs a circle with integer center coordinates and integer radius.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {

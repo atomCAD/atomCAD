@@ -310,6 +310,7 @@ pub fn get_node_type() -> NodeType {
       name: "atom_trans".to_string(),
       description: "The atom_trans node transforms atomic structures. The transformation happens not in integer lattice space but in continuous space (real-space) where one unit is one angstrom.
   By dragging the gadget axes you can move the structure. By dragging the thicker end of the gadget axes you can rotate the structure.  ".to_string(),
+      summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
           Parameter {

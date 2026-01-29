@@ -122,6 +122,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "intersect".to_string(),
       description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values. Use this to cut geometries with a half-space.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {

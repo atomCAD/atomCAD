@@ -466,6 +466,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "lattice_symop".to_string(),
       description: "".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {

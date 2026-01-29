@@ -10,6 +10,7 @@ fn create_test_network(name: &str) -> NodeNetwork {
     NodeNetwork::new(NodeType {
         name: name.to_string(),
         description: "".to_string(),
+        summary: None,
         category: NodeTypeCategory::Custom,
         parameters: Vec::new(),
         output_type: DataType::None,

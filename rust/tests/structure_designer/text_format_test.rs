@@ -1,6 +1,6 @@
 use rust_lib_flutter_cad::structure_designer::text_format::{
     TextValue, Parser, Lexer, Statement, PropertyValue, Token, serialize_network,
-    describe_node_type, truncate_description,
+    describe_node_type, truncate_description, get_display_summary,
 };
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use glam::{IVec2, IVec3, DVec2, DVec3};
@@ -428,6 +428,7 @@ mod network_serializer_tests {
         let node_type = NodeType {
             name: "test".to_string(),
             description: "Test network".to_string(),
+            summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,
@@ -576,6 +577,7 @@ mod network_editor_tests {
         let node_type = NodeType {
             name: "test".to_string(),
             description: "Test network".to_string(),
+            summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,
@@ -1241,6 +1243,7 @@ mod auto_layout_tests {
         let node_type = NodeType {
             name: "test".to_string(),
             description: "Test network".to_string(),
+            summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,
@@ -1622,6 +1625,42 @@ mod node_type_introspection_tests {
         assert_eq!(result.len(), 153); // 150 + "..."
     }
 
+    // get_display_summary tests
+    #[test]
+    fn test_display_summary_prefers_explicit_summary() {
+        let summary = Some("Custom summary for CLI display");
+        let description = "This is a long description that would normally be truncated.\nSecond line with more detail.";
+        assert_eq!(
+            get_display_summary(summary, description),
+            "Custom summary for CLI display"
+        );
+    }
+
+    #[test]
+    fn test_display_summary_falls_back_to_truncated_description() {
+        let description = "First line of description.\nSecond line with more detail.";
+        assert_eq!(
+            get_display_summary(None, description),
+            "First line of description."
+        );
+    }
+
+    #[test]
+    fn test_display_summary_with_empty_summary() {
+        // Empty string summary should still be used (it's Some, not None)
+        let summary = Some("");
+        let description = "This description should not be used.";
+        assert_eq!(get_display_summary(summary, description), "");
+    }
+
+    #[test]
+    fn test_display_summary_truncates_long_description_when_no_summary() {
+        let description = "This is a very long description without any sentence breaks that just keeps going and going and going until it exceeds the maximum length limit we have set";
+        let result = get_display_summary(None, description);
+        assert!(result.ends_with("..."));
+        assert!(result.len() <= 153); // 150 + "..."
+    }
+
     #[test]
     fn test_describe_expr_shows_dynamic_output() {
         let registry = create_test_registry();
@@ -1706,6 +1745,7 @@ mod custom_name_tests {
         let node_type = NodeType {
             name: "test".to_string(),
             description: "Test network".to_string(),
+            summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,

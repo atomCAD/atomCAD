@@ -387,6 +387,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
       name: "drawing_plane".to_string(),
       description: "Defines a 2D drawing plane on a crystallographic plane with Miller indices. Use this to specify where 2D shapes are placed before extrusion.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {

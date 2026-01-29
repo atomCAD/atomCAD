@@ -359,6 +359,7 @@ pub fn get_node_type() -> NodeType {
 The vertices can be freely dragged.
 You can create a new vertex by dragging an edge.
 Delete a vertex by dragging it onto one of its neighbour.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {

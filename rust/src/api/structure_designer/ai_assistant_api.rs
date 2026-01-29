@@ -33,7 +33,7 @@ use crate::structure_designer::text_format::{
     edit_network as text_edit_network,
     EditResult,
     describe_node_type,
-    truncate_description,
+    get_display_summary,
 };
 
 // =============================================================================
@@ -341,12 +341,12 @@ fn format_node_type_list(
                 .unwrap_or(0);
 
             for node in &category_view.nodes {
-                let truncated_desc = truncate_description(&node.description);
+                let display_summary = get_display_summary(node.summary.as_deref(), &node.description);
                 writeln!(
                     output,
                     "  {:width$} - {}",
                     format!("`{}`", node.name),
-                    truncated_desc,
+                    display_summary,
                     width = max_name_len
                 )
                 .unwrap();

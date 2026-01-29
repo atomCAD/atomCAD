@@ -65,6 +65,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "string".to_string(),
       description: "Outputs a string value.".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![],
       output_type: DataType::String,

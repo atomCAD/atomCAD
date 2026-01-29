@@ -121,6 +121,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "union_2d".to_string(),
       description: "Computes the Boolean union of any number of 2D geometries. The `shapes` input accepts an array of `Geometry2D` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
           Parameter {

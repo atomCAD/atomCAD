@@ -586,6 +586,7 @@ pub fn get_node_type() -> NodeType {
       name: "edit_atom".to_string(),
       description: "Note: The `edit_atom` node will be more usable when we will support atomic structure relaxations.
 This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom_nodes at their will.".to_string(),
+      summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
           Parameter {

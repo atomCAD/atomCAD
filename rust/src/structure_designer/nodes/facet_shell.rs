@@ -796,6 +796,7 @@ pub fn get_node_type() -> NodeType {
       name: "facet_shell".to_string(),
       description: "Builds a finite polyhedral shell by clipping an infinite lattice with a user‑supplied set of half‑spaces.
 See the atomCAD reference guide for more details.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
         Parameter {

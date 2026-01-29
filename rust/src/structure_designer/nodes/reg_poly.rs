@@ -168,6 +168,7 @@ pub fn get_node_type() -> NodeType {
       name: "reg_poly".to_string(),
       description: "Outputs a regular polygon with integer radius. The number of sides is a property too.
 Now that we have general polygon node this node is less used.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {

@@ -166,6 +166,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "atom_cut".to_string(),
       description: "Cuts an atomic structure using cutter geometries.".to_string(),
+      summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
           Parameter {

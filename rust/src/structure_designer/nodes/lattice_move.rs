@@ -288,6 +288,7 @@ pub fn get_node_type() -> NodeType {
       description: "Moves the geometry in the discrete lattice space with a relative vector.
 Continuous transformation in the lattice space is not allowed (for continuous transformations use the `atom_trans` node which is only available for atomic structures).
 You can directly enter the translation vector or drag the axes of the gadget.".to_string(),
+      summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {

@@ -868,16 +868,22 @@ class APINodeEvaluationResult {
 class APINodeTypeView {
   final String name;
   final String description;
+  final String? summary;
   final NodeTypeCategory category;
 
   const APINodeTypeView({
     required this.name,
     required this.description,
+    this.summary,
     required this.category,
   });
 
   @override
-  int get hashCode => name.hashCode ^ description.hashCode ^ category.hashCode;
+  int get hashCode =>
+      name.hashCode ^
+      description.hashCode ^
+      summary.hashCode ^
+      category.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -886,6 +892,7 @@ class APINodeTypeView {
           runtimeType == other.runtimeType &&
           name == other.name &&
           description == other.description &&
+          summary == other.summary &&
           category == other.category;
 }
 

@@ -154,6 +154,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
       name: "export_xyz".to_string(),
       description: "Exports atomic structure on its `molecule` input into an XYZ file.".to_string(),
+      summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
         Parameter {

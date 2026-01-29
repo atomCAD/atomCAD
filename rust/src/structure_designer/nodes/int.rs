@@ -65,6 +65,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "int".to_string(),
       description: "Outputs an integer value.".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![],
       output_type: DataType::Int,

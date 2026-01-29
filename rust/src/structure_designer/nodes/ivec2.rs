@@ -100,6 +100,7 @@ pub fn get_node_type() -> NodeType {
   NodeType {
       name: "ivec2".to_string(),
       description: "Outputs an IVec2 value.".to_string(),
+      summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {
