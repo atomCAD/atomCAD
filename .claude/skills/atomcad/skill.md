@@ -234,6 +234,53 @@ Node Networks:
 
 **Note:** `query` and `edit` always operate on the active network.
 
+### File Operations
+
+Load, save, and manage `.cnnd` project files:
+
+```bash
+# Load a .cnnd file
+atomcad-cli load design.cnnd
+atomcad-cli load design.cnnd --force  # Discard unsaved changes
+
+# Save current project
+atomcad-cli save                      # Save to current file
+atomcad-cli save design.cnnd          # Save to new path (overwrites if exists)
+
+# Check file status
+atomcad-cli file
+
+# Create new project
+atomcad-cli new
+atomcad-cli new --force               # Discard unsaved changes
+```
+
+**Output examples:**
+
+```bash
+# load success
+Loaded: /path/to/design.cnnd (3 networks)
+
+# save success
+Saved: /path/to/design.cnnd
+
+# file status
+File: /path/to/design.cnnd
+Modified: yes
+Networks: 3
+
+# file status (no file loaded)
+File: (none)
+Modified: no
+Networks: 1
+```
+
+**Behavior notes:**
+- `load` without `--force` fails if there are unsaved changes
+- `save` without a path saves to the current file; fails if no file is loaded
+- `new` clears all networks and creates a fresh "Main" network
+- Relative paths are resolved relative to the CLI's working directory
+
 ### Evaluate Node Results
 
 Evaluate a specific node and return its computed result (useful for verification and debugging).
@@ -468,6 +515,10 @@ Commands:
 - `camera`/`c` — Get/set camera state
 - `display` — Get/set display preferences
 - `screenshot`/`s <path>` — Capture viewport to PNG
+- `load <path> [--force]` — Load a .cnnd file
+- `save [path]` — Save to file
+- `file` — Show current file status
+- `new [--force]` — Create new project
 - `help`/`?` — Show help
 - `quit`/`exit` — Exit REPL
 

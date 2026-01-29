@@ -73,6 +73,16 @@ Future<void> main(List<String> args) async {
   networksParser.addCommand('activate', networksActivateParser);
   networksParser.addCommand('rename', networksRenameParser);
 
+  // File commands
+  final loadParser = ArgParser()
+    ..addFlag('force',
+        abbr: 'f', negatable: false, help: 'Discard unsaved changes');
+  final saveParser = ArgParser();
+  final fileParser = ArgParser();
+  final newParser = ArgParser()
+    ..addFlag('force',
+        abbr: 'f', negatable: false, help: 'Discard unsaved changes');
+
   parser.addCommand('query', queryParser);
   parser.addCommand('edit', editParser);
   parser.addCommand('nodes', nodesParser);
@@ -82,6 +92,10 @@ Future<void> main(List<String> args) async {
   parser.addCommand('screenshot', screenshotParser);
   parser.addCommand('display', displayParser);
   parser.addCommand('networks', networksParser);
+  parser.addCommand('load', loadParser);
+  parser.addCommand('save', saveParser);
+  parser.addCommand('file', fileParser);
+  parser.addCommand('new', newParser);
 
   ArgResults results;
   try {
@@ -169,6 +183,18 @@ Future<void> main(List<String> args) async {
     case 'networks':
       await _runNetworks(serverUrl, command);
       break;
+    case 'load':
+      await _runLoad(serverUrl, command);
+      break;
+    case 'save':
+      await _runSave(serverUrl, command);
+      break;
+    case 'file':
+      await _runFile(serverUrl);
+      break;
+    case 'new':
+      await _runNew(serverUrl, command);
+      break;
     default:
       stderr.writeln('Unknown command: ${command.name}');
       exit(1);
@@ -243,6 +269,14 @@ void _printUsage() {
   stdout.writeln('  atomcad-cli networks activate <name>  Switch to a network');
   stdout.writeln('  atomcad-cli networks rename <old> <new>');
   stdout.writeln('                                        Rename a network');
+  stdout.writeln(
+      '  atomcad-cli load <path> [--force]     Load a .cnnd file');
+  stdout.writeln(
+      '  atomcad-cli save [path]               Save to file');
+  stdout.writeln(
+      '  atomcad-cli file                      Show current file status');
+  stdout.writeln(
+      '  atomcad-cli new [--force]             Create new project');
   stdout.writeln('');
   stdout.writeln('Options:');
   stdout.writeln('  -h, --help     Show this help');
@@ -295,6 +329,11 @@ void _printReplHelp() {
   stdout.writeln('                      Switch to a network');
   stdout.writeln('  networks rename <old> <new>');
   stdout.writeln('                      Rename a network');
+  stdout.writeln('  load <path> [--force]');
+  stdout.writeln('                      Load a .cnnd file');
+  stdout.writeln('  save [path]         Save to file');
+  stdout.writeln('  file                Show current file status');
+  stdout.writeln('  new [--force]       Create new project');
   stdout.writeln('  help, ?             Show this help');
   stdout.writeln('  quit, exit          Exit REPL');
   stdout.writeln('');
@@ -749,6 +788,142 @@ Future<void> _runNetworksRename(
   }
 }
 
+Future<void> _runLoad(String serverUrl, ArgResults args) async {
+  if (args.rest.isEmpty) {
+    stderr.writeln('Usage: atomcad-cli load <path> [--force]');
+    exit(1);
+  }
+
+  final force = args['force'] as bool;
+  final path = args.rest.first;
+  final absolutePath = _resolveToAbsolutePath(path);
+
+  try {
+    final queryParams = <String, String>{
+      'path': absolutePath,
+    };
+    if (force) queryParams['force'] = 'true';
+
+    final uri =
+        Uri.parse('$serverUrl/load').replace(queryParameters: queryParams);
+
+    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        stdout.writeln(
+            'Loaded: ${result['file_path']} (${result['network_count']} networks)');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+        exit(1);
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runSave(String serverUrl, ArgResults args) async {
+  final path = args.rest.isNotEmpty ? args.rest.first : null;
+
+  try {
+    final queryParams = <String, String>{};
+    if (path != null) {
+      queryParams['path'] = _resolveToAbsolutePath(path);
+    }
+
+    final uri = Uri.parse('$serverUrl/save')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        stdout.writeln('Saved: ${result['file_path']}');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+        exit(1);
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runFile(String serverUrl) async {
+  try {
+    final response = await http
+        .get(Uri.parse('$serverUrl/file'))
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        final filePath = result['file_path'] ?? '(none)';
+        final modified = result['modified'] == true ? 'yes' : 'no';
+        final networkCount = result['network_count'];
+
+        stdout.writeln('File: $filePath');
+        stdout.writeln('Modified: $modified');
+        stdout.writeln('Networks: $networkCount');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+        exit(1);
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
+Future<void> _runNew(String serverUrl, ArgResults args) async {
+  final force = args['force'] as bool;
+
+  try {
+    final queryParams = <String, String>{};
+    if (force) queryParams['force'] = 'true';
+
+    final uri = Uri.parse('$serverUrl/new')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.post(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        stdout.writeln('New project created.');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+        exit(1);
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+      exit(1);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+    exit(1);
+  }
+}
+
 Future<String?> _runEdit(String serverUrl, String code, bool replace) async {
   try {
     final uri = replace
@@ -933,6 +1108,22 @@ Future<void> _runRepl(String serverUrl) async {
 
       case 'networks':
         await _runNetworksRepl(serverUrl, parts);
+        break;
+
+      case 'load':
+        await _runLoadRepl(serverUrl, parts);
+        break;
+
+      case 'save':
+        await _runSaveRepl(serverUrl, parts);
+        break;
+
+      case 'file':
+        await _runFileRepl(serverUrl);
+        break;
+
+      case 'new':
+        await _runNewRepl(serverUrl, parts);
         break;
 
       case 'help':
@@ -1233,6 +1424,140 @@ Future<void> _runNetworksRenameRepl(
     } else {
       final result = jsonDecode(response.body);
       stderr.writeln('Error: ${result['error']}');
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runLoadRepl(String serverUrl, List<String> parts) async {
+  // Parse: load <path> [--force]
+  if (parts.length < 2) {
+    stdout.writeln('Usage: load <path> [--force]');
+    return;
+  }
+
+  final force = parts.contains('--force') || parts.contains('-f');
+  final pathParts =
+      parts.where((p) => p != 'load' && p != '--force' && p != '-f').toList();
+
+  if (pathParts.isEmpty) {
+    stdout.writeln('Usage: load <path> [--force]');
+    return;
+  }
+
+  final absolutePath = _resolveToAbsolutePath(pathParts.first);
+
+  try {
+    final queryParams = <String, String>{
+      'path': absolutePath,
+    };
+    if (force) queryParams['force'] = 'true';
+
+    final uri =
+        Uri.parse('$serverUrl/load').replace(queryParameters: queryParams);
+
+    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        stdout.writeln(
+            'Loaded: ${result['file_path']} (${result['network_count']} networks)');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runSaveRepl(String serverUrl, List<String> parts) async {
+  // Parse: save [path]
+  final path = parts.length > 1 ? parts[1] : null;
+
+  try {
+    final queryParams = <String, String>{};
+    if (path != null) {
+      queryParams['path'] = _resolveToAbsolutePath(path);
+    }
+
+    final uri = Uri.parse('$serverUrl/save')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.post(uri).timeout(const Duration(seconds: 30));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        stdout.writeln('Saved: ${result['file_path']}');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runFileRepl(String serverUrl) async {
+  try {
+    final response = await http
+        .get(Uri.parse('$serverUrl/file'))
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        final filePath = result['file_path'] ?? '(none)';
+        final modified = result['modified'] == true ? 'yes' : 'no';
+        final networkCount = result['network_count'];
+
+        stdout.writeln('File: $filePath');
+        stdout.writeln('Modified: $modified');
+        stdout.writeln('Networks: $networkCount');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
+    }
+  } catch (e) {
+    stderr.writeln('Error: Failed to connect to atomCAD: $e');
+  }
+}
+
+Future<void> _runNewRepl(String serverUrl, List<String> parts) async {
+  // Parse: new [--force]
+  final force = parts.contains('--force') || parts.contains('-f');
+
+  try {
+    final queryParams = <String, String>{};
+    if (force) queryParams['force'] = 'true';
+
+    final uri = Uri.parse('$serverUrl/new')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await http.post(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body);
+      if (result['success'] == true) {
+        stdout.writeln('New project created.');
+      } else {
+        stderr.writeln('Error: ${result['error']}');
+      }
+    } else {
+      stderr.writeln('Error: Server returned ${response.statusCode}');
+      stderr.writeln(response.body);
     }
   } catch (e) {
     stderr.writeln('Error: Failed to connect to atomCAD: $e');

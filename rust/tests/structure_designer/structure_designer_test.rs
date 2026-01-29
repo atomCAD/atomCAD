@@ -421,22 +421,127 @@ fn test_rename_node_network_prevents_builtin_name_conflict() {
 #[test]
 fn test_rename_node_network_existing_validations_still_work() {
     let mut designer = StructureDesigner::new();
-    
+
     // Add two test node networks
     designer.add_node_network("network1");
     designer.add_node_network("network2");
-    
+
     // Try to rename to existing network name - should fail
     let result = designer.rename_node_network("network1", "network2");
     assert_eq!(result, false, "Should not allow renaming to existing network name");
-    
+
     // Try to rename non-existent network - should fail
     let result = designer.rename_node_network("nonexistent", "new_name");
     assert_eq!(result, false, "Should not allow renaming non-existent network");
-    
+
     // Valid rename should still work
     let result = designer.rename_node_network("network1", "renamed_network");
     assert_eq!(result, true, "Should allow valid rename");
+}
+
+// ===== NEW PROJECT TESTS =====
+
+#[test]
+fn test_new_project_clears_networks() {
+    let mut designer = StructureDesigner::new();
+
+    // Add multiple networks with nodes
+    designer.add_node_network("network1");
+    designer.add_node_network("network2");
+    designer.add_node_network("network3");
+    designer.set_active_node_network_name(Some("network1".to_string()));
+    designer.add_node("sphere", DVec2::new(0.0, 0.0));
+
+    assert_eq!(designer.node_type_registry.node_networks.len(), 3);
+
+    // Call new_project
+    designer.new_project();
+
+    // Should have exactly one network (Main)
+    assert_eq!(designer.node_type_registry.node_networks.len(), 1);
+    assert!(!designer.node_type_registry.node_networks.contains_key("network1"));
+    assert!(!designer.node_type_registry.node_networks.contains_key("network2"));
+    assert!(!designer.node_type_registry.node_networks.contains_key("network3"));
+}
+
+#[test]
+fn test_new_project_creates_main_network() {
+    let mut designer = StructureDesigner::new();
+
+    // Add a network with a different name
+    designer.add_node_network("my_custom_network");
+    designer.set_active_node_network_name(Some("my_custom_network".to_string()));
+
+    // Call new_project
+    designer.new_project();
+
+    // Should have Main network
+    assert!(designer.node_type_registry.node_networks.contains_key("Main"));
+
+    // Main should be the active network
+    assert_eq!(designer.active_node_network_name, Some("Main".to_string()));
+
+    // Main network should be empty (no nodes)
+    let main_network = designer.node_type_registry.node_networks.get("Main").unwrap();
+    assert!(main_network.nodes.is_empty());
+}
+
+#[test]
+fn test_new_project_clears_file_path() {
+    let mut designer = StructureDesigner::new();
+
+    // Set a file path
+    designer.file_path = Some("/path/to/design.cnnd".to_string());
+    assert!(designer.file_path.is_some());
+
+    // Call new_project
+    designer.new_project();
+
+    // File path should be cleared
+    assert!(designer.file_path.is_none());
+}
+
+#[test]
+fn test_new_project_clears_dirty_flag() {
+    let mut designer = StructureDesigner::new();
+
+    // Set dirty flag
+    designer.is_dirty = true;
+    assert!(designer.is_dirty);
+
+    // Call new_project
+    designer.new_project();
+
+    // Dirty flag should be cleared
+    assert!(!designer.is_dirty);
+}
+
+#[test]
+fn test_new_project_full_reset() {
+    let mut designer = StructureDesigner::new();
+
+    // Set up complex state: multiple networks with nodes, file path, dirty flag
+    designer.add_node_network("network1");
+    designer.add_node_network("network2");
+    designer.set_active_node_network_name(Some("network1".to_string()));
+    designer.add_node("sphere", DVec2::new(0.0, 0.0));
+    designer.add_node("cuboid", DVec2::new(100.0, 0.0));
+    designer.file_path = Some("/path/to/design.cnnd".to_string());
+    designer.is_dirty = true;
+
+    // Call new_project
+    designer.new_project();
+
+    // Verify full reset
+    assert_eq!(designer.node_type_registry.node_networks.len(), 1);
+    assert!(designer.node_type_registry.node_networks.contains_key("Main"));
+    assert_eq!(designer.active_node_network_name, Some("Main".to_string()));
+    assert!(designer.file_path.is_none());
+    assert!(!designer.is_dirty);
+
+    // Main network should be empty
+    let main_network = designer.node_type_registry.node_networks.get("Main").unwrap();
+    assert!(main_network.nodes.is_empty());
 }
 
 
