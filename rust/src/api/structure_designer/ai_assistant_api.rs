@@ -127,6 +127,7 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                             connections_made: vec![],
                             description_set: None,
                             summary_set: None,
+                            output_set: None,
                             errors: vec!["No active node network".to_string()],
                             warnings: vec![],
                         }).unwrap_or_else(|_| r#"{"success":false,"errors":["No active node network"]}"#.to_string());
@@ -149,6 +150,7 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                             connections_made: vec![],
                             description_set: None,
                             summary_set: None,
+                            output_set: None,
                             errors: vec![format!("Network '{}' not found", network_name)],
                             warnings: vec![],
                         }).unwrap_or_else(|_| r#"{"success":false,"errors":["Network not found"]}"#.to_string());
@@ -178,6 +180,20 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 // Mark that a full refresh is needed since the network was edited directly
                 // (bypassing StructureDesigner change tracking)
                 cad_instance.structure_designer.mark_full_refresh();
+
+                // Set dirty flag if any modifications were made
+                // (text_edit_network bypasses normal edit methods that set dirty)
+                if result.success && (
+                    !result.nodes_created.is_empty() ||
+                    !result.nodes_updated.is_empty() ||
+                    !result.nodes_deleted.is_empty() ||
+                    !result.connections_made.is_empty() ||
+                    result.description_set.is_some() ||
+                    result.summary_set.is_some() ||
+                    result.output_set.is_some()
+                ) {
+                    cad_instance.structure_designer.set_dirty(true);
+                }
 
                 // Trigger a refresh after editing
                 refresh_structure_designer_auto(cad_instance);

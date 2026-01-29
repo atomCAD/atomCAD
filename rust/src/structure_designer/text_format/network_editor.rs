@@ -47,6 +47,8 @@ pub struct EditResult {
     pub description_set: Option<String>,
     /// Network summary if it was set.
     pub summary_set: Option<String>,
+    /// Network output node if it was set.
+    pub output_set: Option<String>,
     /// Error messages encountered during editing.
     pub errors: Vec<String>,
     /// Warning messages (non-fatal issues).
@@ -63,6 +65,7 @@ impl EditResult {
             connections_made: Vec::new(),
             description_set: None,
             summary_set: None,
+            output_set: None,
             errors: Vec::new(),
             warnings: Vec::new(),
         }
@@ -667,6 +670,7 @@ impl<'a> NetworkEditor<'a> {
             .ok_or_else(|| format!("Cannot set output to '{}': node not found", node_name))?;
 
         self.network.set_return_node(node_id);
+        self.result.output_set = Some(node_name.to_string());
         Ok(())
     }
 
