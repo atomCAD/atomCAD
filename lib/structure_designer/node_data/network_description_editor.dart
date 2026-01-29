@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 
-/// Editor for the active node network's description
+/// Editor for the active node network's description and summary
 /// Displayed when no node is selected
 class NetworkDescriptionEditor extends StatefulWidget {
   const NetworkDescriptionEditor({super.key});
@@ -12,7 +12,8 @@ class NetworkDescriptionEditor extends StatefulWidget {
 }
 
 class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
-  late TextEditingController _controller;
+  late TextEditingController _descriptionController;
+  late TextEditingController _summaryController;
   bool _hasChanges = false;
   String? _errorMessage;
 
@@ -20,14 +21,19 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
   void initState() {
     super.initState();
     final description = getActiveNetworkDescription() ?? '';
-    _controller = TextEditingController(text: description);
-    _controller.addListener(_onTextChanged);
+    final summary = getActiveNetworkSummary() ?? '';
+    _descriptionController = TextEditingController(text: description);
+    _summaryController = TextEditingController(text: summary);
+    _descriptionController.addListener(_onTextChanged);
+    _summaryController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onTextChanged);
-    _controller.dispose();
+    _descriptionController.removeListener(_onTextChanged);
+    _summaryController.removeListener(_onTextChanged);
+    _descriptionController.dispose();
+    _summaryController.dispose();
     super.dispose();
   }
 
@@ -41,10 +47,14 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
   }
 
   void _applyChanges() {
-    final newDescription = _controller.text;
+    final newDescription = _descriptionController.text;
+    final newSummary = _summaryController.text;
 
     try {
       setActiveNetworkDescription(description: newDescription);
+      // Pass null for empty summary to clear it
+      setActiveNetworkSummary(
+          summary: newSummary.isEmpty ? null : newSummary);
       setState(() {
         _hasChanges = false;
         _errorMessage = null;
@@ -73,7 +83,7 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
         children: [
           // Title
           Text(
-            'Network Description',
+            'Network Properties',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -82,21 +92,79 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
 
           // Subtitle
           Text(
-            'Edit the description of the active node network.',
+            'Edit the properties of the active node network.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 16),
 
-          // Text editor
+          // Summary label
+          Text(
+            'Summary',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'A short summary for CLI verbose listings (optional).',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 8),
+
+          // Summary text field
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: Theme.of(context).colorScheme.outline),
               borderRadius: BorderRadius.circular(4.0),
             ),
             child: TextField(
-              controller: _controller,
+              controller: _summaryController,
+              maxLines: 2,
+              minLines: 1,
+              decoration: InputDecoration(
+                hintText: 'Enter a short summary...',
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.all(12.0),
+                hintStyle: TextStyle(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant
+                      .withValues(alpha: 0.5),
+                ),
+              ),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Description label
+          Text(
+            'Description',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'A detailed description of the node network.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 8),
+
+          // Description text editor
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).colorScheme.outline),
+              borderRadius: BorderRadius.circular(4.0),
+            ),
+            child: TextField(
+              controller: _descriptionController,
               maxLines: 10,
               minLines: 10,
               decoration: InputDecoration(

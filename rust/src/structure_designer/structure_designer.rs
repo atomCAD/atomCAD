@@ -1019,11 +1019,32 @@ impl StructureDesigner {
   pub fn set_active_network_description(&mut self, description: String) -> Result<(), String> {
     let network_name = self.active_node_network_name.as_ref()
       .ok_or("No active node network")?;
-    
+
     let network = self.node_type_registry.node_networks.get_mut(network_name)
       .ok_or("Active network not found")?;
-    
+
     network.node_type.description = description;
+    self.set_dirty(true);
+    Ok(())
+  }
+
+  /// Gets the summary of the active node network
+  pub fn get_active_network_summary(&self) -> Option<String> {
+    let network = self.get_active_node_network()?;
+    network.node_type.summary.clone()
+  }
+
+  /// Sets the summary of the active node network
+  /// Pass None or empty string to clear the summary
+  pub fn set_active_network_summary(&mut self, summary: Option<String>) -> Result<(), String> {
+    let network_name = self.active_node_network_name.as_ref()
+      .ok_or("No active node network")?;
+
+    let network = self.node_type_registry.node_networks.get_mut(network_name)
+      .ok_or("Active network not found")?;
+
+    // Convert empty string to None
+    network.node_type.summary = summary.filter(|s| !s.is_empty());
     self.set_dirty(true);
     Ok(())
   }

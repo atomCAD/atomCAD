@@ -507,6 +507,33 @@ pub fn set_active_network_description(description: String) -> Result<(), String>
   }
 }
 
+/// Gets the summary of the active node network
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_active_network_summary() -> Option<String> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.get_active_network_summary()
+      },
+      None
+    )
+  }
+}
+
+/// Sets the summary of the active node network
+/// Pass None or empty string to clear the summary
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_network_summary(summary: Option<String>) -> Result<(), String> {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.set_active_network_summary(summary)
+      },
+      Err("CAD instance not available".to_string())
+    )
+  }
+}
+
 /// Gets the description of a specific node network
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_network_description(network_name: String) -> Option<String> {

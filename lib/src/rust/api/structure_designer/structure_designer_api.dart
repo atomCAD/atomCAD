@@ -121,6 +121,16 @@ void setActiveNetworkDescription({required String description}) => RustLib
     .crateApiStructureDesignerStructureDesignerApiSetActiveNetworkDescription(
         description: description);
 
+/// Gets the summary of the active node network
+String? getActiveNetworkSummary() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetActiveNetworkSummary();
+
+/// Sets the summary of the active node network
+/// Pass None or empty string to clear the summary
+void setActiveNetworkSummary({String? summary}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSetActiveNetworkSummary(
+        summary: summary);
+
 /// Gets the description of a specific node network
 String? getNetworkDescription({required String networkName}) => RustLib
     .instance.api
