@@ -42,6 +42,7 @@ We will discuss the different parts of the UI in detail. The parts are:
 - Node Properties Panel
 - Display Preferences Panel
 - Camera Control Panel
+- Preferences Dialog (Edit > Preferences)
 
 ### 3D Viewport
 
@@ -200,6 +201,40 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, and fo
 
 - *File > Load Design*, *File > Save Design*, *File > Save Design As*: The native file format of an atomCAD design is the .cnnd file format. CNND stands for Crystal Node Network Design. It is a json based format. It contains a list of node networks. Can be used as a design file or as a design library file intended for reusing node networks from it as custom nodes in other designs.
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
+
+### Preferences Dialog
+
+The *Edit > Preferences* menu item opens the Preferences dialog, which contains advanced settings organized into categories.
+
+#### Geometry Visualization
+
+| Setting | Description |
+|---------|-------------|
+| Samples Per Unit Cell | Resolution for surface splatting tessellation. Higher values produce smoother surfaces. |
+| Sharpness Angle Threshold | Angle (in degrees) used to detect sharp edges during mesh generation. |
+| Mesh Smoothing | Normal calculation method: *Smooth* (interpolated normals), *Sharp* (flat shading), or *Smoothing Group Based* (smooth within groups, sharp at edges). |
+| Display Camera Target | Shows or hides the camera pivot point as a small red cube. |
+
+#### Atomic Structure Visualization
+
+| Setting | Description |
+|---------|-------------|
+| Rendering Method | *Impostors* (default, high-performance) or *Triangle Mesh* (traditional geometry). |
+| Ball and Stick Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Ball and Stick mode. Set to 0 to disable culling. |
+| Space Filling Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Space Filling mode. Set to 0 to disable culling. |
+
+#### Background
+
+| Setting | Description |
+|---------|-------------|
+| Background Color | The scene background color. |
+| Show Grid | Toggles visibility of the Cartesian grid and axes. |
+| Grid Size | Spacing between grid lines. |
+| Grid Color / Grid Strong Color | Colors for regular and primary (axis-aligned) grid lines. |
+| Show Lattice Axes | Toggles dotted lines showing non-Cartesian lattice directions. |
+| Show Lattice Grid | Toggles a secondary grid aligned to the lattice (useful for non-cubic unit cells). |
+| Lattice Grid Color / Lattice Grid Strong Color | Colors for the lattice grid lines. |
+| Drawing Plane Grid Color / Drawing Plane Grid Strong Color | Colors for the 2D drawing plane grid. |
 
 ### Import from library .cnnd files
 

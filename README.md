@@ -9,7 +9,7 @@ With atomCAD you can design arbitrary covalently bonded atomic structures that a
 
 ## Download
 
-**Latest Release: [v0.1.2](https://github.com/atomCAD/atomCAD/releases/tag/v0.1.2)**
+**Latest Release: [v0.2.0](https://github.com/atomCAD/atomCAD/releases/tag/v0.2.0)**
 
 ## Features
 
