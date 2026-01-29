@@ -106,11 +106,15 @@ Cubic diamond has **Oh symmetry** (48 operations). Key symmetries:
 
 ## Component Library
 
+All custom nodes output **Geometry**. Use `atom_fill` only in the final assembly.
+
 | Component | Status | Parameters | Notes |
 |-----------|--------|------------|-------|
 | `wall_segment` | v1 | length, height, thickness | Basic cuboid, X-aligned |
 | `square_tower` | v1 | outer_width, height, wall_thickness | Hollow via diff |
-| `simple_castle` | v1 | (uses above) | 4 towers + 4 walls assembly |
+| `arrow_slit_wall` | v1 | length, height, thickness, slit_width, slit_height, slit_z | X-aligned wall with centered slit |
+| `arrow_slit_wall_y` | v1 | length, height, thickness, slit_width, slit_height, slit_z | Y-aligned wall with centered slit |
+| `simple_castle` | v1 | (uses above) | 4 towers + 4 walls with slits |
 
 ---
 
