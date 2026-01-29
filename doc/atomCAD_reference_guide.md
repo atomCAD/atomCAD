@@ -126,6 +126,9 @@ Left-click a node and drag to move it.
 **Connect pins**
 Left-click and drag from an output pin to an input pin to create a wire. To disconnect a wire, select it and press `Del` (see Selection below).
 
+**Quick-add node from wire**
+If you drag a wire from a pin and release it in empty space, the **Add Node** window opens filtered to show only nodes with compatible pins. After selecting a node type, the new node is created at the drop location and the wire is automatically connected. If multiple pins are compatible, a dialog lets you choose which one.
+
 **Selection**
 Multiple nodes and wires can be selected. Selection is used for:
 
@@ -361,6 +364,7 @@ To see functional programming in atomCAD in action please check out the *Pattern
 
 We categorize nodes by their functionality and/or output pin data type. There are the following categories of nodes:
 
+- Annotation nodes
 - Math nodes and programming nodes
 - 2D Geometry nodes
 - 3D Geometry nodes
@@ -368,6 +372,19 @@ We categorize nodes by their functionality and/or output pin data type. There ar
 - Other nodes
 
 You create 2D geometry to eventually use the **extrude** node to create 3D geometry from it. You create 3D geometry to eventually use the **atom_fill** node to create an atomic structure from it.
+
+### Annotation nodes
+
+#### comment
+
+Adds text annotations to document your node network. Comment nodes do not have input or output pins and do not affect the evaluation of the network.
+
+**Properties**
+
+- `Label` — An optional title displayed in a yellow header bar.
+- `Text` — The main comment text.
+
+Comment nodes can be resized by dragging the handle in the bottom-right corner.
 
 ### Math and programming nodes
 
