@@ -1,0 +1,33 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+# Network: sample
+
+int1 = int { value: 7 }
+half_space1 = half_space { shift: int1, max_miller_index: 1, m_index: (1, 1, 1), center: (0, 0, 0), subdivision: 1 }
+half_space2 = half_space { shift: int1, max_miller_index: 1, m_index: (-1, -1, -1), center: (0, 0, 0), subdivision: 1 }
+lattice_rot1 = lattice_rot { shape: half_space1, axis_index: 0, step: 1, pivot_point: (0, 0, 0) }
+lattice_rot2 = lattice_rot { shape: half_space1, axis_index: 0, step: 2, pivot_point: (0, 0, 0) }
+lattice_rot3 = lattice_rot { shape: half_space1, axis_index: 0, step: 3, pivot_point: (0, 0, 0) }
+intersect1 = intersect { shapes: [half_space1, lattice_rot1, lattice_rot2, lattice_rot3] }
+lattice_rot4 = lattice_rot { shape: intersect1, axis_index: 2, step: 2, pivot_point: (0, 0, 0) }
+half_space3 = half_space { max_miller_index: 1, m_index: (0, 0, 1), center: (0, 0, 0), shift: 1, subdivision: 1 }
+int2 = int { value: 5 }
+half_space4 = half_space { shift: int2, max_miller_index: 1, m_index: (1, 0, 0), center: (0, 0, 0), subdivision: 1 }
+half_space5 = half_space { shift: int2, max_miller_index: 1, m_index: (-1, 0, 0), center: (0, 0, 0), subdivision: 1 }
+half_space6 = half_space { shift: int2, max_miller_index: 1, m_index: (0, 1, 0), center: (0, 0, 0), subdivision: 1 }
+half_space7 = half_space { shift: int2, max_miller_index: 1, m_index: (0, -1, 0), center: (0, 0, 0), subdivision: 1 }
+ivec31 = ivec3 { x: int2, y: 0, z: 0 }
+half_space8 = half_space { center: ivec31, max_miller_index: 2, m_index: (1, 0, 1), shift: 0, subdivision: 1 }
+half_space9 = half_space { center: ivec31, max_miller_index: 2, m_index: (1, 0, -1), shift: 0, subdivision: 1 }
+intersect3 = intersect { shapes: [half_space8, half_space9] }
+lattice_rot5 = lattice_rot { shape: intersect3, axis_index: 2, step: 1, pivot_point: (0, 0, 0) }
+lattice_rot6 = lattice_rot { shape: intersect3, axis_index: 2, step: 2, pivot_point: (0, 0, 0) }
+lattice_rot7 = lattice_rot { shape: intersect3, axis_index: 2, step: 3, pivot_point: (0, 0, 0) }
+intersect2 = intersect { shapes: [intersect1, lattice_rot4, half_space3, half_space4, half_space5, half_space6, half_space7, intersect3, lattice_rot5, lattice_rot6, lattice_rot7] }
+lattice_move1 = lattice_move { shape: intersect2, translation: (0, 0, 5), subdivision: 1, visible: true }
+atom_fill1 = atom_fill { shape: lattice_move1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+output lattice_move1
+
+# 24 nodes

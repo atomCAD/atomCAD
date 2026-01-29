@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
 /// Editor widget for string nodes
 class StringEditor extends StatefulWidget {
@@ -31,6 +32,7 @@ class StringEditorState extends State<StringEditor> {
     }
 
     return Padding(
+      key: PropertyEditorKeys.stringEditor,
       padding: const EdgeInsets.all(8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -43,6 +45,7 @@ class StringEditorState extends State<StringEditor> {
           StringInput(
             label: 'Value',
             value: widget.data!.value,
+            inputKey: PropertyEditorKeys.stringValueInput,
             onChanged: (newValue) {
               widget.model.setStringData(
                 widget.nodeId,

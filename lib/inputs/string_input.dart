@@ -6,12 +6,14 @@ class StringInput extends StatefulWidget {
   final String label;
   final String value;
   final ValueChanged<String> onChanged;
+  final Key? inputKey;
 
   const StringInput({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.inputKey,
   });
 
   @override
@@ -41,7 +43,7 @@ class _StringInputState extends State<StringInput> {
     if (oldWidget.value != widget.value) {
       final selection = _controller.selection;
       _controller.text = widget.value;
-      
+
       // Ensure the selection is valid for the new text length
       final newTextLength = _controller.text.length;
       if (selection.isValid && selection.end <= newTextLength) {
@@ -70,6 +72,7 @@ class _StringInputState extends State<StringInput> {
     return SizedBox(
       width: double.infinity,
       child: TextField(
+        key: widget.inputKey,
         decoration: AppInputDecorations.standard.copyWith(
           labelText: widget.label,
         ),

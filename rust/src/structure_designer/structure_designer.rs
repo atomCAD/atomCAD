@@ -6,15 +6,16 @@ use super::node_type_registry::NodeTypeRegistry;
 use super::node_network::NodeNetwork;
 use super::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
-use crate::structure_designer::node_data::NoData;
-use crate::structure_designer::node_type::{no_data_saver, no_data_loader};
-use super::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::node_data::CustomNodeData;
+use crate::structure_designer::node_type::{generic_node_data_saver, generic_node_data_loader};
+use super::evaluator::network_evaluator::{NetworkEvaluator, NetworkStackElement, NetworkEvaluationContext};
 use super::evaluator::network_result::NetworkResult;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicStructureVisualization};
+use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluationResult;
 use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RADIUS};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::node_networks_import_manager::NodeNetworksImportManager;
@@ -436,9 +437,9 @@ impl StructureDesigner {
         category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
         parameters: Vec::new(),
         output_type: DataType::None,
-        node_data_creator: || Box::new(NoData {}),
-        node_data_saver: no_data_saver,
-        node_data_loader: no_data_loader,
+        node_data_creator: || Box::new(CustomNodeData::default()),
+        node_data_saver: generic_node_data_saver::<CustomNodeData>,
+        node_data_loader: generic_node_data_loader::<CustomNodeData>,
         public: true,
       }
     ));
@@ -736,6 +737,166 @@ impl StructureDesigner {
       // Apply display policy considering only these nodes as dirty
       self.apply_node_display_policy(Some(&dirty_nodes));
     }
+  }
+
+  /// Auto-connects a source pin to the first compatible pin on a target node.
+  /// 
+  /// - When `source_is_output` is true: connects source output to target's first compatible input
+  /// - When `source_is_output` is false: connects target's output to source input
+  /// 
+  /// Returns true if a connection was made, false otherwise.
+  pub fn auto_connect_to_node(
+    &mut self,
+    source_node_id: u64,
+    source_pin_index: i32,
+    source_is_output: bool,
+    target_node_id: u64,
+  ) -> bool {
+    // Early return if active_node_network_name is None
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return false,
+    };
+
+    // Get source and target node types to find compatible pins
+    let connection_info = {
+      let network = match self.node_type_registry.node_networks.get(&node_network_name) {
+        Some(network) => network,
+        None => return false,
+      };
+
+      let source_node = match network.nodes.get(&source_node_id) {
+        Some(node) => node,
+        None => return false,
+      };
+
+      let target_node = match network.nodes.get(&target_node_id) {
+        Some(node) => node,
+        None => return false,
+      };
+
+      let source_node_type = match self.node_type_registry.get_node_type_for_node(source_node) {
+        Some(nt) => nt,
+        None => return false,
+      };
+
+      let target_node_type = match self.node_type_registry.get_node_type_for_node(target_node) {
+        Some(nt) => nt,
+        None => return false,
+      };
+
+      if source_is_output {
+        // Source is output, find first compatible input on target
+        let source_output_type = source_node_type.get_output_pin_type(source_pin_index);
+        
+        // Find first compatible input parameter on target node
+        let mut compatible_param_index: Option<usize> = None;
+        for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
+          if DataType::can_be_converted_to(&source_output_type, &param.data_type) {
+            compatible_param_index = Some(param_idx);
+            break;
+          }
+        }
+
+        match compatible_param_index {
+          Some(param_idx) => Some((source_node_id, source_pin_index, target_node_id, param_idx)),
+          None => None,
+        }
+      } else {
+        // Source is input, connect target's output to source's input pin
+        let target_output_type = &target_node_type.output_type;
+        let source_param_type = self.node_type_registry.get_node_param_data_type(source_node, source_pin_index as usize);
+        
+        if DataType::can_be_converted_to(target_output_type, &source_param_type) {
+          // Connect target output (pin 0) to source input
+          Some((target_node_id, 0, source_node_id, source_pin_index as usize))
+        } else {
+          None
+        }
+      }
+    };
+
+    // Make the connection if we found compatible pins
+    if let Some((src_node, src_pin, dest_node, dest_param)) = connection_info {
+      self.connect_nodes(src_node, src_pin, dest_node, dest_param);
+      return true;
+    }
+
+    false
+  }
+
+  /// Returns all compatible pins on the target node for auto-connection.
+  /// Each tuple contains (pin_index, pin_name, data_type_string).
+  /// When source_is_output is true, returns compatible INPUT pins on target.
+  /// When source_is_output is false, returns the OUTPUT pin if compatible.
+  pub fn get_compatible_pins_for_auto_connect(
+    &self,
+    source_node_id: u64,
+    source_pin_index: i32,
+    source_is_output: bool,
+    target_node_id: u64,
+  ) -> Vec<(i32, String, String)> {
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return Vec::new(),
+    };
+
+    let network = match self.node_type_registry.node_networks.get(&node_network_name) {
+      Some(network) => network,
+      None => return Vec::new(),
+    };
+
+    let source_node = match network.nodes.get(&source_node_id) {
+      Some(node) => node,
+      None => return Vec::new(),
+    };
+
+    let target_node = match network.nodes.get(&target_node_id) {
+      Some(node) => node,
+      None => return Vec::new(),
+    };
+
+    let source_node_type = match self.node_type_registry.get_node_type_for_node(source_node) {
+      Some(nt) => nt,
+      None => return Vec::new(),
+    };
+
+    let target_node_type = match self.node_type_registry.get_node_type_for_node(target_node) {
+      Some(nt) => nt,
+      None => return Vec::new(),
+    };
+
+    let mut compatible_pins = Vec::new();
+
+    if source_is_output {
+      // Source is output, find all compatible input parameters on target
+      let source_output_type = source_node_type.get_output_pin_type(source_pin_index);
+      
+      for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
+        if DataType::can_be_converted_to(&source_output_type, &param.data_type) {
+          compatible_pins.push((
+            param_idx as i32,
+            param.name.clone(),
+            param.data_type.to_string(),
+          ));
+        }
+      }
+    } else {
+      // Source is input, check if target's output is compatible
+      let target_output_type = &target_node_type.output_type;
+      let source_param_type = self.node_type_registry.get_node_param_data_type(source_node, source_pin_index as usize);
+      
+      if DataType::can_be_converted_to(target_output_type, &source_param_type) {
+        // Output pin is always index 0 with name "output"
+        compatible_pins.push((
+          0,
+          "output".to_string(),
+          target_output_type.to_string(),
+        ));
+      }
+    }
+
+    compatible_pins
   }
 
   pub fn set_node_network_data(&mut self, node_id: u64, mut data: Box<dyn NodeData>) {
@@ -1845,6 +2006,121 @@ impl StructureDesigner {
     }
     
     final_result
+  }
+
+  /// Evaluate a specific node and return its result for CLI inspection.
+  ///
+  /// This triggers evaluation of the node (if not already cached) and returns
+  /// the NetworkResult converted to strings for display.
+  ///
+  /// # Arguments
+  /// * `node_id` - The ID of the node to evaluate
+  /// * `verbose` - If true, include detailed output for complex types
+  ///
+  /// # Returns
+  /// * `Ok(APINodeEvaluationResult)` - The evaluation result
+  /// * `Err(String)` - If node not found or network not active
+  pub fn evaluate_node_for_cli(
+    &mut self,
+    node_id: u64,
+    verbose: bool,
+  ) -> Result<APINodeEvaluationResult, String> {
+    // Check that an active network is set
+    let network_name = self.active_node_network_name.as_ref()
+      .ok_or_else(|| "No active node network".to_string())?
+      .clone();
+
+    // Get the network and verify the node exists
+    let network = self.node_type_registry.node_networks.get(&network_name)
+      .ok_or_else(|| format!("Network '{}' not found", network_name))?;
+
+    // Check if the network is valid
+    if !network.valid {
+      return Err(format!("Network '{}' is invalid and cannot be evaluated", network_name));
+    }
+
+    // Look up the node
+    let node = network.nodes.get(&node_id)
+      .ok_or_else(|| format!("Node {} not found in network '{}'", node_id, network_name))?;
+
+    // Get the node type name and custom name
+    let node_type_name = node.node_type_name.clone();
+    let custom_name = node.custom_name.clone();
+
+    // Get the output type from the node type registry
+    let output_type = self.node_type_registry.get_node_type_for_node(node)
+      .map(|nt| nt.output_type.to_string())
+      .unwrap_or_else(|| "Unknown".to_string());
+
+    // Set up evaluation context
+    let mut context = NetworkEvaluationContext::new();
+    if let Some(params) = self.cli_top_level_parameters.clone() {
+      context.top_level_parameters = params;
+    }
+
+    // Create the network stack
+    let network = self.node_type_registry.node_networks.get(&network_name).unwrap();
+    let mut network_stack = Vec::new();
+    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+
+    // Evaluate the node (output pin 0 is the main output)
+    let result = self.network_evaluator.evaluate(
+      &network_stack,
+      node_id,
+      0,  // output pin index
+      &self.node_type_registry,
+      false,  // decorate - false since this is just for text output
+      &mut context
+    );
+
+    // Build the response
+    let display_string = result.to_display_string();
+    let detailed_string = if verbose {
+      Some(result.to_detailed_string())
+    } else {
+      None
+    };
+
+    // Check for errors
+    let (success, error_message) = match &result {
+      NetworkResult::Error(msg) => (false, Some(msg.clone())),
+      _ => (true, None),
+    };
+
+    Ok(APINodeEvaluationResult {
+      node_id,
+      node_type_name,
+      custom_name,
+      output_type,
+      display_string,
+      detailed_string,
+      success,
+      error_message,
+    })
+  }
+
+  /// Find a node ID by its display name in the active network.
+  ///
+  /// Since all nodes have persistent names assigned at creation,
+  /// this is a simple search through the custom_name fields.
+  ///
+  /// # Arguments
+  /// * `name` - The name to search for
+  ///
+  /// # Returns
+  /// * `Some(node_id)` if a node with the given name exists
+  /// * `None` if no node with the given name is found or no network is active
+  pub fn find_node_id_by_name(&self, name: &str) -> Option<u64> {
+    let network_name = self.active_node_network_name.as_ref()?;
+    let network = self.node_type_registry.node_networks.get(network_name)?;
+
+    for (node_id, node) in &network.nodes {
+      if node.custom_name.as_deref() == Some(name) {
+        return Some(*node_id);
+      }
+    }
+
+    None
   }
 
   /// Exports all visible atomic structures as a single file (XYZ or MOL format)

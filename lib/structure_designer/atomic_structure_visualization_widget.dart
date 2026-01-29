@@ -27,6 +27,7 @@ class AtomicStructureVisualizationWidget extends StatelessWidget {
                 context,
                 Icons.hub, // Using hub icon to represent atoms (circles) connected by bonds (lines)
                 'Atomic visualization: Ball and Stick',
+                key: const Key('atomic_vis_ball_and_stick'),
                 isSelected: model.preferences?.atomicStructureVisualizationPreferences
                         .visualization ==
                     AtomicStructureVisualization.ballAndStick,
@@ -43,6 +44,7 @@ class AtomicStructureVisualizationWidget extends StatelessWidget {
                 context,
                 Icons.circle, // Using circle to represent space filling spheres
                 'Atomic visualization: Space Filling',
+                key: const Key('atomic_vis_space_filling'),
                 isSelected: model.preferences?.atomicStructureVisualizationPreferences
                         .visualization ==
                     AtomicStructureVisualization.spaceFilling,
@@ -61,10 +63,11 @@ class AtomicStructureVisualizationWidget extends StatelessWidget {
   }
 
   Widget _buildIconButton(BuildContext context, IconData icon, String tooltip,
-      {required bool isSelected, required VoidCallback onPressed}) {
+      {required bool isSelected, required VoidCallback onPressed, Key? key}) {
     return Tooltip(
       message: tooltip,
       child: Material(
+        key: key,
         color: isSelected ? AppColors.primaryAccent : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
         child: InkWell(

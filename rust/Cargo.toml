@@ -34,6 +34,7 @@ rustc-hash = "2.1"
 # Issue: https://github.com/timschmidt/csgrs/issues/107
 csgrs = { path = "../csgrs" }
 nalgebra = "^0.33"
+image = { version = "0.25", default-features = false, features = ["png"] }
 geo = "^0.29.3"
 # pyo3 = { version = "0.22", features = ["auto-initialize"] }
 

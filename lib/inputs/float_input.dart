@@ -6,12 +6,14 @@ class FloatInput extends StatefulWidget {
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
+  final Key? inputKey;
 
   const FloatInput({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.inputKey,
   });
 
   @override
@@ -67,6 +69,7 @@ class _FloatInputState extends State<FloatInput> {
       children: [
         Text(widget.label),
         TextField(
+          key: widget.inputKey,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
           ),

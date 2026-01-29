@@ -3,6 +3,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
 use serde::de::Deserializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::crystolecule::atomic_structure::AtomicStructure;
@@ -247,6 +248,48 @@ impl NodeData for AtomFillData {
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         None
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            // Note: parameter_element_value_definition has no matching parameter (stored-only field)
+            ("parameter_element_value_definition".to_string(), TextValue::String(self.parameter_element_value_definition.clone())),
+            // Property names match parameter names for connection shadowing
+            ("m_offset".to_string(), TextValue::Vec3(self.motif_offset)),
+            ("passivate".to_string(), TextValue::Bool(self.hydrogen_passivation)),
+            ("rm_single".to_string(), TextValue::Bool(self.remove_single_bond_atoms_before_passivation)),
+            ("surf_recon".to_string(), TextValue::Bool(self.surface_reconstruction)),
+            ("invert_phase".to_string(), TextValue::Bool(self.invert_phase)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("parameter_element_value_definition") {
+            self.parameter_element_value_definition = v.as_string().ok_or_else(|| "parameter_element_value_definition must be a string".to_string())?.to_string();
+        }
+        if let Some(v) = props.get("m_offset") {
+            self.motif_offset = v.as_vec3().ok_or_else(|| "m_offset must be a Vec3".to_string())?;
+        }
+        if let Some(v) = props.get("passivate") {
+            self.hydrogen_passivation = v.as_bool().ok_or_else(|| "passivate must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("rm_single") {
+            self.remove_single_bond_atoms_before_passivation = v.as_bool().ok_or_else(|| "rm_single must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("surf_recon") {
+            self.surface_reconstruction = v.as_bool().ok_or_else(|| "surf_recon must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("invert_phase") {
+            self.invert_phase = v.as_bool().ok_or_else(|| "invert_phase must be a boolean".to_string())?;
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("shape".to_string(), (true, None)); // required
+        m.insert("motif".to_string(), (false, Some("cubic zincblende".to_string())));
+        m
     }
 }
 

@@ -8,6 +8,53 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
+/// Keys for preferences window widgets, used for integration testing.
+class PreferencesKeys {
+  static const Key preferencesDialog = Key('preferences_dialog');
+  static const Key closeButton = Key('preferences_close_button');
+
+  // Geometry visualization
+  static const Key visualizationMethodDropdown =
+      Key('pref_visualization_method_dropdown');
+  static const Key samplesPerUnitCellInput =
+      Key('pref_samples_per_unit_cell_input');
+  static const Key sharpnessThresholdInput =
+      Key('pref_sharpness_threshold_input');
+  static const Key meshRenderingDropdown = Key('pref_mesh_rendering_dropdown');
+
+  // Atomic structure visualization
+  static const Key atomicVisualizationDropdown =
+      Key('pref_atomic_visualization_dropdown');
+  static const Key atomicRenderingMethodDropdown =
+      Key('pref_atomic_rendering_method_dropdown');
+  static const Key ballAndStickCullDepthInput =
+      Key('pref_ball_and_stick_cull_depth_input');
+  static const Key spaceFillingCullDepthInput =
+      Key('pref_space_filling_cull_depth_input');
+
+  // Other settings
+  static const Key displayCameraPivotCheckbox =
+      Key('pref_display_camera_pivot_checkbox');
+
+  // Background settings
+  static const Key backgroundColorInput = Key('pref_background_color_input');
+  static const Key showGridCheckbox = Key('pref_show_grid_checkbox');
+  static const Key gridSizeInput = Key('pref_grid_size_input');
+  static const Key gridColorInput = Key('pref_grid_color_input');
+  static const Key gridStrongColorInput = Key('pref_grid_strong_color_input');
+  static const Key showLatticeAxesCheckbox =
+      Key('pref_show_lattice_axes_checkbox');
+  static const Key showLatticeGridCheckbox =
+      Key('pref_show_lattice_grid_checkbox');
+  static const Key latticeGridColorInput = Key('pref_lattice_grid_color_input');
+  static const Key latticeGridStrongColorInput =
+      Key('pref_lattice_grid_strong_color_input');
+  static const Key drawingPlaneGridColorInput =
+      Key('pref_drawing_plane_grid_color_input');
+  static const Key drawingPlaneGridStrongColorInput =
+      Key('pref_drawing_plane_grid_strong_color_input');
+}
+
 /// A modal preferences window for the structure designer.
 class PreferencesWindow extends StatefulWidget {
   final StructureDesignerModel model;
@@ -134,6 +181,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
   @override
   Widget build(BuildContext context) {
     return DraggableDialog(
+      key: PreferencesKeys.preferencesDialog,
       width: 400,
       height: 500,
       child: Padding(
@@ -157,6 +205,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                   ),
                 ),
                 IconButton(
+                  key: PreferencesKeys.closeButton,
                   icon: const Icon(Icons.close),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -199,6 +248,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const Text('Visualization method'),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<int>(
+                                key: PreferencesKeys.visualizationMethodDropdown,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
                                   contentPadding:
@@ -231,6 +281,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Samples per unit cell
                           IntInput(
+                            key: PreferencesKeys.samplesPerUnitCellInput,
                             label: 'Samples per unit cell',
                             value: _preferences.geometryVisualizationPreferences
                                 .samplesPerUnitCell,
@@ -246,6 +297,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Sharpness threshold
                           FloatInput(
+                            key: PreferencesKeys.sharpnessThresholdInput,
                             label: 'Sharpness threshold (degree)',
                             value: _preferences.geometryVisualizationPreferences
                                 .sharpnessAngleThresholdDegree,
@@ -266,6 +318,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const Text('Mesh rendering'),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<MeshSmoothing>(
+                                key: PreferencesKeys.meshRenderingDropdown,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
                                   contentPadding:
@@ -333,6 +386,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const Text('Visualization method'),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<int>(
+                                key: PreferencesKeys.atomicVisualizationDropdown,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
                                   contentPadding:
@@ -366,6 +420,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const SizedBox(width: AppSpacing.medium),
                               Expanded(
                                 child: DropdownButton<int>(
+                                  key: PreferencesKeys
+                                      .atomicRenderingMethodDropdown,
                                   value: _getAtomicRenderingMethodIndex(),
                                   items: const [
                                     DropdownMenuItem(
@@ -394,6 +450,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                   .visualization ==
                               AtomicStructureVisualization.ballAndStick) ...[
                             FloatInput(
+                              key: PreferencesKeys.ballAndStickCullDepthInput,
                               label: 'Ball & stick depth culling threshold (Å)',
                               value: _preferences
                                       .atomicStructureVisualizationPreferences
@@ -427,6 +484,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                   .visualization ==
                               AtomicStructureVisualization.spaceFilling) ...[
                             FloatInput(
+                              key: PreferencesKeys.spaceFillingCullDepthInput,
                               label:
                                   'Space filling depth culling threshold (Å)',
                               value: _preferences
@@ -483,6 +541,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           Row(
                             children: [
                               Checkbox(
+                                key: PreferencesKeys.displayCameraPivotCheckbox,
                                 value: _preferences
                                     .geometryVisualizationPreferences
                                     .displayCameraTarget,
@@ -528,6 +587,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Background color
                           IVec3Input(
+                            key: PreferencesKeys.backgroundColorInput,
                             label: 'Background color (RGB)',
                             value: _preferences
                                 .backgroundPreferences.backgroundColor,
@@ -548,6 +608,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           Row(
                             children: [
                               Checkbox(
+                                key: PreferencesKeys.showGridCheckbox,
                                 value:
                                     _preferences.backgroundPreferences.showGrid,
                                 onChanged: (value) {
@@ -568,6 +629,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Grid size
                           IntInput(
+                            key: PreferencesKeys.gridSizeInput,
                             label: 'Grid size',
                             value: _preferences.backgroundPreferences.gridSize,
                             onChanged: (value) {
@@ -583,6 +645,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Grid color
                           IVec3Input(
+                            key: PreferencesKeys.gridColorInput,
                             label: 'Grid color (RGB)',
                             value: _preferences.backgroundPreferences.gridColor,
                             onChanged: (value) {
@@ -600,6 +663,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Grid strong color
                           IVec3Input(
+                            key: PreferencesKeys.gridStrongColorInput,
                             label: 'Grid strong color (RGB)',
                             value: _preferences
                                 .backgroundPreferences.gridStrongColor,
@@ -620,6 +684,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           Row(
                             children: [
                               Checkbox(
+                                key: PreferencesKeys.showLatticeAxesCheckbox,
                                 value: _preferences
                                     .backgroundPreferences.showLatticeAxes,
                                 onChanged: (value) {
@@ -645,6 +710,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           Row(
                             children: [
                               Checkbox(
+                                key: PreferencesKeys.showLatticeGridCheckbox,
                                 value: _preferences
                                     .backgroundPreferences.showLatticeGrid,
                                 onChanged: (value) {
@@ -668,6 +734,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Lattice grid color
                           IVec3Input(
+                            key: PreferencesKeys.latticeGridColorInput,
                             label: 'Lattice grid color (RGB)',
                             value: _preferences
                                 .backgroundPreferences.latticeGridColor,
@@ -686,6 +753,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Lattice grid strong color
                           IVec3Input(
+                            key: PreferencesKeys.latticeGridStrongColorInput,
                             label: 'Lattice grid strong color (RGB)',
                             value: _preferences
                                 .backgroundPreferences.latticeGridStrongColor,
@@ -704,6 +772,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Drawing plane grid color
                           IVec3Input(
+                            key: PreferencesKeys.drawingPlaneGridColorInput,
                             label: 'Drawing plane grid color (RGB)',
                             value: _preferences
                                 .backgroundPreferences.drawingPlaneGridColor,
@@ -722,6 +791,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Drawing plane grid strong color
                           IVec3Input(
+                            key: PreferencesKeys
+                                .drawingPlaneGridStrongColorInput,
                             label: 'Drawing plane grid strong color (RGB)',
                             value: _preferences.backgroundPreferences
                                 .drawingPlaneGridStrongColor,

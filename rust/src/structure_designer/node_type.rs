@@ -6,7 +6,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Parameter {
   pub name: String,
   pub data_type: DataType,

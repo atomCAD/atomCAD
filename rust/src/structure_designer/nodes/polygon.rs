@@ -1,6 +1,8 @@
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::vec_ivec2_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -94,6 +96,37 @@ impl NodeData for PolygonData {
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         None
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("vertices".to_string(), TextValue::Array(
+                self.vertices.iter().map(|v| TextValue::IVec2(*v)).collect()
+            )),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("vertices") {
+            let arr = v.as_array().ok_or_else(|| "vertices must be an array".to_string())?;
+            let mut new_vertices = Vec::new();
+            for (i, item) in arr.iter().enumerate() {
+                let vertex = item.as_ivec2()
+                    .ok_or_else(|| format!("vertex {} must be an IVec2", i))?;
+                new_vertices.push(vertex);
+            }
+            if new_vertices.len() < 3 {
+                return Err("polygon must have at least 3 vertices".to_string());
+            }
+            self.vertices = new_vertices;
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("d_plane".to_string(), (false, Some("XY plane".to_string())));
+        m
     }
 }
 

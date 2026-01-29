@@ -57,12 +57,18 @@ class DraggedWire {
   DraggedWire(this.startPin, this.wireEndPosition);
 }
 
+/// Callback signature for wire drop in empty space.
+/// Called when a wire is dragged from a pin and dropped in empty space.
+typedef WireDropCallback = void Function(
+    PinReference startPin, Offset dropPosition);
+
 /// Manages the entire node graph.
 class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
   NodeNetworkView? nodeNetworkView;
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
+  WireDropCallback? onWireDroppedInEmptySpace; // Callback for wire drop in empty space
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
   StructureDesignerPreferences? preferences;
@@ -107,6 +113,12 @@ class StructureDesignerModel extends ChangeNotifier {
 
   bool isNodeTypeActive(String nodeType) {
     return structure_designer_api.isNodeTypeActive(nodeType: nodeType);
+  }
+
+  List<APINodeCategoryView>? getCompatibleNodeTypes(
+      String sourceType, bool draggingFromOutput) {
+    return structure_designer_api.getCompatibleNodeTypes(
+        sourceTypeStr: sourceType, draggingFromOutput: draggingFromOutput);
   }
 
   void setActiveEditAtomTool(APIEditAtomTool tool) {
@@ -432,6 +444,12 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  /// Handles wire drop in empty space by invoking the callback.
+  /// Called from PinWidget.onDragEnd when wire is dropped (not on a valid pin).
+  void handleWireDropInEmptySpace(PinReference startPin, Offset dropPosition) {
+    onWireDroppedInEmptySpace?.call(startPin, dropPosition);
+  }
+
   bool canConnectPins(PinReference pin1, PinReference pin2) {
     if (pin1.pinType == pin2.pinType) {
       return false;
@@ -482,6 +500,24 @@ class StructureDesignerModel extends ChangeNotifier {
     draggedWire = null;
 
     refreshFromKernel();
+  }
+
+  /// Auto-connects a source pin to the first compatible pin on a target node.
+  /// Used after creating a node from wire drop in empty space.
+  bool autoConnectToNode(
+    BigInt sourceNodeId,
+    int sourcePinIndex,
+    bool sourceIsOutput,
+    BigInt targetNodeId,
+  ) {
+    final result = structure_designer_api.autoConnectToNode(
+      sourceNodeId: sourceNodeId,
+      sourcePinIndex: sourcePinIndex,
+      sourceIsOutput: sourceIsOutput,
+      targetNodeId: targetNodeId,
+    );
+    refreshFromKernel();
+    return result;
   }
 
   void setSelectedNode(BigInt nodeId) {

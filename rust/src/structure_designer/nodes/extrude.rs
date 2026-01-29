@@ -3,7 +3,9 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use glam::DQuat;
@@ -174,12 +176,46 @@ impl NodeData for ExtrudeData {
     }
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-        Some(format!("h: {} dir: [{},{},{}]", 
+        Some(format!("h: {} dir: [{},{},{}]",
             self.height,
             self.extrude_direction.x,
             self.extrude_direction.y,
             self.extrude_direction.z
         ))
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("height".to_string(), TextValue::Int(self.height)),
+            // Property names must match parameter names for describe command
+            ("dir".to_string(), TextValue::IVec3(self.extrude_direction)),
+            ("inf".to_string(), TextValue::Bool(self.infinite)),
+            ("subdivision".to_string(), TextValue::Int(self.subdivision)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("height") {
+            self.height = v.as_int().ok_or_else(|| "height must be an integer".to_string())?;
+        }
+        // Accept both old names (backward compat) and new names (matching parameters)
+        if let Some(v) = props.get("dir").or_else(|| props.get("extrude_direction")) {
+            self.extrude_direction = v.as_ivec3().ok_or_else(|| "dir must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("inf").or_else(|| props.get("infinite")) {
+            self.infinite = v.as_bool().ok_or_else(|| "inf must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("subdivision") {
+            self.subdivision = v.as_int().ok_or_else(|| "subdivision must be an integer".to_string())?;
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("shape".to_string(), (true, None)); // required
+        m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+        m
     }
 }
 

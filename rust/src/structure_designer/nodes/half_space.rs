@@ -5,7 +5,9 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use crate::renderer::mesh::Mesh;
@@ -155,36 +157,71 @@ impl NodeData for HalfSpaceData {
         let m_index_connected = connected_input_pins.contains("m_index");
         let shift_connected = connected_input_pins.contains("shift");
         let subdivision_connected = connected_input_pins.contains("subdivision");
-        
+
         if center_connected && m_index_connected && shift_connected && subdivision_connected {
             None
         } else {
             let mut parts = Vec::new();
-            
+
             if !center_connected {
-                parts.push(format!("c: ({},{},{})", 
+                parts.push(format!("c: ({},{},{})",
                     self.center.x, self.center.y, self.center.z));
             }
-            
+
             if !m_index_connected {
-                parts.push(format!("m: ({},{},{})", 
+                parts.push(format!("m: ({},{},{})",
                     self.miller_index.x, self.miller_index.y, self.miller_index.z));
             }
-            
+
             if !shift_connected {
                 parts.push(format!("s: {}", self.shift));
             }
-            
+
             if !subdivision_connected && self.subdivision != 1 {
                 parts.push(format!("sub: {}", self.subdivision));
             }
-            
+
             if parts.is_empty() {
                 None
             } else {
                 Some(parts.join(" "))
             }
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("max_miller_index".to_string(), TextValue::Int(self.max_miller_index)),
+            ("m_index".to_string(), TextValue::IVec3(self.miller_index)),
+            ("center".to_string(), TextValue::IVec3(self.center)),
+            ("shift".to_string(), TextValue::Int(self.shift)),
+            ("subdivision".to_string(), TextValue::Int(self.subdivision)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("max_miller_index") {
+            self.max_miller_index = v.as_int().ok_or_else(|| "max_miller_index must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("m_index") {
+            self.miller_index = v.as_ivec3().ok_or_else(|| "m_index must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("center") {
+            self.center = v.as_ivec3().ok_or_else(|| "center must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("shift") {
+            self.shift = v.as_int().ok_or_else(|| "shift must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("subdivision") {
+            self.subdivision = v.as_int().ok_or_else(|| "subdivision must be an integer".to_string())?;
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+        m
     }
 }
 

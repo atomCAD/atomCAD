@@ -1,0 +1,2175 @@
+{
+  "node_networks": [
+    [
+      "simple_castle",
+      {
+        "next_node_id": 89,
+        "node_type": {
+          "name": "simple_castle",
+          "description": "A simple castle with 4 corner towers and walls with arrow slits.",
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 77,
+            "node_type_name": "square_tower",
+            "custom_name": "tower4",
+            "position": [
+              1300.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 84,
+            "node_type_name": "lattice_move",
+            "custom_name": "move_ww",
+            "position": [
+              2920.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "83": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                8,
+                0
+              ]
+            }
+          },
+          {
+            "id": 74,
+            "node_type_name": "lattice_move",
+            "custom_name": "move2",
+            "position": [
+              570.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "73": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                18,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 87,
+            "node_type_name": "union",
+            "custom_name": "castle",
+            "position": [
+              3600.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "72": 0,
+                  "78": 0,
+                  "80": 0,
+                  "84": 0,
+                  "86": 0,
+                  "74": 0,
+                  "82": 0,
+                  "76": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 78,
+            "node_type_name": "lattice_move",
+            "custom_name": "move4",
+            "position": [
+              1510.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "77": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                18,
+                18,
+                0
+              ]
+            }
+          },
+          {
+            "id": 86,
+            "node_type_name": "lattice_move",
+            "custom_name": "move_we",
+            "position": [
+              3390.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "85": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                24,
+                8,
+                0
+              ]
+            }
+          },
+          {
+            "id": 73,
+            "node_type_name": "square_tower",
+            "custom_name": "tower2",
+            "position": [
+              360.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 75,
+            "node_type_name": "square_tower",
+            "custom_name": "tower3",
+            "position": [
+              830.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 88,
+            "node_type_name": "atom_fill",
+            "custom_name": "atoms",
+            "position": [
+              3810.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "87": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "invert_phase": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": "",
+              "remove_single_bond_atoms_before_passivation": true,
+              "surface_reconstruction": false
+            }
+          },
+          {
+            "id": 80,
+            "node_type_name": "lattice_move",
+            "custom_name": "move_wn",
+            "position": [
+              1980.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "79": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                8,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 83,
+            "node_type_name": "arrow_slit_wall_y",
+            "custom_name": "wall_w",
+            "position": [
+              2710.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 85,
+            "node_type_name": "arrow_slit_wall_y",
+            "custom_name": "wall_e",
+            "position": [
+              3180.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 82,
+            "node_type_name": "lattice_move",
+            "custom_name": "move_ws",
+            "position": [
+              2450.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "81": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                8,
+                24,
+                0
+              ]
+            }
+          },
+          {
+            "id": 79,
+            "node_type_name": "arrow_slit_wall",
+            "custom_name": "wall_n",
+            "position": [
+              1770.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 81,
+            "node_type_name": "arrow_slit_wall",
+            "custom_name": "wall_s",
+            "position": [
+              2240.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 72,
+            "node_type_name": "square_tower",
+            "custom_name": "tower1",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 76,
+            "node_type_name": "lattice_move",
+            "custom_name": "move3",
+            "position": [
+              1040.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "75": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                18,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            88,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "square_tower",
+      {
+        "next_node_id": 14,
+        "node_type": {
+          "name": "square_tower",
+          "description": "A hollow square tower. Parameters: outer_width, height, wall_thickness.",
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "outer_width",
+              "data_type": "Int"
+            },
+            {
+              "name": "height",
+              "data_type": "Int"
+            },
+            {
+              "name": "wall_thickness",
+              "data_type": "Int"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 11,
+            "node_type_name": "ivec3",
+            "custom_name": "inner_min",
+            "position": [
+              1460.0,
+              244.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "int",
+            "custom_name": "height_def",
+            "position": [
+              570.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 12
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "ivec3",
+            "custom_name": "outer_extent",
+            "position": [
+              990.0,
+              244.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "cuboid",
+            "custom_name": "inner",
+            "position": [
+              1880.0,
+              172.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "diff",
+            "custom_name": "tower",
+            "position": [
+              2085.999999999999,
+              207.20000000000005
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              }
+            ],
+            "data_type": "diff",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "expr",
+            "custom_name": "inner_width",
+            "position": [
+              1460.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "x - 2 * t",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "x"
+                },
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "t"
+                }
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "parameter",
+            "custom_name": "thickness",
+            "position": [
+              1250.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "wall_thickness",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "int",
+            "custom_name": "thick_def",
+            "position": [
+              1040.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "int",
+            "custom_name": "width_def",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 8
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "ivec3",
+            "custom_name": "inner_extent",
+            "position": [
+              1670.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "parameter",
+            "custom_name": "height",
+            "position": [
+              780.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "height",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "parameter",
+            "custom_name": "width",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "outer_width",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "cuboid",
+            "custom_name": "outer",
+            "position": [
+              1200.0,
+              244.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": 13,
+        "displayed_node_ids": []
+      }
+    ],
+    [
+      "arrow_slit_wall_y",
+      {
+        "next_node_id": 21,
+        "node_type": {
+          "name": "arrow_slit_wall_y",
+          "description": "A Y-aligned wall segment with a centered arrow slit. Outputs Geometry.",
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "length",
+              "data_type": "Int"
+            },
+            {
+              "name": "height",
+              "data_type": "Int"
+            },
+            {
+              "name": "thickness",
+              "data_type": "Int"
+            },
+            {
+              "name": "slit_width",
+              "data_type": "Int"
+            },
+            {
+              "name": "slit_height",
+              "data_type": "Int"
+            },
+            {
+              "name": "slit_z",
+              "data_type": "Int"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 8,
+            "node_type_name": "parameter",
+            "custom_name": "slit_width",
+            "position": [
+              1720.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 3,
+              "param_name": "slit_width",
+              "sort_order": 3
+            }
+          },
+          {
+            "id": 14,
+            "node_type_name": "cuboid",
+            "custom_name": "wall",
+            "position": [
+              1670.0,
+              244.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "int",
+            "custom_name": "len_def",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 10
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "ivec3",
+            "custom_name": "slit_ext",
+            "position": [
+              2400.0,
+              203.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "parameter",
+            "custom_name": "slit_height",
+            "position": [
+              2190.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 4,
+              "param_name": "slit_height",
+              "sort_order": 4
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "ivec3",
+            "custom_name": "wall_ext",
+            "position": [
+              1460.0,
+              244.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "parameter",
+            "custom_name": "length",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "length",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "int",
+            "custom_name": "sh_def",
+            "position": [
+              1980.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "int",
+            "custom_name": "ht_def",
+            "position": [
+              570.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 8
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "ivec3",
+            "custom_name": "slit_pos",
+            "position": [
+              2870.0,
+              151.5
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                -1,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "int",
+            "custom_name": "sw_def",
+            "position": [
+              1510.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "int",
+            "custom_name": "sz_def",
+            "position": [
+              2450.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "parameter",
+            "custom_name": "thickness",
+            "position": [
+              1250.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "thickness",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "expr",
+            "custom_name": "slit_depth",
+            "position": [
+              1460.0,
+              409.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "t + 2",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "t"
+                }
+              ]
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "diff",
+            "custom_name": "result",
+            "position": [
+              3290.0,
+              210.625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              }
+            ],
+            "data_type": "diff",
+            "data": {}
+          },
+          {
+            "id": 5,
+            "node_type_name": "int",
+            "custom_name": "thk_def",
+            "position": [
+              1040.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "parameter",
+            "custom_name": "height",
+            "position": [
+              780.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "height",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "parameter",
+            "custom_name": "slit_z",
+            "position": [
+              2660.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 5,
+              "param_name": "slit_z",
+              "sort_order": 5
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "expr",
+            "custom_name": "slit_y",
+            "position": [
+              1930.0,
+              203.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "(len - sw) / 2",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "len"
+                },
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "sw"
+                }
+              ]
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "cuboid",
+            "custom_name": "slit",
+            "position": [
+              3080.0,
+              177.25
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "18": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "17": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": 20,
+        "displayed_node_ids": []
+      }
+    ],
+    [
+      "arrow_slit_wall",
+      {
+        "next_node_id": 21,
+        "node_type": {
+          "name": "arrow_slit_wall",
+          "description": "A wall segment with a centered arrow slit. Outputs Geometry.",
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "length",
+              "data_type": "Int"
+            },
+            {
+              "name": "height",
+              "data_type": "Int"
+            },
+            {
+              "name": "thickness",
+              "data_type": "Int"
+            },
+            {
+              "name": "slit_width",
+              "data_type": "Int"
+            },
+            {
+              "name": "slit_height",
+              "data_type": "Int"
+            },
+            {
+              "name": "slit_z",
+              "data_type": "Int"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 17,
+            "node_type_name": "ivec3",
+            "custom_name": "slit_ext",
+            "position": [
+              2400.0,
+              203.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "16": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "parameter",
+            "custom_name": "length",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "length",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "int",
+            "custom_name": "sz_def",
+            "position": [
+              2450.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "int",
+            "custom_name": "ht_def",
+            "position": [
+              570.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 8
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "expr",
+            "custom_name": "slit_x",
+            "position": [
+              1930.0,
+              203.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "(len - sw) / 2",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "len"
+                },
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "sw"
+                }
+              ]
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "int",
+            "custom_name": "len_def",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 10
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "int",
+            "custom_name": "sw_def",
+            "position": [
+              1510.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "parameter",
+            "custom_name": "height",
+            "position": [
+              780.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "height",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "parameter",
+            "custom_name": "slit_z",
+            "position": [
+              2660.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 5,
+              "param_name": "slit_z",
+              "sort_order": 5
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "ivec3",
+            "custom_name": "wall_ext",
+            "position": [
+              1460.0,
+              244.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "parameter",
+            "custom_name": "thickness",
+            "position": [
+              1250.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "thickness",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "ivec3",
+            "custom_name": "slit_pos",
+            "position": [
+              2870.0,
+              151.5
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "15": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                -1,
+                0
+              ]
+            }
+          },
+          {
+            "id": 20,
+            "node_type_name": "diff",
+            "custom_name": "result",
+            "position": [
+              3290.0,
+              210.625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "19": 0
+                }
+              }
+            ],
+            "data_type": "diff",
+            "data": {}
+          },
+          {
+            "id": 14,
+            "node_type_name": "cuboid",
+            "custom_name": "wall",
+            "position": [
+              1670.0,
+              244.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "13": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "int",
+            "custom_name": "thk_def",
+            "position": [
+              1040.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "int",
+            "custom_name": "sh_def",
+            "position": [
+              1980.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "parameter",
+            "custom_name": "slit_height",
+            "position": [
+              2190.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 4,
+              "param_name": "slit_height",
+              "sort_order": 4
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "cuboid",
+            "custom_name": "slit",
+            "position": [
+              3080.0,
+              177.25
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "18": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "17": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "expr",
+            "custom_name": "slit_depth",
+            "position": [
+              1460.0,
+              409.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "expression": "t + 2",
+              "parameters": [
+                {
+                  "data_type": "Int",
+                  "data_type_str": null,
+                  "name": "t"
+                }
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "parameter",
+            "custom_name": "slit_width",
+            "position": [
+              1720.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 3,
+              "param_name": "slit_width",
+              "sort_order": 3
+            }
+          }
+        ],
+        "return_node_id": 20,
+        "displayed_node_ids": []
+      }
+    ],
+    [
+      "wall_segment",
+      {
+        "next_node_id": 14,
+        "node_type": {
+          "name": "wall_segment",
+          "description": "A rectangular wall segment. Parameters: length (X), height (Z), thickness (Y).",
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "length",
+              "data_type": "Int"
+            },
+            {
+              "name": "height",
+              "data_type": "Int"
+            },
+            {
+              "name": "thickness",
+              "data_type": "Int"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 7,
+            "node_type_name": "parameter",
+            "custom_name": "length",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 0,
+              "param_name": "length",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 11,
+            "node_type_name": "parameter",
+            "custom_name": "thickness",
+            "position": [
+              1250.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 2,
+              "param_name": "thickness",
+              "sort_order": 2
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "parameter",
+            "custom_name": "height",
+            "position": [
+              780.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_index": 1,
+              "param_name": "height",
+              "sort_order": 1
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "ivec3",
+            "custom_name": "extent_vec",
+            "position": [
+              1460.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "11": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "int",
+            "custom_name": "len_default",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 10
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "int",
+            "custom_name": "height_default",
+            "position": [
+              570.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 8
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "int",
+            "custom_name": "thick_default",
+            "position": [
+              1040.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "cuboid",
+            "custom_name": "wall",
+            "position": [
+              1670.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "12": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                1,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        ],
+        "return_node_id": 13,
+        "displayed_node_ids": []
+      }
+    ]
+  ],
+  "version": 2
+}

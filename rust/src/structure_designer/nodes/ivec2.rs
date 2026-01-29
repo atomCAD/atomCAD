@@ -2,6 +2,7 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec2;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec2_serializer;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -13,6 +14,7 @@ use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_dat
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::common_constants::CONNECTED_PIN_SYMBOL;
+use crate::structure_designer::text_format::TextValue;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IVec2Data {
@@ -66,7 +68,7 @@ impl NodeData for IVec2Data {
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         let x_connected = connected_input_pins.contains("x");
         let y_connected = connected_input_pins.contains("y");
-        
+
         if x_connected && y_connected {
             None
         } else {
@@ -74,6 +76,23 @@ impl NodeData for IVec2Data {
             let y_display = if y_connected { CONNECTED_PIN_SYMBOL } else { &self.value.y.to_string() };
             Some(format!("({},{})", x_display, y_display))
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("x".to_string(), TextValue::Int(self.value.x)),
+            ("y".to_string(), TextValue::Int(self.value.y)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("x") {
+            self.value.x = v.as_int().ok_or_else(|| "x must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("y") {
+            self.value.y = v.as_int().ok_or_else(|| "y must be an integer".to_string())?;
+        }
+        Ok(())
     }
 }
 

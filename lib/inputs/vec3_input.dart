@@ -12,12 +12,20 @@ class Vec3Input extends StatefulWidget {
   /// Optional callback triggered when a value is successfully pasted
   final VoidCallback? onPasted;
 
+  /// Optional keys for individual axis text fields (for testing)
+  final Key? xInputKey;
+  final Key? yInputKey;
+  final Key? zInputKey;
+
   const Vec3Input({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
     this.onPasted,
+    this.xInputKey,
+    this.yInputKey,
+    this.zInputKey,
   });
 
   @override
@@ -89,15 +97,18 @@ class _Vec3InputState extends State<Vec3Input> {
 
     // Only update controllers if NOT currently editing this specific axis
     if (_currentlyEditingAxis != 'x' && oldWidget.value.x != widget.value.x) {
-      updateTextControllerWithSelection(_xController, widget.value.x.toStringAsFixed(6));
+      updateTextControllerWithSelection(
+          _xController, widget.value.x.toStringAsFixed(6));
     }
 
     if (_currentlyEditingAxis != 'y' && oldWidget.value.y != widget.value.y) {
-      updateTextControllerWithSelection(_yController, widget.value.y.toStringAsFixed(6));
+      updateTextControllerWithSelection(
+          _yController, widget.value.y.toStringAsFixed(6));
     }
 
     if (_currentlyEditingAxis != 'z' && oldWidget.value.z != widget.value.z) {
-      updateTextControllerWithSelection(_zController, widget.value.z.toStringAsFixed(6));
+      updateTextControllerWithSelection(
+          _zController, widget.value.z.toStringAsFixed(6));
     }
   }
 
@@ -169,6 +180,7 @@ class _Vec3InputState extends State<Vec3Input> {
                   }
                 },
                 child: TextField(
+                  key: widget.xInputKey,
                   controller: _xController,
                   focusNode: _xFocus,
                   style: AppTextStyles.inputField,
@@ -203,6 +215,7 @@ class _Vec3InputState extends State<Vec3Input> {
                   }
                 },
                 child: TextField(
+                  key: widget.yInputKey,
                   controller: _yController,
                   focusNode: _yFocus,
                   style: AppTextStyles.inputField,
@@ -237,6 +250,7 @@ class _Vec3InputState extends State<Vec3Input> {
                   }
                 },
                 child: TextField(
+                  key: widget.zInputKey,
                   controller: _zController,
                   focusNode: _zFocus,
                   style: AppTextStyles.inputField,

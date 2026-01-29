@@ -12,6 +12,7 @@ class IntInput extends StatefulWidget {
   final ValueChanged<int> onChanged;
   final int? minimumValue;
   final int? maximumValue;
+  final Key? inputKey;
 
   const IntInput({
     super.key,
@@ -20,6 +21,7 @@ class IntInput extends StatefulWidget {
     required this.onChanged,
     this.minimumValue,
     this.maximumValue,
+    this.inputKey,
   });
 
   @override
@@ -49,7 +51,7 @@ class _IntInputState extends State<IntInput> {
     if (oldWidget.value != widget.value) {
       final selection = _controller.selection;
       _controller.text = widget.value.toString();
-      
+
       // Ensure the selection is valid for the new text length
       final newTextLength = _controller.text.length;
       if (selection.isValid && selection.end <= newTextLength) {
@@ -208,6 +210,7 @@ class _IntInputState extends State<IntInput> {
                   }
                 },
                 child: TextField(
+                  key: widget.inputKey,
                   decoration: AppInputDecorations.standard,
                   controller: _controller,
                   focusNode: _focusNode,

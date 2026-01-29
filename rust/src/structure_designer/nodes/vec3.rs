@@ -2,7 +2,9 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::f64::DVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::dvec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -76,7 +78,7 @@ impl NodeData for Vec3Data {
         let x_connected = connected_input_pins.contains("x");
         let y_connected = connected_input_pins.contains("y");
         let z_connected = connected_input_pins.contains("z");
-        
+
         if x_connected && y_connected && z_connected {
             None
         } else {
@@ -86,7 +88,27 @@ impl NodeData for Vec3Data {
             Some(format!("({},{},{})", x_display, y_display, z_display))
         }
     }
-    
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("x".to_string(), TextValue::Float(self.value.x)),
+            ("y".to_string(), TextValue::Float(self.value.y)),
+            ("z".to_string(), TextValue::Float(self.value.z)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("x") {
+            self.value.x = v.as_float().ok_or_else(|| "x must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("y") {
+            self.value.y = v.as_float().ok_or_else(|| "y must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("z") {
+            self.value.z = v.as_float().ok_or_else(|| "z must be a float".to_string())?;
+        }
+        Ok(())
+    }
 }
 
 pub fn get_node_type() -> NodeType {

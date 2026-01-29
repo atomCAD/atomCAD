@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_cad/structure_designer/structure_designer.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/frb_generated.dart';
@@ -10,6 +11,11 @@ import 'package:window_manager/window_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:flutter_window_close/flutter_window_close.dart';
+import 'package:flutter_cad/ai_assistant/http_server.dart';
+
+/// Global AI assistant server instance.
+/// This is set in main() and accessed by _MyAppState to connect the UI refresh callback.
+AiAssistantServer? _aiServer;
 
 Future<void> main(List<String> args) async {
   await RustLib.init();
@@ -23,6 +29,15 @@ Future<void> main(List<String> args) async {
   // Normal GUI mode
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
+
+  // Start AI assistant HTTP server
+  _aiServer = AiAssistantServer();
+  try {
+    await _aiServer!.start();
+  } catch (e) {
+    // Server failed to start (e.g., port in use) - continue without it
+    print('[AI Assistant] Warning: Server failed to start: $e');
+  }
 
   runApp(const MyApp());
 }
@@ -142,6 +157,16 @@ class _MyAppState extends State<MyApp> {
     structureDesignerModel = StructureDesignerModel();
     structureDesignerModel.init();
 
+    // Connect AI assistant server to refresh UI after edits
+    _aiServer?.onNetworkEdited = () {
+      structureDesignerModel.refreshFromKernel();
+    };
+
+    // Connect AI assistant server to request re-render (for camera changes)
+    _aiServer?.onRenderingNeeded = () {
+      SchedulerBinding.instance.scheduleFrame();
+    };
+
     // Listen to model changes to update window title
     structureDesignerModel.addListener(_updateWindowTitle);
     _updateWindowTitle(); // Set initial title
@@ -209,7 +234,8 @@ class _MyAppState extends State<MyApp> {
         builder: (context, child) {
           if (forceTextScaleFactor) {
             return MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(1.0)),
               child: child!,
             );
           }

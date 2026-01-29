@@ -116,6 +116,13 @@ impl NodeData for DiffData {
   fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
       None
   }
+
+  fn get_parameter_metadata(&self) -> std::collections::HashMap<String, (bool, Option<String>)> {
+      let mut m = std::collections::HashMap::new();
+      m.insert("base".to_string(), (true, None)); // required
+      m.insert("sub".to_string(), (true, None)); // required
+      m
+  }
 }
 
 fn helper_union<'a>(

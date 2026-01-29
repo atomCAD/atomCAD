@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -115,6 +117,30 @@ impl NodeData for MapData {
 
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         None
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("input_type".to_string(), TextValue::DataType(self.input_type.clone())),
+            ("output_type".to_string(), TextValue::DataType(self.output_type.clone())),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("input_type") {
+            self.input_type = v.as_data_type().ok_or_else(|| "input_type must be a DataType".to_string())?.clone();
+        }
+        if let Some(v) = props.get("output_type") {
+            self.output_type = v.as_data_type().ok_or_else(|| "output_type must be a DataType".to_string())?.clone();
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("xs".to_string(), (true, None)); // required
+        m.insert("f".to_string(), (true, None)); // required
+        m
     }
 }
 

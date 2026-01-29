@@ -64,25 +64,31 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 Consumer<StructureDesignerModel>(
                   builder: (context, model, child) {
                     return MenuWidget(
+                      key: const Key('file_menu'),
                       label: 'File',
                       menuItems: [
                         MenuItemButton(
+                          key: const Key('load_design_item'),
                           onPressed: _loadDesign,
                           child: const Text('Load Design'),
                         ),
                         MenuItemButton(
+                          key: const Key('save_design_item'),
                           onPressed: model.canSave ? _saveDesign : null,
                           child: const Text('Save Design'),
                         ),
                         MenuItemButton(
+                          key: const Key('save_design_as_item'),
                           onPressed: _saveDesignAs,
                           child: const Text('Save Design As'),
                         ),
                         MenuItemButton(
+                          key: const Key('export_visible_item'),
                           onPressed: _exportVisible,
                           child: const Text('Export visible'),
                         ),
                         MenuItemButton(
+                          key: const Key('import_from_library_item'),
                           onPressed: _importFromCnndLibrary,
                           child: const Text('Import from .cnnd library'),
                         ),
@@ -93,13 +99,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
                 // View Menu
                 MenuWidget(
+                  key: const Key('view_menu'),
                   label: 'View',
                   menuItems: [
                     MenuItemButton(
+                      key: const Key('reset_view_item'),
                       onPressed: _resetNodeNetworkView,
                       child: const Text('Reset node network view'),
                     ),
                     MenuItemButton(
+                      key: const Key('toggle_layout_item'),
                       onPressed: _toggleDivisionOrientation,
                       child: Text(verticalDivision
                           ? 'Switch to Horizontal Layout'
@@ -110,15 +119,18 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
                 // Edit Menu
                 MenuWidget(
+                  key: const Key('edit_menu'),
                   label: 'Edit',
                   menuItems: [
                     MenuItemButton(
+                      key: const Key('validate_network_item'),
                       onPressed: () {
                         widget.model.validateActiveNetwork();
                       },
                       child: const Text('Validate active network'),
                     ),
                     MenuItemButton(
+                      key: const Key('preferences_item'),
                       onPressed: _showPreferences,
                       child: const Text('Preferences'),
                     ),

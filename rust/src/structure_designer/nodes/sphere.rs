@@ -2,7 +2,9 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec3_serializer;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
@@ -90,17 +92,39 @@ impl NodeData for SphereData {
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         let show_center = !connected_input_pins.contains("center");
         let show_radius = !connected_input_pins.contains("radius");
-        
+
         match (show_center, show_radius) {
-            (true, true) => Some(format!("c: ({},{},{}) r: {}", 
+            (true, true) => Some(format!("c: ({},{},{}) r: {}",
                 self.center.x, self.center.y, self.center.z, self.radius)),
-            (true, false) => Some(format!("c: ({},{},{})", 
+            (true, false) => Some(format!("c: ({},{},{})",
                 self.center.x, self.center.y, self.center.z)),
             (false, true) => Some(format!("r: {}", self.radius)),
             (false, false) => None,
         }
     }
-    
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("center".to_string(), TextValue::IVec3(self.center)),
+            ("radius".to_string(), TextValue::Int(self.radius)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("center") {
+            self.center = v.as_ivec3().ok_or_else(|| "center must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("radius") {
+            self.radius = v.as_int().ok_or_else(|| "radius must be an integer".to_string())?;
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+        m
+    }
 }
 
 pub fn get_node_type() -> NodeType {

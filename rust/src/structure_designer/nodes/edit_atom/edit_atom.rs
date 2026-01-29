@@ -238,6 +238,12 @@ impl NodeData for EditAtomData {
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         Some(format!("ops: {}", self.history.len()))
     }
+
+    fn get_parameter_metadata(&self) -> std::collections::HashMap<String, (bool, Option<String>)> {
+        let mut m = std::collections::HashMap::new();
+        m.insert("molecule".to_string(), (true, None)); // required
+        m
+    }
 }
 
 // Returns whether an atom or a bond was hit or not.

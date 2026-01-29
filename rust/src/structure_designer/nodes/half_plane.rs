@@ -5,7 +5,9 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::util::transform::Transform2D;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::ivec2_serializer;
+use crate::structure_designer::text_format::TextValue;
 use glam::i32::IVec2;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
@@ -176,7 +178,7 @@ impl NodeData for HalfPlaneData {
 
     fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         let m_index_connected = connected_input_pins.contains("m_index");
-        
+
         // If miller_index is connected, show unconnected miller params
         // Otherwise show point1/point2
         if m_index_connected {
@@ -184,24 +186,24 @@ impl NodeData for HalfPlaneData {
             let center_connected = connected_input_pins.contains("center");
             let shift_connected = connected_input_pins.contains("shift");
             let subdivision_connected = connected_input_pins.contains("subdivision");
-            
+
             if center_connected && shift_connected && subdivision_connected {
                 None // All relevant params connected
             } else {
                 let mut parts = Vec::new();
-                
+
                 if !center_connected {
                     parts.push(format!("c: (0,0)"));
                 }
-                
+
                 if !shift_connected {
                     parts.push(format!("s: 0"));
                 }
-                
+
                 if !subdivision_connected {
                     parts.push(format!("sub: 1"));
                 }
-                
+
                 if parts.is_empty() {
                     None
                 } else {
@@ -210,9 +212,37 @@ impl NodeData for HalfPlaneData {
             }
         } else {
             // Point mode - show point1 and point2
-            Some(format!("({},{}) ({},{})", 
+            Some(format!("({},{}) ({},{})",
                 self.point1.x, self.point1.y, self.point2.x, self.point2.y))
         }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("point1".to_string(), TextValue::IVec2(self.point1)),
+            ("point2".to_string(), TextValue::IVec2(self.point2)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("point1") {
+            self.point1 = v.as_ivec2().ok_or_else(|| "point1 must be an IVec2".to_string())?;
+        }
+        if let Some(v) = props.get("point2") {
+            self.point2 = v.as_ivec2().ok_or_else(|| "point2 must be an IVec2".to_string())?;
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("d_plane".to_string(), (false, Some("XY plane".to_string())));
+        // m_index is optional - if not connected, uses point1/point2 instead
+        m.insert("m_index".to_string(), (false, Some("uses point1/point2 if unconnected".to_string())));
+        m.insert("center".to_string(), (false, Some("(0, 0)".to_string())));
+        m.insert("shift".to_string(), (false, Some("0".to_string())));
+        m.insert("subdivision".to_string(), (false, Some("1".to_string())));
+        m
     }
 }
 

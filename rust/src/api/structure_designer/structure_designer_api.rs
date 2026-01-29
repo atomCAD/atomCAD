@@ -81,12 +81,15 @@ use crate::structure_designer::nodes::expr::ExprData;
 use crate::structure_designer::nodes::map::MapData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::atom_fill::AtomFillData;
+use crate::structure_designer::nodes::comment::CommentData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIExportXYZData;
+use super::structure_designer_api_types::APICommentData;
+use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::structure_designer::cli_runner;
@@ -240,6 +243,19 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
           // Generate subtitle using the node's get_subtitle method
           let subtitle = node.data.get_subtitle(&connected_input_pins);
 
+          // Extract comment-specific data if this is a Comment node
+          let (comment_label, comment_text, comment_width, comment_height) = 
+            if let Some(comment_data) = node.data.as_any_ref().downcast_ref::<CommentData>() {
+              (
+                Some(comment_data.label.clone()),
+                Some(comment_data.text.clone()),
+                Some(comment_data.width),
+                Some(comment_data.height),
+              )
+            } else {
+              (None, None, None, None)
+            };
+
           let output_type = node_type.output_type.clone();
           let function_type = node_type.get_function_type();
           node_network_view.nodes.insert(node.id, NodeView {
@@ -256,6 +272,10 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
             error,
             output_string,
             subtitle,
+            comment_label,
+            comment_text,
+            comment_width,
+            comment_height,
           });
         }
 
@@ -339,12 +359,96 @@ pub fn connect_nodes(source_node_id: u64, source_output_pin_index: i32, dest_nod
   }
 }
 
+/// Auto-connects a source pin to the first compatible pin on a target node.
+/// 
+/// - `source_node_id`: The node where the wire was dragged from
+/// - `source_pin_index`: The pin index on the source node
+/// - `source_is_output`: true if dragging from output pin, false if from input pin
+/// - `target_node_id`: The newly created node to connect to
+/// 
+/// Returns true if a connection was made, false otherwise.
+#[flutter_rust_bridge::frb(sync)]
+pub fn auto_connect_to_node(
+  source_node_id: u64,
+  source_pin_index: i32,
+  source_is_output: bool,
+  target_node_id: u64,
+) -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let result = cad_instance.structure_designer.auto_connect_to_node(
+          source_node_id,
+          source_pin_index,
+          source_is_output,
+          target_node_id,
+        );
+        refresh_structure_designer_auto(cad_instance);
+        result
+      },
+      false
+    )
+  }
+}
+
+/// Returns all compatible pins on the target node for auto-connection.
+/// Each element contains (pin_index, pin_name, data_type_string).
+/// When source_is_output is true, returns compatible INPUT pins on target.
+/// When source_is_output is false, returns the OUTPUT pin if compatible.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_compatible_pins_for_auto_connect(
+  source_node_id: u64,
+  source_pin_index: i32,
+  source_is_output: bool,
+  target_node_id: u64,
+) -> Vec<(i32, String, String)> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.get_compatible_pins_for_auto_connect(
+          source_node_id,
+          source_pin_index,
+          source_is_output,
+          target_node_id,
+        )
+      },
+      Vec::new()
+    )
+  }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
   unsafe {
     with_cad_instance_or(
       |cad_instance| {
         Some(cad_instance.structure_designer.node_type_registry.get_node_type_views())
+      },
+      None
+    )
+  }
+}
+
+/// Returns node types that have at least one pin compatible with the given type.
+/// 
+/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Geometry", "Float")
+/// - `dragging_from_output`: true if dragging from output pin, false if from input pin
+/// 
+/// When dragging from OUTPUT: find nodes with compatible INPUT pins
+/// When dragging from INPUT: find nodes with compatible OUTPUT pins
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_compatible_node_types(
+  source_type_str: String,
+  dragging_from_output: bool,
+) -> Option<Vec<APINodeCategoryView>> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let source_type = DataType::from_string(&source_type_str).ok()?;
+        Some(cad_instance.structure_designer.node_type_registry.get_compatible_node_types(
+          &source_type,
+          dragging_from_output,
+        ))
       },
       None
     )
@@ -436,6 +540,35 @@ pub fn add_new_node_network() {
     with_mut_cad_instance(|instance| {
       instance.structure_designer.add_new_node_network();
     });
+  }
+}
+
+/// Add a node network with a specific name.
+/// Returns success/error. Auto-activates the new network.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_node_network_with_name(name: String) -> APIResult {
+  unsafe {
+    with_mut_cad_instance_or(
+      |instance| {
+        // Check if name already exists
+        if instance.structure_designer.node_type_registry
+            .node_networks.contains_key(&name) {
+          return APIResult {
+            success: false,
+            error_message: format!("Network '{}' already exists", name),
+          };
+        }
+        instance.structure_designer.add_node_network(&name);
+        instance.structure_designer.set_active_node_network_name(Some(name));
+        instance.structure_designer.set_dirty(true);
+        refresh_structure_designer_auto(instance);
+        APIResult { success: true, error_message: String::new() }
+      },
+      APIResult {
+        success: false,
+        error_message: "CAD instance not available".to_string(),
+      }
+    )
   }
 }
 
@@ -2555,9 +2688,96 @@ pub fn run_cli_batch(config: super::structure_designer_api_types::BatchCliConfig
   }
 }
 
+/// Resize a comment node
+#[flutter_rust_bridge::frb(sync)]
+pub fn resize_comment_node(node_id: u64, width: f64, height: f64) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      if let Some(network_name) = &cad_instance.structure_designer.active_node_network_name.clone() {
+        if let Some(network) = cad_instance.structure_designer.node_type_registry.node_networks.get_mut(network_name) {
+          if let Some(node) = network.nodes.get_mut(&node_id) {
+            if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>() {
+              comment_data.width = width.max(100.0);
+              comment_data.height = height.max(60.0);
+            }
+          }
+        }
+      }
+    });
+  }
+}
 
+/// Update a comment node's label and text
+#[flutter_rust_bridge::frb(sync)]
+pub fn update_comment_node(node_id: u64, label: String, text: String) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      if let Some(network_name) = &cad_instance.structure_designer.active_node_network_name.clone() {
+        if let Some(network) = cad_instance.structure_designer.node_type_registry.node_networks.get_mut(network_name) {
+          if let Some(node) = network.nodes.get_mut(&node_id) {
+            if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>() {
+              comment_data.label = label;
+              comment_data.text = text;
+            }
+          }
+        }
+      }
+    });
+  }
+}
 
+/// Get comment node data for property panel editing
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_comment_data(node_id: u64) -> Option<APICommentData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = cad_instance.structure_designer.get_node_network_data(node_id)?;
+        let comment_data = node_data.as_any_ref().downcast_ref::<CommentData>()?;
 
+        Some(APICommentData {
+          label: comment_data.label.clone(),
+          text: comment_data.text.clone(),
+          width: comment_data.width,
+          height: comment_data.height,
+        })
+      },
+      None
+    )
+  }
+}
+
+/// Evaluate a node and return its result string.
+///
+/// # Arguments
+/// * `node_identifier` - Either a numeric node ID or the node's custom name
+/// * `verbose` - If true, return detailed output for complex types
+///
+/// # Returns
+/// * `Ok(APINodeEvaluationResult)` - The evaluation result
+/// * `Err(String)` - If node not found or evaluation fails
+#[flutter_rust_bridge::frb(sync)]
+pub fn evaluate_node(
+  node_identifier: String,
+  verbose: bool,
+) -> Result<APINodeEvaluationResult, String> {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let designer = &mut cad_instance.structure_designer;
+
+        // Try parsing as numeric ID first, then fall back to name lookup
+        let node_id = node_identifier.parse::<u64>()
+          .ok()
+          .or_else(|| designer.find_node_id_by_name(&node_identifier))
+          .ok_or_else(|| format!("Node not found: {}", node_identifier))?;
+
+        designer.evaluate_node_for_cli(node_id, verbose)
+      },
+      Err("CAD instance not available".to_string())
+    )
+  }
+}
 
 
 

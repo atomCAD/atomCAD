@@ -27,6 +27,7 @@ class NodeDisplayWidget extends StatelessWidget {
                 context,
                 Icons.tune, // Using tune icon to represent manual control
                 'Node display policy: Manual (User Selection)',
+                key: const Key('node_display_manual'),
                 isSelected:
                     model.preferences?.nodeDisplayPreferences.displayPolicy ==
                         NodeDisplayPolicy.manual,
@@ -44,6 +45,7 @@ class NodeDisplayWidget extends StatelessWidget {
                 context,
                 Icons.star, // Using star icon to represent selected items
                 'Node display policy: Prefer Selected Nodes',
+                key: const Key('node_display_prefer_selected'),
                 isSelected:
                     model.preferences?.nodeDisplayPreferences.displayPolicy ==
                         NodeDisplayPolicy.preferSelected,
@@ -61,6 +63,7 @@ class NodeDisplayWidget extends StatelessWidget {
                 context,
                 Icons.explore, // Using explore icon for frontier/boundary
                 'Node display policy: Prefer Frontier Nodes',
+                key: const Key('node_display_prefer_frontier'),
                 isSelected:
                     model.preferences?.nodeDisplayPreferences.displayPolicy ==
                         NodeDisplayPolicy.preferFrontier,
@@ -80,10 +83,11 @@ class NodeDisplayWidget extends StatelessWidget {
   }
 
   Widget _buildIconButton(BuildContext context, IconData icon, String tooltip,
-      {required bool isSelected, required VoidCallback onPressed}) {
+      {required bool isSelected, required VoidCallback onPressed, Key? key}) {
     return Tooltip(
       message: tooltip,
       child: Material(
+        key: key,
         color: isSelected ? AppColors.primaryAccent : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
         child: InkWell(

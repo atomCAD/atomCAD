@@ -1,0 +1,21 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+# Network: lib_test-by-sphere-cut
+
+ivec31 = ivec3 { x: 0, y: 0, z: 0, visible: true }
+int1 = int { value: 3 }
+parameter2 = parameter { default: int1, param_index: 1, param_name: "radius", data_type: Int, sort_order: 1 }
+unit_cell1 = unit_cell { cell_length_a: 3.567, cell_length_b: 3.567, cell_length_c: 3.567, cell_angle_alpha: 90.0, cell_angle_beta: 90.0, cell_angle_gamma: 90.0 }
+parameter3 = parameter { default: unit_cell1, param_index: 2, param_name: "unit_cell", data_type: UnitCell, sort_order: 2 }
+sphere1 = sphere { center: ivec31, radius: parameter2, unit_cell: parameter3 }
+cuboid1 = cuboid { min_corner: (-2, -2, -2), extent: (4, 4, 4) }
+parameter1 = parameter { default: cuboid1, param_index: 0, param_name: "igeom_to_test", data_type: Geometry, sort_order: 0 }
+intersect1 = intersect { shapes: [sphere1, parameter1], visible: true }
+atom_fill1 = atom_fill { shape: intersect1, parameter_element_value_definition: "", m_offset: (0.5, 0.5, 0.5), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+motif1 = motif { definition: "" }
+parameter4 = parameter { param_index: 3, param_name: "param3", data_type: Motif, sort_order: 3 }
+output intersect1
+
+# 12 nodes

@@ -1,0 +1,16 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+# Network: pattern
+
+int1 = int { value: 1 }
+parameter1 = parameter { default: int1, param_index: 0, param_name: "index", data_type: Int, sort_order: 0, visible: true }
+int2 = int { value: 4 }
+parameter2 = parameter { default: int2, param_index: 1, param_name: "gap", data_type: Int, sort_order: 1, visible: true }
+expr1 = expr { index: parameter1, gap: parameter2, expression: "index * gap", parameters: [{ name: "index", data_type: Int }, { name: "gap", data_type: Int }] }
+ivec31 = ivec3 { x: expr1, y: 0, z: 0 }
+cuboid1 = cuboid { min_corner: ivec31, extent: (2, 2, 2), visible: true }
+output cuboid1
+
+# 7 nodes

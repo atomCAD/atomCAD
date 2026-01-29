@@ -9,6 +9,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
 
 use super::data_type::DataType;
+use super::node_layout;
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeDisplayType {
@@ -91,6 +92,9 @@ impl Eq for Wire {}
 pub struct Node {
   pub id: u64,
   pub node_type_name: String,
+  /// User-specified name for this node (e.g., "mybox" from "mybox = cuboid {...}").
+  /// If None, the node will be named using auto-generated names like "cuboid1".
+  pub custom_name: Option<String>,
   pub position: DVec2,
   pub arguments: Vec<Argument>,
   pub data: Box<dyn NodeData>,
@@ -248,8 +252,28 @@ impl NodeNetwork {
     return ret;
   }
 
+  /// Generate a unique display name for a new node of the given type.
+  ///
+  /// Scans existing nodes to find the highest counter used for this type,
+  /// then returns `{type}{max+1}`. Names are never reused even if nodes
+  /// are deleted, ensuring stability for external references.
+  pub fn generate_unique_display_name(&self, node_type: &str) -> String {
+    let mut max_counter = 0;
+    for node in self.nodes.values() {
+      if let Some(ref name) = node.custom_name {
+        if let Some(num_str) = name.strip_prefix(node_type) {
+          if let Ok(num) = num_str.parse::<u32>() {
+            max_counter = max_counter.max(num);
+          }
+        }
+      }
+    }
+    format!("{}{}", node_type, max_counter + 1)
+  }
+
   pub fn add_node(&mut self, node_type_name: &str, position: DVec2, num_of_parameters: usize, node_data: Box<dyn NodeData>) -> u64 {
     let node_id = self.next_node_id;
+    let display_name = self.generate_unique_display_name(node_type_name);
     let mut arguments: Vec<Argument> = Vec::new();
     for _i in 0..num_of_parameters {
       arguments.push(Argument::new());
@@ -258,12 +282,13 @@ impl NodeNetwork {
     let node = Node {
       id: node_id,
       node_type_name: node_type_name.to_string(),
+      custom_name: Some(display_name),
       position,
       arguments,
       data: node_data,
       custom_node_type: None,
     };
-    
+
     self.next_node_id += 1;
     self.nodes.insert(node_id, node);
     self.set_node_display(node_id, true);
@@ -782,42 +807,57 @@ impl NodeNetwork {
   }
 
   /// Duplicates a node with all its data and arguments
-  /// 
+  ///
   /// # Parameters
   /// * `node_id` - The ID of the node to duplicate
-  /// 
+  ///
   /// # Returns
   /// Returns Some(new_node_id) if the node was successfully duplicated, None if the node doesn't exist.
   pub fn duplicate_node(&mut self, node_id: u64) -> Option<u64> {
     // Check if the node exists
     let original_node = self.nodes.get(&node_id)?;
-    
+
     // Generate new node ID
     let new_node_id = self.next_node_id;
     self.next_node_id += 1;
-    
+
     // Clone the node data using the clone_box method
     let cloned_data = original_node.data.clone_box();
-    
+
     // Clone the arguments (connections)
     let cloned_arguments = original_node.arguments.clone();
-    
-    let vert_offset = 73.0 + max(cloned_arguments.len(), 1) as f64 * 22.0;
+
+    // Clone the node type name for display name generation
+    let node_type_name = original_node.node_type_name.clone();
+
+    // Use node_layout module for consistent size estimation across the codebase.
+    // The subtitle parameter is set to true as most nodes display a subtitle.
+    let vert_offset = node_layout::duplicate_node_vertical_offset(
+        max(cloned_arguments.len(), 1),
+        true, // has_subtitle - assume yes for conservative spacing
+    );
     let new_position = DVec2::new(original_node.position.x, original_node.position.y + vert_offset);
+
+    // Clone the custom node type
+    let custom_node_type = original_node.custom_node_type.clone();
+
+    // Generate a unique display name for the duplicated node
+    let display_name = self.generate_unique_display_name(&node_type_name);
 
     // Create the duplicated node
     let duplicated_node = Node {
       id: new_node_id,
-      node_type_name: original_node.node_type_name.clone(),
+      node_type_name,
+      custom_name: Some(display_name),
       position: new_position,
       arguments: cloned_arguments,
       data: cloned_data,
-      custom_node_type: original_node.custom_node_type.clone(),
+      custom_node_type,
     };
-    
+
     // Insert the duplicated node into the network
     self.nodes.insert(new_node_id, duplicated_node);
-    
+
     Some(new_node_id)
   }
 }

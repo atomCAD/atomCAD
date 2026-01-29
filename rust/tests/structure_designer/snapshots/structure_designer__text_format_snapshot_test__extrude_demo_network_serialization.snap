@@ -1,0 +1,12 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+# Network: M
+
+polygon1 = polygon { vertices: [(-10, 0), (-10, 4), (-10, 8), (-10, 12), (-10, 16), (-10, 20), (-8, 20), (0, 12), (8, 20), (10, 20), (10, 17), (10, 0), (6, 0), (6, 13), (0, 7), (-6, 13), (-6, 8), (-6, 4), (-6, 0)] }
+extrude1 = extrude { shape: polygon1, height: 3, dir: (0, 0, 1), inf: false, subdivision: 1, visible: true }
+atom_fill1 = atom_fill { shape: extrude1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.0), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+output extrude1
+
+# 3 nodes

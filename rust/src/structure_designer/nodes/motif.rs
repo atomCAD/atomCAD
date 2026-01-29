@@ -1,7 +1,9 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -91,6 +93,29 @@ impl NodeData for MotifData {
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         self.name.clone()
     }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        let mut props = vec![
+            ("definition".to_string(), TextValue::String(self.definition.clone())),
+        ];
+        if let Some(ref name) = self.name {
+            props.push(("name".to_string(), TextValue::String(name.clone())));
+        }
+        props
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("definition") {
+            self.definition = v.as_string().ok_or_else(|| "definition must be a string".to_string())?.to_string();
+        }
+        if let Some(v) = props.get("name") {
+            self.name = Some(v.as_string().ok_or_else(|| "name must be a string".to_string())?.to_string());
+        }
+        // Parse and validate motif after properties are set
+        // (matches what motif_data_loader does after deserializing)
+        let _validation_errors = self.parse_and_validate(0);
+        Ok(())
+    }
 }
 
 /// Special loader for MotifData that parses and validates the motif after deserializing
@@ -109,10 +134,41 @@ pub fn motif_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "motif".to_string(),
-      description: "The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.
-The motif is defined textually using atomCAD's motif definition language.
-The features of the language are basically parameterized fractional atom sites, explicit & periodic bond definitions.
-See the atomCAD reference guide for details on the motif definition language.".to_string(),
+      description: "Produces a `Motif` value for use with `atom_fill` to populate geometry with atoms.
+
+## Motif Definition Language
+
+Three commands define a motif:
+
+**PARAM** - Define parameter elements (can be overridden in atom_fill):
+```
+PARAM PRIMARY C
+PARAM SECONDARY C
+```
+
+**SITE** - Define atomic sites with fractional coordinates (0-1):
+```
+SITE <id> <element> <frac_x> <frac_y> <frac_z>
+SITE CORNER PRIMARY 0 0 0
+SITE FACE_X PRIMARY 0 0.5 0.5
+SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
+```
+
+**BOND** - Define bonds between sites:
+```
+BOND <site1> <relative_cell_prefix><site2>
+```
+The prefix is 3 characters for (x,y,z) directions: `.` = same cell, `+` = next cell, `-` = previous cell.
+First site must be in current cell (prefix `...` or omitted).
+
+Examples:
+```
+BOND INTERIOR1 ...CORNER      # same cell
+BOND INTERIOR2 .++CORNER      # y+1, z+1 cell
+BOND INTERIOR3 +..FACE_X      # x+1 cell
+```
+
+Lines starting with `#` are comments.".to_string(),
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],
       output_type: DataType::Motif,

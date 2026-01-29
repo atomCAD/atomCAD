@@ -531,3 +531,76 @@ fn test_active_node_tracking() {
     network.clear_selection();
     assert!(network.active_node_id.is_none());
 }
+
+// ===== PERSISTENT NODE NAMES TESTS (Phase 1) =====
+
+#[test]
+fn test_generate_unique_display_name_empty_network() {
+    let designer = setup_designer_with_network("test_network");
+    let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+    assert_eq!(network.generate_unique_display_name("cuboid"), "cuboid1");
+}
+
+#[test]
+fn test_generate_unique_display_name_increments() {
+    let mut designer = setup_designer_with_network("test_network");
+    designer.add_node("cuboid", DVec2::ZERO);  // Gets cuboid1
+    designer.add_node("cuboid", DVec2::ZERO);  // Gets cuboid2
+    let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+    assert_eq!(network.generate_unique_display_name("cuboid"), "cuboid3");
+}
+
+#[test]
+fn test_generate_unique_display_name_after_deletion() {
+    let mut designer = setup_designer_with_network("test_network");
+    let id1 = designer.add_node("cuboid", DVec2::ZERO);  // cuboid1
+    let _id2 = designer.add_node("cuboid", DVec2::ZERO);  // cuboid2
+
+    // Delete cuboid1
+    {
+        let network = designer.node_type_registry.node_networks.get_mut("test_network").unwrap();
+        network.select_node(id1);
+    }
+    designer.delete_selected();
+
+    // Next cuboid should be cuboid3, NOT cuboid1 (no reuse)
+    let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+    assert_eq!(network.generate_unique_display_name("cuboid"), "cuboid3");
+}
+
+#[test]
+fn test_add_node_assigns_custom_name() {
+    let mut designer = setup_designer_with_network("test_network");
+    let id = designer.add_node("sphere", DVec2::ZERO);
+    let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+    let node = network.nodes.get(&id).unwrap();
+    assert_eq!(node.custom_name, Some("sphere1".to_string()));
+}
+
+#[test]
+fn test_add_node_assigns_unique_names_per_type() {
+    let mut designer = setup_designer_with_network("test_network");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let sphere2_id = designer.add_node("sphere", DVec2::ZERO);
+
+    let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+    assert_eq!(network.nodes.get(&sphere_id).unwrap().custom_name, Some("sphere1".to_string()));
+    assert_eq!(network.nodes.get(&cuboid_id).unwrap().custom_name, Some("cuboid1".to_string()));
+    assert_eq!(network.nodes.get(&sphere2_id).unwrap().custom_name, Some("sphere2".to_string()));
+}
+
+#[test]
+fn test_duplicate_node_gets_unique_name() {
+    let mut designer = setup_designer_with_network("test_network");
+    let id1 = designer.add_node("cuboid", DVec2::ZERO);  // cuboid1
+    let id2 = designer.duplicate_node(id1);
+    assert_ne!(id2, 0);
+
+    let network = designer.node_type_registry.node_networks.get("test_network").unwrap();
+    let node1 = network.nodes.get(&id1).unwrap();
+    let node2 = network.nodes.get(&id2).unwrap();
+
+    assert_eq!(node1.custom_name, Some("cuboid1".to_string()));
+    assert_eq!(node2.custom_name, Some("cuboid2".to_string()));
+}

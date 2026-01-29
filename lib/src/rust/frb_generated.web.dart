@@ -8,6 +8,8 @@
 
 import 'api/common_api.dart';
 import 'api/common_api_types.dart';
+import 'api/screenshot_api.dart';
+import 'api/structure_designer/ai_assistant_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/import_api.dart';
@@ -61,6 +63,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData dco_decode_api_circle_data(dynamic raw);
+
+  @protected
+  APICommentData dco_decode_api_comment_data(dynamic raw);
 
   @protected
   APICuboidData dco_decode_api_cuboid_data(dynamic raw);
@@ -137,6 +142,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeCategoryView dco_decode_api_node_category_view(dynamic raw);
+
+  @protected
+  APINodeEvaluationResult dco_decode_api_node_evaluation_result(dynamic raw);
 
   @protected
   APINodeTypeView dco_decode_api_node_type_view(dynamic raw);
@@ -232,6 +240,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData dco_decode_box_autoadd_api_circle_data(dynamic raw);
+
+  @protected
+  APICommentData dco_decode_box_autoadd_api_comment_data(dynamic raw);
 
   @protected
   APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw);
@@ -362,6 +373,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView dco_decode_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  (String, BigInt, bool) dco_decode_box_autoadd_record_string_usize_bool(
+      dynamic raw);
+
+  @protected
   StructureDesignerPreferences
       dco_decode_box_autoadd_structure_designer_preferences(dynamic raw);
 
@@ -435,6 +450,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(int, String, String)> dco_decode_list_record_i_32_string_string(
+      dynamic raw);
+
+  @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
@@ -484,6 +503,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData? dco_decode_opt_box_autoadd_api_circle_data(dynamic raw);
+
+  @protected
+  APICommentData? dco_decode_opt_box_autoadd_api_comment_data(dynamic raw);
 
   @protected
   APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw);
@@ -605,6 +627,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NodeNetworkView? dco_decode_opt_box_autoadd_node_network_view(dynamic raw);
 
   @protected
+  (String, BigInt, bool)? dco_decode_opt_box_autoadd_record_string_usize_bool(
+      dynamic raw);
+
+  @protected
   StructureDesignerPreferences?
       dco_decode_opt_box_autoadd_structure_designer_preferences(dynamic raw);
 
@@ -629,10 +655,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  (int, String, String) dco_decode_record_i_32_string_string(dynamic raw);
+
+  @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
+  (String, BigInt, bool) dco_decode_record_string_usize_bool(dynamic raw);
+
+  @protected
   (BigInt, NodeView) dco_decode_record_u_64_node_view(dynamic raw);
+
+  @protected
+  ScreenshotResult dco_decode_screenshot_result(dynamic raw);
 
   @protected
   SelectModifier dco_decode_select_modifier(dynamic raw);
@@ -697,6 +735,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
+
+  @protected
+  APICommentData sse_decode_api_comment_data(SseDeserializer deserializer);
 
   @protected
   APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer);
@@ -778,6 +819,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APINodeCategoryView sse_decode_api_node_category_view(
+      SseDeserializer deserializer);
+
+  @protected
+  APINodeEvaluationResult sse_decode_api_node_evaluation_result(
       SseDeserializer deserializer);
 
   @protected
@@ -882,6 +927,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData sse_decode_box_autoadd_api_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APICommentData sse_decode_box_autoadd_api_comment_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1043,6 +1092,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  (String, BigInt, bool) sse_decode_box_autoadd_record_string_usize_bool(
+      SseDeserializer deserializer);
+
+  @protected
   StructureDesignerPreferences
       sse_decode_box_autoadd_structure_designer_preferences(
           SseDeserializer deserializer);
@@ -1125,6 +1178,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(int, String, String)> sse_decode_list_record_i_32_string_string(
+      SseDeserializer deserializer);
+
+  @protected
   List<(String, String)> sse_decode_list_record_string_string(
       SseDeserializer deserializer);
 
@@ -1184,6 +1241,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData? sse_decode_opt_box_autoadd_api_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APICommentData? sse_decode_opt_box_autoadd_api_comment_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1334,6 +1395,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  (String, BigInt, bool)? sse_decode_opt_box_autoadd_record_string_usize_bool(
+      SseDeserializer deserializer);
+
+  @protected
   StructureDesignerPreferences?
       sse_decode_opt_box_autoadd_structure_designer_preferences(
           SseDeserializer deserializer);
@@ -1360,12 +1425,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  (int, String, String) sse_decode_record_i_32_string_string(
+      SseDeserializer deserializer);
+
+  @protected
   (String, String) sse_decode_record_string_string(
+      SseDeserializer deserializer);
+
+  @protected
+  (String, BigInt, bool) sse_decode_record_string_usize_bool(
       SseDeserializer deserializer);
 
   @protected
   (BigInt, NodeView) sse_decode_record_u_64_node_view(
       SseDeserializer deserializer);
+
+  @protected
+  ScreenshotResult sse_decode_screenshot_result(SseDeserializer deserializer);
 
   @protected
   SelectModifier sse_decode_select_modifier(SseDeserializer deserializer);
@@ -1433,6 +1512,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_comment_data(
+      APICommentData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_cuboid_data(APICuboidData self, SseSerializer serializer);
@@ -1525,6 +1608,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_node_category_view(
       APINodeCategoryView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_node_evaluation_result(
+      APINodeEvaluationResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_node_type_view(
@@ -1634,6 +1721,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_circle_data(
       APICircleData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_comment_data(
+      APICommentData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_cuboid_data(
@@ -1799,6 +1890,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_record_string_usize_bool(
+      (String, BigInt, bool) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_structure_designer_preferences(
       StructureDesignerPreferences self, SseSerializer serializer);
 
@@ -1881,6 +1976,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_record_i_32_string_string(
+      List<(int, String, String)> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_record_string_string(
       List<(String, String)> self, SseSerializer serializer);
 
@@ -1943,6 +2042,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_circle_data(
       APICircleData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_comment_data(
+      APICommentData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_cuboid_data(
@@ -2094,6 +2197,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       NodeNetworkView? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_record_string_usize_bool(
+      (String, BigInt, bool)? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_structure_designer_preferences(
       StructureDesignerPreferences? self, SseSerializer serializer);
 
@@ -2118,12 +2225,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINodeCategoryView>? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+      Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_i_32_string_string(
+      (int, String, String) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_record_string_string(
       (String, String) self, SseSerializer serializer);
 
   @protected
+  void sse_encode_record_string_usize_bool(
+      (String, BigInt, bool) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_record_u_64_node_view(
       (BigInt, NodeView) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_screenshot_result(
+      ScreenshotResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_select_modifier(

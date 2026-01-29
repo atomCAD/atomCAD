@@ -606,6 +606,11 @@ impl Renderer {
       self.update_camera_buffer();
     }
 
+    /// Gets the current viewport size as (width, height)
+    pub fn get_viewport_size(&self) -> (u32, u32) {
+        (self.texture_size.width, self.texture_size.height)
+    }
+
     pub fn set_viewport_size(&mut self, width: u32, height: u32) {
         if self.texture_size.width == width && self.texture_size.height == height {
             return;

@@ -1,6 +1,7 @@
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -10,6 +11,7 @@ use crate::structure_designer::node_type::{NodeType, generic_node_data_saver, ge
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::text_format::TextValue;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoolData {
@@ -44,9 +46,20 @@ impl NodeData for BoolData {
     fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
         Some(self.value.to_string())
     }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("value".to_string(), TextValue::Bool(self.value)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("value") {
+            self.value = v.as_bool().ok_or_else(|| "value must be a boolean".to_string())?;
+        }
+        Ok(())
+    }
 }
-
-
 
 pub fn get_node_type() -> NodeType {
   NodeType {

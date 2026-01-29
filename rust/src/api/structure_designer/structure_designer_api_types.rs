@@ -61,6 +61,11 @@ pub struct InputPinView {
     pub error: Option<String>,
     pub output_string: Option<String>,
     pub subtitle: Option<String>,
+    // Comment node specific fields (only populated for Comment nodes)
+    pub comment_label: Option<String>,
+    pub comment_text: Option<String>,
+    pub comment_width: Option<f64>,
+    pub comment_height: Option<f64>,
   }
   
   pub struct WireView {
@@ -257,6 +262,7 @@ pub struct InputPinView {
   #[frb]
   #[derive(PartialEq, Eq, Hash, Clone, Debug)]
   pub enum NodeTypeCategory {
+    Annotation,
     MathAndProgramming,
     Geometry2D,
     Geometry3D,
@@ -268,17 +274,19 @@ pub struct InputPinView {
   impl NodeTypeCategory {
     pub fn order(&self) -> u8 {
       match self {
-        Self::MathAndProgramming => 0,
-        Self::Geometry2D => 1,
-        Self::Geometry3D => 2,
-        Self::AtomicStructure => 3,
-        Self::OtherBuiltin => 4,
-        Self::Custom => 5,
+        Self::Annotation => 0,
+        Self::MathAndProgramming => 1,
+        Self::Geometry2D => 2,
+        Self::Geometry3D => 3,
+        Self::AtomicStructure => 4,
+        Self::OtherBuiltin => 5,
+        Self::Custom => 6,
       }
     }
 
     pub fn display_name(&self) -> &str {
       match self {
+        Self::Annotation => "Annotation",
         Self::MathAndProgramming => "Math and Programming",
         Self::Geometry2D => "2D Geometry",
         Self::Geometry3D => "3D Geometry",
@@ -320,6 +328,13 @@ pub struct APIImportXYZData {
 
 pub struct APIExportXYZData {
   pub file_name: String,
+}
+
+pub struct APICommentData {
+  pub label: String,
+  pub text: String,
+  pub width: f64,
+  pub height: f64,
 }
 
 pub struct APIAtomCutData {
@@ -372,6 +387,27 @@ pub struct CliConfig {
 pub struct BatchCliConfig {
   pub cnnd_file: String,
   pub batch_file: String,
+}
+
+/// Result of evaluating a single node via CLI
+#[derive(Debug, Clone)]
+pub struct APINodeEvaluationResult {
+  /// The node ID that was evaluated
+  pub node_id: u64,
+  /// The node type name (e.g., "cuboid", "atom_fill")
+  pub node_type_name: String,
+  /// The custom name if assigned, otherwise None
+  pub custom_name: Option<String>,
+  /// The output data type name (e.g., "Geometry", "Atomic", "Float")
+  pub output_type: String,
+  /// Brief display string (from to_display_string())
+  pub display_string: String,
+  /// Detailed string (from to_detailed_string()), only populated if verbose=true
+  pub detailed_string: Option<String>,
+  /// Whether the evaluation succeeded (no errors in this node's chain)
+  pub success: bool,
+  /// Error message if the node itself produced an error
+  pub error_message: Option<String>,
 }
 
 

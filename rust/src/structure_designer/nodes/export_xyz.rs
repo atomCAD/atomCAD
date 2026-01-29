@@ -5,7 +5,9 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::TextValue;
 use crate::crystolecule::io::xyz_saver::save_xyz;
 use crate::util::path_utils::{resolve_path, get_parent_directory, try_make_relative};
 use serde_json::Value;
@@ -94,6 +96,19 @@ impl NodeData for ExportXYZData {
       } else {
           Some(self.file_name.clone())
       }
+  }
+
+  fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+      vec![
+          ("file_name".to_string(), TextValue::String(self.file_name.clone())),
+      ]
+  }
+
+  fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+      if let Some(v) = props.get("file_name") {
+          self.file_name = v.as_string().ok_or_else(|| "file_name must be a string".to_string())?.to_string();
+      }
+      Ok(())
   }
 }
 

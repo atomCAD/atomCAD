@@ -21,3 +21,27 @@ mod node_network_test;
 
 #[path = "structure_designer/network_evaluator_test.rs"]
 mod network_evaluator_test;
+
+#[path = "structure_designer/node_type_registry_test.rs"]
+mod node_type_registry_test;
+
+#[path = "structure_designer/comment_node_test.rs"]
+mod comment_node_test;
+
+#[path = "structure_designer/text_format_test.rs"]
+mod text_format_test;
+
+#[path = "structure_designer/text_properties_test.rs"]
+mod text_properties_test;
+
+#[path = "structure_designer/text_format_snapshot_test.rs"]
+mod text_format_snapshot_test;
+
+#[path = "structure_designer/node_layout_test.rs"]
+mod node_layout_test;
+
+#[path = "structure_designer/evaluate_node_test.rs"]
+mod evaluate_node_test;
+
+#[path = "structure_designer/serialization_test.rs"]
+mod serialization_test;

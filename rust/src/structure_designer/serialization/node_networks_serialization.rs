@@ -11,6 +11,8 @@ use super::super::node_network::{NodeNetwork, Node, Argument};
 use super::super::node_type_registry::NodeTypeRegistry;
 use super::super::node_data::NodeData;
 use super::super::node_data::NoData;
+use super::super::node_data::CustomNodeData;
+use super::super::node_type::{generic_node_data_saver, generic_node_data_loader};
 use super::super::node_network::NodeDisplayType;
 
 // The current version of the serialization format
@@ -43,6 +45,7 @@ fn default_category() -> String {
 fn category_to_string(category: &crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory) -> String {
     use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     match category {
+        NodeTypeCategory::Annotation => "Annotation".to_string(),
         NodeTypeCategory::MathAndProgramming => "MathAndProgramming".to_string(),
         NodeTypeCategory::Geometry2D => "Geometry2D".to_string(),
         NodeTypeCategory::Geometry3D => "Geometry3D".to_string(),
@@ -57,6 +60,7 @@ fn category_to_string(category: &crate::api::structure_designer::structure_desig
 fn category_from_string(category_str: &str) -> crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory {
     use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     match category_str {
+        "Annotation" => NodeTypeCategory::Annotation,
         "MathAndProgramming" => NodeTypeCategory::MathAndProgramming,
         "Geometry2D" => NodeTypeCategory::Geometry2D,
         "Geometry3D" => NodeTypeCategory::Geometry3D,
@@ -72,6 +76,10 @@ fn category_from_string(category_str: &str) -> crate::api::structure_designer::s
 pub struct SerializableNode {
     pub id: u64,
     pub node_type_name: String,
+    /// User-specified name for this node (e.g., "mybox" from "mybox = cuboid {...}").
+    /// If None, the node will be named using auto-generated names like "cuboid1".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_name: Option<String>,
     #[serde(with = "dvec2_serializer")]
     pub position: DVec2,
     pub arguments: Vec<Argument>,
@@ -143,16 +151,16 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
     // Parse category from string
     let category = category_from_string(&serializable.category);
     
-    // Create the NodeType with a default node_data_creator
+    // Create the NodeType with CustomNodeData to support literal parameters
     Ok(NodeType {
         name: serializable.name.clone(),
         description: serializable.description.clone(),
         category,
         parameters,
         output_type,
-        node_data_creator: || Box::new(NoData {}), // Default, will be replaced with actual data
-        node_data_saver: crate::structure_designer::node_type::no_data_saver,
-        node_data_loader: crate::structure_designer::node_type::no_data_loader,
+        node_data_creator: || Box::new(CustomNodeData::default()),
+        node_data_saver: generic_node_data_saver::<CustomNodeData>,
+        node_data_loader: generic_node_data_loader::<CustomNodeData>,
         public: true, // TODO: we should save this info (with proper backward compatibility), but we do not save it yet
     })
 }
@@ -181,6 +189,7 @@ pub fn node_to_serializable(id: u64, node: &mut Node, built_in_node_types: &std:
     Ok(SerializableNode {
         id,
         node_type_name: node.node_type_name.clone(),
+        custom_name: node.custom_name.clone(),
         position: node.position,
         arguments: node.arguments.clone(),
         data_type,
@@ -205,6 +214,7 @@ pub fn serializable_to_node(serializable: &SerializableNode, built_in_node_types
     Ok(Node {
         id: serializable.id,
         node_type_name: serializable.node_type_name.clone(),
+        custom_name: serializable.custom_name.clone(),
         position: serializable.position,
         arguments: serializable.arguments.clone(),
         data,
@@ -242,29 +252,46 @@ pub fn node_network_to_serializable(network: &mut NodeNetwork, built_in_node_typ
 }
 
 /// Creates a NodeNetwork from a SerializableNodeNetwork
-/// 
+///
 /// # Returns
 /// * `io::Result<NodeNetwork>` - The deserialized network or an error if deserialization fails
 pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, built_in_node_types: &std::collections::HashMap<String, crate::structure_designer::node_type::NodeType>, design_dir: Option<&str>) -> io::Result<NodeNetwork> {
     // Create the node type from the serializable node type
     let node_type = serializable_to_node_type(&serializable.node_type)?;
-    
+
     // Create a new network
     let mut network = NodeNetwork::new(node_type);
-    
+
     // Set next_node_id and return_node_id
     network.next_node_id = serializable.next_node_id;
     network.return_node_id = serializable.return_node_id;
-    
+
     // Convert displayed_node_ids from Vec of tuples to HashMap without taking ownership
     network.displayed_node_ids = serializable.displayed_node_ids.iter().map(|(id, display_type)| (*id, *display_type)).collect();
-    
+
     // Process each node
     for serializable_node in &serializable.nodes {
         let node = serializable_to_node(serializable_node, built_in_node_types, design_dir)?;
         network.nodes.insert(node.id, node);
     }
-    
+
+    // Migration: assign names to nodes without custom_name (old files)
+    // This ensures that files created before persistent node names was implemented
+    // will get names assigned when loaded.
+    // Sort by node ID for deterministic name assignment order.
+    let mut nodes_needing_names: Vec<(u64, String)> = network.nodes.iter()
+        .filter(|(_, node)| node.custom_name.is_none())
+        .map(|(id, node)| (*id, node.node_type_name.clone()))
+        .collect();
+    nodes_needing_names.sort_by_key(|(id, _)| *id);
+
+    for (node_id, node_type_name) in nodes_needing_names {
+        let name = network.generate_unique_display_name(&node_type_name);
+        if let Some(node) = network.nodes.get_mut(&node_id) {
+            node.custom_name = Some(name);
+        }
+    }
+
     Ok(network)
 }
 

@@ -11,7 +11,9 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use glam::i32::IVec3;
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 use crate::util::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
+use crate::structure_designer::text_format::TextValue;
 use glam::f64::DVec3;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -255,6 +257,40 @@ impl NodeData for LatticeSymopData {
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        let mut props = vec![
+            ("translation".to_string(), TextValue::IVec3(self.translation)),
+            ("rotation_angle_degrees".to_string(), TextValue::Float(self.rotation_angle_degrees)),
+            ("transform_only_frame".to_string(), TextValue::Bool(self.transform_only_frame)),
+        ];
+        if let Some(axis) = self.rotation_axis {
+            props.push(("rotation_axis".to_string(), TextValue::Vec3(axis)));
+        }
+        props
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("translation") {
+            self.translation = v.as_ivec3().ok_or_else(|| "translation must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("rotation_axis") {
+            self.rotation_axis = Some(v.as_vec3().ok_or_else(|| "rotation_axis must be a Vec3".to_string())?);
+        }
+        if let Some(v) = props.get("rotation_angle_degrees") {
+            self.rotation_angle_degrees = v.as_float().ok_or_else(|| "rotation_angle_degrees must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("transform_only_frame") {
+            self.transform_only_frame = v.as_bool().ok_or_else(|| "transform_only_frame must be a boolean".to_string())?;
+        }
+        Ok(())
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        let mut m = HashMap::new();
+        m.insert("shape".to_string(), (true, None)); // required
+        m
     }
 }
 

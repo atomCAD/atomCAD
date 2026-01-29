@@ -4,6 +4,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
 /// Editor widget for cuboid nodes
 class CuboidEditor extends StatefulWidget {
@@ -32,6 +33,7 @@ class CuboidEditorState extends State<CuboidEditor> {
     }
 
     return Padding(
+      key: PropertyEditorKeys.cuboidEditor,
       padding: const EdgeInsets.all(8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,6 +46,9 @@ class CuboidEditorState extends State<CuboidEditor> {
           IVec3Input(
             label: 'Min Corner',
             value: widget.data!.minCorner,
+            xInputKey: PropertyEditorKeys.cuboidMinCornerXInput,
+            yInputKey: PropertyEditorKeys.cuboidMinCornerYInput,
+            zInputKey: PropertyEditorKeys.cuboidMinCornerZInput,
             onChanged: (newValue) {
               widget.model.setCuboidData(
                 widget.nodeId,
@@ -59,6 +64,9 @@ class CuboidEditorState extends State<CuboidEditor> {
             label: 'Extent',
             value: widget.data!.extent,
             minimumValue: APIIVec3(x: 1, y: 1, z: 1),
+            xInputKey: PropertyEditorKeys.cuboidExtentXInput,
+            yInputKey: PropertyEditorKeys.cuboidExtentYInput,
+            zInputKey: PropertyEditorKeys.cuboidExtentZInput,
             onChanged: (newValue) {
               widget.model.setCuboidData(
                 widget.nodeId,

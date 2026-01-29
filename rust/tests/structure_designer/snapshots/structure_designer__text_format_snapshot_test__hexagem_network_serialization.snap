@@ -1,0 +1,32 @@
+---
+source: tests/structure_designer/text_format_snapshot_test.rs
+expression: text
+---
+# Network: hexagem
+
+int1 = int { value: 3 }
+half_space1 = half_space { shift: int1, max_miller_index: 2, m_index: (-1, -1, -1), center: (0, 0, 0), subdivision: 1 }
+half_space2 = half_space { shift: int1, max_miller_index: 2, m_index: (1, 1, 1), center: (0, 0, 0), subdivision: 1 }
+int2 = int { value: 5 }
+half_space3 = half_space { shift: int2, max_miller_index: 2, m_index: (2, 0, 1), center: (0, 0, 0), subdivision: 1 }
+int3 = int { value: 2 }
+ivec31 = ivec3 { x: -1, y: -1, z: 2 }
+scale_ivec31 = scale_ivec3 { scale_factor: int3, vec: ivec31 }
+int4 = int { value: 2 }
+half_space4 = half_space { center: scale_ivec31, shift: int4, max_miller_index: 2, m_index: (1, 0, 2), subdivision: 1 }
+inv_ivec31 = inv_ivec3 { vec: scale_ivec31 }
+half_space5 = half_space { center: inv_ivec31, shift: int4, max_miller_index: 2, m_index: (2, 1, 0), subdivision: 1 }
+half_space6 = half_space { center: scale_ivec31, shift: int4, max_miller_index: 2, m_index: (-1, -2, 0), subdivision: 1 }
+half_space7 = half_space { center: scale_ivec31, shift: int4, max_miller_index: 2, m_index: (0, 1, 2), subdivision: 1 }
+half_space8 = half_space { shift: int2, max_miller_index: 2, m_index: (0, 2, 1), center: (0, 0, 0), subdivision: 1 }
+half_space9 = half_space { shift: int2, max_miller_index: 2, m_index: (-2, 0, -1), center: (0, 0, 0), subdivision: 1 }
+half_space10 = half_space { center: inv_ivec31, shift: int4, max_miller_index: 2, m_index: (-1, 0, -2), subdivision: 1 }
+half_space11 = half_space { center: scale_ivec31, shift: int4, max_miller_index: 2, m_index: (-2, -1, 0), subdivision: 1 }
+half_space12 = half_space { center: inv_ivec31, shift: int4, max_miller_index: 2, m_index: (1, 2, 0), subdivision: 1 }
+half_space13 = half_space { center: inv_ivec31, shift: int4, max_miller_index: 2, m_index: (0, -1, -2), subdivision: 1 }
+half_space14 = half_space { shift: int2, max_miller_index: 2, m_index: (0, -2, -1), center: (0, 0, 0), subdivision: 1 }
+intersect1 = intersect { shapes: [half_space1, half_space2, half_space3, half_space4, half_space5, half_space6, half_space7, half_space8, half_space9, half_space10, half_space11, half_space12, half_space13, half_space14], visible: true }
+inv_ivec32 = inv_ivec3 { visible: true }
+atom_fill1 = atom_fill { shape: intersect1, parameter_element_value_definition: "", m_offset: (0.5, 0.5, 0.5), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+
+# 24 nodes

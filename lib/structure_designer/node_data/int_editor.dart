@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
 /// Editor widget for int nodes
 class IntEditor extends StatefulWidget {
@@ -31,6 +32,7 @@ class IntEditorState extends State<IntEditor> {
     }
 
     return Padding(
+      key: PropertyEditorKeys.intEditor,
       padding: const EdgeInsets.all(8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -43,6 +45,7 @@ class IntEditorState extends State<IntEditor> {
           IntInput(
             label: 'Value',
             value: widget.data!.value,
+            inputKey: PropertyEditorKeys.intValueInput,
             onChanged: (newValue) {
               widget.model.setIntData(
                 widget.nodeId,

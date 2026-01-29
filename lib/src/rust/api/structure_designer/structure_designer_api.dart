@@ -49,8 +49,58 @@ void connectNodes(
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
+/// Auto-connects a source pin to the first compatible pin on a target node.
+///
+/// - `source_node_id`: The node where the wire was dragged from
+/// - `source_pin_index`: The pin index on the source node
+/// - `source_is_output`: true if dragging from output pin, false if from input pin
+/// - `target_node_id`: The newly created node to connect to
+///
+/// Returns true if a connection was made, false otherwise.
+bool autoConnectToNode(
+        {required BigInt sourceNodeId,
+        required int sourcePinIndex,
+        required bool sourceIsOutput,
+        required BigInt targetNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAutoConnectToNode(
+            sourceNodeId: sourceNodeId,
+            sourcePinIndex: sourcePinIndex,
+            sourceIsOutput: sourceIsOutput,
+            targetNodeId: targetNodeId);
+
+/// Returns all compatible pins on the target node for auto-connection.
+/// Each element contains (pin_index, pin_name, data_type_string).
+/// When source_is_output is true, returns compatible INPUT pins on target.
+/// When source_is_output is false, returns the OUTPUT pin if compatible.
+List<(int, String, String)> getCompatiblePinsForAutoConnect(
+        {required BigInt sourceNodeId,
+        required int sourcePinIndex,
+        required bool sourceIsOutput,
+        required BigInt targetNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetCompatiblePinsForAutoConnect(
+            sourceNodeId: sourceNodeId,
+            sourcePinIndex: sourcePinIndex,
+            sourceIsOutput: sourceIsOutput,
+            targetNodeId: targetNodeId);
+
 List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeTypeViews();
+
+/// Returns node types that have at least one pin compatible with the given type.
+///
+/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Geometry", "Float")
+/// - `dragging_from_output`: true if dragging from output pin, false if from input pin
+///
+/// When dragging from OUTPUT: find nodes with compatible INPUT pins
+/// When dragging from INPUT: find nodes with compatible OUTPUT pins
+List<APINodeCategoryView>? getCompatibleNodeTypes(
+        {required String sourceTypeStr, required bool draggingFromOutput}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetCompatibleNodeTypes(
+            sourceTypeStr: sourceTypeStr,
+            draggingFromOutput: draggingFromOutput);
 
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
@@ -83,6 +133,12 @@ List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
 
 void addNewNodeNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
+
+/// Add a node network with a specific name.
+/// Returns success/error. Auto-activates the new network.
+APIResult addNodeNetworkWithName({required String name}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNodeNetworkWithName(
+        name: name);
 
 void setActiveNodeNetwork({required String nodeNetworkName}) => RustLib
     .instance.api
@@ -587,3 +643,41 @@ APIResult runCliSingle({required CliConfig config}) => RustLib.instance.api
 /// Run atomCAD in headless CLI batch mode
 APIResult runCliBatch({required BatchCliConfig config}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiRunCliBatch(config: config);
+
+/// Resize a comment node
+void resizeCommentNode(
+        {required BigInt nodeId,
+        required double width,
+        required double height}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiResizeCommentNode(
+            nodeId: nodeId, width: width, height: height);
+
+/// Update a comment node's label and text
+void updateCommentNode(
+        {required BigInt nodeId,
+        required String label,
+        required String text}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiUpdateCommentNode(
+            nodeId: nodeId, label: label, text: text);
+
+/// Get comment node data for property panel editing
+APICommentData? getCommentData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetCommentData(
+        nodeId: nodeId);
+
+/// Evaluate a node and return its result string.
+///
+/// # Arguments
+/// * `node_identifier` - Either a numeric node ID or the node's custom name
+/// * `verbose` - If true, return detailed output for complex types
+///
+/// # Returns
+/// * `Ok(APINodeEvaluationResult)` - The evaluation result
+/// * `Err(String)` - If node not found or evaluation fails
+APINodeEvaluationResult evaluateNode(
+        {required String nodeIdentifier, required bool verbose}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiEvaluateNode(
+            nodeIdentifier: nodeIdentifier, verbose: verbose);
