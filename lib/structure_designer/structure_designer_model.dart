@@ -410,6 +410,13 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Apply auto-layout to the active node network.
+  /// Uses the layout algorithm configured in preferences.
+  void autoLayoutNetwork() {
+    structure_designer_api.layoutActiveNetwork();
+    refreshFromKernel();
+  }
+
   // Called on each small update when dragging a node
   // Works only on the UI: do not update the position in the kernel
   void dragNodePosition(BigInt nodeId, Offset delta) {

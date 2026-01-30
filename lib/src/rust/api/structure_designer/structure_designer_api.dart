@@ -705,3 +705,15 @@ APINodeEvaluationResult evaluateNode(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiEvaluateNode(
             nodeIdentifier: nodeIdentifier, verbose: verbose);
+
+/// Apply auto-layout to the active node network.
+///
+/// This function recomputes positions for all nodes in the active network
+/// using the user's preferred layout algorithm from preferences.
+///
+/// # Behavior
+/// - Uses the layout algorithm specified in StructureDesignerPreferences
+/// - Reorganizes all nodes in the active network for improved readability
+/// - Automatically refreshes the UI after layout
+void layoutActiveNetwork() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork();

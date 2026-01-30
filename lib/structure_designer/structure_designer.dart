@@ -130,6 +130,18 @@ class _StructureDesignerState extends State<StructureDesigner> {
                       child: const Text('Validate active network'),
                     ),
                     MenuItemButton(
+                      key: const Key('auto_layout_network_item'),
+                      onPressed: () {
+                        widget.model.autoLayoutNetwork();
+                        // Reset view to show all nodes after layout
+                        final state = nodeNetworkKey.currentState;
+                        if (state != null) {
+                          state.updatePanOffsetForCurrentNetwork(forceUpdate: true);
+                        }
+                      },
+                      child: const Text('Auto-Layout Network'),
+                    ),
+                    MenuItemButton(
                       key: const Key('preferences_item'),
                       onPressed: _showPreferences,
                       child: const Text('Preferences'),

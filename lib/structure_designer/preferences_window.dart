@@ -53,6 +53,11 @@ class PreferencesKeys {
       Key('pref_drawing_plane_grid_color_input');
   static const Key drawingPlaneGridStrongColorInput =
       Key('pref_drawing_plane_grid_strong_color_input');
+
+  // Layout settings
+  static const Key layoutAlgorithmDropdown = Key('pref_layout_algorithm_dropdown');
+  static const Key autoLayoutAfterEditCheckbox =
+      Key('pref_auto_layout_after_edit_checkbox');
 }
 
 /// A modal preferences window for the structure designer.
@@ -558,6 +563,95 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               ),
                               const SizedBox(width: 8),
                               const Text('Display camera pivot point'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.medium),
+
+                    // Layout Preferences Section
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.medium),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Layout',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Layout algorithm dropdown
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Auto-layout algorithm'),
+                              const SizedBox(height: 4),
+                              DropdownButtonFormField<LayoutAlgorithmPreference>(
+                                key: PreferencesKeys.layoutAlgorithmDropdown,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  contentPadding:
+                                      AppSpacing.fieldContentPadding,
+                                ),
+                                value: _preferences
+                                    .layoutPreferences.layoutAlgorithm,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: LayoutAlgorithmPreference.topologicalGrid,
+                                    child: Text('Topological Grid'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: LayoutAlgorithmPreference.sugiyama,
+                                    child: Text('Sugiyama (planned)'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences
+                                          .layoutPreferences
+                                          .layoutAlgorithm = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Auto-layout after edit checkbox
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.autoLayoutAfterEditCheckbox,
+                                value: _preferences
+                                    .layoutPreferences.autoLayoutAfterEdit,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.layoutPreferences
+                                          .autoLayoutAfterEdit = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                    'Auto-layout after AI edit operations'),
+                              ),
                             ],
                           ),
                         ],

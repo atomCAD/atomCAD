@@ -93,6 +93,7 @@ use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::structure_designer::cli_runner;
+use crate::structure_designer::layout;
 
 fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
     let base_type = match api_data_type.data_type_base {
@@ -2833,6 +2834,44 @@ pub fn evaluate_node(
       },
       Err("CAD instance not available".to_string())
     )
+  }
+}
+
+/// Apply auto-layout to the active node network.
+///
+/// This function recomputes positions for all nodes in the active network
+/// using the user's preferred layout algorithm from preferences.
+///
+/// # Behavior
+/// - Uses the layout algorithm specified in StructureDesignerPreferences
+/// - Reorganizes all nodes in the active network for improved readability
+/// - Automatically refreshes the UI after layout
+#[flutter_rust_bridge::frb(sync)]
+pub fn layout_active_network() {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let structure_designer = &mut cad_instance.structure_designer;
+
+      // Get the active network name
+      let network_name = match &structure_designer.active_node_network_name {
+        Some(name) => name.clone(),
+        None => return,
+      };
+
+      // Get the layout algorithm from preferences
+      let algorithm = structure_designer.preferences.layout_preferences.layout_algorithm.into();
+
+      // Get a const pointer to the registry for layout computation
+      let registry_ptr = &structure_designer.node_type_registry as *const crate::structure_designer::node_type_registry::NodeTypeRegistry;
+
+      // Apply layout to the network
+      if let Some(network) = structure_designer.node_type_registry.node_networks.get_mut(&network_name) {
+        layout::layout_network(network, &*registry_ptr, algorithm);
+      }
+
+      // Refresh the UI
+      refresh_structure_designer_auto(cad_instance);
+    });
   }
 }
 
