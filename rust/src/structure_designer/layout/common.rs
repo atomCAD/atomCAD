@@ -21,12 +21,11 @@ use crate::structure_designer::node_network::NodeNetwork;
 pub enum LayoutAlgorithm {
     /// Simple layered layout based on topological depth. Fast and reliable.
     /// Organizes nodes into columns by their depth in the dependency graph.
-    #[default]
     TopologicalGrid,
 
     /// Sophisticated layered layout with crossing minimization.
     /// Uses the Sugiyama algorithm for better visual quality on complex graphs.
-    /// (Not yet implemented - falls back to TopologicalGrid)
+    #[default]
     Sugiyama,
 }
 

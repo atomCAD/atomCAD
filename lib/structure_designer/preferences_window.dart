@@ -612,7 +612,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                   ),
                                   DropdownMenuItem(
                                     value: LayoutAlgorithmPreference.sugiyama,
-                                    child: Text('Sugiyama (planned)'),
+                                    child: Text('Sugiyama'),
                                   ),
                                 ],
                                 onChanged: (value) {

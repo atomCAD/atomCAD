@@ -121,11 +121,10 @@ pub struct BackgroundPreferences {
 pub enum LayoutAlgorithmPreference {
     /// Simple layered layout based on topological depth. Fast and reliable.
     /// Organizes nodes into columns by their depth in the dependency graph.
-    #[default]
     TopologicalGrid,
     /// Sophisticated layered layout with crossing minimization.
     /// Uses the Sugiyama algorithm for better visual quality on complex graphs.
-    /// (Not yet implemented - falls back to TopologicalGrid)
+    #[default]
     Sugiyama,
 }
 
@@ -197,7 +196,7 @@ impl StructureDesignerPreferences {
         drawing_plane_grid_strong_color: APIIVec3 { x: 110, y: 110, z: 160 },
       },
       layout_preferences: LayoutPreferences {
-        layout_algorithm: LayoutAlgorithmPreference::TopologicalGrid,
+        layout_algorithm: LayoutAlgorithmPreference::Sugiyama,
         auto_layout_after_edit: true,
       },
     }
