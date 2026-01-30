@@ -552,9 +552,8 @@ fn test_layout_algorithm_enum() {
     let default_algo = LayoutAlgorithm::default();
     assert_eq!(default_algo, LayoutAlgorithm::TopologicalGrid);
 
-    // Test that other variants can be created (even if they fall back to TopologicalGrid)
+    // Test that Sugiyama variant can be created (falls back to TopologicalGrid until implemented)
     let _sugiyama = LayoutAlgorithm::Sugiyama;
-    let _incremental = LayoutAlgorithm::Incremental;
 }
 
 #[test]

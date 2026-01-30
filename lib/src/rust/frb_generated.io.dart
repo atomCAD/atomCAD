@@ -413,6 +413,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   InputPinView dco_decode_input_pin_view(dynamic raw);
 
   @protected
+  LayoutAlgorithmPreference dco_decode_layout_algorithm_preference(dynamic raw);
+
+  @protected
+  LayoutPreferences dco_decode_layout_preferences(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -1133,6 +1139,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   InputPinView sse_decode_input_pin_view(SseDeserializer deserializer);
+
+  @protected
+  LayoutAlgorithmPreference sse_decode_layout_algorithm_preference(
+      SseDeserializer deserializer);
+
+  @protected
+  LayoutPreferences sse_decode_layout_preferences(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -1930,6 +1943,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_input_pin_view(InputPinView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_layout_algorithm_preference(
+      LayoutAlgorithmPreference self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_layout_preferences(
+      LayoutPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);

@@ -1,5 +1,6 @@
 use flutter_rust_bridge::frb;
 use crate::api::common_api_types::APIIVec3;
+use crate::structure_designer::layout::LayoutAlgorithm;
 
 #[frb]
 #[derive(PartialEq, Clone)]
@@ -107,6 +108,50 @@ pub struct BackgroundPreferences {
   pub drawing_plane_grid_strong_color: APIIVec3,
 }
 
+/// Layout algorithm preference for full network auto-layout operations.
+///
+/// These algorithms reorganize the entire network. They are used:
+/// - When "Auto-Layout Network" is triggered from the menu
+/// - After AI edit operations (when auto_layout_after_edit is enabled)
+///
+/// Note: Incremental positioning of new nodes during editing is handled
+/// separately by the auto_layout module, not through this enum.
+#[frb]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LayoutAlgorithmPreference {
+    /// Simple layered layout based on topological depth. Fast and reliable.
+    /// Organizes nodes into columns by their depth in the dependency graph.
+    #[default]
+    TopologicalGrid,
+    /// Sophisticated layered layout with crossing minimization.
+    /// Uses the Sugiyama algorithm for better visual quality on complex graphs.
+    /// (Not yet implemented - falls back to TopologicalGrid)
+    Sugiyama,
+}
+
+impl From<LayoutAlgorithmPreference> for LayoutAlgorithm {
+    fn from(pref: LayoutAlgorithmPreference) -> Self {
+        match pref {
+            LayoutAlgorithmPreference::TopologicalGrid => LayoutAlgorithm::TopologicalGrid,
+            LayoutAlgorithmPreference::Sugiyama => LayoutAlgorithm::Sugiyama,
+        }
+    }
+}
+
+/// Preferences for auto-layout operations.
+#[frb]
+#[derive(Clone)]
+pub struct LayoutPreferences {
+    /// The layout algorithm to use for auto-layout operations.
+    #[frb(non_final)]
+    pub layout_algorithm: LayoutAlgorithmPreference,
+    /// Whether to automatically apply layout after AI edit operations.
+    /// When true, the full network layout is recomputed after each edit.
+    /// When false, only new nodes are positioned incrementally.
+    #[frb(non_final)]
+    pub auto_layout_after_edit: bool,
+}
+
 #[frb]
 #[derive(Clone)]
 pub struct StructureDesignerPreferences {
@@ -114,6 +159,7 @@ pub struct StructureDesignerPreferences {
   pub node_display_preferences: NodeDisplayPreferences,
   pub atomic_structure_visualization_preferences: AtomicStructureVisualizationPreferences,
   pub background_preferences: BackgroundPreferences,
+  pub layout_preferences: LayoutPreferences,
 }
 
 impl StructureDesignerPreferences {
@@ -149,6 +195,10 @@ impl StructureDesignerPreferences {
         lattice_grid_strong_color: APIIVec3 { x: 100, y: 150, z: 150 },
         drawing_plane_grid_color: APIIVec3 { x: 70, y: 70, z: 100 },
         drawing_plane_grid_strong_color: APIIVec3 { x: 110, y: 110, z: 160 },
+      },
+      layout_preferences: LayoutPreferences {
+        layout_algorithm: LayoutAlgorithmPreference::TopologicalGrid,
+        auto_layout_after_edit: true,
       },
     }
   }

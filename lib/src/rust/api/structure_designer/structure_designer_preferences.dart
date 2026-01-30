@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
@@ -157,6 +157,56 @@ class GeometryVisualizationPreferences {
           displayCameraTarget == other.displayCameraTarget;
 }
 
+/// Layout algorithm preference for full network auto-layout operations.
+///
+/// These algorithms reorganize the entire network. They are used:
+/// - When "Auto-Layout Network" is triggered from the menu
+/// - After AI edit operations (when auto_layout_after_edit is enabled)
+///
+/// Note: Incremental positioning of new nodes during editing is handled
+/// separately by the auto_layout module, not through this enum.
+enum LayoutAlgorithmPreference {
+  /// Simple layered layout based on topological depth. Fast and reliable.
+  /// Organizes nodes into columns by their depth in the dependency graph.
+  topologicalGrid,
+
+  /// Sophisticated layered layout with crossing minimization.
+  /// Uses the Sugiyama algorithm for better visual quality on complex graphs.
+  /// (Not yet implemented - falls back to TopologicalGrid)
+  sugiyama,
+  ;
+
+  static Future<LayoutAlgorithmPreference> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesLayoutAlgorithmPreferenceDefault();
+}
+
+/// Preferences for auto-layout operations.
+class LayoutPreferences {
+  /// The layout algorithm to use for auto-layout operations.
+  LayoutAlgorithmPreference layoutAlgorithm;
+
+  /// Whether to automatically apply layout after AI edit operations.
+  /// When true, the full network layout is recomputed after each edit.
+  /// When false, only new nodes are positioned incrementally.
+  bool autoLayoutAfterEdit;
+
+  LayoutPreferences({
+    required this.layoutAlgorithm,
+    required this.autoLayoutAfterEdit,
+  });
+
+  @override
+  int get hashCode => layoutAlgorithm.hashCode ^ autoLayoutAfterEdit.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LayoutPreferences &&
+          runtimeType == other.runtimeType &&
+          layoutAlgorithm == other.layoutAlgorithm &&
+          autoLayoutAfterEdit == other.autoLayoutAfterEdit;
+}
+
 /// Enum to control mesh smoothing behavior during tessellation
 enum MeshSmoothing {
   /// Smooth normals: averages normals at each vertex from all connected faces
@@ -202,12 +252,14 @@ class StructureDesignerPreferences {
   final AtomicStructureVisualizationPreferences
       atomicStructureVisualizationPreferences;
   final BackgroundPreferences backgroundPreferences;
+  final LayoutPreferences layoutPreferences;
 
   const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
     required this.nodeDisplayPreferences,
     required this.atomicStructureVisualizationPreferences,
     required this.backgroundPreferences,
+    required this.layoutPreferences,
   });
 
   StructureDesignerPreferences cloneSelf() => RustLib.instance.api
@@ -223,7 +275,8 @@ class StructureDesignerPreferences {
       geometryVisualizationPreferences.hashCode ^
       nodeDisplayPreferences.hashCode ^
       atomicStructureVisualizationPreferences.hashCode ^
-      backgroundPreferences.hashCode;
+      backgroundPreferences.hashCode ^
+      layoutPreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -235,5 +288,6 @@ class StructureDesignerPreferences {
           nodeDisplayPreferences == other.nodeDisplayPreferences &&
           atomicStructureVisualizationPreferences ==
               other.atomicStructureVisualizationPreferences &&
-          backgroundPreferences == other.backgroundPreferences;
+          backgroundPreferences == other.backgroundPreferences &&
+          layoutPreferences == other.layoutPreferences;
 }

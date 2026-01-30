@@ -35,6 +35,7 @@ use crate::structure_designer::text_format::{
     describe_node_type,
     get_display_summary,
 };
+use crate::structure_designer::layout;
 
 // =============================================================================
 // FFI Functions (exposed to Flutter via flutter_rust_bridge)
@@ -173,6 +174,18 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                     unsafe {
                         if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name) {
                             validate_network(network, &mut *registry_ptr, None);
+                        }
+                    }
+                }
+
+                // Apply auto-layout if enabled in preferences and edit was successful
+                // This recomputes the entire network layout using the user's preferred algorithm.
+                if result.success && structure_designer.preferences.layout_preferences.auto_layout_after_edit {
+                    let algorithm = structure_designer.preferences.layout_preferences.layout_algorithm.into();
+                    let registry_ptr = &structure_designer.node_type_registry as *const crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                    unsafe {
+                        if let Some(network) = structure_designer.node_type_registry.node_networks.get_mut(&network_name) {
+                            layout::layout_network(network, &*registry_ptr, algorithm);
                         }
                     }
                 }

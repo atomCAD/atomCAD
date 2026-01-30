@@ -1,9 +1,10 @@
-//! Layout algorithms for node networks.
+//! Layout algorithms for full network reorganization.
 //!
-//! This module provides automatic layout algorithms to position nodes in a network
-//! for improved readability and visual organization. This is particularly important
-//! for networks created programmatically through `atomcad-cli`, where node positions
-//! must be calculated automatically.
+//! This module provides automatic layout algorithms to reposition all nodes in a network
+//! for improved readability and visual organization. These algorithms reorganize the
+//! entire network and are used:
+//! - When "Auto-Layout Network" is triggered from the menu
+//! - After AI edit operations (when auto_layout_after_edit is enabled)
 //!
 //! # Available Algorithms
 //!
@@ -11,7 +12,9 @@
 //! |-----------|----------|--------|
 //! | **Topological Grid** | AI-created networks, general purpose | Implemented |
 //! | **Sugiyama** | Complex DAGs requiring minimal edge crossings | Planned |
-//! | **Incremental** | User-edited networks where layout should be preserved | Planned |
+//!
+//! Note: Incremental positioning of new nodes during editing is handled separately
+//! by the `text_format::auto_layout` module, not through these algorithms.
 //!
 //! # Usage
 //!
@@ -27,7 +30,6 @@
 //! - `common.rs` - Shared utilities (depth computation, graph traversal)
 //! - `topological_grid.rs` - Simple, reliable layered layout
 //! - `sugiyama.rs` - Sophisticated layout with crossing minimization (future)
-//! - `incremental.rs` - Layout-preserving for user-edited networks (future)
 
 pub mod common;
 pub mod topological_grid;
@@ -92,13 +94,9 @@ pub fn compute_layout(
 ) -> HashMap<u64, DVec2> {
     match algorithm {
         LayoutAlgorithm::TopologicalGrid => topological_grid::layout(network, registry),
-        // Future algorithms fall back to TopologicalGrid for now
+        // Sugiyama falls back to TopologicalGrid until implemented
         LayoutAlgorithm::Sugiyama => {
             // TODO: Implement Sugiyama layout
-            topological_grid::layout(network, registry)
-        }
-        LayoutAlgorithm::Incremental => {
-            // TODO: Implement Incremental layout
             topological_grid::layout(network, registry)
         }
     }

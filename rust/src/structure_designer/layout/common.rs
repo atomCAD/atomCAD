@@ -9,7 +9,14 @@ use std::collections::{HashMap, HashSet};
 
 use crate::structure_designer::node_network::NodeNetwork;
 
-/// Available layout algorithms for node networks.
+/// Available layout algorithms for full network reorganization.
+///
+/// These algorithms reorganize the entire network. They are used:
+/// - When "Auto-Layout Network" is triggered from the menu
+/// - After AI edit operations (when auto_layout_after_edit is enabled)
+///
+/// Note: Incremental positioning of new nodes during editing is handled
+/// separately by the auto_layout module, not through this enum.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum LayoutAlgorithm {
     /// Simple layered layout based on topological depth. Fast and reliable.
@@ -21,11 +28,6 @@ pub enum LayoutAlgorithm {
     /// Uses the Sugiyama algorithm for better visual quality on complex graphs.
     /// (Not yet implemented - falls back to TopologicalGrid)
     Sugiyama,
-
-    /// Preserves existing layout, only positions new nodes.
-    /// Best for user-edited networks where layout should be maintained.
-    /// (Not yet implemented - falls back to TopologicalGrid)
-    Incremental,
 }
 
 /// Compute the topological depth of each node in the network.
