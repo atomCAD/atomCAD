@@ -11,7 +11,7 @@
 //! | Algorithm | Use Case | Status |
 //! |-----------|----------|--------|
 //! | **Topological Grid** | AI-created networks, general purpose | Implemented |
-//! | **Sugiyama** | Complex DAGs requiring minimal edge crossings | Planned |
+//! | **Sugiyama** | Complex DAGs requiring minimal edge crossings | Implemented |
 //!
 //! Note: Incremental positioning of new nodes during editing is handled separately
 //! by the `text_format::auto_layout` module, not through these algorithms.
@@ -29,9 +29,10 @@
 //!
 //! - `common.rs` - Shared utilities (depth computation, graph traversal)
 //! - `topological_grid.rs` - Simple, reliable layered layout
-//! - `sugiyama.rs` - Sophisticated layout with crossing minimization (future)
+//! - `sugiyama.rs` - Sophisticated layout with crossing minimization
 
 pub mod common;
+pub mod sugiyama;
 pub mod topological_grid;
 
 // Re-export main types and functions
@@ -94,10 +95,6 @@ pub fn compute_layout(
 ) -> HashMap<u64, DVec2> {
     match algorithm {
         LayoutAlgorithm::TopologicalGrid => topological_grid::layout(network, registry),
-        // Sugiyama falls back to TopologicalGrid until implemented
-        LayoutAlgorithm::Sugiyama => {
-            // TODO: Implement Sugiyama layout
-            topological_grid::layout(network, registry)
-        }
+        LayoutAlgorithm::Sugiyama => sugiyama::layout(network, registry),
     }
 }

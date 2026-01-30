@@ -49,5 +49,8 @@ mod serialization_test;
 #[path = "structure_designer/layout_topological_grid_test.rs"]
 mod layout_topological_grid_test;
 
+#[path = "structure_designer/layout_sugiyama_test.rs"]
+mod layout_sugiyama_test;
+
 #[path = "structure_designer/layout_after_edit_test.rs"]
 mod layout_after_edit_test;
