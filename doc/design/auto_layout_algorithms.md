@@ -48,14 +48,6 @@ pub trait LayoutAlgorithm {
 | **Layered/Sugiyama** | Complex DAGs requiring minimal edge crossings | Planned |
 | **Incremental** | User-edited networks where layout should be preserved | Planned |
 
-### Algorithm Selection
-
-The layout algorithm can be selected:
-
-1. **Programmatically**: When calling layout functions from Rust code
-2. **Via CLI**: Using `atomcad-cli` flags (e.g., `--layout=topological-grid`)
-3. **Automatically**: Based on heuristics about the network's origin and structure
-
 ---
 
 ## Algorithm 1: Topological Grid Layout
@@ -394,22 +386,102 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
 // In layout/incremental.rs (future)
 pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64, DVec2>;
 ```
+
+---
+
+## User Configuration
+
+### StructureDesignerPreferences
+
+The layout algorithm is configured through `StructureDesignerPreferences`, not exposed to AI agents via CLI. AI agents should not be aware of node positioning—layout is a user-facing concern.
+
+```rust
+// In api/structure_designer/structure_designer_preferences.rs
+
+/// Layout algorithm preference for auto-layout operations.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub enum LayoutAlgorithmPreference {
+    /// Simple layered layout based on topological depth. Fast and reliable.
+    #[default]
+    TopologicalGrid,
+    /// Sophisticated layered layout with crossing minimization.
+    Sugiyama,
+    /// Preserves existing layout, only positions new nodes.
+    Incremental,
+}
+
+pub struct StructureDesignerPreferences {
+    // ... existing fields ...
+
+    /// The layout algorithm to use for auto-layout operations.
+    pub layout_algorithm: LayoutAlgorithmPreference,
+}
 ```
 
-### CLI Integration
+### Preferences Dialog
 
-The `atomcad-cli` tool can trigger layout after edits:
+The layout algorithm is selectable via a dropdown in the Preferences dialog:
 
-```bash
-# Apply topological grid layout after editing
-atomcad-cli edit network.cnnd --layout=topological-grid "add sphere..."
+| Setting | Options | Default |
+|---------|---------|---------|
+| **Auto-Layout Algorithm** | Topological Grid, Sugiyama, Incremental | Topological Grid |
 
-# Preserve existing layout (incremental mode)
-atomcad-cli edit network.cnnd --layout=preserve "modify union..."
+The dropdown should display user-friendly names:
+- "Topological Grid" → Simple, fast layout organized by dependency depth
+- "Sugiyama" → Advanced layout with crossing minimization (when implemented)
+- "Incremental" → Preserves existing positions, only places new nodes (when implemented)
 
-# Auto-select based on network characteristics
-atomcad-cli edit network.cnnd --layout=auto "..."
+---
+
+## When Auto-Layout is Triggered
+
+Auto-layout is applied in two scenarios:
+
+### 1. After atomcad-cli Edit Operations
+
+When an AI agent modifies a network through `atomcad-cli edit`, the layout algorithm from `StructureDesignerPreferences` is automatically applied to the entire network. The AI agent is not aware of this—it simply edits the network structure, and the application handles positioning.
+
+```rust
+// In atomcad-cli edit handler (pseudocode)
+fn handle_edit_command(network: &mut NodeNetwork, edit_text: &str) {
+    // Apply the edit (AI agent's changes)
+    apply_text_edit(network, edit_text);
+
+    // Auto-layout using user's preferred algorithm
+    let algorithm = preferences.layout_algorithm;
+    layout::layout_network(network, registry, algorithm.into());
+}
 ```
+
+### 2. Manual Menu Item
+
+A menu item allows users to manually trigger auto-layout on the active network:
+
+**Menu Location**: `Edit > Auto-Layout Network` (or similar)
+
+**Behavior**:
+1. Applies the layout algorithm from preferences to the currently active network
+2. All node positions are recalculated
+3. The operation is undoable
+
+```dart
+// In Flutter menu handler (pseudocode)
+void onAutoLayoutMenuItemClicked() {
+  final algorithm = preferences.layoutAlgorithm;
+  final network = structureDesigner.activeNetwork;
+
+  // Call Rust API to perform layout
+  api.layoutNetwork(network.id, algorithm);
+
+  // Refresh the UI
+  notifyListeners();
+}
+```
+
+**Note**: This menu item is useful when:
+- A user imports a network with poor layout
+- A user wants to reorganize after manual edits
+- Testing different layout algorithms on the same network
 
 ---
 
@@ -424,7 +496,6 @@ atomcad-cli edit network.cnnd --layout=auto "..."
 ### Integration Tests
 
 1. **Full layout roundtrip**: Create network via text format, layout, verify positions
-2. **Snapshot tests**: Compare layout output against known-good snapshots
 3. **Edge cases**: Empty network, single node, disconnected components, diamond patterns
 
 ### Visual Testing
@@ -435,3 +506,118 @@ Manual inspection of layouts for representative networks:
 - Multiple independent subgraphs
 - Wide fan-out (one node feeding many)
 - Deep narrow graph
+
+---
+
+## Implementation Plan
+
+The implementation is divided into three phases to keep each phase manageable and testable.
+
+### Phase 1: Core Layout Module (Rust)
+
+**Goal**: Implement the layout module infrastructure and topological grid algorithm in Rust.
+
+**Tasks**:
+
+1. **Create module structure**
+   - Create `rust/src/structure_designer/layout/mod.rs`
+   - Create `rust/src/structure_designer/layout/common.rs`
+   - Create `rust/src/structure_designer/layout/topological_grid.rs`
+   - Add `pub mod layout;` to `rust/src/structure_designer/mod.rs`
+
+2. **Implement common.rs**
+   - `compute_node_depths()` - depth calculation via dependency traversal
+   - `get_input_node_ids()` - get nodes feeding into a given node
+   - `find_source_nodes()` - find nodes with no inputs
+   - `LayoutAlgorithm` enum (TopologicalGrid only for now, others as stubs)
+
+3. **Implement topological_grid.rs**
+   - `layout()` - main entry point
+   - `group_by_depth()` - organize nodes into columns
+   - `order_column()` - barycenter-based ordering within columns
+   - `assign_positions()` - compute final X/Y coordinates
+
+4. **Implement mod.rs**
+   - `layout_network()` - public API that dispatches to algorithm implementations
+   - Re-export public types
+
+5. **Add unit tests**
+   - Create `rust/tests/layout_topological_grid.rs`
+   - Test depth computation for various graph shapes
+   - Test column ordering
+   - Test position assignment (no overlaps, correct spacing)
+   - Test edge cases: empty network, single node, disconnected components
+
+**Deliverables**:
+- Working `layout::layout_network()` function callable from Rust
+- Unit tests passing
+
+---
+
+### Phase 2: atomcad-cli Integration
+
+**Goal**: Automatically apply layout after `atomcad-cli edit` operations.
+
+**Tasks**:
+
+1. **Add LayoutAlgorithmPreference to preferences**
+   - Add `LayoutAlgorithmPreference` enum to `structure_designer_preferences.rs`
+   - Add `layout_algorithm: LayoutAlgorithmPreference` field to `StructureDesignerPreferences`
+   - Default to `TopologicalGrid`
+
+2. **Hook layout into edit command**
+   - In `atomcad-cli` edit handler, after applying text edits:
+   - Read `layout_algorithm` from preferences
+   - Call `layout::layout_network()` with the selected algorithm
+   - Save the updated network with new positions
+
+3. **Add integration test**
+   - Create test that runs `atomcad-cli edit`, then verifies node positions are laid out correctly
+   - Test that layout respects the preference setting
+
+**Deliverables**:
+- `atomcad-cli edit` automatically produces well-laid-out networks
+- Preference field exists (UI comes in Phase 3)
+
+---
+
+### Phase 3: UI Integration (Flutter)
+
+**Goal**: Add preferences dropdown and manual auto-layout menu item.
+
+**Tasks**:
+
+1. **Expose layout API to Flutter**
+   - Add `layout_network(algorithm: LayoutAlgorithmPreference)` to Rust API
+   - Run `flutter_rust_bridge_codegen generate`
+
+2. **Add preferences dropdown**
+   - Add dropdown to preferences dialog for "Auto-Layout Algorithm"
+   - Options: "Topological Grid" (and placeholders for future algorithms)
+   - Wire up to `StructureDesignerPreferences.layout_algorithm`
+
+3. **Add menu item**
+   - Add "Auto-Layout Network" to Edit menu (or appropriate location)
+   - On click: call layout API with current preference, refresh canvas
+   - Ensure operation is undoable (integrate with undo system if applicable)
+
+4. **Visual verification**
+   - Manual testing with various networks
+   - Verify UI updates correctly after layout
+
+**Deliverables**:
+- Users can select layout algorithm in preferences
+- Users can manually trigger auto-layout via menu
+- Full end-to-end workflow functional
+
+---
+
+### Phase Summary
+
+| Phase | Focus | Key Deliverable |
+|-------|-------|-----------------|
+| **1** | Rust core | `layout::layout_network()` + tests |
+| **2** | CLI integration | Auto-layout after `atomcad-cli edit` |
+| **3** | Flutter UI | Preferences dropdown + menu item |
+
+Each phase is independently testable and provides incremental value. Phase 1 is a prerequisite for Phases 2 and 3, but Phases 2 and 3 can be done in either order.
