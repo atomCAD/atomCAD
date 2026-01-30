@@ -46,7 +46,7 @@ pub const DEFAULT_HORIZONTAL_GAP: f64 = 50.0;
 /// Estimates the height of a node based on its number of input pins.
 ///
 /// This matches the formula used in Flutter's `getNodeSize()` function:
-/// ```
+/// ```text
 /// height = title_height + max(input_pins_height, output_height) + subtitle_height + padding
 /// ```
 ///

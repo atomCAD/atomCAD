@@ -45,3 +45,6 @@ mod evaluate_node_test;
 
 #[path = "structure_designer/serialization_test.rs"]
 mod serialization_test;
+
+#[path = "structure_designer/layout_topological_grid_test.rs"]
+mod layout_topological_grid_test;
