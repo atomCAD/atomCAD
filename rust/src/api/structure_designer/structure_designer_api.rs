@@ -44,6 +44,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceDa
 use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomMoveData;
+use crate::api::structure_designer::structure_designer_api_types::APIAtomRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
@@ -62,6 +63,7 @@ use crate::crystolecule::unit_cell_symmetries::{analyze_unit_cell_complete, Crys
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::atom_move::AtomMoveData;
+use crate::structure_designer::nodes::atom_rot::AtomRotData;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
@@ -1696,6 +1698,30 @@ pub fn get_atom_move_data(node_id: u64) -> Option<APIAtomMoveData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_atom_rot_data(node_id: u64) -> Option<APIAtomRotData> {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let node_data = match cad_instance.structure_designer.get_node_network_data(node_id) {
+          Some(data) => data,
+          None => return None,
+        };
+        let atom_rot_data = match node_data.as_any_ref().downcast_ref::<AtomRotData>() {
+          Some(data) => data,
+          None => return None,
+        };
+        Some(APIAtomRotData {
+          angle: atom_rot_data.angle,
+          rot_axis: to_api_vec3(&atom_rot_data.rot_axis),
+          pivot_point: to_api_vec3(&atom_rot_data.pivot_point),
+        })
+      },
+      None
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_atom_trans_data(node_id: u64) -> Option<APIAtomTransData> {
   unsafe {
     with_cad_instance_or(
@@ -2221,6 +2247,21 @@ pub fn set_atom_move_data(node_id: u64, data: APIAtomMoveData) {
         translation: from_api_vec3(&data.translation),
       });
       cad_instance.structure_designer.set_node_network_data(node_id, atom_move_data);
+      refresh_structure_designer_auto(cad_instance);
+    });
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_atom_rot_data(node_id: u64, data: APIAtomRotData) {
+  unsafe {
+    with_mut_cad_instance(|cad_instance| {
+      let atom_rot_data = Box::new(AtomRotData {
+        angle: data.angle,
+        rot_axis: from_api_vec3(&data.rot_axis),
+        pivot_point: from_api_vec3(&data.pivot_point),
+      });
+      cad_instance.structure_designer.set_node_network_data(node_id, atom_rot_data);
       refresh_structure_designer_auto(cad_instance);
     });
   }

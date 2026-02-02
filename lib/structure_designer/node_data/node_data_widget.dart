@@ -15,6 +15,7 @@ import 'package:flutter_cad/structure_designer/node_data/lattice_symop_editor.da
 import 'package:flutter_cad/structure_designer/node_data/lattice_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_move_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/atom_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
@@ -233,6 +234,17 @@ class NodeDataWidget extends StatelessWidget {
         return AtomMoveEditor(
           nodeId: selectedNode.id,
           data: atomMoveData,
+          model: model,
+        );
+      case 'atom_rot':
+        // Fetch the atom rotation data here in the parent widget
+        final atomRotData = getAtomRotData(
+          nodeId: selectedNode.id,
+        );
+
+        return AtomRotEditor(
+          nodeId: selectedNode.id,
+          data: atomRotData,
           model: model,
         );
       case 'atom_trans':

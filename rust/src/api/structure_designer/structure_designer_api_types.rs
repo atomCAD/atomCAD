@@ -228,6 +228,12 @@ pub struct InputPinView {
     pub translation: APIVec3,
   }
 
+  pub struct APIAtomRotData {
+    pub angle: f64,  // In radians
+    pub rot_axis: APIVec3,
+    pub pivot_point: APIVec3,
+  }
+
   pub struct APIAtomTransData {
     pub translation: APIVec3,
     pub rotation: APIVec3, // intrinsic euler angles in radians

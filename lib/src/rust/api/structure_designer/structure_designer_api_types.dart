@@ -93,6 +93,30 @@ class APIAtomMoveData {
           translation == other.translation;
 }
 
+class APIAtomRotData {
+  final double angle;
+  final APIVec3 rotAxis;
+  final APIVec3 pivotPoint;
+
+  const APIAtomRotData({
+    required this.angle,
+    required this.rotAxis,
+    required this.pivotPoint,
+  });
+
+  @override
+  int get hashCode => angle.hashCode ^ rotAxis.hashCode ^ pivotPoint.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomRotData &&
+          runtimeType == other.runtimeType &&
+          angle == other.angle &&
+          rotAxis == other.rotAxis &&
+          pivotPoint == other.pivotPoint;
+}
+
 class APIAtomTransData {
   final APIVec3 translation;
   final APIVec3 rotation;
