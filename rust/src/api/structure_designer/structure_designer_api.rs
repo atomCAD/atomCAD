@@ -2258,8 +2258,14 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
                 ),
             };
 
+            // Preserve existing param_id from the current node data (for wire preservation across renames)
+            let existing_param_id = cad_instance.structure_designer.get_active_node_network()
+                .and_then(|network| network.nodes.get(&node_id))
+                .and_then(|node| node.data.as_any_ref().downcast_ref::<ParameterData>())
+                .and_then(|param_data| param_data.param_id);
+
             let parameter_data = Box::new(ParameterData {
-                param_id: None,  // Will be assigned when validation runs
+                param_id: existing_param_id,  // Preserve existing ID for wire preservation
                 param_index: data.param_index,
                 param_name: data.param_name,
                 data_type,
@@ -2304,14 +2310,69 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                // Get existing expr data to preserve parameter IDs for wire preservation
+                let existing_params: Vec<crate::structure_designer::nodes::expr::ExprParameter> = cad_instance.structure_designer.get_active_node_network()
+                    .and_then(|network| network.nodes.get(&node_id))
+                    .and_then(|node| node.data.as_any_ref().downcast_ref::<ExprData>())
+                    .map(|expr_data| expr_data.parameters.clone())
+                    .unwrap_or_default();
+
+                // Find the next available ID for new parameters
+                let mut next_id = existing_params.iter()
+                    .filter_map(|p| p.id)
+                    .max()
+                    .unwrap_or(0) + 1;
+
+                // Track which IDs have been assigned to avoid duplicates
+                let mut used_ids = std::collections::HashSet::new();
+
                 let mut parameters = Vec::new();
                 let mut first_error = None;
 
-                for api_param in data.parameters {
+                for (new_index, api_param) in data.parameters.into_iter().enumerate() {
+                    // Preserve ID: first match by name (handles reordering), then by position (handles renames)
+                    // Also check that the ID hasn't already been used (prevents duplicates when reordering + adding)
+                    let id = if let Some(existing) = existing_params.iter().find(|p| p.name == api_param.name) {
+                        // Match by name first (handles reordering)
+                        if let Some(existing_id) = existing.id {
+                            if !used_ids.contains(&existing_id) {
+                                existing.id
+                            } else {
+                                // ID already used, generate new one
+                                let id = next_id;
+                                next_id += 1;
+                                Some(id)
+                            }
+                        } else {
+                            existing.id
+                        }
+                    } else if new_index < existing_params.len() && existing_params[new_index].id.is_some() {
+                        // Fall back to position (handles renames - name changed but position same)
+                        let pos_id = existing_params[new_index].id.unwrap();
+                        if !used_ids.contains(&pos_id) {
+                            existing_params[new_index].id
+                        } else {
+                            // ID already used, generate new one
+                            let id = next_id;
+                            next_id += 1;
+                            Some(id)
+                        }
+                    } else {
+                        // New parameter - generate new ID
+                        let id = next_id;
+                        next_id += 1;
+                        Some(id)
+                    };
+
+                    // Track the assigned ID
+                    if let Some(assigned_id) = id {
+                        used_ids.insert(assigned_id);
+                    }
+
                     match api_data_type_to_data_type(&api_param.data_type) {
                         Ok(dt) => {
                             parameters.push(crate::structure_designer::nodes::expr::ExprParameter {
-                                id: None, // ID will be assigned when needed for wire preservation
+                                id,
                                 name: api_param.name,
                                 data_type: dt,
                                 data_type_str: None, // Successfully parsed, no need to store the string
@@ -2322,7 +2383,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
                                 first_error = Some(e.clone());
                             }
                             parameters.push(crate::structure_designer::nodes::expr::ExprParameter {
-                                id: None, // ID will be assigned when needed for wire preservation
+                                id,
                                 name: api_param.name,
                                 data_type: DataType::None, // Set to None on error
                                 data_type_str: if api_param.data_type.data_type_base == APIDataTypeBase::Custom {

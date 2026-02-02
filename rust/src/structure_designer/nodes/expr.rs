@@ -203,6 +203,9 @@ impl NodeData for ExprData {
                 .max()
                 .unwrap_or(0) + 1;
 
+            // Track which IDs have been assigned to avoid duplicates
+            let mut used_ids = std::collections::HashSet::new();
+
             let mut new_params = Vec::new();
             for (new_index, param_val) in params_arr.iter().enumerate() {
                 if let TextValue::Object(obj) = param_val {
@@ -220,19 +223,41 @@ impl NodeData for ExprData {
 
                     // Try to preserve ID: first check if parameter with same name exists (handles reordering),
                     // then check if parameter at same index exists with an ID (handles renames).
-                    // Otherwise generate a new ID.
+                    // Also check that the ID hasn't already been used (prevents duplicates when reordering + adding).
                     let id = if let Some(existing) = self.parameters.iter().find(|p| p.name == name) {
                         // Match by name first (handles reordering)
-                        existing.id
+                        if let Some(existing_id) = existing.id {
+                            if !used_ids.contains(&existing_id) {
+                                existing.id
+                            } else {
+                                let id = next_id;
+                                next_id += 1;
+                                Some(id)
+                            }
+                        } else {
+                            existing.id
+                        }
                     } else if new_index < self.parameters.len() && self.parameters[new_index].id.is_some() {
                         // Fall back to position (handles renames - name changed but position same)
-                        self.parameters[new_index].id
+                        let pos_id = self.parameters[new_index].id.unwrap();
+                        if !used_ids.contains(&pos_id) {
+                            self.parameters[new_index].id
+                        } else {
+                            let id = next_id;
+                            next_id += 1;
+                            Some(id)
+                        }
                     } else {
                         // New parameter - generate new ID
                         let id = next_id;
                         next_id += 1;
                         Some(id)
                     };
+
+                    // Track the assigned ID
+                    if let Some(assigned_id) = id {
+                        used_ids.insert(assigned_id);
+                    }
 
                     new_params.push(ExprParameter { id, name, data_type, data_type_str });
                 }
