@@ -158,10 +158,12 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
         Parameter {
+          id: None,
           name: "molecule".to_string(),
           data_type: DataType::Atomic,
         },
         Parameter {
+          id: None,
           name: "file_name".to_string(),
           data_type: DataType::String,
         },

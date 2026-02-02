@@ -363,6 +363,7 @@ Delete a vertex by dragging it onto one of its neighbour.".to_string(),
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {
+          id: None,
           name: "d_plane".to_string(),
           data_type: DataType::DrawingPlane,
         },

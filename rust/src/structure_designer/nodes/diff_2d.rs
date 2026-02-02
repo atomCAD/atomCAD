@@ -193,10 +193,12 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "base".to_string(),
               data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from
           },
           Parameter {
+              id: None,
               name: "sub".to_string(),
               data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from base
           },

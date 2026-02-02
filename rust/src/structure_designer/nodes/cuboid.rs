@@ -218,14 +218,17 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
         Parameter {
+            id: None,
             name: "min_corner".to_string(),
             data_type: DataType::IVec3,
         },
         Parameter {
+          id: None,
           name: "extent".to_string(),
           data_type: DataType::IVec3,
         },
         Parameter {
+          id: None,
           name: "unit_cell".to_string(),
           data_type: DataType::UnitCell,
         },

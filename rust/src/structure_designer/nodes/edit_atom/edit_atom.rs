@@ -590,6 +590,7 @@ This node enables the manual editing of atomic structures. In a node network eve
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
           Parameter {
+              id: None,
               name: "molecule".to_string(),
               data_type: DataType::Atomic,
           },

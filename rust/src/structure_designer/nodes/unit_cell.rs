@@ -207,14 +207,17 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![
         Parameter {
+            id: None,
             name: "a".to_string(),
             data_type: DataType::Vec3,
         },
         Parameter {
+          id: None,
           name: "b".to_string(),
           data_type: DataType::Vec3,
         },
         Parameter {
+          id: None,
           name: "c".to_string(),
           data_type: DataType::Vec3,
         },

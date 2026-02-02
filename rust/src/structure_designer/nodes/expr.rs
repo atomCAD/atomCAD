@@ -21,6 +21,8 @@ use std::io;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExprParameter {
+    #[serde(default)]  // For backwards compatibility with old files without IDs
+    pub id: Option<u64>,  // Persistent identifier for wire preservation across renames
     pub name: String,
     pub data_type: DataType,
     pub data_type_str: Option<String>,
@@ -102,9 +104,10 @@ impl NodeData for ExprData {
       // Update the output type - use DataType::None if self.output_type is None
       custom_node_type.output_type = self.output_type.clone().unwrap_or(DataType::None);
       
-      // Convert ExprParameter to Parameter
+      // Convert ExprParameter to Parameter, propagating the ID for wire preservation
       custom_node_type.parameters = self.parameters.iter()
         .map(|expr_param| Parameter {
+          id: expr_param.id,  // Propagate ID for wire preservation across renames
           name: expr_param.name.clone(),
           data_type: expr_param.data_type.clone(),
         })
@@ -194,8 +197,14 @@ impl NodeData for ExprData {
             self.expression = v.as_string().ok_or_else(|| "expression must be a string".to_string())?.to_string();
         }
         if let Some(TextValue::Array(params_arr)) = props.get("parameters") {
+            // Find the next available ID for new parameters
+            let mut next_id = self.parameters.iter()
+                .filter_map(|p| p.id)
+                .max()
+                .unwrap_or(0) + 1;
+
             let mut new_params = Vec::new();
-            for param_val in params_arr {
+            for (new_index, param_val) in params_arr.iter().enumerate() {
                 if let TextValue::Object(obj) = param_val {
                     let name = obj.iter().find(|(k, _)| k == "name")
                         .and_then(|(_, v)| v.as_string())
@@ -208,7 +217,24 @@ impl NodeData for ExprData {
                     let data_type_str = obj.iter().find(|(k, _)| k == "data_type_str")
                         .and_then(|(_, v)| v.as_string())
                         .map(|s| s.to_string());
-                    new_params.push(ExprParameter { name, data_type, data_type_str });
+
+                    // Try to preserve ID: first check if parameter with same name exists (handles reordering),
+                    // then check if parameter at same index exists with an ID (handles renames).
+                    // Otherwise generate a new ID.
+                    let id = if let Some(existing) = self.parameters.iter().find(|p| p.name == name) {
+                        // Match by name first (handles reordering)
+                        existing.id
+                    } else if new_index < self.parameters.len() && self.parameters[new_index].id.is_some() {
+                        // Fall back to position (handles renames - name changed but position same)
+                        self.parameters[new_index].id
+                    } else {
+                        // New parameter - generate new ID
+                        let id = next_id;
+                        next_id += 1;
+                        Some(id)
+                    };
+
+                    new_params.push(ExprParameter { id, name, data_type, data_type_str });
                 }
             }
             self.parameters = new_params;
@@ -377,6 +403,7 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
       node_data_creator: || Box::new(ExprData {
         parameters: vec![
           ExprParameter {
+            id: Some(1),  // Default parameter gets ID 1
             name: "x".to_string(),
             data_type: DataType::Int,
             data_type_str: None,

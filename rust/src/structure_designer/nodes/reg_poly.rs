@@ -172,14 +172,17 @@ Now that we have general polygon node this node is less used.".to_string(),
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {
+          id: None,
           name: "num_sides".to_string(),
           data_type: DataType::Int,
         },
         Parameter {
+          id: None,
           name: "radius".to_string(),
           data_type: DataType::Int,
         },
         Parameter {
+          id: None,
           name: "d_plane".to_string(),
           data_type: DataType::DrawingPlane,
         },

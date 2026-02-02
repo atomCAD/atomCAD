@@ -130,17 +130,20 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {
+            id: None,
             name: "start".to_string(),
             data_type: DataType::Int,
         },
         Parameter {
+            id: None,
             name: "step".to_string(),
             data_type: DataType::Int,
         },
         Parameter {
+            id: None,
             name: "count".to_string(),
             data_type: DataType::Int,
-        },        
+        },
       ],
       output_type: DataType::Array(Box::new(DataType::Int)),
       public: true,

@@ -197,10 +197,12 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "base".to_string(),
               data_type: DataType::Array(Box::new(DataType::Geometry)), // If multiple shapes are given, they are unioned.
           },
           Parameter {
+              id: None,
               name: "sub".to_string(),
               data_type: DataType::Array(Box::new(DataType::Geometry)), // A set of shapes to subtract from base
           },

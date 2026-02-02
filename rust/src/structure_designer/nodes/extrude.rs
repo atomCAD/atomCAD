@@ -227,26 +227,32 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "shape".to_string(),
               data_type: DataType::Geometry2D,
           },
           Parameter {
+            id: None,
             name: "unit_cell".to_string(),
             data_type: DataType::UnitCell,
           },
           Parameter {
+            id: None,
             name: "height".to_string(),
             data_type: DataType::Int,
-          },  
+          },
           Parameter {
+            id: None,
             name: "dir".to_string(),
             data_type: DataType::IVec3,
           },
           Parameter {
+            id: None,
             name: "inf".to_string(),
             data_type: DataType::Bool,
           },
           Parameter {
+            id: None,
             name: "subdivision".to_string(),
             data_type: DataType::Int,
           },

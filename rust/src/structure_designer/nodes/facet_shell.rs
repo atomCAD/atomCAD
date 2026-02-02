@@ -800,10 +800,12 @@ See the atomCAD reference guide for more details.".to_string(),
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
         Parameter {
+          id: None,
           name: "unit_cell".to_string(),
           data_type: DataType::UnitCell,
         },
         Parameter {
+          id: None,
           name: "center".to_string(),
           data_type: DataType::IVec3,
         },

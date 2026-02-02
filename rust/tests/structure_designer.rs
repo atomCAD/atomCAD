@@ -54,3 +54,6 @@ mod layout_sugiyama_test;
 
 #[path = "structure_designer/layout_after_edit_test.rs"]
 mod layout_after_edit_test;
+
+#[path = "structure_designer/parameter_wire_preservation_test.rs"]
+mod parameter_wire_preservation_test;

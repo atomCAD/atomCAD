@@ -25,37 +25,59 @@ fn compare_parameters(
 
 /// Repairs call sites when a network's parameter interface changes.
 /// This function updates all nodes that use the given network as their type,
-/// preserving argument connections based on parameter names.
+/// preserving argument connections based on parameter IDs (primary) or names (fallback).
 fn repair_call_sites_for_network(
     network_name: &str,
     old_parameters: &[Parameter],
     new_parameters: &[Parameter],
     node_type_registry: &mut NodeTypeRegistry,
 ) {
-    // Build mapping: parameter_name -> old_index
-    let old_param_map: HashMap<&str, usize> = old_parameters
+    // Build mapping: parameter_id -> old_index (primary matching strategy)
+    let old_param_id_map: HashMap<u64, usize> = old_parameters
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, param)| param.id.map(|id| (id, idx)))
+        .collect();
+
+    // Build mapping: parameter_name -> old_index (fallback for backwards compatibility)
+    let old_param_name_map: HashMap<&str, usize> = old_parameters
         .iter()
         .enumerate()
         .map(|(idx, param)| (param.name.as_str(), idx))
         .collect();
-    
+
     // Find all parent networks that use this network
     let parent_network_names = node_type_registry.find_parent_networks(network_name);
-    
+
     // Update each parent network's call sites
     for parent_name in parent_network_names {
         if let Some(parent_network) = node_type_registry.node_networks.get_mut(&parent_name) {
             // Find all nodes in parent that use our network
             let mut nodes_to_update: Vec<(u64, Vec<Argument>)> = Vec::new();
-            
+
             for (node_id, node) in &parent_network.nodes {
                 if node.node_type_name == network_name {
                     // This node needs argument updates
                     let mut new_arguments = Vec::with_capacity(new_parameters.len());
-                    
-                    // For each new parameter, try to preserve old argument if parameter existed
+
+                    // For each new parameter, try to preserve old argument
                     for new_param in new_parameters {
-                        if let Some(&old_idx) = old_param_map.get(new_param.name.as_str()) {
+                        let old_idx = {
+                            // First try ID-based matching (handles renames)
+                            if let Some(new_id) = new_param.id {
+                                if let Some(&idx) = old_param_id_map.get(&new_id) {
+                                    Some(idx)
+                                } else {
+                                    // Fall back to name-based matching
+                                    old_param_name_map.get(new_param.name.as_str()).copied()
+                                }
+                            } else {
+                                // No ID, use name-based matching (backwards compatibility)
+                                old_param_name_map.get(new_param.name.as_str()).copied()
+                            }
+                        };
+
+                        if let Some(old_idx) = old_idx {
                             // Parameter existed before - preserve its argument if within bounds
                             if old_idx < node.arguments.len() {
                                 new_arguments.push(node.arguments[old_idx].clone());
@@ -68,11 +90,11 @@ fn repair_call_sites_for_network(
                             new_arguments.push(Argument::new());
                         }
                     }
-                    
+
                     nodes_to_update.push((*node_id, new_arguments));
                 }
             }
-            
+
             // Apply updates
             for (node_id, new_arguments) in nodes_to_update {
                 if let Some(node) = parent_network.nodes.get_mut(&node_id) {
@@ -123,9 +145,10 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
         compare_parameters(*node_id_a, param_data_a, *node_id_b, param_data_b)
     });
     
-    // Recreate the parameters array based on sort order
+    // Recreate the parameters array based on sort order, propagating IDs for wire preservation
     network.node_type.parameters = parameter_nodes.iter().map(|(_, param_data)| {
         Parameter {
+            id: param_data.param_id,  // Propagate ID for wire preservation across renames
             name: param_data.param_name.clone(),
             data_type: param_data.data_type.clone(),
         }

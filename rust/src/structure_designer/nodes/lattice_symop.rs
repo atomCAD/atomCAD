@@ -470,22 +470,27 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "shape".to_string(),
               data_type: DataType::Geometry,
           },
           Parameter {
+            id: None,
             name: "translation".to_string(),
             data_type: DataType::IVec3,
           },
           Parameter {
+            id: None,
             name: "rot_axis".to_string(),
             data_type: DataType::Vec3,
           },
           Parameter {
+            id: None,
             name: "rot_angle".to_string(),
             data_type: DataType::Float,
           },
           Parameter {
+            id: None,
             name: "keep_geo".to_string(),
             data_type: DataType::Float,
           },

@@ -290,6 +290,7 @@ fn test_map_data_text_properties() {
 #[test]
 fn test_parameter_data_text_properties() {
     let data = ParameterData {
+        param_id: None,
         param_index: 0,
         param_name: "my_param".to_string(),
         data_type: DataType::Float,
@@ -337,11 +338,13 @@ fn test_expr_data_text_properties() {
     let data = ExprData {
         parameters: vec![
             ExprParameter {
+                id: None,
                 name: "x".to_string(),
                 data_type: DataType::Float,
                 data_type_str: Some("Float".to_string()),
             },
             ExprParameter {
+                id: None,
                 name: "y".to_string(),
                 data_type: DataType::Int,
                 data_type_str: None,
@@ -895,6 +898,7 @@ fn test_import_xyz_roundtrip() {
 #[test]
 fn test_parameter_roundtrip() {
     test_roundtrip(&ParameterData {
+        param_id: None,
         param_index: 0,
         param_name: "test_param".to_string(),
         data_type: DataType::Float,
@@ -909,6 +913,7 @@ fn test_expr_roundtrip() {
     test_roundtrip(&ExprData {
         parameters: vec![
             ExprParameter {
+                id: None,
                 name: "x".to_string(),
                 data_type: DataType::Float,
                 data_type_str: Some("Float".to_string()),
@@ -923,11 +928,13 @@ fn test_expr_roundtrip() {
     test_roundtrip(&ExprData {
         parameters: vec![
             ExprParameter {
+                id: None,
                 name: "a".to_string(),
                 data_type: DataType::Int,
                 data_type_str: None,
             },
             ExprParameter {
+                id: None,
                 name: "b".to_string(),
                 data_type: DataType::Vec3,
                 data_type_str: Some("Vec3".to_string()),

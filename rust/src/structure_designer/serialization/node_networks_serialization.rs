@@ -145,6 +145,7 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Invalid parameter data type: {}", e)))?;
             
             Ok(Parameter {
+                id: None,
                 name: serializable_param.name.clone(),
                 data_type,
             })

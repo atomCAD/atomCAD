@@ -104,13 +104,15 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {
+            id: None,
             name: "x".to_string(),
             data_type: DataType::Int,
         },
         Parameter {
+            id: None,
             name: "y".to_string(),
             data_type: DataType::Int,
-        },        
+        },
       ],
       output_type: DataType::IVec2,
       public: true,

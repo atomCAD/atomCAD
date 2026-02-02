@@ -2259,6 +2259,7 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
             };
 
             let parameter_data = Box::new(ParameterData {
+                param_id: None,  // Will be assigned when validation runs
                 param_index: data.param_index,
                 param_name: data.param_name,
                 data_type,
@@ -2310,6 +2311,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
                     match api_data_type_to_data_type(&api_param.data_type) {
                         Ok(dt) => {
                             parameters.push(crate::structure_designer::nodes::expr::ExprParameter {
+                                id: None, // ID will be assigned when needed for wire preservation
                                 name: api_param.name,
                                 data_type: dt,
                                 data_type_str: None, // Successfully parsed, no need to store the string
@@ -2320,6 +2322,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
                                 first_error = Some(e.clone());
                             }
                             parameters.push(crate::structure_designer::nodes::expr::ExprParameter {
+                                id: None, // ID will be assigned when needed for wire preservation
                                 name: api_param.name,
                                 data_type: DataType::None, // Set to None on error
                                 data_type_str: if api_param.data_type.data_type_base == APIDataTypeBase::Custom {

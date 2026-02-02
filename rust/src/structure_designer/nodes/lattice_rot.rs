@@ -349,18 +349,22 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "shape".to_string(),
               data_type: DataType::Geometry,
           },
           Parameter {
+            id: None,
             name: "axis_index".to_string(),
             data_type: DataType::Int,
           },
           Parameter {
+            id: None,
             name: "step".to_string(),
             data_type: DataType::Int,
           },
           Parameter {
+            id: None,
             name: "pivot_point".to_string(),
             data_type: DataType::IVec3,
           },

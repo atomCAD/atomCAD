@@ -16,6 +16,8 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParameterData {
+  #[serde(default)]  // For backwards compatibility with old files without IDs
+  pub param_id: Option<u64>,  // Persistent identifier for wire preservation across renames
   pub param_index: usize,
   pub param_name: String,
   pub data_type: DataType,
@@ -152,6 +154,7 @@ The sort order property of a parameter determines the order of the parameters in
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
           Parameter {
+              id: None,
               name: "default".to_string(),
               data_type: DataType::Int, // will change based on  ParameterData::data_type.
           },
@@ -159,6 +162,7 @@ The sort order property of a parameter determines the order of the parameters in
       output_type: DataType::Int, // will change based on ParameterData::data_type.
       public: true,
       node_data_creator: || Box::new(ParameterData {
+        param_id: None,  // Will be assigned when the node is added to a network
         param_index: 0,
         param_name: "param".to_string(),
         data_type: DataType::Int,

@@ -8,6 +8,7 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 
 #[derive(Clone, PartialEq)]
 pub struct Parameter {
+  pub id: Option<u64>,  // Persistent identifier for wire preservation across renames
   pub name: String,
   pub data_type: DataType,
 }

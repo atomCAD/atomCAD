@@ -446,22 +446,27 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {
+          id: None,
           name: "d_plane".to_string(),
           data_type: DataType::DrawingPlane,
         },
         Parameter {
+          id: None,
           name: "m_index".to_string(),
           data_type: DataType::IVec2,
         },
         Parameter {
+          id: None,
           name: "center".to_string(),
           data_type: DataType::IVec2,
         },
         Parameter {
+          id: None,
           name: "shift".to_string(),
           data_type: DataType::Int,
         },
         Parameter {
+          id: None,
           name: "subdivision".to_string(),
           data_type: DataType::Int,
         },

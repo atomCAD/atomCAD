@@ -292,14 +292,17 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "shape".to_string(),
               data_type: DataType::Geometry,
           },
           Parameter {
+            id: None,
             name: "translation".to_string(),
             data_type: DataType::IVec3,
           },
           Parameter {
+            id: None,
             name: "subdivision".to_string(),
             data_type: DataType::Int,
           },

@@ -340,14 +340,17 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "shape".to_string(),
               data_type: DataType::Geometry,
           },
           Parameter {
+            id: None,
             name: "translation".to_string(),
             data_type: DataType::IVec3,
           },
           Parameter {
+            id: None,
             name: "rotation".to_string(),
             data_type: DataType::IVec3,
           },

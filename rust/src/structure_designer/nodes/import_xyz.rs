@@ -180,6 +180,7 @@ It converts file paths to relative paths whenever possible (if the file is in th
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
         Parameter {
+          id: None,
           name: "file_name".to_string(),
           data_type: DataType::String,
         },

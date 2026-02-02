@@ -103,16 +103,22 @@ pub struct Node {
 
 impl Node {
   /// Sets the custom node type and intelligently preserves existing argument connections
-  /// when parameter names match between old and new node types
+  /// when parameter IDs (primary) or names (fallback) match between old and new node types
   pub fn set_custom_node_type(&mut self, custom_node_type: Option<NodeType>, refresh_args: bool) {
     if let Some(ref new_node_type) = custom_node_type {
-      // Check if we can preserve existing arguments
+      // Check if we can preserve existing arguments (same parameters in same order)
       let can_preserve = if let Some(ref old_node_type) = self.custom_node_type {
-        // Check if parameters have same names in same order
+        // Check if parameters match by ID (if both have IDs) or by name
         old_node_type.parameters.len() == new_node_type.parameters.len() &&
         old_node_type.parameters.iter()
           .zip(new_node_type.parameters.iter())
-          .all(|(old_param, new_param)| old_param.name == new_param.name)
+          .all(|(old_param, new_param)| {
+            // Match by ID if both have IDs, otherwise by name
+            match (old_param.id, new_param.id) {
+              (Some(old_id), Some(new_id)) => old_id == new_id,
+              _ => old_param.name == new_param.name,
+            }
+          })
       } else {
         false
       };
@@ -123,21 +129,40 @@ impl Node {
       } else {
         // Parameters changed, need to rebuild arguments array
         let mut new_arguments = vec![Argument::new(); new_node_type.parameters.len()];
-        
-        // Try to preserve connections for matching parameter names
+
+        // Try to preserve connections using ID-based matching (primary) or name-based (fallback)
         if let Some(ref old_node_type) = self.custom_node_type {
+          // Build ID map for old parameters
+          let old_id_map: std::collections::HashMap<u64, usize> = old_node_type.parameters.iter()
+            .enumerate()
+            .filter_map(|(idx, p)| p.id.map(|id| (id, idx)))
+            .collect();
+
           for (new_index, new_param) in new_node_type.parameters.iter().enumerate() {
-            // Find matching parameter name in old node type
-            if let Some(old_index) = old_node_type.parameters.iter()
-              .position(|old_param| old_param.name == new_param.name) {
-              // Copy argument connections from old position to new position
-              if old_index < self.arguments.len() {
-                new_arguments[new_index] = self.arguments[old_index].clone();
+            // First try ID-based matching (handles renames)
+            let old_index = if let Some(new_id) = new_param.id {
+              if let Some(&idx) = old_id_map.get(&new_id) {
+                Some(idx)
+              } else {
+                // Fall back to name-based matching
+                old_node_type.parameters.iter()
+                  .position(|old_param| old_param.name == new_param.name)
+              }
+            } else {
+              // No ID, use name-based matching (backwards compatibility)
+              old_node_type.parameters.iter()
+                .position(|old_param| old_param.name == new_param.name)
+            };
+
+            // Copy argument connections from old position to new position
+            if let Some(old_idx) = old_index {
+              if old_idx < self.arguments.len() {
+                new_arguments[new_index] = self.arguments[old_idx].clone();
               }
             }
           }
         }
-        
+
         self.arguments = new_arguments;
       }
     }
@@ -154,6 +179,7 @@ impl Node {
  */
 pub struct NodeNetwork {
   pub next_node_id: u64,
+  pub next_param_id: u64,  // Counter for generating unique parameter IDs within this network
   pub node_type: NodeType, // This is the node type when this node network is used as a node in another network. (analog to a function header in programming)
   pub nodes: HashMap<u64, Node>,
   pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
@@ -238,6 +264,7 @@ impl NodeNetwork {
   pub fn new(node_type: NodeType) -> Self {
     let ret = Self {
       next_node_id: 1,
+      next_param_id: 1,  // Start parameter IDs at 1
       node_type,
       nodes: HashMap::new(),
       return_node_id: None,

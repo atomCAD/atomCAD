@@ -127,6 +127,7 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
+              id: None,
               name: "shapes".to_string(),
               data_type: DataType::Array(Box::new(DataType::Geometry)),
           },

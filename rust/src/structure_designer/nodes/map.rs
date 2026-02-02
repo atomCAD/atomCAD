@@ -152,10 +152,12 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {
+          id: None,
           name: "xs".to_string(),
           data_type: DataType::Array(Box::new(DataType::Float)), // will change based on  ParameterData::data_type.
         },
         Parameter {
+          id: None,
           name: "f".to_string(),
           data_type: DataType::Function(FunctionType {
             parameter_types: vec![DataType::Float],

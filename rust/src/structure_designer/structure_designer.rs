@@ -562,11 +562,16 @@ impl StructureDesigner {
 
     // Special handling for parameter nodes
     if node_type_name == "parameter" {
-      if let Some(node_network) = self.node_type_registry.node_networks.get(node_network_name) {
+      if let Some(node_network) = self.node_type_registry.node_networks.get_mut(node_network_name) {
         let current_param_count = node_network.node_type.parameters.len();
-        
+
+        // Assign a unique param_id from the network's counter
+        let param_id = node_network.next_param_id;
+        node_network.next_param_id += 1;
+
         // Downcast to ParameterData and set properties
         if let Some(param_data) = node_data.as_any_mut().downcast_mut::<crate::structure_designer::nodes::parameter::ParameterData>() {
+          param_data.param_id = Some(param_id);  // Assign unique ID for wire preservation
           param_data.param_name = format!("param{}", current_param_count);
           param_data.sort_order = current_param_count as i32;
         }

@@ -136,14 +136,17 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::Geometry2D,
       parameters: vec![
         Parameter {
+            id: None,
             name: "center".to_string(),
             data_type: DataType::IVec2,
         },
         Parameter {
+          id: None,
           name: "radius".to_string(),
           data_type: DataType::Int,
         },
         Parameter {
+          id: None,
           name: "d_plane".to_string(),
           data_type: DataType::DrawingPlane,
         },

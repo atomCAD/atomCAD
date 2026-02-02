@@ -301,30 +301,37 @@ pub fn get_node_type() -> NodeType {
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
           Parameter {
+              id: None,
               name: "shape".to_string(),
               data_type: DataType::Geometry,
           },
           Parameter {
+              id: None,
               name: "motif".to_string(),
               data_type: DataType::Motif,
           },
           Parameter {
+              id: None,
               name: "m_offset".to_string(),
               data_type: DataType::Vec3,
           },
           Parameter {
+              id: None,
               name: "passivate".to_string(),
               data_type: DataType::Bool,
           },
           Parameter {
+              id: None,
               name: "rm_single".to_string(),
               data_type: DataType::Bool,
           },
           Parameter {
+              id: None,
               name: "surf_recon".to_string(),
               data_type: DataType::Bool,
           },
           Parameter {
+              id: None,
               name: "invert_phase".to_string(),
               data_type: DataType::Bool,
           },
