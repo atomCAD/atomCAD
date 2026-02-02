@@ -224,6 +224,10 @@ pub struct InputPinView {
     pub crystal_system: String,
   }
 
+  pub struct APIAtomMoveData {
+    pub translation: APIVec3,
+  }
+
   pub struct APIAtomTransData {
     pub translation: APIVec3,
     pub rotation: APIVec3, // intrinsic euler angles in radians

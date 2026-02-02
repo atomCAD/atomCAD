@@ -16,6 +16,15 @@ The new nodes address these issues by:
 - **Using world-aligned axes**: Both nodes operate in the fixed Cartesian coordinate system
 - **Simpler mental model**: Each node does one thing well
 
+### Implementation Pattern
+
+**IMPORTANT**: These nodes follow the same pattern as `lattice_move` and `lattice_rot` (see `rust/src/structure_designer/nodes/lattice_move.rs` and `rust/src/structure_designer/nodes/lattice_rot.rs` for reference):
+
+- **No frame transform manipulation**: The nodes directly transform atom positions, they do NOT use or modify the `frame_transform` field
+- **Cumulative through structure**: When chaining nodes, each applies its transformation to the already-transformed atoms from upstream
+- **Gadget at translation/pivot**: The gadget is positioned at the transformation value (translation vector for `atom_move`, pivot point for `atom_rot`), starting from origin
+- **Simple sync_data**: The gadget's `sync_data` directly sets the node data values without computing relative transforms
+
 ### Deprecation of atom_trans
 
 The `atom_trans` node will be deprecated:
@@ -95,6 +104,8 @@ The `translation` input pin shadows the `translation` property in `AtomMoveData`
 
 ### Evaluation Logic
 
+Following the `lattice_move` pattern, the evaluation directly transforms atoms without using frame transforms:
+
 ```rust
 fn eval(&self, ...) -> NetworkResult {
     // 1. Get input atomic structure
@@ -103,20 +114,20 @@ fn eval(&self, ...) -> NetworkResult {
     // 2. Get translation (from pin or property)
     let translation = evaluate_or_default(1, self.translation, extract_vec3);
 
-    // 3. Apply translation to all atoms
-    let mut result = input.clone();
-    result.translate(&translation);
+    // 3. Store eval cache for gadget (empty, reserved for future use)
+    if network_stack.len() == 1 {
+        context.selected_node_eval_cache = Some(Box::new(AtomMoveEvalCache {}));
+    }
 
-    // 4. Update frame transform
-    let new_frame_transform = Transform::new(
-        input.frame_transform().translation + translation,
-        input.frame_transform().rotation
-    );
-    result.set_frame_transform(new_frame_transform);
+    // 4. Apply translation directly to atoms (NO frame transform manipulation)
+    let mut result = input.clone();
+    result.transform(&DQuat::IDENTITY, &translation);
 
     return NetworkResult::Atomic(result);
 }
 ```
+
+**Key difference from `atom_trans`**: This node does NOT manipulate `frame_transform`. The translation is applied directly to atom positions. When chaining multiple `atom_move` nodes, each one adds its translation to the already-translated atoms.
 
 ### Gadget Design
 
@@ -126,7 +137,7 @@ The `AtomMoveGadget` displays an XYZ axis gizmo that is **always world-aligned**
 - Three colored cylinders representing X (red), Y (green), Z (blue) axes
 - Arrow heads at the positive ends
 - Small sphere at the origin
-- Positioned at the translated position of the structure
+- **Positioned at the translation vector value** (i.e., gadget position = `self.translation`, starting from world origin)
 
 #### Interaction
 - **Hit test**: Detect which axis handle is being clicked
@@ -359,6 +370,8 @@ All input pins (except molecule) shadow their corresponding properties in `AtomR
 
 ### Evaluation Logic
 
+Following the `lattice_rot` pattern (see `rust/src/structure_designer/nodes/lattice_rot.rs`), the evaluation directly transforms atoms without using frame transforms:
+
 ```rust
 fn eval(&self, ...) -> NetworkResult {
     // 1. Get input atomic structure
@@ -387,27 +400,25 @@ fn eval(&self, ...) -> NetworkResult {
     // 5. Create rotation quaternion
     let rotation_quat = DQuat::from_axis_angle(normalized_axis, angle);
 
-    // 6. Apply rotation around pivot point
-    let transform = Transform::new_rotation_around_point(pivot_point, rotation_quat);
-
+    // 6. Apply rotation around pivot point directly to atoms (NO frame transform manipulation)
+    // This is: translate to origin, rotate, translate back
     let mut result = input.clone();
-    result.transform(&rotation_quat, &DVec3::ZERO);  // Apply rotation
-    // Adjust for pivot point offset
-    result.translate(&(pivot_point - rotation_quat * pivot_point));
 
-    // 7. Update frame transform
-    let new_frame_transform = input.frame_transform().apply_rotation_around_point(
-        pivot_point, rotation_quat
-    );
-    result.set_frame_transform(new_frame_transform);
+    // For each atom: new_pos = pivot + rotation * (old_pos - pivot)
+    // Which is equivalent to: translate by -pivot, rotate, translate by +pivot
+    result.transform(&DQuat::IDENTITY, &(-pivot_point));  // Move pivot to origin
+    result.transform(&rotation_quat, &DVec3::ZERO);       // Rotate around origin
+    result.transform(&DQuat::IDENTITY, &pivot_point);     // Move back
 
     return NetworkResult::Atomic(result);
 }
 ```
 
+**Key difference from `atom_trans`**: This node does NOT manipulate `frame_transform`. The rotation is applied directly to atom positions around the pivot point. When chaining multiple `atom_rot` nodes, each one rotates the already-transformed atoms.
+
 ### Gadget Design
 
-The `AtomRotGadget` displays the rotation axis as an arrow with a draggable interaction for changing the angle.
+The `AtomRotGadget` displays the rotation axis as an arrow with a draggable interaction for changing the angle. The implementation follows the pattern from `lattice_rot` (see `rust/src/structure_designer/nodes/lattice_rot.rs`).
 
 #### Visual Appearance
 
@@ -427,9 +438,9 @@ The `AtomRotGadget` displays the rotation axis as an arrow with a draggable inte
       ╱                     ╲
 ```
 
-- **Yellow cylinder**: The rotation axis, passing through the pivot point
+- **Yellow cylinder**: The rotation axis, passing through the pivot point (which comes from `self.pivot_point`, not relative to any input)
 - **Arrow head**: At the positive end of the axis, indicating direction
-- **Red sphere**: The pivot point
+- **Red sphere**: The pivot point (positioned at `self.pivot_point` in world space)
 - **Optional arc/ring**: Visual indicator of the current rotation angle (can be added in future iteration)
 
 #### Interaction

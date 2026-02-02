@@ -390,6 +390,11 @@ APILatticeRotData? getLatticeRotData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetLatticeRotData(
             nodeId: nodeId);
 
+APIAtomMoveData? getAtomMoveData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetAtomMoveData(
+            nodeId: nodeId);
+
 APIAtomTransData? getAtomTransData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetAtomTransData(
@@ -528,6 +533,11 @@ void setLatticeRotData(
         {required BigInt nodeId, required APILatticeRotData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetLatticeRotData(
+            nodeId: nodeId, data: data);
+
+void setAtomMoveData({required BigInt nodeId, required APIAtomMoveData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetAtomMoveData(
             nodeId: nodeId, data: data);
 
 void setAtomTransData(

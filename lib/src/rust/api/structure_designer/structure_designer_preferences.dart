@@ -172,7 +172,6 @@ enum LayoutAlgorithmPreference {
 
   /// Sophisticated layered layout with crossing minimization.
   /// Uses the Sugiyama algorithm for better visual quality on complex graphs.
-  /// (Not yet implemented - falls back to TopologicalGrid)
   sugiyama,
   ;
 

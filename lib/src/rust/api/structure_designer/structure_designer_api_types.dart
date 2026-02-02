@@ -75,6 +75,24 @@ class APIAtomFillData {
           error == other.error;
 }
 
+class APIAtomMoveData {
+  final APIVec3 translation;
+
+  const APIAtomMoveData({
+    required this.translation,
+  });
+
+  @override
+  int get hashCode => translation.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomMoveData &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation;
+}
+
 class APIAtomTransData {
   final APIVec3 translation;
   final APIVec3 rotation;
