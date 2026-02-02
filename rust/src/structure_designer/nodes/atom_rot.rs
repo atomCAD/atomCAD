@@ -18,6 +18,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
+use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 
 /// Evaluation cache for atom_rot node.
 /// Stores the evaluated pivot point and rotation axis for gadget creation.
@@ -213,12 +214,13 @@ pub struct AtomRotGadget {
     pub pivot_point: DVec3,
     pub dragging: bool,
     pub drag_start_angle: f64,
-    pub drag_start_mouse_angle: f64,
+    pub drag_start_offset: f64,  // Offset along axis at drag start
 }
 
 const AXIS_LENGTH: f64 = 15.0;  // Length of the rotation axis visualization in angstroms
-const CYLINDER_RADIUS: f64 = 0.1;
-const HIT_RADIUS: f64 = 0.5;  // Hit detection radius
+const CYLINDER_RADIUS: f64 = 0.2;  // Match AXIS_CYLINDER_RADIUS in xyz_gadget_utils
+const HIT_RADIUS: f64 = 1.5;  // Hit detection radius (larger for easier clicking)
+const ROTATION_SENSITIVITY: f64 = 0.3;  // Radians per unit offset delta
 
 impl Tessellatable for AtomRotGadget {
     fn tessellate(&self, output: &mut TessellationOutput) {
@@ -275,6 +277,58 @@ impl Tessellatable for AtomRotGadget {
             12,
             &red_material,
         );
+
+        // === Perpendicular flag that rotates with self.angle ===
+        // This provides visual feedback during dragging
+
+        // Create a reference direction perpendicular to the rotation axis
+        let base_perp_dir = if self.rot_axis.dot(DVec3::X).abs() < 0.9 {
+            self.rot_axis.cross(DVec3::X).normalize()
+        } else {
+            self.rot_axis.cross(DVec3::Y).normalize()
+        };
+
+        // Rotate the perpendicular direction by the current angle
+        let rotation_quat = DQuat::from_axis_angle(self.rot_axis, self.angle);
+        let rotated_perp_dir = rotation_quat * base_perp_dir;
+
+        // Flag parameters
+        let flag_length = 3.0;  // Length of the flag
+        let flag_offset_along_axis = 2.0;  // Offset from pivot along the axis
+
+        // Position the flag slightly above the pivot point
+        let flag_base = self.pivot_point + self.rot_axis * flag_offset_along_axis;
+        let flag_end = flag_base + rotated_perp_dir * flag_length;
+
+        // Use a cyan/teal color for the flag to distinguish from the yellow axis
+        let flag_material = Material::new(
+            &glam::f32::Vec3::new(0.0, 1.0, 1.0),  // Cyan
+            0.4,
+            0.8
+        );
+
+        // Draw the flag cylinder
+        tessellate_cylinder(
+            output_mesh,
+            &flag_base,
+            &flag_end,
+            CYLINDER_RADIUS * 1.5,  // Slightly thicker than axis
+            12,
+            &flag_material,
+            true,
+            Some(&flag_material),
+            Some(&flag_material),
+        );
+
+        // Small sphere at the flag tip for better visibility
+        tessellate_sphere(
+            output_mesh,
+            &flag_end,
+            0.3,
+            8,
+            8,
+            &flag_material,
+        );
     }
 
     fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
@@ -284,7 +338,6 @@ impl Tessellatable for AtomRotGadget {
 
 impl Gadget for AtomRotGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
-        // Test intersection with the axis cylinder
         if cylinder_ray_intersection(
             ray_origin, ray_direction,
             self.pivot_point, self.rot_axis,
@@ -298,13 +351,13 @@ impl Gadget for AtomRotGadget {
     fn start_drag(&mut self, _handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
         self.dragging = true;
         self.drag_start_angle = self.angle;
-        self.drag_start_mouse_angle = self.calculate_mouse_angle(ray_origin, ray_direction);
+        self.drag_start_offset = self.get_axis_offset(ray_origin, ray_direction);
     }
 
     fn drag(&mut self, _handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
-        let current_mouse_angle = self.calculate_mouse_angle(ray_origin, ray_direction);
-        let delta = current_mouse_angle - self.drag_start_mouse_angle;
-        self.angle = self.drag_start_angle + delta;
+        let current_offset = self.get_axis_offset(ray_origin, ray_direction);
+        let offset_delta = current_offset - self.drag_start_offset;
+        self.angle = self.drag_start_angle + offset_delta * ROTATION_SENSITIVITY;
     }
 
     fn end_drag(&mut self) {
@@ -332,40 +385,18 @@ impl AtomRotGadget {
             pivot_point,
             dragging: false,
             drag_start_angle: 0.0,
-            drag_start_mouse_angle: 0.0,
+            drag_start_offset: 0.0,
         }
     }
 
-    /// Calculate the angle of the mouse position around the rotation axis
-    fn calculate_mouse_angle(&self, ray_origin: DVec3, ray_direction: DVec3) -> f64 {
-        // 1. Find intersection of ray with plane perpendicular to axis at pivot
-        let plane_normal = self.rot_axis;
-        let plane_point = self.pivot_point;
-
-        let denom = ray_direction.dot(plane_normal);
-        if denom.abs() < 1e-10 {
-            return 0.0;  // Ray parallel to plane
-        }
-
-        let t = (plane_point - ray_origin).dot(plane_normal) / denom;
-        let intersection = ray_origin + ray_direction * t;
-
-        // 2. Calculate angle from pivot to intersection
-        let to_intersection = intersection - self.pivot_point;
-
-        // Create a reference direction perpendicular to the axis
-        let ref_dir = if self.rot_axis.dot(DVec3::X).abs() < 0.9 {
-            self.rot_axis.cross(DVec3::X).normalize()
-        } else {
-            self.rot_axis.cross(DVec3::Y).normalize()
-        };
-        let perp_dir = self.rot_axis.cross(ref_dir);
-
-        // Project intersection onto the perpendicular plane
-        let x = to_intersection.dot(ref_dir);
-        let y = to_intersection.dot(perp_dir);
-
-        y.atan2(x)
+    /// Get the current drag offset along the rotation axis
+    fn get_axis_offset(&self, ray_origin: DVec3, ray_direction: DVec3) -> f64 {
+        get_closest_point_on_first_ray(
+            &self.pivot_point,
+            &self.rot_axis,
+            &ray_origin,
+            &ray_direction
+        )
     }
 }
 
@@ -378,37 +409,45 @@ fn cylinder_ray_intersection(
     cylinder_length: f64,
     hit_radius: f64,
 ) -> bool {
-    // Project ray onto the plane perpendicular to the cylinder axis
+    // Cylinder segment endpoints
     let half_length = cylinder_length * 0.5;
     let top = cylinder_center + cylinder_axis * half_length;
     let bottom = cylinder_center - cylinder_axis * half_length;
 
-    // Find closest point on the cylinder axis to the ray
-    let w0 = ray_origin - bottom;
-    let u = top - bottom;
-    let v = ray_direction;
+    // Find closest points between cylinder axis line and ray line
+    // Line 1 (cylinder): P1 + s * d1 where P1 = bottom, d1 = (top - bottom)
+    // Line 2 (ray): P2 + t * d2 where P2 = ray_origin, d2 = ray_direction
+    let d1 = top - bottom;
+    let d2 = ray_direction;
+    let w = bottom - ray_origin;  // P1 - P2 (correct sign for formula)
 
-    let a = u.dot(u);
-    let b = u.dot(v);
-    let c = v.dot(v);
-    let d = u.dot(w0);
-    let e = v.dot(w0);
+    let a = d1.dot(d1);  // |d1|²
+    let b = d1.dot(d2);  // d1 · d2
+    let c = d2.dot(d2);  // |d2|²
+    let d = d1.dot(w);   // d1 · w
+    let e = d2.dot(w);   // d2 · w
 
     let denom = a * c - b * b;
     if denom.abs() < 1e-10 {
-        return false;
+        return false;  // Lines are parallel
     }
 
-    let s = (b * e - c * d) / denom;
-    let t = (a * e - b * d) / denom;
+    // Closest point parameters
+    let s = (b * e - c * d) / denom;  // Parameter along cylinder axis [0,1]
+    let t = (a * e - b * d) / denom;  // Parameter along ray [0,∞)
 
     // Check if the closest point is within the cylinder bounds
     if s < 0.0 || s > 1.0 {
         return false;
     }
 
+    // Check if the intersection is in front of the camera (t >= 0)
+    if t < 0.0 {
+        return false;
+    }
+
     // Calculate the distance between the closest points
-    let point_on_axis = bottom + u * s;
+    let point_on_axis = bottom + d1 * s;
     let point_on_ray = ray_origin + ray_direction * t;
     let distance = (point_on_axis - point_on_ray).length();
 
