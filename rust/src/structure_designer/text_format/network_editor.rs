@@ -26,6 +26,7 @@ use serde::Serialize;
 
 use crate::structure_designer::node_network::{NodeNetwork, Argument};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::text_format::{Parser, Statement, PropertyValue};
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::text_format::auto_layout;
@@ -290,6 +291,17 @@ impl<'a> NetworkEditor<'a> {
         // Add node to network
         let num_params = node_type.parameters.len();
         let node_id = self.network.add_node(node_type_name, position, num_params, node_data);
+
+        // Assign param_id for parameter nodes (for wire preservation across renames)
+        if node_type_name == "parameter" {
+            let param_id = self.network.next_param_id;
+            self.network.next_param_id += 1;
+            if let Some(node) = self.network.nodes.get_mut(&node_id) {
+                if let Some(param_data) = node.data.as_any_mut().downcast_mut::<ParameterData>() {
+                    param_data.param_id = Some(param_id);
+                }
+            }
+        }
 
         // Set node as NOT displayed by default (will be set if visible: true)
         self.network.set_node_display(node_id, false);
