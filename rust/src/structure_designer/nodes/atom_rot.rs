@@ -460,7 +460,7 @@ pub fn get_node_type() -> NodeType {
         description: "Rotates an atomic structure around an axis in world space.
 The rotation is performed around the specified axis direction, centered at the pivot point.
 The axis is always interpreted in the fixed Cartesian coordinate system (world space).
-The rotation angle is specified in degrees in the UI.".to_string(),
+The rotation angle is in radians in text format (e.g., 1.5708 for 90°) and degrees in the UI.".to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![
