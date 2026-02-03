@@ -14,6 +14,7 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use super::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
+use crate::structure_designer::nodes::comment::CommentData;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicStructureVisualization};
 use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluationResult;
 use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RADIUS};
@@ -493,6 +494,25 @@ impl StructureDesigner {
       for (_node_id, node) in network.nodes.iter_mut() {
         if node.node_type_name == old_name {
           node.node_type_name = new_name.to_string();
+        }
+      }
+    }
+
+    // Update backtick references in comment nodes across all networks
+    // This keeps documentation in sync when node networks are renamed
+    let old_pattern = format!("`{}`", old_name);
+    let new_pattern = format!("`{}`", new_name);
+    for (_network_name, network) in self.node_type_registry.node_networks.iter_mut() {
+      for (_node_id, node) in network.nodes.iter_mut() {
+        if node.node_type_name == "Comment" {
+          if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>() {
+            if comment_data.label.contains(&old_pattern) {
+              comment_data.label = comment_data.label.replace(&old_pattern, &new_pattern);
+            }
+            if comment_data.text.contains(&old_pattern) {
+              comment_data.text = comment_data.text.replace(&old_pattern, &new_pattern);
+            }
+          }
         }
       }
     }

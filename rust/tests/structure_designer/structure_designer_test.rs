@@ -1,4 +1,6 @@
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use rust_lib_flutter_cad::structure_designer::text_format::TextValue;
+use std::collections::HashMap;
 use glam::f64::DVec2;
 
 fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
@@ -437,6 +439,84 @@ fn test_rename_node_network_existing_validations_still_work() {
     // Valid rename should still work
     let result = designer.rename_node_network("network1", "renamed_network");
     assert_eq!(result, true, "Should allow valid rename");
+}
+
+#[test]
+fn test_rename_node_network_updates_backtick_references_in_comments() {
+    let mut designer = StructureDesigner::new();
+
+    // Create two networks
+    designer.add_node_network("MyModule");
+    designer.add_node_network("Docs");
+    designer.set_active_node_network_name(Some("Docs".to_string()));
+
+    // Add a comment node in the Docs network
+    let comment_id = designer.add_node("Comment", DVec2::new(0.0, 0.0));
+    assert!(comment_id != 0, "Comment node should be added successfully");
+
+    // Set comment data with backtick references to MyModule using text properties
+    {
+        let network = designer.node_type_registry.node_networks.get_mut("Docs").unwrap();
+        let node = network.nodes.get_mut(&comment_id).unwrap();
+        let mut props = HashMap::new();
+        props.insert("label".to_string(), TextValue::String("About `MyModule`".to_string()));
+        props.insert("text".to_string(), TextValue::String("See `MyModule` for the main implementation. The `MyModule` network handles core logic.".to_string()));
+        node.data.set_text_properties(&props).unwrap();
+    }
+
+    // Rename MyModule to CoreModule
+    let result = designer.rename_node_network("MyModule", "CoreModule");
+    assert!(result, "Rename should succeed");
+
+    // Verify backtick references were updated using text properties
+    let network = designer.node_type_registry.node_networks.get("Docs").unwrap();
+    let node = network.nodes.get(&comment_id).unwrap();
+    let props = node.data.get_text_properties();
+    let label = props.iter().find(|(k, _)| k == "label").map(|(_, v)| v);
+    let text = props.iter().find(|(k, _)| k == "text").map(|(_, v)| v);
+
+    assert_eq!(label, Some(&TextValue::String("About `CoreModule`".to_string())), "Label backtick reference should be updated");
+    assert_eq!(text, Some(&TextValue::String("See `CoreModule` for the main implementation. The `CoreModule` network handles core logic.".to_string())), "Text backtick references should be updated");
+}
+
+#[test]
+fn test_rename_node_network_preserves_non_matching_backticks() {
+    let mut designer = StructureDesigner::new();
+
+    // Create networks
+    designer.add_node_network("MyNet");
+    designer.add_node_network("MyNetwork");
+    designer.add_node_network("Docs");
+    designer.set_active_node_network_name(Some("Docs".to_string()));
+
+    // Add a comment with various backtick content
+    let comment_id = designer.add_node("Comment", DVec2::new(0.0, 0.0));
+    assert!(comment_id != 0, "Comment node should be added successfully");
+
+    // Set comment text using text properties
+    {
+        let network = designer.node_type_registry.node_networks.get_mut("Docs").unwrap();
+        let node = network.nodes.get_mut(&comment_id).unwrap();
+        let mut props = HashMap::new();
+        // Contains `MyNet`, `MyNetwork` (similar names), and `code` (unrelated)
+        props.insert("text".to_string(), TextValue::String("Use `MyNet` here. See also `MyNetwork` and `code` examples.".to_string()));
+        node.data.set_text_properties(&props).unwrap();
+    }
+
+    // Rename only MyNet
+    designer.rename_node_network("MyNet", "RenamedNet");
+
+    // Verify only exact matches were replaced using text properties
+    let network = designer.node_type_registry.node_networks.get("Docs").unwrap();
+    let node = network.nodes.get(&comment_id).unwrap();
+    let props = node.data.get_text_properties();
+    let text = props.iter().find(|(k, _)| k == "text").map(|(_, v)| v);
+
+    assert_eq!(
+        text,
+        Some(&TextValue::String("Use `RenamedNet` here. See also `MyNetwork` and `code` examples.".to_string())),
+        "Only exact backtick matches should be replaced"
+    );
 }
 
 // ===== NEW PROJECT TESTS =====

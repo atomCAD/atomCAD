@@ -555,13 +555,9 @@ class StructureDesignerModel extends ChangeNotifier {
     );
 
     if (success) {
-      // If this was the active network, update the view
-      if (nodeNetworkView != null && nodeNetworkView!.name == oldName) {
-        nodeNetworkView = structure_designer_api.getNodeNetworkView();
-      }
-      nodeNetworkNames =
-          structure_designer_api.getNodeNetworksWithValidation() ?? [];
-      notifyListeners();
+      // Always refresh the view - comment nodes in any network may reference
+      // the renamed network via backticks and need to display updated text
+      refreshFromKernel();
     }
   }
 
