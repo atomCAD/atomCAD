@@ -498,11 +498,22 @@ impl StructureDesigner {
       }
     }
 
-    // Update backtick references in comment nodes across all networks
+    // Update backtick references in comment nodes and node network metadata across all networks
     // This keeps documentation in sync when node networks are renamed
     let old_pattern = format!("`{}`", old_name);
     let new_pattern = format!("`{}`", new_name);
     for (_network_name, network) in self.node_type_registry.node_networks.iter_mut() {
+      // Update summary and description fields of the node network
+      if network.node_type.description.contains(&old_pattern) {
+        network.node_type.description = network.node_type.description.replace(&old_pattern, &new_pattern);
+      }
+      if let Some(ref mut summary) = network.node_type.summary {
+        if summary.contains(&old_pattern) {
+          *summary = summary.replace(&old_pattern, &new_pattern);
+        }
+      }
+
+      // Update comment nodes
       for (_node_id, node) in network.nodes.iter_mut() {
         if node.node_type_name == "Comment" {
           if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>() {
