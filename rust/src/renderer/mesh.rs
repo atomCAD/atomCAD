@@ -93,7 +93,7 @@ impl Mesh {
   pub fn add_vertex(&mut self, vertex: Vertex) -> u32 {
     let length = self.vertices.len() as u32;
     self.vertices.push(vertex);
-    return length;
+    length
   }
 
   pub fn add_triangle(&mut self, index0: u32, index1: u32, index2: u32) {

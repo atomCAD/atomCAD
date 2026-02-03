@@ -89,7 +89,7 @@ impl NodeData for RegPolyData {
 
         // Create a transform at the center of the polygon (origin)
         // No rotation is needed for this type of shape
-        return NetworkResult::Geometry2D(
+        NetworkResult::Geometry2D(
           GeometrySummary2D {
             drawing_plane,
             frame_transform: Transform2D::new(
@@ -98,7 +98,7 @@ impl NodeData for RegPolyData {
             ),
             geo_tree_root: GeoNode::polygon(real_vertices),
           }
-        );
+        )
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -151,16 +151,13 @@ fn find_lattice_point(angle: f64, radius: i32) -> IVec2 {
     // Start with the ideal position
     let ideal_x = (radius as f64) * angle.cos();
     let ideal_y = (radius as f64) * angle.sin();
-    
-    // Find closest lattice point
-    let base_point = closest_lattice_point(ideal_x, ideal_y);
-    
-    return base_point;
 
+    // Find closest lattice point
+    closest_lattice_point(ideal_x, ideal_y)
 }
 
 fn kth_angle(k: i32, num_sides: i32) -> f64 {
-    return 2.0 * PI * (k as f64) / (num_sides as f64);
+    2.0 * PI * (k as f64) / (num_sides as f64)
 }
 
 pub fn get_node_type() -> NodeType {

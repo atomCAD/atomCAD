@@ -193,7 +193,7 @@ impl UnitCellStruct {
 
   pub fn dvec2_lattice_to_real(&self, lattice_pos: &DVec2) -> DVec2 {
     let real = lattice_pos.x * self.a + lattice_pos.y * self.b;
-    return DVec2::new(real.x, real.y);
+    DVec2::new(real.x, real.y)
   }
 
   pub fn ivec2_lattice_to_real(&self, lattice_pos: &IVec2) -> DVec2 {

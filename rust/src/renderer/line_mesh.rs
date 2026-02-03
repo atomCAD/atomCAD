@@ -56,7 +56,7 @@ impl LineMesh {
     pub fn add_vertex(&mut self, vertex: LineVertex) -> u32 {
         let length = self.vertices.len() as u32;
         self.vertices.push(vertex);
-        return length;
+        length
     }
 
     // Add a line segment between two vertices

@@ -59,14 +59,15 @@ impl NodeData for RelaxData {
             context.selected_node_eval_cache = Some(Box::new(eval_cache));
           }
           
-          return NetworkResult::Atomic(atomic_structure);
+          NetworkResult::Atomic(atomic_structure)
         }
         Err(error_msg) => {
-          return NetworkResult::Error(error_msg);
+          NetworkResult::Error(error_msg)
         }
       }
+    } else {
+      NetworkResult::Atomic(AtomicStructure::new())
     }
-    return NetworkResult::Atomic(AtomicStructure::new());
   }
 
   fn clone_box(&self) -> Box<dyn NodeData> {

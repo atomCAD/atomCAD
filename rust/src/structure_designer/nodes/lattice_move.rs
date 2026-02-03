@@ -71,11 +71,10 @@ impl NodeData for LatticeMoveData {
       context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
       let shape_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
-    
+
       if let NetworkResult::Error(_) = shape_val {
-        return shape_val;
-      }
-      else if let NetworkResult::Geometry(shape) = shape_val {
+        shape_val
+      } else if let NetworkResult::Geometry(shape) = shape_val {
 
         let translation = match network_evaluator.evaluate_or_default(
           network_stack, node_id, registry, context, 1, 
@@ -255,7 +254,7 @@ impl LatticeMoveGadget {
           start_drag_translation: translation,
           unit_cell: unit_cell.clone(),
       };
-      return ret;
+      ret
   }
 
   // Helper method to get the real space position accounting for subdivision
@@ -278,7 +277,7 @@ impl LatticeMoveGadget {
     // Apply the movement to the translation
     self.translation = self.start_drag_translation + unit_ivec3(axis_index) * (rounded_delta as i32);
 
-    return true;
+    true
   }
 }
 

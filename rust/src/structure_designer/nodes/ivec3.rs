@@ -66,8 +66,8 @@ impl NodeData for IVec3Data {
         Ok(value) => value,
         Err(error) => return error,
       };
-    
-      return NetworkResult::IVec3(IVec3{x, y, z});
+
+      NetworkResult::IVec3(IVec3{x, y, z})
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -49,7 +49,7 @@ impl Camera {
       let view = self.build_view_matrix();
       let proj = self.build_projection_matrix();
       // println!("Projection matrix: {:?}", proj);
-      return proj * view;
+      proj * view
   }
 
   pub fn calc_headlight_direction(&self) -> DVec3 {
@@ -60,7 +60,7 @@ impl Camera {
     let angle_in_radians = 20.0_f64.to_radians();
     let rotation = DQuat::from_axis_angle(right, -angle_in_radians);
 
-    return rotation * forward;
+    rotation * forward
   }
 
   pub fn get_canonical_view(&self) -> CameraCanonicalView {

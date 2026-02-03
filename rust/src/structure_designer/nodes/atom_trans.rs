@@ -39,11 +39,11 @@ impl NodeData for AtomTransData {
         let eval_cache = structure_designer.get_selected_node_eval_cache()?;
         let atom_trans_cache = eval_cache.downcast_ref::<AtomTransEvalCache>()?;
 
-        return Some(Box::new(AtomTransGadget::new(
+        Some(Box::new(AtomTransGadget::new(
             self.translation,
-            self.rotation, 
+            self.rotation,
             atom_trans_cache.input_frame_transform.clone()
-        )));
+        )))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -112,9 +112,10 @@ impl NodeData for AtomTransData {
         result_atomic_structure.transform(&frame_transform.rotation, &frame_transform.translation);
         result_atomic_structure.set_frame_transform(frame_transform);
     
-        return NetworkResult::Atomic(result_atomic_structure);
+        NetworkResult::Atomic(result_atomic_structure)
+      } else {
+        NetworkResult::None
       }
-      return NetworkResult::None;
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -252,7 +253,7 @@ impl AtomTransGadget {
             start_drag_offset: 0.0,
         };
         ret.refresh_frame_transform();
-        return ret;
+        ret
     }
 
     // Returns whether the application of the drag offset was successful and the drag start should be reset
@@ -269,8 +270,8 @@ impl AtomTransGadget {
             
                 // Apply the movement to the frame transform
                 self.frame_transform.translation += movement_vector;
-                
-                return true;
+
+                true
             },
             // Rotation handles (3, 4, 5)
             3 | 4 | 5 => {
@@ -287,10 +288,10 @@ impl AtomTransGadget {
                 let rotation_quat = DQuat::from_axis_angle(local_axis_dir, rotation_angle);
 
                 self.frame_transform.rotation = rotation_quat * self.frame_transform.rotation;
-                
-                return true;
+
+                true
             },
-            _ => return false, // Invalid axis index
+            _ => false, // Invalid axis index
         }
     }
 

@@ -57,8 +57,8 @@ impl NodeData for Vec2Data {
         Ok(value) => value,
         Err(error) => return error,
       };
-    
-      return NetworkResult::Vec2(DVec2{x, y});
+
+      NetworkResult::Vec2(DVec2{x, y})
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -131,7 +131,7 @@ fn generate_mock_image(width: u32, height: u32) -> Vec<u8> {
     v[index + 2] = 0;
     v[index + 3] = 255;
   }
-  return v;
+  v
 }
 
 // Send the given texture in memory to Flutter.

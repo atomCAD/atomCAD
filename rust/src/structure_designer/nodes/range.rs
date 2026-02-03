@@ -77,8 +77,8 @@ impl NodeData for RangeData {
         let value = start + (i * step);
         result_vec.push(NetworkResult::Int(value));
       }
-      
-      return NetworkResult::Array(result_vec);
+
+      NetworkResult::Array(result_vec)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

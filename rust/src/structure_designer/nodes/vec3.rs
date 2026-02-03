@@ -66,8 +66,8 @@ impl NodeData for Vec3Data {
         Ok(value) => value,
         Err(error) => return error,
       };
-    
-      return NetworkResult::Vec3(DVec3{x, y, z});  
+
+      NetworkResult::Vec3(DVec3{x, y, z})
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

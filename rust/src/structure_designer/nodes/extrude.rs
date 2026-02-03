@@ -161,13 +161,13 @@ impl NodeData for ExtrudeData {
         );
     
         let s = shape.geo_tree_root;
-        return NetworkResult::Geometry(GeometrySummary { 
+        NetworkResult::Geometry(GeometrySummary {
           unit_cell,
           frame_transform,
           geo_tree_root: GeoNode::extrude(height_real, local_direction, Box::new(s), plane_to_world_transform, infinite)
-        });
+        })
       } else {
-        return runtime_type_error_in_input(0);
+        runtime_type_error_in_input(0)
       }
     }
 

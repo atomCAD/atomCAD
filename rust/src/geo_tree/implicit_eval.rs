@@ -179,7 +179,7 @@ impl ImplicitGeometry3D for GeoNode {
 impl GeoNode {
   fn half_space_implicit_eval(normal: DVec3, center: DVec3, sample_point: &DVec3) -> f64 {
     // Calculate the signed distance from the point to the plane defined by the normal and center point
-    return normal.dot(*sample_point - center);
+    normal.dot(*sample_point - center)
   }
 
   fn half_space_implicit_eval_batch(

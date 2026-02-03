@@ -91,10 +91,11 @@ impl NodeData for AtomCutData {
       let cutter_geo_tree_root = GeoNode::intersection_3d(shapes);
   
       cut_atomic_structure(&mut atomic_structure, &cutter_geo_tree_root, self.cut_sdf_value, self.unit_cell_size);
-  
-      return NetworkResult::Atomic(atomic_structure);
+
+      NetworkResult::Atomic(atomic_structure)
+    } else {
+      NetworkResult::Atomic(AtomicStructure::new())
     }
-    return NetworkResult::Atomic(AtomicStructure::new());
   }
 
   fn clone_box(&self) -> Box<dyn NodeData> {

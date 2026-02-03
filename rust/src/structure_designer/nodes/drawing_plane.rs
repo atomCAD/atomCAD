@@ -137,7 +137,7 @@ impl NodeData for DrawingPlaneData {
         Err(error_msg) => return NetworkResult::Error(error_msg),
       };
 
-      return NetworkResult::DrawingPlane(drawing_plane);
+      NetworkResult::DrawingPlane(drawing_plane)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

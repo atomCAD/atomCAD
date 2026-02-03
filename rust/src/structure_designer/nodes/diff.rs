@@ -186,7 +186,7 @@ fn helper_union<'a>(
 
   frame_translation /= shape_count as f64;
 
-  return (Some(GeoNode::union_3d(shapes)), frame_translation, Some(first_unit_cell));
+  (Some(GeoNode::union_3d(shapes)), frame_translation, Some(first_unit_cell))
 }
 
 pub fn get_node_type() -> NodeType {

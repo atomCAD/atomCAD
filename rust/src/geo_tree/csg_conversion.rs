@@ -337,8 +337,8 @@ pub fn create_half_space_geo(normal: &DVec3, center_pos: &DVec3, is_root: bool) 
         ),
       ];
 
-  return CSGMesh::from_polygons(&polygons, None)
-    .translate(scale_to_csg(center_pos.x), scale_to_csg(center_pos.y), scale_to_csg(center_pos.z));
+  CSGMesh::from_polygons(&polygons, None)
+    .translate(scale_to_csg(center_pos.x), scale_to_csg(center_pos.y), scale_to_csg(center_pos.z))
 }
 
 

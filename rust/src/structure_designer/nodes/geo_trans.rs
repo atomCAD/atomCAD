@@ -73,9 +73,8 @@ impl NodeData for GeoTransData {
       let shape_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
     
       if let NetworkResult::Error(_) = shape_val {
-        return shape_val;
-      }
-      else if let NetworkResult::Geometry(shape) = shape_val {
+        shape_val
+      } else if let NetworkResult::Geometry(shape) = shape_val {
     
         let translation = match network_evaluator.evaluate_or_default(
           network_stack, node_id, registry, context, 1, 
@@ -133,13 +132,13 @@ impl NodeData for GeoTransData {
           rot
         );
 
-        return NetworkResult::Geometry(GeometrySummary {
+        NetworkResult::Geometry(GeometrySummary {
           unit_cell: shape.unit_cell,
           frame_transform,
           geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
-        });
+        })
       } else {
-        return runtime_type_error_in_input(0);
+        runtime_type_error_in_input(0)
       }
     }
 
@@ -290,7 +289,7 @@ impl GeoTransGadget {
           unit_cell: unit_cell.clone(),
       };
       ret.refresh_frame_transform();
-      return ret;
+      ret
   }
 
   // Returns whether the application of the drag offset was successful and the drag start should be reset
@@ -315,8 +314,8 @@ impl GeoTransGadget {
     
     // Apply the movement to the frame transform
     self.frame_transform.translation += movement_vector;
-    
-    return true;
+
+    true
   }
 
   fn refresh_frame_transform(&mut self) {

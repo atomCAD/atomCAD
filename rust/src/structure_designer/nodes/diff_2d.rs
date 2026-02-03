@@ -182,7 +182,7 @@ fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
   }
 
   frame_translation /= shape_count as f64;
-  return (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_drawing_plane));
+  (Some(GeoNode::union_2d(shapes)), frame_translation, Some(first_drawing_plane))
 }
 
 pub fn get_node_type() -> NodeType {

@@ -30,11 +30,11 @@ pub struct NetworkStackElement<'a> {
 
 impl<'a> NetworkStackElement<'a> {
   pub fn get_top_node(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> &'a Node {
-    return network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap();
+    network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap()
   }
 
   pub fn is_node_selected_in_root_network(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> bool {
-    return network_stack.first().unwrap().node_network.is_node_selected(node_id);
+    network_stack.first().unwrap().node_network.is_node_selected(node_id)
   }
 }
 
@@ -193,7 +193,7 @@ impl NetworkEvaluator {
       selected_node_eval_cache: context.selected_node_eval_cache,
     };
 
-    return node_data;
+    node_data
   }
 
   fn generate_explicit_mesh_output<'a>(
@@ -265,8 +265,8 @@ impl NetworkEvaluator {
       } else {
         NodeOutput::None
       };
-      
-      return (output, geo_tree);
+
+      (output, geo_tree)
   }
 
 
@@ -437,10 +437,10 @@ impl NetworkEvaluator {
         // Convert the result to the expected type
         let converted_result = result.convert_to(&input_node_output_type, &expected_type);
 
-        return converted_result;
+        converted_result
       } else {
-        return NetworkResult::None; // Nothing is connected
-      }      
+        NetworkResult::None // Nothing is connected
+      }
     }
   }
 

@@ -127,7 +127,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(atom_cut_get_node_type());
     ret.add_node_type(relax_get_node_type());
 
-    return ret;
+    ret
   }
 
   /// Returns node types that have at least one pin compatible with the given source type.
@@ -320,12 +320,11 @@ impl NodeTypeRegistry {
   }
 
   pub fn get_node_type(&self, node_type_name: &str) -> Option<&NodeType> {
-    let node_type = self.built_in_node_types.get(node_type_name);
-    if let Some(nt) = node_type {
+    if let Some(nt) = self.built_in_node_types.get(node_type_name) {
       return Some(nt);
     }
     let node_network = self.node_networks.get(node_type_name)?;
-    return Some(&node_network.node_type);
+    Some(&node_network.node_type)
   }
 
   /// Gets a dynamic node type for a specific node instance, handling parameter and expr nodes
@@ -362,9 +361,10 @@ impl NodeTypeRegistry {
       let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
       let has_custom_node_type = custom_node_type.is_some();
       node.set_custom_node_type(custom_node_type, refresh_args);
-      return has_custom_node_type;
+      has_custom_node_type
+    } else {
+      false
     }
-    return false;
   }
 
   /// Populates the custom node type cache for nodes with dynamic node types

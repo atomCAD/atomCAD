@@ -780,13 +780,13 @@ impl FacetShellGadget {
           let dragged_variant_index = (self.dragged_handle_index.unwrap() - 1) as usize;
           // Add bounds checking to prevent crashes from corrupted Vec
           if dragged_variant_index < self.miller_index_variants.len() && self.miller_index_variants.len() <= 1000 {
-              return self.miller_index_variants[dragged_variant_index];
+              self.miller_index_variants[dragged_variant_index]
           } else {
               eprintln!("Warning: FacetShellGadget miller_index_variants bounds check failed (index={}, len={})", dragged_variant_index, self.miller_index_variants.len());
-              return self.miller_index;
+              self.miller_index
           }
         } else {
-          return self.miller_index;
+          self.miller_index
         }
     }
 }

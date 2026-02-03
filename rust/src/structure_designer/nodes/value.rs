@@ -43,7 +43,7 @@ impl NodeData for ValueData {
       _decorate: bool,
       _context: &mut NetworkEvaluationContext
     ) -> NetworkResult {
-      return self.value.clone();
+      self.value.clone()
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

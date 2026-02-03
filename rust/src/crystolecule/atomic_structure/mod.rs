@@ -480,10 +480,10 @@ impl AtomicStructure {
     }
 
     if closest_distance_squared == f64::MAX {
-        return None;
+        None
+    } else {
+        Some(closest_atom_position)
     }
-
-    return Some(closest_atom_position);
   }
 
   /// Sets the position of an atom directly.

@@ -276,7 +276,7 @@ impl NodeNetwork {
       validation_errors: Vec::new(),
     };
 
-    return ret;
+    ret
   }
 
   /// Generate a unique display name for a new node of the given type.
@@ -319,7 +319,7 @@ impl NodeNetwork {
     self.next_node_id += 1;
     self.nodes.insert(node_id, node);
     self.set_node_display(node_id, true);
-    return node_id;
+    node_id
   }
 
   pub fn move_node(&mut self, node_id: u64, position: DVec2) {

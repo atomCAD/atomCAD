@@ -35,8 +35,8 @@ impl NodeData for BoolData {
       _registry: &NodeTypeRegistry,
       _decorate: bool,
       _context: &mut NetworkEvaluationContext
-    ) -> NetworkResult {    
-      return NetworkResult::Bool(self.value);
+    ) -> NetworkResult {
+      NetworkResult::Bool(self.value)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

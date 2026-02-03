@@ -78,7 +78,7 @@ impl NodeData for PolygonData {
         drawing_plane.effective_unit_cell.ivec2_lattice_to_real(v)
       }).collect();
 
-      return NetworkResult::Geometry2D(
+      NetworkResult::Geometry2D(
         GeometrySummary2D {
           drawing_plane,
           frame_transform: Transform2D::new(
@@ -87,7 +87,7 @@ impl NodeData for PolygonData {
           ),
           geo_tree_root: GeoNode::polygon(real_vertices),
         }
-      );
+      )
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

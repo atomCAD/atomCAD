@@ -104,7 +104,7 @@ pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, cente
     // Convert the real space distance to shift units (multiples of d-spacing)
     // Then multiply by subdivision to get the integer shift value
     // When subdivision=1, this is identical to the original: (distance / d_spacing) * 1 = distance / d_spacing
-    return (real_space_distance / plane_props.d_spacing) * subdivision as f64;
+    (real_space_distance / plane_props.d_spacing) * subdivision as f64
 }
 
 pub fn tessellate_center_sphere(output_mesh: &mut Mesh, center_pos: &DVec3) {

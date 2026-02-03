@@ -94,7 +94,7 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   }
   
   pub fn from_api_vec3(v: &APIVec3) -> DVec3 {
-    return DVec3{
+    DVec3{
       x: v.x,
       y: v.y,
       z: v.z
@@ -102,21 +102,21 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   }
   
   pub fn to_api_ivec2(v: &IVec2) -> APIIVec2 {
-    return APIIVec2{
+    APIIVec2{
       x: v.x,
       y: v.y,
     }
   }
   
   pub fn from_api_ivec2(v: &APIIVec2) -> IVec2 {
-    return IVec2{
+    IVec2{
       x: v.x,
       y: v.y,
     }
   }
 
   pub fn to_api_ivec3(v: &IVec3) -> APIIVec3 {
-    return APIIVec3{
+    APIIVec3{
       x: v.x,
       y: v.y,
       z: v.z
@@ -124,7 +124,7 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   }
   
   pub fn from_api_ivec3(v: &APIIVec3) -> IVec3 {
-    return IVec3{
+    IVec3{
       x: v.x,
       y: v.y,
       z: v.z
@@ -132,14 +132,14 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
   }
   
   pub fn to_api_vec2(v: &DVec2) -> APIVec2 {
-    return APIVec2{
+    APIVec2{
       x: v.x,
       y: v.y,
     }
   }
   
   pub fn from_api_vec2(v: &APIVec2) -> DVec2 {
-    return DVec2 {
+    DVec2 {
       x: v.x,
       y: v.y,
     }
@@ -149,7 +149,7 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     // Convert quaternion to Euler angles (intrinsic rotation in radians)
     let rotation_euler = transform.rotation.to_euler(glam::EulerRot::XYZ);
     
-    return APITransform {
+    APITransform {
       translation: to_api_vec3(&transform.translation),
       rotation: APIVec3 {
         x: rotation_euler.0.to_degrees(), // roll (x-axis rotation)
@@ -168,7 +168,7 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
       api_transform.rotation.z.to_radians()
     );
     
-    return Transform {
+    Transform {
       translation: from_api_vec3(&api_transform.translation),
       rotation,
     }

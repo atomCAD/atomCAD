@@ -106,9 +106,9 @@ impl NodeData for MapData {
         // Collect the result
         results.push(result);
       }
-      
+
       // Return the collected results as a NetworkResult::Array
-      return NetworkResult::Array(results);
+      NetworkResult::Array(results)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

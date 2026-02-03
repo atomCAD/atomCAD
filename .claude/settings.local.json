@@ -54,7 +54,8 @@
       "Bash(cmd.exe /c \"powershell -ExecutionPolicy Bypass -File c:\\\\machine_phase_systems\\\\flutter_cad\\\\update_node_types.ps1\")",
       "Bash(cmd.exe /c \"powershell -Command \"\"Get-ChildItem -Path ''c:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\\\\structure_designer'' -Recurse -Filter ''*.rs'' | ForEach-Object { $content = Get-Content $_.FullName -Raw; if \\($content -match ''NodeType \\\\{'' -and $content -notmatch ''summary:''\\) { Write-Host $_.FullName } }\"\"\")",
       "Bash(cmd.exe /c \"powershell -ExecutionPolicy Bypass -File c:\\\\machine_phase_systems\\\\flutter_cad\\\\find_missing.ps1\")",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(grep:*)"
     ]
   }
 }

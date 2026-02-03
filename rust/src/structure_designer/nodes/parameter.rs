@@ -136,13 +136,13 @@ fn eval_default<'a>(
   node_id: u64,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,
-) -> NetworkResult {  
-  return network_evaluator.evaluate_arg_required(
+) -> NetworkResult {
+  network_evaluator.evaluate_arg_required(
     network_stack,
     node_id,
     registry,
     context,
-    0);
+    0)
 }
 
 pub fn get_node_type() -> NodeType {

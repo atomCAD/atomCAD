@@ -104,7 +104,7 @@ impl EditAtomData {
         return false;
       }
       self.next_history_index -= 1;
-      return true;
+      true
     }
   
     pub fn redo(&mut self) -> bool {
@@ -112,7 +112,7 @@ impl EditAtomData {
         return false;
       }
       self.next_history_index += 1;
-      return true;
+      true
     }
     
     pub fn can_undo(&self) -> bool {
@@ -205,9 +205,10 @@ impl NodeData for EditAtomData {
     
       if let NetworkResult::Atomic(mut atomic_structure) = input_val {
         self.eval(&mut atomic_structure, decorate);
-        return NetworkResult::Atomic(atomic_structure);
+        NetworkResult::Atomic(atomic_structure)
+      } else {
+        NetworkResult::Atomic(AtomicStructure::new())
       }
-      return NetworkResult::Atomic(AtomicStructure::new());
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

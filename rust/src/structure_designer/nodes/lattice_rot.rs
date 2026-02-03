@@ -71,9 +71,8 @@ impl NodeData for LatticeRotData {
       let shape_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
       if let NetworkResult::Error(_) = shape_val {
-        return shape_val;
-      }
-      else if let NetworkResult::Geometry(shape) = shape_val {
+        shape_val
+      } else if let NetworkResult::Geometry(shape) = shape_val {
 
         let axis_index = match network_evaluator.evaluate_or_default(
           network_stack, node_id, registry, context, 1, 

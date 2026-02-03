@@ -75,11 +75,11 @@ impl NodeData for ImportXYZData {
         return NetworkResult::Error("Expected string parameter for file name".to_string());
       }
     };
-  
-    return match atomic_structure {
+
+    match atomic_structure {
         Some(atomic_structure) => NetworkResult::Atomic(atomic_structure.clone()),
         None => NetworkResult::Error("No atomic structure imported".to_string()),
-    };
+    }
   }
 
   fn clone_box(&self) -> Box<dyn NodeData> {

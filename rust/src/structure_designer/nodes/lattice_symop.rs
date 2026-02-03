@@ -72,11 +72,10 @@ impl NodeData for LatticeSymopData {
       context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
       let shape_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
-    
+
       if let NetworkResult::Error(_) = shape_val {
-        return shape_val;
-      }
-      else if let NetworkResult::Geometry(shape) = shape_val {
+        shape_val
+      } else if let NetworkResult::Geometry(shape) = shape_val {
 
         let translation = match network_evaluator.evaluate_or_default(
           network_stack, node_id, registry, context, 1, 
@@ -425,7 +424,7 @@ impl LatticeSymopGadget {
           unit_cell: unit_cell.clone(),
       };
       ret.refresh_frame_transform();
-      return ret;
+      ret
   }
 
   // Returns whether the application of the drag offset was successful and the drag start should be reset
@@ -450,8 +449,8 @@ impl LatticeSymopGadget {
     
     // Apply the movement to the frame transform
     self.frame_transform.translation += movement_vector;
-    
-    return true;
+
+    true
   }
 
   fn refresh_frame_transform(&mut self) {

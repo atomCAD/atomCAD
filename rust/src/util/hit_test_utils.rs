@@ -79,11 +79,11 @@ pub fn get_closest_point_on_first_ray(
         // When parallel, just project r onto the first direction
         return -d / a;
     }
-    
+
     // Calculate the parameter 't' for the first ray
     let t = (b * e - c * d) / denominator;
-    
-    return t;
+
+    t
 }
 
 pub fn get_point_distance_to_ray(
@@ -413,10 +413,10 @@ pub fn arrow_hit_test(
         ray_direction);
 
     if cylinder_hit.is_some() {
-        return cylinder_hit;
+        cylinder_hit
+    } else {
+        None
     }
-
-    return None;
 }
 
 

@@ -35,8 +35,8 @@ impl NodeData for StringData {
       _registry: &NodeTypeRegistry,
       _decorate: bool,
       _context: &mut NetworkEvaluationContext
-    ) -> NetworkResult {    
-      return NetworkResult::String(self.value.to_string());
+    ) -> NetworkResult {
+      NetworkResult::String(self.value.to_string())
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -36,7 +36,7 @@ impl NodeData for IntData {
       _decorate: bool,
       _context: &mut NetworkEvaluationContext
     ) -> NetworkResult {
-      return NetworkResult::Int(self.value);
+      NetworkResult::Int(self.value)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
