@@ -550,10 +550,10 @@ fn test_layout_network_modifies_positions() {
 fn test_layout_algorithm_enum() {
     // Test that all algorithm variants exist and have default
     let default_algo = LayoutAlgorithm::default();
-    assert_eq!(default_algo, LayoutAlgorithm::TopologicalGrid);
+    assert_eq!(default_algo, LayoutAlgorithm::Sugiyama);
 
-    // Test that Sugiyama variant can be created (falls back to TopologicalGrid until implemented)
-    let _sugiyama = LayoutAlgorithm::Sugiyama;
+    // Test that TopologicalGrid variant can be created
+    let _topological_grid = LayoutAlgorithm::TopologicalGrid;
 }
 
 #[test]
