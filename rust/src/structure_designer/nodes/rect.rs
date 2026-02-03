@@ -39,7 +39,7 @@ impl NodeData for RectData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -82,7 +82,7 @@ impl NodeData for RectData {
       let center_2d_lattice = min_corner.as_dvec2() + extent.as_dvec2() / 2.0;
       let center = drawing_plane.effective_unit_cell.dvec2_lattice_to_real(&center_2d_lattice);
 
-      return NetworkResult::Geometry2D(
+      NetworkResult::Geometry2D(
         GeometrySummary2D {
           drawing_plane,
           frame_transform: Transform2D::new(
@@ -90,7 +90,7 @@ impl NodeData for RectData {
             0.0,
           ),
           geo_tree_root,
-        });
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -158,13 +158,12 @@ fn create_parallelogram_on_plane(
   let corner_11_real = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&corner_11);
   
   // Create 4 half-planes defining the parallelogram edges
-  let mut half_planes = Vec::new();
-  
-  half_planes.push(GeoNode::half_plane(corner_10_real, corner_00_real));
-  half_planes.push(GeoNode::half_plane(corner_01_real, corner_11_real));
-  
-  half_planes.push(GeoNode::half_plane(corner_00_real, corner_01_real));
-  half_planes.push(GeoNode::half_plane(corner_11_real, corner_10_real));
+  let half_planes = vec![
+    GeoNode::half_plane(corner_10_real, corner_00_real),
+    GeoNode::half_plane(corner_01_real, corner_11_real),
+    GeoNode::half_plane(corner_00_real, corner_01_real),
+    GeoNode::half_plane(corner_11_real, corner_10_real),
+  ];
   
   // Return the intersection of all half-planes
   GeoNode::intersection_2d(half_planes)

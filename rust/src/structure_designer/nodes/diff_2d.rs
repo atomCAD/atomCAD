@@ -35,7 +35,7 @@ impl NodeData for Diff2DData {
   fn eval<'a>(
     &self,
     network_evaluator: &NetworkEvaluator,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     _decorate: bool,
@@ -43,8 +43,8 @@ impl NodeData for Diff2DData {
   ) -> NetworkResult {
     //let _timer = Timer::new("eval_diff");
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let base_input_name = registry.get_parameter_name(&node, 0);
-    let sub_input_name = registry.get_parameter_name(&node, 1);
+    let base_input_name = registry.get_parameter_name(node, 0);
+    let sub_input_name = registry.get_parameter_name(node, 1);
   
     if node.arguments[0].is_empty() {
       return input_missing_error(&base_input_name);
@@ -98,14 +98,14 @@ impl NodeData for Diff2DData {
       frame_translation *= 0.5;
     }
   
-    return NetworkResult::Geometry2D(GeometrySummary2D { 
+    NetworkResult::Geometry2D(GeometrySummary2D { 
       drawing_plane: result_drawing_plane,
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,
       ),
       geo_tree_root: geometry.unwrap(),
-    });
+    })
   }
 
   fn clone_box(&self) -> Box<dyn NodeData> {
@@ -125,7 +125,7 @@ impl NodeData for Diff2DData {
 }
 
 fn helper_union<'a>(network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
+  network_stack: &[NetworkStackElement<'a>],
   node_id: u64,
   parameter_index: usize,
   registry: &NodeTypeRegistry,

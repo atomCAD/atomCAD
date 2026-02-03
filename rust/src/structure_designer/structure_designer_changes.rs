@@ -2,20 +2,17 @@ use std::collections::HashSet;
 
 /// Refresh mode for structure designer operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum RefreshMode {
     /// Lightweight refresh - only update gadget tessellation
     Lightweight,
     /// Partial refresh - use tracked changes (visibility, data, selection)
+    #[default]
     Partial,
     /// Full refresh - re-evaluate everything (fallback for complex/unknown changes)
     Full,
 }
 
-impl Default for RefreshMode {
-    fn default() -> Self {
-        RefreshMode::Partial
-    }
-}
 
 /// Tracks changes to the structure designer to determine what needs to be refreshed
 /// This is the single source of truth for refresh operations, replacing the old

@@ -51,7 +51,7 @@ impl NodeData for AtomMoveData {
     fn eval<'a>(
         &self,
         network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
+        network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
@@ -223,7 +223,7 @@ impl AtomMoveGadget {
     /// Returns true if the operation was successful and the drag start should be reset.
     fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
         // Only handle translation axes (0, 1, 2 for X, Y, Z)
-        if axis_index < 0 || axis_index > 2 {
+        if !(0..=2).contains(&axis_index) {
             return false;
         }
 

@@ -63,7 +63,7 @@ impl GeometrySummary2D {
   /// # Returns
   /// * `true` if all drawing planes are compatible or vector has ≤1 elements
   /// * `false` if any drawing plane is incompatible with the first
-  pub fn all_have_compatible_drawing_planes(geometries: &Vec<GeometrySummary2D>) -> bool {
+  pub fn all_have_compatible_drawing_planes(geometries: &[GeometrySummary2D]) -> bool {
     if geometries.len() <= 1 {
       return true;
     }
@@ -124,7 +124,7 @@ impl GeometrySummary {
   /// # Returns
   /// * `true` if all unit cells are approximately equal or vector has ≤1 elements
   /// * `false` if any unit cell differs significantly from the first
-  pub fn all_have_compatible_unit_cells(geometries: &Vec<GeometrySummary>) -> bool {
+  pub fn all_have_compatible_unit_cells(geometries: &[GeometrySummary]) -> bool {
     if geometries.len() <= 1 {
       return true;
     }
@@ -144,7 +144,9 @@ pub struct Closure {
 }
 
 #[derive(Clone)]
+#[derive(Default)]
 pub enum NetworkResult {
+  #[default]
   None, // Always equivalent with no input pin connected
   Bool(bool),
   String(String),
@@ -165,11 +167,6 @@ pub enum NetworkResult {
   Error(String),
 }
 
-impl Default for NetworkResult {
-  fn default() -> Self {
-    NetworkResult::None
-  }
-}
 
 impl NetworkResult {
 
@@ -586,7 +583,7 @@ impl NetworkResult {
         Ok(NetworkResult::IVec3(IVec3::new(x, y, z)))
       }
       
-      _ => Err(format!("Unsupported CLI parameter type: {}", data_type.to_string()))
+      _ => Err(format!("Unsupported CLI parameter type: {}", data_type))
     }
   }
 }

@@ -131,11 +131,12 @@ impl Renderer {
             .await
             .expect("Failed to find a suitable adapter");
         // Configure custom limits to support larger vertex buffers for complex atomic models
-        let mut limits = wgpu::Limits::default();
-        
         // Increase max buffer size from default 256 MiB to 1 GiB
         // This allows for much larger atomic crystal models
-        limits.max_buffer_size = 1024 * 1024 * 1024; // 1 GiB
+        let limits = wgpu::Limits {
+            max_buffer_size: 1024 * 1024 * 1024, // 1 GiB
+            ..Default::default()
+        };
         
         let device_descriptor = DeviceDescriptor {
             label: Some("AtomCAD Renderer Device"),
@@ -181,8 +182,8 @@ impl Renderer {
         let bond_impostor_mesh = GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
 
         let texture_size = Extent3d {
-            width: width,
-            height: height,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
@@ -320,7 +321,9 @@ impl Renderer {
             &bond_impostor_shader,
         );
 
-        let result = Self {
+        
+
+        Self {
           device,
           queue,
           triangle_pipeline,
@@ -345,9 +348,7 @@ impl Renderer {
           camera_buffer,
           camera_bind_group,
           render_mutex: Mutex::new(()),
-        };
-
-        result
+        }
     }
 
     fn create_line_pipeline(
@@ -362,7 +363,7 @@ impl Renderer {
 
         device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Line Render Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: VertexState {
                 module: &line_shader,
                 entry_point: Some("vs_main"),
@@ -447,9 +448,9 @@ impl Renderer {
 
         device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some(label),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: VertexState {
-                module: &triangle_shader,
+                module: triangle_shader,
                 entry_point: Some("vs_main"),
                 buffers: &[
                   Vertex::desc(),
@@ -457,7 +458,7 @@ impl Renderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
-                module: &triangle_shader,
+                module: triangle_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
@@ -493,9 +494,9 @@ impl Renderer {
     ) -> RenderPipeline {
         device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Atom Impostor Render Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: VertexState {
-                module: &atom_impostor_shader,
+                module: atom_impostor_shader,
                 entry_point: Some("vs_main"),
                 buffers: &[
                   crate::renderer::atom_impostor_mesh::AtomImpostorVertex::desc(),
@@ -503,7 +504,7 @@ impl Renderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
-                module: &atom_impostor_shader,
+                module: atom_impostor_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
@@ -549,9 +550,9 @@ impl Renderer {
     ) -> RenderPipeline {
         device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Bond Impostor Render Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(pipeline_layout),
             vertex: VertexState {
-                module: &bond_impostor_shader,
+                module: bond_impostor_shader,
                 entry_point: Some("vs_main"),
                 buffers: &[
                   crate::renderer::bond_impostor_mesh::BondImpostorVertex::desc(),
@@ -559,7 +560,7 @@ impl Renderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
-                module: &bond_impostor_shader,
+                module: bond_impostor_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8Unorm,
@@ -644,6 +645,7 @@ impl Renderer {
         self.device.poll(Maintain::Wait);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_all_gpu_meshes(
         &mut self,
         lightweight_mesh: &Mesh,
@@ -839,8 +841,8 @@ impl Renderer {
             drop(aligned_data);
             data
         } else {
-            let data = buffer_slice.get_mapped_range().to_vec();
-            data
+            
+            buffer_slice.get_mapped_range().to_vec()
         };
         
         self.output_buffer.unmap();

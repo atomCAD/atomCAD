@@ -264,7 +264,7 @@ pub fn estimate_csg_sketch_size(sketch: &CSGSketch) -> usize {
                     total_size += interior.0.capacity() * mem::size_of::<geo::Coord<f64>>();
                 }
                 // Vec for interiors vector itself (use len since we only have a slice)
-                total_size += polygon.interiors().len() * mem::size_of::<geo::LineString<f64>>();
+                total_size += std::mem::size_of_val(polygon.interiors());
             }
             geo::Geometry::MultiPolygon(multi_polygon) => {
                 // Vec capacity for the polygons vector
@@ -279,7 +279,7 @@ pub fn estimate_csg_sketch_size(sketch: &CSGSketch) -> usize {
                     for interior in polygon.interiors() {
                         total_size += interior.0.capacity() * mem::size_of::<geo::Coord<f64>>();
                     }
-                    total_size += polygon.interiors().len() * mem::size_of::<geo::LineString<f64>>();
+                    total_size += std::mem::size_of_val(polygon.interiors());
                 }
             }
             // Other geometry types are rare in CSGSketch, but we'll add a small overhead

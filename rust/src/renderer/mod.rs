@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod dummy_renderer;
 pub mod renderer;
 pub mod mesh;

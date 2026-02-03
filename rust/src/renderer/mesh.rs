@@ -81,6 +81,12 @@ pub struct Mesh {
   pub indices: Vec<u32>,
 }
 
+impl Default for Mesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Mesh {
   pub fn new() -> Self {
     Self {

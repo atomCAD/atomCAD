@@ -2,7 +2,6 @@ use std::path::Path;
 
 /// Utilities for handling file paths across different operating systems
 /// Supports Windows, Linux, and macOS path conventions
-
 /// Determines if a path is absolute
 /// Works across Windows (C:\, \\server\share), Unix-like systems (/path), and UNC paths
 pub fn is_absolute_path(path: &str) -> bool {

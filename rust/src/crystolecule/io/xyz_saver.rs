@@ -41,7 +41,7 @@ pub fn save_xyz(atomic_structure: &AtomicStructure, file_path: &str) -> Result<(
         // Get element symbol from atomic number
         let atom_info = ATOM_INFO
             .get(&(atom.atomic_number as i32))
-            .ok_or_else(|| XyzSaveError::ElementNotFound(atom.atomic_number))?;
+            .ok_or(XyzSaveError::ElementNotFound(atom.atomic_number))?;
         
         // Write element and position
         writeln!(

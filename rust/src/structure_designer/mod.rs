@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod structure_designer;
 pub mod structure_designer_changes;
 pub mod common_constants;

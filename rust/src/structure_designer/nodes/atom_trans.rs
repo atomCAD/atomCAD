@@ -53,7 +53,7 @@ impl NodeData for AtomTransData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -260,7 +260,7 @@ impl AtomTransGadget {
     fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
         match axis_index {
             // Translation handles (0, 1, 2)
-            0 | 1 | 2 => {
+            0..=2 => {
                 // Get the local axis direction based on the current rotation
                 let local_axis_dir = match xyz_gadget_utils::get_local_axis_direction(&UnitCellStruct::cubic_diamond(), self.frame_transform.rotation, axis_index) {
                     Some(dir) => dir,
@@ -274,7 +274,7 @@ impl AtomTransGadget {
                 true
             },
             // Rotation handles (3, 4, 5)
-            3 | 4 | 5 => {
+            3..=5 => {
                 // Map rotation handle indices to axis indices (3->0, 4->1, 5->2)
                 let rotation_axis_index = axis_index - 3;
                 

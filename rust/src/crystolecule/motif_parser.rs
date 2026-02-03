@@ -52,7 +52,7 @@ pub fn parse_site_specifier(
     line_number: usize, 
     site_id_to_index: &HashMap<String, usize>
 ) -> Result<SiteSpecifier, ParseError> {
-    if specifier.len() < 1 {
+    if specifier.is_empty() {
         return Err(ParseError {
             line_number,
             message: "Site specifier cannot be empty".to_string(),

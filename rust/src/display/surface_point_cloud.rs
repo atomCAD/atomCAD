@@ -14,6 +14,12 @@ pub struct SurfacePointCloud {
   pub points: Vec<SurfacePoint>,
 }
 
+impl Default for SurfacePointCloud {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SurfacePointCloud {
 
   pub fn new() -> Self {
@@ -32,6 +38,12 @@ pub struct SurfacePoint2D {
 pub struct SurfacePointCloud2D {
   pub frame_transform: Transform2D,
   pub points: Vec<SurfacePoint2D>,
+}
+
+impl Default for SurfacePointCloud2D {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SurfacePointCloud2D {

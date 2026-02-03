@@ -35,7 +35,7 @@ impl NodeData for AtomCutData {
   fn eval<'a>(
     &self,
     network_evaluator: &NetworkEvaluator,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     _decorate: bool,
@@ -128,6 +128,12 @@ impl NodeData for AtomCutData {
       m.insert("molecule".to_string(), (true, None)); // required
       m
   }
+}
+
+impl Default for AtomCutData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AtomCutData {

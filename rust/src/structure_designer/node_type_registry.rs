@@ -63,6 +63,12 @@ pub struct NodeTypeRegistry {
   pub design_file_name: Option<String>,
 }
 
+impl Default for NodeTypeRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NodeTypeRegistry {
 
   pub fn new() -> Self {
@@ -172,7 +178,7 @@ impl NodeTypeRegistry {
     let mut category_map: HashMap<NodeTypeCategory, Vec<APINodeTypeView>> = HashMap::new();
     for view in all_views {
       category_map.entry(view.category.clone())
-        .or_insert_with(Vec::new)
+        .or_default()
         .push(view);
     }
     
@@ -244,7 +250,7 @@ impl NodeTypeRegistry {
     let mut category_map: HashMap<NodeTypeCategory, Vec<APINodeTypeView>> = HashMap::new();
     for view in all_views {
       category_map.entry(view.category.clone())
-          .or_insert_with(Vec::new)
+          .or_default()
           .push(view);
     }
     

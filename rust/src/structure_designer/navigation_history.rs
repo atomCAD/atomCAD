@@ -6,6 +6,12 @@ pub struct NavigationHistory {
     current_index: usize,
 }
 
+impl Default for NavigationHistory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NavigationHistory {
     pub fn new() -> Self {
         Self {

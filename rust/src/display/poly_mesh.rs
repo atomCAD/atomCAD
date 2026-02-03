@@ -205,7 +205,7 @@ impl PolyMesh {
             let dot_product = normal1.dot(normal2);
             
             // Handle floating point precision issues
-            let dot_product = dot_product.max(-1.0).min(1.0);
+            let dot_product = dot_product.clamp(-1.0, 1.0);
             
             // Set edge as sharp if angle exceeds threshold
             if dot_product < cos_threshold {
@@ -346,8 +346,7 @@ impl MemorySizeEstimator for PolyMesh {
             .sum::<usize>();
         
         // Accurately estimate edges HashMap by traversing
-        let edges_size = self.edges.iter()
-            .map(|(_key, edge)| {
+        let edges_size = self.edges.values().map(|edge| {
                 std::mem::size_of::<(u32, u32)>() 
                     + std::mem::size_of::<Edge>() 
                     + edge.face_indices.capacity() * std::mem::size_of::<u32>()

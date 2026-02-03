@@ -62,6 +62,12 @@ pub struct LatticeFillStatistics {
   pub surface_reconstructions: i32,
 }
 
+impl Default for LatticeFillStatistics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LatticeFillStatistics {
   pub fn new() -> Self {
     LatticeFillStatistics {

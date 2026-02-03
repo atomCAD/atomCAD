@@ -39,7 +39,7 @@ impl<T: Clone> Unique3DPoints<T> {
 
         // If not, add it to the appropriate cell
         let cell = self.point_to_cell(&point);
-        self.cells.entry(cell).or_insert_with(Vec::new).push((point, value));
+        self.cells.entry(cell).or_default().push((point, value));
         true
     }
 

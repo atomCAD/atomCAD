@@ -39,8 +39,8 @@ impl DummyRenderer {
 
         // Texture size
         let texture_size = Extent3d {
-            width: width,
-            height: height,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
 
@@ -157,7 +157,7 @@ impl DummyRenderer {
 
     pub fn render(&mut self) -> Vec<u8> {
 
-        let t = (&self).start_time.elapsed().as_secs_f32();
+        let t = self.start_time.elapsed().as_secs_f32();
         let uniform_data = UniformData { time: t };
 
         self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform_data]));

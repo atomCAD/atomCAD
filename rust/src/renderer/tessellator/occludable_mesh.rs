@@ -50,6 +50,12 @@ pub struct OccludableMesh {
     triangle_count: usize,
 }
 
+impl Default for OccludableMesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OccludableMesh {
     pub fn new() -> Self {
         Self {

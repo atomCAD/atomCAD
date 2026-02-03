@@ -71,6 +71,12 @@ pub struct BondImpostorMesh {
     pub indices: Vec<u32>,  // 6 indices per bond (2 triangles per quad)
 }
 
+impl Default for BondImpostorMesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BondImpostorMesh {
     pub fn new() -> Self {
         Self {

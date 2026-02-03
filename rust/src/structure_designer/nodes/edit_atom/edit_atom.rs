@@ -58,6 +58,12 @@ pub struct EditAtomData {
     pub selection_transform: Option<Transform>,
 }
 
+impl Default for EditAtomData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EditAtomData {
     pub fn new() -> Self {
         Self {
@@ -89,14 +95,14 @@ impl EditAtomData {
       }
     }
 
-    pub fn add_command(&mut self, command: Box<dyn EditAtomCommand>) -> & Box<dyn EditAtomCommand> {
+    pub fn add_command(&mut self, command: Box<dyn EditAtomCommand>) -> &dyn EditAtomCommand {
       if self.history.len() > self.next_history_index {
         self.history.drain(self.next_history_index..);
       }
       self.history.push(command);
       self.next_history_index = self.history.len();
-  
-      & self.history[self.history.len() - 1]
+
+      self.history[self.history.len() - 1].as_ref()
     }
   
     pub fn undo(&mut self) -> bool {
@@ -191,7 +197,7 @@ impl NodeData for EditAtomData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       decorate: bool,

@@ -19,9 +19,9 @@ impl GeoNode {
   }
 
   /// Convert to CSG mesh with optional caching
-  pub fn to_csg_mesh_cached(&self, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
+  pub fn to_csg_mesh_cached(&self, cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
     //let _timer = Timer::new("GeoNode::to_csg_mesh_cached");
-    self.internal_to_csg_mesh(true, cache.as_deref_mut())
+    self.internal_to_csg_mesh(true, cache)
   }
 
   /// Convert to CSG sketch without caching
@@ -30,8 +30,8 @@ impl GeoNode {
   }
 
   /// Convert to CSG sketch with optional caching
-  pub fn to_csg_sketch_cached(&self, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
-    self.internal_to_csg_sketch(cache.as_deref_mut())
+  pub fn to_csg_sketch_cached(&self, cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
+    self.internal_to_csg_sketch(cache)
   }
 
   fn internal_to_csg_sketch(&self, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
@@ -66,7 +66,7 @@ impl GeoNode {
     }?;
     
     // Store in cache
-    if let Some(cache_ref) = cache.as_deref_mut() {
+    if let Some(cache_ref) = cache {
       cache_ref.insert_sketch(*self.hash(), result.clone());
     }
     
@@ -108,7 +108,7 @@ impl GeoNode {
     }?;
     
     // Store in cache
-    if let Some(cache_ref) = cache.as_deref_mut() {
+    if let Some(cache_ref) = cache {
       cache_ref.insert_mesh(*self.hash(), result.clone());
     }
     
@@ -173,26 +173,25 @@ impl GeoNode {
       .translate(scale_to_csg(center.x), scale_to_csg(center.y), scale_to_csg(center.z))
   }
 
-  fn polygon_to_csg(vertices: &Vec<DVec2>) -> CSGSketch {
-    let mut points: Vec<[f64; 2]> = Vec::new();
-  
-    for i in 0..vertices.len() {
-        points.push([scale_to_csg(vertices[i].x), scale_to_csg(vertices[i].y)]);
-    }
-  
+  fn polygon_to_csg(vertices: &[DVec2]) -> CSGSketch {
+    let points: Vec<[f64; 2]> = vertices
+        .iter()
+        .map(|v| [scale_to_csg(v.x), scale_to_csg(v.y)])
+        .collect();
+
     CSGSketch::polygon(&points, None)
   }
 
   fn extrude_to_csg(
-      height: f64, 
-      direction: DVec3, 
-      shape: &Box<GeoNode>, 
+      height: f64,
+      direction: DVec3,
+      shape: &GeoNode,
       plane_to_world_transform: &Transform,
       infinite: bool,
-      mut cache: Option<&mut CsgConversionCache>
+      cache: Option<&mut CsgConversionCache>
   ) -> Option<CSGMesh> {
       // 1. Get 2D sketch (already in plane-local XY coordinates)
-      let sketch = shape.to_csg_sketch_cached(cache.as_deref_mut())?;
+      let sketch = shape.to_csg_sketch_cached(cache)?;
       
       // 2. Extrude in plane-local space (direction is in plane-local coordinates)
       let extruded = if infinite {
@@ -237,12 +236,12 @@ impl GeoNode {
       )
   }
 
-  fn transform_to_csg(transform: &Transform, shape: &Box<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
-    let mesh = shape.internal_to_csg_mesh(false, cache.as_deref_mut())?;
+  fn transform_to_csg(transform: &Transform, shape: &GeoNode, cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
+    let mesh = shape.internal_to_csg_mesh(false, cache)?;
     Some(Self::apply_transform_to_csg(&mesh, transform))
   }
 
-  fn union_2d_to_csg(shapes: &Vec<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
+  fn union_2d_to_csg(shapes: &[GeoNode], mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
     if shapes.is_empty() {
       return Some(CSGSketch::new());
     }
@@ -254,7 +253,7 @@ impl GeoNode {
     Some(result)
   }
 
-  fn intersection_2d_to_csg(shapes: &Vec<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
+  fn intersection_2d_to_csg(shapes: &[GeoNode], mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
     if shapes.is_empty() {
       return Some(CSGSketch::new());
     }
@@ -266,13 +265,13 @@ impl GeoNode {
     Some(result)
   }
 
-  fn difference_2d_to_csg(base: &Box<GeoNode>, sub: &Box<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
+  fn difference_2d_to_csg(base: &GeoNode, sub: &GeoNode, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGSketch> {
     let base_csg = base.internal_to_csg_sketch(cache.as_deref_mut())?;
-    let sub_csg = sub.internal_to_csg_sketch(cache.as_deref_mut())?;
+    let sub_csg = sub.internal_to_csg_sketch(cache)?;
     Some(base_csg.difference(&sub_csg))
   }
 
-  fn union_3d_to_csg(shapes: &Vec<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
+  fn union_3d_to_csg(shapes: &[GeoNode], mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
     if shapes.is_empty() {
       return Some(CSGMesh::new());
     }
@@ -284,7 +283,7 @@ impl GeoNode {
     Some(result)
   }
 
-  fn intersection_3d_to_csg(shapes: &Vec<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
+  fn intersection_3d_to_csg(shapes: &[GeoNode], mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
     if shapes.is_empty() {
       return Some(CSGMesh::new());
     }
@@ -297,9 +296,9 @@ impl GeoNode {
     Some(result)
   }
 
-  fn difference_3d_to_csg(base: &Box<GeoNode>, sub: &Box<GeoNode>, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
+  fn difference_3d_to_csg(base: &GeoNode, sub: &GeoNode, mut cache: Option<&mut CsgConversionCache>) -> Option<CSGMesh> {
     let base_csg = base.internal_to_csg_mesh(false, cache.as_deref_mut())?;
-    let sub_csg = sub.internal_to_csg_mesh(false, cache.as_deref_mut())?;
+    let sub_csg = sub.internal_to_csg_mesh(false, cache)?;
     Some(base_csg.difference(&sub_csg))
   }
 }

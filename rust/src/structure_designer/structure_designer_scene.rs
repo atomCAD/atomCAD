@@ -93,6 +93,12 @@ pub struct StructureDesignerScene {
     pub unit_cell: Option<UnitCellStruct>,
 }
 
+impl Default for StructureDesignerScene {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StructureDesignerScene {
     /// Default cache size: 256 MB for invisible nodes
     const DEFAULT_INVISIBLE_CACHE_SIZE_BYTES: usize = 256 * 1024 * 1024;
@@ -112,7 +118,7 @@ impl StructureDesignerScene {
     /// Helper to get all errors from all nodes
     pub fn get_all_node_errors(&self) -> HashMap<u64, String> {
         let mut all_errors = HashMap::new();
-        for (_, node_data) in &self.node_data {
+        for node_data in self.node_data.values() {
             all_errors.extend(node_data.node_errors.clone());
         }
         all_errors
@@ -121,7 +127,7 @@ impl StructureDesignerScene {
     /// Helper to get all output strings from all nodes
     pub fn get_all_node_output_strings(&self) -> HashMap<u64, String> {
         let mut all_strings = HashMap::new();
-        for (_, node_data) in &self.node_data {
+        for node_data in self.node_data.values() {
             all_strings.extend(node_data.node_output_strings.clone());
         }
         all_strings
@@ -211,8 +217,7 @@ impl MemorySizeEstimator for NodeSceneData {
             .unwrap_or(0);
         
         // Estimate node_errors HashMap
-        let node_errors_size = self.node_errors.iter()
-            .map(|(_key, value)| {
+        let node_errors_size = self.node_errors.values().map(|value| {
                 std::mem::size_of::<u64>() 
                     + std::mem::size_of::<String>() 
                     + value.capacity()
@@ -220,8 +225,7 @@ impl MemorySizeEstimator for NodeSceneData {
             .sum::<usize>();
         
         // Estimate node_output_strings HashMap
-        let node_output_strings_size = self.node_output_strings.iter()
-            .map(|(_key, value)| {
+        let node_output_strings_size = self.node_output_strings.values().map(|value| {
                 std::mem::size_of::<u64>() 
                     + std::mem::size_of::<String>() 
                     + value.capacity()

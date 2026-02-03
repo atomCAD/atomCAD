@@ -58,7 +58,7 @@ impl<'a> BatchedImplicitEvaluator<'a> {
         println!("Available parallel cores: {}", available_cores);
         
         // Use at most (cores - 1), never more than MAX_THREADS, minimum 1
-        std::cmp::min(MAX_THREADS, std::cmp::max(1, available_cores.saturating_sub(1)))
+        available_cores.saturating_sub(1).clamp(1, MAX_THREADS)
     }
     
     /// Process all pending points in batches and return results
@@ -136,7 +136,7 @@ impl<'a> BatchedImplicitEvaluator<'a> {
         let original_len = chunk.len();
         
         // Pad to multiple of BATCH_SIZE for efficient batch processing
-        let padded_len = ((original_len + BATCH_SIZE - 1) / BATCH_SIZE) * BATCH_SIZE;
+        let padded_len = original_len.div_ceil(BATCH_SIZE) * BATCH_SIZE;
         
         // Create padded chunk
         let mut padded_chunk = chunk.to_vec();
@@ -149,9 +149,7 @@ impl<'a> BatchedImplicitEvaluator<'a> {
         for chunk_start in (0..padded_len).step_by(BATCH_SIZE) {
             // Convert Vec slice to fixed array for batch evaluation
             let mut batch_points = [DVec3::ZERO; BATCH_SIZE];
-            for i in 0..BATCH_SIZE {
-                batch_points[i] = padded_chunk[chunk_start + i];
-            }
+            batch_points[..BATCH_SIZE].copy_from_slice(&padded_chunk[chunk_start..chunk_start + BATCH_SIZE]);
             
             // Get mutable slice directly into results Vec and convert to fixed array reference
             let results_slice = &mut results[chunk_start..chunk_start + BATCH_SIZE];

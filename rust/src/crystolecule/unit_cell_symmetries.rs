@@ -238,26 +238,13 @@ mod symmetry_analysis {
     /// 
     /// Total: 13 rotation axes (excluding identity)
     pub fn analyze_cubic_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
-        
-        // 4-fold rotations along crystallographic axes
-        // These are the basis vectors themselves
-        symmetries.push(RotationalSymmetry::new(unit_cell.a, 4));
-        symmetries.push(RotationalSymmetry::new(unit_cell.b, 4));
-        symmetries.push(RotationalSymmetry::new(unit_cell.c, 4));
-        
         // 3-fold rotations along body diagonals
         // Body diagonals connect opposite corners of the unit cell
         let body_diagonal_1 = unit_cell.a + unit_cell.b + unit_cell.c;  // [111]
         let body_diagonal_2 = -unit_cell.a + unit_cell.b + unit_cell.c; // [1̄11]
         let body_diagonal_3 = unit_cell.a - unit_cell.b + unit_cell.c;  // [11̄1]
         let body_diagonal_4 = unit_cell.a + unit_cell.b - unit_cell.c;  // [111̄]
-        
-        symmetries.push(RotationalSymmetry::new(body_diagonal_1, 3));
-        symmetries.push(RotationalSymmetry::new(body_diagonal_2, 3));
-        symmetries.push(RotationalSymmetry::new(body_diagonal_3, 3));
-        symmetries.push(RotationalSymmetry::new(body_diagonal_4, 3));
-        
+
         // 2-fold rotations along face diagonals
         // Face diagonals are in the faces of the unit cell
         let face_diagonal_ab_1 = unit_cell.a + unit_cell.b;  // [110]
@@ -266,33 +253,40 @@ mod symmetry_analysis {
         let face_diagonal_ac_2 = unit_cell.a - unit_cell.c;  // [101̄]
         let face_diagonal_bc_1 = unit_cell.b + unit_cell.c;  // [011]
         let face_diagonal_bc_2 = unit_cell.b - unit_cell.c;  // [011̄]
-        
-        symmetries.push(RotationalSymmetry::new(face_diagonal_ab_1, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_ab_2, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_ac_1, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_ac_2, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_bc_1, 2));
-        symmetries.push(RotationalSymmetry::new(face_diagonal_bc_2, 2));
-        
-        symmetries
+
+        vec![
+            // 4-fold rotations along crystallographic axes
+            // These are the basis vectors themselves
+            RotationalSymmetry::new(unit_cell.a, 4),
+            RotationalSymmetry::new(unit_cell.b, 4),
+            RotationalSymmetry::new(unit_cell.c, 4),
+            // 3-fold rotations along body diagonals
+            RotationalSymmetry::new(body_diagonal_1, 3),
+            RotationalSymmetry::new(body_diagonal_2, 3),
+            RotationalSymmetry::new(body_diagonal_3, 3),
+            RotationalSymmetry::new(body_diagonal_4, 3),
+            // 2-fold rotations along face diagonals
+            RotationalSymmetry::new(face_diagonal_ab_1, 2),
+            RotationalSymmetry::new(face_diagonal_ab_2, 2),
+            RotationalSymmetry::new(face_diagonal_ac_1, 2),
+            RotationalSymmetry::new(face_diagonal_ac_2, 2),
+            RotationalSymmetry::new(face_diagonal_bc_1, 2),
+            RotationalSymmetry::new(face_diagonal_bc_2, 2),
+        ]
     }
     
     /// Helper function to build tetragonal symmetries given the unique and equal axes
     fn build_tetragonal_symmetries(unique_axis: DVec3, equal_axis1: DVec3, equal_axis2: DVec3) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
-        
-        // 4-fold rotation along unique axis
-        symmetries.push(RotationalSymmetry::new(unique_axis, 4));
-        
-        // 2-fold rotations along equal axes
-        symmetries.push(RotationalSymmetry::new(equal_axis1, 2));
-        symmetries.push(RotationalSymmetry::new(equal_axis2, 2));
-        
-        // 2-fold rotations along face diagonals in the plane of equal axes
-        symmetries.push(RotationalSymmetry::new(equal_axis1 + equal_axis2, 2));
-        symmetries.push(RotationalSymmetry::new(equal_axis1 - equal_axis2, 2));
-        
-        symmetries
+        vec![
+            // 4-fold rotation along unique axis
+            RotationalSymmetry::new(unique_axis, 4),
+            // 2-fold rotations along equal axes
+            RotationalSymmetry::new(equal_axis1, 2),
+            RotationalSymmetry::new(equal_axis2, 2),
+            // 2-fold rotations along face diagonals in the plane of equal axes
+            RotationalSymmetry::new(equal_axis1 + equal_axis2, 2),
+            RotationalSymmetry::new(equal_axis1 - equal_axis2, 2),
+        ]
     }
 
     /// Analyzes rotational symmetries for tetragonal crystal system
@@ -323,35 +317,29 @@ mod symmetry_analysis {
     /// Orthorhombic system has:
     /// - 2-fold rotations along a, b, c axes
     pub fn analyze_orthorhombic_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
-        
         // 2-fold rotations along all three crystallographic axes
-        symmetries.push(RotationalSymmetry::new(unit_cell.a, 2));
-        symmetries.push(RotationalSymmetry::new(unit_cell.b, 2));
-        symmetries.push(RotationalSymmetry::new(unit_cell.c, 2));
-        
-        symmetries
+        vec![
+            RotationalSymmetry::new(unit_cell.a, 2),
+            RotationalSymmetry::new(unit_cell.b, 2),
+            RotationalSymmetry::new(unit_cell.c, 2),
+        ]
     }
     
     /// Helper function to build hexagonal symmetries given the unique and equal axes
     fn build_hexagonal_symmetries(unique_axis: DVec3, equal_axis1: DVec3, equal_axis2: DVec3) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
-        
-        // 6-fold rotation along unique axis (c-axis)
-        symmetries.push(RotationalSymmetry::new(unique_axis, 6));
-        
-        // 2-fold rotations perpendicular to unique axis
-        // Along the two equal axes
-        symmetries.push(RotationalSymmetry::new(equal_axis1, 2));
-        symmetries.push(RotationalSymmetry::new(equal_axis2, 2));
-        
-        // Along face diagonals in the plane of equal axes
-        symmetries.push(RotationalSymmetry::new(equal_axis1 + equal_axis2, 2));     // [110]
-        symmetries.push(RotationalSymmetry::new(equal_axis1 - equal_axis2, 2));     // [11̄0]
-        symmetries.push(RotationalSymmetry::new(2.0 * equal_axis1 + equal_axis2, 2)); // [210]
-        symmetries.push(RotationalSymmetry::new(equal_axis1 + 2.0 * equal_axis2, 2)); // [120]
-        
-        symmetries
+        vec![
+            // 6-fold rotation along unique axis (c-axis)
+            RotationalSymmetry::new(unique_axis, 6),
+            // 2-fold rotations perpendicular to unique axis
+            // Along the two equal axes
+            RotationalSymmetry::new(equal_axis1, 2),
+            RotationalSymmetry::new(equal_axis2, 2),
+            // Along face diagonals in the plane of equal axes
+            RotationalSymmetry::new(equal_axis1 + equal_axis2, 2),     // [110]
+            RotationalSymmetry::new(equal_axis1 - equal_axis2, 2),     // [11̄0]
+            RotationalSymmetry::new(2.0 * equal_axis1 + equal_axis2, 2), // [210]
+            RotationalSymmetry::new(equal_axis1 + 2.0 * equal_axis2, 2), // [120]
+        ]
     }
 
     /// Analyzes rotational symmetries for hexagonal crystal system
@@ -385,16 +373,12 @@ mod symmetry_analysis {
     /// Only the main body diagonal [111] retains 3-fold rotational symmetry.
     /// The other body diagonals lose their 3-fold symmetry due to the rhombohedral distortion.
     pub fn analyze_trigonal_symmetries(unit_cell: &UnitCellStruct) -> Vec<RotationalSymmetry> {
-        let mut symmetries = Vec::new();
-        
         // Only ONE 3-fold rotation along the main body diagonal
         // In a rhombohedral system, the non-90° angles break the equivalence of all body diagonals
         // Only [111] remains a true 3-fold symmetry axis
         let main_body_diagonal = unit_cell.a + unit_cell.b + unit_cell.c;   // [111]
-        
-        symmetries.push(RotationalSymmetry::new(main_body_diagonal, 3));
-        
-        symmetries
+
+        vec![RotationalSymmetry::new(main_body_diagonal, 3)]
     }
     
     /// Analyzes rotational symmetries for monoclinic crystal system

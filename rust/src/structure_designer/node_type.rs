@@ -26,7 +26,9 @@ pub struct NodeType {
   pub output_type: DataType,
   pub public: bool, // whether this node type is available for users to add
   pub node_data_creator: fn() -> Box<dyn NodeData>,
+  #[allow(clippy::type_complexity)]
   pub node_data_saver: fn(&mut dyn NodeData, Option<&str>) -> io::Result<Value>,
+  #[allow(clippy::type_complexity)]
   pub node_data_loader: fn(&Value, Option<&str>) -> io::Result<Box<dyn NodeData>>,
 }
 

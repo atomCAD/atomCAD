@@ -33,7 +33,7 @@ impl NodeData for IntersectData {
   fn eval<'a>(
     &self,
     network_evaluator: &NetworkEvaluator,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     _decorate: bool,
@@ -93,14 +93,14 @@ impl NodeData for IntersectData {
   
     frame_translation /= shape_count as f64;
   
-    return NetworkResult::Geometry(GeometrySummary { 
+    NetworkResult::Geometry(GeometrySummary { 
       unit_cell: first_unit_cell,
       frame_transform: Transform::new(
         frame_translation,
         DQuat::IDENTITY,
       ),
       geo_tree_root: GeoNode::intersection_3d(shapes),
-    });
+    })
   }
 
   fn clone_box(&self) -> Box<dyn NodeData> {

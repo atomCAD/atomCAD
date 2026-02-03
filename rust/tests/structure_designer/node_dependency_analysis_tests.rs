@@ -30,7 +30,7 @@ impl NodeData for MockNodeData {
     fn eval<'a>(
         &self,
         _network_evaluator: &NetworkEvaluator,
-        _network_stack: &Vec<NetworkStackElement<'a>>,
+        _network_stack: &[NetworkStackElement<'a>],
         _node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,

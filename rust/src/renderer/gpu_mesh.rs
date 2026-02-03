@@ -13,6 +13,12 @@ pub struct ModelUniform {
     normal_matrix: [[f32; 4]; 4],
 }
 
+impl Default for ModelUniform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModelUniform {
     pub fn new() -> Self {
         Self {

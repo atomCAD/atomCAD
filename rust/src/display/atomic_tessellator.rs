@@ -97,7 +97,7 @@ pub fn tessellate_atomic_structure(output_mesh: &mut Mesh, atomic_structure: &At
     }
     
     tessellated_count += 1;
-    tessellate_atom(output_mesh, atomic_structure, &atom, params, display_state, &atomic_viz_prefs.visualization, &mut reusable_occludable_mesh, &mut reusable_occluder_array);
+    tessellate_atom(output_mesh, atomic_structure, atom, params, display_state, &atomic_viz_prefs.visualization, &mut reusable_occludable_mesh, &mut reusable_occluder_array);
   }
   
   // Only tessellate bonds for ball-and-stick visualization
@@ -233,6 +233,7 @@ fn calculate_occluder_spheres(atom: &Atom, atomic_structure: &AtomicStructure, v
   }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn tessellate_atom(output_mesh: &mut Mesh, _model: &AtomicStructure, atom: &Atom, params: &AtomicTessellatorParams, display_state: AtomDisplayState, visualization: &AtomicStructureVisualization, reusable_occludable_mesh: &mut tessellator::OccludableMesh, reusable_occluder_array: &mut OccluderArray) {
   let _atom_info = ATOM_INFO.get(&(atom.atomic_number as i32))
     .unwrap_or(&DEFAULT_ATOM_INFO);

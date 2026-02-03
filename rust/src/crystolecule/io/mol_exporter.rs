@@ -62,7 +62,7 @@ pub fn save_mol_v3000(atomic_structure: &AtomicStructure, file_path: &str) -> Re
         // Get element symbol from atomic number
         let atom_info = ATOM_INFO
             .get(&(atom.atomic_number as i32))
-            .ok_or_else(|| MolSaveError::ElementNotFound(atom.atomic_number))?;
+            .ok_or(MolSaveError::ElementNotFound(atom.atomic_number))?;
         
         // Store the mapping for bond writing
         atom_id_to_index.insert(*atom_id, index);
@@ -105,9 +105,9 @@ pub fn save_mol_v3000(atomic_structure: &AtomicStructure, file_path: &str) -> Re
     for (atom_id1, atom_id2, bond_order) in bonds_to_write {
         // Get 1-based indices for the atoms
         let atom1_index = atom_id_to_index.get(&atom_id1)
-            .ok_or_else(|| MolSaveError::ElementNotFound(0))?;
+            .ok_or(MolSaveError::ElementNotFound(0))?;
         let atom2_index = atom_id_to_index.get(&atom_id2)
-            .ok_or_else(|| MolSaveError::ElementNotFound(0))?;
+            .ok_or(MolSaveError::ElementNotFound(0))?;
         
         // Write bond line: M V30 <bidx> <btype> <a1> <a2>
         writeln!(

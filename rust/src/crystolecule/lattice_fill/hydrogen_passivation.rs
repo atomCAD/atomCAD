@@ -117,6 +117,7 @@ pub fn hydrogen_passivate(
 // found_atom_id: ID of the existing atom
 // found_atom_position: position of the existing atom
 // found_atom_atomic_number: atomic number of the existing atom
+#[allow(clippy::too_many_arguments)]
 fn hydrogen_passivate_dangling_bond(
   config: &LatticeFillConfig,
   found_site: &SiteSpecifier,

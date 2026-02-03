@@ -10,6 +10,12 @@ use serde::{Serialize, Deserialize};
 pub struct DeleteCommand {
 }
 
+impl Default for DeleteCommand {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DeleteCommand {
   pub fn new() -> Self {
       Self {

@@ -71,15 +71,15 @@ impl ImplicitGeometry2D for GeoNode {
   }
 
   fn is2d(&self) -> bool {
-    match &self.kind {
-      GeoNodeKind::HalfPlane { .. } => true,
-      GeoNodeKind::Circle { .. } => true,
-      GeoNodeKind::Polygon { .. } => true,
-      GeoNodeKind::Union2D { .. } => true,
-      GeoNodeKind::Intersection2D { .. } => true,
-      GeoNodeKind::Difference2D { .. } => true,
-      _ => false
-    }
+    matches!(
+      &self.kind,
+      GeoNodeKind::HalfPlane { .. }
+        | GeoNodeKind::Circle { .. }
+        | GeoNodeKind::Polygon { .. }
+        | GeoNodeKind::Union2D { .. }
+        | GeoNodeKind::Intersection2D { .. }
+        | GeoNodeKind::Difference2D { .. }
+    )
   }
 }
 
@@ -163,16 +163,16 @@ impl ImplicitGeometry3D for GeoNode {
   }
 
   fn is3d(&self) -> bool {
-    match &self.kind {
-      GeoNodeKind::HalfSpace { .. } => true,
-      GeoNodeKind::Sphere { .. } => true,
-      GeoNodeKind::Extrude { .. } => true,
-      GeoNodeKind::Transform { .. } => true,
-      GeoNodeKind::Union3D { .. } => true,
-      GeoNodeKind::Intersection3D { .. } => true,
-      GeoNodeKind::Difference3D { .. } => true,
-      _ => false
-    }
+    matches!(
+      &self.kind,
+      GeoNodeKind::HalfSpace { .. }
+        | GeoNodeKind::Sphere { .. }
+        | GeoNodeKind::Extrude { .. }
+        | GeoNodeKind::Transform { .. }
+        | GeoNodeKind::Union3D { .. }
+        | GeoNodeKind::Intersection3D { .. }
+        | GeoNodeKind::Difference3D { .. }
+    )
   }
 }
 
@@ -258,7 +258,7 @@ impl GeoNode {
     }
   }
 
-  fn polygon_implicit_eval(vertices: &Vec<DVec2>, sample_point: &DVec2) -> f64 {
+  fn polygon_implicit_eval(vertices: &[DVec2], sample_point: &DVec2) -> f64 {
     // Vertices are already in double precision
     let vertices_dvec2 = vertices;
     
@@ -301,7 +301,7 @@ impl GeoNode {
     }
     
     // Calculate projection of point onto line
-    let t = f64::max(0.0, f64::min(1.0, (*point - *line_start).dot(line_vector) / line_length_squared));
+    let t = ((*point - *line_start).dot(line_vector) / line_length_squared).clamp(0.0, 1.0);
     
     // Calculate closest point on the line segment
     let closest_point = *line_start + line_vector * t;
@@ -311,7 +311,7 @@ impl GeoNode {
   }
 
   /// Check if a point is inside a polygon using ray casting algorithm
-  fn is_point_inside_polygon(point: &DVec2, vertices: &Vec<DVec2>) -> bool {
+  fn is_point_inside_polygon(point: &DVec2, vertices: &[DVec2]) -> bool {
     let num_vertices = vertices.len();
     if num_vertices < 3 {
         return false; // Not a proper polygon
@@ -358,7 +358,7 @@ impl GeoNode {
     } else {
         // Normal case - check if ray intersects line segment
         let t = (test_point.y - point1.y) / (point2.y - point1.y);
-        if t >= 0.0 && t <= 1.0 {
+        if (0.0..=1.0).contains(&t) {
             let x_intersect = point1.x + t * (point2.x - point1.x);
             return x_intersect >= test_point.x;
         }
@@ -368,9 +368,9 @@ impl GeoNode {
   }
 
   fn extrude_implicit_eval(
-      height: f64, 
-      direction: DVec3, 
-      shape: &Box<GeoNode>, 
+      height: f64,
+      direction: DVec3,
+      shape: &GeoNode,
       plane_to_world_transform: &Transform,
       infinite: bool,
       sample_point: &DVec3
@@ -397,12 +397,12 @@ impl GeoNode {
   }
 
   fn extrude_implicit_eval_batch(
-    height: f64, 
-    direction: DVec3, 
-    shape: &Box<GeoNode>, 
+    height: f64,
+    direction: DVec3,
+    shape: &GeoNode,
     plane_to_world_transform: &Transform,
     infinite: bool,
-    sample_points: &[DVec3; BATCH_SIZE], 
+    sample_points: &[DVec3; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     // Transform sample points from world space to plane-local space
@@ -430,9 +430,7 @@ impl GeoNode {
     shape.implicit_eval_2d_batch(&sample_points_2d, &mut shape_results);
 
     if infinite {
-      for i in 0..BATCH_SIZE {
-        results[i] = shape_results[i];
-      }
+      results[..BATCH_SIZE].copy_from_slice(&shape_results[..BATCH_SIZE]);
       return;
     }
 
@@ -444,7 +442,7 @@ impl GeoNode {
     }
   }
 
-  fn transform_implicit_eval(transform: &Transform, shape: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
+  fn transform_implicit_eval(transform: &Transform, shape: &GeoNode, sample_point: &DVec3) -> f64 {
     // Apply inverse transform to the sample point to get the point in the shape's local space
     let inverse_transform = transform.inverse();
     let transformed_point = inverse_transform.apply_to_position(sample_point);
@@ -454,9 +452,9 @@ impl GeoNode {
   }
 
   fn transform_implicit_eval_batch(
-    transform: &Transform, 
-    shape: &Box<GeoNode>, 
-    sample_points: &[DVec3; BATCH_SIZE], 
+    transform: &Transform,
+    shape: &GeoNode,
+    sample_points: &[DVec3; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     // Apply inverse transform to all sample points to get points in the shape's local space
@@ -471,15 +469,15 @@ impl GeoNode {
     shape.implicit_eval_3d_batch(&transformed_points, results);
   }
 
-  fn union_2d_implicit_eval(shapes: &Vec<GeoNode>, sample_point: &DVec2) -> f64 {
+  fn union_2d_implicit_eval(shapes: &[GeoNode], sample_point: &DVec2) -> f64 {
     shapes.iter().map(|shape| {
       shape.implicit_eval_2d(sample_point)
     }).reduce(f64::min).unwrap_or(f64::MAX)
   }
 
   fn union_2d_implicit_eval_batch(
-    shapes: &Vec<GeoNode>, 
-    sample_points: &[DVec2; BATCH_SIZE], 
+    shapes: &[GeoNode],
+    sample_points: &[DVec2; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     if shapes.is_empty() {
@@ -503,15 +501,15 @@ impl GeoNode {
     }
   }
 
-  fn union_3d_implicit_eval(shapes: &Vec<GeoNode>, sample_point: &DVec3) -> f64 {
+  fn union_3d_implicit_eval(shapes: &[GeoNode], sample_point: &DVec3) -> f64 {
     shapes.iter().map(|shape| {
       shape.implicit_eval_3d(sample_point)
     }).reduce(f64::min).unwrap_or(f64::MAX)
   }
 
   fn union_3d_implicit_eval_batch(
-    shapes: &Vec<GeoNode>, 
-    sample_points: &[DVec3; BATCH_SIZE], 
+    shapes: &[GeoNode],
+    sample_points: &[DVec3; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     if shapes.is_empty() {
@@ -535,15 +533,15 @@ impl GeoNode {
     }
   }
 
-  fn intersection_2d_implicit_eval(shapes: &Vec<GeoNode>, sample_point: &DVec2) -> f64 {
+  fn intersection_2d_implicit_eval(shapes: &[GeoNode], sample_point: &DVec2) -> f64 {
     shapes.iter().map(|shape| {
       shape.implicit_eval_2d(sample_point)
     }).reduce(f64::max).unwrap_or(f64::MIN)
   }
 
   fn intersection_2d_implicit_eval_batch(
-    shapes: &Vec<GeoNode>, 
-    sample_points: &[DVec2; BATCH_SIZE], 
+    shapes: &[GeoNode],
+    sample_points: &[DVec2; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     if shapes.is_empty() {
@@ -567,15 +565,15 @@ impl GeoNode {
     }
   }
 
-  fn intersection_3d_implicit_eval(shapes: &Vec<GeoNode>, sample_point: &DVec3) -> f64 {
+  fn intersection_3d_implicit_eval(shapes: &[GeoNode], sample_point: &DVec3) -> f64 {
     shapes.iter().map(|shape| {
       shape.implicit_eval_3d(sample_point)
     }).reduce(f64::max).unwrap_or(f64::MIN)
   }
 
   fn intersection_3d_implicit_eval_batch(
-    shapes: &Vec<GeoNode>, 
-    sample_points: &[DVec3; BATCH_SIZE], 
+    shapes: &[GeoNode],
+    sample_points: &[DVec3; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     if shapes.is_empty() {
@@ -599,7 +597,7 @@ impl GeoNode {
     }
   }
 
-  fn difference_2d_implicit_eval(base: &Box<GeoNode>, sub: &Box<GeoNode>, sample_point: &DVec2) -> f64 {
+  fn difference_2d_implicit_eval(base: &GeoNode, sub: &GeoNode, sample_point: &DVec2) -> f64 {
     let ubase = base.implicit_eval_2d(sample_point);
     let usub = sub.implicit_eval_2d(sample_point);
     
@@ -607,9 +605,9 @@ impl GeoNode {
   }
 
   fn difference_2d_implicit_eval_batch(
-    base: &Box<GeoNode>, 
-    sub: &Box<GeoNode>, 
-    sample_points: &[DVec2; BATCH_SIZE], 
+    base: &GeoNode,
+    sub: &GeoNode,
+    sample_points: &[DVec2; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     // Evaluate base shape in batch
@@ -625,7 +623,7 @@ impl GeoNode {
     }
   }
 
-  fn difference_3d_implicit_eval(base: &Box<GeoNode>, sub: &Box<GeoNode>, sample_point: &DVec3) -> f64 {
+  fn difference_3d_implicit_eval(base: &GeoNode, sub: &GeoNode, sample_point: &DVec3) -> f64 {
     let ubase = base.implicit_eval_3d(sample_point);
     let usub = sub.implicit_eval_3d(sample_point);
     
@@ -633,9 +631,9 @@ impl GeoNode {
   }
 
   fn difference_3d_implicit_eval_batch(
-    base: &Box<GeoNode>, 
-    sub: &Box<GeoNode>, 
-    sample_points: &[DVec3; BATCH_SIZE], 
+    base: &GeoNode,
+    sub: &GeoNode,
+    sample_points: &[DVec3; BATCH_SIZE],
     results: &mut [f64; BATCH_SIZE]
   ) {
     // Evaluate base shape in batch

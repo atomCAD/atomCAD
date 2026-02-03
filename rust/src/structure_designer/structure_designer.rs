@@ -50,6 +50,12 @@ pub struct StructureDesigner {
   navigation_history: NavigationHistory,
 }
 
+impl Default for StructureDesigner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StructureDesigner {
 
   pub fn new() -> Self {
@@ -82,7 +88,7 @@ impl StructureDesigner {
   pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
     use crate::structure_designer::structure_designer_scene::NodeOutput;
     // Find the first atomic structure with from_selected_node = true
-    for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
+    for node_data in self.last_generated_structure_designer_scene.node_data.values() {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
         if atomic_structure.decorator().from_selected_node {
           return Some(atomic_structure);
@@ -271,7 +277,7 @@ impl StructureDesigner {
     
     // Recreate the gadget for the selected node
     if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
-      self.gadget = network.provide_gadget(&self);
+      self.gadget = network.provide_gadget(self);
     }
 
     if let Some(gadget) = &self.gadget {
@@ -402,7 +408,7 @@ impl StructureDesigner {
     // - Selection changed
     // - Node with gadget becomes node without gadget (gadget disappears)
     if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
-      self.gadget = network.provide_gadget(&self);
+      self.gadget = network.provide_gadget(self);
       if let Some(gadget) = &self.gadget {
         self.last_generated_structure_designer_scene.tessellatable = Some(gadget.as_tessellatable());
       } else {
@@ -709,7 +715,7 @@ impl StructureDesigner {
       };
 
       // Get the node type and check parameter
-      match self.node_type_registry.get_node_type_for_node(&dest_node) {
+      match self.node_type_registry.get_node_type_for_node(dest_node) {
         Some(node_type) => {
           if dest_param_index >= node_type.parameters.len() {
             return;
@@ -804,10 +810,7 @@ impl StructureDesigner {
           }
         }
 
-        match compatible_param_index {
-          Some(param_idx) => Some((source_node_id, source_pin_index, target_node_id, param_idx)),
-          None => None,
-        }
+        compatible_param_index.map(|param_idx| (source_node_id, source_pin_index, target_node_id, param_idx))
       } else {
         // Source is input, connect target's output to source's input pin
         let target_output_type = &target_node_type.output_type;
@@ -971,7 +974,7 @@ impl StructureDesigner {
   fn refresh_scene_dependent_edit_atom_data(&mut self) {
     // First calculate the selection transform
     let selection_transform = self.get_atomic_structure_from_selected_node()
-      .and_then(|atomic_structure| calc_selection_transform(atomic_structure));
+      .and_then(calc_selection_transform);
     
     // Then update the edit atom data with the pre-calculated transform
     if let Some(edit_atom_data) = get_selected_edit_atom_data_mut(self) {
@@ -1691,7 +1694,7 @@ impl StructureDesigner {
     
     use crate::structure_designer::structure_designer_scene::NodeOutput;
     // First, check all atomic structures in the scene
-    for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
+    for node_data in self.last_generated_structure_designer_scene.node_data.values() {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
         match atomic_structure.hit_test(ray_origin, ray_direction, visualization, 
           |atom| get_displayed_atom_radius(atom, &display_visualization), BAS_STICK_RADIUS) {
@@ -1759,7 +1762,7 @@ impl StructureDesigner {
         );
         
         // Track visibility changes
-        for (node_id, _display_type) in &changes {
+        for node_id in changes.keys() {
           self.pending_changes.visibility_changed.insert(*node_id);
         }
         
@@ -2121,8 +2124,7 @@ impl StructureDesigner {
 
     // Create the network stack
     let network = self.node_type_registry.node_networks.get(&network_name).unwrap();
-    let mut network_stack = Vec::new();
-    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+    let network_stack = vec![NetworkStackElement { node_network: network, node_id: 0 }];
 
     // Evaluate the node (output pin 0 is the main output)
     let result = self.network_evaluator.evaluate(
@@ -2195,7 +2197,7 @@ impl StructureDesigner {
     let mut has_structures = false;
 
     // Merge all atomic structures from node_data into one
-    for (_node_id, node_data) in &self.last_generated_structure_designer_scene.node_data {
+    for node_data in self.last_generated_structure_designer_scene.node_data.values() {
       if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
         merged_structure.add_atomic_structure(atomic_structure);
         has_structures = true;

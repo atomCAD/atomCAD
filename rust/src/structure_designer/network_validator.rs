@@ -210,7 +210,7 @@ fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &Node
     
     // Collect nodes that need argument count adjustments
     for (dest_node_id, dest_node) in &network.nodes {
-        if let Some(dest_node_type) = node_type_registry.get_node_type_for_node(&dest_node) {
+        if let Some(dest_node_type) = node_type_registry.get_node_type_for_node(dest_node) {
             let expected_param_count = dest_node_type.parameters.len();
             let current_arg_count = dest_node.arguments.len();
             
@@ -251,7 +251,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
         }
         
         // Get the destination node type to access parameter information
-        let dest_node_type = match node_type_registry.get_node_type_for_node(&dest_node) {
+        let dest_node_type = match node_type_registry.get_node_type_for_node(dest_node) {
             Some(node_type) => node_type,
             None => {
                 network.validation_errors.push(ValidationError::new(
@@ -314,7 +314,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                 }
                 
                 // Get the source node type to access its output type
-                let _source_node_type = match node_type_registry.get_node_type_for_node(&source_node) {
+                let _source_node_type = match node_type_registry.get_node_type_for_node(source_node) {
                     Some(node_type) => node_type,
                     None => {
                         network.validation_errors.push(ValidationError::new(

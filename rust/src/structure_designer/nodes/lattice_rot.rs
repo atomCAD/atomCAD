@@ -62,7 +62,7 @@ impl NodeData for LatticeRotData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -138,7 +138,7 @@ impl NodeData for LatticeRotData {
         if network_stack.len() == 1 {
           let eval_cache = LatticeRotEvalCache {
             unit_cell: shape.unit_cell.clone(),
-            pivot_point: pivot_point,  // Store the actual evaluated pivot point
+            pivot_point,  // Store the actual evaluated pivot point
           };
           context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }

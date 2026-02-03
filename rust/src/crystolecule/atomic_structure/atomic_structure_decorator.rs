@@ -17,6 +17,12 @@ pub struct AtomicStructureDecorator {
     pub selection_transform: Option<Transform>,
 }
 
+impl Default for AtomicStructureDecorator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AtomicStructureDecorator {
     pub fn new() -> Self {
         Self {

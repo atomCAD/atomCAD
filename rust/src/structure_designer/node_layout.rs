@@ -146,7 +146,7 @@ pub fn nodes_overlap(
 ///
 /// # Returns
 /// `true` if the proposed position would cause an overlap
-pub fn overlaps_any<'a, I>(
+pub fn overlaps_any<I>(
     proposed_pos: DVec2,
     proposed_size: DVec2,
     existing_nodes: I,

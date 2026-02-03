@@ -49,13 +49,13 @@ impl NodeData for HalfSpaceData {
       let eval_cache = structure_designer.get_selected_node_eval_cache()?;
       let half_space_cache = eval_cache.downcast_ref::<HalfSpaceEvalCache>()?;
 
-      return Some(Box::new(HalfSpaceGadget::new(
+      Some(Box::new(HalfSpaceGadget::new(
         self.max_miller_index,
         &self.miller_index,
         self.center,
         self.shift,
         self.subdivision,
-        &half_space_cache.unit_cell)));
+        &half_space_cache.unit_cell)))
     }
   
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -65,7 +65,7 @@ impl NodeData for HalfSpaceData {
     fn eval<'a>(
         &self,
         network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
+        network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
@@ -138,14 +138,14 @@ impl NodeData for HalfSpaceData {
       let shift_distance = (shift as f64 / subdivision as f64) * plane_props.d_spacing;
       let shifted_center = center_pos + plane_props.normal * shift_distance;
 
-      return NetworkResult::Geometry(GeometrySummary {
+      NetworkResult::Geometry(GeometrySummary {
         unit_cell: unit_cell.clone(),
         frame_transform: Transform::new(
           center_pos,
           DQuat::from_rotation_arc(DVec3::Y, plane_props.normal),
         ),
         geo_tree_root: GeoNode::half_space(plane_props.normal, shifted_center),
-      });
+      })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -378,7 +378,7 @@ impl NodeNetworkGadget for HalfSpaceGadget {
 impl HalfSpaceGadget {
 
     pub fn new(max_miller_index: i32, miller_index: &IVec3, center: IVec3, shift: i32, subdivision: i32, unit_cell: &UnitCellStruct) -> Self {        
-        return Self {
+        Self {
             max_miller_index,
             miller_index: *miller_index,
             center,
@@ -388,7 +388,7 @@ impl HalfSpaceGadget {
             dragged_handle_index: None,
             possible_miller_indices: half_space_utils::generate_possible_miller_indices(max_miller_index),
             unit_cell: unit_cell.clone(),
-        };
+        }
     }
 }
 

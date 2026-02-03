@@ -33,7 +33,7 @@ impl NodeData for ExportXYZData {
   fn eval<'a>(
     &self,
     network_evaluator: &NetworkEvaluator,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     _decorate: bool,
@@ -89,9 +89,7 @@ impl NodeData for ExportXYZData {
   }
 
   fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
-      if connected_input_pins.contains("file_name") {
-          None
-      } else if self.file_name.is_empty() {
+      if connected_input_pins.contains("file_name") || self.file_name.is_empty() {
           None
       } else {
           Some(self.file_name.clone())
@@ -110,6 +108,12 @@ impl NodeData for ExportXYZData {
       }
       Ok(())
   }
+}
+
+impl Default for ExportXYZData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExportXYZData {

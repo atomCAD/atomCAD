@@ -530,6 +530,7 @@ impl<'a> NetworkEditor<'a> {
     }
 
     /// Extract source node references from a property value.
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_source_refs(&self, prop_value: &PropertyValue) -> Vec<(String, bool)> {
         match prop_value {
             PropertyValue::NodeRef(name) => vec![(name.clone(), false)],

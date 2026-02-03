@@ -64,7 +64,7 @@ impl NodeData for LatticeMoveData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -246,15 +246,15 @@ impl NodeNetworkGadget for LatticeMoveGadget {
 
 impl LatticeMoveGadget {
   pub fn new(translation: IVec3, lattice_subdivision: i32, unit_cell: &UnitCellStruct) -> Self {
-      let ret = Self {
+      
+      Self {
           translation,
           lattice_subdivision,
           dragged_handle_index: None,
           start_drag_offset: 0.0,
           start_drag_translation: translation,
           unit_cell: unit_cell.clone(),
-      };
-      ret
+      }
   }
 
   // Helper method to get the real space position accounting for subdivision

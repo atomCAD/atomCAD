@@ -58,7 +58,7 @@ impl NodeData for AtomRotData {
     fn eval<'a>(
         &self,
         network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
+        network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
@@ -437,7 +437,7 @@ fn cylinder_ray_intersection(
     let t = (a * e - b * d) / denom;  // Parameter along ray [0,∞)
 
     // Check if the closest point is within the cylinder bounds
-    if s < 0.0 || s > 1.0 {
+    if !(0.0..=1.0).contains(&s) {
         return false;
     }
 

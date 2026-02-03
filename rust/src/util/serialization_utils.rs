@@ -116,7 +116,7 @@ pub mod dquat_serializer {
 pub mod vec_ivec2_serializer {
     use super::*;
 
-    pub fn serialize<S>(vec_ivec2: &Vec<IVec2>, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(vec_ivec2: &[IVec2], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {

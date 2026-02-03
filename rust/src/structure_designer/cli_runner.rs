@@ -210,7 +210,7 @@ fn parse_cli_parameters(
     println!("  ✓ Parsed parameter '{}' = {} (type: {})", 
       param_name, 
       param_value.to_display_string(), 
-      param_def.data_type.to_string()
+      param_def.data_type
     );
     
     // Store the parsed value in the HashMap

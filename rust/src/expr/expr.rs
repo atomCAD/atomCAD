@@ -153,7 +153,7 @@ impl Expr {
                     let arg_type = arg.validate(variables, functions)?;
                     if !Self::types_compatible(&arg_type, expected_type) {
                         return Err(format!("Function {} argument {} expects type {}, got {}", 
-                            name, i + 1, expected_type.to_string(), arg_type.to_string()));
+                            name, i + 1, expected_type, arg_type));
                     }
                 }
                 
@@ -167,7 +167,7 @@ impl Expr {
                 // Condition must be boolean or int
                 match condition_type {
                     DataType::Bool | DataType::Int => {},
-                    _ => return Err(format!("Conditional condition must be boolean or int, got {}", condition_type.to_string()))
+                    _ => return Err(format!("Conditional condition must be boolean or int, got {}", condition_type))
                 }
                 
                 // Then and else branches must have compatible types
@@ -178,7 +178,7 @@ impl Expr {
                         _ => Ok(then_type.clone()) // Same types or other compatible combinations
                     }
                 } else {
-                    Err(format!("Conditional branches have incompatible types: {} and {}", then_type.to_string(), else_type.to_string()))
+                    Err(format!("Conditional branches have incompatible types: {} and {}", then_type, else_type))
                 }
             }
             Expr::MemberAccess(expr, member) => {
@@ -192,7 +192,7 @@ impl Expr {
                     (DataType::IVec2, "x" | "y") => Ok(DataType::Int),
                     // IVec3 components
                     (DataType::IVec3, "x" | "y" | "z") => Ok(DataType::Int),
-                    _ => Err(format!("Type {} does not have member '{}'", expr_type.to_string(), member))
+                    _ => Err(format!("Type {} does not have member '{}'", expr_type, member))
                 }
             }
         }
@@ -353,11 +353,8 @@ impl Expr {
             }
             BinOp::Mod => {
                 // Check for modulo by zero first
-                match &right {
-                    NetworkResult::Int(0) => {
-                        return NetworkResult::Error("Modulo by zero".to_string());
-                    }
-                    _ => {}
+                if let NetworkResult::Int(0) = &right {
+                    return NetworkResult::Error("Modulo by zero".to_string());
                 }
                 // Modulo only works with integers
                 match (left, right) {

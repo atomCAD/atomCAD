@@ -11,6 +11,12 @@ pub struct TessellationOutput {
   pub line_mesh: LineMesh,
 }
 
+impl Default for TessellationOutput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TessellationOutput {
   pub fn new() -> Self {
     Self {
@@ -80,7 +86,7 @@ pub fn tessellate_cuboid(
     output_mesh,
     &vertices[3], &vertices[2], &vertices[1], &vertices[0],
     &rotator.mul_vec3(DVec3::Y),
-    &top_material
+    top_material
   );
 
   // Bottom face
@@ -88,7 +94,7 @@ pub fn tessellate_cuboid(
     output_mesh,
     &vertices[4], &vertices[5], &vertices[6], &vertices[7],
     &rotator.mul_vec3(-DVec3::Y),
-    &bottom_material
+    bottom_material
   );
 
   // Front face
@@ -96,7 +102,7 @@ pub fn tessellate_cuboid(
     output_mesh,
     &vertices[2], &vertices[3], &vertices[7], &vertices[6],
     &rotator.mul_vec3(DVec3::Z),
-    &side_material
+    side_material
   );
 
   // Back face
@@ -104,7 +110,7 @@ pub fn tessellate_cuboid(
     output_mesh,
     &vertices[0], &vertices[1], &vertices[5], &vertices[4],
     &rotator.mul_vec3(-DVec3::Z),
-    &side_material
+    side_material
   );
 
   // Right face
@@ -112,7 +118,7 @@ pub fn tessellate_cuboid(
     output_mesh,
     &vertices[1], &vertices[2], &vertices[6], &vertices[5],
     &rotator.mul_vec3(DVec3::X),
-    &side_material
+    side_material
   );
 
   // Left face
@@ -120,7 +126,7 @@ pub fn tessellate_cuboid(
     output_mesh,
     &vertices[3], &vertices[0], &vertices[4], &vertices[7],
     &rotator.mul_vec3(-DVec3::X),
-    &side_material
+    side_material
   );
 }
 
@@ -241,6 +247,7 @@ pub fn tessellate_sphere(
   }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tessellate_sphere_with_occlusion(
     output_mesh: &mut Mesh,
     occludable_mesh: &mut OccludableMesh,
@@ -333,22 +340,21 @@ fn build_sphere_geometry(
 /// Phase 2: Mark occlusion for vertices and triangle centers
 fn mark_occlusion(occludable_mesh: &mut OccludableMesh, occluder_spheres: &[OccluderSphere]) {
     // Mark vertex occlusion
-    for i in 0..occludable_mesh.vertex_count() {
-        let position = occludable_mesh.vertices()[i].position;
-        occludable_mesh.vertices_mut()[i].occluded = is_vertex_inside_occluder_spheres(&position, occluder_spheres);
+    for vertex in occludable_mesh.vertices_mut() {
+        vertex.occluded = is_vertex_inside_occluder_spheres(&vertex.position, occluder_spheres);
     }
-    
-    // Mark triangle center occlusion
-    for i in 0..occludable_mesh.triangle_count() {
-        // Get vertex positions for triangle center calculation
-        let triangle = occludable_mesh.triangles()[i];
+
+    // Collect triangle center positions first (to avoid borrow conflict)
+    let triangle_centers: Vec<Vec3> = occludable_mesh.triangles().iter().map(|triangle| {
         let v0_pos = occludable_mesh.vertices()[triangle.v0 as usize].position;
         let v1_pos = occludable_mesh.vertices()[triangle.v1 as usize].position;
         let v2_pos = occludable_mesh.vertices()[triangle.v2 as usize].position;
-        let triangle_center = (v0_pos + v1_pos + v2_pos) / 3.0;
-        
-        // Mark center occlusion
-        occludable_mesh.triangles_mut()[i].center_occluded = is_vertex_inside_occluder_spheres(&triangle_center, occluder_spheres);
+        (v0_pos + v1_pos + v2_pos) / 3.0
+    }).collect();
+
+    // Mark triangle center occlusion
+    for (triangle, center) in occludable_mesh.triangles_mut().iter_mut().zip(triangle_centers.iter()) {
+        triangle.center_occluded = is_vertex_inside_occluder_spheres(center, occluder_spheres);
     }
 }
 
@@ -364,6 +370,7 @@ fn is_vertex_inside_occluder_spheres(vertex_position: &Vec3, occluder_spheres: &
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tessellate_cylinder(
     output_mesh: &mut Mesh,
     top_center: &DVec3,
@@ -418,7 +425,7 @@ pub fn tessellate_cylinder(
     let top_mat = top_material.unwrap_or(material);
     tessellate_circle_sheet (
       output_mesh,
-      &top_center,
+      top_center,
       &up,
       radius,
       divisions,
@@ -429,7 +436,7 @@ pub fn tessellate_cylinder(
     let bottom_mat = bottom_material.unwrap_or(material);
     tessellate_circle_sheet (
       output_mesh,
-      &bottom_center,
+      bottom_center,
       &down,
       radius,
       divisions,
@@ -498,6 +505,7 @@ pub fn tessellate_crosshair_3d(
   );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tessellate_grid(
     output_mesh: &mut Mesh,
     center: &DVec3,
@@ -631,6 +639,7 @@ pub fn tessellate_cone(
   }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn tessellate_arrow(
   output_mesh: &mut Mesh,
   start_center: &DVec3,
@@ -645,7 +654,7 @@ pub fn tessellate_arrow(
     tessellate_cylinder(
       output_mesh,
       &(start_center + axis_dir * cylinder_length),
-      &start_center,
+      start_center,
       cylinder_radius,
       divisions,
       material,

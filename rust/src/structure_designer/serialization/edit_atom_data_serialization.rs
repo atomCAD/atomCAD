@@ -46,7 +46,7 @@ pub fn edit_atom_data_to_serializable(data: &EditAtomData) -> io::Result<Seriali
             ("delete".to_string(), serde_json::to_value(delete_cmd)?)
         } else {
             return Err(io::Error::new(io::ErrorKind::InvalidData, 
-                format!("Unsupported command type in EditAtomData history")));
+                "Unsupported command type in EditAtomData history".to_string()));
         };
         
         serializable_commands.push(SerializableEditAtomCommand {

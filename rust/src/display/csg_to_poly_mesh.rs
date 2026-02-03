@@ -67,15 +67,15 @@ fn convert_polygons_to_poly_mesh(polygons: &Vec<Polygon<()>>, open: bool, hatche
         for vertex in &polygon.vertices {
             // Convert nalgebra Point3 to glam DVec3 and unscale from CSG coordinates
             let position = DVec3::new(
-                unscale_from_csg(vertex.pos.x as f64),
-                unscale_from_csg(vertex.pos.y as f64),
-                unscale_from_csg(vertex.pos.z as f64),
+                unscale_from_csg(vertex.pos.x),
+                unscale_from_csg(vertex.pos.y),
+                unscale_from_csg(vertex.pos.z),
             );
 
             // Get or insert the vertex, retrieving its index
             let vertex_idx = unique_vertices.get_or_insert(position, {
-                let idx = poly_mesh.add_vertex(position);
-                idx
+                
+                poly_mesh.add_vertex(position)
             });
             
             face_vertices.push(vertex_idx);
@@ -100,9 +100,9 @@ fn triangulate_geo_polygon(poly2d: &GeoPolygon<Real>, drawing_plane: &DrawingPla
     
     for triangle in poly2d.earcut_triangles() {
         // Map 2D plane coordinates to 3D world positions using drawing_plane
-        let p0_3d = drawing_plane.real_2d_to_world_3d(&DVec2::new(triangle.0.x as f64, triangle.0.y as f64));
-        let p1_3d = drawing_plane.real_2d_to_world_3d(&DVec2::new(triangle.1.x as f64, triangle.1.y as f64));
-        let p2_3d = drawing_plane.real_2d_to_world_3d(&DVec2::new(triangle.2.x as f64, triangle.2.y as f64));
+        let p0_3d = drawing_plane.real_2d_to_world_3d(&DVec2::new(triangle.0.x, triangle.0.y));
+        let p1_3d = drawing_plane.real_2d_to_world_3d(&DVec2::new(triangle.1.x, triangle.1.y));
+        let p2_3d = drawing_plane.real_2d_to_world_3d(&DVec2::new(triangle.2.x, triangle.2.y));
         
         // Note: geo crate's earcut_triangles() produces clockwise triangles
         // even from counter-clockwise input polygons. We reverse the vertex 
@@ -132,11 +132,11 @@ fn triangulate_csg_sketch(csg_sketch: &CSGSketch, drawing_plane: &DrawingPlane) 
     for geom in csg_sketch.geometry.iter() {
         match geom {
             Geometry::Polygon(poly2d) => {
-                ret.extend(triangulate_geo_polygon(&poly2d, drawing_plane));
+                ret.extend(triangulate_geo_polygon(poly2d, drawing_plane));
             },
             Geometry::MultiPolygon(multipoly) => {
                 for poly2d in multipoly {
-                    ret.extend(triangulate_geo_polygon(&poly2d, drawing_plane));
+                    ret.extend(triangulate_geo_polygon(poly2d, drawing_plane));
                 }
             },
             // Optional: handle other geometry types like LineString here.

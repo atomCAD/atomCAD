@@ -38,7 +38,7 @@ impl NodeData for CircleData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -75,7 +75,7 @@ impl NodeData for CircleData {
       let real_center = drawing_plane.effective_unit_cell.ivec2_lattice_to_real(&center);
       let real_radius = drawing_plane.effective_unit_cell.int_lattice_to_real(radius);
 
-      return NetworkResult::Geometry2D(
+      NetworkResult::Geometry2D(
         GeometrySummary2D {
           drawing_plane,
           frame_transform: Transform2D::new(
@@ -83,7 +83,7 @@ impl NodeData for CircleData {
             0.0,
           ),
           geo_tree_root: GeoNode::circle(real_center, real_radius),
-      });
+      })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

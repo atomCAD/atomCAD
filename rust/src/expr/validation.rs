@@ -31,13 +31,13 @@ static FUNCTION_IMPLEMENTATIONS: OnceLock<HashMap<String, EvaluationFunction>> =
 
 /// Initialize the global function registries
 pub fn init_function_registries() {
-    FUNCTION_SIGNATURES.get_or_init(|| create_standard_function_signatures());
+    FUNCTION_SIGNATURES.get_or_init(create_standard_function_signatures);
     FUNCTION_IMPLEMENTATIONS.get_or_init(|| create_standard_function_implementations());
 }
 
 /// Get reference to the global function signatures registry
 pub fn get_function_signatures() -> &'static HashMap<String, FunctionSignature> {
-    FUNCTION_SIGNATURES.get_or_init(|| create_standard_function_signatures())
+    FUNCTION_SIGNATURES.get_or_init(create_standard_function_signatures)
 }
 
 /// Get reference to the global function implementations registry

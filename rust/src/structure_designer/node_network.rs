@@ -45,6 +45,12 @@ pub struct Argument {
   pub argument_output_pins: HashMap<u64, i32>,
 }
 
+impl Default for Argument {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Argument {
 
   pub fn new() -> Self {
@@ -215,7 +221,7 @@ impl NodeNetwork {
           // So source_node_id has node_id as a downstream dependent
           reverse_map
             .entry(source_node_id)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(node_id);
         }
       }
@@ -262,7 +268,9 @@ impl NodeNetwork {
   }
 
   pub fn new(node_type: NodeType) -> Self {
-    let ret = Self {
+    
+
+    Self {
       next_node_id: 1,
       next_param_id: 1,  // Start parameter IDs at 1
       node_type,
@@ -274,9 +282,7 @@ impl NodeNetwork {
       selected_wires: Vec::new(),
       valid: true,
       validation_errors: Vec::new(),
-    };
-
-    ret
+    }
   }
 
   /// Generate a unique display name for a new node of the given type.
@@ -591,7 +597,7 @@ impl NodeNetwork {
     };
     
     // Only add if not already selected
-    if !self.selected_wires.iter().any(|w| *w == wire) {
+    if !self.selected_wires.contains(&wire) {
       self.selected_wires.push(wire);
     }
     true
@@ -605,7 +611,7 @@ impl NodeNetwork {
       destination_node_id,
       destination_argument_index,
     };
-    self.selected_wires.iter().any(|w| *w == wire)
+    self.selected_wires.contains(&wire)
   }
 
   /// Get all selected wires
@@ -619,10 +625,8 @@ impl NodeNetwork {
     self.active_node_id = None;
     self.selected_wires.clear();
     for wire in wires {
-      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
-        if !self.selected_wires.iter().any(|w| *w == wire) {
-          self.selected_wires.push(wire);
-        }
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) && !self.selected_wires.contains(&wire) {
+        self.selected_wires.push(wire);
       }
     }
   }
@@ -632,10 +636,8 @@ impl NodeNetwork {
     self.selected_node_ids.clear();
     self.active_node_id = None;
     for wire in wires {
-      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
-        if !self.selected_wires.iter().any(|w| *w == wire) {
-          self.selected_wires.push(wire);
-        }
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) && !self.selected_wires.contains(&wire) {
+        self.selected_wires.push(wire);
       }
     }
   }
@@ -677,10 +679,8 @@ impl NodeNetwork {
 
     // Add wires
     for wire in wires {
-      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
-        if !self.selected_wires.iter().any(|w| *w == wire) {
-          self.selected_wires.push(wire);
-        }
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) && !self.selected_wires.contains(&wire) {
+        self.selected_wires.push(wire);
       }
     }
   }
@@ -702,10 +702,8 @@ impl NodeNetwork {
 
     // Add wires without clearing existing selection
     for wire in wires {
-      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) {
-        if !self.selected_wires.iter().any(|w| *w == wire) {
-          self.selected_wires.push(wire);
-        }
+      if self.nodes.contains_key(&wire.source_node_id) && self.nodes.contains_key(&wire.destination_node_id) && !self.selected_wires.contains(&wire) {
+        self.selected_wires.push(wire);
       }
     }
   }

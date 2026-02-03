@@ -95,7 +95,7 @@ fn tessellate_non_lightweight_content(
     };
 
     // Iterate over all node data and tessellate based on output type
-    for (_node_id, node_data) in &scene.node_data {
+    for node_data in scene.node_data.values() {
         match &node_data.output {
             NodeOutput::Atomic(atomic_structure) => {
                 // Tessellate atomic structures based on rendering method

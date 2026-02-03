@@ -79,6 +79,12 @@ pub struct AtomImpostorMesh {
     pub indices: Vec<u32>,  // 6 indices per atom (2 triangles per quad)
 }
 
+impl Default for AtomImpostorMesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AtomImpostorMesh {
     pub fn new() -> Self {
         Self {

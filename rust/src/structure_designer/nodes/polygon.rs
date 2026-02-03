@@ -48,7 +48,7 @@ impl NodeData for PolygonData {
     fn eval<'a>(
         &self,
         network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
+        network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
@@ -143,9 +143,9 @@ pub struct PolygonGadget {
 }
 
 impl PolygonGadget {
-    pub fn new(vertices: &Vec<IVec2>, drawing_plane: &DrawingPlane) -> Self {
+    pub fn new(vertices: &[IVec2], drawing_plane: &DrawingPlane) -> Self {
         PolygonGadget {
-            vertices: vertices.clone(),
+            vertices: vertices.to_vec(),
             is_dragging: false,
             dragged_handle: None,
             drawing_plane: drawing_plane.clone(),
@@ -205,9 +205,8 @@ impl Tessellatable for PolygonGadget {
     let selected_handle_material = Material::new(&common_constants::SELECTED_HANDLE_COLOR, roughness, metallic);  
     let line_material = Material::new(&common_constants::LINE_COLOR, roughness, metallic);
     
-    for i in 0..real_3d_vertices.len() {
+    for (i, &p1_3d) in real_3d_vertices.iter().enumerate() {
         let selected = self.dragged_handle.is_some() && self.dragged_handle.unwrap() == i;
-        let p1_3d = real_3d_vertices[i];
         let p2_3d = real_3d_vertices[(i + 1) % real_3d_vertices.len()];
 
         // handle for the point
@@ -257,9 +256,7 @@ impl Gadget for PolygonGadget {
             .collect();
 
         // First, check hits with vertex handles
-        for i in 0..real_3d_vertices.len() {
-            let p1_3d = real_3d_vertices[i];
-            
+        for (i, &p1_3d) in real_3d_vertices.iter().enumerate() {
             // Handle for the vertex - test cylinder along Z axis
             let handle_half_height = common_constants::HANDLE_HEIGHT * 0.5;
             let handle_start = p1_3d - plane_normal * handle_half_height;
@@ -271,8 +268,7 @@ impl Gadget for PolygonGadget {
         }
         
         // Next, check hits with line segments
-        for i in 0..real_3d_vertices.len() {
-            let p1_3d = real_3d_vertices[i];
+        for (i, &p1_3d) in real_3d_vertices.iter().enumerate() {
             let p2_3d = real_3d_vertices[(i + 1) % real_3d_vertices.len()];
             
             if cylinder_hit_test(&p2_3d, &p1_3d, common_constants::LINE_RADIUS * common_constants::LINE_RADIUS_HIT_TEST_FACTOR, &ray_origin, &ray_direction).is_some() {

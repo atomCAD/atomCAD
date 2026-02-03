@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use std::fmt;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct FunctionType {
@@ -27,51 +28,51 @@ pub enum DataType {
   Function(FunctionType),
 }
 
-impl DataType {
-
-
-  pub fn is_array(&self) -> bool {
-    matches!(self, DataType::Array(_))
-  }
-
-  /// Converts the DataType to its textual representation
-  pub fn to_string(&self) -> String {
+impl fmt::Display for DataType {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      DataType::None => "None".to_string(),
-      DataType::Bool => "Bool".to_string(),
-      DataType::String => "String".to_string(),
-      DataType::Int => "Int".to_string(),
-      DataType::Float => "Float".to_string(),
-      DataType::Vec2 => "Vec2".to_string(),
-      DataType::Vec3 => "Vec3".to_string(),
-      DataType::IVec2 => "IVec2".to_string(),
-      DataType::IVec3 => "IVec3".to_string(),
-      DataType::UnitCell => "UnitCell".to_string(),
-      DataType::DrawingPlane => "DrawingPlane".to_string(),
-      DataType::Geometry2D => "Geometry2D".to_string(),
-      DataType::Geometry => "Geometry".to_string(),
-      DataType::Atomic => "Atomic".to_string(),
-      DataType::Motif => "Motif".to_string(),
+      DataType::None => write!(f, "None"),
+      DataType::Bool => write!(f, "Bool"),
+      DataType::String => write!(f, "String"),
+      DataType::Int => write!(f, "Int"),
+      DataType::Float => write!(f, "Float"),
+      DataType::Vec2 => write!(f, "Vec2"),
+      DataType::Vec3 => write!(f, "Vec3"),
+      DataType::IVec2 => write!(f, "IVec2"),
+      DataType::IVec3 => write!(f, "IVec3"),
+      DataType::UnitCell => write!(f, "UnitCell"),
+      DataType::DrawingPlane => write!(f, "DrawingPlane"),
+      DataType::Geometry2D => write!(f, "Geometry2D"),
+      DataType::Geometry => write!(f, "Geometry"),
+      DataType::Atomic => write!(f, "Atomic"),
+      DataType::Motif => write!(f, "Motif"),
       DataType::Array(element_type) => {
-        format!("[{}]", element_type.to_string())
+        write!(f, "[{}]", element_type)
       },
       DataType::Function(func_type) => {
         if func_type.parameter_types.is_empty() {
-          format!("() -> {}", func_type.output_type.to_string())
+          write!(f, "() -> {}", func_type.output_type)
         } else if func_type.parameter_types.len() == 1 {
-          format!("{} -> {}", 
-            func_type.parameter_types[0].to_string(),
-            func_type.output_type.to_string())
+          write!(f, "{} -> {}",
+            func_type.parameter_types[0],
+            func_type.output_type)
         } else {
           let params = func_type.parameter_types
             .iter()
             .map(|t| t.to_string())
             .collect::<Vec<_>>()
             .join(",");
-          format!("({}) -> {}", params, func_type.output_type.to_string())
+          write!(f, "({}) -> {}", params, func_type.output_type)
         }
       }
     }
+  }
+}
+
+impl DataType {
+
+  pub fn is_array(&self) -> bool {
+    matches!(self, DataType::Array(_))
   }
 
   /// Checks if a source data type can be converted to a destination data type

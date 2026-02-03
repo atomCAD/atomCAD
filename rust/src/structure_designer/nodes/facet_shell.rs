@@ -443,16 +443,14 @@ impl NodeData for FacetShellData {
       let eval_cache = structure_designer.get_selected_node_eval_cache()?;
       let facet_shell_cache = eval_cache.downcast_ref::<FacetShellEvalCache>()?;
   
-      if self.selected_facet_index.is_none() {
-        return None;
-      }
+      self.selected_facet_index?;
       let selected_facet = &self.facets[self.selected_facet_index.unwrap()];
-      return Some(Box::new(FacetShellGadget {
+      Some(Box::new(FacetShellGadget {
         max_miller_index: self.max_miller_index,
         center: self.center,
         miller_index: selected_facet.miller_index,
         miller_index_variants: if selected_facet.symmetrize {
-          self.get_symmetric_variants(&selected_facet).into_iter().map(|facet| facet.miller_index).collect()
+          self.get_symmetric_variants(selected_facet).into_iter().map(|facet| facet.miller_index).collect()
         } else {
           vec![selected_facet.miller_index]
         },
@@ -461,7 +459,7 @@ impl NodeData for FacetShellData {
         dragged_handle_index: None,
         possible_miller_indices: half_space_utils::generate_possible_miller_indices(self.max_miller_index),
         unit_cell: facet_shell_cache.unit_cell.clone(),
-      }));
+      }))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -471,7 +469,7 @@ impl NodeData for FacetShellData {
     fn eval<'a>(
         &self,
         network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
+        network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
@@ -522,14 +520,14 @@ impl NodeData for FacetShellData {
           shapes.push(GeoNode::half_space(plane_props.normal, shifted_center));
         }
 
-        return NetworkResult::Geometry(GeometrySummary {
+        NetworkResult::Geometry(GeometrySummary {
           unit_cell: unit_cell.clone(),
           frame_transform: Transform::new(
             center_pos,
             DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
           ),
           geo_tree_root: GeoNode::intersection_3d(shapes)
-        });
+        })
       }
 
       fn clone_box(&self) -> Box<dyn NodeData> {

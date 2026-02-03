@@ -52,7 +52,7 @@ impl NodeData for HalfPlaneData {
     fn eval<'a>(
         &self,
         network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
+        network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
@@ -161,7 +161,7 @@ impl NodeData for HalfPlaneData {
       let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
     
       // Use point1 as the position and calculate the angle for the transform
-      return NetworkResult::Geometry2D(
+      NetworkResult::Geometry2D(
         GeometrySummary2D {
           drawing_plane,
           frame_transform: Transform2D::new(
@@ -169,7 +169,7 @@ impl NodeData for HalfPlaneData {
             normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
           ),
           geo_tree_root: GeoNode::half_plane(point1, point2),
-        });
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -193,15 +193,15 @@ impl NodeData for HalfPlaneData {
                 let mut parts = Vec::new();
 
                 if !center_connected {
-                    parts.push(format!("c: (0,0)"));
+                    parts.push("c: (0,0)".to_string());
                 }
 
                 if !shift_connected {
-                    parts.push(format!("s: 0"));
+                    parts.push("s: 0".to_string());
                 }
 
                 if !subdivision_connected {
-                    parts.push(format!("sub: 1"));
+                    parts.push("sub: 1".to_string());
                 }
 
                 if parts.is_empty() {

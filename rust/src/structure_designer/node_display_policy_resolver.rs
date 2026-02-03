@@ -8,6 +8,12 @@ use std::collections::VecDeque;
 pub struct NodeDisplayPolicyResolver {  
 }
 
+impl Default for NodeDisplayPolicyResolver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NodeDisplayPolicyResolver {
   pub fn new() -> Self {
     Self {}
@@ -139,7 +145,7 @@ impl NodeDisplayPolicyResolver {
    * * `node_network` - The node network to resolve the node display policy on
    * * `node_display_preferences` - The node display preferences to use
    * * `dirty_node_ids` - Only the node islands
-   * that contain dirty nodes are recalculated. If None, all nodes are considered dirty.
+   *   that contain dirty nodes are recalculated. If None, all nodes are considered dirty.
    * 
    * # Returns
    * The node ids for which the display type needs to be changed.

@@ -31,20 +31,20 @@ pub fn tessellate_xyz_gadget(output_mesh: &mut Mesh, unit_cell: &UnitCellStruct,
   let z_axis_dir = rotation_quat.mul_vec3(unit_cell.c.normalize());
 
   if include_rotation_handles {
-    tessellate_rotation_handle(output_mesh, &pos, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0));
-    tessellate_rotation_handle(output_mesh, &pos, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0));
-    tessellate_rotation_handle(output_mesh, &pos, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0));
+    tessellate_rotation_handle(output_mesh, pos, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0));
+    tessellate_rotation_handle(output_mesh, pos, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0));
+    tessellate_rotation_handle(output_mesh, pos, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0));
     
     // Tessellate axis arrows starting from negative ROTATION_HANDLE_OFFSET with extended length
     let axis_start_offset = -ROTATION_HANDLE_OFFSET;
     let extended_length = AXIS_CYLINDER_LENGTH + ROTATION_HANDLE_OFFSET;
-    tessellate_axis_arrow(output_mesh, &pos, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0), axis_start_offset, extended_length);
-    tessellate_axis_arrow(output_mesh, &pos, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0), axis_start_offset, extended_length);
-    tessellate_axis_arrow(output_mesh, &pos, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0), axis_start_offset, extended_length);
+    tessellate_axis_arrow(output_mesh, pos, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0), axis_start_offset, extended_length);
+    tessellate_axis_arrow(output_mesh, pos, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0), axis_start_offset, extended_length);
+    tessellate_axis_arrow(output_mesh, pos, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0), axis_start_offset, extended_length);
   } else {
-    tessellate_axis_arrow(output_mesh, &pos, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0), 0.0, AXIS_CYLINDER_LENGTH);
-    tessellate_axis_arrow(output_mesh, &pos, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0), 0.0, AXIS_CYLINDER_LENGTH);
-    tessellate_axis_arrow(output_mesh, &pos, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0), 0.0, AXIS_CYLINDER_LENGTH);
+    tessellate_axis_arrow(output_mesh, pos, &x_axis_dir, &Vec3::new(1.0, 0.0, 0.0), 0.0, AXIS_CYLINDER_LENGTH);
+    tessellate_axis_arrow(output_mesh, pos, &y_axis_dir, &Vec3::new(0.0, 1.0, 0.0), 0.0, AXIS_CYLINDER_LENGTH);
+    tessellate_axis_arrow(output_mesh, pos, &z_axis_dir, &Vec3::new(0.0, 0.0, 1.0), 0.0, AXIS_CYLINDER_LENGTH);
   }
 
   // Add center sphere to hide Z-fighting at axis intersection and provide visual clarity
@@ -189,9 +189,9 @@ pub fn xyz_gadget_hit_test(
     // Test rotation handles if enabled
     let mut rotation_hits = [None, None, None];
     if include_rotation_handles {
-        rotation_hits[0] = rotation_handle_hit_test(&pos, &x_axis_dir, ray_origin, ray_direction);
-        rotation_hits[1] = rotation_handle_hit_test(&pos, &y_axis_dir, ray_origin, ray_direction);
-        rotation_hits[2] = rotation_handle_hit_test(&pos, &z_axis_dir, ray_origin, ray_direction);
+        rotation_hits[0] = rotation_handle_hit_test(pos, &x_axis_dir, ray_origin, ray_direction);
+        rotation_hits[1] = rotation_handle_hit_test(pos, &y_axis_dir, ray_origin, ray_direction);
+        rotation_hits[2] = rotation_handle_hit_test(pos, &z_axis_dir, ray_origin, ray_direction);
     }
 
     // Find the closest hit and return its axis index

@@ -29,11 +29,11 @@ pub struct NetworkStackElement<'a> {
 }
 
 impl<'a> NetworkStackElement<'a> {
-  pub fn get_top_node(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> &'a Node {
+  pub fn get_top_node(network_stack: &[NetworkStackElement<'a>], node_id: u64) -> &'a Node {
     network_stack.last().unwrap().node_network.nodes.get(&node_id).unwrap()
   }
 
-  pub fn is_node_selected_in_root_network(network_stack: &Vec<NetworkStackElement<'a>>, node_id: u64) -> bool {
+  pub fn is_node_selected_in_root_network(network_stack: &[NetworkStackElement<'a>], node_id: u64) -> bool {
     network_stack.first().unwrap().node_network.is_node_selected(node_id)
   }
 }
@@ -49,6 +49,12 @@ pub struct NetworkEvaluationContext {
   pub node_output_strings: HashMap<u64, String>,
   pub selected_node_eval_cache: Option<Box<dyn Any>>,
   pub top_level_parameters: HashMap<String, NetworkResult>,
+}
+
+impl Default for NetworkEvaluationContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NetworkEvaluationContext {
@@ -71,6 +77,12 @@ pub struct NetworkEvaluator {
  * The node network evaluator is able to generate displayable representation for a node in a node network.
  * It delegates node related evaluation to functions in node specific modules.
  */
+impl Default for NetworkEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NetworkEvaluator {
   pub fn new() -> Self {
     Self {
@@ -116,9 +128,8 @@ impl NetworkEvaluator {
       context.top_level_parameters = params;
     }
 
-    let mut network_stack = Vec::new();
     // We assign the root node network zero node id. It is not used in the evaluation.
-    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+    let network_stack = vec![NetworkStackElement { node_network: network, node_id: 0 }];
 
     let node = match network.nodes.get(&node_id) {
       Some(node) => node,
@@ -184,22 +195,22 @@ impl NetworkEvaluator {
     };
 
     // Build NodeSceneData
-    let node_data = NodeSceneData {
+    
+
+    NodeSceneData {
       output,
       geo_tree,
       node_errors: context.node_errors.clone(),
       node_output_strings: context.node_output_strings.clone(),
       unit_cell,
       selected_node_eval_cache: context.selected_node_eval_cache,
-    };
-
-    node_data
+    }
   }
 
   fn generate_explicit_mesh_output<'a>(
     &mut self,
     result: NetworkResult,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64, _registry: &NodeTypeRegistry,
     _context: &mut NetworkEvaluationContext,
     geometry_visualization_preferences: &GeometryVisualizationPreferences) -> (NodeOutput, Option<GeoNode>) {
@@ -273,9 +284,11 @@ impl NetworkEvaluator {
   /// Helper method for the common pattern: get value from node data, or override with input pin
   /// Returns the input pin value if connected, otherwise returns the default value
   /// If the input pin evaluation results in an error, returns that error
+  #[allow(clippy::too_many_arguments)]
+  #[allow(clippy::result_large_err)]
   pub fn evaluate_or_default<'a, T>(
     &self,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
@@ -305,9 +318,10 @@ impl NetworkEvaluator {
   /// Helper method for the common pattern: get value from required input pin
   /// Returns the input pin value if connected, otherwise returns the missing input error
   /// If the input pin evaluation results in an error, returns that error
+  #[allow(clippy::result_large_err)]
   pub fn evaluate_required<'a, T>(
     &self,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
@@ -336,14 +350,14 @@ impl NetworkEvaluator {
   // type of the parameter.
   pub fn evaluate_arg_required<'a>(
     &self,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
     parameter_index: usize,
   ) -> NetworkResult {
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let input_name = registry.get_parameter_name(&node, parameter_index);
+    let input_name = registry.get_parameter_name(node, parameter_index);
     let result = self.evaluate_arg(network_stack, node_id, registry, context, parameter_index);
     if let NetworkResult::None = result {
       input_missing_error(&input_name)
@@ -359,14 +373,14 @@ impl NetworkEvaluator {
   // type of the parameter.
   pub fn evaluate_arg<'a>(
     &self,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
     parameter_index: usize,
   ) -> NetworkResult {
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
-    let input_name = registry.get_parameter_name(&node, parameter_index);
+    let input_name = registry.get_parameter_name(node, parameter_index);
 
     // Get the expected input type for this parameter
     let expected_type = registry.get_node_param_data_type(node, parameter_index);
@@ -435,9 +449,9 @@ impl NetworkEvaluator {
         let input_node_output_type = input_node_type.unwrap().get_output_pin_type(input_node_output_pin_index);
 
         // Convert the result to the expected type
-        let converted_result = result.convert_to(&input_node_output_type, &expected_type);
+        
 
-        converted_result
+        result.convert_to(&input_node_output_type, &expected_type)
       } else {
         NetworkResult::None // Nothing is connected
       }
@@ -447,7 +461,7 @@ impl NetworkEvaluator {
   // Evaluates the specified node (calculates the NetworkResult on its output pin).
   pub fn evaluate<'a>(
     &self,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     output_pin_index: i32,
     registry: &NodeTypeRegistry,
@@ -474,13 +488,13 @@ impl NetworkEvaluator {
     } else {
       let node = NetworkStackElement::get_top_node(network_stack, node_id);
       if registry.built_in_node_types.contains_key(&node.node_type_name) {
-        node.data.eval(&self, network_stack, node_id, registry, decorate, context)
+        node.data.eval(self, network_stack, node_id, registry, decorate, context)
       } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) { // custom node{
         // Do not evaluate invalid child networks
         if !child_network.valid {
           return NetworkResult::Error(format!("{} is invalid", node.node_type_name));
         }
-        let mut child_network_stack = network_stack.clone();
+        let mut child_network_stack = network_stack.to_vec();
         child_network_stack.push(NetworkStackElement { node_network: child_network, node_id });
         if child_network.return_node_id.is_none() {
           return NetworkResult::Error(format!("{} has no return node", node.node_type_name));

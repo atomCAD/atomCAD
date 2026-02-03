@@ -281,6 +281,7 @@ fn cell_overlaps_with_box(
 
 /// Fills the specified box with atoms using subdivision optimization.
 /// Recursively subdivides the box to avoid processing huge empty spaces.
+#[allow(clippy::too_many_arguments)]
 fn fill_box(
   unit_cell: &UnitCellStruct,
   geo_tree_root: &GeoNode,
@@ -367,6 +368,7 @@ fn fill_box(
 
 /// Fills the specified box with atoms.
 /// Called by fill_box. It does the actual filling by iterating through motif cells.
+#[allow(clippy::too_many_arguments)]
 fn do_fill_box(
   unit_cell: &UnitCellStruct,
   motif: &Motif,
@@ -428,6 +430,7 @@ fn do_fill_box(
 
 /// Fills a single motif cell with atoms from the motif.
 /// Adds atoms to the batched evaluator for later SDF evaluation.
+#[allow(clippy::too_many_arguments)]
 fn fill_cell(
   unit_cell: &UnitCellStruct,
   motif: &Motif,

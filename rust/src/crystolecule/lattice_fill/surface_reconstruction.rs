@@ -45,6 +45,7 @@ const AXIS_ALIGNMENT_THRESHOLD: f64 = 0.5;
 /// Visual debug flag: when true, enables visual debugging features:
 /// - Replaces atoms with colored elements based on surface orientation
 /// - Highlights reconstructed dimer bonds by selecting them
+///
 /// Set to false for normal reconstruction operation.
 const SURFACE_RECONSTRUCTION_VISUAL_DEBUG: bool = false;
 
@@ -886,6 +887,7 @@ fn add_hydrogen_passivation(
   structure.set_atom_hydrogen_passivation(dimer_pair.partner_atom_id, true);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn reconstruct_surface_100_diamond_cubic(
   structure: &mut AtomicStructure,
   atom_tracker: &PlacedAtomTracker,
@@ -921,10 +923,10 @@ fn reconstruct_surface_100_diamond_cubic(
 }
 
 /// Performs surface reconstruction on the atomic structure.
-/// 
+///
 /// This function will be expanded to support various reconstruction types,
 /// starting with (100) 2×1 dimer reconstruction for cubic diamond.
-/// 
+///
 /// # Arguments
 /// * `structure` - The atomic structure to apply reconstruction to
 /// * `atom_tracker` - Tracker with lattice coordinate mappings for all placed atoms
@@ -933,9 +935,10 @@ fn reconstruct_surface_100_diamond_cubic(
 /// * `parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
 /// * `hydrogen_passivation` - Whether to add hydrogen passivation to reconstructed dimers
-/// 
+///
 /// # Returns
 /// * The number of surface reconstructions performed (e.g., number of dimers for (100) reconstruction)
+#[allow(clippy::too_many_arguments)]
 pub fn reconstruct_surface(
   structure: &mut AtomicStructure,
   atom_tracker: &PlacedAtomTracker,

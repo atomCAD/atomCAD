@@ -44,6 +44,12 @@ pub struct LineMesh {
     pub indices: Vec<u32>,  // Each pair of indices represents a line segment
 }
 
+impl Default for LineMesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LineMesh {
     pub fn new() -> Self {
         Self {

@@ -11,16 +11,16 @@
 //! 
 //! Other optimization ideas for the future:
 //! - Lazy-initialization of the grid. IT might not be needed in certain usecases and
-//! even if needed eventually it is useful to have faster processing until it is needed
-//! (e.g atom fill)
+//!   even if needed eventually it is useful to have faster processing until it is needed
+//!   (e.g atom fill)
 //! - Use fixed-point IVec3 for position instead of DVec3 (one unit can be 0.001 Angstrom)
 //! - Structure of arrays for atoms?
 //! - Long term: lazy-storing atomic representations in crystals: only compute and store atomic
-//! representation of a region if something needs to be changed. The non-changed regions might be
-//! represented as octree nodes or just use the existing grid. This can be part of
-//! a bigger stramable LOD system in atomCAD. Needs to be carefully planned before implemented though
-//! and maybe the crystal representation should be introduced only on a higher level
-//! which just uses AtomicStructure.
+//!   representation of a region if something needs to be changed. The non-changed regions might be
+//!   represented as octree nodes or just use the existing grid. This can be part of
+//!   a bigger stramable LOD system in atomCAD. Needs to be carefully planned before implemented though
+//!   and maybe the crystal representation should be introduced only on a higher level
+//!   which just uses AtomicStructure.
 //!
 
 use crate::util::transform::Transform;
@@ -76,6 +76,12 @@ pub struct AtomicStructure {
   decorator: AtomicStructureDecorator,
 }
 
+impl Default for AtomicStructure {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AtomicStructure {
   // Decorator access
   pub fn decorator(&self) -> &AtomicStructureDecorator {
@@ -106,8 +112,7 @@ impl AtomicStructure {
   
   pub fn iter_atoms(&self) -> impl Iterator<Item = (&u32, &Atom)> {
     self.atoms.iter()
-      .enumerate()
-      .filter_map(|(_idx, slot)| {
+      .filter_map(|slot| {
         slot.as_ref().map(|atom| (&atom.id, atom))
       })
   }
@@ -342,10 +347,8 @@ impl AtomicStructure {
 
   pub fn select(&mut self, atom_ids: &Vec<u32>, bond_references: &Vec<BondReference>, select_modifier: SelectModifier) {
     if select_modifier == SelectModifier::Replace {
-      for slot in &mut self.atoms {
-        if let Some(atom) = slot {
-          atom.set_selected(false);
-        }
+      for atom in self.atoms.iter_mut().flatten() {
+        atom.set_selected(false);
       }
       self.decorator.clear_bond_selection();
     }
@@ -561,7 +564,7 @@ impl AtomicStructure {
   // Helper method to add an atom to the grid at a specific position
   fn add_atom_to_grid(&mut self, atom_id: u32, position: &DVec3) {
     let cell = self.get_cell_for_pos(position);
-    self.grid.entry(cell).or_insert_with(Vec::new).push(atom_id);
+    self.grid.entry(cell).or_default().push(atom_id);
   }
 
   // Helper method to remove an atom from the grid at a specific position
@@ -688,7 +691,7 @@ impl AtomicStructure {
     
     lines.push(format!("atoms: {}", self.num_atoms));
     lines.push(format!("bonds: {}", self.num_bonds));
-    lines.push(format!("frame_transform:"));
+    lines.push("frame_transform:".to_string());
     lines.push(format!("  translation: ({:.6}, {:.6}, {:.6})", 
       self.frame_transform.translation.x,
       self.frame_transform.translation.y,

@@ -36,6 +36,12 @@ pub struct PlacedAtomTracker {
   atom_map: FxIndexMap<CrystallographicAddress, u32>,
 }
 
+impl Default for PlacedAtomTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlacedAtomTracker {
   pub fn new() -> Self {
     PlacedAtomTracker {

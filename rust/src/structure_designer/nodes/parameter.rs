@@ -44,7 +44,7 @@ impl NodeData for ParameterData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -62,7 +62,7 @@ impl NodeData for ParameterData {
       }
 
       let parent_node_id = network_stack.last().unwrap().node_id;
-      let mut parent_network_stack = network_stack.clone();
+      let mut parent_network_stack = network_stack.to_vec();
       parent_network_stack.pop();
       let parent_node = parent_network_stack.last().unwrap().node_network.nodes.get(&parent_node_id).unwrap();
 
@@ -132,7 +132,7 @@ impl NodeData for ParameterData {
 
 fn eval_default<'a>(
   network_evaluator: &NetworkEvaluator,
-  network_stack: &Vec<NetworkStackElement<'a>>,
+  network_stack: &[NetworkStackElement<'a>],
   node_id: u64,
   registry: &NodeTypeRegistry,
   context: &mut NetworkEvaluationContext,

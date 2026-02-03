@@ -101,7 +101,7 @@ pub fn tessellate_coordinate_system(output_mesh: &mut LineMesh, unit_cell: &Unit
 pub fn tessellate_background_coordinate_system(unit_cell: Option<&UnitCellStruct>, background_preferences: &BackgroundPreferences) -> LineMesh {
     let mut line_mesh = LineMesh::new();
 
-    let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(|| UnitCellStruct::cubic_diamond());
+    let unit_cell_to_use = unit_cell.cloned().unwrap_or_else(UnitCellStruct::cubic_diamond);
     tessellate_coordinate_system(&mut line_mesh, &unit_cell_to_use, background_preferences);
 
     line_mesh
@@ -138,7 +138,7 @@ pub fn tessellate_drawing_plane_grid_and_axes(
         background_preferences.drawing_plane_grid_strong_color[2] as f32 / 255.0,
     ];
 
-    let grid_range = background_preferences.grid_size as i32;
+    let grid_range = background_preferences.grid_size;
     let axis_length_steps = background_preferences.grid_size as f64;
     let u_axis_end_2d = u_step_2d * axis_length_steps;
     let v_axis_end_2d = v_step_2d * axis_length_steps;
@@ -338,7 +338,7 @@ pub fn tessellate_grid_with_origin(
     primary_color: &[f32; 3],
     secondary_color: &[f32; 3],
 ) {
-    let grid_range = grid_size as i32;
+    let grid_range = grid_size;
 
     // Create grid lines parallel to the u vector (varying along v direction)
     for i in -grid_range..=grid_range {

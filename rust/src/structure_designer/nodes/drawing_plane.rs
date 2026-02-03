@@ -47,14 +47,14 @@ impl NodeData for DrawingPlaneData {
       let eval_cache = structure_designer.get_selected_node_eval_cache()?;
       let drawing_plane_cache = eval_cache.downcast_ref::<DrawingPlaneEvalCache>()?;
 
-      return Some(Box::new(DrawingPlaneGadget::new(
+      Some(Box::new(DrawingPlaneGadget::new(
         self.max_miller_index,
         &self.miller_index,
         self.center,
         self.shift,
         self.subdivision,
         &drawing_plane_cache.unit_cell,
-        &structure_designer.preferences.background_preferences)));
+        &structure_designer.preferences.background_preferences)))
     }
   
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -64,7 +64,7 @@ impl NodeData for DrawingPlaneData {
     fn eval<'a>(
         &self,
         network_evaluator: &NetworkEvaluator,
-        network_stack: &Vec<NetworkStackElement<'a>>,
+        network_stack: &[NetworkStackElement<'a>],
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
@@ -368,7 +368,7 @@ impl DrawingPlaneGadget {
       unit_cell: &UnitCellStruct,
       background_preferences: &BackgroundPreferences,
     ) -> Self {        
-        return Self {
+        Self {
             max_miller_index,
             miller_index: *miller_index,
             center,
@@ -379,7 +379,7 @@ impl DrawingPlaneGadget {
             possible_miller_indices: half_space_utils::generate_possible_miller_indices(max_miller_index),
             unit_cell: unit_cell.clone(),
             background_preferences: background_preferences.clone(),
-        };
+        }
     }
 }
 

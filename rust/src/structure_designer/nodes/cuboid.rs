@@ -41,7 +41,7 @@ impl NodeData for CuboidData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -86,14 +86,14 @@ impl NodeData for CuboidData {
 
       //println!("{}", geo_tree_root);
 
-      return NetworkResult::Geometry(GeometrySummary {
+      NetworkResult::Geometry(GeometrySummary {
         unit_cell,
         frame_transform: Transform::new(
           center,
           DQuat::IDENTITY,
         ),
         geo_tree_root,
-      });
+      })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

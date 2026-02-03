@@ -38,7 +38,7 @@ impl NodeData for ImportXYZData {
   fn eval<'a>(
     &self,
     network_evaluator: &NetworkEvaluator,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     _decorate: bool,
@@ -108,6 +108,12 @@ impl NodeData for ImportXYZData {
       }
       Ok(())
   }
+}
+
+impl Default for ImportXYZData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ImportXYZData {

@@ -135,10 +135,7 @@ impl NodeNetworksImportManager {
         name_prefix: Option<&str>
     ) -> Result<(), String> {
         // Compute transitive dependencies for the requested networks
-        let networks_with_dependencies = match self.compute_transitive_dependencies(network_names) {
-            Ok(deps) => deps,
-            Err(e) => return Err(e),
-        };
+        let networks_with_dependencies = self.compute_transitive_dependencies(network_names)?;
         
         // Take ownership of the library registry to enable moving networks
         let mut library_registry = match self.library_registry.take() {

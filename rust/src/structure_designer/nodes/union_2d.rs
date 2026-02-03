@@ -32,7 +32,7 @@ impl NodeData for Union2DData {
   fn eval<'a>(
     &self,
     network_evaluator: &NetworkEvaluator,
-    network_stack: &Vec<NetworkStackElement<'a>>,
+    network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
     _decorate: bool,
@@ -92,14 +92,14 @@ impl NodeData for Union2DData {
   
     frame_translation /= shape_count as f64;
   
-    return NetworkResult::Geometry2D(GeometrySummary2D { 
+    NetworkResult::Geometry2D(GeometrySummary2D { 
       drawing_plane: first_drawing_plane,
       frame_transform: Transform2D::new(
         frame_translation,
         0.0,
       ),
       geo_tree_root: GeoNode::union_2d(shapes),
-    });
+    })
   }
 
   fn clone_box(&self) -> Box<dyn NodeData> {

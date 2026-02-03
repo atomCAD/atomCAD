@@ -135,14 +135,14 @@ impl NodeData for AtomFillData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
       context: &mut NetworkEvaluationContext
     ) -> NetworkResult {
       // Evaluate geometry input
-      let shape_val = network_evaluator.evaluate_arg_required(&network_stack, node_id, registry, context, 0);
+      let shape_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
       if let NetworkResult::Error(_) = shape_val {
         return shape_val;
       }

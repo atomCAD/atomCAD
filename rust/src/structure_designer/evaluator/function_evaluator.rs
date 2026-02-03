@@ -68,10 +68,7 @@ impl FunctionEvaluator {
     let node_data = network.get_node_network_data(closure.node_id);
 
     //TODO: pass custom node type too.
-    let cloned_node_data = match node_data {
-      Some(data) => Some(data.clone_box()),
-      None => None,
-    };
+    let cloned_node_data = node_data.map(|data| data.clone_box());
     
     let main_node_id = ret.node_network.add_node(
       &node.node_type_name, 
@@ -105,9 +102,8 @@ impl FunctionEvaluator {
     evaluator: &NetworkEvaluator,
     registry: &NodeTypeRegistry) -> NetworkResult {
 
-      let mut network_stack = Vec::new();
       // We assign the root node network zero node id. It is not used in the evaluation.
-      network_stack.push(NetworkStackElement { node_network: &self.node_network, node_id: 0 });
+      let network_stack = vec![NetworkStackElement { node_network: &self.node_network, node_id: 0 }];
 
       // TODO: think about whether the context is ok this way?
       evaluator.evaluate(

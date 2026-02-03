@@ -148,17 +148,6 @@ impl DrawingPlane {
         )
     }
     
-    /// Creates a default drawing plane with cubic diamond unit cell and XY orientation.
-    /// 
-    /// This is the most common default for 2D geometry nodes.
-    /// Equivalent to `DrawingPlane::xy_plane(UnitCellStruct::cubic_diamond())`.
-    /// 
-    /// # Returns
-    /// * `DrawingPlane` - Default drawing plane (unwrapped, as cubic diamond always succeeds)
-    pub fn default() -> Self {
-        Self::xy_plane(UnitCellStruct::cubic_diamond())
-            .expect("Default drawing plane construction should never fail")
-    }
     
     /// Checks if two drawing planes are compatible for boolean operations.
     /// 
@@ -385,6 +374,17 @@ impl DrawingPlane {
     }
 }
 
+impl Default for DrawingPlane {
+    /// Creates a default drawing plane with cubic diamond unit cell and XY orientation.
+    ///
+    /// This is the most common default for 2D geometry nodes.
+    /// Equivalent to `DrawingPlane::xy_plane(UnitCellStruct::cubic_diamond())`.
+    fn default() -> Self {
+        Self::xy_plane(UnitCellStruct::cubic_diamond())
+            .expect("Default drawing plane construction should never fail")
+    }
+}
+
 /// Computes two primitive in-plane lattice basis vectors from a Miller index.
 /// 
 /// Uses the canonical perpendicular vector construction:
@@ -556,16 +556,11 @@ fn compute_preferred_plane_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result
                 0.0
             };
 
-            if score > best_score + tie_eps {
+            if score > best_score + tie_eps
+                || (prefer_111_obtuse && (score - best_score).abs() <= tie_eps && angle_score > best_angle_score + tie_eps) {
                 best_score = score;
                 best_angle_score = angle_score;
                 best_pair = Some((u, v_corrected));
-            } else if prefer_111_obtuse && (score - best_score).abs() <= tie_eps {
-                if angle_score > best_angle_score + tie_eps {
-                    best_score = score;
-                    best_angle_score = angle_score;
-                    best_pair = Some((u, v_corrected));
-                }
             }
         }
     }

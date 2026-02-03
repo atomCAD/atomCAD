@@ -95,8 +95,8 @@ pub fn get_dragged_shift(unit_cell: &UnitCellStruct, miller_index: &IVec3, cente
     let distance_along_normal = get_closest_point_on_first_ray(
         &center_pos,
         &plane_props.normal,
-        &ray_origin,
-        &ray_direction
+        ray_origin,
+        ray_direction
     );
 
     let real_space_distance = distance_along_normal - handle_offset;
@@ -221,7 +221,7 @@ pub fn tessellate_miller_indices_discs(
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
         // Get the crystallographically correct plane normal for this miller index
-        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index)
+        let direction = unit_cell.ivec3_miller_index_to_normal(miller_index)
             .expect("Miller index should be valid for gadget tessellation");
 
         // Calculate the position for the disc
@@ -357,7 +357,7 @@ pub fn hit_test_miller_indices_discs(
     // Iterate through all possible miller indices
     for miller_index in possible_miller_indices {
         // Get the crystallographically correct plane normal for this miller index
-        let direction = unit_cell.ivec3_miller_index_to_normal(&miller_index)
+        let direction = unit_cell.ivec3_miller_index_to_normal(miller_index)
             .expect("Miller index should be valid for gadget hit testing");
             
         // Calculate the position for the disc

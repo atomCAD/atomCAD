@@ -39,7 +39,7 @@ impl NodeData for SphereData {
     fn eval<'a>(
       &self,
       network_evaluator: &NetworkEvaluator,
-      network_stack: &Vec<NetworkStackElement<'a>>,
+      network_stack: &[NetworkStackElement<'a>],
       node_id: u64,
       registry: &NodeTypeRegistry,
       _decorate: bool,
@@ -75,14 +75,14 @@ impl NodeData for SphereData {
       let real_center = unit_cell.ivec3_lattice_to_real(&center);
       let real_radius = unit_cell.int_lattice_to_real(radius);
 
-      return NetworkResult::Geometry(GeometrySummary { 
+      NetworkResult::Geometry(GeometrySummary { 
         unit_cell,
         frame_transform: Transform::new(
         real_center,
         DQuat::IDENTITY,
         ),
         geo_tree_root: GeoNode::sphere(real_center, real_radius),
-      });
+      })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

@@ -109,12 +109,12 @@ fn order_columns(columns: &mut [Vec<u64>], network: &NodeNetwork) {
     }
 
     // Process each column starting from column 1
-    for col_idx in 1..columns.len() {
-        order_single_column(&mut columns[col_idx], &prev_column_positions, network);
+    for column in columns.iter_mut().skip(1) {
+        order_single_column(column, &prev_column_positions, network);
 
         // Update positions for next iteration
         prev_column_positions.clear();
-        for (i, &node_id) in columns[col_idx].iter().enumerate() {
+        for (i, &node_id) in column.iter().enumerate() {
             prev_column_positions.insert(node_id, i as f64);
         }
     }
@@ -145,7 +145,7 @@ fn order_columns(columns: &mut [Vec<u64>], network: &NodeNetwork) {
 
 /// Order a single column by barycenter of input connections (forward pass).
 fn order_single_column(
-    column: &mut Vec<u64>,
+    column: &mut [u64],
     prev_column_positions: &HashMap<u64, f64>,
     network: &NodeNetwork,
 ) {
@@ -160,7 +160,7 @@ fn order_single_column(
 
 /// Order a single column by barycenter of output connections (backward pass).
 fn order_single_column_backward(
-    column: &mut Vec<u64>,
+    column: &mut [u64],
     next_column_positions: &HashMap<u64, f64>,
     network: &NodeNetwork,
 ) {

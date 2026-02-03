@@ -81,9 +81,9 @@ pub fn get_closest_point_on_first_ray(
     }
 
     // Calculate the parameter 't' for the first ray
-    let t = (b * e - c * d) / denominator;
+    
 
-    t
+    (b * e - c * d) / denominator
 }
 
 pub fn get_point_distance_to_ray(
@@ -175,7 +175,7 @@ pub fn cylinder_hit_test(
     let t2 = (-b + discriminant_sqrt) / (2.0 * a);
     
     // We need to find the t value that represents the closest valid intersection
-    let mut t_cyl = std::f64::MAX;
+    let mut t_cyl = f64::MAX;
     let mut found = false;
     
     // Check if t1 is a valid intersection (within cylinder height)
@@ -215,7 +215,7 @@ fn cylinder_caps_intersection(
     half_height: f64,
     cylinder_radius: f64
 ) -> Option<f64> {
-    let mut t_min = std::f64::MAX;
+    let mut t_min = f64::MAX;
     let mut found = false;
     
     // Skip cap intersection tests if ray is parallel to the cap planes
@@ -333,7 +333,7 @@ pub fn cone_hit_test(
     let t2 = (-b + discriminant_sqrt) / (2.0 * a);
     
     // We need to find the t value that represents the closest valid intersection
-    let mut t_cone = std::f64::MAX;
+    let mut t_cone = f64::MAX;
     let mut found = false;
     
     // Check if t1 is a valid intersection (within cone height)
@@ -382,6 +382,7 @@ pub fn cone_hit_test(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn arrow_hit_test(
     start_center: &DVec3,
     axis_dir: &DVec3,
@@ -407,7 +408,7 @@ pub fn arrow_hit_test(
 
     let cylinder_hit = cylinder_hit_test(
         &(start_center + axis_dir * cylinder_length),
-        &start_center,
+        start_center,
         cylinder_radius,
         ray_origin,
         ray_direction);
