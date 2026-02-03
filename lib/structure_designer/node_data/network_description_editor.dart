@@ -77,7 +77,7 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -88,30 +88,27 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
                   fontWeight: FontWeight.bold,
                 ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-          // Subtitle
-          Text(
-            'Edit the properties of the active node network.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          // Summary label with info tooltip
+          Row(
+            children: [
+              Text(
+                'Summary',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+              const SizedBox(width: 4),
+              Tooltip(
+                message: 'A short summary for CLI verbose listings (optional).',
+                child: Icon(
+                  Icons.info_outline,
+                  size: 16,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-          ),
-          const SizedBox(height: 16),
-
-          // Summary label
-          Text(
-            'Summary',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'A short summary for CLI verbose listings (optional).',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
 
@@ -141,19 +138,25 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
           ),
           const SizedBox(height: 16),
 
-          // Description label
-          Text(
-            'Description',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'A detailed description of the node network.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          // Description label with info tooltip
+          Row(
+            children: [
+              Text(
+                'Description',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+              const SizedBox(width: 4),
+              Tooltip(
+                message: 'A detailed description of the node network.',
+                child: Icon(
+                  Icons.info_outline,
+                  size: 16,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
 
@@ -165,8 +168,8 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
             ),
             child: TextField(
               controller: _descriptionController,
-              maxLines: 10,
-              minLines: 10,
+              maxLines: 18,
+              minLines: 18,
               decoration: InputDecoration(
                 hintText: 'Enter a description for this node network...',
                 border: InputBorder.none,
