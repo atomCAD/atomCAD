@@ -111,11 +111,15 @@ class NodeDataWidget extends StatelessWidget {
               .firstOrNull;
 
           if (selectedNode == null) {
+            final description = getActiveNetworkDescription() ?? '';
+            final summary = getActiveNetworkSummary() ?? '';
             return Padding(
               padding: const EdgeInsets.all(2.0),
               child: BlockingAwareSingleChildScrollView(
                 child: NetworkDescriptionEditor(
                   key: ValueKey(nodeNetworkView.name),
+                  description: description,
+                  summary: summary,
                 ),
               ),
             );
