@@ -1,6 +1,7 @@
 pub mod atom_move;
 pub mod atom_rot;
 pub mod atom_trans;
+pub mod atom_union;
 pub mod comment;
 pub mod geo_trans;
 pub mod parameter;

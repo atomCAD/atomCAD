@@ -48,6 +48,7 @@ use super::nodes::relax::get_node_type as relax_get_node_type;
 use super::nodes::atom_move::get_node_type as atom_move_get_node_type;
 use super::nodes::atom_rot::get_node_type as atom_rot_get_node_type;
 use super::nodes::atom_trans::get_node_type as atom_trans_get_node_type;
+use super::nodes::atom_union::get_node_type as atom_union_get_node_type;
 use super::nodes::edit_atom::edit_atom::get_node_type as edit_atom_get_node_type;
 use super::nodes::atom_fill::get_node_type as atom_fill_get_node_type;
 use super::nodes::import_xyz::get_node_type as import_xyz_get_node_type;
@@ -120,6 +121,7 @@ impl NodeTypeRegistry {
     ret.add_node_type(atom_move_get_node_type());
     ret.add_node_type(atom_rot_get_node_type());
     ret.add_node_type(atom_trans_get_node_type());
+    ret.add_node_type(atom_union_get_node_type());
     ret.add_node_type(import_xyz_get_node_type());
     ret.add_node_type(export_xyz_get_node_type());
     ret.add_node_type(atom_cut_get_node_type());
