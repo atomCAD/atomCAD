@@ -811,7 +811,7 @@ diff(base, sub) = diff(union(...each base input...), union(...each sub input...)
 
 
 
-*Continuous* transformation in the lattice space is not allowed (for continuous transformations use the `atom_trans` node which is only available for atomic structures).
+*Continuous* transformation in the lattice space is not allowed (for continuous transformations use the `atom_move` and `atom_rot` nodes which are only available for atomic structures).
 
 You can directly enter the translation vector or drag the axes of the gadget.
 
@@ -882,19 +882,41 @@ You can switch on or off the following checkboxes:
 - *Invert phase*: Determines whether the phase of the dimer pattern should be inverted. 
 - *Hydrogen passivation:* Hydrogen atoms are added to passivate dangling bonds created by the cut.
 
-#### atom_trans
+#### atom_move
 
-The atom_trans node transforms atomic structures. The transformation happens not in integer lattice space but in continuous space (real-space) where one unit is one angstrom.
+Translates an atomic structure by a vector in world space. Unlike `lattice_move` which operates in discrete lattice coordinates, `atom_move` works in continuous Cartesian coordinates where one unit is one angstrom.
 
-By dragging the gadget axes you can move the structure. By dragging the thicker end of the gadget axes you can rotate the structure.  
+![](./atomCAD_images/atom_move.png)
 
-![](./atomCAD_images/atom_trans_node.png)
+**Properties**
 
-![](./atomCAD_images/atom_trans_props.png)
+- `Translation` — 3D vector specifying the translation in angstroms.
 
-![](./atomCAD_images/atom_trans_viewport.png)
+**Gadget controls**
 
+Drag the gadget axes to adjust the translation vector interactively.
 
+#### atom_rot
+
+Rotates an atomic structure around an axis in world space by a specified angle.
+
+![](./atomCAD_images/atom_rot.png)
+
+**Properties**
+
+- `Angle` — Rotation angle in radians.
+- `Rotation Axis` — 3D vector defining the axis of rotation (will be normalized).
+- `Pivot Point` — The point around which the rotation occurs, in angstroms.
+
+**Gadget controls**
+
+The gadget displays the pivot point and rotation axis. Drag the rotation axis to adjust the angle interactively.
+
+#### atom_union
+
+Merges multiple atomic structures into one. The `structures` input accepts an array of `Atomic` values (array-typed input; you can connect multiple wires and they will be concatenated).
+
+![](./atomCAD_images/atom_union.png)
 
 #### edit_atom
 
