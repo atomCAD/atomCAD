@@ -63,6 +63,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
       top: screenPos.dy,
       child: GestureDetector(
         onTapDown: (_) => _handleTap(context),
+        onSecondaryTapDown: (details) => _handleContextMenu(context, details),
         onPanStart: (details) => _handlePanStart(context, details),
         onPanUpdate: (details) => _handlePanUpdate(context, details),
         onPanEnd: (details) => _handlePanEnd(context),
@@ -253,6 +254,39 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   void _endResize(BuildContext context) {
     setState(() {
       _isResizing = false;
+    });
+  }
+
+  void _handleContextMenu(BuildContext context, TapDownDetails details) {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    model.setSelectedNode(widget.node.id);
+
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        details.globalPosition,
+        details.globalPosition,
+      ),
+      Offset.zero & overlay.size,
+    );
+
+    showMenu(
+      context: context,
+      position: position,
+      items: [
+        PopupMenuItem(
+          value: 'duplicate',
+          child: Text('Duplicate node (Ctrl+D)'),
+        ),
+      ],
+    ).then((value) {
+      if (!context.mounted) return;
+      if (value == 'duplicate') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.duplicateNode(widget.node.id);
+      }
     });
   }
 }
