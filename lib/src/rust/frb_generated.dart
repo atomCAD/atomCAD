@@ -492,9 +492,9 @@ abstract class RustLibApi extends BaseApi {
   APIResult crateApiStructureDesignerStructureDesignerApiRunCliSingle(
       {required CliConfig config});
 
-  bool crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks();
+  APIResult crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks();
 
-  bool crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
+  APIResult crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
       {required String filePath});
 
   bool crateApiStructureDesignerEditAtomApiSelectAtomOrBondByRay(
@@ -4269,14 +4269,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  bool crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks() {
+  APIResult crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 132)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_bool,
+        decodeSuccessData: sse_decode_api_result,
         decodeErrorData: null,
       ),
       constMeta:
@@ -4294,7 +4294,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  bool crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
+  APIResult crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
       {required String filePath}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -4303,7 +4303,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 133)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_bool,
+        decodeSuccessData: sse_decode_api_result,
         decodeErrorData: null,
       ),
       constMeta:

@@ -358,12 +358,13 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  void saveNodeNetworksAs(String filePath) {
-    structure_designer_api.saveNodeNetworksAs(filePath: filePath);
+  APIResult saveNodeNetworksAs(String filePath) {
+    final result = structure_designer_api.saveNodeNetworksAs(filePath: filePath);
     refreshFromKernel();
+    return result;
   }
 
-  bool saveNodeNetworks() {
+  APIResult saveNodeNetworks() {
     final result = structure_designer_api.saveNodeNetworks();
     refreshFromKernel();
     return result;

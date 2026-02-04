@@ -1067,8 +1067,8 @@ class AiAssistantServer {
         return;
       }
 
-      final success = sd_api.saveNodeNetworks();
-      if (success) {
+      final result = sd_api.saveNodeNetworks();
+      if (result.success) {
         request.response.write(jsonEncode({
           'success': true,
           'file_path': currentPath,
@@ -1076,13 +1076,13 @@ class AiAssistantServer {
       } else {
         request.response.write(jsonEncode({
           'success': false,
-          'error': 'Failed to save file.',
+          'error': result.errorMessage,
         }));
       }
     } else {
       // Save to specified path
-      final success = sd_api.saveNodeNetworksAs(filePath: filePath);
-      if (success) {
+      final result = sd_api.saveNodeNetworksAs(filePath: filePath);
+      if (result.success) {
         request.response.write(jsonEncode({
           'success': true,
           'file_path': filePath,
@@ -1090,7 +1090,7 @@ class AiAssistantServer {
       } else {
         request.response.write(jsonEncode({
           'success': false,
-          'error': 'Failed to save file.',
+          'error': result.errorMessage,
         }));
       }
     }

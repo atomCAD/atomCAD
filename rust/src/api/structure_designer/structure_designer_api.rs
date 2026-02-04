@@ -2597,34 +2597,34 @@ pub fn set_return_node_id(node_id: Option<u64>) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn save_node_networks_as(file_path: String) -> bool {
+pub fn save_node_networks_as(file_path: String) -> APIResult {
   unsafe {
     with_mut_cad_instance_or(
       |cad_instance | {
         // Call the method in StructureDesigner
         match cad_instance.structure_designer.save_node_networks_as(&file_path) {
-          Ok(_) => true,
-          Err(_) => false
+          Ok(_) => APIResult { success: true, error_message: String::new() },
+          Err(e) => APIResult { success: false, error_message: e.to_string() }
         }
       },
-      false
+      APIResult { success: false, error_message: "No CAD instance".to_string() }
     )
   }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn save_node_networks() -> bool {
+pub fn save_node_networks() -> APIResult {
   unsafe {
     with_mut_cad_instance_or(
       |cad_instance | {
         // Call the method in StructureDesigner
         match cad_instance.structure_designer.save_node_networks() {
-          Some(Ok(_)) => true,
-          Some(Err(_)) => false,
-          None => false, // No file path available
+          Some(Ok(_)) => APIResult { success: true, error_message: String::new() },
+          Some(Err(e)) => APIResult { success: false, error_message: e.to_string() },
+          None => APIResult { success: false, error_message: "No file path available. Use 'Save As' first.".to_string() },
         }
       },
-      false
+      APIResult { success: false, error_message: "No CAD instance".to_string() }
     )
   }
 }

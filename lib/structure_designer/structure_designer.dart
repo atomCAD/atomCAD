@@ -296,18 +296,38 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (!finalPath.contains('.')) {
         finalPath = '$outputFile.cnnd';
       }
-      graphModel.saveNodeNetworksAs(finalPath);
+      final result = graphModel.saveNodeNetworksAs(finalPath);
+      if (!result.success) {
+        _showSaveErrorDialog(result.errorMessage);
+      }
     }
   }
 
   void _saveDesign() {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    final success = graphModel.saveNodeNetworks();
-    if (!success) {
-      // This shouldn't happen if canSave is working correctly, but just in case
-      debugPrint('Save failed - no file path available');
+    final result = graphModel.saveNodeNetworks();
+    if (!result.success) {
+      _showSaveErrorDialog(result.errorMessage);
     }
+  }
+
+  void _showSaveErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Save Error'),
+          content: Text(errorMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showPreferences() {

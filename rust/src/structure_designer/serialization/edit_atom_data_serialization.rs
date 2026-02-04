@@ -45,8 +45,8 @@ pub fn edit_atom_data_to_serializable(data: &EditAtomData) -> io::Result<Seriali
         } else if let Some(delete_cmd) = command.as_any_ref().downcast_ref::<DeleteCommand>() {
             ("delete".to_string(), serde_json::to_value(delete_cmd)?)
         } else {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, 
-                "Unsupported command type in EditAtomData history".to_string()));
+            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                format!("Unsupported command type in EditAtomData history: {:?}", command)));
         };
         
         serializable_commands.push(SerializableEditAtomCommand {

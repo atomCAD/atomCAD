@@ -611,11 +611,11 @@ bool setReturnNodeId({BigInt? nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSetReturnNodeId(
         nodeId: nodeId);
 
-bool saveNodeNetworksAs({required String filePath}) => RustLib.instance.api
+APIResult saveNodeNetworksAs({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
         filePath: filePath);
 
-bool saveNodeNetworks() => RustLib.instance.api
+APIResult saveNodeNetworks() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks();
 
 bool isDesignDirty() => RustLib.instance.api
