@@ -2758,8 +2758,10 @@ pub fn get_structure_designer_preferences() -> Option<StructureDesignerPreferenc
 pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferences) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
-      cad_instance.structure_designer.set_preferences(preferences);
+      cad_instance.structure_designer.set_preferences(preferences.clone());
       refresh_structure_designer_auto(cad_instance);
+      // Persist preferences to config file (non-blocking, logs errors)
+      crate::structure_designer::preferences::save_preferences(&preferences);
     });
   }
 }

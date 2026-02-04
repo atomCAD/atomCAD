@@ -16,6 +16,7 @@ use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::structure_designer::nodes::comment::CommentData;
 use crate::api::structure_designer::structure_designer_preferences::{StructureDesignerPreferences, AtomicStructureVisualization};
+use super::preferences::load_preferences;
 use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluationResult;
 use crate::display::atomic_tessellator::{get_displayed_atom_radius, BAS_STICK_RADIUS};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
@@ -65,6 +66,8 @@ impl StructureDesigner {
     let node_type_registry = NodeTypeRegistry::new();
     let network_evaluator = NetworkEvaluator::new();
     let node_display_policy_resolver = NodeDisplayPolicyResolver::new();
+    // Load persisted preferences from config directory, or use defaults if not available
+    let preferences = load_preferences();
 
     Self {
       node_type_registry,
@@ -72,7 +75,7 @@ impl StructureDesigner {
       gadget: None,
       active_node_network_name: None,
       last_generated_structure_designer_scene: StructureDesignerScene::new(),
-      preferences: StructureDesignerPreferences::new(),
+      preferences,
       node_display_policy_resolver,
       import_manager: NodeNetworksImportManager::new(),
       is_dirty: false,

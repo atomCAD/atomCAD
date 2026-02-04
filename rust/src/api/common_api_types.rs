@@ -16,7 +16,7 @@ pub struct APIIVec2 {
   pub y: i32,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct APIIVec3 {
   pub x: i32,
   pub y: i32,
