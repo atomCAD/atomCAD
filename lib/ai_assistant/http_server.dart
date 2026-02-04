@@ -357,9 +357,26 @@ class AiAssistantServer {
     var cameraChanged = false;
 
     // Parse and apply eye, target, up vectors
-    if (params.containsKey('eye') &&
-        params.containsKey('target') &&
-        params.containsKey('up')) {
+    final hasEye = params.containsKey('eye');
+    final hasTarget = params.containsKey('target');
+    final hasUp = params.containsKey('up');
+
+    // Validate: if any position param is provided, all three must be provided
+    if (hasEye || hasTarget || hasUp) {
+      if (!(hasEye && hasTarget && hasUp)) {
+        final missing = <String>[];
+        if (!hasEye) missing.add('eye');
+        if (!hasTarget) missing.add('target');
+        if (!hasUp) missing.add('up');
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'success': false,
+          'error':
+              'eye, target, and up must all be provided together. Missing: ${missing.join(', ')}',
+        }));
+        return;
+      }
       final eye = _parseVec3(params['eye']!);
       final target = _parseVec3(params['target']!);
       final up = _parseVec3(params['up']!);

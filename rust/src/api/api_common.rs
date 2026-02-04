@@ -10,6 +10,7 @@ use crate::renderer::renderer::Renderer;
 use crate::util::transform::Transform;
 use crate::api::structure_designer::structure_designer_preferences as api_prefs;
 use crate::display::preferences as display_prefs;
+use crate::structure_designer::camera_settings::CameraSettings;
 
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     APIVec3{
@@ -312,7 +313,8 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
 
 pub fn add_sample_network(kernel: &mut StructureDesigner) {
     kernel.add_node_network("sample");
-    kernel.set_active_node_network_name(Some("sample".to_string()));
+    // New networks don't have camera settings, ignore return value
+    let _ = kernel.set_active_node_network_name(Some("sample".to_string()));
     kernel.add_node("cuboid", DVec2::new(30.0, 30.0));
 }
 
@@ -357,6 +359,39 @@ pub fn add_sample_network(kernel: &mut StructureDesigner) {
   pub fn refresh_structure_designer_auto(cad_instance: &mut CADInstance) {
     let changes = cad_instance.structure_designer.get_pending_changes();
     refresh_structure_designer(cad_instance, &changes);
+  }
+
+  /// Syncs the current camera state to the active node network's camera_settings.
+  /// Call this after any camera modification to keep the network's settings up-to-date.
+  /// Also marks the design as dirty since camera settings are saved per network.
+  pub fn sync_camera_to_active_network(cad_instance: &mut CADInstance) {
+    let camera = &cad_instance.renderer.camera;
+    if let Some(network) = cad_instance.structure_designer.get_active_node_network_mut() {
+      network.camera_settings = Some(CameraSettings {
+        eye: camera.eye,
+        target: camera.target,
+        up: camera.up,
+        orthographic: camera.orthographic,
+        ortho_half_height: camera.ortho_half_height,
+        pivot_point: camera.pivot_point,
+      });
+    }
+    // Camera settings are saved per network, so mark design as dirty
+    cad_instance.structure_designer.set_dirty(true);
+  }
+
+  /// Applies camera settings to the renderer (if Some).
+  /// Call this after any StructureDesigner method that returns Option<CameraSettings>.
+  pub fn apply_camera_settings(renderer: &mut Renderer, settings: Option<&CameraSettings>) {
+    if let Some(s) = settings {
+      renderer.camera.eye = s.eye;
+      renderer.camera.target = s.target;
+      renderer.camera.up = s.up;
+      renderer.camera.orthographic = s.orthographic;
+      renderer.camera.ortho_half_height = s.ortho_half_height;
+      renderer.camera.pivot_point = s.pivot_point;
+      renderer.update_camera_buffer();
+    }
   }
 
 

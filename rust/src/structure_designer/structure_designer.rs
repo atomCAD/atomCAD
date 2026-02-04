@@ -31,6 +31,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use super::structure_designer_changes::{StructureDesignerChanges, RefreshMode};
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
+use super::camera_settings::CameraSettings;
 
 pub struct StructureDesigner {
   pub node_type_registry: NodeTypeRegistry,
@@ -1048,6 +1049,12 @@ impl StructureDesigner {
     self.node_type_registry.node_networks.get(network_name)
   }
 
+  /// Returns a mutable reference to the active node network, if any
+  pub fn get_active_node_network_mut(&mut self) -> Option<&mut NodeNetwork> {
+    let network_name = self.active_node_network_name.as_ref()?;
+    self.node_type_registry.node_networks.get_mut(network_name)
+  }
+
   /// Gets the description of the active node network
   pub fn get_active_network_description(&self) -> Option<String> {
     let network = self.get_active_node_network()?;
@@ -1104,12 +1111,16 @@ impl StructureDesigner {
     None
   }
 
-  // Sets the active node network name and records it in navigation history
-  pub fn set_active_node_network_name(&mut self, node_network_name: Option<String>) {
+  /// Sets the active node network and returns the camera settings to apply (if any).
+  /// The caller is responsible for applying the returned settings to the renderer.
+  pub fn set_active_node_network_name(&mut self, node_network_name: Option<String>) -> Option<CameraSettings> {
     self.navigation_history.navigate_to(node_network_name.clone());
     self.active_node_network_name = node_network_name;
     // Switching networks requires full refresh (everything changes)
     self.mark_full_refresh();
+    // Return camera settings from the newly active network
+    self.get_active_node_network()
+      .and_then(|n| n.camera_settings.clone())
   }
 
   /// Returns true if the design has been modified since the last save/load
@@ -1162,26 +1173,32 @@ impl StructureDesigner {
   }
 
   /// Navigates back in network history
-  /// Returns true if navigation was successful, false if can't go back
-  pub fn navigate_back(&mut self) -> bool {
+  /// Returns (success, camera_settings) where success indicates if navigation occurred
+  /// and camera_settings contains the camera settings to apply (if any)
+  pub fn navigate_back(&mut self) -> (bool, Option<CameraSettings>) {
     if let Some(network_name) = self.navigation_history.navigate_back() {
       self.active_node_network_name = network_name;
       self.mark_full_refresh();
-      true
+      let camera_settings = self.get_active_node_network()
+        .and_then(|n| n.camera_settings.clone());
+      (true, camera_settings)
     } else {
-      false
+      (false, None)
     }
   }
 
   /// Navigates forward in network history
-  /// Returns true if navigation was successful, false if can't go forward
-  pub fn navigate_forward(&mut self) -> bool {
+  /// Returns (success, camera_settings) where success indicates if navigation occurred
+  /// and camera_settings contains the camera settings to apply (if any)
+  pub fn navigate_forward(&mut self) -> (bool, Option<CameraSettings>) {
     if let Some(network_name) = self.navigation_history.navigate_forward() {
       self.active_node_network_name = network_name;
       self.mark_full_refresh();
-      true
+      let camera_settings = self.get_active_node_network()
+        .and_then(|n| n.camera_settings.clone());
+      (true, camera_settings)
     } else {
-      false
+      (false, None)
     }
   }
 
@@ -1959,12 +1976,12 @@ impl StructureDesigner {
     result
   }
 
-  // Loads node networks from a file
-  // Sets the active_node_network_name to the first network if available, otherwise None
-  pub fn load_node_networks(&mut self, file_path: &str) -> std::io::Result<()> {
+  /// Loads node networks from a file and returns the camera settings of the active network (if any).
+  /// Sets the active_node_network_name to the first network if available, otherwise None.
+  pub fn load_node_networks(&mut self, file_path: &str) -> std::io::Result<Option<CameraSettings>> {
 
     let first_network_name = node_networks_serialization::load_node_networks_from_file(
-      &mut self.node_type_registry, 
+      &mut self.node_type_registry,
       file_path
     )?;
 
@@ -1987,12 +2004,13 @@ impl StructureDesigner {
     self.navigation_history.clear();
 
     // Set active node network to the first network if available, otherwise None
-    if first_network_name.is_empty() {
-      self.set_active_node_network_name(None);
+    // Capture camera settings from the newly active network
+    let camera_settings = if first_network_name.is_empty() {
+      self.set_active_node_network_name(None)
     } else {
-      self.set_active_node_network_name(Some(first_network_name));
-    }
-    
+      self.set_active_node_network_name(Some(first_network_name))
+    };
+
     // Apply display policy to all nodes
     self.apply_node_display_policy(None);
 
@@ -2001,14 +2019,14 @@ impl StructureDesigner {
 
     // Clear dirty flag since we just loaded a saved state
     self.is_dirty = false;
-    
+
     // Set the file path since we just loaded from this file
     self.file_path = Some(file_path.to_string());
-    
+
     // Loading networks is a structural change requiring full refresh
     self.mark_full_refresh();
 
-    Ok(())
+    Ok(camera_settings)
   }
 
   /// Validates the active node network and propagates validation to dependent networks

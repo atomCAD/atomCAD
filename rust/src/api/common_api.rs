@@ -13,6 +13,7 @@ use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::add_sample_network;
 use crate::api::api_common::refresh_structure_designer_auto;
+use crate::api::api_common::sync_camera_to_active_network;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::api::api_common::to_api_transform;
 use crate::api::api_common::from_api_transform;
@@ -202,6 +203,7 @@ pub fn move_camera(eye: APIVec3, target: APIVec3, up: APIVec3) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.move_camera(&from_api_vec3(&eye), &from_api_vec3(&target), &from_api_vec3(&up));
+      sync_camera_to_active_network(cad_instance);
     });
   }
 }
@@ -317,15 +319,18 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
       // If we hit something, adjust the pivot point
       if let Some(distance) = hit_distance {
         // Calculate the hit point
-        let hit_point = ray_origin + ray_direction * distance;        
-        
+        let hit_point = ray_origin + ray_direction * distance;
+
         cad_instance.renderer.camera.pivot_point = hit_point;
-        
+
         // Update the camera buffer
         cad_instance.renderer.update_camera_buffer();
 
+        // Sync camera settings to active network
+        sync_camera_to_active_network(cad_instance);
+
         cad_instance.structure_designer.mark_lightweight_refresh();
-        refresh_structure_designer_auto(cad_instance);    
+        refresh_structure_designer_auto(cad_instance);
         return;
       }
     });
@@ -338,6 +343,7 @@ pub fn set_camera_transform(transform: APITransform) {
     with_mut_cad_instance(|cad_instance| {
       let transform = from_api_transform(&transform);
       cad_instance.renderer.set_camera_transform(&transform);
+      sync_camera_to_active_network(cad_instance);
       refresh_structure_designer_auto(cad_instance);
     });
   }
@@ -349,6 +355,7 @@ pub fn set_orthographic_mode(orthographic: bool) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_orthographic_mode(orthographic);
+      sync_camera_to_active_network(cad_instance);
       refresh_structure_designer_auto(cad_instance);
     });
   }
@@ -371,6 +378,7 @@ pub fn set_ortho_half_height(half_height: f64) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_ortho_half_height(half_height);
+      sync_camera_to_active_network(cad_instance);
       refresh_structure_designer_auto(cad_instance);
     });
   }
@@ -408,6 +416,7 @@ pub fn set_camera_canonical_view(view: APICameraCanonicalView) {
   unsafe {
     with_mut_cad_instance(|cad_instance| {
       cad_instance.renderer.set_camera_canonical_view(to_renderer_camera_canonical_view(view));
+      sync_camera_to_active_network(cad_instance);
       refresh_structure_designer_auto(cad_instance);
     });
   }

@@ -1,6 +1,7 @@
 use crate::api::api_common::from_api_ivec2;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::refresh_structure_designer_auto;
+use crate::api::api_common::apply_camera_settings;
 use crate::api::api_common::to_api_ivec2;
 use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::with_mut_cad_instance;
@@ -591,7 +592,9 @@ pub fn add_node_network_with_name(name: String) -> APIResult {
           };
         }
         instance.structure_designer.add_node_network(&name);
-        instance.structure_designer.set_active_node_network_name(Some(name));
+        // New networks don't have camera settings, but we still call the method
+        let camera_settings = instance.structure_designer.set_active_node_network_name(Some(name));
+        apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
         instance.structure_designer.set_dirty(true);
         refresh_structure_designer_auto(instance);
         APIResult { success: true, error_message: String::new() }
@@ -608,7 +611,9 @@ pub fn add_node_network_with_name(name: String) -> APIResult {
 pub fn set_active_node_network(node_network_name: &str) {
   unsafe {
     with_mut_cad_instance(|instance| {
-      instance.structure_designer.set_active_node_network_name(Some(node_network_name.to_string()));
+      let camera_settings = instance.structure_designer
+        .set_active_node_network_name(Some(node_network_name.to_string()));
+      apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
       refresh_structure_designer_auto(instance);
     });
   }
@@ -620,8 +625,9 @@ pub fn navigate_back() -> bool {
   unsafe {
     with_mut_cad_instance_or(
       |instance| {
-        let result = instance.structure_designer.navigate_back();
+        let (result, camera_settings) = instance.structure_designer.navigate_back();
         if result {
+          apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
           refresh_structure_designer_auto(instance);
         }
         result
@@ -637,8 +643,9 @@ pub fn navigate_forward() -> bool {
   unsafe {
     with_mut_cad_instance_or(
       |instance| {
-        let result = instance.structure_designer.navigate_forward();
+        let (result, camera_settings) = instance.structure_designer.navigate_forward();
         if result {
+          apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
           refresh_structure_designer_auto(instance);
         }
         result
@@ -2660,12 +2667,17 @@ pub fn load_node_networks(file_path: String) -> APIResult {
       |cad_instance| {
         // Call the method in StructureDesigner
         let result = cad_instance.structure_designer.load_node_networks(&file_path);
-        
+
         print!("Result: {:?}", result);
+
+        // Apply camera settings returned from load
+        if let Ok(ref camera_settings) = result {
+          apply_camera_settings(&mut cad_instance.renderer, camera_settings.as_ref());
+        }
 
         // Refresh the renderer to reflect any loaded structures (even if there was an error)
         refresh_structure_designer_auto(cad_instance);
-        
+
         match result {
           Ok(_) => APIResult {
             success: true,
