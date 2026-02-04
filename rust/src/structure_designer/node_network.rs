@@ -7,6 +7,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::camera_settings::CameraSettings;
 
 use super::data_type::DataType;
 use super::node_layout;
@@ -195,6 +196,9 @@ pub struct NodeNetwork {
   pub selected_wires: Vec<Wire>, // All selected wires (multi-selection)
   pub valid: bool, // Whether the node network is valid and can be evaluated
   pub validation_errors: Vec<ValidationError>, // List of validation errors if any
+  /// Camera settings for this network's 3D viewport.
+  /// When None, uses default camera position.
+  pub camera_settings: Option<CameraSettings>,
 }
 
 impl NodeNetwork {
@@ -268,7 +272,7 @@ impl NodeNetwork {
   }
 
   pub fn new(node_type: NodeType) -> Self {
-    
+
 
     Self {
       next_node_id: 1,
@@ -282,6 +286,7 @@ impl NodeNetwork {
       selected_wires: Vec::new(),
       valid: true,
       validation_errors: Vec::new(),
+      camera_settings: None, // Will be populated on first use or from saved file
     }
   }
 

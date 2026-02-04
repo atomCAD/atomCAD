@@ -3,8 +3,8 @@ use std::io::{self, Read};
 use std::path::Path;
 use serde::{Serialize, Deserialize};
 use serde_json;
-use glam::f64::DVec2;
-use crate::util::serialization_utils::dvec2_serializer;
+use glam::f64::{DVec2, DVec3};
+use crate::util::serialization_utils::{dvec2_serializer, dvec3_serializer};
 use crate::structure_designer::data_type::DataType;
 use super::super::node_type::{NodeType, Parameter};
 use super::super::node_network::{NodeNetwork, Node, Argument};
@@ -14,9 +14,38 @@ use super::super::node_data::NoData;
 use super::super::node_data::CustomNodeData;
 use super::super::node_type::{generic_node_data_saver, generic_node_data_loader};
 use super::super::node_network::NodeDisplayType;
+use super::super::camera_settings::CameraSettings;
 
 // The current version of the serialization format
 const SERIALIZATION_VERSION: u32 = 2;
+
+/// Camera settings that are saved per node network
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SerializableCameraSettings {
+    #[serde(with = "dvec3_serializer")]
+    pub eye: DVec3,
+    #[serde(with = "dvec3_serializer")]
+    pub target: DVec3,
+    #[serde(with = "dvec3_serializer")]
+    pub up: DVec3,
+    pub orthographic: bool,
+    pub ortho_half_height: f64,
+    #[serde(with = "dvec3_serializer")]
+    pub pivot_point: DVec3,
+}
+
+impl Default for SerializableCameraSettings {
+    fn default() -> Self {
+        Self {
+            eye: DVec3::new(0.0, -30.0, 10.0),
+            target: DVec3::new(0.0, 0.0, 0.0),
+            up: DVec3::new(0.0, 0.32, 0.95),
+            orthographic: false,
+            ortho_half_height: 10.0,
+            pivot_point: DVec3::new(0.0, 0.0, 0.0),
+        }
+    }
+}
 
 /// Serializable version of Parameter struct for JSON serialization
 #[derive(Serialize, Deserialize)]
@@ -98,6 +127,9 @@ pub struct SerializableNodeNetwork {
     pub nodes: Vec<SerializableNode>, // Store as vec instead of HashMap
     pub return_node_id: Option<u64>,
     pub displayed_node_ids: Vec<(u64, NodeDisplayType)>, // Store as vec instead of HashSet
+    /// Camera settings for this network's 3D viewport (backward compatible - defaults to None for old files)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_settings: Option<SerializableCameraSettings>,
 }
 
 /// Container for serializing all node networks in the NodeTypeRegistry
@@ -242,10 +274,22 @@ pub fn node_network_to_serializable(network: &mut NodeNetwork, built_in_node_typ
     
     // Convert displayed_node_ids from HashMap to Vec of tuples
     let displayed_node_ids: Vec<(u64, NodeDisplayType)> = network.displayed_node_ids.iter().map(|(key, value)| (*key, *value)).collect();
-    
+
     // Create a serializable version of the node type
     let serializable_node_type = node_type_to_serializable(&network.node_type);
-    
+
+    // Convert camera settings if present
+    let camera_settings = network.camera_settings.as_ref().map(|cs| {
+        SerializableCameraSettings {
+            eye: cs.eye,
+            target: cs.target,
+            up: cs.up,
+            orthographic: cs.orthographic,
+            ortho_half_height: cs.ortho_half_height,
+            pivot_point: cs.pivot_point,
+        }
+    });
+
     // Create the serializable network
     Ok(SerializableNodeNetwork {
         next_node_id: network.next_node_id,
@@ -253,6 +297,7 @@ pub fn node_network_to_serializable(network: &mut NodeNetwork, built_in_node_typ
         nodes: serializable_nodes,
         return_node_id: network.return_node_id,
         displayed_node_ids,
+        camera_settings,
     })
 }
 
@@ -296,6 +341,18 @@ pub fn serializable_to_node_network(serializable: &SerializableNodeNetwork, buil
             node.custom_name = Some(name);
         }
     }
+
+    // Convert camera settings if present
+    network.camera_settings = serializable.camera_settings.as_ref().map(|scs| {
+        CameraSettings {
+            eye: scs.eye,
+            target: scs.target,
+            up: scs.up,
+            orthographic: scs.orthographic,
+            ortho_half_height: scs.ortho_half_height,
+            pivot_point: scs.pivot_point,
+        }
+    });
 
     Ok(network)
 }
