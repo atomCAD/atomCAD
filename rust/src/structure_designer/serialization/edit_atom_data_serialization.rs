@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 use crate::structure_designer::nodes::edit_atom::commands::select_command::SelectCommand;
+use crate::structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
 use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::AddBondCommand;
 use crate::structure_designer::nodes::edit_atom::commands::replace_command::ReplaceCommand;
 use crate::structure_designer::nodes::edit_atom::commands::transform_command::TransformCommand;
@@ -36,6 +37,8 @@ pub fn edit_atom_data_to_serializable(data: &EditAtomData) -> io::Result<Seriali
     for command in &data.history {
         let (command_type, command_data) = if let Some(select_cmd) = command.as_any_ref().downcast_ref::<SelectCommand>() {
             ("select".to_string(), serde_json::to_value(select_cmd)?)
+        } else if let Some(add_atom_cmd) = command.as_any_ref().downcast_ref::<AddAtomCommand>() {
+            ("add_atom".to_string(), serde_json::to_value(add_atom_cmd)?)
         } else if let Some(add_bond_cmd) = command.as_any_ref().downcast_ref::<AddBondCommand>() {
             ("add_bond".to_string(), serde_json::to_value(add_bond_cmd)?)
         } else if let Some(replace_cmd) = command.as_any_ref().downcast_ref::<ReplaceCommand>() {
@@ -74,6 +77,10 @@ pub fn serializable_to_edit_atom_data(serializable: &SerializableEditAtomData) -
             "select" => {
                 let select_cmd: SelectCommand = serde_json::from_value(cmd.command_data.clone())?;
                 Box::new(select_cmd)
+            },
+            "add_atom" => {
+                let add_atom_cmd: AddAtomCommand = serde_json::from_value(cmd.command_data.clone())?;
+                Box::new(add_atom_cmd)
             },
             "add_bond" => {
                 let add_bond_cmd: AddBondCommand = serde_json::from_value(cmd.command_data.clone())?;
