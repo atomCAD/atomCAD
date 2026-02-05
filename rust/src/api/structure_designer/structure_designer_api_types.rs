@@ -421,7 +421,35 @@ pub struct APINodeEvaluationResult {
   pub error_message: Option<String>,
 }
 
+/// Information for the factor-into-subnetwork dialog
+pub struct FactorSelectionInfo {
+  /// Whether the selection can be factored
+  pub can_factor: bool,
+  /// If not valid, the reason why
+  pub invalid_reason: Option<String>,
+  /// Suggested name for the new subnetwork
+  pub suggested_name: String,
+  /// Suggested names for the parameters (one per external input)
+  pub suggested_param_names: Vec<String>,
+}
 
+/// Request to factor selection into subnetwork
+pub struct FactorSelectionRequest {
+  /// Name for the new subnetwork (custom node type)
+  pub subnetwork_name: String,
+  /// Names for the parameters (must match count of external inputs)
+  pub param_names: Vec<String>,
+}
+
+/// Result of factoring attempt
+pub struct FactorSelectionResult {
+  /// Whether the factoring succeeded
+  pub success: bool,
+  /// Error message if factoring failed
+  pub error: Option<String>,
+  /// ID of the created custom node (if successful)
+  pub new_node_id: Option<u64>,
+}
 
 
 

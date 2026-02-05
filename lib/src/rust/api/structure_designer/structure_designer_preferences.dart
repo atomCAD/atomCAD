@@ -7,18 +7,25 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_samples_per_unit_cell`, `default_sharpness_angle_threshold`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
   impostors,
   ;
+
+  static Future<AtomicRenderingMethod> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesAtomicRenderingMethodDefault();
 }
 
 enum AtomicStructureVisualization {
   ballAndStick,
   spaceFilling,
   ;
+
+  static Future<AtomicStructureVisualization> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesAtomicStructureVisualizationDefault();
 }
 
 class AtomicStructureVisualizationPreferences {
@@ -33,6 +40,10 @@ class AtomicStructureVisualizationPreferences {
     this.ballAndStickCullDepth,
     this.spaceFillingCullDepth,
   });
+
+  static Future<AtomicStructureVisualizationPreferences> default_() => RustLib
+      .instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesAtomicStructureVisualizationPreferencesDefault();
 
   @override
   int get hashCode =>
@@ -79,6 +90,9 @@ class BackgroundPreferences {
     required this.drawingPlaneGridStrongColor,
   });
 
+  static Future<BackgroundPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesBackgroundPreferencesDefault();
+
   @override
   int get hashCode =>
       backgroundColor.hashCode ^
@@ -115,6 +129,9 @@ enum GeometryVisualization {
   surfaceSplatting,
   explicitMesh,
   ;
+
+  static Future<GeometryVisualization> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesGeometryVisualizationDefault();
 }
 
 class GeometryVisualizationPreferences {
@@ -133,6 +150,10 @@ class GeometryVisualizationPreferences {
     required this.meshSmoothing,
     required this.displayCameraTarget,
   });
+
+  static Future<GeometryVisualizationPreferences> default_() => RustLib
+      .instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesGeometryVisualizationPreferencesDefault();
 
   @override
   int get hashCode =>
@@ -194,6 +215,9 @@ class LayoutPreferences {
     required this.autoLayoutAfterEdit,
   });
 
+  static Future<LayoutPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesLayoutPreferencesDefault();
+
   @override
   int get hashCode => layoutAlgorithm.hashCode ^ autoLayoutAfterEdit.hashCode;
 
@@ -218,6 +242,9 @@ enum MeshSmoothing {
   /// duplicates vertices at smoothing group boundaries
   smoothingGroupBased,
   ;
+
+  static Future<MeshSmoothing> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesMeshSmoothingDefault();
 }
 
 enum NodeDisplayPolicy {
@@ -225,6 +252,9 @@ enum NodeDisplayPolicy {
   preferSelected,
   preferFrontier,
   ;
+
+  static Future<NodeDisplayPolicy> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesNodeDisplayPolicyDefault();
 }
 
 class NodeDisplayPreferences {
@@ -233,6 +263,9 @@ class NodeDisplayPreferences {
   NodeDisplayPreferences({
     required this.displayPolicy,
   });
+
+  static Future<NodeDisplayPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesNodeDisplayPreferencesDefault();
 
   @override
   int get hashCode => displayPolicy.hashCode;
@@ -265,6 +298,9 @@ class StructureDesignerPreferences {
           .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelf(
         that: this,
       );
+
+  static Future<StructureDesignerPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesDefault();
 
   factory StructureDesignerPreferences() => RustLib.instance.api
       .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew();

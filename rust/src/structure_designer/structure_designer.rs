@@ -2282,5 +2282,175 @@ impl StructureDesigner {
       Err(format!("Unsupported file format. Please use .xyz or .mol extension. Got: {}", file_path))
     }
   }
-  
+
+  /// Factors the current selection in the active network into a new subnetwork.
+  ///
+  /// This is a thin wrapper that coordinates the functions from the selection_factoring module.
+  ///
+  /// # Arguments
+  /// * `subnetwork_name` - The name for the new subnetwork (must not already exist)
+  /// * `param_names` - Names for the parameters (must match the number of external inputs)
+  ///
+  /// # Returns
+  /// * `Ok(new_node_id)` - The ID of the new custom node that replaced the selection
+  /// * `Err(String)` - If validation fails or any error occurs
+  pub fn factor_selection_into_subnetwork(
+    &mut self,
+    subnetwork_name: &str,
+    param_names: Vec<String>,
+  ) -> Result<u64, String> {
+    use super::selection_factoring;
+
+    // 1. Validate name doesn't exist
+    if self.node_type_registry.get_node_type(subnetwork_name).is_some() {
+      return Err(format!("Node type '{}' already exists", subnetwork_name));
+    }
+
+    // 2. Get active network
+    let network_name = self.active_node_network_name.clone()
+      .ok_or("No active network")?;
+
+    // 3. Analyze selection (using module function)
+    let network = self.node_type_registry.node_networks.get(&network_name)
+      .ok_or("Network not found")?;
+    let analysis = selection_factoring::analyze_selection_for_factoring(
+      network,
+      &self.node_type_registry
+    );
+
+    if !analysis.is_valid {
+      return Err(analysis.invalid_reason.unwrap_or("Invalid selection".to_string()));
+    }
+
+    // 4. Validate param names count matches
+    if param_names.len() != analysis.external_inputs.len() {
+      return Err(format!(
+        "Parameter count mismatch: expected {}, got {}",
+        analysis.external_inputs.len(),
+        param_names.len()
+      ));
+    }
+
+    // 5. Create subnetwork (using module function)
+    let source_network = self.node_type_registry.node_networks.get(&network_name).unwrap();
+    let new_network = selection_factoring::create_subnetwork_from_selection(
+      source_network,
+      &analysis,
+      subnetwork_name,
+      &param_names,
+      &self.node_type_registry,
+    );
+
+    // 6. Register subnetwork
+    let num_params = new_network.node_type.parameters.len();
+    self.node_type_registry.add_node_network(new_network);
+
+    // 7. Replace selection with custom node (using module function)
+    let network = self.node_type_registry.node_networks.get_mut(&network_name).unwrap();
+    let new_node_id = selection_factoring::replace_selection_with_custom_node(
+      network,
+      &analysis,
+      subnetwork_name,
+      num_params,
+    );
+
+    // 8. Validate networks
+    self.validate_active_network();
+
+    // 9. Mark dirty and schedule refresh
+    self.is_dirty = true;
+    self.mark_full_refresh();
+
+    Ok(new_node_id)
+  }
+
+  /// Gets information about whether/how the current selection can be factored.
+  ///
+  /// This analyzes the selection without making any changes, returning information
+  /// that can be used to populate the factoring dialog.
+  ///
+  /// # Returns
+  /// Information about the selection's eligibility for factoring and suggested names.
+  pub fn get_factor_selection_info(&self) -> FactorSelectionInfo {
+    use super::selection_factoring;
+
+    // Check for active network
+    let network_name = match &self.active_node_network_name {
+      Some(name) => name,
+      None => return FactorSelectionInfo {
+        can_factor: false,
+        invalid_reason: Some("No active network".to_string()),
+        suggested_name: String::new(),
+        suggested_param_names: Vec::new(),
+      },
+    };
+
+    // Get the network
+    let network = match self.node_type_registry.node_networks.get(network_name) {
+      Some(n) => n,
+      None => return FactorSelectionInfo {
+        can_factor: false,
+        invalid_reason: Some("Network not found".to_string()),
+        suggested_name: String::new(),
+        suggested_param_names: Vec::new(),
+      },
+    };
+
+    // Analyze selection
+    let analysis = selection_factoring::analyze_selection_for_factoring(
+      network,
+      &self.node_type_registry
+    );
+
+    if !analysis.is_valid {
+      return FactorSelectionInfo {
+        can_factor: false,
+        invalid_reason: analysis.invalid_reason,
+        suggested_name: String::new(),
+        suggested_param_names: Vec::new(),
+      };
+    }
+
+    // Generate suggested name
+    let suggested_name = self.generate_unique_subnetwork_name();
+
+    // Collect suggested parameter names
+    let suggested_param_names: Vec<String> = analysis.external_inputs
+      .iter()
+      .map(|input| input.suggested_name.clone())
+      .collect();
+
+    FactorSelectionInfo {
+      can_factor: true,
+      invalid_reason: None,
+      suggested_name,
+      suggested_param_names,
+    }
+  }
+
+  /// Generates a unique subnetwork name like "subnetwork1", "subnetwork2", etc.
+  fn generate_unique_subnetwork_name(&self) -> String {
+    let base = "subnetwork";
+    let mut counter = 1;
+    loop {
+      let name = format!("{}{}", base, counter);
+      if self.node_type_registry.get_node_type(&name).is_none() {
+        return name;
+      }
+      counter += 1;
+    }
+  }
+
+}
+
+/// Information about whether/how a selection can be factored into a subnetwork
+pub struct FactorSelectionInfo {
+  /// Whether the selection can be factored
+  pub can_factor: bool,
+  /// If not valid, the reason why
+  pub invalid_reason: Option<String>,
+  /// Suggested name for the new subnetwork
+  pub suggested_name: String,
+  /// Suggested names for the parameters (one per external input)
+  pub suggested_param_names: Vec<String>,
 }

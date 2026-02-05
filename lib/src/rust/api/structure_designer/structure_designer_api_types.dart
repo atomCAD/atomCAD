@@ -1270,6 +1270,100 @@ class CliConfig {
           parameters == other.parameters;
 }
 
+/// Information for the factor-into-subnetwork dialog
+class FactorSelectionInfo {
+  /// Whether the selection can be factored
+  final bool canFactor;
+
+  /// If not valid, the reason why
+  final String? invalidReason;
+
+  /// Suggested name for the new subnetwork
+  final String suggestedName;
+
+  /// Suggested names for the parameters (one per external input)
+  final List<String> suggestedParamNames;
+
+  const FactorSelectionInfo({
+    required this.canFactor,
+    this.invalidReason,
+    required this.suggestedName,
+    required this.suggestedParamNames,
+  });
+
+  @override
+  int get hashCode =>
+      canFactor.hashCode ^
+      invalidReason.hashCode ^
+      suggestedName.hashCode ^
+      suggestedParamNames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FactorSelectionInfo &&
+          runtimeType == other.runtimeType &&
+          canFactor == other.canFactor &&
+          invalidReason == other.invalidReason &&
+          suggestedName == other.suggestedName &&
+          suggestedParamNames == other.suggestedParamNames;
+}
+
+/// Request to factor selection into subnetwork
+class FactorSelectionRequest {
+  /// Name for the new subnetwork (custom node type)
+  final String subnetworkName;
+
+  /// Names for the parameters (must match count of external inputs)
+  final List<String> paramNames;
+
+  const FactorSelectionRequest({
+    required this.subnetworkName,
+    required this.paramNames,
+  });
+
+  @override
+  int get hashCode => subnetworkName.hashCode ^ paramNames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FactorSelectionRequest &&
+          runtimeType == other.runtimeType &&
+          subnetworkName == other.subnetworkName &&
+          paramNames == other.paramNames;
+}
+
+/// Result of factoring attempt
+class FactorSelectionResult {
+  /// Whether the factoring succeeded
+  final bool success;
+
+  /// Error message if factoring failed
+  final String? error;
+
+  /// ID of the created custom node (if successful)
+  final BigInt? newNodeId;
+
+  const FactorSelectionResult({
+    required this.success,
+    this.error,
+    this.newNodeId,
+  });
+
+  @override
+  int get hashCode => success.hashCode ^ error.hashCode ^ newNodeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FactorSelectionResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          error == other.error &&
+          newNodeId == other.newNodeId;
+}
+
 class InputPinView {
   final String name;
   final String dataType;

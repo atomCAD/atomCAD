@@ -374,6 +374,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
+  FactorSelectionRequest dco_decode_box_autoadd_factor_selection_request(
+      dynamic raw);
+
+  @protected
   int dco_decode_box_autoadd_i_16(dynamic raw);
 
   @protected
@@ -407,6 +411,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  FactorSelectionInfo dco_decode_factor_selection_info(dynamic raw);
+
+  @protected
+  FactorSelectionRequest dco_decode_factor_selection_request(dynamic raw);
+
+  @protected
+  FactorSelectionResult dco_decode_factor_selection_result(dynamic raw);
 
   @protected
   GeometryVisualization dco_decode_geometry_visualization(dynamic raw);
@@ -1118,6 +1131,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
+  FactorSelectionRequest sse_decode_box_autoadd_factor_selection_request(
+      SseDeserializer deserializer);
+
+  @protected
   int sse_decode_box_autoadd_i_16(SseDeserializer deserializer);
 
   @protected
@@ -1153,6 +1170,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  FactorSelectionInfo sse_decode_factor_selection_info(
+      SseDeserializer deserializer);
+
+  @protected
+  FactorSelectionRequest sse_decode_factor_selection_request(
+      SseDeserializer deserializer);
+
+  @protected
+  FactorSelectionResult sse_decode_factor_selection_result(
+      SseDeserializer deserializer);
 
   @protected
   GeometryVisualization sse_decode_geometry_visualization(
@@ -1947,6 +1976,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_factor_selection_request(
+      FactorSelectionRequest self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_i_16(int self, SseSerializer serializer);
 
   @protected
@@ -1982,6 +2015,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_factor_selection_info(
+      FactorSelectionInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_factor_selection_request(
+      FactorSelectionRequest self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_factor_selection_result(
+      FactorSelectionResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_geometry_visualization(

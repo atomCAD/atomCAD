@@ -3031,7 +3031,80 @@ pub fn layout_active_network() {
   }
 }
 
+/// Get information about whether/how the current selection can be factored into a subnetwork.
+///
+/// Returns information that can be used to populate the "Factor into Subnetwork" dialog,
+/// including suggested names for the subnetwork and its parameters.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_factor_selection_info() -> super::structure_designer_api_types::FactorSelectionInfo {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        let info = cad_instance.structure_designer.get_factor_selection_info();
+        super::structure_designer_api_types::FactorSelectionInfo {
+          can_factor: info.can_factor,
+          invalid_reason: info.invalid_reason,
+          suggested_name: info.suggested_name,
+          suggested_param_names: info.suggested_param_names,
+        }
+      },
+      super::structure_designer_api_types::FactorSelectionInfo {
+        can_factor: false,
+        invalid_reason: Some("CAD instance not available".to_string()),
+        suggested_name: String::new(),
+        suggested_param_names: Vec::new(),
+      }
+    )
+  }
+}
 
+/// Factor the current selection into a new subnetwork.
+///
+/// Creates a new custom node type from the selected nodes and replaces
+/// the selection with an instance of that node type.
+///
+/// # Arguments
+/// * `request` - The factoring request containing the subnetwork name and parameter names
+///
+/// # Returns
+/// A result indicating success or failure, with the new node ID on success
+#[flutter_rust_bridge::frb(sync)]
+pub fn factor_selection_into_subnetwork(
+  request: super::structure_designer_api_types::FactorSelectionRequest
+) -> super::structure_designer_api_types::FactorSelectionResult {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        match cad_instance.structure_designer.factor_selection_into_subnetwork(
+          &request.subnetwork_name,
+          request.param_names,
+        ) {
+          Ok(new_node_id) => {
+            // Refresh the UI
+            refresh_structure_designer_auto(cad_instance);
+            super::structure_designer_api_types::FactorSelectionResult {
+              success: true,
+              error: None,
+              new_node_id: Some(new_node_id),
+            }
+          }
+          Err(error) => {
+            super::structure_designer_api_types::FactorSelectionResult {
+              success: false,
+              error: Some(error),
+              new_node_id: None,
+            }
+          }
+        }
+      },
+      super::structure_designer_api_types::FactorSelectionResult {
+        success: false,
+        error: Some("CAD instance not available".to_string()),
+        new_node_id: None,
+      }
+    )
+  }
+}
 
 
 

@@ -736,3 +736,26 @@ APINodeEvaluationResult evaluateNode(
 /// - Automatically refreshes the UI after layout
 void layoutActiveNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork();
+
+/// Get information about whether/how the current selection can be factored into a subnetwork.
+///
+/// Returns information that can be used to populate the "Factor into Subnetwork" dialog,
+/// including suggested names for the subnetwork and its parameters.
+FactorSelectionInfo getFactorSelectionInfo() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetFactorSelectionInfo();
+
+/// Factor the current selection into a new subnetwork.
+///
+/// Creates a new custom node type from the selected nodes and replaces
+/// the selection with an instance of that node type.
+///
+/// # Arguments
+/// * `request` - The factoring request containing the subnetwork name and parameter names
+///
+/// # Returns
+/// A result indicating success or failure, with the new node ID on success
+FactorSelectionResult factorSelectionIntoSubnetwork(
+        {required FactorSelectionRequest request}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiFactorSelectionIntoSubnetwork(
+            request: request);
