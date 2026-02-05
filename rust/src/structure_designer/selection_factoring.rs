@@ -90,19 +90,47 @@ fn get_output_type(
     DataType::None
 }
 
-/// Generates a suggested parameter name from the source node
-fn generate_param_name(source_node_id: u64, nodes: &HashMap<u64, Node>, pin_index: i32) -> String {
-    if let Some(node) = nodes.get(&source_node_id) {
-        let base_name = node.custom_name.as_ref()
-            .unwrap_or(&node.node_type_name);
-
-        if pin_index == -1 {
-            format!("{}_fn", base_name)
-        } else {
-            base_name.clone()
-        }
+/// Generates a suggested parameter name from the source node and destination parameter.
+/// Format: {source_node_name}_{destination_param_name}
+/// For function pins (pin_index == -1), appends "_fn" instead of param name.
+fn generate_param_name(
+    source_node_id: u64,
+    source_pin_index: i32,
+    dest_node_id: u64,
+    dest_param_index: usize,
+    nodes: &HashMap<u64, Node>,
+    registry: &NodeTypeRegistry,
+) -> String {
+    // Get source node name
+    let source_name = if let Some(node) = nodes.get(&source_node_id) {
+        node.custom_name.as_ref()
+            .unwrap_or(&node.node_type_name)
+            .clone()
     } else {
         "input".to_string()
+    };
+
+    // For function pins, just append "_fn"
+    if source_pin_index == -1 {
+        return format!("{}_fn", source_name);
+    }
+
+    // Get destination parameter name from the node type
+    let dest_param_name = if let Some(dest_node) = nodes.get(&dest_node_id) {
+        if let Some(node_type) = registry.get_node_type_for_node(dest_node) {
+            node_type.parameters.get(dest_param_index)
+                .map(|p| p.name.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Combine source name with destination parameter name
+    match dest_param_name {
+        Some(param_name) => format!("{}_{}", source_name, param_name),
+        None => source_name,
     }
 }
 
@@ -178,7 +206,14 @@ pub fn analyze_selection_for_factoring(
                 if !network.selected_node_ids.contains(&source_id) {
                     // This is an external input
                     let data_type = get_output_type(network, source_id, pin_idx, registry);
-                    let suggested_name = generate_param_name(source_id, &network.nodes, pin_idx);
+                    let suggested_name = generate_param_name(
+                        source_id,
+                        pin_idx,
+                        node_id,
+                        param_idx,
+                        &network.nodes,
+                        registry,
+                    );
                     external_inputs.push(ExternalInput {
                         source_node_id: source_id,
                         source_output_pin_index: pin_idx,
