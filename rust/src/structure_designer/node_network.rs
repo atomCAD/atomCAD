@@ -290,6 +290,95 @@ impl NodeNetwork {
     }
   }
 
+  /// Creates an empty NodeNetwork with a placeholder node type.
+  /// Used for clipboard and other transient networks.
+  pub fn new_empty() -> Self {
+    use crate::structure_designer::node_type::{NodeType, no_data_saver, no_data_loader};
+    use crate::structure_designer::node_data::NoData;
+    use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+    use crate::structure_designer::data_type::DataType;
+
+    let placeholder_type = NodeType {
+      name: String::new(),
+      description: String::new(),
+      summary: None,
+      category: NodeTypeCategory::OtherBuiltin,
+      parameters: vec![],
+      output_type: DataType::None,
+      public: false,
+      node_data_creator: || Box::new(NoData {}),
+      node_data_saver: no_data_saver,
+      node_data_loader: no_data_loader,
+    };
+    Self::new(placeholder_type)
+  }
+
+  /// Copies nodes from another network into this network.
+  ///
+  /// Internal connections between copied nodes are preserved (with remapped IDs).
+  /// External connections (to nodes not in source_node_ids) are dropped.
+  /// Each pasted node gets a fresh ID, a unique display name, and is set to displayed.
+  ///
+  /// Returns the list of newly created node IDs.
+  pub fn copy_nodes_from(
+    &mut self,
+    source: &NodeNetwork,
+    source_node_ids: &HashSet<u64>,
+    position_offset: DVec2,
+  ) -> Vec<u64> {
+    let mut old_to_new: HashMap<u64, u64> = HashMap::new();
+    let mut new_ids: Vec<u64> = Vec::new();
+
+    // Step 1 — Create all nodes
+    for &old_id in source_node_ids {
+      let source_node = match source.nodes.get(&old_id) {
+        Some(node) => node,
+        None => continue,
+      };
+
+      let new_id = self.next_node_id;
+      self.next_node_id += 1;
+      old_to_new.insert(old_id, new_id);
+
+      let cloned_data = source_node.data.clone_box();
+      let cloned_arguments = source_node.arguments.clone();
+      let custom_node_type = source_node.custom_node_type.clone();
+      let node_type_name = source_node.node_type_name.clone();
+      let new_position = source_node.position + position_offset;
+      let display_name = self.generate_unique_display_name(&node_type_name);
+
+      let new_node = Node {
+        id: new_id,
+        node_type_name,
+        custom_name: Some(display_name),
+        position: new_position,
+        arguments: cloned_arguments,
+        data: cloned_data,
+        custom_node_type,
+      };
+
+      self.nodes.insert(new_id, new_node);
+      self.set_node_display(new_id, true);
+      new_ids.push(new_id);
+    }
+
+    // Step 2 — Remap arguments (runs after all nodes are created)
+    for &new_id in &new_ids {
+      if let Some(node) = self.nodes.get_mut(&new_id) {
+        for arg in &mut node.arguments {
+          let remapped: HashMap<u64, i32> = arg.argument_output_pins.iter()
+            .filter_map(|(&source_id, &pin_index)| {
+              old_to_new.get(&source_id).map(|&mapped_id| (mapped_id, pin_index))
+            })
+            .collect();
+          arg.argument_output_pins = remapped;
+        }
+      }
+    }
+
+    new_ids
+  }
+
   /// Generate a unique display name for a new node of the given type.
   ///
   /// Scans existing nodes to find the highest counter used for this type,

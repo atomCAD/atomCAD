@@ -3106,6 +3106,61 @@ pub fn factor_selection_into_subnetwork(
   }
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn copy_selection() -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.copy_selection()
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn paste_at_position(x: f64, y: f64) -> Vec<u64> {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let position = glam::f64::DVec2::new(x, y);
+        let new_ids = cad_instance.structure_designer.paste_at_position(position);
+        refresh_structure_designer_auto(cad_instance);
+        new_ids
+      },
+      vec![]
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cut_selection() -> bool {
+  unsafe {
+    with_mut_cad_instance_or(
+      |cad_instance| {
+        let result = cad_instance.structure_designer.cut_selection();
+        if result {
+          refresh_structure_designer_auto(cad_instance);
+        }
+        result
+      },
+      false
+    )
+  }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn has_clipboard_content() -> bool {
+  unsafe {
+    with_cad_instance_or(
+      |cad_instance| {
+        cad_instance.structure_designer.has_clipboard_content()
+      },
+      false
+    )
+  }
+}
+
 
 
 

@@ -759,3 +759,16 @@ FactorSelectionResult factorSelectionIntoSubnetwork(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiFactorSelectionIntoSubnetwork(
             request: request);
+
+bool copySelection() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCopySelection();
+
+Uint64List pasteAtPosition({required double x, required double y}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiPasteAtPosition(x: x, y: y);
+
+bool cutSelection() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCutSelection();
+
+bool hasClipboardContent() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiHasClipboardContent();

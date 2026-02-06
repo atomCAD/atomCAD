@@ -51,6 +51,8 @@ pub struct StructureDesigner {
   pub cli_top_level_parameters: Option<HashMap<String, NetworkResult>>,
   // Navigation history for back/forward functionality
   navigation_history: NavigationHistory,
+  // Clipboard for copy/paste operations (stores copied nodes as an isolated NodeNetwork)
+  pub clipboard: Option<NodeNetwork>,
 }
 
 impl Default for StructureDesigner {
@@ -83,6 +85,7 @@ impl StructureDesigner {
       pending_changes: StructureDesignerChanges::default(),
       cli_top_level_parameters: None,
       navigation_history: NavigationHistory::new(),
+      clipboard: None,
     }
   }
 }
@@ -502,6 +505,15 @@ impl StructureDesigner {
       }
     }
 
+    // Update clipboard node_type_names to reflect the rename
+    if let Some(ref mut clipboard) = self.clipboard {
+      for node in clipboard.nodes.values_mut() {
+        if node.node_type_name == old_name {
+          node.node_type_name = new_name.to_string();
+        }
+      }
+    }
+
     // Update backtick references in comment nodes and node network metadata across all networks
     // This keeps documentation in sync when node networks are renamed
     let old_pattern = format!("`{}`", old_name);
@@ -578,6 +590,13 @@ impl StructureDesigner {
 
     // Remove the deleted network from navigation history
     self.navigation_history.remove_network(network_name);
+
+    // Clear clipboard if it references the deleted network type
+    if let Some(ref clipboard) = self.clipboard {
+      if clipboard.nodes.values().any(|n| n.node_type_name == network_name) {
+        self.clipboard = None;
+      }
+    }
 
     // Mark design as dirty since we deleted a network
     self.set_dirty(true);
@@ -695,10 +714,103 @@ impl StructureDesigner {
     }
 
     self.mark_node_data_changed(node_id);
-    
+
     new_node_id
   }
 
+  /// Copies the currently selected nodes to the clipboard.
+  /// Returns true if something was copied, false if selection was empty.
+  pub fn copy_selection(&mut self) -> bool {
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return false,
+    };
+
+    let active_network = match self.node_type_registry.node_networks.get(&node_network_name) {
+      Some(network) => network,
+      None => return false,
+    };
+
+    if active_network.selected_node_ids.is_empty() {
+      return false;
+    }
+
+    // Compute centroid of selected nodes' positions
+    let selected_ids = active_network.selected_node_ids.clone();
+    let mut sum = DVec2::ZERO;
+    let mut count = 0u64;
+    for &id in &selected_ids {
+      if let Some(node) = active_network.nodes.get(&id) {
+        sum += node.position;
+        count += 1;
+      }
+    }
+    if count == 0 {
+      return false;
+    }
+    let centroid = sum / count as f64;
+
+    // Create clipboard and copy nodes centered at (0, 0)
+    let mut clipboard = NodeNetwork::new_empty();
+    clipboard.copy_nodes_from(active_network, &selected_ids, -centroid);
+    self.clipboard = Some(clipboard);
+    true
+  }
+
+  /// Pastes clipboard contents into the active network at the given position.
+  /// Returns the list of newly created node IDs (empty if clipboard was empty).
+  pub fn paste_at_position(&mut self, position: DVec2) -> Vec<u64> {
+    let node_network_name = match &self.active_node_network_name {
+      Some(name) => name.clone(),
+      None => return vec![],
+    };
+
+    let clipboard = match &self.clipboard {
+      Some(cb) => cb,
+      None => return vec![],
+    };
+
+    let all_clipboard_ids: HashSet<u64> = clipboard.nodes.keys().copied().collect();
+    if all_clipboard_ids.is_empty() {
+      return vec![];
+    }
+
+    // Snapshot the clipboard since we need to borrow self mutably for the active network
+    let mut clipboard_snapshot = NodeNetwork::new_empty();
+    clipboard_snapshot.copy_nodes_from(clipboard, &all_clipboard_ids, DVec2::ZERO);
+    let snapshot_ids: HashSet<u64> = clipboard_snapshot.nodes.keys().copied().collect();
+
+    let active_network = match self.node_type_registry.node_networks.get_mut(&node_network_name) {
+      Some(network) => network,
+      None => return vec![],
+    };
+
+    let new_ids = active_network.copy_nodes_from(&clipboard_snapshot, &snapshot_ids, position);
+
+    // Select the pasted nodes
+    active_network.select_nodes(new_ids.clone());
+
+    // Mark design as dirty and trigger full refresh
+    self.set_dirty(true);
+    self.mark_full_refresh();
+
+    new_ids
+  }
+
+  /// Cuts the currently selected nodes (copy + delete).
+  /// Returns true if something was cut.
+  pub fn cut_selection(&mut self) -> bool {
+    if !self.copy_selection() {
+      return false;
+    }
+    self.delete_selected();
+    true
+  }
+
+  /// Returns true if the clipboard contains content.
+  pub fn has_clipboard_content(&self) -> bool {
+    self.clipboard.is_some()
+  }
 
   pub fn move_node(&mut self, node_id: u64, position: DVec2) {
     // Early return if active_node_network_name is None
@@ -2104,7 +2216,7 @@ impl StructureDesigner {
       if was_valid != is_now_valid || interface_changed {
         // Find all parent networks that use this network as a node
         let parent_networks = self.node_type_registry.find_parent_networks(&current_network_name);
-        
+
         for parent_name in parent_networks {
           if interface_changed {
             // If interface changed, validate ALL parent networks regardless of their current state
@@ -2118,9 +2230,18 @@ impl StructureDesigner {
             }
           }
         }
+
+        // Clear clipboard if it contains nodes of the changed type
+        if interface_changed {
+          if let Some(ref clipboard) = self.clipboard {
+            if clipboard.nodes.values().any(|n| n.node_type_name == current_network_name) {
+              self.clipboard = None;
+            }
+          }
+        }
       }
     }
-    
+
     final_result
   }
 
