@@ -282,6 +282,9 @@ class NodeNetworkState extends State<NodeNetwork> {
   Rect? _selectionRect; // Current rectangle being drawn (screen coords)
   Offset? _selectionRectStart; // Start point of rectangle drag (screen coords)
 
+  /// Last known mouse position in screen coordinates (for Ctrl+V paste)
+  Offset _lastMousePosition = Offset.zero;
+
   @override
   void initState() {
     super.initState();
@@ -690,16 +693,53 @@ class NodeNetworkState extends State<NodeNetwork> {
       return;
     }
 
-    // Only show add node popup if clicked on empty space (not on a node)
+    // Only show context menu if clicked on empty space (not on a node)
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
-      String? selectedNode = await showAddNodePopup(context);
-      if (selectedNode != null) {
-        // Convert screen position to logical coordinates for node creation
-        final scale = getZoomScale(_zoomLevel);
-        final logicalPosition =
-            screenToLogical(details.localPosition, _panOffset, scale);
-        model.createNode(selectedNode, logicalPosition);
+      final scale = getZoomScale(_zoomLevel);
+      final logicalPosition =
+          screenToLogical(details.localPosition, _panOffset, scale);
+
+      if (model.hasClipboardContent()) {
+        // Show intermediary context menu with Add Node and Paste options
+        final RenderBox overlay =
+            Overlay.of(context).context.findRenderObject() as RenderBox;
+        final RelativeRect position = RelativeRect.fromRect(
+          Rect.fromPoints(
+              details.globalPosition, details.globalPosition),
+          Offset.zero & overlay.size,
+        );
+
+        final value = await showMenu<String>(
+          context: context,
+          position: position,
+          items: [
+            const PopupMenuItem(
+              value: 'add_node',
+              child: Text('Add Node...'),
+            ),
+            const PopupMenuItem(
+              value: 'paste',
+              child: Text('Paste (Ctrl+V)'),
+            ),
+          ],
+        );
+
+        if (!context.mounted) return;
+        if (value == 'add_node') {
+          String? selectedNode = await showAddNodePopup(context);
+          if (selectedNode != null) {
+            model.createNode(selectedNode, logicalPosition);
+          }
+        } else if (value == 'paste') {
+          model.pasteAtPosition(logicalPosition.dx, logicalPosition.dy);
+        }
+      } else {
+        // No clipboard content - show Add Node dialog directly (existing behavior)
+        String? selectedNode = await showAddNodePopup(context);
+        if (selectedNode != null) {
+          model.createNode(selectedNode, logicalPosition);
+        }
       }
     }
     focusNode.requestFocus();
@@ -768,6 +808,9 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle pointer move event for panning (middle mouse or Shift + right mouse) and rectangle selection
   void _handlePointerMove(PointerMoveEvent event) {
+    // Always track mouse position for paste (Ctrl+V)
+    _lastMousePosition = event.localPosition;
+
     if ((_isMiddleMousePanning || _isShiftRightMousePanning) &&
         _lastPanPosition != null) {
       setState(() {
@@ -921,6 +964,29 @@ class NodeNetworkState extends State<NodeNetwork> {
                 }
 
                 model.duplicateNode(selectedNodeId);
+                return KeyEventResult.handled;
+              }
+              // Ctrl+C: Copy selection
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyC) {
+                model.copySelection();
+                return KeyEventResult.handled;
+              }
+              // Ctrl+V: Paste at cursor position
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyV) {
+                if (model.hasClipboardContent()) {
+                  final scale = getZoomScale(_zoomLevel);
+                  final logicalPos = screenToLogical(
+                      _lastMousePosition, _panOffset, scale);
+                  model.pasteAtPosition(logicalPos.dx, logicalPos.dy);
+                }
+                return KeyEventResult.handled;
+              }
+              // Ctrl+X: Cut selection
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyX) {
+                model.cutSelection();
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.delete ||

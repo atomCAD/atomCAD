@@ -659,6 +659,35 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  // ===== COPY / PASTE / CUT =====
+
+  /// Copies the current selection to the clipboard.
+  /// Returns true if something was copied, false if selection was empty.
+  bool copySelection() {
+    return structure_designer_api.copySelection();
+  }
+
+  /// Pastes clipboard content at the given position (network coordinates).
+  void pasteAtPosition(double x, double y) {
+    structure_designer_api.pasteAtPosition(x: x, y: y);
+    refreshFromKernel();
+  }
+
+  /// Cuts the current selection (copy + delete).
+  /// Returns true if something was cut.
+  bool cutSelection() {
+    final result = structure_designer_api.cutSelection();
+    if (result) {
+      refreshFromKernel();
+    }
+    return result;
+  }
+
+  /// Returns true if the clipboard has content available for pasting.
+  bool hasClipboardContent() {
+    return structure_designer_api.hasClipboardContent();
+  }
+
   void deleteSelectedAtomsAndBonds() {
     if (nodeNetworkView == null) return;
     edit_atom_api.deleteSelectedAtomsAndBonds();

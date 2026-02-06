@@ -580,6 +580,14 @@ class NodeWidget extends StatelessWidget {
           value: 'duplicate',
           child: Text('Duplicate node (Ctrl+D)'),
         ),
+        PopupMenuItem(
+          value: 'copy',
+          child: Text('Copy (Ctrl+C)'),
+        ),
+        PopupMenuItem(
+          value: 'cut',
+          child: Text('Cut (Ctrl+X)'),
+        ),
         if (canFactor)
           PopupMenuItem(
             value: 'factor_into_subnetwork',
@@ -604,6 +612,14 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.duplicateNode(node.id);
+      } else if (value == 'copy') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.copySelection();
+      } else if (value == 'cut') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.cutSelection();
       } else if (value == 'factor_into_subnetwork') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
