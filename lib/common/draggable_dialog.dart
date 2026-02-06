@@ -6,12 +6,14 @@ class DraggableDialog extends StatefulWidget {
   final Widget child;
   final double width;
   final double? height;
+  final Color backgroundColor;
 
   const DraggableDialog({
     super.key,
     required this.child,
     required this.width,
     this.height,
+    this.backgroundColor = Colors.white,
   });
 
   @override
@@ -84,7 +86,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
                 width: widget.width,
                 height: widget.height, // null = intrinsic height
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: widget.backgroundColor,
                   borderRadius: BorderRadius.circular(8.0),
                 ),
                 child: widget.child,

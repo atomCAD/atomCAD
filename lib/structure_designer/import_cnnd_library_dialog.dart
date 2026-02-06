@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../common/draggable_dialog.dart';
 import '../src/rust/api/structure_designer/import_api.dart';
 import 'structure_designer_model.dart';
 
@@ -276,10 +277,10 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        width: 620,
-        height: 600,
+    return DraggableDialog(
+      width: 620,
+      height: 600,
+      child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

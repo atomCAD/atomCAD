@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
@@ -122,12 +123,11 @@ class _AddNodePopupState extends State<AddNodePopup> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
+    return DraggableDialog(
       key: AddNodePopupKeys.dialog,
       backgroundColor: Colors.black,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Container(
-        width: 560, // Wider to accommodate two panels
+      width: 560,
+      child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
