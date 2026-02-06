@@ -541,7 +541,7 @@ class NodeWidget extends StatelessWidget {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
 
     // Only change selection if this node isn't already selected
-    // This preserves multi-selection for operations like "Factor into Subnetwork"
+    // This preserves multi-selection for operations like "Factor out to Subnetwork"
     if (!node.selected) {
       model.setSelectedNode(node.id);
     }
@@ -583,7 +583,7 @@ class NodeWidget extends StatelessWidget {
         if (canFactor)
           PopupMenuItem(
             value: 'factor_into_subnetwork',
-            child: Text('Factor into Subnetwork...'),
+            child: Text('Factor out to Subnetwork...'),
           ),
       ],
     ).then((value) {

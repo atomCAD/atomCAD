@@ -171,7 +171,7 @@ class _FactorIntoSubnetworkDialogState
           children: [
             // Title
             Text(
-              'Factor into Subnetwork',
+              'Factor out to Subnetwork',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 24),

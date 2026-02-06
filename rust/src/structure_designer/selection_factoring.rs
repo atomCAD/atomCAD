@@ -90,9 +90,10 @@ fn get_output_type(
     DataType::None
 }
 
-/// Generates a suggested parameter name from the source node and destination parameter.
-/// Format: {source_node_name}_{destination_param_name}
-/// For function pins (pin_index == -1), appends "_fn" instead of param name.
+/// Generates a suggested parameter name from the destination parameter.
+/// Uses only the destination parameter name for clarity.
+/// For function pins (pin_index == -1), uses the source node name with "_fn" suffix.
+/// Disambiguation (e.g., appending _2) is handled later by `make_names_unique`.
 fn generate_param_name(
     source_node_id: u64,
     source_pin_index: i32,
@@ -101,36 +102,34 @@ fn generate_param_name(
     nodes: &HashMap<u64, Node>,
     registry: &NodeTypeRegistry,
 ) -> String {
-    // Get source node name
-    let source_name = if let Some(node) = nodes.get(&source_node_id) {
+    // For function pins, use source node name with "_fn" suffix
+    if source_pin_index == -1 {
+        let source_name = if let Some(node) = nodes.get(&source_node_id) {
+            node.custom_name.as_ref()
+                .unwrap_or(&node.node_type_name)
+                .clone()
+        } else {
+            "input".to_string()
+        };
+        return format!("{}_fn", source_name);
+    }
+
+    // Get destination parameter name from the node type
+    if let Some(dest_node) = nodes.get(&dest_node_id) {
+        if let Some(node_type) = registry.get_node_type_for_node(dest_node) {
+            if let Some(param) = node_type.parameters.get(dest_param_index) {
+                return param.name.clone();
+            }
+        }
+    }
+
+    // Fallback to source node name if destination param name is unavailable
+    if let Some(node) = nodes.get(&source_node_id) {
         node.custom_name.as_ref()
             .unwrap_or(&node.node_type_name)
             .clone()
     } else {
         "input".to_string()
-    };
-
-    // For function pins, just append "_fn"
-    if source_pin_index == -1 {
-        return format!("{}_fn", source_name);
-    }
-
-    // Get destination parameter name from the node type
-    let dest_param_name = if let Some(dest_node) = nodes.get(&dest_node_id) {
-        if let Some(node_type) = registry.get_node_type_for_node(dest_node) {
-            node_type.parameters.get(dest_param_index)
-                .map(|p| p.name.clone())
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    // Combine source name with destination parameter name
-    match dest_param_name {
-        Some(param_name) => format!("{}_{}", source_name, param_name),
-        None => source_name,
     }
 }
 
@@ -281,46 +280,23 @@ pub fn analyze_selection_for_factoring(
 
 /// Make suggested parameter names unique by appending _2, _3, etc. for duplicates
 fn make_names_unique(mut inputs: Vec<ExternalInput>) -> Vec<ExternalInput> {
-    let mut name_counts: HashMap<String, usize> = HashMap::new();
-
-    for input in inputs.iter_mut() {
-        let base_name = input.suggested_name.clone();
-        let count = name_counts.entry(base_name.clone()).or_insert(0);
-        *count += 1;
-
-        if *count > 1 {
-            input.suggested_name = format!("{}_{}", base_name, count);
-        }
+    // Count how many times each base name appears
+    let mut name_totals: HashMap<String, usize> = HashMap::new();
+    for input in &inputs {
+        *name_totals.entry(input.suggested_name.clone()).or_insert(0) += 1;
     }
 
-    // Second pass: if a name was duplicated, rename the first occurrence too
-    let mut final_counts: HashMap<String, usize> = HashMap::new();
-    for input in inputs.iter() {
-        *final_counts.entry(input.suggested_name.clone()).or_insert(0) += 1;
-    }
-
-    // If we have duplicates due to the naming above, handle it
-    let mut seen_names: HashSet<String> = HashSet::new();
+    // For names that appear more than once, keep the first bare, then append 1, 2, ...
+    let mut name_counters: HashMap<String, usize> = HashMap::new();
     for input in inputs.iter_mut() {
-        let original = input.suggested_name.clone();
-        let mut name = original.clone();
-        let mut counter = 1;
-        while seen_names.contains(&name) {
-            counter += 1;
-            // Strip any existing suffix like _2, _3 and re-add
-            let base = if let Some(idx) = original.rfind('_') {
-                if original[idx+1..].parse::<usize>().is_ok() {
-                    original[..idx].to_string()
-                } else {
-                    original.clone()
-                }
-            } else {
-                original.clone()
-            };
-            name = format!("{}_{}", base, counter);
+        let base = input.suggested_name.clone();
+        if name_totals[&base] > 1 {
+            let counter = name_counters.entry(base.clone()).or_insert(0);
+            if *counter > 0 {
+                input.suggested_name = format!("{}{}", base, counter);
+            }
+            *counter += 1;
         }
-        seen_names.insert(name.clone());
-        input.suggested_name = name;
     }
 
     inputs
