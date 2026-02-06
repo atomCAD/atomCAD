@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 class DraggableDialog extends StatefulWidget {
   final Widget child;
   final double width;
-  final double height;
+  final double? height;
 
   const DraggableDialog({
     super.key,
     required this.child,
     required this.width,
-    required this.height,
+    this.height,
   });
 
   @override
@@ -34,7 +34,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
     final screenSize = MediaQuery.of(context).size;
     final initialPosition = Offset(
       (screenSize.width - widget.width) / 2,
-      (screenSize.height - widget.height) / 2,
+      (screenSize.height - (widget.height ?? 300)) / 2,
     );
     
     // Initialize position if not already set
@@ -82,7 +82,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
               borderRadius: BorderRadius.circular(8.0),
               child: Container(
                 width: widget.width,
-                height: widget.height,
+                height: widget.height, // null = intrinsic height
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8.0),

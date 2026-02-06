@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../common/draggable_dialog.dart';
 import '../src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import '../src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -161,9 +162,9 @@ class _FactorIntoSubnetworkDialogState
   Widget build(BuildContext context) {
     final hasParams = widget.info.suggestedParamNames.isNotEmpty;
 
-    return Dialog(
-      child: Container(
-        width: 450,
+    return DraggableDialog(
+      width: 450,
+      child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
