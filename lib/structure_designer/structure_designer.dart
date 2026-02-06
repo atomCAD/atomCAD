@@ -69,6 +69,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
                       label: 'File',
                       menuItems: [
                         MenuItemButton(
+                          key: const Key('new_design_item'),
+                          onPressed: _newDesign,
+                          child: const Text('New'),
+                        ),
+                        MenuItemButton(
                           key: const Key('load_design_item'),
                           onPressed: _loadDesign,
                           child: const Text('Load Design'),
@@ -242,7 +247,35 @@ class _StructureDesignerState extends State<StructureDesigner> {
     );
   }
 
+  Future<bool> _confirmDiscardChanges() async {
+    if (!graphModel.isDirty) return true;
+    final shouldProceed = await showDraggableAlertDialog<bool>(
+      context: context,
+      title: const Text('Unsaved Changes'),
+      content: const Text(
+          'You have unsaved changes. Do you want to discard them?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Discard'),
+        ),
+      ],
+    );
+    return shouldProceed ?? false;
+  }
+
+  Future<void> _newDesign() async {
+    if (!await _confirmDiscardChanges()) return;
+    graphModel.newProject();
+  }
+
   Future<void> _loadDesign() async {
+    if (!await _confirmDiscardChanges()) return;
+
     // Open file picker for CNND files
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
