@@ -7,6 +7,7 @@ class DraggableDialog extends StatefulWidget {
   final double width;
   final double? height;
   final Color backgroundColor;
+  final bool dismissible;
 
   const DraggableDialog({
     super.key,
@@ -14,6 +15,7 @@ class DraggableDialog extends StatefulWidget {
     required this.width,
     this.height,
     this.backgroundColor = Colors.white,
+    this.dismissible = true,
   });
 
   @override
@@ -47,7 +49,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
         // Invisible full-screen barrier for detecting clicks outside
         Positioned.fill(
           child: GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
+            onTap: widget.dismissible ? () => Navigator.of(context).pop() : null,
             behavior: HitTestBehavior.opaque,
             child: Container(color: Colors.transparent),
           ),
@@ -97,4 +99,46 @@ class _DraggableDialogState extends State<DraggableDialog> {
       ],
     );
   }
+}
+
+/// Shows a draggable alert dialog — a drop-in replacement for
+/// `showDialog` + `AlertDialog` that makes the dialog movable.
+Future<T?> showDraggableAlertDialog<T>({
+  required BuildContext context,
+  required Widget title,
+  required Widget content,
+  required List<Widget> actions,
+  double width = 400,
+  bool barrierDismissible = true,
+  Key? key,
+}) {
+  return showDialog<T>(
+    context: context,
+    barrierDismissible: false, // DraggableDialog handles its own barrier
+    builder: (context) => DraggableDialog(
+      key: key,
+      width: width,
+      dismissible: barrierDismissible,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DefaultTextStyle(
+              style: Theme.of(context).textTheme.headlineSmall!,
+              child: title,
+            ),
+            const SizedBox(height: 16),
+            content,
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: actions,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

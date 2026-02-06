@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import '../common/draggable_dialog.dart';
 import '../common/menu_widget.dart';
 import '../common/section.dart';
 import 'structure_designer_model.dart';
@@ -257,20 +258,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (!loadResult.success) {
         // Show error dialog
         if (mounted) {
-          showDialog(
+          showDraggableAlertDialog(
             context: context,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                title: const Text('Load Error'),
-                content: Text(loadResult.errorMessage),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('OK'),
-                  ),
-                ],
-              );
-            },
+            title: const Text('Load Error'),
+            content: Text(loadResult.errorMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
           );
         }
       }
@@ -313,20 +310,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   void _showSaveErrorDialog(String errorMessage) {
-    showDialog(
+    showDraggableAlertDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Save Error'),
-          content: Text(errorMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
+      title: const Text('Save Error'),
+      content: Text(errorMessage),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('OK'),
+        ),
+      ],
     );
   }
 
@@ -385,18 +378,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
     } catch (e) {
       // Handle any unexpected errors
       if (mounted) {
-        showDialog(
+        showDraggableAlertDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Import Error'),
-            content: Text('An unexpected error occurred: $e'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+          title: const Text('Import Error'),
+          content: Text('An unexpected error occurred: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
         );
       }
     }
@@ -407,38 +398,36 @@ class _StructureDesignerState extends State<StructureDesigner> {
     try {
       // First, let user select the format
       if (!mounted) return;
-      String? selectedFormat = await showDialog<String>(
+      String? selectedFormat = await showDraggableAlertDialog<String>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Select Export Format'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Choose the file format for export:'),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.description),
-                title: const Text('MOL format (.mol)'),
-                subtitle:
-                    const Text('Molecular structure with bond information'),
-                onTap: () => Navigator.of(context).pop('mol'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.scatter_plot),
-                title: const Text('XYZ format (.xyz)'),
-                subtitle: const Text('Atomic coordinates only'),
-                onTap: () => Navigator.of(context).pop('xyz'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+        title: const Text('Select Export Format'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Choose the file format for export:'),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.description),
+              title: const Text('MOL format (.mol)'),
+              subtitle:
+                  const Text('Molecular structure with bond information'),
+              onTap: () => Navigator.of(context).pop('mol'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.scatter_plot),
+              title: const Text('XYZ format (.xyz)'),
+              subtitle: const Text('Atomic coordinates only'),
+              onTap: () => Navigator.of(context).pop('xyz'),
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
       );
 
       if (selectedFormat == null) return;
@@ -464,18 +453,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
         if (!result.success) {
           // Show error dialog
           if (mounted) {
-            showDialog(
+            showDraggableAlertDialog(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Export Error'),
-                content: Text(result.errorMessage),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
+              title: const Text('Export Error'),
+              content: Text(result.errorMessage),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
             );
           }
         }
@@ -483,18 +470,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
     } catch (e) {
       // Handle any unexpected errors
       if (mounted) {
-        showDialog(
+        showDraggableAlertDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Export Error'),
-            content: Text('An unexpected error occurred: $e'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+          title: const Text('Export Error'),
+          content: Text('An unexpected error occurred: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
         );
       }
     }

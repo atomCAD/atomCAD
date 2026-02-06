@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
@@ -112,47 +113,39 @@ class NodeNetworksActionBar extends StatelessWidget {
   // Show confirmation dialog for network deletion
   Future<bool?> _showDeleteConfirmationDialog(
       BuildContext context, String networkName) {
-    return showDialog<bool>(
+    return showDraggableAlertDialog<bool>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          key: const Key('delete_confirm_dialog'),
-          title: const Text('Delete Network'),
-          content: Text(
-            'Are you sure you want to remove the node network "$networkName"?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+      key: const Key('delete_confirm_dialog'),
+      title: const Text('Delete Network'),
+      content: Text(
+        'Are you sure you want to remove the node network "$networkName"?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
     );
   }
 
   // Show error dialog when deletion fails
   Future<void> _showDeleteErrorDialog(
       BuildContext context, String errorMessage) {
-    return showDialog(
+    return showDraggableAlertDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Cannot Delete Network'),
-          content: Text(errorMessage),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
+      title: const Text('Cannot Delete Network'),
+      content: Text(errorMessage),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('OK'),
+        ),
+      ],
     );
   }
 }

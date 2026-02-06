@@ -11,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:flutter_window_close/flutter_window_close.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/ai_assistant/http_server.dart';
 
 /// Global AI assistant server instance.
@@ -179,24 +180,22 @@ class _MyAppState extends State<MyApp> {
           if (context == null) {
             return false;
           }
-          final shouldClose = await showDialog<bool>(
+          final shouldClose = await showDraggableAlertDialog<bool>(
             context: context,
             barrierDismissible: false,
-            builder: (dialogContext) => AlertDialog(
-              title: const Text('atomCAD'),
-              content: Text(
-                  'Do you want to quit without saving changes to ${structureDesignerModel.displayFileName}?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Quit'),
-                ),
-              ],
-            ),
+            title: const Text('atomCAD'),
+            content: Text(
+                'Do you want to quit without saving changes to ${structureDesignerModel.displayFileName}?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Quit'),
+              ),
+            ],
           );
           return shouldClose ?? false;
         }

@@ -175,48 +175,46 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
   }
 
   Future<bool> _showOverwriteWarning(List<String> conflictingNetworks) async {
-    return await showDialog<bool>(
+    return await showDraggableAlertDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Overwrite Warning'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('The following networks already exist and will be overwritten:'),
-            const SizedBox(height: 12),
-            Container(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: conflictingNetworks.map((name) => 
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text('• $name', style: const TextStyle(fontFamily: 'monospace')),
-                    )
-                  ).toList(),
-                ),
+      title: const Text('Overwrite Warning'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('The following networks already exist and will be overwritten:'),
+          const SizedBox(height: 12),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: conflictingNetworks.map((name) =>
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text('• $name', style: const TextStyle(fontFamily: 'monospace')),
+                  )
+                ).toList(),
               ),
             ),
-            const SizedBox(height: 12),
-            const Text('Do you want to proceed and overwrite these networks?'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
-            child: const Text('Overwrite'),
-          ),
+          const SizedBox(height: 12),
+          const Text('Do you want to proceed and overwrite these networks?'),
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+          ),
+          child: const Text('Overwrite'),
+        ),
+      ],
     ) ?? false; // Default to false if dialog is dismissed
   }
 
