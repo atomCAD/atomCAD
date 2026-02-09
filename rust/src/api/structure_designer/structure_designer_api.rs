@@ -3697,6 +3697,12 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     })
                     .collect();
 
+                // Save active node's custom_name so we can restore selection after replace
+                let active_custom_name: Option<String> = network
+                    .active_node_id
+                    .and_then(|id| network.nodes.get(&id))
+                    .and_then(|node| node.custom_name.clone());
+
                 // Validate parse first to extract line/column errors
                 let parse_errors: Vec<APITextError> = match Parser::parse(&code) {
                     Ok(_) => vec![],
@@ -3738,6 +3744,18 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                         if let Some(&saved_pos) = saved_positions.get(name) {
                             node.position = saved_pos;
                         }
+                    }
+                }
+
+                // Restore active/selected node by custom_name
+                if let Some(ref active_name) = active_custom_name {
+                    let node_id = network
+                        .nodes
+                        .values()
+                        .find(|n| n.custom_name.as_deref() == Some(active_name.as_str()))
+                        .map(|n| n.id);
+                    if let Some(id) = node_id {
+                        network.select_node(id);
                     }
                 }
 

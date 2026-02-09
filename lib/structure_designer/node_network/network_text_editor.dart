@@ -377,35 +377,40 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
             width: 1,
             color: Colors.grey[700],
           ),
-          // Text editor
+          // Text editor (horizontal scroll disables soft-wrapping)
           Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              scrollController: _editorScrollController,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              onTap: _onCursorChanged,
-              onChanged: (text) {
-                // Rebuild line-to-node mappings so cursor sync stays accurate
-                _buildLineNodeMappings(text);
-                setState(() {});
-                _onCursorChanged();
-              },
-              style: const TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-                color: Color(0xFFD4D4D4),
-                height: 20.0 / 12.0,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: IntrinsicWidth(
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  scrollController: _editorScrollController,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  onTap: _onCursorChanged,
+                  onChanged: (text) {
+                    // Rebuild line-to-node mappings so cursor sync stays accurate
+                    _buildLineNodeMappings(text);
+                    setState(() {});
+                    _onCursorChanged();
+                  },
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    color: Color(0xFFD4D4D4),
+                    height: 20.0 / 12.0,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                    isDense: true,
+                  ),
+                  cursorColor: Colors.white,
+                ),
               ),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                isDense: true,
-              ),
-              cursorColor: Colors.white,
             ),
           ),
         ],
