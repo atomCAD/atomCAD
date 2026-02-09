@@ -49,6 +49,7 @@ pub struct InputPinView {
 pub struct NodeView {
     pub id: u64,
     pub node_type_name: String,
+    pub custom_name: Option<String>,
     #[frb(non_final)]
     pub position: APIVec2,
     pub input_pins: Vec<InputPinView>,

@@ -1505,6 +1505,7 @@ enum NodeTypeCategory {
 class NodeView {
   final BigInt id;
   final String nodeTypeName;
+  final String? customName;
   APIVec2 position;
   final List<InputPinView> inputPins;
   final String outputType;
@@ -1524,6 +1525,7 @@ class NodeView {
   NodeView({
     required this.id,
     required this.nodeTypeName,
+    this.customName,
     required this.position,
     required this.inputPins,
     required this.outputType,
@@ -1545,6 +1547,7 @@ class NodeView {
   int get hashCode =>
       id.hashCode ^
       nodeTypeName.hashCode ^
+      customName.hashCode ^
       position.hashCode ^
       inputPins.hashCode ^
       outputType.hashCode ^
@@ -1568,6 +1571,7 @@ class NodeView {
           runtimeType == other.runtimeType &&
           id == other.id &&
           nodeTypeName == other.nodeTypeName &&
+          customName == other.customName &&
           position == other.position &&
           inputPins == other.inputPins &&
           outputType == other.outputType &&

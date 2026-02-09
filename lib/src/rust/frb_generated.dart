@@ -8313,26 +8313,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 17)
-      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
-      position: dco_decode_api_vec_2(arr[2]),
-      inputPins: dco_decode_list_input_pin_view(arr[3]),
-      outputType: dco_decode_String(arr[4]),
-      functionType: dco_decode_String(arr[5]),
-      selected: dco_decode_bool(arr[6]),
-      active: dco_decode_bool(arr[7]),
-      displayed: dco_decode_bool(arr[8]),
-      returnNode: dco_decode_bool(arr[9]),
-      error: dco_decode_opt_String(arr[10]),
-      outputString: dco_decode_opt_String(arr[11]),
-      subtitle: dco_decode_opt_String(arr[12]),
-      commentLabel: dco_decode_opt_String(arr[13]),
-      commentText: dco_decode_opt_String(arr[14]),
-      commentWidth: dco_decode_opt_box_autoadd_f_64(arr[15]),
-      commentHeight: dco_decode_opt_box_autoadd_f_64(arr[16]),
+      customName: dco_decode_opt_String(arr[2]),
+      position: dco_decode_api_vec_2(arr[3]),
+      inputPins: dco_decode_list_input_pin_view(arr[4]),
+      outputType: dco_decode_String(arr[5]),
+      functionType: dco_decode_String(arr[6]),
+      selected: dco_decode_bool(arr[7]),
+      active: dco_decode_bool(arr[8]),
+      displayed: dco_decode_bool(arr[9]),
+      returnNode: dco_decode_bool(arr[10]),
+      error: dco_decode_opt_String(arr[11]),
+      outputString: dco_decode_opt_String(arr[12]),
+      subtitle: dco_decode_opt_String(arr[13]),
+      commentLabel: dco_decode_opt_String(arr[14]),
+      commentText: dco_decode_opt_String(arr[15]),
+      commentWidth: dco_decode_opt_box_autoadd_f_64(arr[16]),
+      commentHeight: dco_decode_opt_box_autoadd_f_64(arr[17]),
     );
   }
 
@@ -10387,6 +10388,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_u_64(deserializer);
     var var_nodeTypeName = sse_decode_String(deserializer);
+    var var_customName = sse_decode_opt_String(deserializer);
     var var_position = sse_decode_api_vec_2(deserializer);
     var var_inputPins = sse_decode_list_input_pin_view(deserializer);
     var var_outputType = sse_decode_String(deserializer);
@@ -10405,6 +10407,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return NodeView(
         id: var_id,
         nodeTypeName: var_nodeTypeName,
+        customName: var_customName,
         position: var_position,
         inputPins: var_inputPins,
         outputType: var_outputType,
@@ -12522,6 +12525,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.id, serializer);
     sse_encode_String(self.nodeTypeName, serializer);
+    sse_encode_opt_String(self.customName, serializer);
     sse_encode_api_vec_2(self.position, serializer);
     sse_encode_list_input_pin_view(self.inputPins, serializer);
     sse_encode_String(self.outputType, serializer);

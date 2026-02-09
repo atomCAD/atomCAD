@@ -303,6 +303,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                         NodeView {
                             id: node.id,
                             node_type_name: node.node_type_name.clone(),
+                            custom_name: node.custom_name.clone(),
                             position: to_api_vec2(&node.position),
                             input_pins,
                             output_type: output_type.to_string(),

@@ -25,6 +25,7 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
   final ScrollController _gutterScrollController = ScrollController();
 
   bool _isDirty = false;
+  int _activeLine = 0; // 1-indexed, 0 = no active line
   APITextEditResult? _lastResult;
   Map<int, APITextError> _errorsByLine = {};
   List<_LineNodeMapping> _lineNodeMappings = [];
@@ -68,10 +69,12 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
     _controller.text = text;
     _controller.addListener(_onTextChanged);
     _buildLineNodeMappings(text);
+    _syncActiveLineFromModel();
     setState(() {
       _isDirty = false;
       _lastResult = null;
       _errorsByLine = {};
+      // _activeLine was set by _syncActiveLineFromModel above
     });
   }
 
@@ -108,6 +111,42 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
     loadFromNetwork();
   }
 
+  /// Set _activeLine from the currently active node in the model.
+  void _syncActiveLineFromModel() {
+    final view = widget.graphModel.nodeNetworkView;
+    if (view == null || _lineNodeMappings.isEmpty) {
+      _activeLine = 0;
+      return;
+    }
+    // Find the active node, fall back to selected
+    NodeView? targetNode;
+    for (final node in view.nodes.values) {
+      if (node.active) {
+        targetNode = node;
+        break;
+      }
+    }
+    targetNode ??= view.nodes.values.cast<NodeView?>().firstWhere(
+          (n) => n!.selected,
+          orElse: () => null,
+        );
+    if (targetNode == null) {
+      _activeLine = 0;
+      return;
+    }
+    // Match by custom_name which is the name used in the text format
+    final name = targetNode.customName;
+    if (name != null) {
+      for (final mapping in _lineNodeMappings) {
+        if (mapping.nodeName == name) {
+          _activeLine = mapping.lineNumber;
+          return;
+        }
+      }
+    }
+    _activeLine = 0;
+  }
+
   /// Build line→node name mappings from the text.
   void _buildLineNodeMappings(String text) {
     final mappings = <_LineNodeMapping>[];
@@ -131,18 +170,30 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
     _lineNodeMappings = mappings;
   }
 
+  /// Compute the current line number (1-indexed) from cursor position.
+  int _computeCurrentLine() {
+    final selection = _controller.selection;
+    if (!selection.isValid) return 0;
+    final text = _controller.text;
+    final offset = selection.baseOffset.clamp(0, text.length);
+    int line = 1;
+    for (int i = 0; i < offset; i++) {
+      if (text[i] == '\n') line++;
+    }
+    return line;
+  }
+
   /// Handle cursor position changes to sync active node.
   void _onCursorChanged() {
     if (!_focusNode.hasFocus) return;
-    final selection = _controller.selection;
-    if (!selection.isValid) return;
 
-    // Compute current line number (1-indexed)
-    final text = _controller.text;
-    final offset = selection.baseOffset.clamp(0, text.length);
-    int currentLine = 1;
-    for (int i = 0; i < offset; i++) {
-      if (text[i] == '\n') currentLine++;
+    final currentLine = _computeCurrentLine();
+    if (currentLine == 0) return;
+
+    if (_activeLine != currentLine) {
+      setState(() {
+        _activeLine = currentLine;
+      });
     }
 
     // Find node on this line
@@ -154,38 +205,17 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
     }
   }
 
-  /// Select a node by its custom name.
+  /// Select a node by its custom name (the name used in text format).
   void _selectNodeByName(String nodeName) {
     final view = widget.graphModel.nodeNetworkView;
     if (view == null) return;
 
     for (final entry in view.nodes.entries) {
-      final node = entry.value;
-      // Match by subtitle which contains custom_name, or by node type + name pattern
-      // The NodeView doesn't directly expose custom_name, but we can look at subtitle
-      // Actually, let's use the API to find the node by looking at all nodes
-      if (node.subtitle == nodeName || _nodeMatchesName(node, nodeName)) {
+      if (entry.value.customName == nodeName) {
         widget.graphModel.setSelectedNode(entry.key);
         return;
       }
     }
-  }
-
-  /// Check if a node matches a given custom name.
-  bool _nodeMatchesName(NodeView node, String name) {
-    // The subtitle field contains the custom_name when it differs from auto-generated
-    if (node.subtitle != null && node.subtitle == name) return true;
-    // For nodes where custom_name matches the auto-generated pattern,
-    // subtitle may be null but the name still matches
-    // We check if name follows the pattern: nodeTypeName + number
-    final typeName = node.nodeTypeName;
-    if (name.startsWith(typeName)) {
-      final suffix = name.substring(typeName.length);
-      if (suffix.isNotEmpty && int.tryParse(suffix) != null) {
-        return true;
-      }
-    }
-    return false;
   }
 
   @override
@@ -293,13 +323,21 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
                 itemBuilder: (context, index) {
                   final lineNum = index + 1;
                   final hasError = _errorsByLine.containsKey(lineNum);
+                  final isActive = lineNum == _activeLine;
                   return SizedBox(
                     height: 20,
                     child: Row(
                       children: [
+                        // Active line indicator
+                        Container(
+                          width: 5,
+                          color: isActive
+                              ? const Color(0xFFD84315)
+                              : Colors.transparent,
+                        ),
                         // Error indicator
                         SizedBox(
-                          width: 14,
+                          width: 9,
                           child: hasError
                               ? Tooltip(
                                   message: _errorsByLine[lineNum]!.message,
@@ -349,8 +387,9 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
               expands: true,
               textAlignVertical: TextAlignVertical.top,
               onTap: _onCursorChanged,
-              onChanged: (_) {
-                // Rebuild line count for gutter
+              onChanged: (text) {
+                // Rebuild line-to-node mappings so cursor sync stays accurate
+                _buildLineNodeMappings(text);
                 setState(() {});
                 _onCursorChanged();
               },
