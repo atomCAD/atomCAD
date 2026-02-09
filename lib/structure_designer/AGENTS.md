@@ -1,0 +1,65 @@
+# Structure Designer UI - Agent Instructions
+
+Main application UI for the atomCAD structure designer. Provides the node network editor, 3D viewport, property panels, and network management.
+
+## Subdirectory Instructions
+
+- Working in `node_network/` → Read `node_network/AGENTS.md`
+- Working in `node_data/` → Read `node_data/AGENTS.md`
+
+## Directory Structure
+
+```
+structure_designer/
+├── structure_designer.dart           # Main widget: menu bar + 3-panel layout
+├── structure_designer_model.dart     # StructureDesignerModel: central state
+├── structure_designer_viewport.dart  # 3D viewport with ray-cast interaction
+├── main_content_area.dart            # Resizable split: viewport + node editor
+├── camera_control_widget.dart        # Camera view selector (ortho/perspective)
+├── node_display_widget.dart          # Display policy buttons (Manual/Selected/Frontier)
+├── atomic_structure_visualization_widget.dart  # Atom/bond 3D display
+├── geometry_visualization_widget.dart          # Geometry 3D display
+├── preferences_window.dart           # Settings dialog
+├── factor_into_subnetwork_dialog.dart # Extract selection to subnetwork
+├── import_cnnd_library_dialog.dart   # Import from .cnnd library
+├── namespace_utils.dart              # Network name validation
+├── node_network/                     # Node graph editor
+├── node_data/                        # Per-node-type property editors
+└── node_networks_list/               # Network list/tree panels
+```
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `structure_designer.dart` | Top-level widget, menu bar (File/View/Edit), layout |
+| `structure_designer_model.dart` | `ChangeNotifier` state: wraps all Rust API calls |
+| `structure_designer_viewport.dart` | `CadViewport` subclass for 3D ray-cast interaction |
+| `main_content_area.dart` | Resizable split between viewport and node editor |
+
+## State Management Pattern
+
+`StructureDesignerModel` (extends `ChangeNotifier`) is the single source of truth:
+
+```
+User interaction → Model method → Rust API call → refreshFromKernel() → notifyListeners()
+```
+
+Access via `Provider.of<StructureDesignerModel>(context)` or `Consumer<StructureDesignerModel>`.
+
+All Rust state is fetched into `NodeNetworkView` (the model's snapshot of current network state).
+
+## Layout
+
+Three-panel layout:
+- **Left sidebar:** Display policy, camera controls, network list (tabs: List/Tree)
+- **Main area:** Resizable split between 3D viewport and node network editor
+- Supports vertical (side-by-side) and horizontal (stacked) layout modes
+
+## node_networks_list/ Subdirectory
+
+Network management panel with:
+- `node_networks_panel.dart` - Tab container (List/Tree views) + action bar
+- `node_network_list_view.dart` - Flat list with rename, validation error indicators
+- `node_network_tree_view.dart` - Hierarchical tree view
+- `node_networks_action_bar.dart` - Add/delete/navigate buttons

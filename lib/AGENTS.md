@@ -11,7 +11,7 @@ lib/
 ├── main.dart              # Entry point (GUI + CLI modes)
 ├── common/                # Shared UI widgets and utilities
 ├── inputs/                # Input handling
-├── structure_designer/    # Main Structure Designer UI
+├── structure_designer/    # Main Structure Designer UI (see structure_designer/AGENTS.md)
 │   ├── node_network/      # Node network editor
 │   ├── node_data/         # Node property editors
 │   └── node_networks_list/# Network list panel

@@ -5,7 +5,11 @@
 **IMPORTANT:** When working on files in these directories (or any of their subdirectories), always read the corresponding AGENTS.md file first:
 
 - Working in `rust/` or any descendant (e.g., `rust/src/`, `rust/src/structure_designer/`, etc.) → Read `rust/AGENTS.md`
-- Working in `lib/` or any descendant (e.g., `lib/common/`, `lib/structure_designer/`, etc.) → Read `lib/AGENTS.md` (if it exists)
+- Working in `rust/src/crystolecule/` or any descendant → Also read `rust/src/crystolecule/AGENTS.md`
+- Working in `rust/src/geo_tree/` or any descendant → Also read `rust/src/geo_tree/AGENTS.md`
+- Working in `rust/src/structure_designer/` or any descendant → Also read `rust/src/structure_designer/AGENTS.md`
+- Working in `lib/` or any descendant (e.g., `lib/common/`, `lib/structure_designer/`, etc.) → Read `lib/AGENTS.md`
+- Working in `lib/structure_designer/` or any descendant → Also read `lib/structure_designer/AGENTS.md`
 
 These files contain directory-specific conventions, testing requirements, and coding standards that must be followed.
 
