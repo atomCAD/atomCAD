@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::nodes::comment::{CommentData, get_node_type};
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::nodes::comment::{CommentData, get_node_type};
 
 #[test]
 fn test_comment_data_default() {

@@ -5,18 +5,3 @@
 /// This provides a consistent type alias that can be used throughout the project.
 pub type CSGMesh = csgrs::mesh::Mesh<()>;
 pub type CSGSketch = csgrs::sketch::Sketch<()>;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

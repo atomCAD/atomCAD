@@ -58,7 +58,8 @@
       "Bash(grep:*)",
       "Bash(Select-String -Pattern \"csg_conversion\")",
       "Bash(Select-String -Pattern \"vec_init_then_push\")",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(cargo fmt:*)"
     ]
   }
 }

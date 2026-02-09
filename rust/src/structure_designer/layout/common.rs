@@ -178,11 +178,7 @@ pub fn find_source_nodes(network: &NodeNetwork) -> HashSet<u64> {
                 .arguments
                 .iter()
                 .any(|arg| !arg.argument_output_pins.is_empty());
-            if has_inputs {
-                None
-            } else {
-                Some(node_id)
-            }
+            if has_inputs { None } else { Some(node_id) }
         })
         .collect()
 }

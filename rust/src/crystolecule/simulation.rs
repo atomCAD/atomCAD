@@ -1,9 +1,9 @@
 use crate::crystolecule::atomic_structure::AtomicStructure;
 //use pyo3::prelude::*;
 //use pyo3::types::{PyDict, PyList};
-use glam::DVec3;
 use crate::crystolecule::atomic_structure_utils::print_atom_info;
 use crate::util::timer::Timer;
+use glam::DVec3;
 
 /*
 #[pyclass]
@@ -14,7 +14,7 @@ impl LoggingStdout {
     fn write(&self, data: &str) {
         print!("{}", data);
     }
-    
+
     fn flush(&self) {
         // Optional: implement flush for completeness
     }
@@ -27,43 +27,43 @@ impl LoggingStdout {
 pub fn initialize_simulation() -> Result<String, String> {
     /*
     let _timer = Timer::new("Simulation initialization");
-    
+
     Python::with_gil(|py| {
         // Set up stdout redirection to capture Python print statements
         let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
         sys.setattr("stdout", LoggingStdout.into_py(py))
             .map_err(|e| format!("Failed to redirect stdout: {}", e))?;
-        
+
         // Add the python directory to the Python path
         let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
-        
+
         path.call_method1("append", ("python",))
             .map_err(|e| format!("Failed to add python directory to sys.path: {}", e))?;
-        
+
         // Import simulation module
         let simulation_module = py.import_bound("simulation")
             .map_err(|e| format!("Failed to import simulation module: {}", e))?;
-        
+
         // Call the initialize_simulation function
         let result = simulation_module.call_method0("initialize_simulation")
             .map_err(|e| format!("Failed to call initialize_simulation: {}", e))?;
-        
+
         // Extract the result dictionary
         let result_dict = result.downcast::<PyDict>()
             .map_err(|e| format!("Result is not a dictionary: {}", e))?;
-        
+
         let success: bool = result_dict.get_item("success")
             .map_err(|e| format!("Failed to get 'success' field: {}", e))?
             .ok_or("Missing 'success' field")?
             .extract()
             .map_err(|e| format!("Failed to extract 'success': {}", e))?;
-        
+
         let message: String = result_dict.get_item("message")
             .map_err(|e| format!("Failed to get 'message' field: {}", e))?
             .ok_or("Missing 'message' field")?
             .extract()
             .map_err(|e| format!("Failed to extract 'message': {}", e))?;
-        
+
         if success {
             println!("Simulation initialization successful: {}", message);
             Ok(message)
@@ -76,30 +76,32 @@ pub fn initialize_simulation() -> Result<String, String> {
 }
 
 /// Performs energy minimization on an atomic structure using Python-based force fields.
-/// 
+///
 /// This function integrates with Python libraries (OpenMM, OpenFF) to perform
 /// energy minimization using OpenFF 2.2.1 force fields.
-/// 
+///
 /// # Arguments
-/// 
+///
 /// * `structure` - A mutable reference to the atomic structure to minimize
-/// 
+///
 /// # Returns
-/// 
-/// Returns `Ok(MinimizationResult)` with energy, iterations, and message if successful, 
-/// or an error if it failed. The function updates the atom positions in the AtomicStructure 
+///
+/// Returns `Ok(MinimizationResult)` with energy, iterations, and message if successful,
+/// or an error if it failed. The function updates the atom positions in the AtomicStructure
 /// with the minimized coordinates.
 pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<MinimizationResult, String> {
     let _total_timer = Timer::new("Total energy minimization");
-    println!("Energy minimization called on structure with {} atoms", 
-             structure.get_num_of_atoms());
-    
+    println!(
+        "Energy minimization called on structure with {} atoms",
+        structure.get_num_of_atoms()
+    );
+
     // Extract molecular data from AtomicStructure
     let (atoms_data, bonds_data) = {
         let _timer = Timer::new("Data extraction from AtomicStructure");
         extract_molecular_data(structure)?
     };
-    
+
     // Call Python energy minimization
     match call_python_minimize_energy_with_data(atoms_data, bonds_data) {
         Ok(result) => {
@@ -109,7 +111,10 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<MinimizationRe
                     let _timer = Timer::new("Position updates back to AtomicStructure");
                     update_atom_positions(structure, &result.positions)?;
                 }
-                println!("Energy minimization successful! Final energy: {:.2} kJ/mol", result.energy);
+                println!(
+                    "Energy minimization successful! Final energy: {:.2} kJ/mol",
+                    result.energy
+                );
                 Ok(result)
             } else {
                 println!("Energy minimization failed: {}", result.message);
@@ -117,9 +122,7 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<MinimizationRe
                 Err(format!("Energy minimization failed: {}", result.message))
             }
         }
-        Err(e) => {
-            Err(format!("Failed to call Python simulation: {}", e))
-        }
+        Err(e) => Err(format!("Failed to call Python simulation: {}", e)),
     }
 }
 
@@ -152,14 +155,16 @@ struct BondData {
 }
 
 /// Extracts molecular data from AtomicStructure for Python interface
-fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>, Vec<BondData>), String> {
+fn extract_molecular_data(
+    structure: &AtomicStructure,
+) -> Result<(Vec<AtomData>, Vec<BondData>), String> {
     // Create atom data - iterate through atoms HashMap
     let mut atoms_data = Vec::new();
     let mut atom_id_to_index = std::collections::HashMap::new();
-    
+
     // Collect atom IDs to ensure consistent ordering
     let atom_ids: Vec<u32> = structure.atom_ids().cloned().collect();
-    
+
     for (index, &atom_id) in atom_ids.iter().enumerate() {
         if let Some(atom) = structure.get_atom(atom_id) {
             atom_id_to_index.insert(atom_id, index);
@@ -170,7 +175,7 @@ fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>,
             });
         }
     }
-    
+
     // Create bond data - iterate inline bonds, avoiding duplicates
     let mut bonds_data = Vec::new();
     for atom in structure.atoms_values() {
@@ -178,51 +183,62 @@ fn extract_molecular_data(structure: &AtomicStructure) -> Result<(Vec<AtomData>,
             let other_atom_id = bond.other_atom_id();
             // Only include each bond once
             if atom.id < other_atom_id {
-                let atom1_index = atom_id_to_index.get(&atom.id)
+                let atom1_index = atom_id_to_index
+                    .get(&atom.id)
                     .ok_or_else(|| format!("Atom ID {} not found for bond", atom.id))?;
-                let atom2_index = atom_id_to_index.get(&other_atom_id)
+                let atom2_index = atom_id_to_index
+                    .get(&other_atom_id)
                     .ok_or_else(|| format!("Atom ID {} not found for bond", other_atom_id))?;
-                
+
                 bonds_data.push(BondData {
                     atom1: *atom1_index,
                     atom2: *atom2_index,
-                    order: bond.bond_order() as i32,  // Convert u8 to i32
+                    order: bond.bond_order() as i32, // Convert u8 to i32
                 });
             }
         }
     }
-    
+
     Ok((atoms_data, bonds_data))
 }
 
 /// Updates atom positions in AtomicStructure with minimized coordinates
-fn update_atom_positions(structure: &mut AtomicStructure, positions: &[Vec<f64>]) -> Result<(), String> {
+fn update_atom_positions(
+    structure: &mut AtomicStructure,
+    positions: &[Vec<f64>],
+) -> Result<(), String> {
     // Get atom IDs in the same order as we extracted them
     let atom_ids: Vec<u32> = structure.atom_ids().cloned().collect();
-    
+
     if atom_ids.len() != positions.len() {
-        return Err(format!("Position count mismatch: {} atoms vs {} positions", 
-                          atom_ids.len(), positions.len()));
+        return Err(format!(
+            "Position count mismatch: {} atoms vs {} positions",
+            atom_ids.len(),
+            positions.len()
+        ));
     }
-    
+
     for (atom_id, pos) in atom_ids.iter().zip(positions.iter()) {
         if pos.len() != 3 {
-            return Err(format!("Invalid position format: expected 3 coordinates, got {}", pos.len()));
+            return Err(format!(
+                "Invalid position format: expected 3 coordinates, got {}",
+                pos.len()
+            ));
         }
-        
+
         let new_position = DVec3::new(pos[0], pos[1], pos[2]);
         if !structure.set_atom_position(*atom_id, new_position) {
             return Err(format!("Failed to update position for atom ID {}", atom_id));
         }
     }
-    
+
     Ok(())
 }
 
 /// Calls the minimize_energy function from Python simulation module with molecular data
 fn call_python_minimize_energy_with_data(
-    _atoms_data: Vec<AtomData>, 
-    _bonds_data: Vec<BondData>
+    _atoms_data: Vec<AtomData>,
+    _bonds_data: Vec<BondData>,
 ) -> Result<MinimizationResult, String> {
     /*
     let _timer = Timer::new("Python function call (total)");
@@ -231,22 +247,22 @@ fn call_python_minimize_energy_with_data(
         let simulation_module = {
             let _timer = Timer::new("Python runtime init and module import");
             let sys = py.import_bound("sys").map_err(|e| format!("Failed to import sys: {}", e))?;
-            
+
             // Set up stdout redirection to capture Python print statements
             sys.setattr("stdout", LoggingStdout.into_py(py))
                 .map_err(|e| format!("Failed to redirect stdout: {}", e))?;
-            
+
             let path = sys.getattr("path").map_err(|e| format!("Failed to get sys.path: {}", e))?;
-            
+
             // Add the python directory to sys.path (assuming we're running from the project root)
             path.call_method1("append", ("python",))
                 .map_err(|e| format!("Failed to add python directory to sys.path: {}", e))?;
-            
+
             // Import our simulation module
             py.import_bound("simulation")
                 .map_err(|e| format!("Failed to import simulation module: {}", e))?
         };
-        
+
         // Convert atoms data to Python format
         let (atoms_list, bonds_list) = {
             let _timer = Timer::new("Data serialization to Python format");
@@ -262,7 +278,7 @@ fn call_python_minimize_energy_with_data(
                 atoms_list.append(atom_dict)
                     .map_err(|e| format!("Failed to append atom dict: {}", e))?;
             }
-            
+
             // Convert bonds data to Python format
             let bonds_list = PyList::empty_bound(py);
             for bond in bonds_data {
@@ -278,52 +294,52 @@ fn call_python_minimize_energy_with_data(
             }
             (atoms_list, bonds_list)
         };
-        
+
         // Call the minimize_energy function with molecular data
         let result = {
             let _timer = Timer::new("Python minimize_energy function call");
             simulation_module.call_method1("minimize_energy", (atoms_list, bonds_list))
                 .map_err(|e| format!("Failed to call minimize_energy: {}", e))?
         };
-        
+
         // Extract the result dictionary
         let result_dict = {
             let _timer = Timer::new("Result deserialization from Python");
             result.downcast::<PyDict>()
                 .map_err(|e| format!("Result is not a dictionary: {}", e))?
         };
-        
+
         // Extract individual fields from the result
         let success: bool = result_dict.get_item("success")
             .map_err(|e| format!("Failed to get 'success' field: {}", e))?
             .ok_or("Missing 'success' field")?
             .extract()
             .map_err(|e| format!("Failed to extract 'success': {}", e))?;
-        
+
         let positions: Vec<Vec<f64>> = result_dict.get_item("positions")
             .map_err(|e| format!("Failed to get 'positions' field: {}", e))?
             .ok_or("Missing 'positions' field")?
             .extract()
             .map_err(|e| format!("Failed to extract 'positions': {}", e))?;
-        
+
         let energy: f64 = result_dict.get_item("energy")
             .map_err(|e| format!("Failed to get 'energy' field: {}", e))?
             .ok_or("Missing 'energy' field")?
             .extract()
             .map_err(|e| format!("Failed to extract 'energy': {}", e))?;
-        
+
         let iterations: i32 = result_dict.get_item("iterations")
             .map_err(|e| format!("Failed to get 'iterations' field: {}", e))?
             .ok_or("Missing 'iterations' field")?
             .extract()
             .map_err(|e| format!("Failed to extract 'iterations': {}", e))?;
-        
+
         let message: String = result_dict.get_item("message")
             .map_err(|e| format!("Failed to get 'message' field: {}", e))?
             .ok_or("Missing 'message' field")?
             .extract()
             .map_err(|e| format!("Failed to extract 'message': {}", e))?;
-        
+
         Ok(MinimizationResult {
             success,
             positions,

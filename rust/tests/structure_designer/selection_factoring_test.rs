@@ -1,21 +1,22 @@
 //! Tests for selection factoring functionality.
 
+use glam::f64::DVec2;
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::node_data::{NoData, NodeData};
+use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+use rust_lib_flutter_cad::structure_designer::node_network_gadget::NodeNetworkGadget;
+use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::selection_factoring::{
-    analyze_selection_for_factoring,
-    create_subnetwork_from_selection,
+    analyze_selection_for_factoring, create_subnetwork_from_selection,
     replace_selection_with_custom_node,
 };
-use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
-use rust_lib_flutter_cad::structure_designer::node_data::{NodeData, NoData};
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-use rust_lib_flutter_cad::structure_designer::node_network_gadget::NodeNetworkGadget;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{NetworkEvaluator, NetworkStackElement, NetworkEvaluationContext};
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use glam::f64::DVec2;
 use std::collections::HashSet;
 
 // Mock NodeData for testing
@@ -26,7 +27,10 @@ impl NodeData for MockNodeData {
         Box::new(MockNodeData)
     }
 
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
         None
     }
 
@@ -41,7 +45,7 @@ impl NodeData for MockNodeData {
         _node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext
+        _context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
         NetworkResult::Error("MockNodeData eval not implemented".to_string())
     }
@@ -110,7 +114,10 @@ fn test_empty_selection_invalid() {
     let analysis = analyze_selection_for_factoring(&network, &registry);
 
     assert!(!analysis.is_valid);
-    assert_eq!(analysis.invalid_reason, Some("Select at least 1 node".to_string()));
+    assert_eq!(
+        analysis.invalid_reason,
+        Some("Select at least 1 node".to_string())
+    );
 }
 
 #[test]
@@ -141,7 +148,10 @@ fn test_selection_with_parameter_node_invalid() {
     let analysis = analyze_selection_for_factoring(&network, &registry);
 
     assert!(!analysis.is_valid);
-    assert_eq!(analysis.invalid_reason, Some("Selection contains Parameter nodes".to_string()));
+    assert_eq!(
+        analysis.invalid_reason,
+        Some("Selection contains Parameter nodes".to_string())
+    );
 }
 
 #[test]
@@ -165,7 +175,10 @@ fn test_selection_with_multiple_outputs_invalid() {
     let analysis = analyze_selection_for_factoring(&network, &registry);
 
     assert!(!analysis.is_valid);
-    assert_eq!(analysis.invalid_reason, Some("Selection has multiple output wires".to_string()));
+    assert_eq!(
+        analysis.invalid_reason,
+        Some("Selection has multiple output wires".to_string())
+    );
 }
 
 #[test]
@@ -248,7 +261,10 @@ fn test_multiple_nodes_selection_with_internal_connections() {
     assert!(analysis.selected_ids.contains(&node_b));
     // External output is from B to C
     assert!(analysis.external_output.is_some());
-    assert_eq!(analysis.external_output.as_ref().unwrap().source_node_id, node_b);
+    assert_eq!(
+        analysis.external_output.as_ref().unwrap().source_node_id,
+        node_b
+    );
     // No external inputs (A has no external dependencies)
     assert_eq!(analysis.external_inputs.len(), 0);
 }
@@ -259,7 +275,12 @@ fn test_bounding_box_calculation() {
     let registry = create_test_registry();
 
     let node_a = network.add_node("cuboid", DVec2::new(0.0, 0.0), 0, Box::new(MockNodeData));
-    let node_b = network.add_node("cuboid", DVec2::new(200.0, 100.0), 0, Box::new(MockNodeData));
+    let node_b = network.add_node(
+        "cuboid",
+        DVec2::new(200.0, 100.0),
+        0,
+        Box::new(MockNodeData),
+    );
 
     network.select_nodes(vec![node_a, node_b]);
 
@@ -289,7 +310,7 @@ fn test_create_subnetwork_basic() {
         &network,
         &analysis,
         "my_subnetwork",
-        &[],  // No external inputs, so no params
+        &[], // No external inputs, so no params
         &registry,
     );
 
@@ -329,7 +350,9 @@ fn test_create_subnetwork_with_parameters() {
     assert_eq!(subnetwork.nodes.len(), 2);
 
     // Check that there's a parameter node
-    let param_node = subnetwork.nodes.values()
+    let param_node = subnetwork
+        .nodes
+        .values()
         .find(|n| n.node_type_name == "parameter");
     assert!(param_node.is_some());
 }
@@ -350,13 +373,8 @@ fn test_create_subnetwork_with_return_node() {
     assert!(analysis.is_valid);
     assert!(analysis.external_output.is_some());
 
-    let subnetwork = create_subnetwork_from_selection(
-        &network,
-        &analysis,
-        "my_subnetwork",
-        &[],
-        &registry,
-    );
+    let subnetwork =
+        create_subnetwork_from_selection(&network, &analysis, "my_subnetwork", &[], &registry);
 
     // Should have return node set
     assert!(subnetwork.return_node_id.is_some());
@@ -377,18 +395,15 @@ fn test_create_subnetwork_preserves_internal_connections() {
     let analysis = analyze_selection_for_factoring(&network, &registry);
     assert!(analysis.is_valid);
 
-    let subnetwork = create_subnetwork_from_selection(
-        &network,
-        &analysis,
-        "my_subnetwork",
-        &[],
-        &registry,
-    );
+    let subnetwork =
+        create_subnetwork_from_selection(&network, &analysis, "my_subnetwork", &[], &registry);
 
     assert_eq!(subnetwork.nodes.len(), 2);
 
     // Find the union node (node B) and verify it has a connection
-    let union_node = subnetwork.nodes.values()
+    let union_node = subnetwork
+        .nodes
+        .values()
         .find(|n| n.node_type_name == "union")
         .unwrap();
 
@@ -410,12 +425,8 @@ fn test_replace_selection_basic() {
     assert!(analysis.is_valid);
 
     // Replace selection
-    let new_node_id = replace_selection_with_custom_node(
-        &mut network,
-        &analysis,
-        "my_subnetwork",
-        0,
-    );
+    let new_node_id =
+        replace_selection_with_custom_node(&mut network, &analysis, "my_subnetwork", 0);
 
     // Old node should be gone
     assert!(!network.nodes.contains_key(&node_a));
@@ -448,13 +459,17 @@ fn test_replace_selection_wires_up_inputs() {
         &mut network,
         &analysis,
         "my_subnetwork",
-        1,  // 1 parameter
+        1, // 1 parameter
     );
 
     // New node should be wired to A
     let new_node = network.nodes.get(&new_node_id).unwrap();
     assert!(!new_node.arguments[0].is_empty());
-    assert!(new_node.arguments[0].argument_output_pins.contains_key(&node_a));
+    assert!(
+        new_node.arguments[0]
+            .argument_output_pins
+            .contains_key(&node_a)
+    );
 }
 
 #[test]
@@ -472,17 +487,17 @@ fn test_replace_selection_wires_up_output() {
     let analysis = analyze_selection_for_factoring(&network, &registry);
     assert!(analysis.is_valid);
 
-    let new_node_id = replace_selection_with_custom_node(
-        &mut network,
-        &analysis,
-        "my_subnetwork",
-        0,
-    );
+    let new_node_id =
+        replace_selection_with_custom_node(&mut network, &analysis, "my_subnetwork", 0);
 
     // B should now be wired to new node
     let node_b_obj = network.nodes.get(&node_b).unwrap();
     assert!(!node_b_obj.arguments[0].is_empty());
-    assert!(node_b_obj.arguments[0].argument_output_pins.contains_key(&new_node_id));
+    assert!(
+        node_b_obj.arguments[0]
+            .argument_output_pins
+            .contains_key(&new_node_id)
+    );
 }
 
 #[test]
@@ -500,12 +515,7 @@ fn test_replace_selection_removes_all_selected_nodes() {
     let analysis = analyze_selection_for_factoring(&network, &registry);
     assert!(analysis.is_valid);
 
-    replace_selection_with_custom_node(
-        &mut network,
-        &analysis,
-        "my_subnetwork",
-        0,
-    );
+    replace_selection_with_custom_node(&mut network, &analysis, "my_subnetwork", 0);
 
     // Both old nodes should be gone
     assert!(!network.nodes.contains_key(&node_a));
@@ -525,12 +535,8 @@ fn test_replace_selection_selects_new_node() {
 
     let analysis = analyze_selection_for_factoring(&network, &registry);
 
-    let new_node_id = replace_selection_with_custom_node(
-        &mut network,
-        &analysis,
-        "my_subnetwork",
-        0,
-    );
+    let new_node_id =
+        replace_selection_with_custom_node(&mut network, &analysis, "my_subnetwork", 0);
 
     // New node should be selected
     assert!(network.is_node_selected(new_node_id));
@@ -544,7 +550,8 @@ fn test_full_factoring_workflow() {
     let mut sd = StructureDesigner::new();
 
     // Create a network
-    sd.node_type_registry.add_node_network(NodeNetwork::new(create_test_node_type("main")));
+    sd.node_type_registry
+        .add_node_network(NodeNetwork::new(create_test_node_type("main")));
     sd.active_node_network_name = Some("main".to_string());
 
     // Add nodes to the network
@@ -561,16 +568,17 @@ fn test_full_factoring_workflow() {
     network.select_nodes(vec![node_a, node_b]);
 
     // Factor into subnetwork
-    let result = sd.factor_selection_into_subnetwork(
-        "my_custom_node",
-        vec![],
-    );
+    let result = sd.factor_selection_into_subnetwork("my_custom_node", vec![]);
 
     assert!(result.is_ok());
     let new_node_id = result.unwrap();
 
     // Verify the subnetwork was created
-    assert!(sd.node_type_registry.node_networks.contains_key("my_custom_node"));
+    assert!(
+        sd.node_type_registry
+            .node_networks
+            .contains_key("my_custom_node")
+    );
 
     // Verify the original network now has the custom node
     let main_network = sd.node_type_registry.node_networks.get("main").unwrap();
@@ -581,7 +589,11 @@ fn test_full_factoring_workflow() {
     // Node C should still exist and be wired to the new custom node
     assert!(main_network.nodes.contains_key(&node_c));
     let node_c_obj = main_network.nodes.get(&node_c).unwrap();
-    assert!(node_c_obj.arguments[0].argument_output_pins.contains_key(&new_node_id));
+    assert!(
+        node_c_obj.arguments[0]
+            .argument_output_pins
+            .contains_key(&new_node_id)
+    );
 }
 
 #[test]
@@ -589,7 +601,8 @@ fn test_factoring_duplicate_name_fails() {
     let mut sd = StructureDesigner::new();
 
     // Create a network
-    sd.node_type_registry.add_node_network(NodeNetwork::new(create_test_node_type("main")));
+    sd.node_type_registry
+        .add_node_network(NodeNetwork::new(create_test_node_type("main")));
     sd.active_node_network_name = Some("main".to_string());
 
     let network = sd.node_type_registry.node_networks.get_mut("main").unwrap();
@@ -597,10 +610,7 @@ fn test_factoring_duplicate_name_fails() {
     network.select_node(node_a);
 
     // Try to create a subnetwork with a name that already exists (built-in)
-    let result = sd.factor_selection_into_subnetwork(
-        "cuboid",
-        vec![],
-    );
+    let result = sd.factor_selection_into_subnetwork("cuboid", vec![]);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("already exists"));
@@ -610,7 +620,8 @@ fn test_factoring_duplicate_name_fails() {
 fn test_factoring_param_count_mismatch_fails() {
     let mut sd = StructureDesigner::new();
 
-    sd.node_type_registry.add_node_network(NodeNetwork::new(create_test_node_type("main")));
+    sd.node_type_registry
+        .add_node_network(NodeNetwork::new(create_test_node_type("main")));
     sd.active_node_network_name = Some("main".to_string());
 
     let network = sd.node_type_registry.node_networks.get_mut("main").unwrap();
@@ -625,7 +636,7 @@ fn test_factoring_param_count_mismatch_fails() {
     // Analysis shows 1 external input, but we provide 0 param names
     let result = sd.factor_selection_into_subnetwork(
         "my_custom_node",
-        vec![],  // Wrong count!
+        vec![], // Wrong count!
     );
 
     assert!(result.is_err());
@@ -636,7 +647,8 @@ fn test_factoring_param_count_mismatch_fails() {
 fn test_get_factor_selection_info() {
     let mut sd = StructureDesigner::new();
 
-    sd.node_type_registry.add_node_network(NodeNetwork::new(create_test_node_type("main")));
+    sd.node_type_registry
+        .add_node_network(NodeNetwork::new(create_test_node_type("main")));
     sd.active_node_network_name = Some("main".to_string());
 
     let network = sd.node_type_registry.node_networks.get_mut("main").unwrap();
@@ -654,7 +666,8 @@ fn test_get_factor_selection_info() {
 fn test_get_factor_selection_info_invalid_selection() {
     let mut sd = StructureDesigner::new();
 
-    sd.node_type_registry.add_node_network(NodeNetwork::new(create_test_node_type("main")));
+    sd.node_type_registry
+        .add_node_network(NodeNetwork::new(create_test_node_type("main")));
     sd.active_node_network_name = Some("main".to_string());
 
     // Don't select anything

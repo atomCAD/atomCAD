@@ -1,62 +1,67 @@
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::node_data::NodeData;
-use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
-use glam::i32::IVec3;
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use crate::util::serialization_utils::ivec3_serializer;
-use crate::structure_designer::text_format::TextValue;
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
+use crate::crystolecule::drawing_plane::DrawingPlane;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::display::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
-use std::collections::HashSet;
-use crate::display::gadget::Gadget;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::utils::half_space_utils;
+use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::{
+    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::crystolecule::drawing_plane::DrawingPlane;
+use crate::structure_designer::text_format::TextValue;
+use crate::structure_designer::utils::half_space_utils;
+use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
+use crate::util::serialization_utils::ivec3_serializer;
 use glam::f64::DVec3;
-use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
+use glam::i32::IVec3;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingPlaneData {
-  pub max_miller_index: i32,
-  #[serde(with = "ivec3_serializer")]
-  pub miller_index: IVec3,
-  #[serde(with = "ivec3_serializer")]
-  pub center: IVec3,
-  pub shift: i32,
-  #[serde(default = "default_subdivision")]
-  pub subdivision: i32,
+    pub max_miller_index: i32,
+    #[serde(with = "ivec3_serializer")]
+    pub miller_index: IVec3,
+    #[serde(with = "ivec3_serializer")]
+    pub center: IVec3,
+    pub shift: i32,
+    #[serde(default = "default_subdivision")]
+    pub subdivision: i32,
 }
 
 fn default_subdivision() -> i32 {
-  1
+    1
 }
 
 impl NodeData for DrawingPlaneData {
+    fn provide_gadget(
+        &self,
+        structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        let eval_cache = structure_designer.get_selected_node_eval_cache()?;
+        let drawing_plane_cache = eval_cache.downcast_ref::<DrawingPlaneEvalCache>()?;
 
-    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-      let eval_cache = structure_designer.get_selected_node_eval_cache()?;
-      let drawing_plane_cache = eval_cache.downcast_ref::<DrawingPlaneEvalCache>()?;
-
-      Some(Box::new(DrawingPlaneGadget::new(
-        self.max_miller_index,
-        &self.miller_index,
-        self.center,
-        self.shift,
-        self.subdivision,
-        &drawing_plane_cache.unit_cell,
-        &structure_designer.preferences.background_preferences)))
+        Some(Box::new(DrawingPlaneGadget::new(
+            self.max_miller_index,
+            &self.miller_index,
+            self.center,
+            self.shift,
+            self.subdivision,
+            &drawing_plane_cache.unit_cell,
+            &structure_designer.preferences.background_preferences,
+        )))
     }
-  
+
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
         None
     }
@@ -68,111 +73,132 @@ impl NodeData for DrawingPlaneData {
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
-        context: &mut NetworkEvaluationContext
-      ) -> NetworkResult {
-    
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 0, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
+        context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+        let unit_cell = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            0,
+            UnitCellStruct::cubic_diamond(),
+            NetworkResult::extract_unit_cell,
         ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
-
-      let miller_index = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 1, 
-        self.miller_index, 
-        NetworkResult::extract_ivec3
-      ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
-
-      let center = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 2, 
-        self.center,
-        NetworkResult::extract_ivec3
-      ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
-
-      let shift = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 3, 
-        self.shift,
-        NetworkResult::extract_int
-      ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
-
-      let subdivision = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 4, 
-        self.subdivision,
-        NetworkResult::extract_int
-      ) {
-        Ok(value) => value.max(1), // Ensure minimum value of 1
-        Err(error) => return error,
-      };
-
-      // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-      // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
-      if network_stack.len() == 1 {
-        let eval_cache = DrawingPlaneEvalCache {
-          unit_cell: unit_cell.clone(),
+            Ok(value) => value,
+            Err(error) => return error,
         };
-        context.selected_node_eval_cache = Some(Box::new(eval_cache));
-      }
 
-      // Create DrawingPlane using the new constructor
-      let drawing_plane = match DrawingPlane::new(
-        unit_cell,
-        miller_index,
-        center,
-        shift,
-        subdivision,
-      ) {
-        Ok(plane) => plane,
-        Err(error_msg) => return NetworkResult::Error(error_msg),
-      };
+        let miller_index = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.miller_index,
+            NetworkResult::extract_ivec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
 
-      NetworkResult::DrawingPlane(drawing_plane)
+        let center = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            self.center,
+            NetworkResult::extract_ivec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+
+        let shift = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            3,
+            self.shift,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+
+        let subdivision = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            4,
+            self.subdivision,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value.max(1), // Ensure minimum value of 1
+            Err(error) => return error,
+        };
+
+        // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
+        // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+        if network_stack.len() == 1 {
+            let eval_cache = DrawingPlaneEvalCache {
+                unit_cell: unit_cell.clone(),
+            };
+            context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+
+        // Create DrawingPlane using the new constructor
+        let drawing_plane =
+            match DrawingPlane::new(unit_cell, miller_index, center, shift, subdivision) {
+                Ok(plane) => plane,
+                Err(error_msg) => return NetworkResult::Error(error_msg),
+            };
+
+        NetworkResult::DrawingPlane(drawing_plane)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
 
-    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+    fn get_subtitle(
+        &self,
+        connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
         let center_connected = connected_input_pins.contains("center");
         let m_index_connected = connected_input_pins.contains("m_index");
         let shift_connected = connected_input_pins.contains("shift");
         let subdivision_connected = connected_input_pins.contains("subdivision");
-        
+
         if center_connected && m_index_connected && shift_connected && subdivision_connected {
             None
         } else {
             let mut parts = Vec::new();
-            
+
             if !center_connected {
-                parts.push(format!("c: ({},{},{})", 
-                    self.center.x, self.center.y, self.center.z));
+                parts.push(format!(
+                    "c: ({},{},{})",
+                    self.center.x, self.center.y, self.center.z
+                ));
             }
-            
+
             if !m_index_connected {
-                parts.push(format!("m: ({},{},{})", 
-                    self.miller_index.x, self.miller_index.y, self.miller_index.z));
+                parts.push(format!(
+                    "m: ({},{},{})",
+                    self.miller_index.x, self.miller_index.y, self.miller_index.z
+                ));
             }
-            
+
             if !shift_connected {
                 parts.push(format!("s: {}", self.shift));
             }
-            
+
             if !subdivision_connected && self.subdivision != 1 {
                 parts.push(format!("sub: {}", self.subdivision));
             }
-            
+
             if parts.is_empty() {
                 None
             } else {
@@ -183,7 +209,10 @@ impl NodeData for DrawingPlaneData {
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
-            ("max_miller_index".to_string(), TextValue::Int(self.max_miller_index)),
+            (
+                "max_miller_index".to_string(),
+                TextValue::Int(self.max_miller_index),
+            ),
             ("m_index".to_string(), TextValue::IVec3(self.miller_index)),
             ("center".to_string(), TextValue::IVec3(self.center)),
             ("shift".to_string(), TextValue::Int(self.shift)),
@@ -193,33 +222,46 @@ impl NodeData for DrawingPlaneData {
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("max_miller_index") {
-            self.max_miller_index = v.as_int().ok_or_else(|| "max_miller_index must be an integer".to_string())?;
+            self.max_miller_index = v
+                .as_int()
+                .ok_or_else(|| "max_miller_index must be an integer".to_string())?;
         }
         if let Some(v) = props.get("m_index") {
-            self.miller_index = v.as_ivec3().ok_or_else(|| "m_index must be an IVec3".to_string())?;
+            self.miller_index = v
+                .as_ivec3()
+                .ok_or_else(|| "m_index must be an IVec3".to_string())?;
         }
         if let Some(v) = props.get("center") {
-            self.center = v.as_ivec3().ok_or_else(|| "center must be an IVec3".to_string())?;
+            self.center = v
+                .as_ivec3()
+                .ok_or_else(|| "center must be an IVec3".to_string())?;
         }
         if let Some(v) = props.get("shift") {
-            self.shift = v.as_int().ok_or_else(|| "shift must be an integer".to_string())?;
+            self.shift = v
+                .as_int()
+                .ok_or_else(|| "shift must be an integer".to_string())?;
         }
         if let Some(v) = props.get("subdivision") {
-            self.subdivision = v.as_int().ok_or_else(|| "subdivision must be an integer".to_string())?;
+            self.subdivision = v
+                .as_int()
+                .ok_or_else(|| "subdivision must be an integer".to_string())?;
         }
         Ok(())
     }
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+        m.insert(
+            "unit_cell".to_string(),
+            (false, Some("cubic diamond".to_string())),
+        );
         m
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct DrawingPlaneEvalCache {
-  pub unit_cell: UnitCellStruct,
+    pub unit_cell: UnitCellStruct,
 }
 
 #[derive(Clone)]
@@ -249,7 +291,8 @@ impl Tessellatable for DrawingPlaneGadget {
             &self.miller_index,
             self.dragged_shift,
             &self.unit_cell,
-            self.subdivision);
+            self.subdivision,
+        );
 
         // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
         if self.dragged_handle_index == Some(0) {
@@ -259,8 +302,9 @@ impl Tessellatable for DrawingPlaneGadget {
                 &self.miller_index,
                 &self.possible_miller_indices,
                 self.max_miller_index,
-                &self.unit_cell);
-        } 
+                &self.unit_cell,
+            );
+        }
     }
 
     fn as_tessellatable(&self) -> Box<dyn Tessellatable> {
@@ -278,11 +322,11 @@ impl Gadget for DrawingPlaneGadget {
             &self.unit_cell,
             &self.center,
             &ray_origin,
-            &ray_direction
+            &ray_direction,
         ) {
             return Some(0); // Central sphere hit
         }
-        
+
         // Test shift handle cylinder
         if let Some(_t) = half_space_utils::hit_test_shift_handle(
             &self.unit_cell,
@@ -306,10 +350,10 @@ impl Gadget for DrawingPlaneGadget {
     fn drag(&mut self, handle_index: i32, ray_origin: DVec3, ray_direction: DVec3) {
         // Calculate center position in world space
         let center_pos = self.unit_cell.ivec3_lattice_to_real(&self.center);
-        
+
         if handle_index == 0 {
             // Handle index already stored in dragged_handle_index during start_drag
-            
+
             // Check if any miller index disc is hit
             if let Some(new_miller_index) = half_space_utils::hit_test_miller_indices_discs(
                 &self.unit_cell,
@@ -317,7 +361,8 @@ impl Gadget for DrawingPlaneGadget {
                 &self.possible_miller_indices,
                 self.max_miller_index,
                 ray_origin,
-                ray_direction) {
+                ray_direction,
+            ) {
                 // Set the miller index to the hit disc's miller index
                 self.miller_index = new_miller_index;
             }
@@ -329,7 +374,7 @@ impl Gadget for DrawingPlaneGadget {
                 &self.miller_index,
                 &self.center,
                 &ray_origin,
-                &ray_direction, 
+                &ray_direction,
                 half_space_utils::SHIFT_HANDLE_ACCESSIBILITY_OFFSET,
                 self.subdivision,
             );
@@ -358,16 +403,15 @@ impl NodeNetworkGadget for DrawingPlaneGadget {
 }
 
 impl DrawingPlaneGadget {
-
     pub fn new(
-      max_miller_index: i32,
-      miller_index: &IVec3,
-      center: IVec3,
-      shift: i32,
-      subdivision: i32,
-      unit_cell: &UnitCellStruct,
-      background_preferences: &BackgroundPreferences,
-    ) -> Self {        
+        max_miller_index: i32,
+        miller_index: &IVec3,
+        center: IVec3,
+        shift: i32,
+        subdivision: i32,
+        unit_cell: &UnitCellStruct,
+        background_preferences: &BackgroundPreferences,
+    ) -> Self {
         Self {
             max_miller_index,
             miller_index: *miller_index,
@@ -376,7 +420,9 @@ impl DrawingPlaneGadget {
             shift,
             subdivision,
             dragged_handle_index: None,
-            possible_miller_indices: half_space_utils::generate_possible_miller_indices(max_miller_index),
+            possible_miller_indices: half_space_utils::generate_possible_miller_indices(
+                max_miller_index,
+            ),
             unit_cell: unit_cell.clone(),
             background_preferences: background_preferences.clone(),
         }

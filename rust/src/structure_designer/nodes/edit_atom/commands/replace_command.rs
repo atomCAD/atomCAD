@@ -1,6 +1,6 @@
-use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use serde::{Serialize, Deserialize};
+use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
+use serde::{Deserialize, Serialize};
 
 /*
  * Replace command: replaces all selected atoms with a specified atomic number
@@ -12,16 +12,15 @@ pub struct ReplaceCommand {
 
 impl ReplaceCommand {
     pub fn new(atomic_number: i16) -> Self {
-        Self {
-            atomic_number,
-        }
+        Self { atomic_number }
     }
 }
 
 impl EditAtomCommand for ReplaceCommand {
     fn execute(&self, model: &mut AtomicStructure) {
         // Collect all selected atom IDs
-        let selected_atom_ids: Vec<u32> = model.iter_atoms()
+        let selected_atom_ids: Vec<u32> = model
+            .iter_atoms()
             .filter(|(_, atom)| atom.is_selected())
             .map(|(id, _)| *id)
             .collect();

@@ -2,7 +2,7 @@
 //!
 //! Provides functionality to capture the current viewport to a PNG file.
 
-use crate::api::api_common::{with_mut_cad_instance_or, CADInstance};
+use crate::api::api_common::{CADInstance, with_mut_cad_instance_or};
 use image::{ImageBuffer, Rgba};
 use std::path::Path;
 

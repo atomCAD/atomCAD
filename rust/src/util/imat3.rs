@@ -1,4 +1,4 @@
-use glam::{IVec3, DMat3};
+use glam::{DMat3, IVec3};
 
 /// A 3x3 integer matrix for integer-based transformations.
 /// Used primarily for rotating integer crystal lattice positions.
@@ -65,7 +65,7 @@ impl IMat3 {
         let x_col = self.mul(&other.cols[0]);
         let y_col = self.mul(&other.cols[1]);
         let z_col = self.mul(&other.cols[2]);
-        
+
         IMat3::new(&x_col, &y_col, &z_col)
     }
 
@@ -78,23 +78,7 @@ impl IMat3 {
         DMat3::from_cols(
             self.cols[0].as_dvec3(),
             self.cols[1].as_dvec3(),
-            self.cols[2].as_dvec3()
+            self.cols[2].as_dvec3(),
         )
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -14,16 +14,16 @@ pub fn is_absolute_path(path: &str) -> bool {
 pub fn absolute_to_relative(absolute_path: &str, base_dir: &str) -> Option<String> {
     let abs_path = Path::new(absolute_path);
     let base_path = Path::new(base_dir);
-    
+
     // Ensure both paths are absolute
     if !abs_path.is_absolute() || !base_path.is_absolute() {
         return None;
     }
-    
+
     // Canonicalize paths to handle symlinks and normalize separators
     let abs_canonical = abs_path.canonicalize().ok()?;
     let base_canonical = base_path.canonicalize().ok()?;
-    
+
     // Try to create relative path
     match abs_canonical.strip_prefix(&base_canonical) {
         Ok(relative) => Some(relative.to_string_lossy().to_string()),
@@ -36,17 +36,17 @@ pub fn absolute_to_relative(absolute_path: &str, base_dir: &str) -> Option<Strin
 pub fn relative_to_absolute(relative_path: &str, base_dir: &str) -> Option<String> {
     let rel_path = Path::new(relative_path);
     let base_path = Path::new(base_dir);
-    
+
     // Ensure relative path is actually relative
     if rel_path.is_absolute() {
         return None;
     }
-    
+
     // Ensure base directory is absolute
     if !base_path.is_absolute() {
         return None;
     }
-    
+
     // Join paths and return the absolute path
     let combined = base_path.join(rel_path);
     combined.to_str().map(|s| s.to_string())
@@ -63,12 +63,13 @@ pub fn resolve_path(path: &str, base_dir: Option<&str>) -> Result<(String, bool)
     } else {
         // Path is relative - need base directory
         match base_dir {
-            Some(base) => {
-                match relative_to_absolute(path, base) {
-                    Some(absolute) => Ok((absolute, true)),
-                    None => Err(format!("Failed to resolve relative path '{}' with base '{}'", path, base)),
-                }
-            }
+            Some(base) => match relative_to_absolute(path, base) {
+                Some(absolute) => Ok((absolute, true)),
+                None => Err(format!(
+                    "Failed to resolve relative path '{}' with base '{}'",
+                    path, base
+                )),
+            },
             None => Err("Relative path provided but no base directory available".to_string()),
         }
     }
@@ -79,12 +80,10 @@ pub fn resolve_path(path: &str, base_dir: Option<&str>) -> Result<(String, bool)
 /// If not possible or path is already relative, returns the original path
 pub fn try_make_relative(path: &str, base_dir: Option<&str>) -> (String, bool) {
     match base_dir {
-        Some(base) if is_absolute_path(path) => {
-            match absolute_to_relative(path, base) {
-                Some(relative) => (relative, true),
-                None => (path.to_string(), false),
-            }
-        }
+        Some(base) if is_absolute_path(path) => match absolute_to_relative(path, base) {
+            Some(relative) => (relative, true),
+            None => (path.to_string(), false),
+        },
         _ => (path.to_string(), false),
     }
 }
@@ -102,7 +101,7 @@ pub fn get_parent_directory(file_path: &str) -> Option<String> {
 mod tests {
     use super::*;
     use std::env;
-    
+
     #[test]
     fn test_is_absolute_path() {
         // Unix-style absolute paths (only test on Unix-like systems)
@@ -110,58 +109,51 @@ mod tests {
             assert!(is_absolute_path("/home/user/file.txt"));
             assert!(is_absolute_path("/"));
         }
-        
+
         // Windows-style absolute paths
         if cfg!(windows) {
             assert!(is_absolute_path("C:\\Users\\file.txt"));
             assert!(is_absolute_path("D:\\"));
             assert!(is_absolute_path("\\\\server\\share\\file.txt"));
         }
-        
+
         // Relative paths
         assert!(!is_absolute_path("file.txt"));
         assert!(!is_absolute_path("./file.txt"));
         assert!(!is_absolute_path("../file.txt"));
         assert!(!is_absolute_path("folder/file.txt"));
     }
-    
+
     #[test]
     fn test_get_parent_directory() {
-        assert_eq!(get_parent_directory("/home/user/file.txt"), Some("/home/user".to_string()));
-        assert_eq!(get_parent_directory("folder/file.txt"), Some("folder".to_string()));
+        assert_eq!(
+            get_parent_directory("/home/user/file.txt"),
+            Some("/home/user".to_string())
+        );
+        assert_eq!(
+            get_parent_directory("folder/file.txt"),
+            Some("folder".to_string())
+        );
         assert_eq!(get_parent_directory("file.txt"), Some("".to_string()));
-        
+
         if cfg!(windows) {
-            assert_eq!(get_parent_directory("C:\\Users\\file.txt"), Some("C:\\Users".to_string()));
+            assert_eq!(
+                get_parent_directory("C:\\Users\\file.txt"),
+                Some("C:\\Users".to_string())
+            );
         }
     }
-    
+
     #[test]
     fn test_try_make_relative() {
         // Test with no base directory
         let (result, changed) = try_make_relative("/some/path/file.txt", None);
         assert_eq!(result, "/some/path/file.txt");
         assert!(!changed);
-        
+
         // Test with relative path (should return unchanged)
         let (result, changed) = try_make_relative("relative/file.txt", Some("/base"));
         assert_eq!(result, "relative/file.txt");
         assert!(!changed);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

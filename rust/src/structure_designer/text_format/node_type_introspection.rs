@@ -297,7 +297,12 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
     }
 
     // Output type
-    writeln!(output, "Output: {}", format_data_type_for_display(&node_type.output_type)).unwrap();
+    writeln!(
+        output,
+        "Output: {}",
+        format_data_type_for_display(&node_type.output_type)
+    )
+    .unwrap();
 
     // For nodes with dynamic pins (expr, parameter), show the calculated custom node type
     let custom_node_type = default_data.calculate_custom_node_type(node_type);

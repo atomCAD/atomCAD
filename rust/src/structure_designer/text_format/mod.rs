@@ -38,25 +38,17 @@
 //! let text = serialize_network(&network, &registry);
 //! ```
 
-mod text_value;
-mod serializer;
-mod parser;
-mod network_serializer;
-mod network_editor;
-mod node_type_introspection;
 pub mod auto_layout;
+mod network_editor;
+mod network_serializer;
+mod node_type_introspection;
+mod parser;
+mod serializer;
+mod text_value;
 
-pub use text_value::TextValue;
-pub use parser::{
-    Parser,
-    Lexer,
-    ParseError,
-    Statement,
-    PropertyValue,
-    Token,
-    TokenInfo,
-};
-pub use serializer::TextFormatter;
+pub use network_editor::{EditResult, NetworkEditor, edit_network};
 pub use network_serializer::{NetworkSerializer, serialize_network};
-pub use network_editor::{NetworkEditor, EditResult, edit_network};
-pub use node_type_introspection::{describe_node_type, truncate_description, get_display_summary};
+pub use node_type_introspection::{describe_node_type, get_display_summary, truncate_description};
+pub use parser::{Lexer, ParseError, Parser, PropertyValue, Statement, Token, TokenInfo};
+pub use serializer::TextFormatter;
+pub use text_value::TextValue;

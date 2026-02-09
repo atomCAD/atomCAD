@@ -1,7 +1,7 @@
-use wgpu::*;
 use bytemuck;
 use std::time::Instant;
 use wgpu::util::DeviceExt;
+use wgpu::*;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -70,9 +70,9 @@ impl DummyRenderer {
         // Uniform buffer for time
         let initial_uniform_data = UniformData { time: 0.0 };
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-          label: Some("Uniform Buffer"),
-          contents: bytemuck::cast_slice(&[initial_uniform_data]),
-          usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[initial_uniform_data]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         // Shader module
@@ -81,31 +81,30 @@ impl DummyRenderer {
             source: ShaderSource::Wgsl(include_str!("triangle_shader.wgsl").into()),
         });
 
-        let uniform_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-          label: Some("Uniform Bind Group Layout"),
-          entries: &[
-              wgpu::BindGroupLayoutEntry {
-                  binding: 0,
-                  visibility: wgpu::ShaderStages::VERTEX,
-                  ty: wgpu::BindingType::Buffer {
-                      ty: wgpu::BufferBindingType::Uniform,
-                      has_dynamic_offset: false,
-                      min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<UniformData>() as _),
-                  },
-                  count: None,
-              }
-          ],
-        });
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Uniform Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<UniformData>() as _
+                        ),
+                    },
+                    count: None,
+                }],
+            });
 
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-          layout: &uniform_bind_group_layout, // Use the layout defined above
-          entries: &[
-              wgpu::BindGroupEntry {
-                  binding: 0, // Must match the bind group layout and shader binding
-                  resource: uniform_buffer.as_entire_binding(),
-              },
-          ],
-          label: Some("Uniform Bind Group"),
+            layout: &uniform_bind_group_layout, // Use the layout defined above
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0, // Must match the bind group layout and shader binding
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+            label: Some("Uniform Bind Group"),
         });
 
         // Pipeline setup
@@ -156,11 +155,14 @@ impl DummyRenderer {
     }
 
     pub fn render(&mut self) -> Vec<u8> {
-
         let t = self.start_time.elapsed().as_secs_f32();
         let uniform_data = UniformData { time: t };
 
-        self.queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniform_data]));
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[uniform_data]),
+        );
 
         // Create a new command encoder
         let mut encoder = self
@@ -220,8 +222,7 @@ impl DummyRenderer {
 
         // Read data
         let buffer_slice = self.output_buffer.slice(..);
-        buffer_slice.map_async(MapMode::Read, |_| {
-        });
+        buffer_slice.map_async(MapMode::Read, |_| {});
 
         self.device.poll(Maintain::Wait);
 
@@ -231,19 +232,3 @@ impl DummyRenderer {
         data
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

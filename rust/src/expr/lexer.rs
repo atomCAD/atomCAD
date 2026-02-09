@@ -50,7 +50,9 @@ impl<'a> Lexer<'a> {
 
     fn bump(&mut self) -> Option<char> {
         let c = self.peek();
-        if c.is_some() { self.i += 1; }
+        if c.is_some() {
+            self.i += 1;
+        }
         c
     }
 
@@ -60,7 +62,9 @@ impl<'a> Lexer<'a> {
             if f(c) {
                 s.push(c);
                 self.i += 1;
-            } else { break; }
+            } else {
+                break;
+            }
         }
         s
     }
@@ -68,13 +72,24 @@ impl<'a> Lexer<'a> {
     fn next_token(&mut self) -> Token {
         // skip whitespace
         while let Some(c) = self.peek() {
-            if c.is_whitespace() { self.i += 1; }
-            else { break; }
+            if c.is_whitespace() {
+                self.i += 1;
+            } else {
+                break;
+            }
         }
 
         match self.peek() {
             None => Token::Eof,
-            Some(c) if c.is_ascii_digit() || (c == '.' && self.chars.get(self.i+1).map(|ch| ch.is_ascii_digit()).unwrap_or(false)) => {
+            Some(c)
+                if c.is_ascii_digit()
+                    || (c == '.'
+                        && self
+                            .chars
+                            .get(self.i + 1)
+                            .map(|ch| ch.is_ascii_digit())
+                            .unwrap_or(false)) =>
+            {
                 // number literal (simple)
                 let mut s = String::new();
                 // integer part and fraction
@@ -89,7 +104,7 @@ impl<'a> Lexer<'a> {
                 }
                 match s.parse::<f64>() {
                     Ok(n) => Token::Number(n),
-                    Err(_) => Token::Number(0.0) // fallback; could return error
+                    Err(_) => Token::Number(0.0), // fallback; could return error
                 }
             }
             Some(c) if c.is_ascii_alphabetic() || c == '_' => {
@@ -103,20 +118,47 @@ impl<'a> Lexer<'a> {
                     _ => Token::Ident(id),
                 }
             }
-            Some('+') => { self.i += 1; Token::Plus }
-            Some('-') => { self.i += 1; Token::Minus }
-            Some('*') => { self.i += 1; Token::Star }
-            Some('/') => { self.i += 1; Token::Slash }
-            Some('%') => { self.i += 1; Token::Percent }
-            Some('^') => { self.i += 1; Token::Caret }
-            Some('(') => { self.i += 1; Token::LParen }
-            Some(')') => { self.i += 1; Token::RParen }
-            Some(',') => { self.i += 1; Token::Comma }
+            Some('+') => {
+                self.i += 1;
+                Token::Plus
+            }
+            Some('-') => {
+                self.i += 1;
+                Token::Minus
+            }
+            Some('*') => {
+                self.i += 1;
+                Token::Star
+            }
+            Some('/') => {
+                self.i += 1;
+                Token::Slash
+            }
+            Some('%') => {
+                self.i += 1;
+                Token::Percent
+            }
+            Some('^') => {
+                self.i += 1;
+                Token::Caret
+            }
+            Some('(') => {
+                self.i += 1;
+                Token::LParen
+            }
+            Some(')') => {
+                self.i += 1;
+                Token::RParen
+            }
+            Some(',') => {
+                self.i += 1;
+                Token::Comma
+            }
             Some('.') => {
                 // Check if this is part of a number (should have been handled above)
                 // If we get here, it's a standalone dot for member access
-                self.i += 1; 
-                Token::Dot 
+                self.i += 1;
+                Token::Dot
             }
             Some('=') => {
                 self.i += 1;
@@ -203,19 +245,3 @@ pub fn tokenize(input: &str) -> Vec<Token> {
     let lexer = Lexer::new(input);
     lexer.tokenize()
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

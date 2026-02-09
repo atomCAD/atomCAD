@@ -1,25 +1,25 @@
-use rust_lib_flutter_cad::crystolecule::drawing_plane::{
-    compute_plane_axes, reduce_to_primitive, gcd, gcd3
-};
-use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
-use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
+use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
+use rust_lib_flutter_cad::crystolecule::drawing_plane::{
+    compute_plane_axes, gcd, gcd3, reduce_to_primitive,
+};
+use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 
 #[test]
 fn test_compute_plane_axes_001() {
     // (001) plane - normal along Z
     let m = IVec3::new(0, 0, 1);
     let (u, v) = compute_plane_axes(&m).unwrap();
-    
+
     // Axes should be in XY plane
     assert_eq!(u.z, 0);
     assert_eq!(v.z, 0);
-    
+
     // Should be perpendicular to normal
     assert_eq!(u.dot(m), 0);
     assert_eq!(v.dot(m), 0);
-    
+
     // Should be non-zero and non-collinear
     assert_ne!(u, IVec3::ZERO);
     assert_ne!(v, IVec3::ZERO);
@@ -130,11 +130,11 @@ fn test_compute_plane_axes_100() {
     // (100) plane - normal along X
     let m = IVec3::new(1, 0, 0);
     let (u, v) = compute_plane_axes(&m).unwrap();
-    
+
     // Axes should be in YZ plane
     assert_eq!(u.x, 0);
     assert_eq!(v.x, 0);
-    
+
     // Should be perpendicular to normal
     assert_eq!(u.dot(m), 0);
     assert_eq!(v.dot(m), 0);
@@ -145,11 +145,11 @@ fn test_compute_plane_axes_111() {
     // (111) plane - diagonal
     let m = IVec3::new(1, 1, 1);
     let (u, v) = compute_plane_axes(&m).unwrap();
-    
+
     // Should be perpendicular to normal
     assert_eq!(u.dot(m), 0);
     assert_eq!(v.dot(m), 0);
-    
+
     // Should be primitive (GCD = 1)
     assert_eq!(gcd3(u.x.abs(), u.y.abs(), u.z.abs()), 1);
     assert_eq!(gcd3(v.x.abs(), v.y.abs(), v.z.abs()), 1);
@@ -157,9 +157,18 @@ fn test_compute_plane_axes_111() {
 
 #[test]
 fn test_reduce_to_primitive() {
-    assert_eq!(reduce_to_primitive(IVec3::new(2, 4, 6)), IVec3::new(1, 2, 3));
-    assert_eq!(reduce_to_primitive(IVec3::new(0, 3, 6)), IVec3::new(0, 1, 2));
-    assert_eq!(reduce_to_primitive(IVec3::new(5, 10, 15)), IVec3::new(1, 2, 3));
+    assert_eq!(
+        reduce_to_primitive(IVec3::new(2, 4, 6)),
+        IVec3::new(1, 2, 3)
+    );
+    assert_eq!(
+        reduce_to_primitive(IVec3::new(0, 3, 6)),
+        IVec3::new(0, 1, 2)
+    );
+    assert_eq!(
+        reduce_to_primitive(IVec3::new(5, 10, 15)),
+        IVec3::new(1, 2, 3)
+    );
     assert_eq!(reduce_to_primitive(IVec3::ZERO), IVec3::ZERO);
 }
 
@@ -193,8 +202,14 @@ fn assert_plane_mapping_consistent(m: IVec3) {
 
     // A single lattice step must match the real-space length of the corresponding
     // in-plane lattice axis.
-    let u_real_len = plane.unit_cell.ivec3_lattice_to_real(&plane.u_axis).length();
-    let v_real_len = plane.unit_cell.ivec3_lattice_to_real(&plane.v_axis).length();
+    let u_real_len = plane
+        .unit_cell
+        .ivec3_lattice_to_real(&plane.u_axis)
+        .length();
+    let v_real_len = plane
+        .unit_cell
+        .ivec3_lattice_to_real(&plane.v_axis)
+        .length();
     assert!((dx.length() - u_real_len).abs() < 1e-8);
     assert!((dy.length() - v_real_len).abs() < 1e-8);
 

@@ -4,16 +4,23 @@ use glam::f32::Vec3;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct AtomImpostorVertex {
-    pub center_position: [f32; 3],    // World position of atom center
-    pub quad_offset: [f32; 2],        // (-1,-1), (1,-1), (1,1), (-1,1) for quad corners
-    pub radius: f32,                  // Van der Waals or covalent radius
-    pub albedo: [f32; 3],            // Atom color
+    pub center_position: [f32; 3], // World position of atom center
+    pub quad_offset: [f32; 2],     // (-1,-1), (1,-1), (1,1), (-1,1) for quad corners
+    pub radius: f32,               // Van der Waals or covalent radius
+    pub albedo: [f32; 3],          // Atom color
     pub roughness: f32,
     pub metallic: f32,
 }
 
 impl AtomImpostorVertex {
-    pub fn new(center_position: &Vec3, quad_offset: [f32; 2], radius: f32, albedo: &[f32; 3], roughness: f32, metallic: f32) -> Self {
+    pub fn new(
+        center_position: &Vec3,
+        quad_offset: [f32; 2],
+        radius: f32,
+        albedo: &[f32; 3],
+        roughness: f32,
+        metallic: f32,
+    ) -> Self {
         Self {
             center_position: [center_position.x, center_position.y, center_position.z],
             quad_offset,
@@ -65,7 +72,7 @@ impl AtomImpostorVertex {
                     shader_location: 5,
                     format: wgpu::VertexFormat::Float32,
                 },
-            ]
+            ],
         }
     }
 }
@@ -76,7 +83,7 @@ impl AtomImpostorVertex {
  */
 pub struct AtomImpostorMesh {
     pub vertices: Vec<AtomImpostorVertex>,
-    pub indices: Vec<u32>,  // 6 indices per atom (2 triangles per quad)
+    pub indices: Vec<u32>, // 6 indices per atom (2 triangles per quad)
 }
 
 impl Default for AtomImpostorMesh {
@@ -94,9 +101,16 @@ impl AtomImpostorMesh {
     }
 
     // Returns the starting index of the added quad vertices
-    pub fn add_atom_quad(&mut self, center_position: &Vec3, radius: f32, albedo: &[f32; 3], roughness: f32, metallic: f32) -> u32 {
+    pub fn add_atom_quad(
+        &mut self,
+        center_position: &Vec3,
+        radius: f32,
+        albedo: &[f32; 3],
+        roughness: f32,
+        metallic: f32,
+    ) -> u32 {
         let base_index = self.vertices.len() as u32;
-        
+
         // Add 4 vertices for quad corners: bottom-left, bottom-right, top-right, top-left
         let quad_offsets = [
             [-1.0, -1.0], // bottom-left
@@ -104,7 +118,7 @@ impl AtomImpostorMesh {
             [1.0, 1.0],   // top-right
             [-1.0, 1.0],  // top-left
         ];
-        
+
         for &offset in &quad_offsets {
             self.vertices.push(AtomImpostorVertex::new(
                 center_position,
@@ -115,10 +129,10 @@ impl AtomImpostorMesh {
                 metallic,
             ));
         }
-        
+
         // Add 6 indices for 2 triangles (quad)
         self.add_quad(base_index, base_index + 1, base_index + 2, base_index + 3);
-        
+
         base_index
     }
 
@@ -128,7 +142,7 @@ impl AtomImpostorMesh {
         self.indices.push(index0);
         self.indices.push(index1);
         self.indices.push(index2);
-        
+
         // Second triangle: 2, 3, 0
         self.indices.push(index2);
         self.indices.push(index3);
@@ -142,19 +156,3 @@ impl AtomImpostorMesh {
         vertices_bytes + indices_bytes
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

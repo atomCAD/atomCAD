@@ -772,3 +772,13 @@ bool cutSelection() => RustLib.instance.api
 
 bool hasClipboardContent() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiHasClipboardContent();
+
+/// Serialize the active node network to text format for the text editor tab.
+String serializeActiveNetworkToText() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSerializeActiveNetworkToText();
+
+/// Apply text format edits to the active node network (replace mode with position preservation).
+APITextEditResult applyTextToActiveNetwork({required String code}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiApplyTextToActiveNetwork(
+            code: code);

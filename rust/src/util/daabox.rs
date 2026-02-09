@@ -59,9 +59,12 @@ impl DAABox {
     /// Checks if this box overlaps with another box.
     /// Returns true if the boxes overlap or touch.
     pub fn overlaps(&self, other: &DAABox) -> bool {
-        self.min.x <= other.max.x && self.max.x >= other.min.x &&
-        self.min.y <= other.max.y && self.max.y >= other.min.y &&
-        self.min.z <= other.max.z && self.max.z >= other.min.z
+        self.min.x <= other.max.x
+            && self.max.x >= other.min.x
+            && self.min.y <= other.max.y
+            && self.max.y >= other.min.y
+            && self.min.z <= other.max.z
+            && self.max.z >= other.min.z
     }
 
     /// Conservative overlap check that expands this box by epsilon before checking overlap.
@@ -75,32 +78,16 @@ impl DAABox {
 
     /// Checks if a point is inside this box (inclusive of boundaries).
     pub fn contains_point(&self, point: DVec3) -> bool {
-        point.x >= self.min.x && point.x <= self.max.x &&
-        point.y >= self.min.y && point.y <= self.max.y &&
-        point.z >= self.min.z && point.z <= self.max.z
+        point.x >= self.min.x
+            && point.x <= self.max.x
+            && point.y >= self.min.y
+            && point.y <= self.max.y
+            && point.z >= self.min.z
+            && point.z <= self.max.z
     }
 
     /// Returns true if this box is valid (min <= max in all dimensions).
     pub fn is_valid(&self) -> bool {
-        self.min.x <= self.max.x &&
-        self.min.y <= self.max.y &&
-        self.min.z <= self.max.z
+        self.min.x <= self.max.x && self.min.y <= self.max.y && self.min.z <= self.max.z
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

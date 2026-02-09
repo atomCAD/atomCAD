@@ -1099,6 +1099,75 @@ class APIStringData {
           value == other.value;
 }
 
+/// Result of applying text format edits to the active network.
+class APITextEditResult {
+  final bool success;
+  final List<String> nodesCreated;
+  final List<String> nodesUpdated;
+  final List<String> nodesDeleted;
+  final List<String> connectionsMade;
+  final List<APITextError> errors;
+  final List<String> warnings;
+
+  const APITextEditResult({
+    required this.success,
+    required this.nodesCreated,
+    required this.nodesUpdated,
+    required this.nodesDeleted,
+    required this.connectionsMade,
+    required this.errors,
+    required this.warnings,
+  });
+
+  @override
+  int get hashCode =>
+      success.hashCode ^
+      nodesCreated.hashCode ^
+      nodesUpdated.hashCode ^
+      nodesDeleted.hashCode ^
+      connectionsMade.hashCode ^
+      errors.hashCode ^
+      warnings.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITextEditResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          nodesCreated == other.nodesCreated &&
+          nodesUpdated == other.nodesUpdated &&
+          nodesDeleted == other.nodesDeleted &&
+          connectionsMade == other.connectionsMade &&
+          errors == other.errors &&
+          warnings == other.warnings;
+}
+
+/// A parse or edit error with location information.
+class APITextError {
+  final String message;
+  final int line;
+  final int column;
+
+  const APITextError({
+    required this.message,
+    required this.line,
+    required this.column,
+  });
+
+  @override
+  int get hashCode => message.hashCode ^ line.hashCode ^ column.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITextError &&
+          runtimeType == other.runtimeType &&
+          message == other.message &&
+          line == other.line &&
+          column == other.column;
+}
+
 class APIUnitCellData {
   final double cellLengthA;
   final double cellLengthB;

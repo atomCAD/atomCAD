@@ -1,25 +1,27 @@
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::structure_designer::node_data::NodeData;
-use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use glam::f64::DVec3;
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use std::collections::HashSet;
-use crate::util::serialization_utils::dvec3_serializer;
-use crate::structure_designer::text_format::TextValue;
+use crate::display::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
-use crate::display::gadget::Gadget;
-use glam::f64::DQuat;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::utils::xyz_gadget_utils;
-use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::{
+    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::TextValue;
+use crate::structure_designer::utils::xyz_gadget_utils;
+use crate::util::serialization_utils::dvec3_serializer;
+use glam::f64::DQuat;
+use glam::f64::DVec3;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// Evaluation cache for atom_move node.
 /// Currently empty but reserved for future gadget needs.
@@ -33,11 +35,14 @@ pub struct AtomMoveEvalCache {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomMoveData {
     #[serde(with = "dvec3_serializer")]
-    pub translation: DVec3,  // Translation vector in angstroms
+    pub translation: DVec3, // Translation vector in angstroms
 }
 
 impl NodeData for AtomMoveData {
-    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(
+        &self,
+        structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
         let eval_cache = structure_designer.get_selected_node_eval_cache()?;
         let _atom_move_cache = eval_cache.downcast_ref::<AtomMoveEvalCache>()?;
 
@@ -55,10 +60,11 @@ impl NodeData for AtomMoveData {
         node_id: u64,
         registry: &NodeTypeRegistry,
         _decorate: bool,
-        context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext
+        context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
     ) -> NetworkResult {
         // 1. Get input atomic structure
-        let input_val = network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+        let input_val =
+            network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
             return input_val;
         }
@@ -66,9 +72,13 @@ impl NodeData for AtomMoveData {
         if let NetworkResult::Atomic(atomic_structure) = input_val {
             // 2. Get translation (from pin or property)
             let translation = match network_evaluator.evaluate_or_default(
-                network_stack, node_id, registry, context, 1,
+                network_stack,
+                node_id,
+                registry,
+                context,
+                1,
                 self.translation,
-                NetworkResult::extract_vec3
+                NetworkResult::extract_vec3,
             ) {
                 Ok(value) => value,
                 Err(error) => return error,
@@ -95,14 +105,14 @@ impl NodeData for AtomMoveData {
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
-        vec![
-            ("translation".to_string(), TextValue::Vec3(self.translation)),
-        ]
+        vec![("translation".to_string(), TextValue::Vec3(self.translation))]
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("translation") {
-            self.translation = v.as_vec3().ok_or_else(|| "translation must be a Vec3".to_string())?;
+            self.translation = v
+                .as_vec3()
+                .ok_or_else(|| "translation must be a Vec3".to_string())?;
         }
         Ok(())
     }
@@ -111,8 +121,10 @@ impl NodeData for AtomMoveData {
         if connected_input_pins.contains("translation") {
             return None;
         }
-        Some(format!("({:.2}, {:.2}, {:.2})",
-            self.translation.x, self.translation.y, self.translation.z))
+        Some(format!(
+            "({:.2}, {:.2}, {:.2})",
+            self.translation.x, self.translation.y, self.translation.z
+        ))
     }
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
@@ -143,7 +155,7 @@ impl Tessellatable for AtomMoveGadget {
             &UnitCellStruct::cubic_diamond(),
             DQuat::IDENTITY,
             &self.translation,
-            false,  // No rotation handles (translation only)
+            false, // No rotation handles (translation only)
         );
     }
 
@@ -160,7 +172,7 @@ impl Gadget for AtomMoveGadget {
             &self.translation,
             &ray_origin,
             &ray_direction,
-            false  // No rotation handles
+            false, // No rotation handles
         )
     }
 
@@ -172,7 +184,7 @@ impl Gadget for AtomMoveGadget {
             &self.translation,
             handle_index,
             &ray_origin,
-            &ray_direction
+            &ray_direction,
         );
         self.start_drag_translation = self.translation;
     }
@@ -184,7 +196,7 @@ impl Gadget for AtomMoveGadget {
             &self.translation,
             handle_index,
             &ray_origin,
-            &ray_direction
+            &ray_direction,
         );
         let offset_delta = current_offset - self.start_drag_offset;
         if self.apply_drag_offset(handle_index, offset_delta) {
@@ -231,7 +243,7 @@ impl AtomMoveGadget {
         let axis_direction = match xyz_gadget_utils::get_local_axis_direction(
             &UnitCellStruct::cubic_diamond(),
             DQuat::IDENTITY,
-            axis_index
+            axis_index,
         ) {
             Some(dir) => dir,
             None => return false,

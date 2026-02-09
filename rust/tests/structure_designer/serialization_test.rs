@@ -1,17 +1,22 @@
 use glam::f64::DVec2;
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
-    serializable_to_node_network, SerializableNode, SerializableNodeNetwork,
-    SerializableNodeType,
-};
 use rust_lib_flutter_cad::structure_designer::node_network::Argument;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+    SerializableNode, SerializableNodeNetwork, SerializableNodeType, serializable_to_node_network,
+};
 
-fn create_built_in_node_types() -> std::collections::HashMap<String, rust_lib_flutter_cad::structure_designer::node_type::NodeType> {
+fn create_built_in_node_types()
+-> std::collections::HashMap<String, rust_lib_flutter_cad::structure_designer::node_type::NodeType>
+{
     let registry = NodeTypeRegistry::new();
     registry.built_in_node_types
 }
 
-fn create_serializable_node(id: u64, node_type_name: &str, custom_name: Option<&str>) -> SerializableNode {
+fn create_serializable_node(
+    id: u64,
+    node_type_name: &str,
+    custom_name: Option<&str>,
+) -> SerializableNode {
     // Provide proper default data based on node type
     let data = match node_type_name {
         "int" => serde_json::json!({"value": 0}),
@@ -66,8 +71,14 @@ fn test_migration_assigns_names_to_old_nodes() {
     let node1 = network.nodes.get(&1).unwrap();
     let node2 = network.nodes.get(&2).unwrap();
 
-    assert!(node1.custom_name.is_some(), "Node 1 should have a name assigned");
-    assert!(node2.custom_name.is_some(), "Node 2 should have a name assigned");
+    assert!(
+        node1.custom_name.is_some(),
+        "Node 1 should have a name assigned"
+    );
+    assert!(
+        node2.custom_name.is_some(),
+        "Node 2 should have a name assigned"
+    );
 
     // Names should be unique
     let name1 = node1.custom_name.as_ref().unwrap();
@@ -93,12 +104,23 @@ fn test_migration_preserves_existing_custom_names() {
 
     // Existing name should be preserved
     let node1 = network.nodes.get(&1).unwrap();
-    assert_eq!(node1.custom_name, Some("myint".to_string()), "Existing name should be preserved");
+    assert_eq!(
+        node1.custom_name,
+        Some("myint".to_string()),
+        "Existing name should be preserved"
+    );
 
     // New name should be assigned to the other node
     let node2 = network.nodes.get(&2).unwrap();
-    assert!(node2.custom_name.is_some(), "Node 2 should have a name assigned");
-    assert_ne!(node2.custom_name.as_ref().unwrap(), "myint", "New name should be different from existing");
+    assert!(
+        node2.custom_name.is_some(),
+        "Node 2 should have a name assigned"
+    );
+    assert_ne!(
+        node2.custom_name.as_ref().unwrap(),
+        "myint",
+        "New name should be different from existing"
+    );
 }
 
 #[test]
@@ -163,7 +185,11 @@ fn test_migration_respects_existing_name_counters() {
     assert_eq!(node1.custom_name, Some("int2".to_string()));
 
     // New name should be int3 (not int1, to avoid future collisions)
-    assert_eq!(node2.custom_name, Some("int3".to_string()), "New name should be int3 since int2 exists");
+    assert_eq!(
+        node2.custom_name,
+        Some("int3".to_string()),
+        "New name should be int3 since int2 exists"
+    );
 }
 
 #[test]
@@ -190,6 +216,12 @@ fn test_migration_all_nodes_already_named() {
     let network = serializable_to_node_network(&serializable, &built_ins, None).unwrap();
 
     // Names should be preserved exactly
-    assert_eq!(network.nodes.get(&1).unwrap().custom_name, Some("a".to_string()));
-    assert_eq!(network.nodes.get(&2).unwrap().custom_name, Some("b".to_string()));
+    assert_eq!(
+        network.nodes.get(&1).unwrap().custom_name,
+        Some("a".to_string())
+    );
+    assert_eq!(
+        network.nodes.get(&2).unwrap().custom_name,
+        Some("b".to_string())
+    );
 }

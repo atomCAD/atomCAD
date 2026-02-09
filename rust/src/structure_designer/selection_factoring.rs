@@ -4,14 +4,14 @@
 //! into a new subnetwork (custom node type). The selection must be a "single-output subset"
 //! meaning at most one wire exits the selection to nodes outside it.
 
-use std::collections::{HashMap, HashSet};
 use glam::f64::DVec2;
+use std::collections::{HashMap, HashSet};
 
 use super::data_type::DataType;
-use super::node_network::{Argument, Node, NodeDisplayType, NodeNetwork};
-use super::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
-use super::node_type_registry::NodeTypeRegistry;
 use super::node_data::CustomNodeData;
+use super::node_network::{Argument, Node, NodeDisplayType, NodeNetwork};
+use super::node_type::{NodeType, Parameter, generic_node_data_loader, generic_node_data_saver};
+use super::node_type_registry::NodeTypeRegistry;
 use super::nodes::parameter::ParameterData;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 
@@ -105,7 +105,8 @@ fn generate_param_name(
     // For function pins, use source node name with "_fn" suffix
     if source_pin_index == -1 {
         let source_name = if let Some(node) = nodes.get(&source_node_id) {
-            node.custom_name.as_ref()
+            node.custom_name
+                .as_ref()
                 .unwrap_or(&node.node_type_name)
                 .clone()
         } else {
@@ -125,7 +126,8 @@ fn generate_param_name(
 
     // Fallback to source node name if destination param name is unavailable
     if let Some(node) = nodes.get(&source_node_id) {
-        node.custom_name.as_ref()
+        node.custom_name
+            .as_ref()
             .unwrap_or(&node.node_type_name)
             .clone()
     } else {
@@ -136,7 +138,8 @@ fn generate_param_name(
 /// Deduplicates external inputs, keeping one entry per unique (source_node_id, pin_index)
 fn deduplicate_external_inputs(inputs: Vec<ExternalInput>) -> Vec<ExternalInput> {
     let mut seen: HashSet<(u64, i32)> = HashSet::new();
-    inputs.into_iter()
+    inputs
+        .into_iter()
         .filter(|input| seen.insert((input.source_node_id, input.source_output_pin_index)))
         .collect()
 }
@@ -254,8 +257,16 @@ pub fn analyze_selection_for_factoring(
 
     // 5. Sort external inputs by destination node Y-coordinate
     external_inputs.sort_by(|a, b| {
-        let y_a = network.nodes.get(&a.destination_node_id).map(|n| n.position.y).unwrap_or(0.0);
-        let y_b = network.nodes.get(&b.destination_node_id).map(|n| n.position.y).unwrap_or(0.0);
+        let y_a = network
+            .nodes
+            .get(&a.destination_node_id)
+            .map(|n| n.position.y)
+            .unwrap_or(0.0);
+        let y_b = network
+            .nodes
+            .get(&b.destination_node_id)
+            .map(|n| n.position.y)
+            .unwrap_or(0.0);
         y_a.partial_cmp(&y_b).unwrap_or(std::cmp::Ordering::Equal)
     });
 
@@ -314,13 +325,20 @@ pub fn create_subnetwork_from_selection(
 ) -> NodeNetwork {
     // 1. Determine output type
     let output_type = if let Some(ref output) = analysis.external_output {
-        get_output_type(source_network, output.source_node_id, output.source_output_pin_index, registry)
+        get_output_type(
+            source_network,
+            output.source_node_id,
+            output.source_output_pin_index,
+            registry,
+        )
     } else {
         DataType::None
     };
 
     // 2. Create parameters from external inputs
-    let parameters: Vec<Parameter> = analysis.external_inputs.iter()
+    let parameters: Vec<Parameter> = analysis
+        .external_inputs
+        .iter()
         .enumerate()
         .map(|(i, input)| Parameter {
             id: Some(i as u64 + 1),
@@ -394,7 +412,10 @@ pub fn create_subnetwork_from_selection(
 
         // Position parameter nodes on the left
         let y_offset = i as f64 * 80.0;
-        let param_position = DVec2::new(-300.0, y_offset - (analysis.external_inputs.len() as f64 * 40.0));
+        let param_position = DVec2::new(
+            -300.0,
+            y_offset - (analysis.external_inputs.len() as f64 * 40.0),
+        );
 
         let param_data = ParameterData {
             param_id: Some(new_network.next_param_id),
@@ -493,7 +514,8 @@ pub fn replace_selection_with_custom_node(
     // Build map of (source_id, pin) -> param_index
     let mut input_map: HashMap<(u64, i32), usize> = HashMap::new();
     for (i, input) in analysis.external_inputs.iter().enumerate() {
-        input_map.entry((input.source_node_id, input.source_output_pin_index))
+        input_map
+            .entry((input.source_node_id, input.source_output_pin_index))
             .or_insert(i);
     }
 

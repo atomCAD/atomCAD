@@ -29,13 +29,13 @@ use std::hash::Hash;
 pub struct MemoryBoundedLruCache<K: Hash + Eq, V> {
     /// Underlying LRU cache with no count limit
     cache: LruCache<K, V>,
-    
+
     /// Current total memory usage in bytes
     current_memory_bytes: usize,
-    
+
     /// Maximum allowed memory usage in bytes
     max_memory_bytes: usize,
-    
+
     /// Function to estimate the memory size of a value in bytes
     size_estimator: fn(&V) -> usize,
 }
@@ -50,7 +50,7 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
     /// # Example
     /// ```
     /// use rust_lib_flutter_cad::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
-    /// 
+    ///
     /// let cache: MemoryBoundedLruCache<String, String> = MemoryBoundedLruCache::new(
     ///     256 * 1024 * 1024,  // 256 MB
     ///     |value| std::mem::size_of_val(value)
@@ -79,7 +79,7 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
     /// The old value if the key already existed, otherwise `None`
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let value_size = (self.size_estimator)(&value);
-        
+
         // Evict LRU entries until we have enough space for the new value
         while self.current_memory_bytes + value_size > self.max_memory_bytes {
             if let Some((_, evicted_value)) = self.cache.pop_lru() {
@@ -91,19 +91,19 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
                 break;
             }
         }
-        
+
         // Insert the new value and handle replacement
         let old_value = self.cache.put(key, value);
-        
+
         if let Some(ref old_val) = old_value {
             // Key existed, subtract old value's size
             let old_size = (self.size_estimator)(old_val);
             self.current_memory_bytes = self.current_memory_bytes.saturating_sub(old_size);
         }
-        
+
         // Add new value's size
         self.current_memory_bytes += value_size;
-        
+
         old_value
     }
 
@@ -224,7 +224,7 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
     /// * `new_max_memory_bytes` - The new maximum memory limit in bytes
     pub fn resize(&mut self, new_max_memory_bytes: usize) {
         self.max_memory_bytes = new_max_memory_bytes;
-        
+
         // Evict entries if we're over the new limit
         while self.current_memory_bytes > self.max_memory_bytes {
             if let Some((_, evicted_value)) = self.cache.pop_lru() {
@@ -236,19 +236,3 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

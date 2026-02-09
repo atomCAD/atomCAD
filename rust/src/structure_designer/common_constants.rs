@@ -21,19 +21,3 @@ pub const LINE_RADIUS: f64 = 0.18;
 pub const LINE_RADIUS_HIT_TEST_FACTOR: f64 = 1.3;
 
 pub const CONNECTED_PIN_SYMBOL: &str = "⎆";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

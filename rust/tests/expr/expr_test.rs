@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::expr::lexer::{tokenize, Token};
+use rust_lib_flutter_cad::expr::lexer::{Token, tokenize};
 use rust_lib_flutter_cad::expr::parser::parse;
 
 mod lexer_tests {
@@ -28,65 +28,81 @@ mod lexer_tests {
         assert_eq!(tokens, vec![Token::Ident("x".to_string()), Token::Eof]);
 
         let tokens = tokenize("variable_name");
-        assert_eq!(tokens, vec![Token::Ident("variable_name".to_string()), Token::Eof]);
+        assert_eq!(
+            tokens,
+            vec![Token::Ident("variable_name".to_string()), Token::Eof]
+        );
 
         let tokens = tokenize("func123");
-        assert_eq!(tokens, vec![Token::Ident("func123".to_string()), Token::Eof]);
+        assert_eq!(
+            tokens,
+            vec![Token::Ident("func123".to_string()), Token::Eof]
+        );
 
         let tokens = tokenize("_private");
-        assert_eq!(tokens, vec![Token::Ident("_private".to_string()), Token::Eof]);
+        assert_eq!(
+            tokens,
+            vec![Token::Ident("_private".to_string()), Token::Eof]
+        );
     }
 
     #[test]
     fn test_tokenize_operators() {
         let tokens = tokenize("+ - * / % ^");
-        assert_eq!(tokens, vec![
-            Token::Plus,
-            Token::Minus,
-            Token::Star,
-            Token::Slash,
-            Token::Percent,
-            Token::Caret,
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Plus,
+                Token::Minus,
+                Token::Star,
+                Token::Slash,
+                Token::Percent,
+                Token::Caret,
+                Token::Eof
+            ]
+        );
     }
 
     #[test]
     fn test_tokenize_parentheses_and_comma() {
         let tokens = tokenize("( ) ,");
-        assert_eq!(tokens, vec![
-            Token::LParen,
-            Token::RParen,
-            Token::Comma,
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![Token::LParen, Token::RParen, Token::Comma, Token::Eof]
+        );
     }
 
     #[test]
     fn test_tokenize_whitespace_handling() {
         let tokens = tokenize("  x  +  y  ");
-        assert_eq!(tokens, vec![
-            Token::Ident("x".to_string()),
-            Token::Plus,
-            Token::Ident("y".to_string()),
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Ident("x".to_string()),
+                Token::Plus,
+                Token::Ident("y".to_string()),
+                Token::Eof
+            ]
+        );
     }
 
     #[test]
     fn test_tokenize_complex_expression() {
         let tokens = tokenize("2 * x + sin(3.14)");
-        assert_eq!(tokens, vec![
-            Token::Number(2.0),
-            Token::Star,
-            Token::Ident("x".to_string()),
-            Token::Plus,
-            Token::Ident("sin".to_string()),
-            Token::LParen,
-            Token::Number(3.14),
-            Token::RParen,
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Number(2.0),
+                Token::Star,
+                Token::Ident("x".to_string()),
+                Token::Plus,
+                Token::Ident("sin".to_string()),
+                Token::LParen,
+                Token::Number(3.14),
+                Token::RParen,
+                Token::Eof
+            ]
+        );
     }
 
     #[test]
@@ -114,80 +130,85 @@ mod lexer_tests {
     #[test]
     fn test_tokenize_comparison_operators() {
         let tokens = tokenize("== != < <= > >=");
-        assert_eq!(tokens, vec![
-            Token::EqEq,
-            Token::Ne,
-            Token::Lt,
-            Token::Le,
-            Token::Gt,
-            Token::Ge,
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::EqEq,
+                Token::Ne,
+                Token::Lt,
+                Token::Le,
+                Token::Gt,
+                Token::Ge,
+                Token::Eof
+            ]
+        );
     }
 
     #[test]
     fn test_tokenize_logical_operators() {
         let tokens = tokenize("&& || !");
-        assert_eq!(tokens, vec![
-            Token::And,
-            Token::Or,
-            Token::Not,
-            Token::Eof
-        ]);
+        assert_eq!(tokens, vec![Token::And, Token::Or, Token::Not, Token::Eof]);
     }
 
     #[test]
     fn test_tokenize_boolean_expressions() {
         let tokens = tokenize("x == 5 && !flag");
-        assert_eq!(tokens, vec![
-            Token::Ident("x".to_string()),
-            Token::EqEq,
-            Token::Number(5.0),
-            Token::And,
-            Token::Not,
-            Token::Ident("flag".to_string()),
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Ident("x".to_string()),
+                Token::EqEq,
+                Token::Number(5.0),
+                Token::And,
+                Token::Not,
+                Token::Ident("flag".to_string()),
+                Token::Eof
+            ]
+        );
 
         let tokens = tokenize("a <= b || c != d");
-        assert_eq!(tokens, vec![
-            Token::Ident("a".to_string()),
-            Token::Le,
-            Token::Ident("b".to_string()),
-            Token::Or,
-            Token::Ident("c".to_string()),
-            Token::Ne,
-            Token::Ident("d".to_string()),
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Ident("a".to_string()),
+                Token::Le,
+                Token::Ident("b".to_string()),
+                Token::Or,
+                Token::Ident("c".to_string()),
+                Token::Ne,
+                Token::Ident("d".to_string()),
+                Token::Eof
+            ]
+        );
     }
 
     #[test]
     fn test_tokenize_conditional_keywords() {
         let tokens = tokenize("if then else");
-        assert_eq!(tokens, vec![
-            Token::If,
-            Token::Then,
-            Token::Else,
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![Token::If, Token::Then, Token::Else, Token::Eof]
+        );
     }
 
     #[test]
     fn test_tokenize_conditional_expression() {
         let tokens = tokenize("if x > 0 then 1 else -1");
-        assert_eq!(tokens, vec![
-            Token::If,
-            Token::Ident("x".to_string()),
-            Token::Gt,
-            Token::Number(0.0),
-            Token::Then,
-            Token::Number(1.0),
-            Token::Else,
-            Token::Minus,
-            Token::Number(1.0),
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::If,
+                Token::Ident("x".to_string()),
+                Token::Gt,
+                Token::Number(0.0),
+                Token::Then,
+                Token::Number(1.0),
+                Token::Else,
+                Token::Minus,
+                Token::Number(1.0),
+                Token::Eof
+            ]
+        );
     }
 }
 
@@ -314,7 +335,10 @@ mod parser_tests {
         assert_eq!(expr.to_prefix_string(), "(+ (* 2 x) (call sin (* 3.14 y)))");
 
         let expr = parse("-sin(x) + cos(y) ^ 2").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(+ (neg (call sin x)) (^ (call cos y) 2))");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(+ (neg (call sin x)) (^ (call cos y) 2))"
+        );
 
         let expr = parse("(a + b) * (c - d) / (e ^ f)").unwrap();
         assert_eq!(expr.to_prefix_string(), "(/ (* (+ a b) (- c d)) (^ e f))");
@@ -343,7 +367,7 @@ mod parser_tests {
         assert!(parse("* x").is_err());
         assert!(parse("/ x").is_err());
         assert!(parse("^ x").is_err());
-        
+
         // Note: "x + + y" is actually valid as "x + (+y)", so we test other invalid cases
         assert!(parse("x + * y").is_err());
         assert!(parse("x * / y").is_err());
@@ -443,10 +467,16 @@ mod parser_tests {
     #[test]
     fn test_parse_complex_boolean_expressions() {
         let expr = parse("!flag && (x > 0 || y < 10)").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(&& (not flag) (|| (> x 0) (< y 10)))");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(&& (not flag) (|| (> x 0) (< y 10)))"
+        );
 
         let expr = parse("a == b && c != d || e >= f").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(|| (&& (== a b) (!= c d)) (>= e f))");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(|| (&& (== a b) (!= c d)) (>= e f))"
+        );
 
         let expr = parse("x + y > z && !done").unwrap();
         assert_eq!(expr.to_prefix_string(), "(&& (> (+ x y) z) (not done))");
@@ -458,7 +488,10 @@ mod parser_tests {
         assert_eq!(expr.to_prefix_string(), "(== (+ (* 2 x) 1) (^ y 2))");
 
         let expr = parse("sin(x) > 0.5 && cos(y) < 0.8").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(&& (> (call sin x) 0.5) (< (call cos y) 0.8))");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(&& (> (call sin x) 0.5) (< (call cos y) 0.8))"
+        );
     }
 
     #[test]
@@ -476,22 +509,34 @@ mod parser_tests {
     #[test]
     fn test_parse_conditional_complex() {
         let expr = parse("if x > 0 && y < 10 then x + y else 0").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(if (&& (> x 0) (< y 10)) then (+ x y) else 0)");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(if (&& (> x 0) (< y 10)) then (+ x y) else 0)"
+        );
 
         let expr = parse("if !done then compute(x) else result").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(if (not done) then (call compute x) else result)");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(if (not done) then (call compute x) else result)"
+        );
     }
 
     #[test]
     fn test_parse_conditional_nested() {
         let expr = parse("if x > 0 then if y > 0 then 1 else 2 else 3").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(if (> x 0) then (if (> y 0) then 1 else 2) else 3)");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(if (> x 0) then (if (> y 0) then 1 else 2) else 3)"
+        );
     }
 
     #[test]
     fn test_parse_conditional_with_arithmetic() {
         let expr = parse("if x == 0 then sin(y) else cos(z) + 1").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(if (== x 0) then (call sin y) else (+ (call cos z) 1))");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(if (== x 0) then (call sin y) else (+ (call cos z) 1))"
+        );
 
         let expr = parse("2 * if flag then a else b").unwrap();
         assert_eq!(expr.to_prefix_string(), "(* 2 (if flag then a else b))");
@@ -501,16 +546,16 @@ mod parser_tests {
     fn test_parse_conditional_errors() {
         // Missing then
         assert!(parse("if x > 0 else 1").is_err());
-        
+
         // Missing else
         assert!(parse("if x > 0 then 1").is_err());
-        
+
         // Missing condition
         assert!(parse("if then 1 else 0").is_err());
-        
+
         // Missing then expression
         assert!(parse("if true then else 0").is_err());
-        
+
         // Missing else expression
         assert!(parse("if true then 1 else").is_err());
     }
@@ -521,12 +566,15 @@ mod parser_tests {
         assert_eq!(tokens, vec![Token::Percent, Token::Eof]);
 
         let tokens = tokenize("7 % 3");
-        assert_eq!(tokens, vec![
-            Token::Number(7.0),
-            Token::Percent,
-            Token::Number(3.0),
-            Token::Eof
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Number(7.0),
+                Token::Percent,
+                Token::Number(3.0),
+                Token::Eof
+            ]
+        );
     }
 
     #[test]
@@ -558,10 +606,16 @@ mod parser_tests {
     fn test_parse_modulo_complex_expressions() {
         // Test the specific complex expressions requested
         let expr = parse("if (x%2) > 0 then -1 else 1").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(if (> (% x 2) 0) then (neg 1) else 1)");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(if (> (% x 2) 0) then (neg 1) else 1)"
+        );
 
         let expr = parse("if x%2 > 0 then -1 else 1").unwrap();
-        assert_eq!(expr.to_prefix_string(), "(if (> (% x 2) 0) then (neg 1) else 1)");
+        assert_eq!(
+            expr.to_prefix_string(),
+            "(if (> (% x 2) 0) then (neg 1) else 1)"
+        );
 
         // More complex expressions
         let expr = parse("(a + b) % (c - d)").unwrap();
@@ -580,10 +634,3 @@ mod parser_tests {
         assert_eq!(expr.to_prefix_string(), "(% x (call abs_int y))");
     }
 }
-
-
-
-
-
-
-

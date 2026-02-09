@@ -12,7 +12,7 @@ use glam::DVec2;
 use rust_lib_flutter_cad::structure_designer::layout::common::LayoutAlgorithm;
 use rust_lib_flutter_cad::structure_designer::layout::compute_layout;
 use rust_lib_flutter_cad::structure_designer::layout::sugiyama::{
-    create_layered_graph_for_testing, LayerNode,
+    LayerNode, create_layered_graph_for_testing,
 };
 use rust_lib_flutter_cad::structure_designer::node_layout;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -453,8 +453,14 @@ fn test_no_node_overlap_sugiyama() {
             let (id1, pos1) = position_vec[i];
             let (id2, pos2) = position_vec[j];
 
-            let size1 = node_sizes.get(&id1).copied().unwrap_or(DVec2::new(160.0, 83.0));
-            let size2 = node_sizes.get(&id2).copied().unwrap_or(DVec2::new(160.0, 83.0));
+            let size1 = node_sizes
+                .get(&id1)
+                .copied()
+                .unwrap_or(DVec2::new(160.0, 83.0));
+            let size2 = node_sizes
+                .get(&id2)
+                .copied()
+                .unwrap_or(DVec2::new(160.0, 83.0));
 
             // Check if boxes overlap (no additional gap required, algorithm handles spacing)
             let overlaps = node_layout::nodes_overlap(pos1, size1, pos2, size2, 0.0);
@@ -600,7 +606,10 @@ fn test_sugiyama_vs_topological_grid_same_result_for_simple_chain() {
 
     // Both should have increasing X for the chain
     assert!(positions_topo.get(&float_id).unwrap().x < positions_topo.get(&sphere_id).unwrap().x);
-    assert!(positions_sugiyama.get(&float_id).unwrap().x < positions_sugiyama.get(&sphere_id).unwrap().x);
+    assert!(
+        positions_sugiyama.get(&float_id).unwrap().x
+            < positions_sugiyama.get(&sphere_id).unwrap().x
+    );
 }
 
 // =============================================================================

@@ -9,9 +9,9 @@
 //! - **macOS:** `~/Library/Application Support/atomCAD/preferences.json`
 //! - **Linux:** `~/.config/atomCAD/preferences.json`
 
+use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 use std::fs;
 use std::path::PathBuf;
-use crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences;
 
 const CONFIG_DIR_NAME: &str = "atomCAD";
 const PREFERENCES_FILE_NAME: &str = "preferences.json";
@@ -42,17 +42,23 @@ pub fn load_preferences() -> StructureDesignerPreferences {
     }
 
     match fs::read_to_string(&path) {
-        Ok(contents) => {
-            match serde_json::from_str(&contents) {
-                Ok(prefs) => prefs,
-                Err(e) => {
-                    eprintln!("[preferences] Failed to parse {}: {}, using defaults", path.display(), e);
-                    StructureDesignerPreferences::default()
-                }
+        Ok(contents) => match serde_json::from_str(&contents) {
+            Ok(prefs) => prefs,
+            Err(e) => {
+                eprintln!(
+                    "[preferences] Failed to parse {}: {}, using defaults",
+                    path.display(),
+                    e
+                );
+                StructureDesignerPreferences::default()
             }
-        }
+        },
         Err(e) => {
-            eprintln!("[preferences] Failed to read {}: {}, using defaults", path.display(), e);
+            eprintln!(
+                "[preferences] Failed to read {}: {}, using defaults",
+                path.display(),
+                e
+            );
             StructureDesignerPreferences::default()
         }
     }
@@ -71,7 +77,11 @@ pub fn save_preferences(prefs: &StructureDesignerPreferences) {
     // Create the config directory if it doesn't exist
     if let Some(parent) = path.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!("[preferences] Failed to create config directory {}: {}", parent.display(), e);
+            eprintln!(
+                "[preferences] Failed to create config directory {}: {}",
+                parent.display(),
+                e
+            );
             return;
         }
     }

@@ -1,5 +1,5 @@
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use glam::f64::DVec2;
+use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
 fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
     let mut designer = StructureDesigner::new();
@@ -9,8 +9,17 @@ fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
 }
 
 /// Helper to set a custom name on a node by directly accessing the network
-fn set_node_custom_name(designer: &mut StructureDesigner, network_name: &str, node_id: u64, name: &str) {
-    if let Some(network) = designer.node_type_registry.node_networks.get_mut(network_name) {
+fn set_node_custom_name(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+    name: &str,
+) {
+    if let Some(network) = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+    {
         if let Some(node) = network.nodes.get_mut(&node_id) {
             node.custom_name = Some(name.to_string());
         }

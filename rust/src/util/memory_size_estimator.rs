@@ -1,11 +1,11 @@
 /// Trait for types that can estimate their memory usage in bytes
-/// 
+///
 /// This is used for cache management and memory-bounded data structures.
 /// The estimate should include:
 /// - The size of the struct itself (std::mem::size_of::<Self>())
 /// - Heap-allocated data (Vec, HashMap, Box, String, etc.)
 /// - Recursively estimated sizes of contained types
-/// 
+///
 /// The estimate does not need to be exact, but should be:
 /// - Reasonably accurate (within ~20% of actual usage)
 /// - Fast to compute (avoid expensive traversals if possible)
@@ -29,7 +29,7 @@ impl<T> MemorySizeEstimator for Vec<T> {
     }
 }
 
-impl<T> MemorySizeEstimator for Option<T> 
+impl<T> MemorySizeEstimator for Option<T>
 where
     T: MemorySizeEstimator,
 {
@@ -38,7 +38,7 @@ where
     }
 }
 
-impl<T> MemorySizeEstimator for Box<T> 
+impl<T> MemorySizeEstimator for Box<T>
 where
     T: MemorySizeEstimator,
 {
@@ -95,19 +95,3 @@ impl MemorySizeEstimator for bool {
         std::mem::size_of::<bool>()
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

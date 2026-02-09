@@ -1,17 +1,19 @@
-use crate::structure_designer::node_data::NodeData;
-use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::text_format::TextValue;
-use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::{NodeType, generic_node_data_saver, generic_node_data_loader};
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::{
+    NodeType, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::TextValue;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommentData {
@@ -33,7 +35,10 @@ impl Default for CommentData {
 }
 
 impl NodeData for CommentData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
         None
     }
 
@@ -48,7 +53,7 @@ impl NodeData for CommentData {
         _node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext
+        _context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
         NetworkResult::None
     }
@@ -57,7 +62,10 @@ impl NodeData for CommentData {
         Box::new(self.clone())
     }
 
-    fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
         if self.label.is_empty() {
             None
         } else {
@@ -76,16 +84,26 @@ impl NodeData for CommentData {
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("label") {
-            self.label = v.as_string().ok_or_else(|| "label must be a string".to_string())?.to_string();
+            self.label = v
+                .as_string()
+                .ok_or_else(|| "label must be a string".to_string())?
+                .to_string();
         }
         if let Some(v) = props.get("text") {
-            self.text = v.as_string().ok_or_else(|| "text must be a string".to_string())?.to_string();
+            self.text = v
+                .as_string()
+                .ok_or_else(|| "text must be a string".to_string())?
+                .to_string();
         }
         if let Some(v) = props.get("width") {
-            self.width = v.as_float().ok_or_else(|| "width must be a float".to_string())?;
+            self.width = v
+                .as_float()
+                .ok_or_else(|| "width must be a float".to_string())?;
         }
         if let Some(v) = props.get("height") {
-            self.height = v.as_float().ok_or_else(|| "height must be a float".to_string())?;
+            self.height = v
+                .as_float()
+                .ok_or_else(|| "height must be a float".to_string())?;
         }
         Ok(())
     }

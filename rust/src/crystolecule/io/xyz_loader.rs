@@ -1,17 +1,17 @@
+use crate::crystolecule::atomic_constants::CHEMICAL_ELEMENTS;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure_utils::auto_create_bonds;
+use glam::f64::DVec3;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::num::ParseFloatError;
 use thiserror::Error;
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use glam::f64::DVec3;
-use crate::crystolecule::atomic_constants::CHEMICAL_ELEMENTS;
-use crate::crystolecule::atomic_structure_utils::auto_create_bonds;
 
 #[derive(Debug, Error)]
 pub enum XyzError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
-    
+
     #[error("Invalid XYZ format: {0}")]
     Parse(String),
 
@@ -34,7 +34,9 @@ pub fn load_xyz(file_path: &str, create_bonds: bool) -> Result<AtomicStructure, 
         .map_err(|_| XyzError::Parse("Invalid number of atoms".to_string()))?;
 
     // Read the second line (title/comment)
-    lines.next().ok_or_else(|| XyzError::Parse("Missing title/comment".to_string()))??;
+    lines
+        .next()
+        .ok_or_else(|| XyzError::Parse("Missing title/comment".to_string()))??;
 
     for (index, line) in lines.enumerate() {
         let line = line?;

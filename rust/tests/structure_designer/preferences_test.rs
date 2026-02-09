@@ -1,20 +1,12 @@
 //! Tests for preferences persistence (load/save to config file).
 
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
-    StructureDesignerPreferences,
-    GeometryVisualization,
-    MeshSmoothing,
-    NodeDisplayPolicy,
-    AtomicStructureVisualization,
-    AtomicRenderingMethod,
-    LayoutAlgorithmPreference,
-    GeometryVisualizationPreferences,
-    NodeDisplayPreferences,
-    AtomicStructureVisualizationPreferences,
-    BackgroundPreferences,
-    LayoutPreferences,
-};
 use rust_lib_flutter_cad::api::common_api_types::APIIVec3;
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
+    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
+    BackgroundPreferences, GeometryVisualization, GeometryVisualizationPreferences,
+    LayoutAlgorithmPreference, LayoutPreferences, MeshSmoothing, NodeDisplayPolicy,
+    NodeDisplayPreferences, StructureDesignerPreferences,
+};
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
 #[test]
@@ -25,12 +17,14 @@ fn test_preferences_roundtrip_serialization() {
     let json = serde_json::to_string_pretty(&prefs).expect("Failed to serialize preferences");
 
     // Deserialize back
-    let loaded: StructureDesignerPreferences = serde_json::from_str(&json)
-        .expect("Failed to deserialize preferences");
+    let loaded: StructureDesignerPreferences =
+        serde_json::from_str(&json).expect("Failed to deserialize preferences");
 
     // Verify key fields match
     assert_eq!(
-        loaded.geometry_visualization_preferences.geometry_visualization,
+        loaded
+            .geometry_visualization_preferences
+            .geometry_visualization,
         GeometryVisualization::ExplicitMesh
     );
     assert_eq!(
@@ -38,7 +32,9 @@ fn test_preferences_roundtrip_serialization() {
         NodeDisplayPolicy::Manual
     );
     assert_eq!(
-        loaded.atomic_structure_visualization_preferences.visualization,
+        loaded
+            .atomic_structure_visualization_preferences
+            .visualization,
         AtomicStructureVisualization::BallAndStick
     );
     assert_eq!(
@@ -57,18 +53,25 @@ fn test_preferences_missing_fields_use_defaults() {
         }
     }"#;
 
-    let loaded: StructureDesignerPreferences = serde_json::from_str(partial_json)
-        .expect("Failed to deserialize partial preferences");
+    let loaded: StructureDesignerPreferences =
+        serde_json::from_str(partial_json).expect("Failed to deserialize partial preferences");
 
     // The specified field should be loaded
     assert_eq!(
-        loaded.geometry_visualization_preferences.geometry_visualization,
+        loaded
+            .geometry_visualization_preferences
+            .geometry_visualization,
         GeometryVisualization::SurfaceSplatting
     );
 
     // Missing fields should get defaults
     assert!(!loaded.geometry_visualization_preferences.wireframe_geometry);
-    assert_eq!(loaded.geometry_visualization_preferences.samples_per_unit_cell, 1);
+    assert_eq!(
+        loaded
+            .geometry_visualization_preferences
+            .samples_per_unit_cell,
+        1
+    );
     assert_eq!(
         loaded.geometry_visualization_preferences.mesh_smoothing,
         MeshSmoothing::SmoothingGroupBased
@@ -136,7 +139,9 @@ fn test_preferences_extra_fields_ignored() {
 
     // Known fields should be loaded correctly
     assert_eq!(
-        loaded.geometry_visualization_preferences.geometry_visualization,
+        loaded
+            .geometry_visualization_preferences
+            .geometry_visualization,
         GeometryVisualization::ExplicitMesh
     );
 }
@@ -155,15 +160,19 @@ fn test_preferences_corrupted_json_fails() {
 fn test_preferences_empty_json_uses_defaults() {
     let empty_json = "{}";
 
-    let loaded: StructureDesignerPreferences = serde_json::from_str(empty_json)
-        .expect("Failed to deserialize empty preferences");
+    let loaded: StructureDesignerPreferences =
+        serde_json::from_str(empty_json).expect("Failed to deserialize empty preferences");
 
     // Should be equivalent to default
     let default_prefs = StructureDesignerPreferences::default();
 
     assert_eq!(
-        loaded.geometry_visualization_preferences.geometry_visualization,
-        default_prefs.geometry_visualization_preferences.geometry_visualization
+        loaded
+            .geometry_visualization_preferences
+            .geometry_visualization,
+        default_prefs
+            .geometry_visualization_preferences
+            .geometry_visualization
     );
     assert_eq!(
         loaded.layout_preferences.layout_algorithm,
@@ -177,31 +186,82 @@ fn test_default_values_match_documentation() {
     let prefs = StructureDesignerPreferences::default();
 
     // Geometry visualization defaults
-    assert_eq!(prefs.geometry_visualization_preferences.geometry_visualization, GeometryVisualization::ExplicitMesh);
+    assert_eq!(
+        prefs
+            .geometry_visualization_preferences
+            .geometry_visualization,
+        GeometryVisualization::ExplicitMesh
+    );
     assert!(!prefs.geometry_visualization_preferences.wireframe_geometry);
-    assert_eq!(prefs.geometry_visualization_preferences.samples_per_unit_cell, 1);
-    assert_eq!(prefs.geometry_visualization_preferences.sharpness_angle_threshold_degree, 29.0);
-    assert_eq!(prefs.geometry_visualization_preferences.mesh_smoothing, MeshSmoothing::SmoothingGroupBased);
-    assert!(!prefs.geometry_visualization_preferences.display_camera_target);
+    assert_eq!(
+        prefs
+            .geometry_visualization_preferences
+            .samples_per_unit_cell,
+        1
+    );
+    assert_eq!(
+        prefs
+            .geometry_visualization_preferences
+            .sharpness_angle_threshold_degree,
+        29.0
+    );
+    assert_eq!(
+        prefs.geometry_visualization_preferences.mesh_smoothing,
+        MeshSmoothing::SmoothingGroupBased
+    );
+    assert!(
+        !prefs
+            .geometry_visualization_preferences
+            .display_camera_target
+    );
 
     // Node display defaults
-    assert_eq!(prefs.node_display_preferences.display_policy, NodeDisplayPolicy::Manual);
+    assert_eq!(
+        prefs.node_display_preferences.display_policy,
+        NodeDisplayPolicy::Manual
+    );
 
     // Atomic visualization defaults
-    assert_eq!(prefs.atomic_structure_visualization_preferences.visualization, AtomicStructureVisualization::BallAndStick);
-    assert_eq!(prefs.atomic_structure_visualization_preferences.rendering_method, AtomicRenderingMethod::Impostors);
-    assert_eq!(prefs.atomic_structure_visualization_preferences.ball_and_stick_cull_depth, Some(8.0));
-    assert_eq!(prefs.atomic_structure_visualization_preferences.space_filling_cull_depth, Some(3.0));
+    assert_eq!(
+        prefs
+            .atomic_structure_visualization_preferences
+            .visualization,
+        AtomicStructureVisualization::BallAndStick
+    );
+    assert_eq!(
+        prefs
+            .atomic_structure_visualization_preferences
+            .rendering_method,
+        AtomicRenderingMethod::Impostors
+    );
+    assert_eq!(
+        prefs
+            .atomic_structure_visualization_preferences
+            .ball_and_stick_cull_depth,
+        Some(8.0)
+    );
+    assert_eq!(
+        prefs
+            .atomic_structure_visualization_preferences
+            .space_filling_cull_depth,
+        Some(3.0)
+    );
 
     // Background defaults
-    assert_eq!(prefs.background_preferences.background_color, APIIVec3 { x: 0, y: 0, z: 0 });
+    assert_eq!(
+        prefs.background_preferences.background_color,
+        APIIVec3 { x: 0, y: 0, z: 0 }
+    );
     assert!(prefs.background_preferences.show_grid);
     assert_eq!(prefs.background_preferences.grid_size, 200);
     assert!(prefs.background_preferences.show_lattice_axes);
     assert!(!prefs.background_preferences.show_lattice_grid);
 
     // Layout defaults
-    assert_eq!(prefs.layout_preferences.layout_algorithm, LayoutAlgorithmPreference::Sugiyama);
+    assert_eq!(
+        prefs.layout_preferences.layout_algorithm,
+        LayoutAlgorithmPreference::Sugiyama
+    );
     assert!(prefs.layout_preferences.auto_layout_after_edit);
 }
 
@@ -227,17 +287,45 @@ fn test_non_default_values_roundtrip() {
             space_filling_cull_depth: None,
         },
         background_preferences: BackgroundPreferences {
-            background_color: APIIVec3 { x: 255, y: 128, z: 64 },
+            background_color: APIIVec3 {
+                x: 255,
+                y: 128,
+                z: 64,
+            },
             show_grid: false,
             grid_size: 100,
-            grid_color: APIIVec3 { x: 50, y: 50, z: 50 },
-            grid_strong_color: APIIVec3 { x: 100, y: 100, z: 100 },
+            grid_color: APIIVec3 {
+                x: 50,
+                y: 50,
+                z: 50,
+            },
+            grid_strong_color: APIIVec3 {
+                x: 100,
+                y: 100,
+                z: 100,
+            },
             show_lattice_axes: false,
             show_lattice_grid: true,
-            lattice_grid_color: APIIVec3 { x: 30, y: 60, z: 60 },
-            lattice_grid_strong_color: APIIVec3 { x: 80, y: 120, z: 120 },
-            drawing_plane_grid_color: APIIVec3 { x: 50, y: 50, z: 80 },
-            drawing_plane_grid_strong_color: APIIVec3 { x: 90, y: 90, z: 130 },
+            lattice_grid_color: APIIVec3 {
+                x: 30,
+                y: 60,
+                z: 60,
+            },
+            lattice_grid_strong_color: APIIVec3 {
+                x: 80,
+                y: 120,
+                z: 120,
+            },
+            drawing_plane_grid_color: APIIVec3 {
+                x: 50,
+                y: 50,
+                z: 80,
+            },
+            drawing_plane_grid_strong_color: APIIVec3 {
+                x: 90,
+                y: 90,
+                z: 130,
+            },
         },
         layout_preferences: LayoutPreferences {
             layout_algorithm: LayoutAlgorithmPreference::TopologicalGrid,
@@ -247,29 +335,85 @@ fn test_non_default_values_roundtrip() {
 
     // Roundtrip
     let json = serde_json::to_string(&prefs).expect("Failed to serialize");
-    let loaded: StructureDesignerPreferences = serde_json::from_str(&json).expect("Failed to deserialize");
+    let loaded: StructureDesignerPreferences =
+        serde_json::from_str(&json).expect("Failed to deserialize");
 
     // Verify all non-default values are preserved
-    assert_eq!(loaded.geometry_visualization_preferences.geometry_visualization, GeometryVisualization::SurfaceSplatting);
+    assert_eq!(
+        loaded
+            .geometry_visualization_preferences
+            .geometry_visualization,
+        GeometryVisualization::SurfaceSplatting
+    );
     assert!(loaded.geometry_visualization_preferences.wireframe_geometry);
-    assert_eq!(loaded.geometry_visualization_preferences.samples_per_unit_cell, 3);
-    assert_eq!(loaded.geometry_visualization_preferences.sharpness_angle_threshold_degree, 45.0);
-    assert_eq!(loaded.geometry_visualization_preferences.mesh_smoothing, MeshSmoothing::Sharp);
-    assert!(loaded.geometry_visualization_preferences.display_camera_target);
+    assert_eq!(
+        loaded
+            .geometry_visualization_preferences
+            .samples_per_unit_cell,
+        3
+    );
+    assert_eq!(
+        loaded
+            .geometry_visualization_preferences
+            .sharpness_angle_threshold_degree,
+        45.0
+    );
+    assert_eq!(
+        loaded.geometry_visualization_preferences.mesh_smoothing,
+        MeshSmoothing::Sharp
+    );
+    assert!(
+        loaded
+            .geometry_visualization_preferences
+            .display_camera_target
+    );
 
-    assert_eq!(loaded.node_display_preferences.display_policy, NodeDisplayPolicy::PreferFrontier);
+    assert_eq!(
+        loaded.node_display_preferences.display_policy,
+        NodeDisplayPolicy::PreferFrontier
+    );
 
-    assert_eq!(loaded.atomic_structure_visualization_preferences.visualization, AtomicStructureVisualization::SpaceFilling);
-    assert_eq!(loaded.atomic_structure_visualization_preferences.rendering_method, AtomicRenderingMethod::TriangleMesh);
-    assert_eq!(loaded.atomic_structure_visualization_preferences.ball_and_stick_cull_depth, Some(10.0));
-    assert_eq!(loaded.atomic_structure_visualization_preferences.space_filling_cull_depth, None);
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .visualization,
+        AtomicStructureVisualization::SpaceFilling
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .rendering_method,
+        AtomicRenderingMethod::TriangleMesh
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .ball_and_stick_cull_depth,
+        Some(10.0)
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .space_filling_cull_depth,
+        None
+    );
 
-    assert_eq!(loaded.background_preferences.background_color, APIIVec3 { x: 255, y: 128, z: 64 });
+    assert_eq!(
+        loaded.background_preferences.background_color,
+        APIIVec3 {
+            x: 255,
+            y: 128,
+            z: 64
+        }
+    );
     assert!(!loaded.background_preferences.show_grid);
     assert_eq!(loaded.background_preferences.grid_size, 100);
     assert!(!loaded.background_preferences.show_lattice_axes);
     assert!(loaded.background_preferences.show_lattice_grid);
 
-    assert_eq!(loaded.layout_preferences.layout_algorithm, LayoutAlgorithmPreference::TopologicalGrid);
+    assert_eq!(
+        loaded.layout_preferences.layout_algorithm,
+        LayoutAlgorithmPreference::TopologicalGrid
+    );
     assert!(!loaded.layout_preferences.auto_layout_after_edit);
 }

@@ -3,14 +3,14 @@
 //! These tests verify that layout is correctly applied after network edit
 //! operations, which is the Phase 2 integration of the layout module.
 
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::layout::{layout_network, LayoutAlgorithm};
+use rust_lib_flutter_cad::structure_designer::layout::{LayoutAlgorithm, layout_network};
 use rust_lib_flutter_cad::structure_designer::node_layout;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
 use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::text_format::edit_network;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 
 fn create_test_registry() -> NodeTypeRegistry {
     NodeTypeRegistry::new()
@@ -25,7 +25,9 @@ fn create_test_network() -> NodeNetwork {
         parameters: vec![],
         output_type: DataType::Geometry,
         public: true,
-        node_data_creator: || Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
+        node_data_creator: || {
+            Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
+        },
         node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
         node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
     };
@@ -33,11 +35,7 @@ fn create_test_network() -> NodeNetwork {
 }
 
 /// Simulates what ai_edit_network does: edit then layout
-fn edit_and_layout(
-    network: &mut NodeNetwork,
-    registry: &NodeTypeRegistry,
-    code: &str,
-) {
+fn edit_and_layout(network: &mut NodeNetwork, registry: &NodeTypeRegistry, code: &str) {
     // Apply edit
     let result = edit_network(network, registry, code, true);
     assert!(result.success, "Edit should succeed: {:?}", result.errors);
@@ -220,14 +218,8 @@ fn test_diamond_pattern_layout_after_edit() {
     let union_pos = network.nodes.get(&union_id).unwrap().position;
 
     // Verify diamond: r1 at depth 0, spheres at depth 1, union at depth 2
-    assert!(
-        r1_pos.x < sphere1_pos.x,
-        "r1 should be left of sphere1"
-    );
-    assert!(
-        r1_pos.x < sphere2_pos.x,
-        "r1 should be left of sphere2"
-    );
+    assert!(r1_pos.x < sphere1_pos.x, "r1 should be left of sphere1");
+    assert!(r1_pos.x < sphere2_pos.x, "r1 should be left of sphere2");
     assert!(
         sphere1_pos.x < union_pos.x,
         "sphere1 should be left of union"

@@ -1,6 +1,6 @@
 use super::text_value::TextValue;
 use crate::structure_designer::data_type::DataType;
-use glam::{IVec2, IVec3, DVec2, DVec3};
+use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::fmt;
 
 // ============================================================================
@@ -27,7 +27,11 @@ impl ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Parse error at line {}, column {}: {}", self.line, self.column, self.message)
+        write!(
+            f,
+            "Parse error at line {}, column {}: {}",
+            self.line, self.column, self.message
+        )
     }
 }
 
@@ -46,21 +50,21 @@ pub enum Token {
     String(String),
     True,
     False,
-    Equals,         // =
-    Colon,          // :
-    Comma,          // ,
-    LeftBrace,      // {
-    RightBrace,     // }
-    LeftBracket,    // [
-    RightBracket,   // ]
-    LeftParen,      // (
-    RightParen,     // )
-    At,             // @
-    Hash,           // #
-    Output,         // output keyword
-    Delete,         // delete keyword
-    Description,    // description keyword
-    Summary,        // summary keyword
+    Equals,       // =
+    Colon,        // :
+    Comma,        // ,
+    LeftBrace,    // {
+    RightBrace,   // }
+    LeftBracket,  // [
+    RightBracket, // ]
+    LeftParen,    // (
+    RightParen,   // )
+    At,           // @
+    Hash,         // #
+    Output,       // output keyword
+    Delete,       // delete keyword
+    Description,  // description keyword
+    Summary,      // summary keyword
     Newline,
     Eof,
 }
@@ -87,21 +91,13 @@ pub enum Statement {
         properties: Vec<(String, PropertyValue)>,
     },
     /// Output statement: `output node_name`
-    Output {
-        node_name: String,
-    },
+    Output { node_name: String },
     /// Delete statement: `delete node_name`
-    Delete {
-        node_name: String,
-    },
+    Delete { node_name: String },
     /// Description statement: `description "text"` or `description """multi-line"""`
-    Description {
-        text: String,
-    },
+    Description { text: String },
     /// Summary statement: `summary "text"` - short description for CLI listings
-    Summary {
-        text: String,
-    },
+    Summary { text: String },
     /// Comment: `# comment text`
     Comment(String),
 }
@@ -190,7 +186,6 @@ impl Lexer {
         }
     }
 
-
     fn next_token(&mut self) -> Result<TokenInfo, ParseError> {
         self.skip_whitespace_except_newline();
 
@@ -198,78 +193,141 @@ impl Lexer {
         let column = self.column;
 
         match self.peek() {
-            None => Ok(TokenInfo { token: Token::Eof, line, column }),
+            None => Ok(TokenInfo {
+                token: Token::Eof,
+                line,
+                column,
+            }),
 
             Some('\n') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::Newline, line, column })
+                Ok(TokenInfo {
+                    token: Token::Newline,
+                    line,
+                    column,
+                })
             }
 
             Some('#') => {
                 // Comment - read to end of line
                 self.advance(); // consume #
                 let _comment = self.read_comment();
-                Ok(TokenInfo { token: Token::Hash, line, column })
+                Ok(TokenInfo {
+                    token: Token::Hash,
+                    line,
+                    column,
+                })
             }
 
             Some('=') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::Equals, line, column })
+                Ok(TokenInfo {
+                    token: Token::Equals,
+                    line,
+                    column,
+                })
             }
 
             Some(':') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::Colon, line, column })
+                Ok(TokenInfo {
+                    token: Token::Colon,
+                    line,
+                    column,
+                })
             }
 
             Some(',') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::Comma, line, column })
+                Ok(TokenInfo {
+                    token: Token::Comma,
+                    line,
+                    column,
+                })
             }
 
             Some('{') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::LeftBrace, line, column })
+                Ok(TokenInfo {
+                    token: Token::LeftBrace,
+                    line,
+                    column,
+                })
             }
 
             Some('}') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::RightBrace, line, column })
+                Ok(TokenInfo {
+                    token: Token::RightBrace,
+                    line,
+                    column,
+                })
             }
 
             Some('[') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::LeftBracket, line, column })
+                Ok(TokenInfo {
+                    token: Token::LeftBracket,
+                    line,
+                    column,
+                })
             }
 
             Some(']') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::RightBracket, line, column })
+                Ok(TokenInfo {
+                    token: Token::RightBracket,
+                    line,
+                    column,
+                })
             }
 
             Some('(') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::LeftParen, line, column })
+                Ok(TokenInfo {
+                    token: Token::LeftParen,
+                    line,
+                    column,
+                })
             }
 
             Some(')') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::RightParen, line, column })
+                Ok(TokenInfo {
+                    token: Token::RightParen,
+                    line,
+                    column,
+                })
             }
 
             Some('@') => {
                 self.advance();
-                Ok(TokenInfo { token: Token::At, line, column })
+                Ok(TokenInfo {
+                    token: Token::At,
+                    line,
+                    column,
+                })
             }
 
             Some('"') => {
                 let s = self.read_string()?;
-                Ok(TokenInfo { token: Token::String(s), line, column })
+                Ok(TokenInfo {
+                    token: Token::String(s),
+                    line,
+                    column,
+                })
             }
 
-            Some(ch) if ch.is_ascii_digit() || (ch == '-' && self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit())) => {
+            Some(ch)
+                if ch.is_ascii_digit()
+                    || (ch == '-' && self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit())) =>
+            {
                 let num = self.read_number()?;
-                Ok(TokenInfo { token: num, line, column })
+                Ok(TokenInfo {
+                    token: num,
+                    line,
+                    column,
+                })
             }
 
             Some(ch) if ch.is_alphabetic() || ch == '_' => {
@@ -283,10 +341,18 @@ impl Lexer {
                     "summary" => Token::Summary,
                     _ => Token::Identifier(ident),
                 };
-                Ok(TokenInfo { token, line, column })
+                Ok(TokenInfo {
+                    token,
+                    line,
+                    column,
+                })
             }
 
-            Some(ch) => Err(ParseError::new(format!("Unexpected character: '{}'", ch), line, column)),
+            Some(ch) => Err(ParseError::new(
+                format!("Unexpected character: '{}'", ch),
+                line,
+                column,
+            )),
         }
     }
 
@@ -422,18 +488,39 @@ impl Lexer {
                 Some('\\') => {
                     self.advance(); // consume backslash
                     match self.peek() {
-                        Some('n') => { result.push('\n'); self.advance(); }
-                        Some('r') => { result.push('\r'); self.advance(); }
-                        Some('t') => { result.push('\t'); self.advance(); }
-                        Some('\\') => { result.push('\\'); self.advance(); }
-                        Some('"') => { result.push('"'); self.advance(); }
+                        Some('n') => {
+                            result.push('\n');
+                            self.advance();
+                        }
+                        Some('r') => {
+                            result.push('\r');
+                            self.advance();
+                        }
+                        Some('t') => {
+                            result.push('\t');
+                            self.advance();
+                        }
+                        Some('\\') => {
+                            result.push('\\');
+                            self.advance();
+                        }
+                        Some('"') => {
+                            result.push('"');
+                            self.advance();
+                        }
                         Some(ch) => {
                             return Err(ParseError::new(
                                 format!("Invalid escape sequence: \\{}", ch),
-                                self.line, self.column));
+                                self.line,
+                                self.column,
+                            ));
                         }
                         None => {
-                            return Err(ParseError::new("Unexpected end of input in escape sequence", self.line, self.column));
+                            return Err(ParseError::new(
+                                "Unexpected end of input in escape sequence",
+                                self.line,
+                                self.column,
+                            ));
                         }
                     }
                 }
@@ -455,7 +542,11 @@ impl Lexer {
         loop {
             match self.peek() {
                 None => {
-                    return Err(ParseError::new("Unterminated triple-quoted string", line, column));
+                    return Err(ParseError::new(
+                        "Unterminated triple-quoted string",
+                        line,
+                        column,
+                    ));
                 }
                 Some('"') if self.peek_ahead(1) == Some('"') && self.peek_ahead(2) == Some('"') => {
                     self.advance(); // consume first quote
@@ -497,13 +588,15 @@ impl Parser {
     }
 
     fn peek(&self) -> &Token {
-        self.tokens.get(self.pos)
+        self.tokens
+            .get(self.pos)
             .map(|ti| &ti.token)
             .unwrap_or(&Token::Eof)
     }
 
     fn current_position(&self) -> (usize, usize) {
-        self.tokens.get(self.pos)
+        self.tokens
+            .get(self.pos)
             .map(|ti| (ti.line, ti.column))
             .unwrap_or((0, 0))
     }
@@ -522,7 +615,9 @@ impl Parser {
         } else {
             Err(ParseError::new(
                 format!("Expected {:?}, found {:?}", expected, self.peek()),
-                line, col))
+                line,
+                col,
+            ))
         }
     }
 
@@ -535,7 +630,9 @@ impl Parser {
             }
             other => Err(ParseError::new(
                 format!("Expected identifier, found {:?}", other),
-                line, col))
+                line,
+                col,
+            )),
         }
     }
 
@@ -579,7 +676,9 @@ impl Parser {
                     let (line, col) = self.current_position();
                     return Err(ParseError::new(
                         format!("Unexpected token: {:?}", other),
-                        line, col));
+                        line,
+                        col,
+                    ));
                 }
             }
         }
@@ -599,7 +698,11 @@ impl Parser {
             vec![]
         };
 
-        Ok(Statement::Assignment { name, node_type, properties })
+        Ok(Statement::Assignment {
+            name,
+            node_type,
+            properties,
+        })
     }
 
     /// Parse an output statement: `output node_name`
@@ -627,7 +730,9 @@ impl Parser {
             }
             other => Err(ParseError::new(
                 format!("Expected string after 'description', found {:?}", other),
-                line, col))
+                line,
+                col,
+            )),
         }
     }
 
@@ -642,7 +747,9 @@ impl Parser {
             }
             other => Err(ParseError::new(
                 format!("Expected string after 'summary', found {:?}", other),
-                line, col))
+                line,
+                col,
+            )),
         }
     }
 
@@ -750,7 +857,9 @@ impl Parser {
                 let (line, col) = self.current_position();
                 Err(ParseError::new(
                     format!("Expected property value, found {:?}", other),
-                    line, col))
+                    line,
+                    col,
+                ))
             }
         }
     }
@@ -783,15 +892,28 @@ impl Parser {
 
         // Determine vector type based on component count and whether floats were used
         match components.len() {
-            2 if all_ints => Ok(TextValue::IVec2(IVec2::new(components[0] as i32, components[1] as i32))),
+            2 if all_ints => Ok(TextValue::IVec2(IVec2::new(
+                components[0] as i32,
+                components[1] as i32,
+            ))),
             2 => Ok(TextValue::Vec2(DVec2::new(components[0], components[1]))),
-            3 if all_ints => Ok(TextValue::IVec3(IVec3::new(components[0] as i32, components[1] as i32, components[2] as i32))),
-            3 => Ok(TextValue::Vec3(DVec3::new(components[0], components[1], components[2]))),
+            3 if all_ints => Ok(TextValue::IVec3(IVec3::new(
+                components[0] as i32,
+                components[1] as i32,
+                components[2] as i32,
+            ))),
+            3 => Ok(TextValue::Vec3(DVec3::new(
+                components[0],
+                components[1],
+                components[2],
+            ))),
             n => {
                 let (line, col) = self.current_position();
                 Err(ParseError::new(
                     format!("Vector must have 2 or 3 components, found {}", n),
-                    line, col))
+                    line,
+                    col,
+                ))
             }
         }
     }
@@ -814,7 +936,9 @@ impl Parser {
             }
             other => Err(ParseError::new(
                 format!("Expected number in vector, found {:?}", other),
-                line, col))
+                line,
+                col,
+            )),
         }
     }
 
@@ -868,9 +992,7 @@ impl Parser {
                 self.bump();
                 Ok(TextValue::String(s))
             }
-            Token::LeftParen => {
-                self.parse_vector_literal()
-            }
+            Token::LeftParen => self.parse_vector_literal(),
             Token::LeftBracket => {
                 self.bump();
                 let mut elements = Vec::new();
@@ -888,9 +1010,7 @@ impl Parser {
                 self.expect(&Token::RightBracket)?;
                 Ok(TextValue::Array(elements))
             }
-            Token::LeftBrace => {
-                self.parse_object_literal()
-            }
+            Token::LeftBrace => self.parse_object_literal(),
             Token::Identifier(name) => {
                 let name = name.clone();
                 self.bump();
@@ -906,7 +1026,9 @@ impl Parser {
                 let (line, col) = self.current_position();
                 Err(ParseError::new(
                     format!("Expected literal value, found {:?}", other),
-                    line, col))
+                    line,
+                    col,
+                ))
             }
         }
     }

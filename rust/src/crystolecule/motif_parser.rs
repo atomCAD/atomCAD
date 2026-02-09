@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use crate::crystolecule::atomic_constants::CHEMICAL_ELEMENTS;
+use crate::crystolecule::motif::{Motif, MotifBond, ParameterElement, Site, SiteSpecifier};
 use glam::f64::DVec3;
 use glam::i32::IVec3;
-use crate::crystolecule::motif::{Motif, ParameterElement, Site, SiteSpecifier, MotifBond};
-use crate::crystolecule::atomic_constants::CHEMICAL_ELEMENTS;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct ParseError {
@@ -12,7 +12,11 @@ pub struct ParseError {
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Parse error at line {}: {}", self.line_number, self.message)
+        write!(
+            f,
+            "Parse error at line {}: {}",
+            self.line_number, self.message
+        )
     }
 }
 
@@ -20,9 +24,7 @@ impl std::error::Error for ParseError {}
 
 /// Tokenizes a line by splitting on whitespace and filtering out empty tokens
 pub fn tokenize_line(line: &str) -> Vec<String> {
-    line.split_whitespace()
-        .map(|s| s.to_string())
-        .collect()
+    line.split_whitespace().map(|s| s.to_string()).collect()
 }
 
 /// Checks if a string is a valid identifier (alphanumeric characters and underscore, can start with number)
@@ -30,7 +32,7 @@ pub fn is_valid_identifier(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    
+
     s.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
@@ -48,9 +50,9 @@ fn cell_char_to_int(c: char) -> i32 {
 /// Parses a site specifier (e.g., "+..1", "2", "-.+site1")
 /// Returns SiteSpecifier with site_index and relative_cell
 pub fn parse_site_specifier(
-    specifier: &str, 
-    line_number: usize, 
-    site_id_to_index: &HashMap<String, usize>
+    specifier: &str,
+    line_number: usize,
+    site_id_to_index: &HashMap<String, usize>,
 ) -> Result<SiteSpecifier, ParseError> {
     if specifier.is_empty() {
         return Err(ParseError {
@@ -62,7 +64,10 @@ pub fn parse_site_specifier(
     // Check if it starts with a 3-character relative cell specifier
     if specifier.len() >= 4 {
         let potential_cell_spec = &specifier[0..3];
-        if potential_cell_spec.chars().all(|c| c == '+' || c == '-' || c == '.') {
+        if potential_cell_spec
+            .chars()
+            .all(|c| c == '+' || c == '-' || c == '.')
+        {
             // Parse the relative cell specifier
             let chars: Vec<char> = potential_cell_spec.chars().collect();
             let relative_cell = IVec3::new(
@@ -70,33 +75,39 @@ pub fn parse_site_specifier(
                 cell_char_to_int(chars[1]), // Y direction
                 cell_char_to_int(chars[2]), // Z direction
             );
-            
+
             let site_id = &specifier[3..];
             if !is_valid_identifier(site_id) {
                 return Err(ParseError {
                     line_number,
-                    message: format!("'{}' is not a valid site ID in site specifier '{}'", site_id, specifier),
+                    message: format!(
+                        "'{}' is not a valid site ID in site specifier '{}'",
+                        site_id, specifier
+                    ),
                 });
             }
-            
+
             // Look up the site index
             let site_index = match site_id_to_index.get(site_id) {
                 Some(&index) => index,
                 None => {
                     return Err(ParseError {
                         line_number,
-                        message: format!("Unknown site ID '{}' in site specifier '{}'", site_id, specifier),
+                        message: format!(
+                            "Unknown site ID '{}' in site specifier '{}'",
+                            site_id, specifier
+                        ),
                     });
                 }
             };
-            
+
             return Ok(SiteSpecifier {
                 site_index,
                 relative_cell,
             });
         }
     }
-    
+
     // No relative cell specifier, just a site ID
     if !is_valid_identifier(specifier) {
         return Err(ParseError {
@@ -104,7 +115,7 @@ pub fn parse_site_specifier(
             message: format!("'{}' is not a valid site ID", specifier),
         });
     }
-    
+
     // Look up the site index
     let site_index = match site_id_to_index.get(specifier) {
         Some(&index) => index,
@@ -115,7 +126,7 @@ pub fn parse_site_specifier(
             });
         }
     };
-    
+
     Ok(SiteSpecifier {
         site_index,
         relative_cell: IVec3::ZERO,
@@ -124,7 +135,10 @@ pub fn parse_site_specifier(
 
 /// Parses a param command line
 /// Format: param PARAMETER_NAME [DEFAULT_ELEMENT]
-pub fn parse_param_command(tokens: &[String], line_number: usize) -> Result<ParameterElement, ParseError> {
+pub fn parse_param_command(
+    tokens: &[String],
+    line_number: usize,
+) -> Result<ParameterElement, ParseError> {
     if tokens.len() < 2 {
         return Err(ParseError {
             line_number,
@@ -140,19 +154,22 @@ pub fn parse_param_command(tokens: &[String], line_number: usize) -> Result<Para
     }
 
     let parameter_name = &tokens[1];
-    
+
     // Validate parameter name is a valid identifier
     if !is_valid_identifier(parameter_name) {
         return Err(ParseError {
             line_number,
-            message: format!("'{}' is not a valid parameter name (must contain only alphanumeric characters and underscores)", parameter_name),
+            message: format!(
+                "'{}' is not a valid parameter name (must contain only alphanumeric characters and underscores)",
+                parameter_name
+            ),
         });
     }
 
     // Get default element (if provided) or use Carbon as default
     let default_atomic_number = if tokens.len() == 3 {
         let element_symbol = &tokens[2];
-        
+
         // Look up the atomic number from the CHEMICAL_ELEMENTS map
         // Note: CHEMICAL_ELEMENTS uses original case (e.g., "Si", "Al"), not uppercase
         match CHEMICAL_ELEMENTS.get(element_symbol) {
@@ -177,22 +194,30 @@ pub fn parse_param_command(tokens: &[String], line_number: usize) -> Result<Para
 
 /// Parses a site command line
 /// Format: site SITE_ID ELEMENT_NAME X Y Z
-pub fn parse_site_command(tokens: &[String], line_number: usize, parameters: &[ParameterElement]) -> Result<(String, Site), ParseError> {
+pub fn parse_site_command(
+    tokens: &[String],
+    line_number: usize,
+    parameters: &[ParameterElement],
+) -> Result<(String, Site), ParseError> {
     if tokens.len() != 6 {
         return Err(ParseError {
             line_number,
-            message: "site command requires exactly 5 arguments: site SITE_ID ELEMENT_NAME X Y Z".to_string(),
+            message: "site command requires exactly 5 arguments: site SITE_ID ELEMENT_NAME X Y Z"
+                .to_string(),
         });
     }
 
     let site_id = &tokens[1];
     let element_name = &tokens[2];
-    
+
     // Validate site ID is a valid identifier
     if !is_valid_identifier(site_id) {
         return Err(ParseError {
             line_number,
-            message: format!("'{}' is not a valid site ID (must contain only alphanumeric characters and underscores)", site_id),
+            message: format!(
+                "'{}' is not a valid site ID (must contain only alphanumeric characters and underscores)",
+                site_id
+            ),
         });
     }
 
@@ -225,7 +250,10 @@ pub fn parse_site_command(tokens: &[String], line_number: usize, parameters: &[P
                 } else {
                     return Err(ParseError {
                         line_number,
-                        message: format!("Unknown element or parameter: '{}' (not found in chemical elements or declared parameters)", element_name),
+                        message: format!(
+                            "Unknown element or parameter: '{}' (not found in chemical elements or declared parameters)",
+                            element_name
+                        ),
                     });
                 }
             }
@@ -233,7 +261,10 @@ pub fn parse_site_command(tokens: &[String], line_number: usize, parameters: &[P
     } else {
         return Err(ParseError {
             line_number,
-            message: format!("'{}' is not a valid element name or parameter element (must contain only alphanumeric characters and underscores)", element_name),
+            message: format!(
+                "'{}' is not a valid element name or parameter element (must contain only alphanumeric characters and underscores)",
+                element_name
+            ),
         });
     };
 
@@ -249,9 +280,9 @@ pub fn parse_site_command(tokens: &[String], line_number: usize, parameters: &[P
 /// Parses a bond command line
 /// Format: bond SITE_SPECIFIER1 SITE_SPECIFIER2 [multiplicity]
 pub fn parse_bond_command(
-    tokens: &[String], 
-    line_number: usize, 
-    site_id_to_index: &HashMap<String, usize>
+    tokens: &[String],
+    line_number: usize,
+    site_id_to_index: &HashMap<String, usize>,
 ) -> Result<MotifBond, ParseError> {
     if tokens.len() < 3 {
         return Err(ParseError {
@@ -286,7 +317,10 @@ pub fn parse_bond_command(
     let multiplicity = if tokens.len() == 4 {
         tokens[3].parse::<i32>().map_err(|_| ParseError {
             line_number,
-            message: format!("Invalid multiplicity: '{}' (must be a positive integer)", tokens[3]),
+            message: format!(
+                "Invalid multiplicity: '{}' (must be a positive integer)",
+                tokens[3]
+            ),
         })?
     } else {
         1
@@ -330,7 +364,7 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
 
         // Tokenize the line
         let tokens = tokenize_line(trimmed_line);
-        
+
         if tokens.is_empty() {
             continue;
         }
@@ -364,14 +398,14 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
     let num_sites = sites.len();
     let mut bonds_by_site1_index: Vec<Vec<usize>> = vec![Vec::new(); num_sites];
     let mut bonds_by_site2_index: Vec<Vec<usize>> = vec![Vec::new(); num_sites];
-    
+
     for (bond_index, bond) in bonds.iter().enumerate() {
         // Store bond index for site_1 (always at relative cell (0,0,0))
         bonds_by_site1_index[bond.site_1.site_index].push(bond_index);
         // Store bond index for site_2 (may have relative cell offset)
         bonds_by_site2_index[bond.site_2.site_index].push(bond_index);
     }
-    
+
     Ok(Motif {
         parameters,
         sites,
@@ -387,42 +421,46 @@ pub fn parse_motif(motif_text: &str) -> Result<Motif, ParseError> {
 /// PRIMARY C
 /// SECONDARY Si
 /// # This is a comment
-/// 
+///
 /// Returns HashMap<String, i16> mapping parameter names to atomic numbers
 pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i16>, ParseError> {
     let mut parameter_values = HashMap::new();
-    
+
     for (line_number, line) in text.lines().enumerate() {
         let line_number = line_number + 1; // 1-indexed for user-friendly error messages
         let line = line.trim();
-        
+
         // Skip empty lines and comments
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        
+
         // Split line into tokens
         let tokens: Vec<String> = line.split_whitespace().map(|s| s.to_string()).collect();
-        
+
         // Validate token count
         if tokens.len() != 2 {
             return Err(ParseError {
                 line_number,
-                message: format!("Expected format: PARAMETER_NAME ELEMENT_NAME, got {} tokens", tokens.len()),
+                message: format!(
+                    "Expected format: PARAMETER_NAME ELEMENT_NAME, got {} tokens",
+                    tokens.len()
+                ),
             });
         }
-        
+
         let parameter_name = &tokens[0];
         let element_name = &tokens[1];
-        
+
         // Look up atomic number for the element
-        let atomic_number = CHEMICAL_ELEMENTS.get(element_name)
+        let atomic_number = CHEMICAL_ELEMENTS
+            .get(element_name)
             .copied()
             .ok_or_else(|| ParseError {
                 line_number,
                 message: format!("Unknown chemical element: '{}'", element_name),
             })? as i16;
-        
+
         // Check for duplicate parameter names
         if parameter_values.contains_key(parameter_name) {
             return Err(ParseError {
@@ -430,11 +468,10 @@ pub fn parse_parameter_element_values(text: &str) -> Result<HashMap<String, i16>
                 message: format!("Duplicate parameter name: '{}'", parameter_name),
             });
         }
-        
+
         // Store the parameter assignment
         parameter_values.insert(parameter_name.clone(), atomic_number);
     }
-    
+
     Ok(parameter_values)
 }
-

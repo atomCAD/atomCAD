@@ -21,15 +21,15 @@
 //! output union1
 //! ```
 
-use std::collections::HashMap;
 use serde::Serialize;
+use std::collections::HashMap;
 
-use crate::structure_designer::node_network::{NodeNetwork, Argument};
+use crate::structure_designer::node_network::{Argument, NodeNetwork};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::structure_designer::text_format::{Parser, Statement, PropertyValue};
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::text_format::auto_layout;
+use crate::structure_designer::text_format::{Parser, PropertyValue, Statement};
 
 /// Result of an edit operation.
 #[derive(Debug, Clone, Serialize)]
@@ -170,7 +170,8 @@ impl<'a> NetworkEditor<'a> {
         }
 
         // Ensure custom node types are updated for any nodes that need them
-        self.registry.initialize_custom_node_types_for_network(self.network);
+        self.registry
+            .initialize_custom_node_types_for_network(self.network);
 
         self.result
     }
@@ -216,15 +217,13 @@ impl<'a> NetworkEditor<'a> {
     /// Process a statement in the first pass (create/update nodes, collect connections).
     fn process_statement_first_pass(&mut self, stmt: &Statement) -> Result<(), String> {
         match stmt {
-            Statement::Assignment { name, node_type, properties } => {
-                self.process_assignment(name, node_type, properties)
-            }
-            Statement::Description { text } => {
-                self.process_description(text)
-            }
-            Statement::Summary { text } => {
-                self.process_summary(text)
-            }
+            Statement::Assignment {
+                name,
+                node_type,
+                properties,
+            } => self.process_assignment(name, node_type, properties),
+            Statement::Description { text } => self.process_description(text),
+            Statement::Summary { text } => self.process_summary(text),
             Statement::Comment(_) => Ok(()), // Skip comments
             Statement::Output { .. } | Statement::Delete { .. } => Ok(()), // Handled in second pass
         }
@@ -270,7 +269,9 @@ impl<'a> NetworkEditor<'a> {
         properties: &[(String, PropertyValue)],
     ) -> Result<u64, String> {
         // Look up node type
-        let node_type = self.registry.get_node_type(node_type_name)
+        let node_type = self
+            .registry
+            .get_node_type(node_type_name)
             .ok_or_else(|| format!("Unknown node type: '{}'", node_type_name))?;
 
         // Create node data using the factory
@@ -290,7 +291,9 @@ impl<'a> NetworkEditor<'a> {
 
         // Add node to network
         let num_params = node_type.parameters.len();
-        let node_id = self.network.add_node(node_type_name, position, num_params, node_data);
+        let node_id = self
+            .network
+            .add_node(node_type_name, position, num_params, node_data);
 
         // Assign param_id for parameter nodes (for wire preservation across renames)
         if node_type_name == "parameter" {
@@ -418,16 +421,14 @@ impl<'a> NetworkEditor<'a> {
             .nodes
             .get(&node_id)
             .and_then(|node| {
-                self.registry
-                    .get_node_type_for_node(node)
-                    .map(|node_type| {
-                        let params = node_type
-                            .parameters
-                            .iter()
-                            .map(|p| p.name.clone())
-                            .collect();
-                        (params, node.node_type_name.clone())
-                    })
+                self.registry.get_node_type_for_node(node).map(|node_type| {
+                    let params = node_type
+                        .parameters
+                        .iter()
+                        .map(|p| p.name.clone())
+                        .collect();
+                    (params, node.node_type_name.clone())
+                })
             })
             .unwrap_or_else(|| (Vec::new(), String::new()));
 
@@ -493,7 +494,8 @@ impl<'a> NetworkEditor<'a> {
         // Apply to node data
         if !literal_props.is_empty() {
             if let Some(node) = self.network.nodes.get_mut(&node_id) {
-                node.data.set_text_properties(&literal_props)
+                node.data
+                    .set_text_properties(&literal_props)
                     .map_err(|e| format!("Error setting properties: {}", e))?;
             }
         }
@@ -535,11 +537,10 @@ impl<'a> NetworkEditor<'a> {
         match prop_value {
             PropertyValue::NodeRef(name) => vec![(name.clone(), false)],
             PropertyValue::FunctionRef(name) => vec![(name.clone(), true)],
-            PropertyValue::Array(items) => {
-                items.iter()
-                    .flat_map(|item| self.extract_source_refs(item))
-                    .collect()
-            }
+            PropertyValue::Array(items) => items
+                .iter()
+                .flat_map(|item| self.extract_source_refs(item))
+                .collect(),
             PropertyValue::Literal(_) => vec![],
         }
     }
@@ -561,15 +562,21 @@ impl<'a> NetworkEditor<'a> {
     /// Wire a single connection.
     fn wire_connection(&mut self, conn: &PendingConnection) -> Result<(), String> {
         // Resolve destination node
-        let dest_node_id = *self.name_to_id.get(&conn.dest_node_name)
+        let dest_node_id = *self
+            .name_to_id
+            .get(&conn.dest_node_name)
             .ok_or_else(|| format!("Destination node '{}' not found", conn.dest_node_name))?;
 
         // Get destination node's parameter index
         let (param_index, is_multi) = self.get_param_index(dest_node_id, &conn.param_name)?;
 
         // Get destination node for modification
-        let dest_node = self.network.nodes.get_mut(&dest_node_id)
-            .ok_or_else(|| format!("Destination node '{}' not found in network", conn.dest_node_name))?;
+        let dest_node = self.network.nodes.get_mut(&dest_node_id).ok_or_else(|| {
+            format!(
+                "Destination node '{}' not found in network",
+                conn.dest_node_name
+            )
+        })?;
 
         // Ensure arguments vector is large enough
         while dest_node.arguments.len() <= param_index {
@@ -578,12 +585,16 @@ impl<'a> NetworkEditor<'a> {
 
         // Clear existing connections for this parameter if it's not multi
         if !is_multi {
-            dest_node.arguments[param_index].argument_output_pins.clear();
+            dest_node.arguments[param_index]
+                .argument_output_pins
+                .clear();
         }
 
         // Wire each source
         for (source_name, is_function_ref) in &conn.source_refs {
-            let source_node_id = *self.name_to_id.get(source_name)
+            let source_node_id = *self
+                .name_to_id
+                .get(source_name)
                 .ok_or_else(|| format!("Source node '{}' not found", source_name))?;
 
             // Determine output pin index (-1 for function pin, 0 for regular)
@@ -610,10 +621,15 @@ impl<'a> NetworkEditor<'a> {
     /// Get the parameter index for a parameter name.
     /// Returns (index, is_multi) where is_multi is true if the parameter accepts multiple inputs.
     fn get_param_index(&self, node_id: u64, param_name: &str) -> Result<(usize, bool), String> {
-        let node = self.network.nodes.get(&node_id)
+        let node = self
+            .network
+            .nodes
+            .get(&node_id)
             .ok_or_else(|| "Node not found".to_string())?;
 
-        let node_type = self.registry.get_node_type_for_node(node)
+        let node_type = self
+            .registry
+            .get_node_type_for_node(node)
             .ok_or_else(|| format!("Node type '{}' not found", node.node_type_name))?;
 
         for (index, param) in node_type.parameters.iter().enumerate() {
@@ -624,7 +640,10 @@ impl<'a> NetworkEditor<'a> {
             }
         }
 
-        Err(format!("Parameter '{}' not found on node type '{}'", param_name, node.node_type_name))
+        Err(format!(
+            "Parameter '{}' not found on node type '{}'",
+            param_name, node.node_type_name
+        ))
     }
 
     /// Apply visibility settings to nodes.
@@ -640,7 +659,9 @@ impl<'a> NetworkEditor<'a> {
 
     /// Process a delete statement.
     fn process_delete(&mut self, node_name: &str) -> Result<(), String> {
-        let node_id = *self.name_to_id.get(node_name)
+        let node_id = *self
+            .name_to_id
+            .get(node_name)
             .ok_or_else(|| format!("Cannot delete '{}': node not found", node_name))?;
 
         // Remove all wires connected to this node (both incoming and outgoing)
@@ -679,7 +700,9 @@ impl<'a> NetworkEditor<'a> {
 
     /// Process an output statement.
     fn process_output(&mut self, node_name: &str) -> Result<(), String> {
-        let node_id = *self.name_to_id.get(node_name)
+        let node_id = *self
+            .name_to_id
+            .get(node_name)
             .ok_or_else(|| format!("Cannot set output to '{}': node not found", node_name))?;
 
         self.network.set_return_node(node_id);

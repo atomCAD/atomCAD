@@ -24,18 +24,13 @@
 //! ```
 
 use crate::api::api_common::{
-    refresh_structure_designer_auto,
-    with_cad_instance_or,
-    with_mut_cad_instance_or,
-};
-use crate::structure_designer::text_format::{
-    serialize_network,
-    edit_network as text_edit_network,
-    EditResult,
-    describe_node_type,
-    get_display_summary,
+    refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance_or,
 };
 use crate::structure_designer::layout;
+use crate::structure_designer::text_format::{
+    EditResult, describe_node_type, edit_network as text_edit_network, get_display_summary,
+    serialize_network,
+};
 
 // =============================================================================
 // FFI Functions (exposed to Flutter via flutter_rust_bridge)
@@ -71,15 +66,23 @@ pub fn ai_query_network() -> String {
                 };
 
                 // Get the network from the registry
-                let network = match structure_designer.node_type_registry.node_networks.get(network_name) {
+                let network = match structure_designer
+                    .node_type_registry
+                    .node_networks
+                    .get(network_name)
+                {
                     Some(network) => network,
                     None => return format!("# Network '{}' not found\n", network_name),
                 };
 
                 // Serialize the network with its name
-                serialize_network(network, &structure_designer.node_type_registry, Some(network_name))
+                serialize_network(
+                    network,
+                    &structure_designer.node_type_registry,
+                    Some(network_name),
+                )
             },
-            "# Error: Could not access structure designer\n".to_string()
+            "# Error: Could not access structure designer\n".to_string(),
         )
     }
 }
@@ -131,7 +134,10 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                             output_set: None,
                             errors: vec!["No active node network".to_string()],
                             warnings: vec![],
-                        }).unwrap_or_else(|_| r#"{"success":false,"errors":["No active node network"]}"#.to_string());
+                        })
+                        .unwrap_or_else(|_| {
+                            r#"{"success":false,"errors":["No active node network"]}"#.to_string()
+                        });
                     }
                 };
 
@@ -140,7 +146,11 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 // - &mut NodeNetwork (the network we're editing)
                 // - &NodeTypeRegistry (for looking up node types)
                 // And the network lives inside the registry's node_networks HashMap.
-                let mut network = match structure_designer.node_type_registry.node_networks.remove(&network_name) {
+                let mut network = match structure_designer
+                    .node_type_registry
+                    .node_networks
+                    .remove(&network_name)
+                {
                     Some(network) => network,
                     None => {
                         return serde_json::to_string(&EditResult {
@@ -154,15 +164,26 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                             output_set: None,
                             errors: vec![format!("Network '{}' not found", network_name)],
                             warnings: vec![],
-                        }).unwrap_or_else(|_| r#"{"success":false,"errors":["Network not found"]}"#.to_string());
+                        })
+                        .unwrap_or_else(|_| {
+                            r#"{"success":false,"errors":["Network not found"]}"#.to_string()
+                        });
                     }
                 };
 
                 // Apply the edit commands
-                let result = text_edit_network(&mut network, &structure_designer.node_type_registry, &code, replace);
+                let result = text_edit_network(
+                    &mut network,
+                    &structure_designer.node_type_registry,
+                    &code,
+                    replace,
+                );
 
                 // Put the network back into the registry
-                structure_designer.node_type_registry.node_networks.insert(network_name.clone(), network);
+                structure_designer
+                    .node_type_registry
+                    .node_networks
+                    .insert(network_name.clone(), network);
 
                 // Validate the edited network to update output_type and repair arguments
                 // This is necessary because text_edit_network doesn't update network.node_type.output_type
@@ -170,9 +191,11 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 // Without this, custom nodes using this network won't render correctly.
                 {
                     use crate::structure_designer::network_validator::validate_network;
-                    let registry_ptr = &mut structure_designer.node_type_registry as *mut crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                    let registry_ptr = &mut structure_designer.node_type_registry
+                        as *mut crate::structure_designer::node_type_registry::NodeTypeRegistry;
                     unsafe {
-                        if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name) {
+                        if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name)
+                        {
                             validate_network(network, &mut *registry_ptr, None);
                         }
                     }
@@ -180,11 +203,25 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
 
                 // Apply auto-layout if enabled in preferences and edit was successful
                 // This recomputes the entire network layout using the user's preferred algorithm.
-                if result.success && structure_designer.preferences.layout_preferences.auto_layout_after_edit {
-                    let algorithm = structure_designer.preferences.layout_preferences.layout_algorithm.into();
-                    let registry_ptr = &structure_designer.node_type_registry as *const crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                if result.success
+                    && structure_designer
+                        .preferences
+                        .layout_preferences
+                        .auto_layout_after_edit
+                {
+                    let algorithm = structure_designer
+                        .preferences
+                        .layout_preferences
+                        .layout_algorithm
+                        .into();
+                    let registry_ptr = &structure_designer.node_type_registry
+                        as *const crate::structure_designer::node_type_registry::NodeTypeRegistry;
                     unsafe {
-                        if let Some(network) = structure_designer.node_type_registry.node_networks.get_mut(&network_name) {
+                        if let Some(network) = structure_designer
+                            .node_type_registry
+                            .node_networks
+                            .get_mut(&network_name)
+                        {
                             layout::layout_network(network, &*registry_ptr, algorithm);
                         }
                     }
@@ -196,15 +233,15 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
 
                 // Set dirty flag if any modifications were made
                 // (text_edit_network bypasses normal edit methods that set dirty)
-                if result.success && (
-                    !result.nodes_created.is_empty() ||
-                    !result.nodes_updated.is_empty() ||
-                    !result.nodes_deleted.is_empty() ||
-                    !result.connections_made.is_empty() ||
-                    result.description_set.is_some() ||
-                    result.summary_set.is_some() ||
-                    result.output_set.is_some()
-                ) {
+                if result.success
+                    && (!result.nodes_created.is_empty()
+                        || !result.nodes_updated.is_empty()
+                        || !result.nodes_deleted.is_empty()
+                        || !result.connections_made.is_empty()
+                        || result.description_set.is_some()
+                        || result.summary_set.is_some()
+                        || result.output_set.is_some())
+                {
                     cad_instance.structure_designer.set_dirty(true);
                 }
 
@@ -213,10 +250,13 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
 
                 // Return the result as JSON
                 serde_json::to_string(&result).unwrap_or_else(|e| {
-                    format!(r#"{{"success":false,"errors":["Failed to serialize result: {}"]}}"#, e)
+                    format!(
+                        r#"{{"success":false,"errors":["Failed to serialize result: {}"]}}"#,
+                        e
+                    )
                 })
             },
-            r#"{"success":false,"errors":["Could not access structure designer"]}"#.to_string()
+            r#"{"success":false,"errors":["Could not access structure designer"]}"#.to_string(),
         )
     }
 }
@@ -233,9 +273,12 @@ pub fn ai_list_networks() -> Vec<String> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                cad_instance.structure_designer.node_type_registry.get_node_network_names()
+                cad_instance
+                    .structure_designer
+                    .node_type_registry
+                    .get_node_network_names()
             },
-            vec![]
+            vec![],
         )
     }
 }
@@ -252,7 +295,10 @@ pub fn ai_get_active_network_info() -> Option<(String, usize, bool)> {
             |cad_instance| {
                 let structure_designer = &cad_instance.structure_designer;
                 let network_name = structure_designer.active_node_network_name.as_ref()?;
-                let network = structure_designer.node_type_registry.node_networks.get(network_name)?;
+                let network = structure_designer
+                    .node_type_registry
+                    .node_networks
+                    .get(network_name)?;
 
                 Some((
                     network_name.clone(),
@@ -260,7 +306,7 @@ pub fn ai_get_active_network_info() -> Option<(String, usize, bool)> {
                     network.return_node_id.is_some(),
                 ))
             },
-            None
+            None,
         )
     }
 }
@@ -372,7 +418,8 @@ fn format_node_type_list(
                 .unwrap_or(0);
 
             for node in &category_view.nodes {
-                let display_summary = get_display_summary(node.summary.as_deref(), &node.description);
+                let display_summary =
+                    get_display_summary(node.summary.as_deref(), &node.description);
                 writeln!(
                     output,
                     "  {:width$} - {}",
@@ -384,7 +431,11 @@ fn format_node_type_list(
             }
         } else {
             // Compact mode: comma-separated names
-            let names: Vec<&str> = category_view.nodes.iter().map(|n| n.name.as_str()).collect();
+            let names: Vec<&str> = category_view
+                .nodes
+                .iter()
+                .map(|n| n.name.as_str())
+                .collect();
             writeln!(output, "  {}", names.join(", ")).unwrap();
         }
 

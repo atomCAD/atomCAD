@@ -180,6 +180,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIStringData dco_decode_api_string_data(dynamic raw);
 
   @protected
+  APITextEditResult dco_decode_api_text_edit_result(dynamic raw);
+
+  @protected
+  APITextError dco_decode_api_text_error(dynamic raw);
+
+  @protected
   APITransform dco_decode_api_transform(dynamic raw);
 
   @protected
@@ -467,6 +473,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
       dynamic raw);
+
+  @protected
+  List<APITextError> dco_decode_list_api_text_error(dynamic raw);
 
   @protected
   List<ElementSummary> dco_decode_list_element_summary(dynamic raw);
@@ -897,6 +906,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIStringData sse_decode_api_string_data(SseDeserializer deserializer);
 
   @protected
+  APITextEditResult sse_decode_api_text_edit_result(
+      SseDeserializer deserializer);
+
+  @protected
+  APITextError sse_decode_api_text_error(SseDeserializer deserializer);
+
+  @protected
   APITransform sse_decode_api_transform(SseDeserializer deserializer);
 
   @protected
@@ -1235,6 +1251,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRotationalSymmetry> sse_decode_list_api_rotational_symmetry(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APITextError> sse_decode_list_api_text_error(
       SseDeserializer deserializer);
 
   @protected
@@ -1735,6 +1755,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_string_data(APIStringData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_text_edit_result(
+      APITextEditResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_text_error(APITextError self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_transform(APITransform self, SseSerializer serializer);
 
   @protected
@@ -2080,6 +2107,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_rotational_symmetry(
       List<APIRotationalSymmetry> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_text_error(
+      List<APITextError> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_element_summary(

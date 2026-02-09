@@ -1,44 +1,29 @@
 #![allow(clippy::module_inception)]
 
-pub mod structure_designer;
-pub mod preferences;
-pub mod structure_designer_changes;
+pub mod camera_settings;
+pub mod cli_runner;
 pub mod common_constants;
 pub mod data_type;
-pub mod node_type;
-pub mod node_network;
-pub mod camera_settings;
+pub mod evaluator;
+pub mod implicit_eval;
+pub mod layout;
+pub mod navigation_history;
+pub mod network_validator;
+pub mod node_data;
 pub mod node_dependency_analysis;
-pub mod selection_factoring;
+pub mod node_display_policy_resolver;
+pub mod node_layout;
+pub mod node_network;
+pub mod node_network_gadget;
+pub mod node_networks_import_manager;
+pub mod node_type;
 pub mod node_type_registry;
 pub mod nodes;
-pub mod node_data;
-pub mod node_layout;
-pub mod evaluator;
-pub mod node_network_gadget;
-pub mod structure_designer_scene;
+pub mod preferences;
+pub mod selection_factoring;
 pub mod serialization;
-pub mod node_display_policy_resolver;
-pub mod utils;
-pub mod network_validator;
-pub mod implicit_eval;
-pub mod node_networks_import_manager;
-pub mod cli_runner;
-pub mod navigation_history;
+pub mod structure_designer;
+pub mod structure_designer_changes;
+pub mod structure_designer_scene;
 pub mod text_format;
-pub mod layout;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+pub mod utils;

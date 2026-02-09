@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_resizable_container/flutter_resizable_container.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart';
-import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/network_editor_tabs.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
@@ -51,9 +51,12 @@ class MainContentArea extends StatelessWidget {
     );
   }
 
-  /// Builds the NodeNetwork widget with the global key
+  /// Builds the NetworkEditorTabs widget (Graph/Text tabs) with the global key
   Widget _buildNodeNetwork() {
-    return NodeNetwork(key: nodeNetworkKey, graphModel: graphModel);
+    return NetworkEditorTabs(
+      graphModel: graphModel,
+      nodeNetworkKey: nodeNetworkKey,
+    );
   }
 
   /// Builds the network panel for vertical layout (side-by-side network and data)

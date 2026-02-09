@@ -1,10 +1,10 @@
-use glam::{IVec2, IVec3, DVec2, DVec3};
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::ser::SerializeMap;
-use serde::de::{MapAccess, Visitor};
-use std::fmt;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use glam::{DVec2, DVec3, IVec2, IVec3};
+use serde::de::{MapAccess, Visitor};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
 
 /// Represents a value in the node network text format.
 /// Used for both serialization (query) and deserialization (edit).
@@ -105,7 +105,9 @@ impl<'de> Deserialize<'de> for TextValue {
                     match key.as_str() {
                         "type" => type_str = Some(map.next_value()?),
                         "value" => value = Some(map.next_value()?),
-                        _ => { let _ = map.next_value::<serde_json::Value>()?; }
+                        _ => {
+                            let _ = map.next_value::<serde_json::Value>()?;
+                        }
                     }
                 }
 
@@ -130,19 +132,23 @@ impl<'de> Deserialize<'de> for TextValue {
                         Ok(TextValue::String(v))
                     }
                     "IVec2" => {
-                        let arr: [i32; 2] = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                        let arr: [i32; 2] =
+                            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::IVec2(IVec2::new(arr[0], arr[1])))
                     }
                     "IVec3" => {
-                        let arr: [i32; 3] = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                        let arr: [i32; 3] =
+                            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::IVec3(IVec3::new(arr[0], arr[1], arr[2])))
                     }
                     "Vec2" => {
-                        let arr: [f64; 2] = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                        let arr: [f64; 2] =
+                            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::Vec2(DVec2::new(arr[0], arr[1])))
                     }
                     "Vec3" => {
-                        let arr: [f64; 3] = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                        let arr: [f64; 3] =
+                            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::Vec3(DVec3::new(arr[0], arr[1], arr[2])))
                     }
                     "DataType" => {
@@ -157,7 +163,13 @@ impl<'de> Deserialize<'de> for TextValue {
                         let v = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::Object(v))
                     }
-                    _ => Err(serde::de::Error::unknown_variant(&type_str, &["Bool", "Int", "Float", "String", "IVec2", "IVec3", "Vec2", "Vec3", "DataType", "Array", "Object"]))
+                    _ => Err(serde::de::Error::unknown_variant(
+                        &type_str,
+                        &[
+                            "Bool", "Int", "Float", "String", "IVec2", "IVec3", "Vec2", "Vec3",
+                            "DataType", "Array", "Object",
+                        ],
+                    )),
                 }
             }
         }
@@ -325,7 +337,10 @@ impl TextValue {
 
     /// Returns true if this is a vector type
     pub fn is_vector(&self) -> bool {
-        matches!(self, TextValue::IVec2(_) | TextValue::IVec3(_) | TextValue::Vec2(_) | TextValue::Vec3(_))
+        matches!(
+            self,
+            TextValue::IVec2(_) | TextValue::IVec3(_) | TextValue::Vec2(_) | TextValue::Vec3(_)
+        )
     }
 
     /// Returns the expected DataType for this TextValue
@@ -370,11 +385,19 @@ impl TextValue {
             // Type coercion: float to int (truncate)
             (TextValue::Float(f), DataType::Int) => Some(NetworkResult::Int(*f as i32)),
             // Type coercion: IVec to Vec
-            (TextValue::IVec2(v), DataType::Vec2) => Some(NetworkResult::Vec2(DVec2::new(v.x as f64, v.y as f64))),
-            (TextValue::IVec3(v), DataType::Vec3) => Some(NetworkResult::Vec3(DVec3::new(v.x as f64, v.y as f64, v.z as f64))),
+            (TextValue::IVec2(v), DataType::Vec2) => {
+                Some(NetworkResult::Vec2(DVec2::new(v.x as f64, v.y as f64)))
+            }
+            (TextValue::IVec3(v), DataType::Vec3) => Some(NetworkResult::Vec3(DVec3::new(
+                v.x as f64, v.y as f64, v.z as f64,
+            ))),
             // Type coercion: Vec to IVec (truncate)
-            (TextValue::Vec2(v), DataType::IVec2) => Some(NetworkResult::IVec2(IVec2::new(v.x as i32, v.y as i32))),
-            (TextValue::Vec3(v), DataType::IVec3) => Some(NetworkResult::IVec3(IVec3::new(v.x as i32, v.y as i32, v.z as i32))),
+            (TextValue::Vec2(v), DataType::IVec2) => {
+                Some(NetworkResult::IVec2(IVec2::new(v.x as i32, v.y as i32)))
+            }
+            (TextValue::Vec3(v), DataType::IVec3) => Some(NetworkResult::IVec3(IVec3::new(
+                v.x as i32, v.y as i32, v.z as i32,
+            ))),
             _ => None,
         }
     }

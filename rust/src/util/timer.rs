@@ -20,19 +20,3 @@ impl Drop for Timer {
         println!("{} took {:.3?}", self.action, elapsed);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

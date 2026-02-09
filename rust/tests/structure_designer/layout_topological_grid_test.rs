@@ -9,8 +9,8 @@
 use glam::DVec2;
 
 use rust_lib_flutter_cad::structure_designer::layout::common::{
-    compute_node_depths, find_sink_nodes, find_source_nodes, get_input_node_ids,
-    get_output_node_ids, LayoutAlgorithm,
+    LayoutAlgorithm, compute_node_depths, find_sink_nodes, find_source_nodes, get_input_node_ids,
+    get_output_node_ids,
 };
 use rust_lib_flutter_cad::structure_designer::layout::compute_layout;
 use rust_lib_flutter_cad::structure_designer::node_layout;
@@ -462,8 +462,14 @@ fn test_no_node_overlap() {
             let (id1, pos1) = position_vec[i];
             let (id2, pos2) = position_vec[j];
 
-            let size1 = node_sizes.get(&id1).copied().unwrap_or(DVec2::new(160.0, 83.0));
-            let size2 = node_sizes.get(&id2).copied().unwrap_or(DVec2::new(160.0, 83.0));
+            let size1 = node_sizes
+                .get(&id1)
+                .copied()
+                .unwrap_or(DVec2::new(160.0, 83.0));
+            let size2 = node_sizes
+                .get(&id2)
+                .copied()
+                .unwrap_or(DVec2::new(160.0, 83.0));
 
             // Check if boxes overlap (no additional gap required, algorithm handles spacing)
             let overlaps = node_layout::nodes_overlap(pos1, size1, pos2, size2, 0.0);

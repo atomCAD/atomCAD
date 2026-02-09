@@ -11,10 +11,12 @@ use rust_lib_flutter_cad::structure_designer::text_format::serialize_network;
 /// Load a .cnnd file and serialize it to text format.
 fn serialize_cnnd_file(file_path: &str) -> String {
     let mut registry = NodeTypeRegistry::new();
-    let first_network_name = load_node_networks_from_file(&mut registry, file_path)
-        .expect("Failed to load CNND file");
+    let first_network_name =
+        load_node_networks_from_file(&mut registry, file_path).expect("Failed to load CNND file");
 
-    let network = registry.node_networks.get(&first_network_name)
+    let network = registry
+        .node_networks
+        .get(&first_network_name)
         .expect("Network not found");
 
     serialize_network(network, &registry, Some(&first_network_name))
