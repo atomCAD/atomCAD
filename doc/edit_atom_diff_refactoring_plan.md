@@ -32,11 +32,18 @@ pub struct AtomicStructure {
 - `anchor_position(atom_id)` getter, `set_anchor_position(atom_id, pos)` setter, `remove_anchor_position(atom_id)` remover
 - `has_anchor_position(atom_id)` convenience method
 
-### The Delete Site Marker
+### Delete Markers
 
+**Atom delete marker:**
 - A constant `pub const DELETED_SITE_ATOMIC_NUMBER: i16 = 0;` on `AtomicStructure` or at module level.
 - `Atom::is_delete_marker(&self) -> bool` helper method.
-- In diff visualization mode, render delete markers with a distinct appearance (e.g., red translucent sphere with X overlay, or a specific "void" glyph).
+- In diff visualization mode, render atom delete markers as red solid spheres.
+
+**Bond delete marker:**
+- A constant `pub const BOND_DELETED: u8 = 0;` alongside existing bond order constants (`BOND_SINGLE=1` through `BOND_METALLIC=7`). Bond order 0 is currently unused and semantically means "no bond."
+- `InlineBond::is_delete_marker(&self) -> bool` helper (returns `self.bond_order() == BOND_DELETED`).
+- A bond with order 0 in the diff means "explicitly delete this base bond." This parallels `atomic_number = 0` for atom deletion.
+- Bond delete markers are only meaningful in diff structures (`is_diff = true`). Non-diff structures should never contain them.
 
 ### Diff Application Algorithm
 
@@ -88,12 +95,23 @@ The provenance is a zero-cost byproduct of the matching that `apply_diff()` alre
    - **No match + normal atom:** The atom is added to the result (new atom insertion).
    - **No match + delete marker:** Ignored (trying to delete something that doesn't exist).
 
-3. **Bond resolution:** For any pair of atoms where **both** were matched or added by the diff, bonds between them are defined entirely by the diff. For pairs where at least one atom was NOT involved in the diff, bonds come from the base structure unchanged. This means:
-   - A moved atom retains its base bonds to non-diff neighbors automatically.
-   - New bonds between diff atoms are defined in the diff.
-   - Bonds between base atoms not mentioned in the diff are untouched.
+3. **Bond resolution:** Base bonds survive by default; the diff can override or explicitly delete them.
 
-4. **Unmatched base atoms:** Pass through to the result with their original properties and bonds (governed by the bond rule above).
+   For each pair of atoms in the result:
+   - **Neither atom from the diff:** Bond comes from the base unchanged.
+   - **Exactly one atom from the diff:** Bond comes from the base unchanged. The diff atom inherits base bonds to non-diff neighbors automatically. This means a moved or replaced atom keeps all its bonds to unmodified neighbors.
+   - **Both atoms from the diff:**
+     - If the diff contains a bond between them with `bond_order > 0`: use the diff's bond (add or override).
+     - If the diff contains a bond between them with `bond_order = 0` (delete marker): no bond in the result (explicit deletion).
+     - If the diff contains no bond between them: use the base bond if one exists (bonds survive by default).
+
+   This design means:
+   - Replacing the element of two bonded atoms preserves their bond automatically — no interaction function bookkeeping needed.
+   - Moving two bonded atoms preserves their bond automatically.
+   - New bonds between diff atoms are added explicitly in the diff.
+   - Bond deletion requires both atoms in the diff and a delete marker bond (`bond_order = 0`) between them.
+
+4. **Unmatched base atoms:** Pass through to the result with their original properties and bonds.
 
 5. **Result:** A `DiffApplicationResult` containing a new `AtomicStructure` with `is_diff = false` (fully resolved) and a `DiffProvenance` mapping every result atom to its origin.
 
@@ -113,8 +131,9 @@ When a user moves an atom from position P_old to P_new:
 
 **Why this is better than delete+add:**
 - A single atom in the diff represents the move (not a delete marker + a separate new atom).
-- Bonds to non-diff neighbors are preserved automatically via the bond rule. No need to include neighbors in the diff.
+- Bonds to non-diff neighbors are preserved automatically (base bonds survive by default). No need to include neighbors in the diff.
 - Example: Moving a carbon in diamond (4 bonds) requires just 1 atom in the diff with an anchor. Delete+add would require 1 delete marker + 1 new atom + 4 neighbors + all their inter-bonds (~6 atoms, ~10+ bonds).
+- Moving two bonded atoms simultaneously works correctly: both enter the diff with anchors, and their mutual bond survives from the base (no explicit bond needed in the diff).
 
 **Anchor lifecycle:**
 - First move: anchor is set to the base atom's current position.
@@ -225,8 +244,12 @@ Extend the core `AtomicStructure` type in the crystolecule module with diff capa
    - Update `to_detailed_string()` to include diff info when `is_diff = true`
    - Update `MemorySizeEstimator` to account for anchor map
 
-2. **`rust/src/crystolecule/atomic_structure/atom.rs`** — Add helper method:
+2. **`rust/src/crystolecule/atomic_structure/atom.rs`** — Add atom delete marker helper:
    - `pub fn is_delete_marker(&self) -> bool` (returns `self.atomic_number == DELETED_SITE_ATOMIC_NUMBER`)
+
+   **`rust/src/crystolecule/atomic_structure/inline_bond.rs`** — Add bond delete marker:
+   - Add `pub const BOND_DELETED: u8 = 0;` alongside existing `BOND_SINGLE=1` through `BOND_METALLIC=7`
+   - Add `pub fn is_delete_marker(&self) -> bool` (returns `self.bond_order() == BOND_DELETED`)
 
 ### Phase 2: Diff Application Algorithm
 
@@ -240,9 +263,9 @@ Implement the core diff application logic in the crystolecule module. This is in
    - `DiffProvenance` struct: `sources: FxHashMap<u32, AtomSource>`, `base_to_result: FxHashMap<u32, u32>`, `diff_to_result: FxHashMap<u32, u32>`
    - `AtomSource` enum: `BasePassthrough(u32)`, `DiffMatchedBase { diff_id, base_id }`, `DiffAdded(u32)`
    - Internal: `match_diff_atoms()` — greedy nearest-first positional matching with anchor support
-   - Internal: `resolve_bonds()` — bond resolution using the "both from diff → use diff bonds" rule
+   - Internal: `resolve_bonds()` — bond resolution using the "bonds survive by default, diff overrides or deletes" rule
    - Helper: `diff_stats(diff: &AtomicStructure, base: &AtomicStructure, tolerance: f64) -> DiffStats` — computes statistics (atoms added/deleted/modified) by running the matching without full application
-   - `DiffStats` struct: `atoms_added: u32, atoms_deleted: u32, atoms_modified: u32, bonds_in_diff: u32`
+   - `DiffStats` struct: `atoms_added: u32, atoms_deleted: u32, atoms_modified: u32, bonds_added: u32, bonds_deleted: u32`
 
 4. **`rust/src/crystolecule/mod.rs`** — Add `pub mod atomic_structure_diff;`
 
@@ -251,9 +274,12 @@ Implement the core diff application logic in the crystolecule module. This is in
    - Delete atom by position match (delete marker)
    - Replace element at matched position
    - Move atom via anchor position (verify bonds to non-diff neighbors preserved)
-   - Bond resolution: diff-diff bonds override base bonds
-   - Bond resolution: diff-base bonds come from base
-   - Bond resolution: base-base bonds untouched
+   - Bond resolution: both atoms in diff, diff bond with order > 0 overrides base bond
+   - Bond resolution: both atoms in diff, diff bond delete marker (order = 0) removes base bond
+   - Bond resolution: both atoms in diff, no diff bond → base bond survives by default
+   - Bond resolution: one atom in diff, one not → base bond survives
+   - Bond resolution: neither atom in diff → base bond untouched
+   - Bond resolution: replacing element of two bonded atoms preserves their bond (no explicit bond in diff needed)
    - Tolerance edge cases (just inside/outside tolerance)
    - No-match delete marker (graceful ignore)
    - Multiple close atoms (greedy assignment correctness)
@@ -293,6 +319,7 @@ Replace the command stack in EditAtomData with the diff. The eval method now del
      - `replace_in_diff(match_position, new_atomic_number)` — adds/updates atom in diff
      - `move_in_diff(atom_id, new_position)` — sets anchor if needed, updates position
      - `add_bond_in_diff(atom_id1, atom_id2, order)` — adds bond in diff structure
+     - `delete_bond_in_diff(atom_id1, atom_id2)` — adds bond delete marker (`bond_order = 0`) in diff, ensuring both atoms are in the diff
      - `remove_from_diff(diff_atom_id)` — removes atom from diff (and its anchor if any)
    - Remove `undo()`, `redo()`, `can_undo()`, `can_redo()`, `add_command()`
    - Keep `active_tool`
@@ -326,7 +353,7 @@ Rewrite the public interaction functions that were previously creating commands.
 
    - `add_atom_by_ray()` — Calculate position (ray-plane intersection, same as current), then call `edit_atom_data.add_atom_to_diff(atomic_number, position)`. Clear `selection.selected_bonds` (diff changed).
 
-   - `draw_bond_by_ray()` — Same two-click workflow. On second click, call `edit_atom_data.add_bond_in_diff(atom_id1, atom_id2, 1)`. The atom IDs are diff-internal IDs. If bonding involves a base atom not yet in the diff, it must be added to the diff first (at its current position, no anchor) so both atoms are "from the diff" for bond resolution. Clear `selection.selected_bonds`.
+   - `draw_bond_by_ray()` — Same two-click workflow. On second click, call `edit_atom_data.add_bond_in_diff(atom_id1, atom_id2, 1)`. The atom IDs are diff-internal IDs. If bonding involves a base atom not yet in the diff, it must be added to the diff first (at its current position, no anchor) so the bond can reference diff atom IDs. Clear `selection.selected_bonds`.
 
    - `delete_selected_atoms_and_bonds()` — Iterate selection by provenance category:
      - For each `base_id` in `selection.selected_base_atoms`: add a delete marker at that atom's position via `mark_for_deletion()`. Remove from `selected_base_atoms`.
@@ -334,7 +361,7 @@ Rewrite the public interaction functions that were previously creating commands.
        - If the diff atom is a pure addition (no anchor, no base match): remove from diff via `remove_from_diff()`.
        - If the diff atom matched a base atom (has anchor or was a replacement): replace with delete marker (keep position/anchor for matching).
        - Remove from `selected_diff_atoms`.
-     - For bonds: if both atoms are in the diff, remove the bond from the diff. Otherwise, ensure both atoms are in the diff and omit the bond. Clear `selected_bonds`.
+     - For selected bonds: ensure both endpoint atoms are in the diff (add at current positions if not already present). Add a bond delete marker (`bond_order = 0`) between them via `delete_bond_in_diff()`. This works uniformly whether the bond came from the base or was previously added in the diff — a delete marker suppresses any bond between the two atoms. Clear `selected_bonds`.
 
    - `replace_selected_atoms()` — For each selected atom:
      - `diff_id` in `selected_diff_atoms`: update its `atomic_number` in the diff. Selection unchanged.
@@ -381,7 +408,8 @@ Rewrite the public interaction functions that were previously creating commands.
         pub atoms_added: u32,
         pub atoms_deleted: u32,
         pub atoms_modified: u32,
-        pub bonds_in_diff: u32,
+        pub bonds_added: u32,
+        pub bonds_deleted: u32,
     }
     ```
 
@@ -535,7 +563,7 @@ The rendering system uses PBR materials with `albedo`, `roughness`, and `metalli
 
 The diff visualization leverages this existing infrastructure with **minimal changes** — no new render pipelines, no transparency, no new display states.
 
-25. **`rust/src/display/atomic_tessellator.rs`** — Two small changes to `get_atom_color_and_material()`:
+25. **`rust/src/display/atomic_tessellator.rs`** — Three small changes:
 
     **a) Delete marker rendering (atomic_number = 0):**
     - In `get_atom_color_and_material()`, add a check: if `atom.atomic_number == 0` (delete marker), return a fixed color and radius instead of looking up `ATOM_INFO` (which has no entry for atomic_number 0).
@@ -543,11 +571,15 @@ The diff visualization leverages this existing infrastructure with **minimal cha
     - Radius: fixed `0.5` Angstrom (a reasonable small sphere; covalent radii range ~0.3–1.5 A).
     - No transparency, no X overlay, no special glyph — just a red sphere. The renderer already handles arbitrary colors per atom; this is a one-line branch.
 
-    **b) Normal diff atoms (additions, replacements, moves):**
+    **b) Bond delete marker rendering (bond_order = 0):**
+    - In bond tessellation, add a check: if `bond.bond_order() == 0` (delete marker) and the structure has `is_diff = true`, skip rendering the bond (or optionally render as a thin red dashed/dotted line for visualization). In non-diff structures, bond_order = 0 should never occur.
+    - This is a one-line branch in the bond tessellation loop.
+
+    **c) Normal diff atoms (additions, replacements, moves):**
     - Rendered with their **standard element color** — no special color coding for "added" vs. "modified". A carbon in the diff looks like any other carbon.
     - This requires **zero rendering changes**. The tessellator already uses `atom.atomic_number` to look up the element color.
 
-    **c) Anchor arrow visualization (optional, controlled by `show_anchor_arrows: bool` on `AtomicStructure`):**
+    **d) Anchor arrow visualization (optional, controlled by `show_anchor_arrows: bool` on `AtomicStructure`):**
     - When `is_diff = true` and `show_anchor_arrows = true`, the tessellator iterates `anchor_positions`. For each entry `(atom_id, anchor_pos)`:
       1. Render a small delete-marker-style sphere at `anchor_pos` (same red color, smaller radius e.g. `0.3` A) to show "this is where the atom was matched".
       2. Render a thin cylinder from `anchor_pos` to the atom's current position (reusing the existing bond cylinder tessellation with a small radius e.g. `0.05` A, colored e.g. orange `Vec3::new(1.0, 0.6, 0.0)`).
@@ -556,11 +588,11 @@ The diff visualization leverages this existing infrastructure with **minimal cha
     - Default: `show_anchor_arrows = false`. The flag lives on `AtomicStructure` alongside `is_diff` and `anchor_positions`, so it's available at tessellation time.
     - When `show_anchor_arrows = false` or `is_diff = false`: no extra geometry, zero performance impact.
 
-    **Total rendering changes:** One branch in `get_atom_color_and_material()` for atomic_number=0, plus an optional anchor arrow loop in both `tessellate_atomic_structure()` and `tessellate_atomic_structure_impostors()`. No shader changes, no pipeline changes, no new Material fields.
+    **Total rendering changes:** One branch in `get_atom_color_and_material()` for atomic_number=0, one branch in bond tessellation for bond_order=0, plus an optional anchor arrow loop in both `tessellate_atomic_structure()` and `tessellate_atomic_structure_impostors()`. No shader changes, no pipeline changes, no new Material fields.
 
 26. **Display mode in the edit_atom node:**
     - When `output_diff = false` (default): the node outputs the applied result. Rendering shows the final structure with standard element colors. This is the normal editing workflow.
-    - When `output_diff = true`: the node outputs the diff itself. The `is_diff = true` flag causes delete markers to render as red spheres. Added/modified atoms render with their normal element colors. If `show_anchor_arrows` is enabled, movement arrows are shown.
+    - When `output_diff = true`: the node outputs the diff itself. The `is_diff = true` flag causes atom delete markers to render as red spheres and bond delete markers to be skipped (or rendered as red lines). Added/modified atoms render with their normal element colors. If `show_anchor_arrows` is enabled, movement arrows are shown.
     - The user toggles `show_anchor_arrows` independently of `output_diff` (both are on the node data). Arrows are only meaningful when viewing the diff, but the flag is harmless on non-diff structures (no anchors → no arrows).
 
 ### Phase 9: Flutter UI Changes
@@ -610,6 +642,7 @@ The diff visualization leverages this existing infrastructure with **minimal cha
 |------|---------|
 | `rust/src/crystolecule/atomic_structure/mod.rs` | Add `is_diff`, `anchor_positions`, `DELETED_SITE_ATOMIC_NUMBER`, new constructors and accessors, update Clone/Default/add_atomic_structure/serialization |
 | `rust/src/crystolecule/atomic_structure/atom.rs` | Add `is_delete_marker()` |
+| `rust/src/crystolecule/atomic_structure/inline_bond.rs` | Add `BOND_DELETED` constant and `is_delete_marker()` |
 | `rust/src/crystolecule/mod.rs` | Add `pub mod atomic_structure_diff;` |
 | `rust/src/structure_designer/nodes/edit_atom/edit_atom.rs` | New data model (`EditAtomData` with `EditAtomSelection`), new eval using `apply_diff()` with eval cache (`EditAtomEvalCache`), provenance-based selection, new diff-mutating interaction functions |
 | `rust/src/structure_designer/serialization/edit_atom_data_serialization.rs` | Complete rewrite for diff-based serialization |
@@ -637,7 +670,7 @@ The diff visualization leverages this existing infrastructure with **minimal cha
 |------|---------|
 | `rust/src/structure_designer/nodes/edit_atom/mod.rs` | Remove command modules |
 | `rust/src/structure_designer/node_type_registry.rs` | Update edit_atom description and saver/loader |
-| `rust/src/display/atomic_tessellator.rs` | One branch for delete marker color/radius in `get_atom_color_and_material()`, optional anchor arrow loop (sphere + cylinder reuse) |
+| `rust/src/display/atomic_tessellator.rs` | One branch for atom delete marker color/radius in `get_atom_color_and_material()`, one branch for bond delete marker (bond_order=0) in bond tessellation, optional anchor arrow loop (sphere + cylinder reuse) |
 | `rust/tests/crystolecule.rs` | Register new test module |
 
 ## Dependency Order
@@ -645,7 +678,7 @@ The diff visualization leverages this existing infrastructure with **minimal cha
 The implementation phases have a clear dependency chain:
 
 ```
-Phase 1: AtomicStructure extensions (is_diff, anchors, delete marker constant)
+Phase 1: AtomicStructure extensions (is_diff, anchors, atom/bond delete marker constants)
     ↓
 Phase 2: apply_diff() + DiffProvenance in crystolecule + tests
     ↓
