@@ -36,6 +36,7 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
   void initState() {
     super.initState();
     _controller.addListener(_onTextChanged);
+    widget.graphModel.addListener(_onModelChanged);
     // Sync scroll between gutter and editor
     _editorScrollController.addListener(() {
       if (_gutterScrollController.hasClients) {
@@ -46,12 +47,27 @@ class NetworkTextEditorState extends State<NetworkTextEditor> {
 
   @override
   void dispose() {
+    widget.graphModel.removeListener(_onModelChanged);
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
     _editorScrollController.dispose();
     _gutterScrollController.dispose();
     super.dispose();
+  }
+
+  /// Called when the model notifies listeners (e.g. gadget drag, node changes).
+  /// Re-serializes the text if there are no unapplied user edits.
+  void _onModelChanged() {
+    if (!_isDirty) {
+      final text = sd_api.serializeActiveNetworkToText();
+      _controller.removeListener(_onTextChanged);
+      _controller.text = text;
+      _controller.addListener(_onTextChanged);
+      _buildLineNodeMappings(text);
+      _syncActiveLineFromModel();
+      setState(() {});
+    }
   }
 
   void _onTextChanged() {
