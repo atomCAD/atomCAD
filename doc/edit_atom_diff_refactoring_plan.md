@@ -392,12 +392,13 @@ Implement the public interaction functions for the `atom_edit` node. These direc
      - `diff_id` in `selected_diff_atoms`: update its `atomic_number` in the diff. Selection unchanged.
      - `base_id` in `selected_base_atoms`: add to diff with the new `atomic_number` at the base atom's position. Move from `selected_base_atoms` to `selected_diff_atoms` (new diff ID). Clear `selected_bonds`.
 
-   - `transform_selected()` — For each selected atom:
+   - `transform_selected(abs_transform)` — Compute relative delta: `relative = abs_transform.delta_from(selection_transform)`. Then for each selected atom:
      - `diff_id` in `selected_diff_atoms`:
-       - If added atom (no anchor): update position directly. Selection unchanged.
-       - If matched atom (has anchor): update position, anchor stays at original base position. Selection unchanged.
-     - `base_id` in `selected_base_atoms`: add to diff at base atom's position, set anchor to base position, update position to new position. Move from `selected_base_atoms` to `selected_diff_atoms` (new diff ID).
-     - Recalculate `selection.selection_transform` (same approach as in `select_atom_or_bond_by_ray()`: map IDs to result atoms via provenance, call `calc_selection_transform()`). Clear `selected_bonds`.
+       - Read current position from diff: `P_old = self.diff.get_atom(diff_id).position()`
+       - Compute `P_new = relative.rotation * P_old + relative.translation`
+       - Update position in diff. Anchor (if any) stays at original base position. Selection unchanged.
+     - `base_id` in `selected_base_atoms`: look up `provenance.base_to_result[base_id]` → read position and element from result. Add to diff at new position (`relative` applied to old position), set anchor to old position. Move from `selected_base_atoms` to `selected_diff_atoms` (new diff ID).
+     - Update `selection.selection_transform` algebraically: `selection_transform = selection_transform.apply_to_new(relative)` (same composition as existing `edit_atom` TransformCommand — no position re-lookup needed since the result hasn't been re-evaluated yet). Clear `selected_bonds`.
 
    **Key design point:** Interaction functions know atom provenance from the `AtomEditSelection` itself — `selected_base_atoms` and `selected_diff_atoms` are separate sets. The eval cache provenance is only needed during `select_atom_or_bond_by_ray()` to classify a newly-clicked result atom. For mutation functions (delete, replace, transform), the selection already tells us which atoms are base vs. diff.
 
