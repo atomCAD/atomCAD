@@ -16,6 +16,13 @@ const ATOM_FLAG_SELECTED: u16 = 1 << 0;
 const ATOM_FLAG_HYDROGEN_PASSIVATION: u16 = 1 << 1;
 
 impl Atom {
+    /// Returns true if this atom is a delete marker in a diff structure.
+    /// Delete markers have atomic_number == 0.
+    #[inline]
+    pub fn is_delete_marker(&self) -> bool {
+        self.atomic_number == super::DELETED_SITE_ATOMIC_NUMBER
+    }
+
     #[inline]
     pub fn is_selected(&self) -> bool {
         (self.flags & ATOM_FLAG_SELECTED) != 0

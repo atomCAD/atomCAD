@@ -15,6 +15,8 @@ pub struct AtomicStructureDecorator {
     selected_bonds: std::collections::HashSet<BondReference>,
     pub from_selected_node: bool,
     pub selection_transform: Option<Transform>,
+    /// Transient rendering hint: when true and the structure is a diff, render anchor arrows
+    pub show_anchor_arrows: bool,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -30,6 +32,7 @@ impl AtomicStructureDecorator {
             selected_bonds: std::collections::HashSet::new(),
             from_selected_node: false,
             selection_transform: None,
+            show_anchor_arrows: false,
         }
     }
 

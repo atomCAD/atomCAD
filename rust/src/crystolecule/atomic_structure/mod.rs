@@ -44,9 +44,13 @@ pub use atom::Atom;
 pub use atomic_structure_decorator::{AtomDisplayState, AtomicStructureDecorator};
 pub use bond_reference::BondReference;
 pub use inline_bond::{
-    BOND_AROMATIC, BOND_DATIVE, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE, BOND_SINGLE,
-    BOND_TRIPLE, InlineBond,
+    BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
+    BOND_SINGLE, BOND_TRIPLE, InlineBond,
 };
+
+/// Atomic number used as a delete marker in diff structures.
+/// An atom with this atomic number in a diff means "delete the matched base atom."
+pub const DELETED_SITE_ATOMIC_NUMBER: i16 = 0;
 
 // Cell size for spatial grid - larger than typical bond length for efficient neighbor lookup
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
@@ -77,6 +81,10 @@ pub struct AtomicStructure {
     // also consider lazily creating this: might not be needed in a lot of usecases
     grid: FxHashMap<(i32, i32, i32), Vec<u32>>,
     decorator: AtomicStructureDecorator,
+    /// Whether this structure represents a diff (contains delete markers, anchors)
+    is_diff: bool,
+    /// For diff structures: maps diff atom IDs to base match positions (for moved atoms)
+    anchor_positions: FxHashMap<u32, DVec3>,
 }
 
 impl Default for AtomicStructure {
@@ -102,6 +110,35 @@ impl AtomicStructure {
 
     pub fn set_frame_transform(&mut self, transform: Transform) {
         self.frame_transform = transform;
+    }
+
+    // Diff accessors
+    pub fn is_diff(&self) -> bool {
+        self.is_diff
+    }
+
+    pub fn set_is_diff(&mut self, is_diff: bool) {
+        self.is_diff = is_diff;
+    }
+
+    pub fn anchor_position(&self, atom_id: u32) -> Option<&DVec3> {
+        self.anchor_positions.get(&atom_id)
+    }
+
+    pub fn set_anchor_position(&mut self, atom_id: u32, pos: DVec3) {
+        self.anchor_positions.insert(atom_id, pos);
+    }
+
+    pub fn remove_anchor_position(&mut self, atom_id: u32) {
+        self.anchor_positions.remove(&atom_id);
+    }
+
+    pub fn has_anchor_position(&self, atom_id: u32) -> bool {
+        self.anchor_positions.contains_key(&atom_id)
+    }
+
+    pub fn anchor_positions(&self) -> &FxHashMap<u32, DVec3> {
+        &self.anchor_positions
     }
 
     // Atom access methods
@@ -168,6 +205,22 @@ impl AtomicStructure {
             num_bonds: 0,
             grid: FxHashMap::default(),
             decorator: AtomicStructureDecorator::new(),
+            is_diff: false,
+            anchor_positions: FxHashMap::default(),
+        }
+    }
+
+    /// Creates an empty structure marked as a diff
+    pub fn new_diff() -> Self {
+        Self {
+            frame_transform: Transform::default(),
+            atoms: Vec::new(),
+            num_atoms: 0,
+            num_bonds: 0,
+            grid: FxHashMap::default(),
+            decorator: AtomicStructureDecorator::new(),
+            is_diff: true,
+            anchor_positions: FxHashMap::default(),
         }
     }
 
@@ -687,6 +740,13 @@ impl AtomicStructure {
             }
         }
 
+        // Merge anchor positions with remapped IDs
+        for (&old_atom_id, &anchor_pos) in &other.anchor_positions {
+            if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
+                self.anchor_positions.insert(new_atom_id, anchor_pos);
+            }
+        }
+
         // Merge bond selections from decorator
         for bond_ref in other.decorator.iter_selected_bonds() {
             if let (Some(&new_id1), Some(&new_id2)) = (
@@ -726,8 +786,10 @@ impl MemorySizeEstimator for AtomicStructure {
         let decorator_size = std::mem::size_of::<AtomicStructureDecorator>()
             + (self.atoms.len() / 10)
                 * (std::mem::size_of::<u32>() + std::mem::size_of::<AtomDisplayState>());
+        let anchor_size = self.anchor_positions.len()
+            * (std::mem::size_of::<u32>() + std::mem::size_of::<DVec3>());
 
-        base_size + atoms_size + grid_size + decorator_size
+        base_size + atoms_size + grid_size + decorator_size + anchor_size
     }
 }
 
@@ -737,6 +799,12 @@ impl AtomicStructure {
     pub fn to_detailed_string(&self) -> String {
         let mut lines = Vec::new();
 
+        if self.is_diff {
+            lines.push("is_diff: true".to_string());
+            if !self.anchor_positions.is_empty() {
+                lines.push(format!("anchor_positions: {}", self.anchor_positions.len()));
+            }
+        }
         lines.push(format!("atoms: {}", self.num_atoms));
         lines.push(format!("bonds: {}", self.num_bonds));
         lines.push("frame_transform:".to_string());

@@ -8,6 +8,7 @@ pub struct InlineBond {
     packed: u32,
 }
 
+pub const BOND_DELETED: u8 = 0;
 pub const BOND_SINGLE: u8 = 1;
 pub const BOND_DOUBLE: u8 = 2;
 pub const BOND_TRIPLE: u8 = 3;
@@ -49,6 +50,13 @@ impl InlineBond {
     #[inline]
     pub fn bond_order(&self) -> u8 {
         ((self.packed >> Self::BOND_ORDER_SHIFT) & Self::BOND_ORDER_MASK) as u8
+    }
+
+    /// Returns true if this bond is a delete marker in a diff structure.
+    /// Delete markers have bond_order == 0.
+    #[inline]
+    pub fn is_delete_marker(&self) -> bool {
+        self.bond_order() == BOND_DELETED
     }
 
     #[inline]
