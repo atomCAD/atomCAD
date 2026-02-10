@@ -22,11 +22,12 @@ pub struct AtomicStructure {
     // ... existing fields ...
     is_diff: bool,                                  // Whether this structure represents a diff
     anchor_positions: FxHashMap<u32, DVec3>,         // diff_atom_id → base match position (for moved atoms)
+    show_anchor_arrows: bool,                       // When true + is_diff, tessellator renders anchor arrows
 }
 ```
 
-- `AtomicStructure::new()` → `is_diff = false`, empty anchor map (existing behavior, unchanged)
-- `AtomicStructure::new_diff()` → `is_diff = true`, empty anchor map (new constructor for diffs)
+- `AtomicStructure::new()` → `is_diff = false`, empty anchor map, `show_anchor_arrows = false` (existing behavior, unchanged)
+- `AtomicStructure::new_diff()` → `is_diff = true`, empty anchor map, `show_anchor_arrows = false` (new constructor for diffs)
 - `is_diff()` getter, `set_is_diff()` setter
 - `anchor_position(atom_id)` getter, `set_anchor_position(atom_id, pos)` setter, `remove_anchor_position(atom_id)` remover
 - `has_anchor_position(atom_id)` convenience method
@@ -134,6 +135,7 @@ pub struct AtomicStructure {
     // ... existing fields (atoms, grid, num_atoms, num_bonds, decorator, frame_transform) ...
     is_diff: bool,
     anchor_positions: FxHashMap<u32, DVec3>,
+    show_anchor_arrows: bool,
 }
 ```
 
@@ -144,6 +146,7 @@ EditAtomData {
     // Persistent (serialized to .cnnd)
     diff: AtomicStructure,                  // The diff (is_diff = true)
     output_diff: bool,                      // When true, output the diff instead of the result
+    show_anchor_arrows: bool,               // When true + output_diff, render anchor arrows in diff view
     tolerance: f64,                         // Positional matching tolerance (default 0.1)
 
     // Transient (NOT serialized)
@@ -213,9 +216,10 @@ Extend the core `AtomicStructure` type in the crystolecule module with diff capa
 1. **`rust/src/crystolecule/atomic_structure/mod.rs`** — Add diff fields and methods to `AtomicStructure`:
    - Add `is_diff: bool` field (default `false`)
    - Add `anchor_positions: FxHashMap<u32, DVec3>` field (default empty)
+   - Add `show_anchor_arrows: bool` field (default `false`) — controls optional anchor arrow visualization during tessellation
    - Add `pub const DELETED_SITE_ATOMIC_NUMBER: i16 = 0;`
    - Add `new_diff()` constructor (creates empty structure with `is_diff = true`)
-   - Add getters/setters: `is_diff()`, `set_is_diff()`, `anchor_position(atom_id)`, `set_anchor_position(atom_id, pos)`, `remove_anchor_position(atom_id)`, `has_anchor_position(atom_id)`
+   - Add getters/setters: `is_diff()`, `set_is_diff()`, `show_anchor_arrows()`, `set_show_anchor_arrows()`, `anchor_position(atom_id)`, `set_anchor_position(atom_id, pos)`, `remove_anchor_position(atom_id)`, `has_anchor_position(atom_id)`
    - Update `Default` and `Clone` implementations to include new fields
    - Update `add_atomic_structure()` to merge anchor positions with remapped IDs
    - Update `to_detailed_string()` to include diff info when `is_diff = true`
@@ -279,7 +283,7 @@ Replace the command stack in EditAtomData with the diff. The eval method now del
    - Rewrite `eval()`:
      - When `output_diff` is false:
        1. Call `apply_diff(input, &self.diff, self.tolerance)` → `DiffApplicationResult { result, provenance }`
-       2. Apply selection to result: for each ID in `selection.selected_base_atoms`, look up `provenance.base_to_result` → set `atom.set_selected(true)`; same for `selection.selected_diff_atoms` via `provenance.diff_to_result`. Apply `selection.selected_bonds` to result decorator. (Clean up any stale IDs that no longer appear in the provenance maps.)
+       2. Apply selection to result: for each ID in `selection.selected_base_atoms`, look up `provenance.base_to_result` → if found, set `atom.set_selected(true)`; same for `selection.selected_diff_atoms` via `provenance.diff_to_result`. Apply `selection.selected_bonds` to result decorator. Silently skip any stale IDs that don't appear in the provenance maps (eval is `&self`, so selection can't be mutated here; stale entries are harmless and cleaned up lazily during the next selection interaction).
        3. Store provenance in eval cache: `if network_stack.len() == 1 { context.selected_node_eval_cache = Some(Box::new(EditAtomEvalCache { provenance })); }`
        4. Return result
      - When `output_diff` is true: return a clone of `self.diff`
@@ -352,6 +356,7 @@ Rewrite the public interaction functions that were previously creating commands.
 10. **`rust/src/api/structure_designer/edit_atom_api.rs`** — Update API functions:
     - Remove `edit_atom_undo()`, `edit_atom_redo()`
     - Add `toggle_edit_atom_output_diff()` — toggles `edit_atom_data.output_diff`
+    - Add `toggle_edit_atom_show_anchor_arrows()` — toggles `edit_atom_data.show_anchor_arrows`
     - All other API functions (`select_atom_or_bond_by_ray`, `add_atom_by_ray`, `draw_bond_by_ray`, `delete_selected_atoms_and_bonds`, `replace_selected_atoms`, `transform_selected`) — signatures unchanged, implementations call the rewritten interaction functions
 
 11. **`rust/src/api/structure_designer/structure_designer_api_types.rs`** — Update types:
@@ -367,6 +372,7 @@ Rewrite the public interaction functions that were previously creating commands.
         pub selection_transform: Option<APITransform>,
         // NEW:
         pub output_diff: bool,
+        pub show_anchor_arrows: bool,
         pub diff_stats: APIDiffStats,
     }
 
@@ -383,8 +389,8 @@ Rewrite the public interaction functions that were previously creating commands.
     - Remove `can_undo`, `can_redo` from the returned struct
     - Add `output_diff` from `edit_atom_data.output_diff`
     - Compute and add `diff_stats` by calling `diff_stats()` on the diff and base structure
-    - Read `has_selected_atoms`, `has_selection` from `edit_atom_data.selection` (not from the atomic structure as before)
-    - Read `selection_transform` from `edit_atom_data.selection.selection_transform` (not from `edit_atom_data.selection_transform`)
+    - Read `has_selected_atoms`, `has_selection` from the **evaluated result** atomic structure (same as current code — this correctly reflects only visible selected atoms, excluding any stale IDs in `EditAtomSelection`)
+    - Read `selection_transform` from `edit_atom_data.selection.selection_transform`
     - Remove `refresh_scene_dependent_edit_atom_data()` — no longer needed
 
 ### Phase 6: Serialization
@@ -400,7 +406,8 @@ Rewrite the public interaction functions that were previously creating commands.
 14. **`rust/src/crystolecule/atomic_structure/mod.rs`** (serialization aspect) — The `AtomicStructure` serialization (used by `.cnnd` save/load) must be updated to persist:
     - `is_diff` flag
     - `anchor_positions` map (only when `is_diff = true`)
-    - These fields are optional in the format — absent means `is_diff = false` and empty anchors (backward compatible)
+    - `show_anchor_arrows` flag (only when `is_diff = true`)
+    - These fields are optional in the format — absent means `is_diff = false`, empty anchors, `show_anchor_arrows = false` (backward compatible)
 
 15. **`rust/src/structure_designer/node_type_registry.rs`** — Update the `edit_atom` node type entry's `node_data_saver` and `node_data_loader` to use the new serialization.
 
@@ -479,10 +486,11 @@ The selection model is the most architecturally significant change from the comm
 20. **Selection rendering — during eval:**
 
     After `apply_diff()` produces the result and provenance:
-    1. For each `base_id` in `selection.selected_base_atoms`: look up `provenance.base_to_result[base_id]` → `result_id`, set `result.get_atom_mut(result_id).set_selected(true)`. If `base_id` not in map (atom was deleted by a delete marker in the diff), silently remove from selection.
-    2. For each `diff_id` in `selection.selected_diff_atoms`: look up `provenance.diff_to_result[diff_id]` → `result_id`, set `result.get_atom_mut(result_id).set_selected(true)`. If `diff_id` not in map (diff atom was a delete marker, not visible), silently remove from selection.
+    1. For each `base_id` in `selection.selected_base_atoms`: look up `provenance.base_to_result[base_id]` → if found, `result_id`, set `result.get_atom_mut(result_id).set_selected(true)`. If `base_id` not in map (atom was deleted by a delete marker in the diff), silently skip — eval is `&self` and cannot mutate selection. Stale entries are harmless and cleaned up lazily during the next selection interaction.
+    2. For each `diff_id` in `selection.selected_diff_atoms`: look up `provenance.diff_to_result[diff_id]` → if found, set `result.get_atom_mut(result_id).set_selected(true)`. Same stale-skip logic.
     3. Apply `selection.selected_bonds` to result decorator.
     4. Tessellator renders selection exactly as before — no tessellator changes needed for selection (only for diff visualization in Phase 8).
+    5. The API reads `has_selected_atoms` / `has_selection` from the **result** (where flags are correctly set only for existing atoms), not from `EditAtomSelection` (which may contain stale IDs). This ensures the UI doesn't show active Delete/Replace buttons for a phantom selection.
 
 21. **Selection updates during mutations:**
 
@@ -523,17 +531,37 @@ The selection model is the most architecturally significant change from the comm
 
 ### Phase 8: Diff Visualization
 
-25. **`rust/src/display/atomic_tessellator.rs`** — Rendering support for diff structures:
-    - When an `AtomicStructure` has `is_diff = true`, the tessellator uses diff-aware rendering:
-      - **Delete markers** (atomic_number = 0): Render as translucent red spheres with X overlay or a distinct "void" glyph. Use a fixed radius (e.g., 1.0 A) since there's no element to determine size.
-      - **Normal diff atoms**: Render with standard appearance. Color coding (green outline for added, orange for modified) can be done at the decorator level or via a display mode flag.
-      - **Anchor arrows**: For atoms with anchor positions, optionally render a ghost atom at the anchor position connected by a dashed line/arrow to the actual position, showing the movement.
-    - When `is_diff = false`, rendering is completely unchanged (no performance impact).
+The rendering system uses PBR materials with `albedo`, `roughness`, and `metallic` — no opacity channel, no alpha blending, no depth sorting for transparency. All atoms render as solid spheres with element-based colors (from `ATOM_INFO`). Selected atoms override the color to magenta with lower roughness. The decorator provides `AtomDisplayState` (Normal, Marked, SecondaryMarked) for crosshair overlays. Bonds render as cylinders.
+
+The diff visualization leverages this existing infrastructure with **minimal changes** — no new render pipelines, no transparency, no new display states.
+
+25. **`rust/src/display/atomic_tessellator.rs`** — Two small changes to `get_atom_color_and_material()`:
+
+    **a) Delete marker rendering (atomic_number = 0):**
+    - In `get_atom_color_and_material()`, add a check: if `atom.atomic_number == 0` (delete marker), return a fixed color and radius instead of looking up `ATOM_INFO` (which has no entry for atomic_number 0).
+    - Color: solid red, e.g., `Vec3::new(0.9, 0.1, 0.1)`. Roughness: `0.5`. Metallic: `0.0`.
+    - Radius: fixed `0.5` Angstrom (a reasonable small sphere; covalent radii range ~0.3–1.5 A).
+    - No transparency, no X overlay, no special glyph — just a red sphere. The renderer already handles arbitrary colors per atom; this is a one-line branch.
+
+    **b) Normal diff atoms (additions, replacements, moves):**
+    - Rendered with their **standard element color** — no special color coding for "added" vs. "modified". A carbon in the diff looks like any other carbon.
+    - This requires **zero rendering changes**. The tessellator already uses `atom.atomic_number` to look up the element color.
+
+    **c) Anchor arrow visualization (optional, controlled by `show_anchor_arrows: bool` on `AtomicStructure`):**
+    - When `is_diff = true` and `show_anchor_arrows = true`, the tessellator iterates `anchor_positions`. For each entry `(atom_id, anchor_pos)`:
+      1. Render a small delete-marker-style sphere at `anchor_pos` (same red color, smaller radius e.g. `0.3` A) to show "this is where the atom was matched".
+      2. Render a thin cylinder from `anchor_pos` to the atom's current position (reusing the existing bond cylinder tessellation with a small radius e.g. `0.05` A, colored e.g. orange `Vec3::new(1.0, 0.6, 0.0)`).
+    - This reuses existing geometry primitives (sphere + cylinder) with no new rendering infrastructure.
+    - **Impostor compatibility:** Both tessellation paths (triangle mesh and impostor) are supported. The impostor path's `AtomImpostorMesh::add_atom_quad()` and `BondImpostorMesh::add_bond_quad()` take arbitrary positions, radii, and colors — no atom references needed. The anchor arrow loop adds to the same impostor meshes that regular atoms and bonds use. The anchor sphere is an `add_atom_quad()` call; the arrow cylinder is an `add_bond_quad(anchor_pos, atom_pos, thin_radius, orange_color)` call.
+    - Default: `show_anchor_arrows = false`. The flag lives on `AtomicStructure` alongside `is_diff` and `anchor_positions`, so it's available at tessellation time.
+    - When `show_anchor_arrows = false` or `is_diff = false`: no extra geometry, zero performance impact.
+
+    **Total rendering changes:** One branch in `get_atom_color_and_material()` for atomic_number=0, plus an optional anchor arrow loop in both `tessellate_atomic_structure()` and `tessellate_atomic_structure_impostors()`. No shader changes, no pipeline changes, no new Material fields.
 
 26. **Display mode in the edit_atom node:**
-    - When `output_diff = false` (default): the node outputs the applied result. Rendering shows the final structure. This is the normal editing workflow.
-    - When `output_diff = true`: the node outputs the diff itself. The `is_diff = true` flag tells the renderer to use diff visualization. The user sees what edits the node contains.
-    - A future enhancement could overlay the diff on the base (ghosted base + highlighted diff), but this is not required for the initial refactoring.
+    - When `output_diff = false` (default): the node outputs the applied result. Rendering shows the final structure with standard element colors. This is the normal editing workflow.
+    - When `output_diff = true`: the node outputs the diff itself. The `is_diff = true` flag causes delete markers to render as red spheres. Added/modified atoms render with their normal element colors. If `show_anchor_arrows` is enabled, movement arrows are shown.
+    - The user toggles `show_anchor_arrows` independently of `output_diff` (both are on the node data). Arrows are only meaningful when viewing the diff, but the flag is harmless on non-diff structures (no anchors → no arrows).
 
 ### Phase 9: Flutter UI Changes
 
@@ -542,6 +570,7 @@ The selection model is the most architecturally significant change from the comm
 27. **`lib/structure_designer/node_data/edit_atom_editor.dart`** — UI changes:
     - **Remove:** Undo/Redo buttons from the header row
     - **Add:** Output mode toggle in the header — a segmented button or toggle switch labeled "Result" / "Diff"
+    - **Add:** "Show Arrows" checkbox/toggle — visible when in Diff output mode, toggles `show_anchor_arrows`
     - **Add:** Diff statistics display below the header — show e.g., "+3 atoms, -1 atom, ~2 modified" from `APIDiffStats`
     - **Keep:** Tool selector (Default, AddAtom, AddBond) — tools are unchanged in concept
     - **Keep:** Element selector — used for add/replace operations
@@ -555,7 +584,8 @@ The selection model is the most architecturally significant change from the comm
 28. **`lib/structure_designer/structure_designer_model.dart`** — Update model methods:
     - Remove `editAtomUndo()`, `editAtomRedo()`
     - Add `toggleEditAtomOutputDiff()` — calls new API function
-    - Update `refreshFromKernel()` data fetch to populate new `APIEditAtomData` fields (output_diff, diff_stats)
+    - Add `toggleEditAtomShowAnchorArrows()` — calls new API function
+    - Update `refreshFromKernel()` data fetch to populate new `APIEditAtomData` fields (output_diff, show_anchor_arrows, diff_stats)
 
 29. **`lib/structure_designer/structure_designer_viewport.dart`** — No changes expected. Ray-cast interactions call the same API functions; the implementations change internally but the viewport code doesn't need to know.
 
@@ -607,7 +637,7 @@ The selection model is the most architecturally significant change from the comm
 |------|---------|
 | `rust/src/structure_designer/nodes/edit_atom/mod.rs` | Remove command modules |
 | `rust/src/structure_designer/node_type_registry.rs` | Update edit_atom description and saver/loader |
-| `rust/src/display/atomic_tessellator.rs` | Diff-aware rendering (delete markers, anchor arrows) |
+| `rust/src/display/atomic_tessellator.rs` | One branch for delete marker color/radius in `get_atom_color_and_material()`, optional anchor arrow loop (sphere + cylinder reuse) |
 | `rust/tests/crystolecule.rs` | Register new test module |
 
 ## Dependency Order
