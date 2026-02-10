@@ -1,3 +1,6 @@
+#[path = "crystolecule/atomic_structure_diff_test.rs"]
+mod atomic_structure_diff_test;
+
 #[path = "crystolecule/atomic_structure_test.rs"]
 mod atomic_structure_test;
 

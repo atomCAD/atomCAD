@@ -1,5 +1,6 @@
 pub mod atomic_constants;
 pub mod atomic_structure;
+pub mod atomic_structure_diff;
 pub mod atomic_structure_utils;
 pub mod crystolecule_constants;
 pub mod drawing_plane;
