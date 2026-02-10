@@ -219,10 +219,11 @@ Follows the existing eval cache pattern (see `FacetShellEvalCache`, `DrawingPlan
 #[derive(Debug, Clone)]
 pub struct AtomEditEvalCache {
     pub provenance: DiffProvenance,
+    pub stats: DiffStats,
 }
 ```
 
-The provenance maps result atom IDs to their base/diff origins. Used by selection and interaction functions to determine atom provenance without re-running the matching algorithm.
+The provenance maps result atom IDs to their base/diff origins. Used by selection and interaction functions to determine atom provenance without re-running the matching algorithm. The stats are used by `get_subtitle()` and `get_atom_edit_data()` without re-running `apply_diff()`.
 
 ### Relationship to old `edit_atom` node
 
@@ -259,6 +260,10 @@ Extend the core `AtomicStructure` type in the crystolecule module with diff capa
    **`rust/src/crystolecule/atomic_structure/inline_bond.rs`** — Add bond delete marker:
    - Add `pub const BOND_DELETED: u8 = 0;` alongside existing `BOND_SINGLE=1` through `BOND_METALLIC=7`
    - Add `pub fn is_delete_marker(&self) -> bool` (returns `self.bond_order() == BOND_DELETED`)
+
+   **`rust/src/crystolecule/atomic_structure/atomic_structure_decorator.rs`** — Add anchor arrow rendering hint:
+   - Add `pub show_anchor_arrows: bool` field (default `false`)
+   - This is a transient rendering hint, consistent with the decorator's existing role (display states, bond selection, `from_selected_node`)
 
 ### Phase 2: Diff Application Algorithm
 
@@ -325,9 +330,9 @@ Create the new `atom_edit` node with diff-based data model. The eval method dele
      - When `output_diff` is false:
        1. Call `apply_diff(input, &self.diff, self.tolerance)` → `DiffApplicationResult { result, provenance, stats }`
        2. Apply selection to result: for each ID in `selection.selected_base_atoms`, look up `provenance.base_to_result` → if found, set `atom.set_selected(true)`; same for `selection.selected_diff_atoms` via `provenance.diff_to_result`. Apply `selection.selected_bonds` to result decorator. Silently skip any stale IDs that don't appear in the provenance maps (eval is `&self`, so selection can't be mutated here; stale entries are harmless and cleaned up lazily during the next selection interaction).
-       3. Store provenance in eval cache: `if network_stack.len() == 1 { context.selected_node_eval_cache = Some(Box::new(AtomEditEvalCache { provenance })); }`
+       3. Store provenance and stats in eval cache: `if network_stack.len() == 1 { context.selected_node_eval_cache = Some(Box::new(AtomEditEvalCache { provenance, stats })); }`
        4. Return result
-     - When `output_diff` is true: return a clone of `self.diff` with `show_anchor_arrows` set according to `self.show_anchor_arrows`
+     - When `output_diff` is true: return a clone of `self.diff` with `decorator().show_anchor_arrows` set according to `self.show_anchor_arrows`
    - Direct diff mutation methods:
      - `add_atom_to_diff(atomic_number, position)` — calls `self.diff.add_atom()`
      - `mark_for_deletion(match_position)` — adds atom with `DELETED_SITE_ATOMIC_NUMBER` at match_position
@@ -336,7 +341,7 @@ Create the new `atom_edit` node with diff-based data model. The eval method dele
      - `add_bond_in_diff(atom_id1, atom_id2, order)` — adds bond in diff structure
      - `delete_bond_in_diff(atom_id1, atom_id2)` — adds bond delete marker (`bond_order = 0`) in diff, ensuring both atoms are in the diff
      - `remove_from_diff(diff_atom_id)` — removes atom from diff (and its anchor if any)
-   - `get_subtitle()`: use stats from the most recent `DiffApplicationResult` to show "+N, -M, ~K" summary
+   - `get_subtitle()`: read `DiffStats` from the eval cache (`AtomEditEvalCache.stats`) to show "+N, -M, ~K" summary
    - `clone_box()`: clone diff (including anchor_positions) + selection + other fields
    - `get_parameter_metadata()`: requires "molecule" input (same as edit_atom)
 
@@ -455,7 +460,7 @@ Implement the public interaction functions for the `atom_edit` node. These direc
     - Read `has_selected_atoms`, `has_selection` from the **evaluated result** atomic structure (correctly reflects only visible selected atoms, excluding any stale IDs in `AtomEditSelection`)
     - Read `selection_transform` from `atom_edit_data.selection.selection_transform`
     - Read `output_diff`, `show_anchor_arrows` from `atom_edit_data`
-    - Compute `diff_stats` from the most recent eval result (cached in eval cache or recomputed)
+    - Read `diff_stats` from the eval cache (`AtomEditEvalCache.stats`)
 
 ### Phase 6: Serialization
 
@@ -514,17 +519,18 @@ The selection model is the most architecturally significant difference from the 
 
 19. **`AtomEditEvalCache` — provenance via eval cache:**
 
-    The eval cache stores the `DiffProvenance` computed during the most recent `apply_diff()` call. This follows the established eval cache pattern used by 14+ existing nodes (e.g., `FacetShellEvalCache`, `DrawingPlaneEvalCache`).
+    The eval cache stores the `DiffProvenance` and `DiffStats` computed during the most recent `apply_diff()` call. This follows the established eval cache pattern used by 14+ existing nodes (e.g., `FacetShellEvalCache`, `DrawingPlaneEvalCache`).
 
     ```rust
     #[derive(Debug, Clone)]
     pub struct AtomEditEvalCache {
         pub provenance: DiffProvenance,
+        pub stats: DiffStats,
     }
     ```
 
     **Lifecycle:**
-    - **Populated:** During `AtomEditData::eval()` when `network_stack.len() == 1` (root-level evaluation), via `context.selected_node_eval_cache = Some(Box::new(AtomEditEvalCache { provenance }))`.
+    - **Populated:** During `AtomEditData::eval()` when `network_stack.len() == 1` (root-level evaluation), via `context.selected_node_eval_cache = Some(Box::new(AtomEditEvalCache { provenance, stats }))`.
     - **Retrieved:** By `select_atom_or_bond_by_ray()` and other interaction functions via `structure_designer.get_selected_node_eval_cache()` → `downcast_ref::<AtomEditEvalCache>()`.
     - **Invalidated:** Automatically when the node is re-evaluated (new provenance replaces old). Also invalidated when node data changes and downstream caches are cleared.
     - **Cached when invisible:** Travels with `NodeSceneData` into the invisible node cache, restored on visibility without re-evaluation.
@@ -599,15 +605,15 @@ The diff visualization leverages this existing infrastructure with **minimal cha
     - Rendered with their **standard element color** — no special color coding for "added" vs. "modified". A carbon in the diff looks like any other carbon.
     - This requires **zero rendering changes**. The tessellator already uses `atom.atomic_number` to look up the element color.
 
-    **d) Anchor arrow visualization (optional, controlled by `show_anchor_arrows: bool` on `AtomicStructure`):**
-    - `show_anchor_arrows` is stored on `AtomEditData` (the node data). When `output_diff = true`, the eval method copies this flag to the output `AtomicStructure` before returning it: `diff_clone.set_show_anchor_arrows(self.show_anchor_arrows)`. This is the single source of truth — the flag on `AtomicStructure` is a transient rendering hint set during eval, not a persistent field.
-    - When `is_diff = true` and `show_anchor_arrows = true` on the `AtomicStructure`, the tessellator iterates `anchor_positions`. For each entry `(atom_id, anchor_pos)`:
+    **d) Anchor arrow visualization (optional, controlled by `show_anchor_arrows: bool` on `AtomicStructureDecorator`):**
+    - `show_anchor_arrows` is stored on `AtomEditData` (the node data). When `output_diff = true`, the eval method copies this flag to the output `AtomicStructure`'s decorator before returning it: `diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows`. This is the single source of truth — the flag on the decorator is a transient rendering hint set during eval, not a persistent field.
+    - When `is_diff = true` and `decorator().show_anchor_arrows = true`, the tessellator iterates `anchor_positions`. For each entry `(atom_id, anchor_pos)`:
       1. Render a small delete-marker-style sphere at `anchor_pos` (same red color, smaller radius e.g. `0.3` A) to show "this is where the atom was matched".
       2. Render a thin cylinder from `anchor_pos` to the atom's current position (reusing the existing bond cylinder tessellation with a small radius e.g. `0.05` A, colored e.g. orange `Vec3::new(1.0, 0.6, 0.0)`).
     - This reuses existing geometry primitives (sphere + cylinder) with no new rendering infrastructure.
     - **Impostor compatibility:** Both tessellation paths (triangle mesh and impostor) are supported. The impostor path's `AtomImpostorMesh::add_atom_quad()` and `BondImpostorMesh::add_bond_quad()` take arbitrary positions, radii, and colors — no atom references needed. The anchor arrow loop adds to the same impostor meshes that regular atoms and bonds use.
     - When `show_anchor_arrows = false` or `is_diff = false`: no extra geometry, zero performance impact.
-    - `show_anchor_arrows` field on `AtomicStructure`: Add a `show_anchor_arrows: bool` field (default `false`) with getter/setter. This field is NOT serialized — it's a transient rendering hint set only during eval output. This keeps the tessellator self-contained: it reads everything it needs from the `AtomicStructure` without external context.
+    - `show_anchor_arrows` field on `AtomicStructureDecorator`: Add a `show_anchor_arrows: bool` field (default `false`). This field is NOT serialized — it's a transient rendering hint set only during eval output. This is consistent with the decorator's existing role as the home for rendering/UI hints (`atom_display_states`, `from_selected_node`, `selected_bonds`) that travel with the structure. The tessellator already reads the decorator for display states and bond selection, so accessing `decorator().show_anchor_arrows` is zero friction.
 
     **Total rendering changes:** One branch in `get_atom_color_and_material()` for atomic_number=0, one branch in bond tessellation for bond_order=0, plus an optional anchor arrow loop in both `tessellate_atomic_structure()` and `tessellate_atomic_structure_impostors()`. No shader changes, no pipeline changes, no new Material fields.
 
@@ -672,7 +678,8 @@ The diff visualization leverages this existing infrastructure with **minimal cha
 ### Files to modify (crystolecule infrastructure)
 | File | Changes |
 |------|---------|
-| `rust/src/crystolecule/atomic_structure/mod.rs` | Add `is_diff`, `anchor_positions`, `show_anchor_arrows` (transient), `DELETED_SITE_ATOMIC_NUMBER`, new constructors and accessors, update Clone/Default/add_atomic_structure/serialization |
+| `rust/src/crystolecule/atomic_structure/mod.rs` | Add `is_diff`, `anchor_positions`, `DELETED_SITE_ATOMIC_NUMBER`, new constructors and accessors, update Clone/Default/add_atomic_structure/serialization |
+| `rust/src/crystolecule/atomic_structure/atomic_structure_decorator.rs` | Add `show_anchor_arrows: bool` field (transient rendering hint, default `false`) |
 | `rust/src/crystolecule/atomic_structure/atom.rs` | Add `is_delete_marker()` |
 | `rust/src/crystolecule/atomic_structure/inline_bond.rs` | Add `BOND_DELETED` constant and `is_delete_marker()` |
 | `rust/src/crystolecule/mod.rs` | Add `pub mod atomic_structure_diff;` |
