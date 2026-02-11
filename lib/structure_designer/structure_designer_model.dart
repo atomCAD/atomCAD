@@ -809,6 +809,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void toggleAtomEditIncludeBaseBondsInDiff() {
+    atom_edit_api.atomEditToggleIncludeBaseBondsInDiff();
+    refreshFromKernel();
+  }
+
   bool setAtomEditDefaultData(int replacementAtomicNumber) {
     if (nodeNetworkView == null) return false;
     final result = atom_edit_api.setAtomEditDefaultData(

@@ -163,7 +163,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 ),
               ],
             ),
-            // Show anchor arrows toggle (only visible in diff mode)
+            // Diff mode options (only visible in diff mode)
             if (_stagedData!.outputDiff) ...[
               const SizedBox(height: AppSpacing.small),
               Row(
@@ -180,6 +180,23 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                   ),
                   const SizedBox(width: 8),
                   Text('Show anchor arrows'),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.small),
+              Row(
+                children: [
+                  SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: Checkbox(
+                      value: _stagedData!.includeBaseBondsInDiff,
+                      onChanged: (_) {
+                        widget.model.toggleAtomEditIncludeBaseBondsInDiff();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('Include base bonds in the output diff'),
                 ],
               ),
             ],

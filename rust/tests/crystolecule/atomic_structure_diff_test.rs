@@ -4,7 +4,7 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::{
-    AtomSource, DiffStats, apply_diff,
+    AtomSource, DiffStats, apply_diff, enrich_diff_with_base_bonds,
 };
 
 const DEFAULT_TOLERANCE: f64 = 0.1;
@@ -747,7 +747,92 @@ fn test_atom_deletion_removes_all_connected_bonds() {
 }
 
 // ============================================================================
-// Group 16: Empty structures
+// Group 16: enrich_diff_with_base_bonds
+// ============================================================================
+
+#[test]
+fn test_enrich_diff_with_base_bonds_both_moved() {
+    // Two bonded atoms moved — diff should get the base bond after enrichment
+    let base = create_ethane_like(); // C1-C2 bonded
+    let mut diff = AtomicStructure::new_diff();
+    let d1 = diff.add_atom(6, DVec3::new(1.0, 0.0, 0.0)); // moved C1
+    diff.set_anchor_position(d1, DVec3::new(0.0, 0.0, 0.0)); // anchor at original
+    let d2 = diff.add_atom(6, DVec3::new(2.5, 0.0, 0.0)); // moved C2
+    diff.set_anchor_position(d2, DVec3::new(1.5, 0.0, 0.0)); // anchor at original
+
+    // Before enrichment: no bond in diff
+    assert_eq!(diff.get_num_of_bonds(), 0);
+
+    enrich_diff_with_base_bonds(&mut diff, &base, DEFAULT_TOLERANCE);
+
+    // After enrichment: bond between the two diff atoms
+    assert_eq!(diff.get_num_of_bonds(), 1);
+    assert!(has_bond(&diff, d1, d2));
+}
+
+#[test]
+fn test_enrich_diff_with_base_bonds_does_not_duplicate() {
+    // If diff already has a bond, don't add another
+    let base = create_ethane_like();
+    let mut diff = AtomicStructure::new_diff();
+    let d1 = diff.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    diff.set_anchor_position(d1, DVec3::new(0.0, 0.0, 0.0));
+    let d2 = diff.add_atom(6, DVec3::new(2.5, 0.0, 0.0));
+    diff.set_anchor_position(d2, DVec3::new(1.5, 0.0, 0.0));
+    // Explicitly add bond in diff
+    diff.add_bond(d1, d2, 2); // double bond override
+
+    enrich_diff_with_base_bonds(&mut diff, &base, DEFAULT_TOLERANCE);
+
+    // Should still have just 1 bond, and it should be the double bond (not overwritten)
+    assert_eq!(diff.get_num_of_bonds(), 1);
+    assert_eq!(bond_order_between(&diff, d1, d2), Some(2));
+}
+
+#[test]
+fn test_enrich_diff_with_base_bonds_preserves_delete_marker() {
+    // Bond delete marker in diff should not be overwritten
+    let base = create_ethane_like();
+    let mut diff = AtomicStructure::new_diff();
+    let d1 = diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // identity for C1
+    let d2 = diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0)); // identity for C2
+    diff.add_bond(d1, d2, BOND_DELETED); // explicit delete marker
+
+    enrich_diff_with_base_bonds(&mut diff, &base, DEFAULT_TOLERANCE);
+
+    // Should still have the delete marker, not a restored bond
+    assert_eq!(diff.get_num_of_bonds(), 1);
+    assert_eq!(bond_order_between(&diff, d1, d2), Some(BOND_DELETED));
+}
+
+#[test]
+fn test_enrich_diff_with_base_bonds_only_matched_atoms() {
+    // Only one of two bonded base atoms is in the diff — no bond should be added
+    let base = create_ethane_like(); // C1-C2 bonded
+    let mut diff = AtomicStructure::new_diff();
+    let _d1 = diff.add_atom(6, DVec3::new(1.0, 0.0, 0.0)); // moved C1
+    diff.set_anchor_position(_d1, DVec3::new(0.0, 0.0, 0.0));
+    // C2 is NOT in the diff
+
+    enrich_diff_with_base_bonds(&mut diff, &base, DEFAULT_TOLERANCE);
+
+    // No bond should be added (only one endpoint matched)
+    assert_eq!(diff.get_num_of_bonds(), 0);
+}
+
+#[test]
+fn test_enrich_diff_with_base_bonds_empty_diff() {
+    // Empty diff — no bonds should be added
+    let base = create_ethane_like();
+    let mut diff = AtomicStructure::new_diff();
+
+    enrich_diff_with_base_bonds(&mut diff, &base, DEFAULT_TOLERANCE);
+
+    assert_eq!(diff.get_num_of_bonds(), 0);
+}
+
+// ============================================================================
+// Group 17: Empty structures
 // ============================================================================
 
 #[test]

@@ -12,7 +12,7 @@ use crate::crystolecule::atomic_structure::{
     AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER,
 };
 use crate::crystolecule::atomic_structure_diff::{
-    AtomSource, DiffProvenance, DiffStats, apply_diff,
+    AtomSource, DiffProvenance, DiffStats, apply_diff, enrich_diff_with_base_bonds,
 };
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
@@ -137,6 +137,8 @@ pub struct AtomEditData {
     pub output_diff: bool,
     /// When true + output_diff, render anchor arrows in diff view
     pub show_anchor_arrows: bool,
+    /// When true + output_diff, include base bonds between matched diff atoms in diff output
+    pub include_base_bonds_in_diff: bool,
     /// Positional matching tolerance in Angstroms
     pub tolerance: f64,
 
@@ -161,6 +163,7 @@ impl AtomEditData {
             diff: AtomicStructure::new_diff(),
             output_diff: false,
             show_anchor_arrows: false,
+            include_base_bonds_in_diff: true,
             tolerance: DEFAULT_TOLERANCE,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
@@ -176,12 +179,14 @@ impl AtomEditData {
         diff: AtomicStructure,
         output_diff: bool,
         show_anchor_arrows: bool,
+        include_base_bonds_in_diff: bool,
         tolerance: f64,
     ) -> Self {
         Self {
             diff,
             output_diff,
             show_anchor_arrows,
+            include_base_bonds_in_diff,
             tolerance,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
@@ -661,6 +666,9 @@ impl NodeData for AtomEditData {
             if self.output_diff {
                 // Output the diff itself for visualization/debugging
                 let mut diff_clone = self.diff.clone();
+                if self.include_base_bonds_in_diff {
+                    enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, self.tolerance);
+                }
                 diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows;
                 if decorate {
                     diff_clone.decorator_mut().from_selected_node = true;
@@ -738,6 +746,7 @@ impl NodeData for AtomEditData {
             diff: self.diff.clone(),
             output_diff: self.output_diff,
             show_anchor_arrows: self.show_anchor_arrows,
+            include_base_bonds_in_diff: self.include_base_bonds_in_diff,
             tolerance: self.tolerance,
             selection: self.selection.clone(),
             active_tool: match &self.active_tool {
@@ -785,6 +794,7 @@ impl NodeData for AtomEditData {
             ("diff".to_string(), TextValue::String(serialize_diff(&self.diff))),
             ("output_diff".to_string(), TextValue::Bool(self.output_diff)),
             ("show_anchor_arrows".to_string(), TextValue::Bool(self.show_anchor_arrows)),
+            ("base_bonds".to_string(), TextValue::Bool(self.include_base_bonds_in_diff)),
             ("tolerance".to_string(), TextValue::Float(self.tolerance)),
         ]
     }
@@ -795,6 +805,9 @@ impl NodeData for AtomEditData {
         }
         if let Some(v) = props.get("show_anchor_arrows") {
             self.show_anchor_arrows = v.as_bool().ok_or("show_anchor_arrows must be a bool")?;
+        }
+        if let Some(v) = props.get("base_bonds") {
+            self.include_base_bonds_in_diff = v.as_bool().ok_or("base_bonds must be a bool")?;
         }
         if let Some(v) = props.get("tolerance") {
             self.tolerance = v.as_float().ok_or("tolerance must be a number")?;

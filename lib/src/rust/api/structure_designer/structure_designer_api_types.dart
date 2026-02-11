@@ -40,6 +40,7 @@ class APIAtomEditData {
   final APITransform? selectionTransform;
   final bool outputDiff;
   final bool showAnchorArrows;
+  final bool includeBaseBondsInDiff;
   final APIDiffStats diffStats;
 
   const APIAtomEditData({
@@ -52,6 +53,7 @@ class APIAtomEditData {
     this.selectionTransform,
     required this.outputDiff,
     required this.showAnchorArrows,
+    required this.includeBaseBondsInDiff,
     required this.diffStats,
   });
 
@@ -66,6 +68,7 @@ class APIAtomEditData {
       selectionTransform.hashCode ^
       outputDiff.hashCode ^
       showAnchorArrows.hashCode ^
+      includeBaseBondsInDiff.hashCode ^
       diffStats.hashCode;
 
   @override
@@ -82,6 +85,7 @@ class APIAtomEditData {
           selectionTransform == other.selectionTransform &&
           outputDiff == other.outputDiff &&
           showAnchorArrows == other.showAnchorArrows &&
+          includeBaseBondsInDiff == other.includeBaseBondsInDiff &&
           diffStats == other.diffStats;
 }
 

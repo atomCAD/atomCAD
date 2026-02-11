@@ -407,6 +407,57 @@ fn canonical_pair(a: u32, b: u32) -> (u32, u32) {
     if a < b { (a, b) } else { (b, a) }
 }
 
+/// Enriches a diff structure with base bonds between matched atom pairs.
+///
+/// When viewing a diff, atoms that were moved/replaced appear without their base bonds
+/// (since the bond wasn't explicitly changed and thus isn't in the diff). This function
+/// copies base bonds into the diff clone where both endpoints are matched by diff atoms
+/// and the diff doesn't already have a bond between them.
+///
+/// This modifies the diff in place (intended for use on a clone, not the stored diff).
+pub fn enrich_diff_with_base_bonds(
+    diff: &mut AtomicStructure,
+    base: &AtomicStructure,
+    tolerance: f64,
+) {
+    let tolerance_sq = tolerance * tolerance;
+    let (matches, _) = match_diff_atoms(base, diff, tolerance_sq);
+
+    // Build base_to_diff map
+    let mut base_to_diff: FxHashMap<u32, u32> = FxHashMap::default();
+    for m in &matches {
+        base_to_diff.insert(m.base_id, m.diff_id);
+    }
+
+    // Collect bonds to add (to avoid borrowing issues with base iteration)
+    let mut bonds_to_add: Vec<(u32, u32, u8)> = Vec::new();
+
+    for (_, base_atom) in base.iter_atoms() {
+        for bond in &base_atom.bonds {
+            let base_b_id = bond.other_atom_id();
+            // Only process each bond once
+            if base_atom.id >= base_b_id {
+                continue;
+            }
+
+            if let (Some(&diff_a_id), Some(&diff_b_id)) = (
+                base_to_diff.get(&base_atom.id),
+                base_to_diff.get(&base_b_id),
+            ) {
+                // Both endpoints matched — check if diff already has a bond between them
+                let existing = find_bond_between(diff, diff_a_id, diff_b_id);
+                if existing.is_none() {
+                    bonds_to_add.push((diff_a_id, diff_b_id, bond.bond_order()));
+                }
+            }
+        }
+    }
+
+    for (a, b, order) in bonds_to_add {
+        diff.add_bond(a, b, order);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

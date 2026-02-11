@@ -53,6 +53,9 @@ bool atomEditToggleOutputDiff() => RustLib.instance.api
 bool atomEditToggleShowAnchorArrows() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditToggleShowAnchorArrows();
 
+bool atomEditToggleIncludeBaseBondsInDiff() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditToggleIncludeBaseBondsInDiff();
+
 APIAtomEditTool? getActiveAtomEditTool() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiGetActiveAtomEditTool();
 

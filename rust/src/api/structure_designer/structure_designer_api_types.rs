@@ -276,6 +276,7 @@ pub struct APIAtomEditData {
     pub selection_transform: Option<APITransform>,
     pub output_diff: bool,
     pub show_anchor_arrows: bool,
+    pub include_base_bonds_in_diff: bool,
     pub diff_stats: APIDiffStats,
 }
 
