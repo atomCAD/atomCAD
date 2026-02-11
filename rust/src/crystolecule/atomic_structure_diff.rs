@@ -7,8 +7,8 @@
 //! This lives in the crystolecule module because diff application is a fundamental
 //! operation on atomic structures, not specific to any particular node type.
 
-use crate::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
 use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
 use rustc_hash::FxHashMap;
 
 /// Result of applying a diff to a base structure.
@@ -114,8 +114,7 @@ pub fn apply_diff(
         } else {
             // Matched normal atom → replacement/move
             // Use the diff atom's position (which may differ from base for moves)
-            let result_id =
-                result.add_atom(diff_atom.atomic_number, diff_atom.position);
+            let result_id = result.add_atom(diff_atom.atomic_number, diff_atom.position);
             provenance.sources.insert(
                 result_id,
                 AtomSource::DiffMatchedBase {

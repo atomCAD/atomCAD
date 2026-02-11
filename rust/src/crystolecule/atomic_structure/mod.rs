@@ -185,6 +185,12 @@ impl AtomicStructure {
         }
     }
 
+    pub fn set_atom_selected(&mut self, atom_id: u32, selected: bool) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.set_selected(selected);
+        }
+    }
+
     pub fn has_selected_atoms(&self) -> bool {
         self.atoms
             .iter()
@@ -243,6 +249,18 @@ impl AtomicStructure {
 
     pub fn get_num_of_bonds(&self) -> usize {
         self.num_bonds
+    }
+
+    /// Returns the total number of atom slots (including deleted/empty slots).
+    /// Used for serialization ID restoration.
+    pub fn get_num_of_atoms_including_deleted(&self) -> usize {
+        self.atoms.len()
+    }
+
+    /// Adds an empty padding slot (None) to the atom vector.
+    /// Used during deserialization to restore exact atom IDs when there are gaps.
+    pub fn add_padding_slot(&mut self) {
+        self.atoms.push(None);
     }
 
     /// Adds an atom to the structure and returns its ID

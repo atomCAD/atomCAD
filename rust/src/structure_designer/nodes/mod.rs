@@ -1,4 +1,5 @@
 pub mod atom_cut;
+pub mod atom_edit;
 pub mod atom_fill;
 pub mod atom_move;
 pub mod atom_rot;

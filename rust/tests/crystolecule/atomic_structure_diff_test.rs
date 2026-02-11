@@ -101,10 +101,7 @@ fn test_delete_atom_by_position_match() {
     assert_eq!(count_element(&result.result, 6), 1); // Only C2 remains
     assert_eq!(result.stats.atoms_deleted, 1);
     // Bonds to deleted atom should also be gone
-    assert_eq!(
-        result.result.get_num_of_bonds(),
-        1
-    ); // C2-H2 survives, C1-C2 and C1-H1 gone
+    assert_eq!(result.result.get_num_of_bonds(), 1); // C2-H2 survives, C1-C2 and C1-H1 gone
 }
 
 #[test]
@@ -216,7 +213,10 @@ fn test_bond_both_atoms_in_diff_override() {
     let result_c1 = *result.provenance.base_to_result.get(&1).unwrap();
     let result_c2 = *result.provenance.base_to_result.get(&2).unwrap();
 
-    assert_eq!(bond_order_between(&result.result, result_c1, result_c2), Some(2));
+    assert_eq!(
+        bond_order_between(&result.result, result_c1, result_c2),
+        Some(2)
+    );
 }
 
 #[test]
@@ -254,7 +254,10 @@ fn test_bond_both_atoms_in_diff_no_diff_bond_survives() {
 
     // Base bond survives
     assert!(has_bond(&result.result, result_c1, result_c2));
-    assert_eq!(bond_order_between(&result.result, result_c1, result_c2), Some(1));
+    assert_eq!(
+        bond_order_between(&result.result, result_c1, result_c2),
+        Some(1)
+    );
 }
 
 #[test]
@@ -298,7 +301,10 @@ fn test_replace_bonded_atoms_preserves_bond() {
     let result_c1 = *result.provenance.base_to_result.get(&1).unwrap();
     let result_c2 = *result.provenance.base_to_result.get(&2).unwrap();
     assert!(has_bond(&result.result, result_c1, result_c2));
-    assert_eq!(bond_order_between(&result.result, result_c1, result_c2), Some(1));
+    assert_eq!(
+        bond_order_between(&result.result, result_c1, result_c2),
+        Some(1)
+    );
 }
 
 #[test]
