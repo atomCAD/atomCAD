@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -28,6 +28,68 @@ class APIAtomCutData {
           runtimeType == other.runtimeType &&
           cutSdfValue == other.cutSdfValue &&
           unitCellSize == other.unitCellSize;
+}
+
+class APIAtomEditData {
+  final APIAtomEditTool activeTool;
+  final int? bondToolLastAtomId;
+  final int? replacementAtomicNumber;
+  final int? addAtomToolAtomicNumber;
+  final bool hasSelectedAtoms;
+  final bool hasSelection;
+  final APITransform? selectionTransform;
+  final bool outputDiff;
+  final bool showAnchorArrows;
+  final APIDiffStats diffStats;
+
+  const APIAtomEditData({
+    required this.activeTool,
+    this.bondToolLastAtomId,
+    this.replacementAtomicNumber,
+    this.addAtomToolAtomicNumber,
+    required this.hasSelectedAtoms,
+    required this.hasSelection,
+    this.selectionTransform,
+    required this.outputDiff,
+    required this.showAnchorArrows,
+    required this.diffStats,
+  });
+
+  @override
+  int get hashCode =>
+      activeTool.hashCode ^
+      bondToolLastAtomId.hashCode ^
+      replacementAtomicNumber.hashCode ^
+      addAtomToolAtomicNumber.hashCode ^
+      hasSelectedAtoms.hashCode ^
+      hasSelection.hashCode ^
+      selectionTransform.hashCode ^
+      outputDiff.hashCode ^
+      showAnchorArrows.hashCode ^
+      diffStats.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomEditData &&
+          runtimeType == other.runtimeType &&
+          activeTool == other.activeTool &&
+          bondToolLastAtomId == other.bondToolLastAtomId &&
+          replacementAtomicNumber == other.replacementAtomicNumber &&
+          addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
+          hasSelectedAtoms == other.hasSelectedAtoms &&
+          hasSelection == other.hasSelection &&
+          selectionTransform == other.selectionTransform &&
+          outputDiff == other.outputDiff &&
+          showAnchorArrows == other.showAnchorArrows &&
+          diffStats == other.diffStats;
+}
+
+enum APIAtomEditTool {
+  default_,
+  addAtom,
+  addBond,
+  ;
 }
 
 class APIAtomFillData {
@@ -269,6 +331,41 @@ enum APIDataTypeBase {
   motif,
   custom,
   ;
+}
+
+class APIDiffStats {
+  final int atomsAdded;
+  final int atomsDeleted;
+  final int atomsModified;
+  final int bondsAdded;
+  final int bondsDeleted;
+
+  const APIDiffStats({
+    required this.atomsAdded,
+    required this.atomsDeleted,
+    required this.atomsModified,
+    required this.bondsAdded,
+    required this.bondsDeleted,
+  });
+
+  @override
+  int get hashCode =>
+      atomsAdded.hashCode ^
+      atomsDeleted.hashCode ^
+      atomsModified.hashCode ^
+      bondsAdded.hashCode ^
+      bondsDeleted.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDiffStats &&
+          runtimeType == other.runtimeType &&
+          atomsAdded == other.atomsAdded &&
+          atomsDeleted == other.atomsDeleted &&
+          atomsModified == other.atomsModified &&
+          bondsAdded == other.bondsAdded &&
+          bondsDeleted == other.bondsDeleted;
 }
 
 class APIDrawingPlaneData {

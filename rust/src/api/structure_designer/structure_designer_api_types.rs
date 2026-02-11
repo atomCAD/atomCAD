@@ -251,6 +251,34 @@ pub struct APIEditAtomData {
     pub selection_transform: Option<APITransform>,
 }
 
+#[derive(Clone)]
+pub enum APIAtomEditTool {
+    Default,
+    AddAtom,
+    AddBond,
+}
+
+pub struct APIDiffStats {
+    pub atoms_added: u32,
+    pub atoms_deleted: u32,
+    pub atoms_modified: u32,
+    pub bonds_added: u32,
+    pub bonds_deleted: u32,
+}
+
+pub struct APIAtomEditData {
+    pub active_tool: APIAtomEditTool,
+    pub bond_tool_last_atom_id: Option<u32>,
+    pub replacement_atomic_number: Option<i16>,
+    pub add_atom_tool_atomic_number: Option<i16>,
+    pub has_selected_atoms: bool,
+    pub has_selection: bool,
+    pub selection_transform: Option<APITransform>,
+    pub output_diff: bool,
+    pub show_anchor_arrows: bool,
+    pub diff_stats: APIDiffStats,
+}
+
 pub struct APIRegPolyData {
     pub num_sides: i32,
     pub radius: i32,

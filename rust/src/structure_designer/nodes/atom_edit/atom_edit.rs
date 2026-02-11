@@ -1,4 +1,5 @@
 use crate::api::common_api_types::SelectModifier;
+use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::crystolecule::atomic_structure::HitTestResult;
@@ -249,6 +250,50 @@ impl AtomEditData {
         self.selection.clear_bonds();
         self.diff.delete_atom(diff_atom_id);
         self.diff.remove_anchor_position(diff_atom_id);
+    }
+
+    // --- Tool management ---
+
+    pub fn get_active_tool(&self) -> APIAtomEditTool {
+        match &self.active_tool {
+            AtomEditTool::Default(_) => APIAtomEditTool::Default,
+            AtomEditTool::AddAtom(_) => APIAtomEditTool::AddAtom,
+            AtomEditTool::AddBond(_) => APIAtomEditTool::AddBond,
+        }
+    }
+
+    pub fn set_active_tool(&mut self, api_tool: APIAtomEditTool) {
+        self.active_tool = match api_tool {
+            APIAtomEditTool::Default => AtomEditTool::Default(DefaultToolState {
+                replacement_atomic_number: 6,
+            }),
+            APIAtomEditTool::AddAtom => {
+                AtomEditTool::AddAtom(AddAtomToolState { atomic_number: 6 })
+            }
+            APIAtomEditTool::AddBond => {
+                AtomEditTool::AddBond(AddBondToolState { last_atom_id: None })
+            }
+        }
+    }
+
+    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i16) -> bool {
+        match &mut self.active_tool {
+            AtomEditTool::Default(state) => {
+                state.replacement_atomic_number = replacement_atomic_number;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i16) -> bool {
+        match &mut self.active_tool {
+            AtomEditTool::AddAtom(state) => {
+                state.atomic_number = atomic_number;
+                true
+            }
+            _ => false,
+        }
     }
 }
 

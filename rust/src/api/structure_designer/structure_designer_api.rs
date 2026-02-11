@@ -34,11 +34,13 @@ use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::common_api_types::APIResult;
 use crate::api::common_api_types::APIVec2;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
+use crate::api::structure_designer::structure_designer_api_types::APIAtomEditData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomMoveData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIBoolData;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
+use crate::api::structure_designer::structure_designer_api_types::APIDiffStats;
 use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIFloatData;
@@ -69,6 +71,9 @@ use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::layout;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
+use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
+use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
+use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
 use crate::structure_designer::nodes::atom_fill::AtomFillData;
 use crate::structure_designer::nodes::atom_move::AtomMoveData;
 use crate::structure_designer::nodes::atom_rot::AtomRotData;
@@ -2078,6 +2083,86 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
                         .selection_transform
                         .as_ref()
                         .map(|transform| crate::api::api_common::to_api_transform(transform)),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let atom_edit_data = match node_data.as_any_ref().downcast_ref::<AtomEditData>() {
+                    Some(data) => data,
+                    None => return None,
+                };
+
+                let (
+                    replacement_atomic_number,
+                    add_atom_tool_atomic_number,
+                    bond_tool_last_atom_id,
+                ) = match &atom_edit_data.active_tool {
+                    AtomEditTool::Default(state) => {
+                        (Some(state.replacement_atomic_number), None, None)
+                    }
+                    AtomEditTool::AddAtom(state) => (None, Some(state.atomic_number), None),
+                    AtomEditTool::AddBond(state) => (None, None, state.last_atom_id),
+                };
+
+                // Read selection state from the evaluated result (correct for visible atoms)
+                let atomic_structure = cad_instance
+                    .structure_designer
+                    .get_atomic_structure_from_selected_node();
+                let has_selected_atoms =
+                    atomic_structure.map_or(false, |structure| structure.has_selected_atoms());
+                let has_selection =
+                    atomic_structure.map_or(false, |structure| structure.has_selection());
+
+                // Read diff stats from eval cache
+                let diff_stats = cad_instance
+                    .structure_designer
+                    .get_selected_node_eval_cache()
+                    .and_then(|cache| cache.downcast_ref::<AtomEditEvalCache>())
+                    .map(|cache| APIDiffStats {
+                        atoms_added: cache.stats.atoms_added,
+                        atoms_deleted: cache.stats.atoms_deleted,
+                        atoms_modified: cache.stats.atoms_modified,
+                        bonds_added: cache.stats.bonds_added,
+                        bonds_deleted: cache.stats.bonds_deleted,
+                    })
+                    .unwrap_or(APIDiffStats {
+                        atoms_added: 0,
+                        atoms_deleted: 0,
+                        atoms_modified: 0,
+                        bonds_added: 0,
+                        bonds_deleted: 0,
+                    });
+
+                Some(APIAtomEditData {
+                    active_tool: atom_edit_data.get_active_tool(),
+                    bond_tool_last_atom_id,
+                    replacement_atomic_number,
+                    add_atom_tool_atomic_number,
+                    has_selected_atoms,
+                    has_selection,
+                    selection_transform: atom_edit_data
+                        .selection
+                        .selection_transform
+                        .as_ref()
+                        .map(|transform| crate::api::api_common::to_api_transform(transform)),
+                    output_diff: atom_edit_data.output_diff,
+                    show_anchor_arrows: atom_edit_data.show_anchor_arrows,
+                    diff_stats,
                 })
             },
             None,

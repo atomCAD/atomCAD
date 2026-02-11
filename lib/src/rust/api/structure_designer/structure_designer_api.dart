@@ -409,6 +409,11 @@ APIEditAtomData? getEditAtomData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetEditAtomData(
             nodeId: nodeId);
 
+APIAtomEditData? getAtomEditData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetAtomEditData(
+            nodeId: nodeId);
+
 APIParameterData? getParameterData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetParameterData(

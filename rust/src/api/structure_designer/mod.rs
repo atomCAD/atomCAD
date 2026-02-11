@@ -1,4 +1,5 @@
 pub mod ai_assistant_api;
+pub mod atom_edit_api;
 pub mod edit_atom_api;
 pub mod facet_shell_api;
 pub mod import_api;
