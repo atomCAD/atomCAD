@@ -50,5 +50,5 @@ pub use network_editor::{EditResult, NetworkEditor, edit_network};
 pub use network_serializer::{NetworkSerializer, serialize_network};
 pub use node_type_introspection::{describe_node_type, get_display_summary, truncate_description};
 pub use parser::{Lexer, ParseError, Parser, PropertyValue, Statement, Token, TokenInfo};
-pub use serializer::TextFormatter;
+pub use serializer::{TextFormatter, format_float};
 pub use text_value::TextValue;

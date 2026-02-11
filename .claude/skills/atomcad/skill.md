@@ -548,6 +548,55 @@ atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10), visible
 
 **Note:** `diff` and `diff_2d` accept arrays on both inputs. They implicitly union each array before computing the difference: `diff(base, sub) = base₁ ∪ base₂ ∪ ... − (sub₁ ∪ sub₂ ∪ ...)`
 
+### Editing individual atoms with atom_edit
+
+The `atom_edit` node applies a diff (additions, deletions, replacements, moves) to an input atomic structure. The diff is specified via the `diff` property using a line-based text format:
+
+```bash
+# Create a structure then edit individual atoms
+atomcad-cli edit --replace <<'EOF'
+s = sphere { radius: 5, visible: false }
+atoms = atom_fill { shape: s, passivate: true, visible: false }
+edited = atom_edit { molecule: atoms, diff: "+Si @ (0.0, 0.0, 10.0)\n+Si @ (0.0, 0.0, 13.567)", visible: true }
+EOF
+```
+
+**Diff format syntax** (each line is one operation):
+
+| Pattern | Meaning |
+|---------|---------|
+| `+C @ (x, y, z)` | Add a carbon atom at position (angstroms) |
+| `- @ (x, y, z)` | Delete the atom at that position |
+| `~Si @ (x, y, z) [from (ox, oy, oz)]` | Move atom from old position to new position (and optionally change element) |
+| `bond 1-2 single` | Add a bond between atom line 1 and atom line 2 |
+| `unbond 3-4` | Delete bond between atoms at lines 3 and 4 |
+| `# comment` | Comment (ignored) |
+
+**Notes:**
+- Positions are in **angstroms** (real-space coordinates), not lattice units
+- Element symbols are standard (C, Si, N, O, H, etc.)
+- Bond atom indices are **1-based** and refer to the order of atom lines in the diff
+- Supported bond orders: `single`, `double`, `triple`, `quadruple`, `aromatic`, `dative`, `metallic`
+- Deletion matches atoms in the input structure by position (within tolerance)
+- The `~` (move) syntax uses `[from ...]` to specify the original position to match
+
+**Multi-line diff with heredoc:**
+
+```bash
+atomcad-cli edit <<'EOF'
+edited = atom_edit { molecule: atoms, diff: """
++C @ (0.0, 0.0, 10.0)
++C @ (0.0, 0.0, 13.567)
+bond 1-2 single
+""", visible: true }
+EOF
+```
+
+**Additional properties:**
+- `output_diff: true` — Output the raw diff instead of the merged structure
+- `show_anchor_arrows: true` — Display move arrows in the viewport
+- `tolerance: 0.1` — Position matching tolerance in angstroms (default: 0.1)
+
 ### Creating realistic atomic structures
 
 ```bash

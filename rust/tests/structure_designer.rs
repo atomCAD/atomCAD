@@ -66,3 +66,6 @@ mod selection_factoring_test;
 
 #[path = "structure_designer/copy_paste_test.rs"]
 mod copy_paste_test;
+
+#[path = "structure_designer/atom_edit_text_format_test.rs"]
+mod atom_edit_text_format_test;

@@ -2,8 +2,15 @@ use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
+use crate::crystolecule::atomic_constants::{ATOM_INFO, CHEMICAL_ELEMENTS, DEFAULT_ATOM_INFO};
 use crate::crystolecule::atomic_structure::HitTestResult;
-use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use crate::crystolecule::atomic_structure::inline_bond::{
+    BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
+    BOND_SINGLE, BOND_TRIPLE,
+};
+use crate::crystolecule::atomic_structure::{
+    AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER,
+};
 use crate::crystolecule::atomic_structure_diff::{
     AtomSource, DiffProvenance, DiffStats, apply_diff,
 };
@@ -18,6 +25,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::{TextValue, format_float};
 use crate::util::transform::Transform;
 use glam::f64::{DQuat, DVec3};
 use std::collections::{HashMap, HashSet};
@@ -297,6 +305,330 @@ impl AtomEditData {
     }
 }
 
+// =============================================================================
+// Phase 10: Text Format Helpers
+// =============================================================================
+
+/// Get element symbol from atomic number.
+fn element_symbol(atomic_number: i16) -> String {
+    ATOM_INFO
+        .get(&(atomic_number as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .symbol
+        .clone()
+}
+
+/// Normalize an element symbol to standard capitalization (first char upper, rest lower).
+fn normalize_element_symbol(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => {
+            let mut result = c.to_uppercase().to_string();
+            result.extend(chars.flat_map(|c| c.to_lowercase()));
+            result
+        }
+    }
+}
+
+/// Format a position as (x, y, z) text.
+fn format_position(pos: &DVec3) -> String {
+    format!(
+        "({}, {}, {})",
+        format_float(pos.x),
+        format_float(pos.y),
+        format_float(pos.z)
+    )
+}
+
+/// Get human-readable name for a bond order.
+fn bond_order_name(order: u8) -> &'static str {
+    match order {
+        BOND_SINGLE => "single",
+        BOND_DOUBLE => "double",
+        BOND_TRIPLE => "triple",
+        BOND_QUADRUPLE => "quadruple",
+        BOND_AROMATIC => "aromatic",
+        BOND_DATIVE => "dative",
+        BOND_METALLIC => "metallic",
+        _ => "unknown",
+    }
+}
+
+/// Parse a bond order name to its numeric value.
+fn parse_bond_order_name(name: &str) -> Option<u8> {
+    match name.to_lowercase().as_str() {
+        "single" | "1" => Some(BOND_SINGLE),
+        "double" | "2" => Some(BOND_DOUBLE),
+        "triple" | "3" => Some(BOND_TRIPLE),
+        "quadruple" | "4" => Some(BOND_QUADRUPLE),
+        "aromatic" | "5" => Some(BOND_AROMATIC),
+        "dative" | "6" => Some(BOND_DATIVE),
+        "metallic" | "7" => Some(BOND_METALLIC),
+        _ => None,
+    }
+}
+
+/// Serialize a diff `AtomicStructure` to human-readable text format.
+///
+/// Format:
+/// - `+El @ (x, y, z)` — atom addition (or replacement if it matches a base atom)
+/// - `- @ (x, y, z)` — atom delete marker
+/// - `~El @ (x, y, z) [from (ox, oy, oz)]` — atom move (with anchor position)
+/// - `bond A-B order_name` — bond between atom lines A and B
+/// - `unbond A-B` — bond delete marker between atom lines A and B
+///
+/// Atom line numbers (A, B) are 1-indexed, referring to the sequential order of atom entries.
+pub fn serialize_diff(diff: &AtomicStructure) -> String {
+    let mut lines = Vec::new();
+    let mut atom_id_to_line: HashMap<u32, usize> = HashMap::new();
+    let mut line_num = 1;
+
+    // Collect and sort atom IDs for deterministic output
+    let mut atom_ids: Vec<u32> = diff.iter_atoms().map(|(id, _)| *id).collect();
+    atom_ids.sort();
+
+    for &atom_id in &atom_ids {
+        let atom = diff.get_atom(atom_id).unwrap();
+        atom_id_to_line.insert(atom_id, line_num);
+        line_num += 1;
+
+        let pos = format_position(&atom.position);
+
+        if atom.atomic_number == DELETED_SITE_ATOMIC_NUMBER {
+            lines.push(format!("- @ {}", pos));
+        } else if let Some(anchor) = diff.anchor_position(atom_id) {
+            let el = element_symbol(atom.atomic_number);
+            let anchor_pos = format_position(anchor);
+            lines.push(format!("~{} @ {} [from {}]", el, pos, anchor_pos));
+        } else {
+            let el = element_symbol(atom.atomic_number);
+            lines.push(format!("+{} @ {}", el, pos));
+        }
+    }
+
+    // Collect bonds (deduplicated: only where atom_id < other_id)
+    for &atom_id in &atom_ids {
+        let atom = diff.get_atom(atom_id).unwrap();
+        for bond in &atom.bonds {
+            let other_id = bond.other_atom_id();
+            if atom_id < other_id {
+                if let (Some(&a), Some(&b)) = (
+                    atom_id_to_line.get(&atom_id),
+                    atom_id_to_line.get(&other_id),
+                ) {
+                    if bond.bond_order() == BOND_DELETED {
+                        lines.push(format!("unbond {}-{}", a, b));
+                    } else {
+                        lines.push(format!(
+                            "bond {}-{} {}",
+                            a,
+                            b,
+                            bond_order_name(bond.bond_order())
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    lines.join("\n")
+}
+
+/// Parse a human-readable diff text into an `AtomicStructure` with `is_diff = true`.
+///
+/// See `serialize_diff` for the format specification.
+pub fn parse_diff_text(text: &str) -> Result<AtomicStructure, String> {
+    let mut diff = AtomicStructure::new_diff();
+    // Maps 1-indexed line number to diff atom ID
+    let mut line_to_atom_id: Vec<u32> = Vec::new();
+
+    for (line_idx, raw_line) in text.lines().enumerate() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let line_number = line_idx + 1;
+
+        if let Some(rest) = line.strip_prefix('+') {
+            // Addition: +El @ (x, y, z)
+            let (element, position) = parse_element_and_position(rest.trim())
+                .map_err(|e| format!("Line {}: {}", line_number, e))?;
+            let atomic_number = resolve_element(&element)
+                .ok_or_else(|| format!("Line {}: Unknown element '{}'", line_number, element))?;
+            let atom_id = diff.add_atom(atomic_number, position);
+            line_to_atom_id.push(atom_id);
+        } else if let Some(rest) = line.strip_prefix("- ") {
+            // Deletion: - @ (x, y, z)
+            let rest = rest
+                .trim()
+                .strip_prefix('@')
+                .ok_or_else(|| format!("Line {}: Expected '@' after '-'", line_number))?
+                .trim();
+            let position =
+                parse_position(rest).map_err(|e| format!("Line {}: {}", line_number, e))?;
+            let atom_id = diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, position);
+            line_to_atom_id.push(atom_id);
+        } else if let Some(rest) = line.strip_prefix('~') {
+            // Modification: ~El @ (x, y, z) [from (ox, oy, oz)]
+            let (element, position, anchor) = parse_modification(rest.trim())
+                .map_err(|e| format!("Line {}: {}", line_number, e))?;
+            let atomic_number = resolve_element(&element)
+                .ok_or_else(|| format!("Line {}: Unknown element '{}'", line_number, element))?;
+            let atom_id = diff.add_atom(atomic_number, position);
+            if let Some(anchor_pos) = anchor {
+                diff.set_anchor_position(atom_id, anchor_pos);
+            }
+            line_to_atom_id.push(atom_id);
+        } else if let Some(rest) = line.strip_prefix("bond ") {
+            // Bond: bond A-B order_name
+            let (a, b, order) =
+                parse_bond_line(rest.trim()).map_err(|e| format!("Line {}: {}", line_number, e))?;
+            let &atom_a = line_to_atom_id
+                .get(a - 1)
+                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, a))?;
+            let &atom_b = line_to_atom_id
+                .get(b - 1)
+                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, b))?;
+            diff.add_bond(atom_a, atom_b, order);
+        } else if let Some(rest) = line.strip_prefix("unbond ") {
+            // Bond deletion: unbond A-B
+            let (a, b) =
+                parse_atom_pair(rest.trim()).map_err(|e| format!("Line {}: {}", line_number, e))?;
+            let &atom_a = line_to_atom_id
+                .get(a - 1)
+                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, a))?;
+            let &atom_b = line_to_atom_id
+                .get(b - 1)
+                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, b))?;
+            diff.add_bond(atom_a, atom_b, BOND_DELETED);
+        } else {
+            return Err(format!(
+                "Line {}: Unrecognized diff entry: '{}'",
+                line_number, line
+            ));
+        }
+    }
+
+    Ok(diff)
+}
+
+/// Resolve an element symbol to an atomic number.
+fn resolve_element(symbol: &str) -> Option<i16> {
+    // Try as-is first, then normalized
+    if let Some(&n) = CHEMICAL_ELEMENTS.get(symbol) {
+        return Some(n as i16);
+    }
+    let normalized = normalize_element_symbol(symbol);
+    CHEMICAL_ELEMENTS.get(&normalized).map(|&n| n as i16)
+}
+
+/// Parse "El @ (x, y, z)" into (element, position).
+fn parse_element_and_position(text: &str) -> Result<(String, DVec3), String> {
+    let at_idx = text.find('@').ok_or("Expected '@'")?;
+    let element = text[..at_idx].trim().to_string();
+    if element.is_empty() {
+        return Err("Missing element symbol".to_string());
+    }
+    let pos_str = text[at_idx + 1..].trim();
+    let position = parse_position(pos_str)?;
+    Ok((element, position))
+}
+
+/// Parse "El @ (x, y, z) [from (ox, oy, oz)]" into (element, position, optional anchor).
+fn parse_modification(text: &str) -> Result<(String, DVec3, Option<DVec3>), String> {
+    let at_idx = text.find('@').ok_or("Expected '@'")?;
+    let element = text[..at_idx].trim().to_string();
+    if element.is_empty() {
+        return Err("Missing element symbol".to_string());
+    }
+
+    let rest = text[at_idx + 1..].trim();
+
+    if let Some(from_idx) = rest.find("[from") {
+        let pos_str = rest[..from_idx].trim();
+        let position = parse_position(pos_str)?;
+
+        let from_str = rest[from_idx..].trim();
+        let from_str = from_str
+            .strip_prefix("[from")
+            .ok_or("Expected '[from'")?
+            .trim();
+        let from_str = from_str.strip_suffix(']').ok_or("Expected closing ']'")?;
+        let anchor = parse_position(from_str.trim())?;
+
+        Ok((element, position, Some(anchor)))
+    } else {
+        let position = parse_position(rest)?;
+        Ok((element, position, None))
+    }
+}
+
+/// Parse a position "(x, y, z)" into `DVec3`.
+fn parse_position(text: &str) -> Result<DVec3, String> {
+    let text = text.trim();
+    let inner = text
+        .strip_prefix('(')
+        .ok_or("Expected '(' for position")?
+        .strip_suffix(')')
+        .ok_or("Expected ')' for position")?;
+
+    let parts: Vec<&str> = inner.split(',').collect();
+    if parts.len() != 3 {
+        return Err(format!(
+            "Expected 3 components in position, got {}",
+            parts.len()
+        ));
+    }
+
+    let x: f64 = parts[0]
+        .trim()
+        .parse()
+        .map_err(|_| format!("Invalid x coordinate: '{}'", parts[0].trim()))?;
+    let y: f64 = parts[1]
+        .trim()
+        .parse()
+        .map_err(|_| format!("Invalid y coordinate: '{}'", parts[1].trim()))?;
+    let z: f64 = parts[2]
+        .trim()
+        .parse()
+        .map_err(|_| format!("Invalid z coordinate: '{}'", parts[2].trim()))?;
+
+    Ok(DVec3::new(x, y, z))
+}
+
+/// Parse "A-B order_name" for a bond line.
+fn parse_bond_line(text: &str) -> Result<(usize, usize, u8), String> {
+    let parts: Vec<&str> = text.split_whitespace().collect();
+    if parts.len() != 2 {
+        return Err("Expected format: A-B order_name".to_string());
+    }
+
+    let (a, b) = parse_atom_pair(parts[0])?;
+    let order = parse_bond_order_name(parts[1])
+        .ok_or_else(|| format!("Unknown bond order: '{}'", parts[1]))?;
+
+    Ok((a, b, order))
+}
+
+/// Parse "A-B" atom pair into 1-indexed line numbers.
+fn parse_atom_pair(text: &str) -> Result<(usize, usize), String> {
+    let dash_idx = text.find('-').ok_or("Expected '-' between atom indices")?;
+    let a: usize = text[..dash_idx]
+        .trim()
+        .parse()
+        .map_err(|_| format!("Invalid atom index: '{}'", text[..dash_idx].trim()))?;
+    let b: usize = text[dash_idx + 1..]
+        .trim()
+        .parse()
+        .map_err(|_| format!("Invalid atom index: '{}'", text[dash_idx + 1..].trim()))?;
+    if a == 0 || b == 0 {
+        return Err("Atom indices are 1-based".to_string());
+    }
+    Ok((a, b))
+}
+
 impl NodeData for AtomEditData {
     fn provide_gadget(
         &self,
@@ -448,6 +780,38 @@ impl NodeData for AtomEditData {
         }
     }
 
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("diff".to_string(), TextValue::String(serialize_diff(&self.diff))),
+            ("output_diff".to_string(), TextValue::Bool(self.output_diff)),
+            ("show_anchor_arrows".to_string(), TextValue::Bool(self.show_anchor_arrows)),
+            ("tolerance".to_string(), TextValue::Float(self.tolerance)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("output_diff") {
+            self.output_diff = v.as_bool().ok_or("output_diff must be a bool")?;
+        }
+        if let Some(v) = props.get("show_anchor_arrows") {
+            self.show_anchor_arrows = v.as_bool().ok_or("show_anchor_arrows must be a bool")?;
+        }
+        if let Some(v) = props.get("tolerance") {
+            self.tolerance = v.as_float().ok_or("tolerance must be a number")?;
+        }
+        if let Some(v) = props.get("diff") {
+            let diff_text = v.as_string().ok_or("diff must be a string")?;
+            if diff_text.trim().is_empty() {
+                self.diff = AtomicStructure::new_diff();
+            } else {
+                self.diff = parse_diff_text(diff_text)?;
+            }
+            // Clear selection since the diff has been replaced
+            self.selection.clear();
+        }
+        Ok(())
+    }
+
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("molecule".to_string(), (true, None)); // required
@@ -481,7 +845,21 @@ pub fn get_node_type() -> NodeType {
         name: "atom_edit".to_string(),
         description: "Diff-based atomic structure editing. Represents edits as a diff \
             (additions, deletions, replacements, moves) applied to the input structure. \
-            Selection is transient and not serialized."
+            Selection is transient and not serialized.\n\
+            \n\
+            The 'diff' property uses a line-based text format:\n\
+            \n\
+            Atom lines:\n\
+            +C @ (1.0, 2.0, 3.0)                         # Add carbon atom at position\n\
+            - @ (4.0, 5.0, 6.0)                           # Delete atom at position\n\
+            ~Si @ (7.0, 8.0, 9.0) [from (7.0, 8.5, 9.0)] # Move/replace: Si at new pos, anchor at old pos\n\
+            \n\
+            Bond lines (atom indices are 1-based, referencing atom line order above):\n\
+            bond 1-2 single                                # Add bond (single/double/triple/aromatic/...)\n\
+            unbond 3-4                                     # Delete bond between atoms 3 and 4\n\
+            \n\
+            Supported bond orders: single, double, triple, quadruple, aromatic, dative, metallic.\n\
+            Lines starting with # are comments. Blank lines are ignored."
             .to_string(),
         summary: Some("Edit atoms via diff".to_string()),
         category: NodeTypeCategory::AtomicStructure,
