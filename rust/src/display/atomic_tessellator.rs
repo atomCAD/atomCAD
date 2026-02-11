@@ -33,6 +33,19 @@ const MARKER_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
 // color for secondary markers (blue)
 const SECONDARY_MARKER_COLOR: Vec3 = Vec3::new(0.0, 0.5, 1.0);
 
+// color for atom delete markers in diff structures (red)
+const DELETE_MARKER_COLOR: Vec3 = Vec3::new(0.9, 0.1, 0.1);
+// fixed radius for atom delete markers (Angstroms)
+const DELETE_MARKER_RADIUS: f64 = 0.5;
+// roughness for atom delete markers
+const DELETE_MARKER_ROUGHNESS: f32 = 0.5;
+// color for anchor arrows in diff structures (orange)
+const ANCHOR_ARROW_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0);
+// radius for anchor point spheres (Angstroms)
+const ANCHOR_SPHERE_RADIUS: f64 = 0.3;
+// radius for anchor arrow cylinders (Angstroms)
+const ANCHOR_ARROW_RADIUS: f64 = 0.05;
+
 /// Helper function to determine if an atom should be culled based on depth
 fn should_cull_atom(
     atom: &Atom,
@@ -134,6 +147,11 @@ pub fn tessellate_atomic_structure(
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
                 if atom.id < other_atom_id {
+                    // Skip bond delete markers in diff structures
+                    if bond.is_delete_marker() && atomic_structure.is_diff() {
+                        continue;
+                    }
+
                     if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
@@ -154,6 +172,36 @@ pub fn tessellate_atomic_structure(
         }
     }
 
+    // Render anchor arrows for diff structures when enabled
+    if atomic_structure.is_diff() && atomic_structure.decorator().show_anchor_arrows {
+        for (&atom_id, &anchor_pos) in atomic_structure.anchor_positions() {
+            if let Some(atom) = atomic_structure.get_atom(atom_id) {
+                // Small red sphere at anchor position
+                tessellator::tessellate_sphere(
+                    output_mesh,
+                    &anchor_pos,
+                    ANCHOR_SPHERE_RADIUS,
+                    params.ball_and_stick_sphere_horizontal_divisions,
+                    params.ball_and_stick_sphere_vertical_divisions,
+                    &Material::new(&DELETE_MARKER_COLOR, DELETE_MARKER_ROUGHNESS, 0.0),
+                );
+
+                // Orange cylinder from anchor to atom's current position
+                tessellator::tessellate_cylinder(
+                    output_mesh,
+                    &anchor_pos,
+                    &atom.position,
+                    ANCHOR_ARROW_RADIUS,
+                    params.cylinder_divisions,
+                    &Material::new(&ANCHOR_ARROW_COLOR, 0.5, 0.0),
+                    false,
+                    None,
+                    None,
+                );
+            }
+        }
+    }
+
     println!(
         "Atomic tessellation: {:?} visualization, {} atoms tessellated, {} atoms culled",
         atomic_viz_prefs.visualization, tessellated_count, culled_count
@@ -161,6 +209,11 @@ pub fn tessellate_atomic_structure(
 }
 
 pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVisualization) -> f64 {
+    // Delete markers use a fixed radius
+    if atom.is_delete_marker() {
+        return DELETE_MARKER_RADIUS;
+    }
+
     let atom_info = ATOM_INFO
         .get(&(atom.atomic_number as i32))
         .unwrap_or(&DEFAULT_ATOM_INFO);
@@ -175,6 +228,21 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
 
 /// Shared helper to get atom color and material properties based on selection state
 fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
+    // Delete markers render as red spheres
+    if atom.is_delete_marker() {
+        let color = if atom.is_selected() {
+            to_selected_color(&DELETE_MARKER_COLOR)
+        } else {
+            DELETE_MARKER_COLOR
+        };
+        let roughness = if atom.is_selected() {
+            0.15
+        } else {
+            DELETE_MARKER_ROUGHNESS
+        };
+        return (color, roughness, 0.0);
+    }
+
     let atom_info = ATOM_INFO
         .get(&(atom.atomic_number as i32))
         .unwrap_or(&DEFAULT_ATOM_INFO);
@@ -462,6 +530,11 @@ pub fn tessellate_atomic_structure_impostors(
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
                 if atom.id < other_atom_id {
+                    // Skip bond delete markers in diff structures
+                    if bond.is_delete_marker() && atomic_structure.is_diff() {
+                        continue;
+                    }
+
                     if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
@@ -476,6 +549,30 @@ pub fn tessellate_atomic_structure_impostors(
                         );
                     }
                 }
+            }
+        }
+    }
+
+    // Render anchor arrows for diff structures when enabled
+    if atomic_structure.is_diff() && atomic_structure.decorator().show_anchor_arrows {
+        for (&atom_id, &anchor_pos) in atomic_structure.anchor_positions() {
+            if let Some(atom) = atomic_structure.get_atom(atom_id) {
+                // Small red sphere at anchor position
+                atom_impostor_mesh.add_atom_quad(
+                    &anchor_pos.as_vec3(),
+                    ANCHOR_SPHERE_RADIUS as f32,
+                    &DELETE_MARKER_COLOR.to_array(),
+                    DELETE_MARKER_ROUGHNESS,
+                    0.0,
+                );
+
+                // Orange cylinder from anchor to atom's current position
+                bond_impostor_mesh.add_bond_quad(
+                    &anchor_pos.as_vec3(),
+                    &atom.position.as_vec3(),
+                    ANCHOR_ARROW_RADIUS as f32,
+                    &ANCHOR_ARROW_COLOR.to_array(),
+                );
             }
         }
     }
