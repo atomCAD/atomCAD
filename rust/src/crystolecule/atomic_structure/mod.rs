@@ -641,6 +641,20 @@ impl AtomicStructure {
         }
     }
 
+    /// Sets the atomic number of an atom.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the atom was found and updated, `false` otherwise
+    pub fn set_atomic_number(&mut self, atom_id: u32, atomic_number: i16) -> bool {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.atomic_number = atomic_number;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Transform a single atom by applying rotation and translation.
     /// Updates the atom position in the grid.
     ///
