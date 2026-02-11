@@ -156,6 +156,9 @@ pub struct BackgroundPreferences {
     #[serde(default = "default_background_color")]
     pub background_color: APIIVec3,
     #[frb(non_final)]
+    #[serde(default = "default_show_axes")]
+    pub show_axes: bool,
+    #[frb(non_final)]
     #[serde(default = "default_show_grid")]
     pub show_grid: bool,
     #[frb(non_final)]
@@ -189,6 +192,9 @@ pub struct BackgroundPreferences {
 
 fn default_background_color() -> APIIVec3 {
     APIIVec3 { x: 0, y: 0, z: 0 }
+}
+fn default_show_axes() -> bool {
+    true
 }
 fn default_show_grid() -> bool {
     true
@@ -246,6 +252,7 @@ impl Default for BackgroundPreferences {
     fn default() -> Self {
         Self {
             background_color: default_background_color(),
+            show_axes: true,
             show_grid: true,
             grid_size: 200,
             grid_color: default_grid_color(),

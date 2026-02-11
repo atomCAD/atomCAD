@@ -7631,20 +7631,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BackgroundPreferences dco_decode_background_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return BackgroundPreferences(
       backgroundColor: dco_decode_apii_vec_3(arr[0]),
-      showGrid: dco_decode_bool(arr[1]),
-      gridSize: dco_decode_i_32(arr[2]),
-      gridColor: dco_decode_apii_vec_3(arr[3]),
-      gridStrongColor: dco_decode_apii_vec_3(arr[4]),
-      showLatticeAxes: dco_decode_bool(arr[5]),
-      showLatticeGrid: dco_decode_bool(arr[6]),
-      latticeGridColor: dco_decode_apii_vec_3(arr[7]),
-      latticeGridStrongColor: dco_decode_apii_vec_3(arr[8]),
-      drawingPlaneGridColor: dco_decode_apii_vec_3(arr[9]),
-      drawingPlaneGridStrongColor: dco_decode_apii_vec_3(arr[10]),
+      showAxes: dco_decode_bool(arr[1]),
+      showGrid: dco_decode_bool(arr[2]),
+      gridSize: dco_decode_i_32(arr[3]),
+      gridColor: dco_decode_apii_vec_3(arr[4]),
+      gridStrongColor: dco_decode_apii_vec_3(arr[5]),
+      showLatticeAxes: dco_decode_bool(arr[6]),
+      showLatticeGrid: dco_decode_bool(arr[7]),
+      latticeGridColor: dco_decode_apii_vec_3(arr[8]),
+      latticeGridStrongColor: dco_decode_apii_vec_3(arr[9]),
+      drawingPlaneGridColor: dco_decode_apii_vec_3(arr[10]),
+      drawingPlaneGridStrongColor: dco_decode_apii_vec_3(arr[11]),
     );
   }
 
@@ -9577,6 +9578,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_backgroundColor = sse_decode_apii_vec_3(deserializer);
+    var var_showAxes = sse_decode_bool(deserializer);
     var var_showGrid = sse_decode_bool(deserializer);
     var var_gridSize = sse_decode_i_32(deserializer);
     var var_gridColor = sse_decode_apii_vec_3(deserializer);
@@ -9589,6 +9591,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_drawingPlaneGridStrongColor = sse_decode_apii_vec_3(deserializer);
     return BackgroundPreferences(
         backgroundColor: var_backgroundColor,
+        showAxes: var_showAxes,
         showGrid: var_showGrid,
         gridSize: var_gridSize,
         gridColor: var_gridColor,
@@ -11796,6 +11799,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       BackgroundPreferences self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_3(self.backgroundColor, serializer);
+    sse_encode_bool(self.showAxes, serializer);
     sse_encode_bool(self.showGrid, serializer);
     sse_encode_i_32(self.gridSize, serializer);
     sse_encode_apii_vec_3(self.gridColor, serializer);

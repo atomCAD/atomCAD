@@ -92,6 +92,7 @@ pub fn to_display_preferences(
                 .space_filling_cull_depth,
         },
         background: display_prefs::BackgroundPreferences {
+            show_axes: preferences.background_preferences.show_axes,
             show_grid: preferences.background_preferences.show_grid,
             grid_size: preferences.background_preferences.grid_size,
             grid_color: [
