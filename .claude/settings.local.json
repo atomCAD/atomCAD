@@ -60,7 +60,12 @@
       "Bash(Select-String -Pattern \"vec_init_then_push\")",
       "Bash(git log:*)",
       "Bash(cargo fmt:*)",
-      "Bash(cargo clean:*)"
+      "Bash(cargo clean:*)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:newton.ex.ac.uk)",
+      "WebFetch(domain:link.aps.org)",
+      "WebFetch(domain:www.researchgate.net)"
     ]
   }
 }
