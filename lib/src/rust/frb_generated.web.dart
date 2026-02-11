@@ -10,6 +10,7 @@ import 'api/common_api.dart';
 import 'api/common_api_types.dart';
 import 'api/screenshot_api.dart';
 import 'api/structure_designer/ai_assistant_api.dart';
+import 'api/structure_designer/atom_edit_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/import_api.dart';
@@ -249,6 +250,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomEditData dco_decode_box_autoadd_api_atom_edit_data(dynamic raw);
+
+  @protected
+  APIAtomEditTool dco_decode_box_autoadd_api_atom_edit_tool(dynamic raw);
 
   @protected
   APIAtomFillData dco_decode_box_autoadd_api_atom_fill_data(dynamic raw);
@@ -543,6 +547,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomEditData? dco_decode_opt_box_autoadd_api_atom_edit_data(dynamic raw);
+
+  @protected
+  APIAtomEditTool? dco_decode_opt_box_autoadd_api_atom_edit_tool(dynamic raw);
 
   @protected
   APIAtomFillData? dco_decode_opt_box_autoadd_api_atom_fill_data(dynamic raw);
@@ -998,6 +1005,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIAtomEditTool sse_decode_box_autoadd_api_atom_edit_tool(
+      SseDeserializer deserializer);
+
+  @protected
   APIAtomFillData sse_decode_box_autoadd_api_atom_fill_data(
       SseDeserializer deserializer);
 
@@ -1347,6 +1358,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomEditData? sse_decode_opt_box_autoadd_api_atom_edit_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAtomEditTool? sse_decode_opt_box_autoadd_api_atom_edit_tool(
       SseDeserializer deserializer);
 
   @protected
@@ -1867,6 +1882,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIAtomEditData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_atom_edit_tool(
+      APIAtomEditTool self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_atom_fill_data(
       APIAtomFillData self, SseSerializer serializer);
 
@@ -2226,6 +2245,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_atom_edit_data(
       APIAtomEditData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_atom_edit_tool(
+      APIAtomEditTool? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_atom_fill_data(

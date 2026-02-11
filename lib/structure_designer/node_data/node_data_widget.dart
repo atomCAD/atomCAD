@@ -18,6 +18,7 @@ import 'package:flutter_cad/structure_designer/node_data/atom_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/atom_edit_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
@@ -271,6 +272,16 @@ class NodeDataWidget extends StatelessWidget {
         return EditAtomEditor(
           nodeId: selectedNode.id,
           data: editAtomData,
+          model: model,
+        );
+      case 'atom_edit':
+        final atomEditData = getAtomEditData(
+          nodeId: selectedNode.id,
+        );
+
+        return AtomEditEditor(
+          nodeId: selectedNode.id,
+          data: atomEditData,
           model: model,
         );
       case 'rect':

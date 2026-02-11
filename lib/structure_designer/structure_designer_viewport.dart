@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
     as edit_atom_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
+    as atom_edit_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -28,6 +30,8 @@ class _StructureDesignerViewportState
   void onDefaultClick(Offset pointerPos) {
     if (widget.graphModel.isNodeTypeActive("facet_shell")) {
       onFacetShellClick(pointerPos);
+    } else if (widget.graphModel.isNodeTypeActive("atom_edit")) {
+      onAtomEditClick(pointerPos);
     } else if (widget.graphModel.isNodeTypeActive("edit_atom")) {
       onEditAtomClick(pointerPos);
     }
@@ -39,6 +43,47 @@ class _StructureDesignerViewportState
       ray.start,
       ray.direction,
     );
+  }
+
+  void onAtomEditClick(Offset pointerPos) {
+    final ray = getRayFromPointerPos(pointerPos);
+    final activeAtomEditTool = atom_edit_api.getActiveAtomEditTool();
+
+    final selectedNode = widget.graphModel.nodeNetworkView?.nodes.entries
+        .where((entry) => entry.value.selected)
+        .map((entry) => entry.value)
+        .firstOrNull;
+
+    if (activeAtomEditTool == APIAtomEditTool.addAtom) {
+      final atomEditData = structure_designer_api.getAtomEditData(
+        nodeId: selectedNode?.id ?? BigInt.zero,
+      );
+
+      if (atomEditData != null) {
+        final camera = common_api.getCamera();
+        final cameraTransform = getCameraTransform(camera);
+        final planeNormal = cameraTransform!.forward;
+
+        widget.graphModel.atomEditAddAtomByRay(
+          atomEditData.addAtomToolAtomicNumber!,
+          planeNormal,
+          ray.start,
+          ray.direction,
+        );
+      }
+    } else if (activeAtomEditTool == APIAtomEditTool.addBond) {
+      widget.graphModel.atomEditDrawBondByRay(
+        ray.start,
+        ray.direction,
+      );
+    } else if (activeAtomEditTool == APIAtomEditTool.default_) {
+      final selectModifier = getSelectModifierFromKeyboard();
+      widget.graphModel.atomEditSelectByRay(
+        ray.start,
+        ray.direction,
+        selectModifier,
+      );
+    }
   }
 
   void onEditAtomClick(Offset pointerPos) {

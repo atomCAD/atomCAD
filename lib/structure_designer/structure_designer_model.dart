@@ -16,6 +16,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
     as import_xyz_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_api.dart'
     as import_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
+    as atom_edit_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 enum PinType {
@@ -67,6 +69,7 @@ class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
   NodeNetworkView? nodeNetworkView;
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
+  APIAtomEditTool? activeAtomEditTool = APIAtomEditTool.default_;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
   WireDropCallback? onWireDroppedInEmptySpace; // Callback for wire drop in empty space
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
@@ -739,6 +742,89 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  // ===== ATOM_EDIT (NEW DIFF-BASED NODE) METHODS =====
+
+  void setActiveAtomEditTool(APIAtomEditTool tool) {
+    atom_edit_api.setActiveAtomEditTool(tool: tool);
+    refreshFromKernel();
+  }
+
+  void atomEditSelectByRay(vector_math.Vector3 rayStart,
+      vector_math.Vector3 rayDir, SelectModifier selectModifier) {
+    atom_edit_api.atomEditSelectByRay(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+      selectModifier: selectModifier,
+    );
+    refreshFromKernel();
+  }
+
+  void atomEditAddAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditAddAtomByRay(
+      atomicNumber: atomicNumber,
+      planeNormal: vector3ToApiVec3(planeNormal),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
+
+  void atomEditDrawBondByRay(
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditDrawBondByRay(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
+
+  void atomEditDeleteSelected() {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditDeleteSelected();
+    refreshFromKernel();
+  }
+
+  void atomEditReplaceSelected(int atomicNumber) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditReplaceSelected(atomicNumber: atomicNumber);
+    refreshFromKernel();
+  }
+
+  void atomEditTransformSelected(APITransform absTransform) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditTransformSelected(absTransform: absTransform);
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditOutputDiff() {
+    atom_edit_api.atomEditToggleOutputDiff();
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditShowAnchorArrows() {
+    atom_edit_api.atomEditToggleShowAnchorArrows();
+    refreshFromKernel();
+  }
+
+  bool setAtomEditDefaultData(int replacementAtomicNumber) {
+    if (nodeNetworkView == null) return false;
+    final result = atom_edit_api.setAtomEditDefaultData(
+        replacementAtomicNumber: replacementAtomicNumber);
+    refreshFromKernel();
+    return result;
+  }
+
+  bool setAtomEditAddAtomData(int atomicNumber) {
+    if (nodeNetworkView == null) return false;
+    final result =
+        atom_edit_api.setAtomEditAddAtomData(atomicNumber: atomicNumber);
+    refreshFromKernel();
+    return result;
+  }
+
   void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;
@@ -999,6 +1085,7 @@ class StructureDesignerModel extends ChangeNotifier {
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];
     activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
+    activeAtomEditTool = atom_edit_api.getActiveAtomEditTool();
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();
     preferences = structure_designer_api.getStructureDesignerPreferences();
