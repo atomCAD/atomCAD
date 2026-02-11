@@ -550,35 +550,38 @@ atomcad-cli edit --replace --code="base = cuboid { extent: (10, 10, 10), visible
 
 ### Editing individual atoms with atom_edit
 
-The `atom_edit` node applies a diff (additions, deletions, replacements, moves) to an input atomic structure. The diff is specified via the `diff` property using a line-based text format:
+The `atom_edit` node applies a diff (additions, deletions, replacements, moves) to an input atomic structure. Edits are specified via a line-based text format in the `diff` property.
 
 ```bash
-# Create a structure then edit individual atoms
+# Create a silicon crystal and edit it (T-center defect)
 atomcad-cli edit --replace <<'EOF'
-s = sphere { radius: 5, visible: false }
-atoms = atom_fill { shape: s, passivate: true, visible: false }
-edited = atom_edit { molecule: atoms, diff: "+Si @ (0.0, 0.0, 10.0)\n+Si @ (0.0, 0.0, 13.567)", visible: true }
+geom = cuboid { extent: (2, 2, 2), visible: false }
+atoms = atom_fill { shape: geom, parameter_element_value_definition: "PRIMARY Si\nSECONDARY Si", rm_single: true, visible: false }
+edited = atom_edit { molecule: atoms, diff: """# Replace two Si with C, add bridging H
+~C @ (0.89175, 2.67525, 2.67525)
+~C @ (1.7835, 1.7835, 3.567)
++H @ (1.337625, 2.229375, 3.121125)
+bond 1-3 single
+bond 2-3 single""", visible: true }
 EOF
 ```
 
-**Diff format syntax** (each line is one operation):
+**Diff format — atom lines:**
+- `+El @ (x, y, z)` — Add a new atom (e.g., `+H @ (1.0, 2.0, 3.0)`)
+- `~El @ (x, y, z)` — Replace the base atom at this position with element El (e.g., `~C @ (0.89, 2.67, 2.67)` replaces Si with C)
+- `~El @ (x, y, z) [from (ox, oy, oz)]` — Move atom: match base atom at anchor position, place at new position
+- `- @ (x, y, z)` — Delete the base atom at this position
 
-| Pattern | Meaning |
-|---------|---------|
-| `+C @ (x, y, z)` | Add a carbon atom at position (angstroms) |
-| `- @ (x, y, z)` | Delete the atom at that position |
-| `~Si @ (x, y, z) [from (ox, oy, oz)]` | Move atom from old position to new position (and optionally change element) |
-| `bond 1-2 single` | Add a bond between atom line 1 and atom line 2 |
-| `unbond 3-4` | Delete bond between atoms at lines 3 and 4 |
-| `# comment` | Comment (ignored) |
+**Diff format — bond lines (1-based atom indices referencing atom lines above):**
+- `bond A-B order` — Add bond (orders: single, double, triple, quadruple, aromatic, dative, metallic)
+- `unbond A-B` — Delete bond between atoms A and B
 
 **Notes:**
 - Positions are in **angstroms** (real-space coordinates), not lattice units
-- Element symbols are standard (C, Si, N, O, H, etc.)
-- Bond atom indices are **1-based** and refer to the order of atom lines in the diff
-- Supported bond orders: `single`, `double`, `triple`, `quadruple`, `aromatic`, `dative`, `metallic`
+- Element symbols are standard (C, Si, N, O, H, Fe, etc.) and case-insensitive
+- The `~` prefix means the atom is expected to match a base atom (replacement or move). The `+` prefix means a new atom addition. Both use positional matching internally, but `~` preserves user intent on round-trip.
 - Deletion matches atoms in the input structure by position (within tolerance)
-- The `~` (move) syntax uses `[from ...]` to specify the original position to match
+- Lines starting with `#` are comments. Blank lines are ignored.
 
 **Multi-line diff with heredoc:**
 
@@ -592,10 +595,11 @@ bond 1-2 single
 EOF
 ```
 
-**Additional properties:**
-- `output_diff: true` — Output the raw diff instead of the merged structure
-- `show_anchor_arrows: true` — Display move arrows in the viewport
-- `tolerance: 0.1` — Position matching tolerance in angstroms (default: 0.1)
+**atom_edit options:**
+- `output_diff: true` — Show the diff itself instead of the applied result (for debugging/visualization)
+- `show_anchor_arrows: true` — When viewing diff, show arrows from anchor positions to moved atoms
+- `base_bonds: true` — Include base bonds between matched diff atoms in diff output
+- `tolerance: 0.1` — Positional matching tolerance in angstroms (default: 0.1)
 
 ### Creating realistic atomic structures
 
@@ -607,14 +611,14 @@ atomcad-cli edit --code="atoms = atom_fill { shape: geom, passivate: true, visib
 atomcad-cli edit --code="atoms = atom_fill { shape: geom, rm_single: true, visible: true }"
 
 # Override motif elements (e.g., silicon carbide instead of diamond)
-atomcad-cli edit --code="atoms = atom_fill { shape: geom, element_values: \"PRIMARY Si\\nSECONDARY C\", visible: true }"
+atomcad-cli edit --code="atoms = atom_fill { shape: geom, parameter_element_value_definition: \"PRIMARY Si\\nSECONDARY C\", visible: true }"
 ```
 
 **atom_fill options:**
 - `passivate: true` — Add hydrogen atoms to dangling bonds
 - `rm_single: true` — Recursively remove atoms with only one bond
 - `surf_recon: true` — Enable surface reconstruction (cubic diamond (100) 2×1 only)
-- `element_values: "..."` — Override motif parameter elements (newline-separated `PARAM_NAME Element`)
+- `parameter_element_value_definition: "..."` — Override motif parameter elements (newline-separated `PARAM_NAME Element`, e.g., `"PRIMARY Si\nSECONDARY Si"` for pure silicon)
 - `m_offset: (x, y, z)` — Fractional offset (0-1) to adjust cut position
 
 ### Parametric design with custom nodes

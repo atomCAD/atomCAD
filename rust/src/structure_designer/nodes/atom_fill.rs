@@ -319,6 +319,19 @@ impl NodeData for AtomFillData {
                 .as_string()
                 .ok_or_else(|| "parameter_element_value_definition must be a string".to_string())?
                 .to_string();
+            // Parse the definition into the HashMap used by eval()
+            self.parameter_element_values.clear();
+            if !self.parameter_element_value_definition.trim().is_empty() {
+                match parse_parameter_element_values(&self.parameter_element_value_definition) {
+                    Ok(values) => {
+                        self.parameter_element_values = values;
+                    }
+                    Err(parse_error) => {
+                        self.error =
+                            Some(format!("Parameter element parse error: {}", parse_error));
+                    }
+                }
+            }
         }
         if let Some(v) = props.get("m_offset") {
             self.motif_offset = v

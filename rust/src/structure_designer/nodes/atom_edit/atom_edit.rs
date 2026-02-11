@@ -377,11 +377,16 @@ fn parse_bond_order_name(name: &str) -> Option<u8> {
 /// Serialize a diff `AtomicStructure` to human-readable text format.
 ///
 /// Format:
-/// - `+El @ (x, y, z)` — atom addition (or replacement if it matches a base atom)
+/// - `+El @ (x, y, z)` — atom addition (new atom, no base match expected)
+/// - `~El @ (x, y, z)` — atom replacement (matches base atom at same position, changes element)
+/// - `~El @ (x, y, z) [from (ox, oy, oz)]` — atom move (matches base atom at anchor, placed at new position)
 /// - `- @ (x, y, z)` — atom delete marker
-/// - `~El @ (x, y, z) [from (ox, oy, oz)]` — atom move (with anchor position)
 /// - `bond A-B order_name` — bond between atom lines A and B
 /// - `unbond A-B` — bond delete marker between atom lines A and B
+///
+/// The `~` prefix indicates the atom is intended to match a base atom (replacement or move).
+/// The `+` prefix indicates a pure addition. Both are functionally equivalent in the diff
+/// algorithm (positional matching determines the actual effect), but `~` preserves user intent.
 ///
 /// Atom line numbers (A, B) are 1-indexed, referring to the sequential order of atom entries.
 pub fn serialize_diff(diff: &AtomicStructure) -> String {
@@ -404,8 +409,14 @@ pub fn serialize_diff(diff: &AtomicStructure) -> String {
             lines.push(format!("- @ {}", pos));
         } else if let Some(anchor) = diff.anchor_position(atom_id) {
             let el = element_symbol(atom.atomic_number);
-            let anchor_pos = format_position(anchor);
-            lines.push(format!("~{} @ {} [from {}]", el, pos, anchor_pos));
+            // Self-anchor (anchor == position): replacement, no [from ...] needed
+            // Different anchor: move, include [from ...]
+            if (anchor - &atom.position).length() < 1e-10 {
+                lines.push(format!("~{} @ {}", el, pos));
+            } else {
+                let anchor_pos = format_position(anchor);
+                lines.push(format!("~{} @ {} [from {}]", el, pos, anchor_pos));
+            }
         } else {
             let el = element_symbol(atom.atomic_number);
             lines.push(format!("+{} @ {}", el, pos));
@@ -477,14 +488,15 @@ pub fn parse_diff_text(text: &str) -> Result<AtomicStructure, String> {
             line_to_atom_id.push(atom_id);
         } else if let Some(rest) = line.strip_prefix('~') {
             // Modification: ~El @ (x, y, z) [from (ox, oy, oz)]
+            // Without [from ...]: replacement at same position (anchor = position)
             let (element, position, anchor) = parse_modification(rest.trim())
                 .map_err(|e| format!("Line {}: {}", line_number, e))?;
             let atomic_number = resolve_element(&element)
                 .ok_or_else(|| format!("Line {}: Unknown element '{}'", line_number, element))?;
             let atom_id = diff.add_atom(atomic_number, position);
-            if let Some(anchor_pos) = anchor {
-                diff.set_anchor_position(atom_id, anchor_pos);
-            }
+            // Set anchor: explicit [from ...] or self-anchor (marks as modification)
+            let anchor_pos = anchor.unwrap_or(position);
+            diff.set_anchor_position(atom_id, anchor_pos);
             line_to_atom_id.push(atom_id);
         } else if let Some(rest) = line.strip_prefix("bond ") {
             // Bond: bond A-B order_name
@@ -865,7 +877,11 @@ pub fn get_node_type() -> NodeType {
             Atom lines:\n\
             +C @ (1.0, 2.0, 3.0)                         # Add carbon atom at position\n\
             - @ (4.0, 5.0, 6.0)                           # Delete atom at position\n\
-            ~Si @ (7.0, 8.0, 9.0) [from (7.0, 8.5, 9.0)] # Move/replace: Si at new pos, anchor at old pos\n\
+            ~C @ (7.0, 8.0, 9.0)                          # Replace atom at position (e.g. Si->C)\n\
+            ~Si @ (7.0, 8.0, 9.0) [from (7.0, 8.5, 9.0)] # Move atom: Si at new pos, matched at old pos\n\
+            \n\
+            The ~ prefix means the atom is expected to match a base atom (replacement or move).\n\
+            The + prefix means a new atom addition. Both use positional matching internally.\n\
             \n\
             Bond lines (atom indices are 1-based, referencing atom line order above):\n\
             bond 1-2 single                                # Add bond (single/double/triple/aromatic/...)\n\

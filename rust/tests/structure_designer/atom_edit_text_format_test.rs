@@ -172,12 +172,16 @@ fn test_parse_modification_with_anchor() {
 
 #[test]
 fn test_parse_modification_without_anchor() {
+    // ~El @ pos without [from ...] sets a self-anchor (anchor == position)
     let diff = parse_diff_text("~N @ (1.0, 2.0, 3.0)").unwrap();
     assert_eq!(diff.get_num_of_atoms(), 1);
 
     let (&atom_id, atom) = diff.iter_atoms().next().unwrap();
     assert_eq!(atom.atomic_number, 7); // Nitrogen
-    assert!(!diff.has_anchor_position(atom_id));
+    assert!(diff.has_anchor_position(atom_id));
+    let anchor = diff.anchor_position(atom_id).unwrap();
+    // Self-anchor: anchor == position
+    assert!((anchor - DVec3::new(1.0, 2.0, 3.0)).length() < 1e-10);
 }
 
 #[test]
@@ -563,6 +567,47 @@ fn test_roundtrip_via_text_properties() {
     assert_eq!(restored.diff.get_num_of_atoms(), 2);
     assert!(restored.output_diff);
     assert!((restored.tolerance - 0.2).abs() < 1e-10);
+}
+
+#[test]
+fn test_serialize_replacement_self_anchor() {
+    // A self-anchor (anchor == position) should serialize as ~El @ pos (no [from ...])
+    let mut diff = AtomicStructure::new_diff();
+    let id = diff.add_atom(6, DVec3::new(1.0, 2.0, 3.0)); // Carbon
+    diff.set_anchor_position(id, DVec3::new(1.0, 2.0, 3.0)); // Self-anchor
+
+    let text = serialize_diff(&diff);
+    assert_eq!(text, "~C @ (1.0, 2.0, 3.0)");
+}
+
+#[test]
+fn test_roundtrip_replacement_preserves_tilde() {
+    // ~C @ pos should round-trip as ~C @ pos (not +C @ pos)
+    let text = "~C @ (1.0, 2.0, 3.0)";
+    let diff = parse_diff_text(text).unwrap();
+    let serialized = serialize_diff(&diff);
+    assert_eq!(serialized, "~C @ (1.0, 2.0, 3.0)");
+}
+
+#[test]
+fn test_roundtrip_addition_preserves_plus() {
+    // +C @ pos should round-trip as +C @ pos
+    let text = "+C @ (1.0, 2.0, 3.0)";
+    let diff = parse_diff_text(text).unwrap();
+    let serialized = serialize_diff(&diff);
+    assert_eq!(serialized, "+C @ (1.0, 2.0, 3.0)");
+}
+
+#[test]
+fn test_roundtrip_mixed_plus_and_tilde() {
+    // Mixed + and ~ atoms should preserve their prefixes
+    let text = "~C @ (0.89175, 2.67525, 2.67525)\n~C @ (1.7835, 1.7835, 3.567)\n+H @ (1.337625, 2.229375, 3.121125)\nbond 1-3 single\nbond 2-3 single";
+    let diff = parse_diff_text(text).unwrap();
+    let serialized = serialize_diff(&diff);
+    let lines: Vec<&str> = serialized.lines().collect();
+    assert!(lines[0].starts_with("~C @"));
+    assert!(lines[1].starts_with("~C @"));
+    assert!(lines[2].starts_with("+H @"));
 }
 
 // =============================================================================
