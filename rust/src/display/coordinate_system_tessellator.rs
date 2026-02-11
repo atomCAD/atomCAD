@@ -37,67 +37,70 @@ pub fn tessellate_coordinate_system(
     unit_cell: &UnitCellStruct,
     background_preferences: &BackgroundPreferences,
 ) {
-    // Skip rendering if grid is disabled
-    if !background_preferences.show_grid {
+    // Skip rendering if both axes and grid are disabled
+    if !background_preferences.show_axes && !background_preferences.show_grid {
         return;
     }
 
-    // Origin point
     let origin = DVec3::new(0.0, 0.0, 0.0);
     let cs_size = background_preferences.grid_size as f64;
 
-    // Cartesian coordinate axes (always displayed)
-    let x_axis_end = origin + DVec3::new(cs_size, 0.0, 0.0);
-    let y_axis_end = origin + DVec3::new(0.0, cs_size, 0.0);
-    let z_axis_end = origin + DVec3::new(0.0, 0.0, cs_size);
+    // Cartesian coordinate axes (X=red, Y=green, Z=blue)
+    if background_preferences.show_axes {
+        let x_axis_end = origin + DVec3::new(cs_size, 0.0, 0.0);
+        let y_axis_end = origin + DVec3::new(0.0, cs_size, 0.0);
+        let z_axis_end = origin + DVec3::new(0.0, 0.0, cs_size);
 
-    add_axis_line(output_mesh, &origin, &x_axis_end, &X_AXIS_COLOR);
-    add_axis_line(output_mesh, &origin, &y_axis_end, &Y_AXIS_COLOR);
-    add_axis_line(output_mesh, &origin, &z_axis_end, &Z_AXIS_COLOR);
+        add_axis_line(output_mesh, &origin, &x_axis_end, &X_AXIS_COLOR);
+        add_axis_line(output_mesh, &origin, &y_axis_end, &Y_AXIS_COLOR);
+        add_axis_line(output_mesh, &origin, &z_axis_end, &Z_AXIS_COLOR);
 
-    // Lattice basis vectors (only if not aligned with Cartesian axes)
-    if background_preferences.show_lattice_axes {
-        add_lattice_axes_if_non_cartesian(output_mesh, unit_cell, cs_size);
+        // Lattice basis vectors (only if not aligned with Cartesian axes)
+        if background_preferences.show_lattice_axes {
+            add_lattice_axes_if_non_cartesian(output_mesh, unit_cell, cs_size);
+        }
     }
 
     // Grid rendering: single lattice grid or dual grid system
-    if is_lattice_xy_aligned(unit_cell) {
-        // Single grid mode: lattice is aligned with Cartesian XY
-        // Display only the lattice grid with primary colors
-        tessellate_grid_with_origin(
-            output_mesh,
-            &origin,
-            &unit_cell.a,
-            &unit_cell.b,
-            background_preferences.grid_size,
-            &get_grid_primary_color(background_preferences),
-            &get_grid_secondary_color(background_preferences),
-        );
-    } else {
-        // Dual grid mode: lattice not aligned with Cartesian XY
-        // Display Cartesian grid with diamond spacing (primary colors)
-        let cartesian_spacing = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-        tessellate_grid_with_origin(
-            output_mesh,
-            &origin,
-            &(DVec3::new(cartesian_spacing, 0.0, 0.0)),
-            &(DVec3::new(0.0, cartesian_spacing, 0.0)),
-            background_preferences.grid_size,
-            &get_grid_primary_color(background_preferences),
-            &get_grid_secondary_color(background_preferences),
-        );
-
-        // Optionally display lattice grid with secondary colors
-        if background_preferences.show_lattice_grid {
+    if background_preferences.show_grid {
+        if is_lattice_xy_aligned(unit_cell) {
+            // Single grid mode: lattice is aligned with Cartesian XY
+            // Display only the lattice grid with primary colors
             tessellate_grid_with_origin(
                 output_mesh,
                 &origin,
                 &unit_cell.a,
                 &unit_cell.b,
                 background_preferences.grid_size,
-                &get_lattice_grid_primary_color(background_preferences),
-                &get_lattice_grid_secondary_color(background_preferences),
+                &get_grid_primary_color(background_preferences),
+                &get_grid_secondary_color(background_preferences),
             );
+        } else {
+            // Dual grid mode: lattice not aligned with Cartesian XY
+            // Display Cartesian grid with diamond spacing (primary colors)
+            let cartesian_spacing = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+            tessellate_grid_with_origin(
+                output_mesh,
+                &origin,
+                &(DVec3::new(cartesian_spacing, 0.0, 0.0)),
+                &(DVec3::new(0.0, cartesian_spacing, 0.0)),
+                background_preferences.grid_size,
+                &get_grid_primary_color(background_preferences),
+                &get_grid_secondary_color(background_preferences),
+            );
+
+            // Optionally display lattice grid with secondary colors
+            if background_preferences.show_lattice_grid {
+                tessellate_grid_with_origin(
+                    output_mesh,
+                    &origin,
+                    &unit_cell.a,
+                    &unit_cell.b,
+                    background_preferences.grid_size,
+                    &get_lattice_grid_primary_color(background_preferences),
+                    &get_lattice_grid_secondary_color(background_preferences),
+                );
+            }
         }
     }
 }

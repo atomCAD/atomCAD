@@ -220,6 +220,8 @@ class TestFinders {
       find.byKey(PreferencesKeys.visualizationMethodDropdown);
   static Finder get displayCameraPivotCheckbox =>
       find.byKey(PreferencesKeys.displayCameraPivotCheckbox);
+  static Finder get showAxesCheckbox =>
+      find.byKey(PreferencesKeys.showAxesCheckbox);
   static Finder get showGridCheckbox =>
       find.byKey(PreferencesKeys.showGridCheckbox);
   static Finder get backgroundColorInput =>

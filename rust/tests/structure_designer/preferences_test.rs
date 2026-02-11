@@ -292,6 +292,7 @@ fn test_non_default_values_roundtrip() {
                 y: 128,
                 z: 64,
             },
+            show_axes: false,
             show_grid: false,
             grid_size: 100,
             grid_color: APIIVec3 {

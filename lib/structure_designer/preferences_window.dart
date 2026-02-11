@@ -38,6 +38,7 @@ class PreferencesKeys {
 
   // Background settings
   static const Key backgroundColorInput = Key('pref_background_color_input');
+  static const Key showAxesCheckbox = Key('pref_show_axes_checkbox');
   static const Key showGridCheckbox = Key('pref_show_grid_checkbox');
   static const Key gridSizeInput = Key('pref_grid_size_input');
   static const Key gridColorInput = Key('pref_grid_color_input');
@@ -55,7 +56,8 @@ class PreferencesKeys {
       Key('pref_drawing_plane_grid_strong_color_input');
 
   // Layout settings
-  static const Key layoutAlgorithmDropdown = Key('pref_layout_algorithm_dropdown');
+  static const Key layoutAlgorithmDropdown =
+      Key('pref_layout_algorithm_dropdown');
   static const Key autoLayoutAfterEditCheckbox =
       Key('pref_auto_layout_after_edit_checkbox');
 }
@@ -253,7 +255,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const Text('Visualization method'),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<int>(
-                                key: PreferencesKeys.visualizationMethodDropdown,
+                                key:
+                                    PreferencesKeys.visualizationMethodDropdown,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
                                   contentPadding:
@@ -391,7 +394,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               const Text('Visualization method'),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<int>(
-                                key: PreferencesKeys.atomicVisualizationDropdown,
+                                key:
+                                    PreferencesKeys.atomicVisualizationDropdown,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
                                   contentPadding:
@@ -596,7 +600,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             children: [
                               const Text('Auto-layout algorithm'),
                               const SizedBox(height: 4),
-                              DropdownButtonFormField<LayoutAlgorithmPreference>(
+                              DropdownButtonFormField<
+                                  LayoutAlgorithmPreference>(
                                 key: PreferencesKeys.layoutAlgorithmDropdown,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
@@ -607,7 +612,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                     .layoutPreferences.layoutAlgorithm,
                                 items: const [
                                   DropdownMenuItem(
-                                    value: LayoutAlgorithmPreference.topologicalGrid,
+                                    value: LayoutAlgorithmPreference
+                                        .topologicalGrid,
                                     child: Text('Topological Grid'),
                                   ),
                                   DropdownMenuItem(
@@ -618,8 +624,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 onChanged: (value) {
                                   if (value != null) {
                                     setState(() {
-                                      _preferences
-                                          .layoutPreferences
+                                      _preferences.layoutPreferences
                                           .layoutAlgorithm = value;
                                     });
                                     _applyPreferences();
@@ -634,7 +639,8 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           Row(
                             children: [
                               Checkbox(
-                                key: PreferencesKeys.autoLayoutAfterEditCheckbox,
+                                key:
+                                    PreferencesKeys.autoLayoutAfterEditCheckbox,
                                 value: _preferences
                                     .layoutPreferences.autoLayoutAfterEdit,
                                 onChanged: (value) {
@@ -696,7 +702,84 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             maximumValue:
                                 const APIIVec3(x: 255, y: 255, z: 255),
                           ),
-                          const SizedBox(height: AppSpacing.medium),
+                          const SizedBox(height: AppSpacing.large),
+
+                          // --- Axes section ---
+                          Text(
+                            'Axes',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Show axes checkbox
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.showAxesCheckbox,
+                                value:
+                                    _preferences.backgroundPreferences.showAxes,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences.backgroundPreferences
+                                          .showAxes = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('Show axes'),
+                            ],
+                          ),
+
+                          // Show lattice axes checkbox (child of axes)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 24),
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  key: PreferencesKeys.showLatticeAxesCheckbox,
+                                  value: _preferences
+                                      .backgroundPreferences.showLatticeAxes,
+                                  onChanged: _preferences
+                                          .backgroundPreferences.showAxes
+                                      ? (value) {
+                                          if (value != null) {
+                                            setState(() {
+                                              _preferences.backgroundPreferences
+                                                  .showLatticeAxes = value;
+                                            });
+                                            _applyPreferences();
+                                          }
+                                        }
+                                      : null,
+                                ),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                      'Show lattice axes (dotted lines for non-Cartesian lattices)'),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.large),
+
+                          // --- Grid section ---
+                          Text(
+                            'Grid',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
 
                           // Show grid checkbox
                           Row(
@@ -716,153 +799,203 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 },
                               ),
                               const SizedBox(width: 8),
-                              const Text('Show axes and grids'),
+                              const Text('Show grid'),
                             ],
                           ),
-                          const SizedBox(height: AppSpacing.medium),
 
-                          // Grid size
-                          IntInput(
-                            key: PreferencesKeys.gridSizeInput,
-                            label: 'Grid size',
-                            value: _preferences.backgroundPreferences.gridSize,
-                            onChanged: (value) {
-                              setState(() {
-                                _preferences.backgroundPreferences.gridSize =
-                                    value;
-                              });
-                              _applyPreferences();
-                            },
-                            minimumValue: 1,
-                          ),
-                          const SizedBox(height: AppSpacing.medium),
+                          // Grid sub-options (indented, visually disabled when grid is off)
+                          IgnorePointer(
+                            ignoring:
+                                !_preferences.backgroundPreferences.showGrid,
+                            child: Opacity(
+                              opacity:
+                                  _preferences.backgroundPreferences.showGrid
+                                      ? 1.0
+                                      : 0.4,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: AppSpacing.small),
 
-                          // Grid color
-                          IVec3Input(
-                            key: PreferencesKeys.gridColorInput,
-                            label: 'Grid color (RGB)',
-                            value: _preferences.backgroundPreferences.gridColor,
-                            onChanged: (value) {
-                              setState(() {
-                                _preferences.backgroundPreferences.gridColor =
-                                    value;
-                              });
-                              _applyPreferences();
-                            },
-                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
-                            maximumValue:
-                                const APIIVec3(x: 255, y: 255, z: 255),
-                          ),
-                          const SizedBox(height: AppSpacing.medium),
+                                    // Grid size
+                                    IntInput(
+                                      key: PreferencesKeys.gridSizeInput,
+                                      label: 'Grid size',
+                                      value: _preferences
+                                          .backgroundPreferences.gridSize,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _preferences.backgroundPreferences
+                                              .gridSize = value;
+                                        });
+                                        _applyPreferences();
+                                      },
+                                      minimumValue: 1,
+                                    ),
+                                    const SizedBox(height: AppSpacing.small),
 
-                          // Grid strong color
-                          IVec3Input(
-                            key: PreferencesKeys.gridStrongColorInput,
-                            label: 'Grid strong color (RGB)',
-                            value: _preferences
-                                .backgroundPreferences.gridStrongColor,
-                            onChanged: (value) {
-                              setState(() {
-                                _preferences.backgroundPreferences
-                                    .gridStrongColor = value;
-                              });
-                              _applyPreferences();
-                            },
-                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
-                            maximumValue:
-                                const APIIVec3(x: 255, y: 255, z: 255),
-                          ),
-                          const SizedBox(height: AppSpacing.medium),
+                                    // Grid color
+                                    IVec3Input(
+                                      key: PreferencesKeys.gridColorInput,
+                                      label: 'Grid color (RGB)',
+                                      value: _preferences
+                                          .backgroundPreferences.gridColor,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _preferences.backgroundPreferences
+                                              .gridColor = value;
+                                        });
+                                        _applyPreferences();
+                                      },
+                                      minimumValue:
+                                          const APIIVec3(x: 0, y: 0, z: 0),
+                                      maximumValue: const APIIVec3(
+                                          x: 255, y: 255, z: 255),
+                                    ),
+                                    const SizedBox(height: AppSpacing.small),
 
-                          // Show lattice axes checkbox
-                          Row(
-                            children: [
-                              Checkbox(
-                                key: PreferencesKeys.showLatticeAxesCheckbox,
-                                value: _preferences
-                                    .backgroundPreferences.showLatticeAxes,
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      _preferences.backgroundPreferences
-                                          .showLatticeAxes = value;
-                                    });
-                                    _applyPreferences();
-                                  }
-                                },
+                                    // Grid strong color
+                                    IVec3Input(
+                                      key: PreferencesKeys.gridStrongColorInput,
+                                      label: 'Grid strong color (RGB)',
+                                      value: _preferences.backgroundPreferences
+                                          .gridStrongColor,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _preferences.backgroundPreferences
+                                              .gridStrongColor = value;
+                                        });
+                                        _applyPreferences();
+                                      },
+                                      minimumValue:
+                                          const APIIVec3(x: 0, y: 0, z: 0),
+                                      maximumValue: const APIIVec3(
+                                          x: 255, y: 255, z: 255),
+                                    ),
+                                    const SizedBox(height: AppSpacing.small),
+
+                                    // Show lattice grid checkbox
+                                    Row(
+                                      children: [
+                                        Checkbox(
+                                          key: PreferencesKeys
+                                              .showLatticeGridCheckbox,
+                                          value: _preferences
+                                              .backgroundPreferences
+                                              .showLatticeGrid,
+                                          onChanged: (value) {
+                                            if (value != null) {
+                                              setState(() {
+                                                _preferences
+                                                    .backgroundPreferences
+                                                    .showLatticeGrid = value;
+                                              });
+                                              _applyPreferences();
+                                            }
+                                          },
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Expanded(
+                                          child: Text(
+                                              'Show lattice grid (secondary grid for non-Cartesian lattices)'),
+                                        ),
+                                      ],
+                                    ),
+
+                                    // Lattice grid colors (double-indented, disabled when lattice grid off)
+                                    IgnorePointer(
+                                      ignoring: !_preferences
+                                          .backgroundPreferences
+                                          .showLatticeGrid,
+                                      child: Opacity(
+                                        opacity: _preferences
+                                                .backgroundPreferences
+                                                .showLatticeGrid
+                                            ? 1.0
+                                            : 0.4,
+                                        child: Padding(
+                                          padding:
+                                              const EdgeInsets.only(left: 24),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const SizedBox(
+                                                  height: AppSpacing.small),
+
+                                              // Lattice grid color
+                                              IVec3Input(
+                                                key: PreferencesKeys
+                                                    .latticeGridColorInput,
+                                                label:
+                                                    'Lattice grid color (RGB)',
+                                                value: _preferences
+                                                    .backgroundPreferences
+                                                    .latticeGridColor,
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _preferences
+                                                        .backgroundPreferences
+                                                        .latticeGridColor = value;
+                                                  });
+                                                  _applyPreferences();
+                                                },
+                                                minimumValue: const APIIVec3(
+                                                    x: 0, y: 0, z: 0),
+                                                maximumValue: const APIIVec3(
+                                                    x: 255, y: 255, z: 255),
+                                              ),
+                                              const SizedBox(
+                                                  height: AppSpacing.small),
+
+                                              // Lattice grid strong color
+                                              IVec3Input(
+                                                key: PreferencesKeys
+                                                    .latticeGridStrongColorInput,
+                                                label:
+                                                    'Lattice grid strong color (RGB)',
+                                                value: _preferences
+                                                    .backgroundPreferences
+                                                    .latticeGridStrongColor,
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _preferences
+                                                            .backgroundPreferences
+                                                            .latticeGridStrongColor =
+                                                        value;
+                                                  });
+                                                  _applyPreferences();
+                                                },
+                                                minimumValue: const APIIVec3(
+                                                    x: 0, y: 0, z: 0),
+                                                maximumValue: const APIIVec3(
+                                                    x: 255, y: 255, z: 255),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                    'Show lattice axes (dotted lines for non-Cartesian lattices)'),
-                              ),
-                            ],
+                            ),
                           ),
-                          const SizedBox(height: AppSpacing.medium),
 
-                          // Show lattice grid checkbox
-                          Row(
-                            children: [
-                              Checkbox(
-                                key: PreferencesKeys.showLatticeGridCheckbox,
-                                value: _preferences
-                                    .backgroundPreferences.showLatticeGrid,
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      _preferences.backgroundPreferences
-                                          .showLatticeGrid = value;
-                                    });
-                                    _applyPreferences();
-                                  }
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                    'Show lattice grid (secondary grid for non-Cartesian lattices)'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.medium),
+                          const SizedBox(height: AppSpacing.large),
 
-                          // Lattice grid color
-                          IVec3Input(
-                            key: PreferencesKeys.latticeGridColorInput,
-                            label: 'Lattice grid color (RGB)',
-                            value: _preferences
-                                .backgroundPreferences.latticeGridColor,
-                            onChanged: (value) {
-                              setState(() {
-                                _preferences.backgroundPreferences
-                                    .latticeGridColor = value;
-                              });
-                              _applyPreferences();
-                            },
-                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
-                            maximumValue:
-                                const APIIVec3(x: 255, y: 255, z: 255),
+                          // --- Drawing Plane section ---
+                          Text(
+                            'Drawing Plane',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
-                          const SizedBox(height: AppSpacing.medium),
-
-                          // Lattice grid strong color
-                          IVec3Input(
-                            key: PreferencesKeys.latticeGridStrongColorInput,
-                            label: 'Lattice grid strong color (RGB)',
-                            value: _preferences
-                                .backgroundPreferences.latticeGridStrongColor,
-                            onChanged: (value) {
-                              setState(() {
-                                _preferences.backgroundPreferences
-                                    .latticeGridStrongColor = value;
-                              });
-                              _applyPreferences();
-                            },
-                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
-                            maximumValue:
-                                const APIIVec3(x: 255, y: 255, z: 255),
-                          ),
-                          const SizedBox(height: AppSpacing.medium),
+                          const SizedBox(height: AppSpacing.small),
 
                           // Drawing plane grid color
                           IVec3Input(
@@ -881,7 +1014,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             maximumValue:
                                 const APIIVec3(x: 255, y: 255, z: 255),
                           ),
-                          const SizedBox(height: AppSpacing.medium),
+                          const SizedBox(height: AppSpacing.small),
 
                           // Drawing plane grid strong color
                           IVec3Input(
