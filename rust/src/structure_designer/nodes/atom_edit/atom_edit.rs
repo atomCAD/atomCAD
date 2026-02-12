@@ -1428,6 +1428,11 @@ pub fn draw_bond_by_ray(
     ray_dir: &DVec3,
 ) {
     // Phase 1: Hit test and gather info (immutable borrows)
+    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
+        Some(data) => data.output_diff,
+        None => return,
+    };
+
     let (atom_source, atom_info) = {
         let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
             Some(s) => s,
@@ -1458,26 +1463,35 @@ pub fn draw_bond_by_ray(
             _ => return,
         };
 
-        let eval_cache = match structure_designer.get_selected_node_eval_cache() {
-            Some(cache) => cache,
-            None => return,
-        };
-        let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
-            Some(cache) => cache,
-            None => return,
-        };
+        if is_diff_view {
+            // In diff view, atom IDs are diff-native — no provenance needed
+            let atom = match result_structure.get_atom(result_atom_id) {
+                Some(a) => (a.atomic_number, a.position),
+                None => return,
+            };
+            (None, (result_atom_id, atom))
+        } else {
+            let eval_cache = match structure_designer.get_selected_node_eval_cache() {
+                Some(cache) => cache,
+                None => return,
+            };
+            let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
+                Some(cache) => cache,
+                None => return,
+            };
 
-        let source = match eval_cache.provenance.sources.get(&result_atom_id) {
-            Some(s) => s.clone(),
-            None => return,
-        };
+            let source = match eval_cache.provenance.sources.get(&result_atom_id) {
+                Some(s) => s.clone(),
+                None => return,
+            };
 
-        let atom = match result_structure.get_atom(result_atom_id) {
-            Some(a) => (a.atomic_number, a.position),
-            None => return,
-        };
+            let atom = match result_structure.get_atom(result_atom_id) {
+                Some(a) => (a.atomic_number, a.position),
+                None => return,
+            };
 
-        (source, atom)
+            (Some(source), (result_atom_id, atom))
+        }
     };
 
     // Phase 2: Resolve to diff atom ID and handle bond workflow
@@ -1486,10 +1500,20 @@ pub fn draw_bond_by_ray(
         None => return,
     };
 
-    // Resolve to diff atom ID (add identity entry for base atoms)
-    let diff_atom_id = match &atom_source {
-        AtomSource::BasePassthrough(_) => atom_edit_data.diff.add_atom(atom_info.0, atom_info.1),
-        AtomSource::DiffMatchedBase { diff_id, .. } | AtomSource::DiffAdded(diff_id) => *diff_id,
+    // Resolve to diff atom ID
+    let diff_atom_id = if is_diff_view {
+        // In diff view, the hit ID is already a diff atom ID
+        atom_info.0
+    } else {
+        // In result view, map through provenance (add identity entry for base atoms)
+        match &atom_source {
+            Some(AtomSource::BasePassthrough(_)) => {
+                atom_edit_data.diff.add_atom(atom_info.1 .0, atom_info.1 .1)
+            }
+            Some(AtomSource::DiffMatchedBase { diff_id, .. })
+            | Some(AtomSource::DiffAdded(diff_id)) => *diff_id,
+            None => return,
+        }
     };
 
     // Get current last_atom_id (copies the value, ending the immutable borrow)
@@ -1778,33 +1802,39 @@ fn classify_diff_atom(diff: &AtomicStructure, diff_id: u32) -> DiffAtomKind {
 pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic_number: i16) {
     // Phase 1: Gather base atom info (immutable borrows)
     let base_atoms_to_replace = {
-        let eval_cache = match structure_designer.get_selected_node_eval_cache() {
-            Some(cache) => cache,
-            None => return,
-        };
-        let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
-            Some(cache) => cache,
-            None => return,
-        };
-        let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
-            Some(s) => s,
-            None => return,
-        };
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
             None => return,
         };
 
-        let mut base_atoms: Vec<(u32, DVec3)> = Vec::new();
-        for &base_id in &atom_edit_data.selection.selected_base_atoms {
-            if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
-                if let Some(atom) = result_structure.get_atom(result_id) {
-                    base_atoms.push((base_id, atom.position));
+        // In diff view, there are no base atoms in the selection — skip provenance
+        if atom_edit_data.output_diff {
+            Vec::new()
+        } else {
+            let eval_cache = match structure_designer.get_selected_node_eval_cache() {
+                Some(cache) => cache,
+                None => return,
+            };
+            let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
+                Some(cache) => cache,
+                None => return,
+            };
+            let result_structure =
+                match structure_designer.get_atomic_structure_from_selected_node() {
+                    Some(s) => s,
+                    None => return,
+                };
+
+            let mut base_atoms: Vec<(u32, DVec3)> = Vec::new();
+            for &base_id in &atom_edit_data.selection.selected_base_atoms {
+                if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
+                    if let Some(atom) = result_structure.get_atom(result_id) {
+                        base_atoms.push((base_id, atom.position));
+                    }
                 }
             }
+            base_atoms
         }
-
-        base_atoms
     };
 
     // Phase 2: Apply replacements
@@ -1860,28 +1890,35 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
             None => return,
         };
 
-        let eval_cache = match structure_designer.get_selected_node_eval_cache() {
-            Some(cache) => cache,
-            None => return,
-        };
-        let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
-            Some(cache) => cache,
-            None => return,
-        };
-        let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
-            Some(s) => s,
-            None => return,
-        };
+        // In diff view, there are no base atoms in the selection — skip provenance
+        let base_info: Vec<(u32, i16, DVec3)> = if atom_edit_data.output_diff {
+            Vec::new()
+        } else {
+            let eval_cache = match structure_designer.get_selected_node_eval_cache() {
+                Some(cache) => cache,
+                None => return,
+            };
+            let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
+                Some(cache) => cache,
+                None => return,
+            };
+            let result_structure =
+                match structure_designer.get_atomic_structure_from_selected_node() {
+                    Some(s) => s,
+                    None => return,
+                };
 
-        // Collect base atom info for adding to diff with anchors
-        let mut base_info: Vec<(u32, i16, DVec3)> = Vec::new();
-        for &base_id in &atom_edit_data.selection.selected_base_atoms {
-            if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
-                if let Some(atom) = result_structure.get_atom(result_id) {
-                    base_info.push((base_id, atom.atomic_number, atom.position));
+            // Collect base atom info for adding to diff with anchors
+            let mut info: Vec<(u32, i16, DVec3)> = Vec::new();
+            for &base_id in &atom_edit_data.selection.selected_base_atoms {
+                if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
+                    if let Some(atom) = result_structure.get_atom(result_id) {
+                        info.push((base_id, atom.atomic_number, atom.position));
+                    }
                 }
             }
-        }
+            info
+        };
 
         (current_transform, base_info)
     };
