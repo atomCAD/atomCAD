@@ -157,6 +157,7 @@ pub fn tessellate_atomic_structure(
                         if bond.is_delete_marker() && atomic_structure.is_diff() {
                             tessellate_bond_delete_marker(
                                 output_mesh,
+                                atomic_structure,
                                 atom,
                                 other_atom,
                                 params,
@@ -476,20 +477,34 @@ fn tessellate_bond_inline(
     );
 }
 
-/// Tessellate a bond delete marker as a red cylinder (triangle mesh path)
+/// Tessellate a bond delete marker as a red cylinder (triangle mesh path).
+/// Selection (magenta) takes priority over delete marker color (red).
 fn tessellate_bond_delete_marker(
     output_mesh: &mut Mesh,
+    atomic_structure: &AtomicStructure,
     atom1: &Atom,
     atom2: &Atom,
     params: &AtomicTessellatorParams,
 ) {
+    let bond_ref = BondReference {
+        atom_id1: atom1.id,
+        atom_id2: atom2.id,
+    };
+    let selected = atomic_structure.decorator().is_bond_selected(&bond_ref);
+    let color = if selected {
+        to_selected_color(&DELETE_MARKER_COLOR)
+    } else {
+        DELETE_MARKER_COLOR
+    };
+    let roughness = if selected { 0.2 } else { DELETE_MARKER_ROUGHNESS };
+
     tessellator::tessellate_cylinder(
         output_mesh,
         &atom2.position,
         &atom1.position,
         BAS_STICK_RADIUS,
         params.cylinder_divisions,
-        &Material::new(&DELETE_MARKER_COLOR, DELETE_MARKER_ROUGHNESS, 0.0),
+        &Material::new(&color, roughness, 0.0),
         false,
         None,
         None,
@@ -565,12 +580,14 @@ pub fn tessellate_atomic_structure_impostors(
                         if bond.is_delete_marker() && atomic_structure.is_diff() {
                             tessellate_bond_delete_marker_impostor(
                                 bond_impostor_mesh,
+                                atomic_structure,
                                 atom,
                                 other_atom,
                             );
                         } else {
                             tessellate_bond_impostor_inline(
                                 bond_impostor_mesh,
+                                atomic_structure,
                                 atom,
                                 other_atom,
                                 bond.bond_order(),
@@ -647,31 +664,44 @@ pub fn tessellate_atom_impostor(
 /// Tessellate bond impostor using inline bond data
 fn tessellate_bond_impostor_inline(
     bond_impostor_mesh: &mut BondImpostorMesh,
+    atomic_structure: &AtomicStructure,
     atom1: &Atom,
     atom2: &Atom,
     _bond_order: u8,
 ) {
-    // Note: For impostors, selection is handled in the shader
-    let base_color = Vec3::new(0.8, 0.8, 0.8);
+    let color = get_bond_color_inline(atom1.id, atom2.id, atomic_structure);
 
     bond_impostor_mesh.add_bond_quad(
         &atom1.position.as_vec3(),
         &atom2.position.as_vec3(),
         BAS_STICK_RADIUS as f32,
-        &base_color.to_array(),
+        &color.to_array(),
     );
 }
 
-/// Tessellate a bond delete marker as a red cylinder (impostor path)
+/// Tessellate a bond delete marker as a red cylinder (impostor path).
+/// Selection (magenta) takes priority over delete marker color (red).
 fn tessellate_bond_delete_marker_impostor(
     bond_impostor_mesh: &mut BondImpostorMesh,
+    atomic_structure: &AtomicStructure,
     atom1: &Atom,
     atom2: &Atom,
 ) {
+    let bond_ref = BondReference {
+        atom_id1: atom1.id,
+        atom_id2: atom2.id,
+    };
+    let selected = atomic_structure.decorator().is_bond_selected(&bond_ref);
+    let color = if selected {
+        to_selected_color(&DELETE_MARKER_COLOR)
+    } else {
+        DELETE_MARKER_COLOR
+    };
+
     bond_impostor_mesh.add_bond_quad(
         &atom1.position.as_vec3(),
         &atom2.position.as_vec3(),
         BAS_STICK_RADIUS as f32,
-        &DELETE_MARKER_COLOR.to_array(),
+        &color.to_array(),
     );
 }
