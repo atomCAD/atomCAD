@@ -147,25 +147,30 @@ pub fn tessellate_atomic_structure(
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
                 if atom.id < other_atom_id {
-                    // Skip bond delete markers in diff structures
-                    if bond.is_delete_marker() && atomic_structure.is_diff() {
-                        continue;
-                    }
-
                     if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
                             continue;
                         }
 
-                        tessellate_bond_inline(
-                            output_mesh,
-                            atomic_structure,
-                            atom,
-                            other_atom,
-                            bond.bond_order(),
-                            params,
-                        );
+                        // Bond delete markers in diff structures render as red
+                        if bond.is_delete_marker() && atomic_structure.is_diff() {
+                            tessellate_bond_delete_marker(
+                                output_mesh,
+                                atom,
+                                other_atom,
+                                params,
+                            );
+                        } else {
+                            tessellate_bond_inline(
+                                output_mesh,
+                                atomic_structure,
+                                atom,
+                                other_atom,
+                                bond.bond_order(),
+                                params,
+                            );
+                        }
                     }
                 }
             }
@@ -471,6 +476,26 @@ fn tessellate_bond_inline(
     );
 }
 
+/// Tessellate a bond delete marker as a red cylinder (triangle mesh path)
+fn tessellate_bond_delete_marker(
+    output_mesh: &mut Mesh,
+    atom1: &Atom,
+    atom2: &Atom,
+    params: &AtomicTessellatorParams,
+) {
+    tessellator::tessellate_cylinder(
+        output_mesh,
+        &atom2.position,
+        &atom1.position,
+        BAS_STICK_RADIUS,
+        params.cylinder_divisions,
+        &Material::new(&DELETE_MARKER_COLOR, DELETE_MARKER_ROUGHNESS, 0.0),
+        false,
+        None,
+        None,
+    );
+}
+
 // ============================================================================
 // IMPOSTOR TESSELLATION METHODS
 // ============================================================================
@@ -530,23 +555,27 @@ pub fn tessellate_atomic_structure_impostors(
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
                 if atom.id < other_atom_id {
-                    // Skip bond delete markers in diff structures
-                    if bond.is_delete_marker() && atomic_structure.is_diff() {
-                        continue;
-                    }
-
                     if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
                             continue;
                         }
 
-                        tessellate_bond_impostor_inline(
-                            bond_impostor_mesh,
-                            atom,
-                            other_atom,
-                            bond.bond_order(),
-                        );
+                        // Bond delete markers in diff structures render as red
+                        if bond.is_delete_marker() && atomic_structure.is_diff() {
+                            tessellate_bond_delete_marker_impostor(
+                                bond_impostor_mesh,
+                                atom,
+                                other_atom,
+                            );
+                        } else {
+                            tessellate_bond_impostor_inline(
+                                bond_impostor_mesh,
+                                atom,
+                                other_atom,
+                                bond.bond_order(),
+                            );
+                        }
                     }
                 }
             }
@@ -630,5 +659,19 @@ fn tessellate_bond_impostor_inline(
         &atom2.position.as_vec3(),
         BAS_STICK_RADIUS as f32,
         &base_color.to_array(),
+    );
+}
+
+/// Tessellate a bond delete marker as a red cylinder (impostor path)
+fn tessellate_bond_delete_marker_impostor(
+    bond_impostor_mesh: &mut BondImpostorMesh,
+    atom1: &Atom,
+    atom2: &Atom,
+) {
+    bond_impostor_mesh.add_bond_quad(
+        &atom1.position.as_vec3(),
+        &atom2.position.as_vec3(),
+        BAS_STICK_RADIUS as f32,
+        &DELETE_MARKER_COLOR.to_array(),
     );
 }

@@ -684,6 +684,23 @@ impl NodeData for AtomEditData {
                 diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows;
                 if decorate {
                     diff_clone.decorator_mut().from_selected_node = true;
+
+                    // Apply diff atom selection directly (no provenance needed —
+                    // diff atom IDs ARE the output atom IDs in diff view)
+                    for &diff_id in &self.selection.selected_diff_atoms {
+                        diff_clone.set_atom_selected(diff_id, true);
+                    }
+
+                    // Apply bond selection
+                    for bond_ref in &self.selection.selected_bonds {
+                        diff_clone.decorator_mut().select_bond(bond_ref);
+                    }
+
+                    // Apply selection transform
+                    if let Some(ref transform) = self.selection.selection_transform {
+                        diff_clone.decorator_mut().selection_transform =
+                            Some(transform.clone());
+                    }
                 }
                 return NetworkResult::Atomic(diff_clone);
             }
@@ -1100,9 +1117,19 @@ pub fn select_atom_or_bond_by_ray(
         )
     };
 
+    // In diff view, atom IDs from the hit test are diff-native IDs — no provenance needed
+    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
+        Some(data) => data.output_diff,
+        None => false,
+    };
+
     match hit_result {
-        HitTestResult::Atom(result_atom_id, _distance) => {
-            select_result_atom(structure_designer, result_atom_id, select_modifier)
+        HitTestResult::Atom(atom_id, _distance) => {
+            if is_diff_view {
+                select_diff_atom_directly(structure_designer, atom_id, select_modifier)
+            } else {
+                select_result_atom(structure_designer, atom_id, select_modifier)
+            }
         }
         HitTestResult::Bond(bond_reference, _distance) => {
             select_result_bond(structure_designer, &bond_reference, select_modifier)
@@ -1231,6 +1258,74 @@ fn select_result_atom(
                 .iter()
                 .filter_map(|&id| position_map.get(&(true, id)).copied()),
         )
+        .collect();
+
+    atom_edit_data.selection.selection_transform = calc_transform_from_positions(&positions);
+
+    true
+}
+
+/// Select an atom directly in diff view (no provenance needed).
+///
+/// In diff view, the displayed structure IS the diff, so atom IDs from the hit test
+/// are diff atom IDs. All selected atoms go into `selected_diff_atoms`.
+fn select_diff_atom_directly(
+    structure_designer: &mut StructureDesigner,
+    diff_atom_id: u32,
+    select_modifier: SelectModifier,
+) -> bool {
+    // Phase 1: Gather positions (immutable borrow)
+    let (clicked_position, mut position_map) = {
+        let displayed_structure =
+            match structure_designer.get_atomic_structure_from_selected_node() {
+                Some(s) => s,
+                None => return false,
+            };
+        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+            Some(data) => data,
+            None => return false,
+        };
+
+        let clicked_pos = match displayed_structure.get_atom(diff_atom_id) {
+            Some(a) => a.position,
+            None => return false,
+        };
+
+        // Collect positions for currently selected diff atoms
+        let mut sel_positions: HashMap<u32, DVec3> = HashMap::new();
+        for &id in &atom_edit_data.selection.selected_diff_atoms {
+            if let Some(atom) = displayed_structure.get_atom(id) {
+                sel_positions.insert(id, atom.position);
+            }
+        }
+
+        (clicked_pos, sel_positions)
+    };
+
+    position_map.insert(diff_atom_id, clicked_position);
+
+    // Phase 2: Mutate selection
+    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(data) => data,
+        None => return false,
+    };
+
+    if matches!(select_modifier, SelectModifier::Replace) {
+        atom_edit_data.selection.clear();
+    }
+
+    apply_modifier_to_set(
+        &mut atom_edit_data.selection.selected_diff_atoms,
+        diff_atom_id,
+        &select_modifier,
+    );
+
+    // Recalculate selection transform from diff atom positions
+    let positions: Vec<DVec3> = atom_edit_data
+        .selection
+        .selected_diff_atoms
+        .iter()
+        .filter_map(|&id| position_map.get(&id).copied())
         .collect();
 
     atom_edit_data.selection.selection_transform = calc_transform_from_positions(&positions);
@@ -1431,11 +1526,33 @@ pub fn draw_bond_by_ray(
 
 /// Delete all selected atoms and bonds.
 ///
+/// In result view:
 /// - Base atoms: adds delete markers at their positions.
 /// - Diff-added atoms: removed from diff entirely.
 /// - Diff-matched atoms: converted to delete markers.
 /// - Selected bonds: adds bond delete markers (bond_order = 0).
+///
+/// In diff view (reversal semantics — "delete the edit"):
+/// - Delete marker atoms: removed from diff (restores base atom).
+/// - Atoms with anchors (moved/replaced base atoms): converted to delete markers.
+/// - Pure addition atoms: removed from diff entirely.
+/// - Bond delete markers: removed from diff (restores base bond).
+/// - Normal bonds: removed from diff.
 pub fn delete_selected_atoms_and_bonds(structure_designer: &mut StructureDesigner) {
+    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
+        Some(data) => data.output_diff,
+        None => return,
+    };
+
+    if is_diff_view {
+        delete_selected_in_diff_view(structure_designer);
+    } else {
+        delete_selected_in_result_view(structure_designer);
+    }
+}
+
+/// Delete selected items in result view (provenance-based).
+fn delete_selected_in_result_view(structure_designer: &mut StructureDesigner) {
     // Phase 1: Gather info about what to delete (immutable borrows)
     let (base_atoms_to_delete, diff_atoms_to_delete, bonds_to_delete) = {
         let eval_cache = match structure_designer.get_selected_node_eval_cache() {
@@ -1558,6 +1675,99 @@ pub fn delete_selected_atoms_and_bonds(structure_designer: &mut StructureDesigne
 
     atom_edit_data.selection.selected_bonds.clear();
     atom_edit_data.selection.selection_transform = None;
+}
+
+/// Delete selected items in diff view (reversal semantics).
+///
+/// In diff view, "delete" means "remove this edit from the diff":
+/// - Delete markers → removed (restores the base atom)
+/// - Moved/replaced atoms (have anchor) → converted to delete markers
+/// - Pure additions → removed entirely
+/// - Bond delete markers → removed (restores the base bond)
+/// - Normal diff bonds → removed
+fn delete_selected_in_diff_view(structure_designer: &mut StructureDesigner) {
+    // Phase 1: Gather what to delete (immutable borrows)
+    let (diff_atoms_to_delete, bonds_to_delete) = {
+        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+            Some(data) => data,
+            None => return,
+        };
+
+        let diff_atoms: Vec<(u32, DiffAtomKind)> = atom_edit_data
+            .selection
+            .selected_diff_atoms
+            .iter()
+            .filter_map(|&diff_id| {
+                let kind = classify_diff_atom(&atom_edit_data.diff, diff_id);
+                Some((diff_id, kind))
+            })
+            .collect();
+
+        let bonds: Vec<BondReference> =
+            atom_edit_data.selection.selected_bonds.iter().cloned().collect();
+
+        (diff_atoms, bonds)
+    };
+
+    // Phase 2: Apply deletions
+    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(data) => data,
+        None => return,
+    };
+
+    for (diff_id, kind) in &diff_atoms_to_delete {
+        match kind {
+            // Delete marker → remove from diff (un-deletes the base atom)
+            DiffAtomKind::DeleteMarker => {
+                atom_edit_data.remove_from_diff(*diff_id);
+            }
+            // Moved/replaced base atom → convert to delete marker
+            DiffAtomKind::MatchedBase => {
+                convert_diff_atom_to_delete_marker(atom_edit_data, *diff_id);
+            }
+            // Pure addition → remove entirely
+            DiffAtomKind::PureAddition => {
+                atom_edit_data.remove_from_diff(*diff_id);
+            }
+        }
+        atom_edit_data.selection.selected_diff_atoms.remove(diff_id);
+    }
+
+    // Bonds in diff view: remove the bond from the diff entirely
+    // (whether it's a delete marker or a normal bond, removing it from the diff
+    // restores the base state for that bond pair)
+    for bond_ref in &bonds_to_delete {
+        atom_edit_data.diff.delete_bond(bond_ref);
+    }
+
+    atom_edit_data.selection.selected_bonds.clear();
+    atom_edit_data.selection.selection_transform = None;
+}
+
+/// Classification of a diff atom based on its properties (no provenance needed).
+enum DiffAtomKind {
+    /// Atom with atomic_number == 0 (marks a base atom for deletion)
+    DeleteMarker,
+    /// Atom with an anchor position (moved or replaced base atom)
+    MatchedBase,
+    /// Normal atom without anchor (pure addition to the structure)
+    PureAddition,
+}
+
+/// Classify a diff atom by inspecting the diff structure directly.
+fn classify_diff_atom(diff: &AtomicStructure, diff_id: u32) -> DiffAtomKind {
+    if let Some(atom) = diff.get_atom(diff_id) {
+        if atom.is_delete_marker() {
+            DiffAtomKind::DeleteMarker
+        } else if diff.has_anchor_position(diff_id) {
+            DiffAtomKind::MatchedBase
+        } else {
+            DiffAtomKind::PureAddition
+        }
+    } else {
+        // Atom not found — treat as removable
+        DiffAtomKind::PureAddition
+    }
 }
 
 /// Replace all selected atoms with a new element.
