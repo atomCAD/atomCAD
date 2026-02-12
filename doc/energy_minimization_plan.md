@@ -10,6 +10,8 @@ The atom_edit node lets users drag atoms to new positions, but those positions a
 - **Easy to integrate**: Pure Rust, no external runtime dependencies (no Python, no C++ FFI)
 - **Good enough, not perfect**: Interactive CAD quality, not publication-grade simulations
 
+**Scope**: The initial implementation is **Tier 2: bond stretching, angle bending, torsion, and inversion.** No van der Waals, no electrostatics. These can be added later once the bonded terms are validated.
+
 ### Alternatives Considered
 
 **FFI to C++ libraries (RDKit, OpenBabel, OpenMM, LAMMPS):**
@@ -46,6 +48,14 @@ Two clean open-source UFF implementations exist. We use both:
 **OpenBabel** (~1,800 lines C++, single file) — cross-reference and independent validation. Easier to see the complete flow in one place. Its test suite validates analytical gradients numerically (forward difference, 5-8% tolerance per component) for all 18 test molecules — something RDKit's tests don't do. OpenBabel's 18-molecule regression set serves as an independent cross-validation dataset.
 
 When porting a specific energy term, the implementor should read both RDKit's modular file and the corresponding section in OpenBabel's single file, and resolve any discrepancies by consulting the original UFF paper.
+
+### Licensing
+
+RDKit is **BSD-3-Clause** (permissive) — safe to port code structure and logic from. OpenBabel is **GPL-2** — use only as a cross-reference for understanding the math, do not copy code verbatim. The UFF parameter values are from a published paper (Rappé et al. 1992, JACS) and are public domain science.
+
+### Error Handling for Unsupported Atom Types
+
+UFF defines 126 atom types covering most of the periodic table, but some elements (e.g., copper, lanthanides) have no parameters or incomplete coverage. When the atom typer encounters an element/hybridization combination with no UFF parameters, the implementation should **return an error** (e.g., `Err("No UFF parameters for element Cu with 4 bonds")`). This propagates up to the node evaluation as a `NetworkResult::Error`, which the UI already displays. Do not silently skip atoms or use fallback parameters — incorrect silent behavior is worse than a clear error.
 
 ---
 
@@ -350,11 +360,26 @@ A new `minimize_atom_edit(node_id, freeze_mode)` API function handles the atom_e
 
 ---
 
-## 8. Future Work (not in this plan)
+## 8. Interactive Minimization (future, but architecturally planned for)
+
+A natural evolution of the button-press approach: as the user drags an atom, the surrounding structure continuously relaxes in real-time (as SAMSON supports via IM-UFF).
+
+**Performance is not a concern** for molecules under ~500 atoms. UFF energy+gradient evaluation is cheap arithmetic (dot products, trig functions). For 200 atoms, a single evaluation takes microseconds. At 30 FPS (~33ms per frame), running 5-10 relaxation steps per frame is comfortably within budget. The IM-UFF paper achieved real-time on molecules with thousands of atoms.
+
+**The current plan's architecture supports this without fundamental changes.** What interactive mode adds:
+
+1. **"Run N steps" mode** — the minimizer takes `max_iterations` as a parameter. Run 5-10 steps per frame instead of running to convergence. This is a parameter change, not an architectural change.
+2. **Topology caching** — build the `UffForceField` once when the user starts dragging, reuse across frames. Only rebuild if bonds are created/broken. The `UffForceField` struct is already designed for this (constructed once, `energy_and_gradients()` called repeatedly with different positions).
+3. **Dragged atom as frozen** — the atom under the cursor is pinned at the cursor position, everything else relaxes. Same frozen-atom mechanism as the button-press mode, just a different frozen set.
+
+Nothing in the ForceField trait, energy terms, topology builder, or parameter table needs to change for interactive mode.
+
+---
+
+## 9. Other Future Work (not in this plan)
 
 - **Van der Waals** (Tier 3) — add after bonded terms are validated; handles steric clashes
 - **Molecular dynamics** — velocity Verlet integration with thermostat
 - **DREIDING force field** — alternative FF; could use `dreid-kernel` crate or implement similarly
-- **Interactive minimization** — run batches of 5-10 steps, update display in real-time (IM-UFF approach)
-- **Selective minimization** — minimize only selected atoms in atom_edit
+- **Explicit per-atom freeze flags** — user selects atoms to freeze before minimizing
 - **Constraint support** — fix bond lengths, angles, or planes during minimization
