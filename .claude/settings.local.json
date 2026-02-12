@@ -65,7 +65,28 @@
       "WebFetch(domain:arxiv.org)",
       "WebFetch(domain:newton.ex.ac.uk)",
       "WebFetch(domain:link.aps.org)",
-      "WebFetch(domain:www.researchgate.net)"
+      "WebFetch(domain:www.researchgate.net)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:lammpstube.com)",
+      "WebFetch(domain:documentation.samson-connect.net)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:towhee.sourceforge.net)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:team.inria.fr)",
+      "WebFetch(domain:lib.rs)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:www.scm.com)",
+      "WebFetch(domain:open-babel.readthedocs.io)",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:faculty.fiu.edu)",
+      "WebFetch(domain:www.semanticscholar.org)",
+      "WebFetch(domain:mason.gmu.edu)",
+      "WebFetch(domain:www.sklogwiki.org)",
+      "WebFetch(domain:gaussian.com)",
+      "Bash(curl:*)",
+      "WebFetch(domain:manpages.debian.org)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }
