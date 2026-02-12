@@ -496,7 +496,11 @@ fn tessellate_bond_delete_marker(
     } else {
         DELETE_MARKER_COLOR
     };
-    let roughness = if selected { 0.2 } else { DELETE_MARKER_ROUGHNESS };
+    let roughness = if selected {
+        0.2
+    } else {
+        DELETE_MARKER_ROUGHNESS
+    };
 
     tessellator::tessellate_cylinder(
         output_mesh,

@@ -1,16 +1,10 @@
+use super::text_format::{parse_diff_text, serialize_diff};
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::crystolecule::atomic_constants::{ATOM_INFO, CHEMICAL_ELEMENTS, DEFAULT_ATOM_INFO};
 use crate::crystolecule::atomic_structure::HitTestResult;
-use crate::crystolecule::atomic_structure::inline_bond::{
-    BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
-    BOND_SINGLE, BOND_TRIPLE,
-};
-use crate::crystolecule::atomic_structure::{
-    AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER,
-};
+use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::crystolecule::atomic_structure_diff::{
     AtomSource, DiffProvenance, DiffStats, apply_diff, enrich_diff_with_base_bonds,
 };
@@ -25,7 +19,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::text_format::{TextValue, format_float};
+use crate::structure_designer::text_format::TextValue;
 use crate::util::transform::Transform;
 use glam::f64::{DQuat, DVec3};
 use std::collections::{HashMap, HashSet};
@@ -308,342 +302,170 @@ impl AtomEditData {
             _ => false,
         }
     }
-}
 
-// =============================================================================
-// Phase 10: Text Format Helpers
-// =============================================================================
+    // --- Core mutation methods (testable without StructureDesigner) ---
 
-/// Get element symbol from atomic number.
-fn element_symbol(atomic_number: i16) -> String {
-    ATOM_INFO
-        .get(&(atomic_number as i32))
-        .unwrap_or(&DEFAULT_ATOM_INFO)
-        .symbol
-        .clone()
-}
-
-/// Normalize an element symbol to standard capitalization (first char upper, rest lower).
-fn normalize_element_symbol(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => {
-            let mut result = c.to_uppercase().to_string();
-            result.extend(chars.flat_map(|c| c.to_lowercase()));
-            result
-        }
-    }
-}
-
-/// Format a position as (x, y, z) text.
-fn format_position(pos: &DVec3) -> String {
-    format!(
-        "({}, {}, {})",
-        format_float(pos.x),
-        format_float(pos.y),
-        format_float(pos.z)
-    )
-}
-
-/// Get human-readable name for a bond order.
-fn bond_order_name(order: u8) -> &'static str {
-    match order {
-        BOND_SINGLE => "single",
-        BOND_DOUBLE => "double",
-        BOND_TRIPLE => "triple",
-        BOND_QUADRUPLE => "quadruple",
-        BOND_AROMATIC => "aromatic",
-        BOND_DATIVE => "dative",
-        BOND_METALLIC => "metallic",
-        _ => "unknown",
-    }
-}
-
-/// Parse a bond order name to its numeric value.
-fn parse_bond_order_name(name: &str) -> Option<u8> {
-    match name.to_lowercase().as_str() {
-        "single" | "1" => Some(BOND_SINGLE),
-        "double" | "2" => Some(BOND_DOUBLE),
-        "triple" | "3" => Some(BOND_TRIPLE),
-        "quadruple" | "4" => Some(BOND_QUADRUPLE),
-        "aromatic" | "5" => Some(BOND_AROMATIC),
-        "dative" | "6" => Some(BOND_DATIVE),
-        "metallic" | "7" => Some(BOND_METALLIC),
-        _ => None,
-    }
-}
-
-/// Serialize a diff `AtomicStructure` to human-readable text format.
-///
-/// Format:
-/// - `+El @ (x, y, z)` — atom addition (new atom, no base match expected)
-/// - `~El @ (x, y, z)` — atom replacement (matches base atom at same position, changes element)
-/// - `~El @ (x, y, z) [from (ox, oy, oz)]` — atom move (matches base atom at anchor, placed at new position)
-/// - `- @ (x, y, z)` — atom delete marker
-/// - `bond A-B order_name` — bond between atom lines A and B
-/// - `unbond A-B` — bond delete marker between atom lines A and B
-///
-/// The `~` prefix indicates the atom is intended to match a base atom (replacement or move).
-/// The `+` prefix indicates a pure addition. Both are functionally equivalent in the diff
-/// algorithm (positional matching determines the actual effect), but `~` preserves user intent.
-///
-/// Atom line numbers (A, B) are 1-indexed, referring to the sequential order of atom entries.
-pub fn serialize_diff(diff: &AtomicStructure) -> String {
-    let mut lines = Vec::new();
-    let mut atom_id_to_line: HashMap<u32, usize> = HashMap::new();
-    let mut line_num = 1;
-
-    // Collect and sort atom IDs for deterministic output
-    let mut atom_ids: Vec<u32> = diff.iter_atoms().map(|(id, _)| *id).collect();
-    atom_ids.sort();
-
-    for &atom_id in &atom_ids {
-        let atom = diff.get_atom(atom_id).unwrap();
-        atom_id_to_line.insert(atom_id, line_num);
-        line_num += 1;
-
-        let pos = format_position(&atom.position);
-
-        if atom.atomic_number == DELETED_SITE_ATOMIC_NUMBER {
-            lines.push(format!("- @ {}", pos));
-        } else if let Some(anchor) = diff.anchor_position(atom_id) {
-            let el = element_symbol(atom.atomic_number);
-            // Self-anchor (anchor == position): replacement, no [from ...] needed
-            // Different anchor: move, include [from ...]
-            if (anchor - &atom.position).length() < 1e-10 {
-                lines.push(format!("~{} @ {}", el, pos));
-            } else {
-                let anchor_pos = format_position(anchor);
-                lines.push(format!("~{} @ {} [from {}]", el, pos, anchor_pos));
+    /// Convert a matched diff atom to a delete marker.
+    ///
+    /// The delete marker is placed at the match position (anchor if present,
+    /// else atom position) so it matches the same base atom during apply_diff.
+    pub fn convert_to_delete_marker(&mut self, diff_atom_id: u32) {
+        let match_position = {
+            let anchor = self.diff.anchor_position(diff_atom_id).copied();
+            match anchor {
+                Some(pos) => pos,
+                None => match self.diff.get_atom(diff_atom_id) {
+                    Some(atom) => atom.position,
+                    None => return,
+                },
             }
-        } else {
-            let el = element_symbol(atom.atomic_number);
-            lines.push(format!("+{} @ {}", el, pos));
-        }
+        };
+
+        self.remove_from_diff(diff_atom_id);
+        self.mark_for_deletion(match_position);
     }
 
-    // Collect bonds (deduplicated: only where atom_id < other_id)
-    for &atom_id in &atom_ids {
-        let atom = diff.get_atom(atom_id).unwrap();
-        for bond in &atom.bonds {
-            let other_id = bond.other_atom_id();
-            if atom_id < other_id {
-                if let (Some(&a), Some(&b)) = (
-                    atom_id_to_line.get(&atom_id),
-                    atom_id_to_line.get(&other_id),
-                ) {
-                    if bond.bond_order() == BOND_DELETED {
-                        lines.push(format!("unbond {}-{}", a, b));
-                    } else {
-                        lines.push(format!(
-                            "bond {}-{} {}",
-                            a,
-                            b,
-                            bond_order_name(bond.bond_order())
-                        ));
-                    }
+    /// Apply deletion in result view. Called by `delete_selected_in_result_view`
+    /// after gathering positions and provenance info from StructureDesigner.
+    ///
+    /// - `base_atoms`: (base_id, position) — adds delete markers at these positions
+    /// - `diff_atoms`: (diff_id, is_pure_addition) — removes pure additions,
+    ///   converts matched atoms to delete markers
+    /// - `bonds`: bond deletion info for adding bond delete markers
+    pub fn apply_delete_result_view(
+        &mut self,
+        base_atoms: &[(u32, DVec3)],
+        diff_atoms: &[(u32, bool)],
+        bonds: &[BondDeletionInfo],
+    ) {
+        // Delete base atoms (add delete markers)
+        for (base_id, position) in base_atoms {
+            self.mark_for_deletion(*position);
+            self.selection.selected_base_atoms.remove(base_id);
+        }
+
+        // Delete diff atoms
+        for (diff_id, is_pure_addition) in diff_atoms {
+            if *is_pure_addition {
+                self.remove_from_diff(*diff_id);
+            } else {
+                self.convert_to_delete_marker(*diff_id);
+            }
+            self.selection.selected_diff_atoms.remove(diff_id);
+        }
+
+        // Delete bonds (add bond delete markers)
+        for info in bonds {
+            let actual_a = match info.diff_id_a {
+                Some(id) => id,
+                None => match info.identity_a {
+                    Some((an, pos)) => self.diff.add_atom(an, pos),
+                    None => continue,
+                },
+            };
+            let actual_b = match info.diff_id_b {
+                Some(id) => id,
+                None => match info.identity_b {
+                    Some((an, pos)) => self.diff.add_atom(an, pos),
+                    None => continue,
+                },
+            };
+            self.delete_bond_in_diff(actual_a, actual_b);
+        }
+
+        self.selection.selected_bonds.clear();
+        self.selection.selection_transform = None;
+    }
+
+    /// Apply deletion in diff view (reversal semantics). Called by
+    /// `delete_selected_in_diff_view` after gathering selected IDs.
+    ///
+    /// - `diff_atoms`: (diff_id, DiffAtomKind) — action depends on kind
+    /// - `bonds`: bond references to remove from diff
+    pub fn apply_delete_diff_view(
+        &mut self,
+        diff_atoms: &[(u32, DiffAtomKind)],
+        bonds: &[BondReference],
+    ) {
+        for (diff_id, kind) in diff_atoms {
+            match kind {
+                // Delete marker → remove from diff (un-deletes the base atom)
+                DiffAtomKind::DeleteMarker => {
+                    self.remove_from_diff(*diff_id);
+                }
+                // Moved/replaced base atom → convert to delete marker
+                DiffAtomKind::MatchedBase => {
+                    self.convert_to_delete_marker(*diff_id);
+                }
+                // Pure addition → remove entirely
+                DiffAtomKind::PureAddition => {
+                    self.remove_from_diff(*diff_id);
                 }
             }
-        }
-    }
-
-    lines.join("\n")
-}
-
-/// Parse a human-readable diff text into an `AtomicStructure` with `is_diff = true`.
-///
-/// See `serialize_diff` for the format specification.
-pub fn parse_diff_text(text: &str) -> Result<AtomicStructure, String> {
-    let mut diff = AtomicStructure::new_diff();
-    // Maps 1-indexed line number to diff atom ID
-    let mut line_to_atom_id: Vec<u32> = Vec::new();
-
-    for (line_idx, raw_line) in text.lines().enumerate() {
-        let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
+            self.selection.selected_diff_atoms.remove(diff_id);
         }
 
-        let line_number = line_idx + 1;
-
-        if let Some(rest) = line.strip_prefix('+') {
-            // Addition: +El @ (x, y, z)
-            let (element, position) = parse_element_and_position(rest.trim())
-                .map_err(|e| format!("Line {}: {}", line_number, e))?;
-            let atomic_number = resolve_element(&element)
-                .ok_or_else(|| format!("Line {}: Unknown element '{}'", line_number, element))?;
-            let atom_id = diff.add_atom(atomic_number, position);
-            line_to_atom_id.push(atom_id);
-        } else if let Some(rest) = line.strip_prefix("- ") {
-            // Deletion: - @ (x, y, z)
-            let rest = rest
-                .trim()
-                .strip_prefix('@')
-                .ok_or_else(|| format!("Line {}: Expected '@' after '-'", line_number))?
-                .trim();
-            let position =
-                parse_position(rest).map_err(|e| format!("Line {}: {}", line_number, e))?;
-            let atom_id = diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, position);
-            line_to_atom_id.push(atom_id);
-        } else if let Some(rest) = line.strip_prefix('~') {
-            // Modification: ~El @ (x, y, z) [from (ox, oy, oz)]
-            // Without [from ...]: replacement at same position (anchor = position)
-            let (element, position, anchor) = parse_modification(rest.trim())
-                .map_err(|e| format!("Line {}: {}", line_number, e))?;
-            let atomic_number = resolve_element(&element)
-                .ok_or_else(|| format!("Line {}: Unknown element '{}'", line_number, element))?;
-            let atom_id = diff.add_atom(atomic_number, position);
-            // Set anchor: explicit [from ...] or self-anchor (marks as modification)
-            let anchor_pos = anchor.unwrap_or(position);
-            diff.set_anchor_position(atom_id, anchor_pos);
-            line_to_atom_id.push(atom_id);
-        } else if let Some(rest) = line.strip_prefix("bond ") {
-            // Bond: bond A-B order_name
-            let (a, b, order) =
-                parse_bond_line(rest.trim()).map_err(|e| format!("Line {}: {}", line_number, e))?;
-            let &atom_a = line_to_atom_id
-                .get(a - 1)
-                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, a))?;
-            let &atom_b = line_to_atom_id
-                .get(b - 1)
-                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, b))?;
-            diff.add_bond(atom_a, atom_b, order);
-        } else if let Some(rest) = line.strip_prefix("unbond ") {
-            // Bond deletion: unbond A-B
-            let (a, b) =
-                parse_atom_pair(rest.trim()).map_err(|e| format!("Line {}: {}", line_number, e))?;
-            let &atom_a = line_to_atom_id
-                .get(a - 1)
-                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, a))?;
-            let &atom_b = line_to_atom_id
-                .get(b - 1)
-                .ok_or_else(|| format!("Line {}: Atom index {} out of range", line_number, b))?;
-            diff.add_bond(atom_a, atom_b, BOND_DELETED);
-        } else {
-            return Err(format!(
-                "Line {}: Unrecognized diff entry: '{}'",
-                line_number, line
-            ));
+        // Bonds in diff view: remove the bond from the diff entirely
+        for bond_ref in bonds {
+            self.diff.delete_bond(bond_ref);
         }
+
+        self.selection.selected_bonds.clear();
+        self.selection.selection_transform = None;
     }
 
-    Ok(diff)
-}
+    /// Apply element replacement to selected atoms.
+    ///
+    /// - `atomic_number`: the new element
+    /// - `base_atoms`: (base_id, position) — adds to diff with new element
+    pub fn apply_replace(&mut self, atomic_number: i16, base_atoms: &[(u32, DVec3)]) {
+        // Replace diff atoms (update atomic_number in place)
+        let diff_ids: Vec<u32> = self.selection.selected_diff_atoms.iter().copied().collect();
+        for diff_id in &diff_ids {
+            self.diff.set_atomic_number(*diff_id, atomic_number);
+        }
 
-/// Resolve an element symbol to an atomic number.
-fn resolve_element(symbol: &str) -> Option<i16> {
-    // Try as-is first, then normalized
-    if let Some(&n) = CHEMICAL_ELEMENTS.get(symbol) {
-        return Some(n as i16);
-    }
-    let normalized = normalize_element_symbol(symbol);
-    CHEMICAL_ELEMENTS.get(&normalized).map(|&n| n as i16)
-}
+        // Replace base atoms (add to diff with new element)
+        for (base_id, position) in base_atoms {
+            let new_diff_id = self.replace_in_diff(*position, atomic_number);
+            self.selection.selected_base_atoms.remove(base_id);
+            self.selection.selected_diff_atoms.insert(new_diff_id);
+        }
 
-/// Parse "El @ (x, y, z)" into (element, position).
-fn parse_element_and_position(text: &str) -> Result<(String, DVec3), String> {
-    let at_idx = text.find('@').ok_or("Expected '@'")?;
-    let element = text[..at_idx].trim().to_string();
-    if element.is_empty() {
-        return Err("Missing element symbol".to_string());
-    }
-    let pos_str = text[at_idx + 1..].trim();
-    let position = parse_position(pos_str)?;
-    Ok((element, position))
-}
-
-/// Parse "El @ (x, y, z) [from (ox, oy, oz)]" into (element, position, optional anchor).
-fn parse_modification(text: &str) -> Result<(String, DVec3, Option<DVec3>), String> {
-    let at_idx = text.find('@').ok_or("Expected '@'")?;
-    let element = text[..at_idx].trim().to_string();
-    if element.is_empty() {
-        return Err("Missing element symbol".to_string());
+        self.selection.clear_bonds();
     }
 
-    let rest = text[at_idx + 1..].trim();
+    /// Apply a relative transform to selected atoms.
+    ///
+    /// - `relative`: the delta transform to apply
+    /// - `base_atoms`: (base_id, atomic_number, old_position) — adds to diff with anchor
+    pub fn apply_transform(&mut self, relative: &Transform, base_atoms: &[(u32, i16, DVec3)]) {
+        // Transform existing diff atoms (update position, keep anchor)
+        let diff_ids: Vec<u32> = self.selection.selected_diff_atoms.iter().copied().collect();
+        for diff_id in diff_ids {
+            let new_position = if let Some(atom) = self.diff.get_atom(diff_id) {
+                relative.apply_to_position(&atom.position)
+            } else {
+                continue;
+            };
+            self.diff.set_atom_position(diff_id, new_position);
+        }
 
-    if let Some(from_idx) = rest.find("[from") {
-        let pos_str = rest[..from_idx].trim();
-        let position = parse_position(pos_str)?;
+        // Add base atoms to diff with anchors at old positions
+        for (base_id, atomic_number, old_position) in base_atoms {
+            let new_position = relative.apply_to_position(old_position);
+            let new_diff_id = self.diff.add_atom(*atomic_number, new_position);
+            self.diff.set_anchor_position(new_diff_id, *old_position);
+            self.selection.selected_base_atoms.remove(base_id);
+            self.selection.selected_diff_atoms.insert(new_diff_id);
+        }
 
-        let from_str = rest[from_idx..].trim();
-        let from_str = from_str
-            .strip_prefix("[from")
-            .ok_or("Expected '[from'")?
-            .trim();
-        let from_str = from_str.strip_suffix(']').ok_or("Expected closing ']'")?;
-        let anchor = parse_position(from_str.trim())?;
-
-        Ok((element, position, Some(anchor)))
-    } else {
-        let position = parse_position(rest)?;
-        Ok((element, position, None))
+        // Update selection transform algebraically (no need to re-eval)
+        if let Some(ref current_transform) = self.selection.selection_transform {
+            self.selection.selection_transform = Some(current_transform.apply_to_new(relative));
+        }
+        self.selection.clear_bonds();
     }
-}
-
-/// Parse a position "(x, y, z)" into `DVec3`.
-fn parse_position(text: &str) -> Result<DVec3, String> {
-    let text = text.trim();
-    let inner = text
-        .strip_prefix('(')
-        .ok_or("Expected '(' for position")?
-        .strip_suffix(')')
-        .ok_or("Expected ')' for position")?;
-
-    let parts: Vec<&str> = inner.split(',').collect();
-    if parts.len() != 3 {
-        return Err(format!(
-            "Expected 3 components in position, got {}",
-            parts.len()
-        ));
-    }
-
-    let x: f64 = parts[0]
-        .trim()
-        .parse()
-        .map_err(|_| format!("Invalid x coordinate: '{}'", parts[0].trim()))?;
-    let y: f64 = parts[1]
-        .trim()
-        .parse()
-        .map_err(|_| format!("Invalid y coordinate: '{}'", parts[1].trim()))?;
-    let z: f64 = parts[2]
-        .trim()
-        .parse()
-        .map_err(|_| format!("Invalid z coordinate: '{}'", parts[2].trim()))?;
-
-    Ok(DVec3::new(x, y, z))
-}
-
-/// Parse "A-B order_name" for a bond line.
-fn parse_bond_line(text: &str) -> Result<(usize, usize, u8), String> {
-    let parts: Vec<&str> = text.split_whitespace().collect();
-    if parts.len() != 2 {
-        return Err("Expected format: A-B order_name".to_string());
-    }
-
-    let (a, b) = parse_atom_pair(parts[0])?;
-    let order = parse_bond_order_name(parts[1])
-        .ok_or_else(|| format!("Unknown bond order: '{}'", parts[1]))?;
-
-    Ok((a, b, order))
-}
-
-/// Parse "A-B" atom pair into 1-indexed line numbers.
-fn parse_atom_pair(text: &str) -> Result<(usize, usize), String> {
-    let dash_idx = text.find('-').ok_or("Expected '-' between atom indices")?;
-    let a: usize = text[..dash_idx]
-        .trim()
-        .parse()
-        .map_err(|_| format!("Invalid atom index: '{}'", text[..dash_idx].trim()))?;
-    let b: usize = text[dash_idx + 1..]
-        .trim()
-        .parse()
-        .map_err(|_| format!("Invalid atom index: '{}'", text[dash_idx + 1..].trim()))?;
-    if a == 0 || b == 0 {
-        return Err("Atom indices are 1-based".to_string());
-    }
-    Ok((a, b))
 }
 
 impl NodeData for AtomEditData {
@@ -698,8 +520,7 @@ impl NodeData for AtomEditData {
 
                     // Apply selection transform
                     if let Some(ref transform) = self.selection.selection_transform {
-                        diff_clone.decorator_mut().selection_transform =
-                            Some(transform.clone());
+                        diff_clone.decorator_mut().selection_transform = Some(transform.clone());
                     }
                 }
                 return NetworkResult::Atomic(diff_clone);
@@ -820,10 +641,19 @@ impl NodeData for AtomEditData {
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
-            ("diff".to_string(), TextValue::String(serialize_diff(&self.diff))),
+            (
+                "diff".to_string(),
+                TextValue::String(serialize_diff(&self.diff)),
+            ),
             ("output_diff".to_string(), TextValue::Bool(self.output_diff)),
-            ("show_anchor_arrows".to_string(), TextValue::Bool(self.show_anchor_arrows)),
-            ("base_bonds".to_string(), TextValue::Bool(self.include_base_bonds_in_diff)),
+            (
+                "show_anchor_arrows".to_string(),
+                TextValue::Bool(self.show_anchor_arrows),
+            ),
+            (
+                "base_bonds".to_string(),
+                TextValue::Bool(self.include_base_bonds_in_diff),
+            ),
             ("tolerance".to_string(), TextValue::Float(self.tolerance)),
         ]
     }
@@ -1041,11 +871,12 @@ fn apply_modifier_to_set(set: &mut HashSet<u32>, id: u32, modifier: &SelectModif
 
 /// Info needed to delete a bond: diff atom IDs for both endpoints
 /// (None if the atom needs an identity entry), plus the atom info for identity entries.
-struct BondDeletionInfo {
-    diff_id_a: Option<u32>,
-    diff_id_b: Option<u32>,
-    identity_a: Option<(i16, DVec3)>,
-    identity_b: Option<(i16, DVec3)>,
+#[derive(Debug, Clone)]
+pub struct BondDeletionInfo {
+    pub diff_id_a: Option<u32>,
+    pub diff_id_b: Option<u32>,
+    pub identity_a: Option<(i16, DVec3)>,
+    pub identity_b: Option<(i16, DVec3)>,
 }
 
 /// Extract the diff atom ID from an AtomSource, if present.
@@ -1055,26 +886,6 @@ fn get_diff_id_from_source(source: &AtomSource) -> Option<u32> {
         AtomSource::DiffMatchedBase { diff_id, .. } => Some(*diff_id),
         AtomSource::DiffAdded(diff_id) => Some(*diff_id),
     }
-}
-
-/// Convert a matched diff atom to a delete marker.
-///
-/// The delete marker is placed at the match position (anchor if present,
-/// else atom position) so it matches the same base atom during apply_diff.
-fn convert_diff_atom_to_delete_marker(atom_edit_data: &mut AtomEditData, diff_atom_id: u32) {
-    let match_position = {
-        let anchor = atom_edit_data.diff.anchor_position(diff_atom_id).copied();
-        match anchor {
-            Some(pos) => pos,
-            None => match atom_edit_data.diff.get_atom(diff_atom_id) {
-                Some(atom) => atom.position,
-                None => return,
-            },
-        }
-    };
-
-    atom_edit_data.remove_from_diff(diff_atom_id);
-    atom_edit_data.mark_for_deletion(match_position);
 }
 
 // --- Public interaction functions ---
@@ -1276,11 +1087,11 @@ fn select_diff_atom_directly(
 ) -> bool {
     // Phase 1: Gather positions (immutable borrow)
     let (clicked_position, mut position_map) = {
-        let displayed_structure =
-            match structure_designer.get_atomic_structure_from_selected_node() {
-                Some(s) => s,
-                None => return false,
-            };
+        let displayed_structure = match structure_designer.get_atomic_structure_from_selected_node()
+        {
+            Some(s) => s,
+            None => return false,
+        };
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
             None => return false,
@@ -1508,7 +1319,7 @@ pub fn draw_bond_by_ray(
         // In result view, map through provenance (add identity entry for base atoms)
         match &atom_source {
             Some(AtomSource::BasePassthrough(_)) => {
-                atom_edit_data.diff.add_atom(atom_info.1 .0, atom_info.1 .1)
+                atom_edit_data.diff.add_atom(atom_info.1.0, atom_info.1.1)
             }
             Some(AtomSource::DiffMatchedBase { diff_id, .. })
             | Some(AtomSource::DiffAdded(diff_id)) => *diff_id,
@@ -1662,43 +1473,11 @@ fn delete_selected_in_result_view(structure_designer: &mut StructureDesigner) {
         None => return,
     };
 
-    // Delete base atoms (add delete markers)
-    for (base_id, position) in &base_atoms_to_delete {
-        atom_edit_data.mark_for_deletion(*position);
-        atom_edit_data.selection.selected_base_atoms.remove(base_id);
-    }
-
-    // Delete diff atoms
-    for (diff_id, is_pure_addition) in &diff_atoms_to_delete {
-        if *is_pure_addition {
-            atom_edit_data.remove_from_diff(*diff_id);
-        } else {
-            convert_diff_atom_to_delete_marker(atom_edit_data, *diff_id);
-        }
-        atom_edit_data.selection.selected_diff_atoms.remove(diff_id);
-    }
-
-    // Delete bonds (add bond delete markers)
-    for info in &bonds_to_delete {
-        let actual_a = match info.diff_id_a {
-            Some(id) => id,
-            None => match info.identity_a {
-                Some((an, pos)) => atom_edit_data.diff.add_atom(an, pos),
-                None => continue,
-            },
-        };
-        let actual_b = match info.diff_id_b {
-            Some(id) => id,
-            None => match info.identity_b {
-                Some((an, pos)) => atom_edit_data.diff.add_atom(an, pos),
-                None => continue,
-            },
-        };
-        atom_edit_data.delete_bond_in_diff(actual_a, actual_b);
-    }
-
-    atom_edit_data.selection.selected_bonds.clear();
-    atom_edit_data.selection.selection_transform = None;
+    atom_edit_data.apply_delete_result_view(
+        &base_atoms_to_delete,
+        &diff_atoms_to_delete,
+        &bonds_to_delete,
+    );
 }
 
 /// Delete selected items in diff view (reversal semantics).
@@ -1721,14 +1500,18 @@ fn delete_selected_in_diff_view(structure_designer: &mut StructureDesigner) {
             .selection
             .selected_diff_atoms
             .iter()
-            .filter_map(|&diff_id| {
+            .map(|&diff_id| {
                 let kind = classify_diff_atom(&atom_edit_data.diff, diff_id);
-                Some((diff_id, kind))
+                (diff_id, kind)
             })
             .collect();
 
-        let bonds: Vec<BondReference> =
-            atom_edit_data.selection.selected_bonds.iter().cloned().collect();
+        let bonds: Vec<BondReference> = atom_edit_data
+            .selection
+            .selected_bonds
+            .iter()
+            .cloned()
+            .collect();
 
         (diff_atoms, bonds)
     };
@@ -1739,37 +1522,12 @@ fn delete_selected_in_diff_view(structure_designer: &mut StructureDesigner) {
         None => return,
     };
 
-    for (diff_id, kind) in &diff_atoms_to_delete {
-        match kind {
-            // Delete marker → remove from diff (un-deletes the base atom)
-            DiffAtomKind::DeleteMarker => {
-                atom_edit_data.remove_from_diff(*diff_id);
-            }
-            // Moved/replaced base atom → convert to delete marker
-            DiffAtomKind::MatchedBase => {
-                convert_diff_atom_to_delete_marker(atom_edit_data, *diff_id);
-            }
-            // Pure addition → remove entirely
-            DiffAtomKind::PureAddition => {
-                atom_edit_data.remove_from_diff(*diff_id);
-            }
-        }
-        atom_edit_data.selection.selected_diff_atoms.remove(diff_id);
-    }
-
-    // Bonds in diff view: remove the bond from the diff entirely
-    // (whether it's a delete marker or a normal bond, removing it from the diff
-    // restores the base state for that bond pair)
-    for bond_ref in &bonds_to_delete {
-        atom_edit_data.diff.delete_bond(bond_ref);
-    }
-
-    atom_edit_data.selection.selected_bonds.clear();
-    atom_edit_data.selection.selection_transform = None;
+    atom_edit_data.apply_delete_diff_view(&diff_atoms_to_delete, &bonds_to_delete);
 }
 
 /// Classification of a diff atom based on its properties (no provenance needed).
-enum DiffAtomKind {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffAtomKind {
     /// Atom with atomic_number == 0 (marks a base atom for deletion)
     DeleteMarker,
     /// Atom with an anchor position (moved or replaced base atom)
@@ -1779,7 +1537,7 @@ enum DiffAtomKind {
 }
 
 /// Classify a diff atom by inspecting the diff structure directly.
-fn classify_diff_atom(diff: &AtomicStructure, diff_id: u32) -> DiffAtomKind {
+pub fn classify_diff_atom(diff: &AtomicStructure, diff_id: u32) -> DiffAtomKind {
     if let Some(atom) = diff.get_atom(diff_id) {
         if atom.is_delete_marker() {
             DiffAtomKind::DeleteMarker
@@ -1843,30 +1601,7 @@ pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic
         None => return,
     };
 
-    // Replace diff atoms (update atomic_number in place)
-    let diff_ids: Vec<u32> = atom_edit_data
-        .selection
-        .selected_diff_atoms
-        .iter()
-        .copied()
-        .collect();
-    for diff_id in &diff_ids {
-        atom_edit_data
-            .diff
-            .set_atomic_number(*diff_id, atomic_number);
-    }
-
-    // Replace base atoms (add to diff with new element)
-    for (base_id, position) in &base_atoms_to_replace {
-        let new_diff_id = atom_edit_data.replace_in_diff(*position, atomic_number);
-        atom_edit_data.selection.selected_base_atoms.remove(base_id);
-        atom_edit_data
-            .selection
-            .selected_diff_atoms
-            .insert(new_diff_id);
-    }
-
-    atom_edit_data.selection.clear_bonds();
+    atom_edit_data.apply_replace(atomic_number, &base_atoms_to_replace);
 }
 
 /// Transform selected atoms using an absolute transform.
@@ -1932,37 +1667,5 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
         None => return,
     };
 
-    // Transform existing diff atoms (update position, keep anchor)
-    let diff_ids: Vec<u32> = atom_edit_data
-        .selection
-        .selected_diff_atoms
-        .iter()
-        .copied()
-        .collect();
-    for diff_id in diff_ids {
-        let new_position = if let Some(atom) = atom_edit_data.diff.get_atom(diff_id) {
-            relative.apply_to_position(&atom.position)
-        } else {
-            continue;
-        };
-        atom_edit_data.diff.set_atom_position(diff_id, new_position);
-    }
-
-    // Add base atoms to diff with anchors at old positions
-    for (base_id, atomic_number, old_position) in &base_atoms_info {
-        let new_position = relative.apply_to_position(old_position);
-        let new_diff_id = atom_edit_data.diff.add_atom(*atomic_number, new_position);
-        atom_edit_data
-            .diff
-            .set_anchor_position(new_diff_id, *old_position);
-        atom_edit_data.selection.selected_base_atoms.remove(base_id);
-        atom_edit_data
-            .selection
-            .selected_diff_atoms
-            .insert(new_diff_id);
-    }
-
-    // Update selection transform algebraically (no need to re-eval)
-    atom_edit_data.selection.selection_transform = Some(current_transform.apply_to_new(&relative));
-    atom_edit_data.selection.clear_bonds();
+    atom_edit_data.apply_transform(&relative, &base_atoms_info);
 }

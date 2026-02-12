@@ -5,7 +5,7 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
 };
-use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
+use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::text_format::{
     parse_diff_text, serialize_diff,
 };
 use std::collections::HashMap;
