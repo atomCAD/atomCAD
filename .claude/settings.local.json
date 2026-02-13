@@ -89,7 +89,8 @@
       "WebFetch(domain:api.github.com)",
       "Bash(pip show:*)",
       "Bash(python generate_uff_reference.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(test:*)"
     ]
   }
 }

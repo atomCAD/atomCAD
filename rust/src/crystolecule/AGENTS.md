@@ -13,7 +13,6 @@ crystolecule/
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
 ├── motif_parser.rs                 # Text format parser for motifs
-├── simulation.rs                   # Python energy minimization interface (stub)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
 ├── unit_cell_symmetries.rs         # Crystal system classification (7 systems)
 ├── atomic_structure/
@@ -26,12 +25,22 @@ crystolecule/
 │   ├── mol_exporter.rs             # MOL V3000 export
 │   ├── xyz_loader.rs               # XYZ import
 │   └── xyz_saver.rs                # XYZ export
-└── lattice_fill/
-    ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
-    ├── fill_algorithm.rs           # Recursive lattice filling (SDF sampling)
-    ├── hydrogen_passivation.rs     # H termination of dangling bonds
-    ├── placed_atom_tracker.rs      # CrystallographicAddress → atom ID map
-    └── surface_reconstruction.rs   # Diamond (100) 2×1 dimer reconstruction
+├── lattice_fill/
+│   ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
+│   ├── fill_algorithm.rs           # Recursive lattice filling (SDF sampling)
+│   ├── hydrogen_passivation.rs     # H termination of dangling bonds
+│   ├── placed_atom_tracker.rs      # CrystallographicAddress → atom ID map
+│   └── surface_reconstruction.rs   # Diamond (100) 2×1 dimer reconstruction
+└── simulation/
+    ├── mod.rs                      # Public API: minimize_energy(), MinimizationResult
+    ├── force_field.rs              # ForceField trait (energy_and_gradients)
+    ├── topology.rs                 # Interaction list enumeration from bond graph
+    ├── minimize.rs                 # L-BFGS optimizer wrapper, frozen atom support
+    └── uff/
+        ├── mod.rs                  # UffForceField: implements ForceField trait
+        ├── params.rs               # Static UFF parameter table (126 atom types)
+        ├── typer.rs                # Atom type assignment from connectivity
+        └── energy.rs               # Energy terms + analytical gradients
 ```
 
 ## Key Types
