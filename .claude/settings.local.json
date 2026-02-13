@@ -92,7 +92,8 @@
       "Bash(python:*)",
       "Bash(test:*)",
       "Bash(python3:*)",
-      "Bash(xxd:*)"
+      "Bash(xxd:*)",
+      "WebFetch(domain:docs.rs)"
     ]
   }
 }
