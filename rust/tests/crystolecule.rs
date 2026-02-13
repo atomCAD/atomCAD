@@ -45,3 +45,6 @@ mod uff_typer_test;
 
 #[path = "crystolecule/simulation/topology_test.rs"]
 mod topology_test;
+
+#[path = "crystolecule/simulation/uff_force_field_test.rs"]
+mod uff_force_field_test;
