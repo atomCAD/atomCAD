@@ -462,7 +462,9 @@ This catches transcription errors that are invisible to human review and undetec
 | 1 | COMPLETE | `simulation/` directory with 8 stub files, old Python stub deleted |
 | 2 | COMPLETE | 127 entries, 3 constants, `get_uff_params()` lookup. Verified via `verify_params.py` (1,397 values, 0 errors) |
 | 3 | COMPLETE | 27 tests (13 A1 param spot-checks + 14 A2 bond param tests). `calc_bond_rest_length()` and `calc_bond_force_constant()` ported from RDKit BondStretch.cpp. Cross-validated all 9 reference molecules' bond params against `uff_reference.json` (r0 tol=1e-4, kb tol=0.01). |
-| 4–21 | Not started | |
+| 4 | COMPLETE | `BondStretchParams` struct, `bond_stretch_energy()` and `bond_stretch_energy_and_gradient()` in `uff/energy.rs`. Ported from RDKit BondStretch.cpp. Harmonic potential E=0.5·kb·(r-r0)², gradient with chain rule through distance. Degenerate zero-distance case handled (nudge, matching RDKit). |
+| 5 | COMPLETE | 20 tests in `uff_energy_test.rs`. A3: energy at r=1.814 matches RDKit testUFF2 (E=31.4816, grad=±209.8775), equilibrium E=0, compressed bond, diagonal direction, multi-bond accumulation. A4: numerical vs analytical gradient (central difference h=1e-5, <1% rel error) for 10 bond types/geometries (C3-C3, C2=C2, C_R-C_R aromatic, O3-H, N3-H, C3-S, near-equilibrium, non-origin). Also tests gradient accumulation and degenerate zero-distance. |
+| 6–21 | Not started | |
 
 ---
 
