@@ -461,7 +461,8 @@ This catches transcription errors that are invisible to human review and undetec
 | 0 | COMPLETE | `uff_reference.json` (229 KB), `generate_uff_reference.py` |
 | 1 | COMPLETE | `simulation/` directory with 8 stub files, old Python stub deleted |
 | 2 | COMPLETE | 127 entries, 3 constants, `get_uff_params()` lookup. Verified via `verify_params.py` (1,397 values, 0 errors) |
-| 3–21 | Not started | |
+| 3 | COMPLETE | 27 tests (13 A1 param spot-checks + 14 A2 bond param tests). `calc_bond_rest_length()` and `calc_bond_force_constant()` ported from RDKit BondStretch.cpp. Cross-validated all 9 reference molecules' bond params against `uff_reference.json` (r0 tol=1e-4, kb tol=0.01). |
+| 4–21 | Not started | |
 
 ---
 

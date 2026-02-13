@@ -198,3 +198,55 @@ static LABEL_TO_INDEX: LazyLock<HashMap<&'static str, usize>> = LazyLock::new(||
 pub fn get_uff_params(label: &str) -> Option<&'static UffAtomParams> {
     LABEL_TO_INDEX.get(label).map(|&i| &UFF_PARAMS[i])
 }
+
+/// Calculates the UFF equilibrium bond rest length.
+///
+/// Applies the Pauling bond-order correction and O'Keeffe-Brese electronegativity
+/// correction to the sum of covalent radii.
+///
+/// Ported from RDKit's `Utils::calcBondRestLength()` in BondStretch.cpp (BSD-3-Clause).
+///
+/// # Arguments
+/// * `bond_order` - Bond order (1.0 for single, 1.5 for aromatic, 2.0 for double, etc.)
+/// * `params_i` - UFF parameters for atom i
+/// * `params_j` - UFF parameters for atom j
+pub fn calc_bond_rest_length(
+    bond_order: f64,
+    params_i: &UffAtomParams,
+    params_j: &UffAtomParams,
+) -> f64 {
+    let ri = params_i.r1;
+    let rj = params_j.r1;
+
+    // Pauling bond-order correction
+    let r_bo = -LAMBDA * (ri + rj) * bond_order.ln();
+
+    // O'Keeffe-Brese electronegativity correction
+    let xi = params_i.gmp_xi;
+    let xj = params_j.gmp_xi;
+    let sqrt_diff = xi.sqrt() - xj.sqrt();
+    let r_en = ri * rj * sqrt_diff * sqrt_diff / (xi * ri + xj * rj);
+
+    ri + rj + r_bo - r_en
+}
+
+/// Calculates the UFF bond stretching force constant.
+///
+/// k = 2 * G * Z_i * Z_j / r0^3
+///
+/// where G is the force constant prefactor (332.06 kcal/mol·Å) and Z_i, Z_j are
+/// the effective charges.
+///
+/// Ported from RDKit's `Utils::calcBondForceConstant()` in BondStretch.cpp (BSD-3-Clause).
+///
+/// # Arguments
+/// * `rest_length` - The equilibrium bond rest length (from `calc_bond_rest_length`)
+/// * `params_i` - UFF parameters for atom i
+/// * `params_j` - UFF parameters for atom j
+pub fn calc_bond_force_constant(
+    rest_length: f64,
+    params_i: &UffAtomParams,
+    params_j: &UffAtomParams,
+) -> f64 {
+    2.0 * G * params_i.z1 * params_j.z1 / (rest_length * rest_length * rest_length)
+}
