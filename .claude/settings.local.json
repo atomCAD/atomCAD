@@ -86,7 +86,10 @@
       "WebFetch(domain:gaussian.com)",
       "Bash(curl:*)",
       "WebFetch(domain:manpages.debian.org)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "Bash(pip show:*)",
+      "Bash(python generate_uff_reference.py:*)",
+      "Bash(python:*)"
     ]
   }
 }

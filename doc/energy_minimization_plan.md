@@ -102,6 +102,54 @@ The reference JSON file is checked into the repo at `rust/tests/crystolecule/sim
 
 **This is the "no-bullshit" end-to-end test**: if our Rust implementation produces the same energy, gradients, and geometric properties as RDKit for these molecules, the port is correct.
 
+#### Phase 0 Completion Notes
+
+**Status: COMPLETE.** Files generated:
+- `rust/tests/crystolecule/simulation/test_data/generate_uff_reference.py`
+- `rust/tests/crystolecule/simulation/test_data/uff_reference.json` (229 KB, 12,622 lines)
+
+**What the JSON contains for each molecule:**
+- `input_positions` — 3D coordinates from RDKit's ETKDGv3 distance geometry embedding (randomSeed=42). These are NOT at UFF equilibrium — they have non-trivial energy and gradients.
+- `atoms` — per-atom info including `uff_type` (inferred, see caveat below)
+- `bonds` — connectivity with bond orders
+- `bond_params`, `angle_params`, `torsion_params`, `inversion_params`, `vdw_params` — per-interaction UFF parameters extracted from RDKit's `GetUFF*Params()` Python API
+- `interaction_counts` — number of each interaction type
+- `input_energy` — `{total, bonded, vdw}` where `bonded` was computed with `vdwThresh=0` to exclude vdW
+- `input_gradients` — `{full, bonded}` — analytical gradients (dE/dx, negative of force) at input positions
+- `gradient_verification` — numerical vs analytical gradient self-check (all passed, max rel error < 1e-5)
+- `minimized_positions`, `minimized_energy`, `minimized_geometry` — after RDKit's UFF minimization
+- `butane_dihedral_scan` — 72-point constrained scan (separate top-level key)
+
+**Deviations from plan:**
+
+1. **Per-component energies (item 6) partially available.** The RDKit Python API does not expose per-term-type energies (bond vs angle vs torsion separately). Instead, we store `bonded` (all bonded terms combined, excluding vdW) and `vdw` (the difference). Individual bond/angle/torsion/inversion energies will be validated against RDKit's C++ test values (section 2.2) which provide specific per-component reference numbers.
+
+2. **Atom type labels are inferred, not from RDKit API.** `GetAtomLabel()` is not exposed in RDKit 2025.03.5 Python bindings. The script infers UFF types from element + hybridization (covers C, H, N, O, S). The definitive validation of atom typing is the per-interaction parameters — if our Rust typer produces types that yield the same kb, r0, ka, theta0 values, the typing is correct.
+
+3. **Inversion params are inferred from UFF paper rules.** `GetUFFInversionParams()` returns None in RDKit 2025.03.5 Python bindings for all atoms (likely a wrapper bug). K values were set from the UFF paper: C sp2 → K=6.0, N sp2 → K=2.0. These are marked with `"source": "inferred"` in the JSON. Validate against RDKit's C++ test values (testUFFParamGetters: K=2.0 for amide nitrogen).
+
+4. **Methanethiol (CH₃SH) chosen** as the "molecule with Si, S, or P" — tests sulfur atom typing and group 6 torsion handling.
+
+**Validation performed on reference data:**
+- Gradient self-check (numerical central difference vs analytical) passed for all 9 molecules
+- Parameter spot-checks match RDKit C++ test values: C-C kb=699.59, r0=1.514; C=C kb=1034.69, r0=1.329; H-C-H theta0=109.47°
+- Interaction counts are chemically correct (e.g., methane: 4 bonds, 6 angles, 0 torsions)
+- All 9 minimizations converged
+- Butane scan: anti=0.0, gauche=1.40, eclipsed=4.68, syn=11.13 kcal/mol (relative)
+
+**How to use in Rust tests:**
+```rust
+// Load JSON, parse molecule data
+// For each molecule:
+//   1. Build AtomicStructure from input_positions + bonds
+//   2. Run our atom typer → compare atom types
+//   3. Compute UFF parameters → compare bond_params, angle_params, etc.
+//   4. Evaluate energy at input_positions → compare input_energy.bonded
+//   5. Evaluate gradients at input_positions → compare input_gradients.bonded
+//   6. Run minimizer → compare minimized_energy.bonded, minimized geometry
+// Note: our Tier 2 implementation has no vdW, so compare against "bonded" values.
+```
+
 ### 2.1 The Core Guarantee: Numerical Gradient Verification
 
 **Neither RDKit nor OpenBabel test analytical gradients against numerical gradients.** This is the single most important test we must add.
