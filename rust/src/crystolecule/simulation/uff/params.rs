@@ -50,6 +50,7 @@ pub const AMIDE_BOND_ORDER: f64 = 1.41;
 pub const ANGLE_CORRECTION_THRESHOLD: f64 = 0.8660;
 
 /// Complete UFF parameter table (127 entries).
+#[allow(clippy::approx_constant)] // 3.141 is a UFF parameter for Hafnium, not PI
 pub static UFF_PARAMS: &[UffAtomParams] = &[
     // Row 1: H, He
     UffAtomParams {
@@ -2012,6 +2013,54 @@ pub fn sin_n_phi(cos_phi: f64, sin_phi: f64, sin_phi_sq: f64, n: u32) -> f64 {
         }
         _ => 0.0,
     }
+}
+
+/// Calculates inversion (out-of-plane) coefficients and force constant.
+///
+/// For sp2 centers with 3 neighbors, the inversion term penalizes deviation from
+/// planarity. Returns `(force_constant, c0, c1, c2)` for the energy formula:
+///   E = force_constant * (C0 + C1*cos(omega) + C2*cos(2*omega))
+/// where omega is the Wilson angle (angle between a bond and the plane of the
+/// other two bonds).
+///
+/// The force constant is pre-divided by 3 (for the 3 permutations of peripheral atoms).
+///
+/// Ported from RDKit's Utils::calcInversionCoefficientsAndForceConstant() (BSD-3-Clause).
+///
+/// # Arguments
+/// * `at2_atomic_num` - Atomic number of the central atom (sp2 center)
+/// * `is_c_bound_to_o` - True if the central atom is sp2 carbon bonded to sp2 oxygen
+pub fn calc_inversion_coefficients_and_force_constant(
+    at2_atomic_num: i32,
+    is_c_bound_to_o: bool,
+) -> (f64, f64, f64, f64) {
+    let (mut k, c0, c1, c2): (f64, f64, f64, f64);
+
+    if matches!(at2_atomic_num, 6..=8) {
+        // sp2 carbon, nitrogen, or oxygen
+        c0 = 1.0;
+        c1 = -1.0;
+        c2 = 0.0;
+        k = if is_c_bound_to_o { 50.0 } else { 6.0 };
+    } else {
+        // Group 15 elements (P, As, Sb, Bi) — not clearly explained in UFF paper;
+        // logic from MCCCS Towhee's ffuff.F, via RDKit.
+        let w0_deg: f64 = match at2_atomic_num {
+            15 => 84.4339, // phosphorus
+            33 => 86.9735, // arsenic
+            51 => 87.7047, // antimony
+            83 => 90.0,    // bismuth
+            _ => 0.0,
+        };
+        let w0 = w0_deg.to_radians();
+        c2 = 1.0;
+        c1 = -4.0 * w0.cos();
+        c0 = -(c1 * w0.cos() + c2 * (2.0 * w0).cos());
+        k = 22.0 / (c0 + c1 + c2);
+    }
+
+    k /= 3.0;
+    (k, c0, c1, c2)
 }
 
 /// Calculates UFF torsion parameters for the central bond between atoms 2 and 3.

@@ -36,3 +36,6 @@ mod uff_angle_test;
 
 #[path = "crystolecule/simulation/uff_torsion_test.rs"]
 mod uff_torsion_test;
+
+#[path = "crystolecule/simulation/uff_inversion_test.rs"]
+mod uff_inversion_test;

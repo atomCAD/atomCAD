@@ -574,6 +574,199 @@ pub fn torsion_energy_and_gradient(
 }
 
 // ============================================================================
+// Inversion (out-of-plane bending)
+// ============================================================================
+//
+// The inversion term penalizes deviation from planarity for sp2 centers.
+// Atom idx2 is the central (sp2) atom with three neighbors idx1, idx3, idx4.
+//
+// The Wilson angle omega is the angle between bond J→L and the plane IJK,
+// where J is the central atom. Let Y be the angle between J→L and the
+// IJK-plane normal: omega = pi/2 - Y, so sin(omega) = cos(Y), cos(omega) = sin(Y).
+//
+// Energy:
+//   E = K * (C0 + C1*cos(omega) + C2*cos(2*omega))
+//     = K * (C0 + C1*sin(Y) + C2*(2*sin²(Y) - 1))
+//
+// For C, N, O: C0=1, C1=-1, C2=0 → E = K*(1 - sin(Y))
+//   At planarity: Y=90° (L perpendicular to normal), sin(Y)=1, E=0
+//   Out of plane: sin(Y)<1, E>0
+//
+// For group 15 (P, As, Sb, Bi): C0, C1, C2 computed from equilibrium angle w0
+//
+// Ported from RDKit's Inversion.cpp and Utils.cpp (BSD-3-Clause).
+
+/// Pre-computed parameters for a single inversion interaction.
+#[derive(Debug, Clone)]
+pub struct InversionParams {
+    /// Index of peripheral atom I.
+    pub idx1: usize,
+    /// Index of central atom J (sp2 center).
+    pub idx2: usize,
+    /// Index of peripheral atom K.
+    pub idx3: usize,
+    /// Index of peripheral atom L (out-of-plane atom).
+    pub idx4: usize,
+    /// Force constant K in kcal/mol (already divided by 3 for the 3 permutations).
+    pub force_constant: f64,
+    /// Fourier coefficient C0.
+    pub c0: f64,
+    /// Fourier coefficient C1.
+    pub c1: f64,
+    /// Fourier coefficient C2.
+    pub c2: f64,
+}
+
+/// Computes the cosine of the angle Y between the IJK-plane normal and the J→L vector.
+///
+/// Y is the complement of the Wilson angle: omega = pi/2 - Y.
+/// When L is in the IJK plane, Y = 90°, cos(Y) = 0.
+/// When L is along the normal (maximally out of plane), Y = 0°, cos(Y) = ±1.
+///
+/// Ported from RDKit's Utils::calculateCosY() (BSD-3-Clause).
+pub fn calculate_cos_y(p1: [f64; 3], p2: [f64; 3], p3: [f64; 3], p4: [f64; 3]) -> f64 {
+    let rji = sub(p1, p2);
+    let rjk = sub(p3, p2);
+    let rjl = sub(p4, p2);
+
+    let l2ji = dot(rji, rji);
+    let l2jk = dot(rjk, rjk);
+    let l2jl = dot(rjl, rjl);
+
+    if l2ji < 1e-16 || l2jk < 1e-16 || l2jl < 1e-16 {
+        return 0.0;
+    }
+
+    // n = rJI × rJK (normal to IJK plane, not yet normalized)
+    let n = cross(rji, rjk);
+    let l2n = dot(n, n);
+    if l2n < 1e-16 {
+        return 0.0;
+    }
+
+    // cosY = n · rJL / (|n| * |rJL|)
+    dot(n, rjl) / (l2n.sqrt() * l2jl.sqrt())
+}
+
+/// Computes inversion energy for a single inversion interaction.
+///
+/// Positions are a flat array: [x0, y0, z0, x1, y1, z1, ...].
+/// Returns energy in kcal/mol.
+pub fn inversion_energy(params: &InversionParams, positions: &[f64]) -> f64 {
+    let p1 = get_pos(positions, params.idx1);
+    let p2 = get_pos(positions, params.idx2);
+    let p3 = get_pos(positions, params.idx3);
+    let p4 = get_pos(positions, params.idx4);
+
+    let cos_y = calculate_cos_y(p1, p2, p3, p4);
+    let sin_y_sq = 1.0 - cos_y * cos_y;
+    let sin_y = if sin_y_sq > 0.0 { sin_y_sq.sqrt() } else { 0.0 };
+
+    // cos(2*omega) = 2*cos²(omega) - 1 = 2*sin²(Y) - 1
+    let cos_2w = 2.0 * sin_y * sin_y - 1.0;
+
+    params.force_constant * (params.c0 + params.c1 * sin_y + params.c2 * cos_2w)
+}
+
+/// Computes inversion energy and accumulates gradients for a single inversion interaction.
+///
+/// Positions and gradients are flat arrays: [x0, y0, z0, x1, y1, z1, ...].
+/// Gradients are **accumulated** (added to existing values).
+/// Returns energy in kcal/mol.
+///
+/// The gradient computation uses the chain rule through the Wilson angle geometry.
+/// Ported from RDKit's InversionContrib::getGrad() (BSD-3-Clause).
+pub fn inversion_energy_and_gradient(
+    params: &InversionParams,
+    positions: &[f64],
+    gradients: &mut [f64],
+) -> f64 {
+    let i1 = params.idx1 * 3;
+    let i2 = params.idx2 * 3;
+    let i3 = params.idx3 * 3;
+    let i4 = params.idx4 * 3;
+
+    let p1 = get_pos(positions, params.idx1);
+    let p2 = get_pos(positions, params.idx2);
+    let p3 = get_pos(positions, params.idx3);
+    let p4 = get_pos(positions, params.idx4);
+
+    // Vectors from central atom J to each neighbor
+    let rji_raw = sub(p1, p2);
+    let rjk_raw = sub(p3, p2);
+    let rjl_raw = sub(p4, p2);
+
+    let d_ji = length(rji_raw);
+    let d_jk = length(rjk_raw);
+    let d_jl = length(rjl_raw);
+
+    if d_ji < 1e-8 || d_jk < 1e-8 || d_jl < 1e-8 {
+        return inversion_energy(params, positions);
+    }
+
+    // Normalize to unit vectors
+    let rji = [rji_raw[0] / d_ji, rji_raw[1] / d_ji, rji_raw[2] / d_ji];
+    let rjk = [rjk_raw[0] / d_jk, rjk_raw[1] / d_jk, rjk_raw[2] / d_jk];
+    let rjl = [rjl_raw[0] / d_jl, rjl_raw[1] / d_jl, rjl_raw[2] / d_jl];
+
+    // Normal to IJK plane: n = (-rJI) × rJK, then normalize
+    // (RDKit gradient convention: opposite sign from energy's calculateCosY)
+    let neg_rji = [-rji[0], -rji[1], -rji[2]];
+    let n_raw = cross(neg_rji, rjk);
+    let n_len = length(n_raw);
+    if n_len < 1e-8 {
+        return inversion_energy(params, positions);
+    }
+    let n = [n_raw[0] / n_len, n_raw[1] / n_len, n_raw[2] / n_len];
+
+    let cos_y = dot(n, rjl).clamp(-1.0, 1.0);
+    let sin_y_sq = 1.0 - cos_y * cos_y;
+    let sin_y = sin_y_sq.sqrt().max(1e-8);
+
+    let cos_theta = dot(rji, rjk).clamp(-1.0, 1.0);
+    let sin_theta_sq = 1.0 - cos_theta * cos_theta;
+    let sin_theta = sin_theta_sq.sqrt().max(1e-8);
+
+    // Energy (sinY and cos2W don't depend on the sign of cosY)
+    let cos_2w = 2.0 * sin_y * sin_y - 1.0;
+    let energy = params.force_constant * (params.c0 + params.c1 * sin_y + params.c2 * cos_2w);
+
+    // dE/dW = -K * (C1*cosY + 4*C2*cosY*sinY)
+    //
+    // Derivation: E = K*(C0 + C1*cosW + C2*cos(2W)) where cosW = sinY.
+    // dE/dY = K*cosY_energy*(C1 + 4*C2*sinY). With the gradient code's cosY
+    // convention (opposite sign from energy), and tg terms computing ∂Y/∂r:
+    // dE_dW = -K*(C1*cosY + 4*C2*cosY*sinY).
+    //
+    // Note: RDKit's Inversion.cpp has a sign error in the C2 term (uses minus
+    // instead of plus). This is harmless for C/N/O where C2=0 but incorrect
+    // for group 15 elements (P, As, Sb, Bi) where C2=1.
+    let de_dw = -params.force_constant * (params.c1 * cos_y + 4.0 * params.c2 * cos_y * sin_y);
+
+    // Cross products for gradient computation
+    let t1 = cross(rjl, rjk); // rJL × rJK
+    let t2 = cross(rji, rjl); // rJI × rJL
+    let t3 = cross(rjk, rji); // rJK × rJI
+
+    let term1 = sin_y * sin_theta;
+    let term2 = cos_y / (sin_y * sin_theta_sq);
+
+    // Geometric derivatives for each atom
+    for dim in 0..3 {
+        let tg1 = (t1[dim] / term1 - (rji[dim] - rjk[dim] * cos_theta) * term2) / d_ji;
+        let tg3 = (t2[dim] / term1 - (rjk[dim] - rji[dim] * cos_theta) * term2) / d_jk;
+        let tg4 = (t3[dim] / term1 - rjl[dim] * cos_y / sin_y) / d_jl;
+
+        gradients[i1 + dim] += de_dw * tg1;
+        gradients[i2 + dim] += -de_dw * (tg1 + tg3 + tg4);
+        gradients[i3 + dim] += de_dw * tg3;
+        gradients[i4 + dim] += de_dw * tg4;
+    }
+
+    energy
+}
+
+// ============================================================================
 // Vector helpers (inline, no allocation)
 // ============================================================================
 
