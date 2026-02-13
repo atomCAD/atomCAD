@@ -395,7 +395,77 @@ A new `minimize_atom_edit(node_id, freeze_mode)` API function handles the atom_e
 
 ---
 
-## 7. References
+## 7. Practical Notes for Implementors
+
+### Downloading RDKit C++ Source Files
+
+Each phase requires reading specific RDKit C++ files. **Do not use LLM summarization tools (WebFetch, etc.) to read these files** — they lose numerical precision and skip critical details. Instead, download the raw files with `curl` and read them directly:
+
+```bash
+# Download to test_data/ for reference (these are BSD-3-Clause licensed)
+cd rust/tests/crystolecule/simulation/test_data/
+
+# Params (Phase 2 — already downloaded and verified)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/Params.cpp" -o Params.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/Params.h" -o Params.h
+
+# Bond stretching (Phase 4)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/BondStretch.cpp" -o BondStretch.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/BondStretch.h" -o BondStretch.h
+
+# Angle bending (Phase 6)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/AngleBend.cpp" -o AngleBend.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/AngleBend.h" -o AngleBend.h
+
+# Torsion (Phase 8)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/TorsionAngle.cpp" -o TorsionAngle.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/TorsionAngle.h" -o TorsionAngle.h
+
+# Inversion (Phase 10)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/Inversion.cpp" -o Inversion.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/Inversion.h" -o Inversion.h
+
+# Atom typer (Phase 12)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/GraphMol/ForceFieldHelpers/UFF/AtomTyper.cpp" -o AtomTyper.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/GraphMol/ForceFieldHelpers/UFF/AtomTyper.h" -o AtomTyper.h
+
+# Builder — topology enumeration + param pre-computation (Phase 13, 15)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/GraphMol/ForceFieldHelpers/UFF/Builder.cpp" -o Builder.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/GraphMol/ForceFieldHelpers/UFF/Builder.h" -o Builder.h
+
+# Test files with reference numerical values (Phase 3+)
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/UFF/testUFFForceField.cpp" -o testUFFForceField.cpp
+curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/GraphMol/ForceFieldHelpers/UFF/testUFFHelpers.cpp" -o testUFFHelpers.cpp
+
+# OpenBabel cross-reference (single file, all energy terms)
+curl -sL "https://raw.githubusercontent.com/openbabel/openbabel/master/src/forcefields/forcefielduff.cpp" -o forcefielduff.cpp
+```
+
+These downloaded `.cpp`/`.h` files are reference-only and should be listed in `.gitignore` (except `Params.cpp` which is used by `verify_params.py`). The Rust implementation must be original code — do not copy C++ verbatim, especially from OpenBabel (GPL-2).
+
+### Verifying Ported Data Tables
+
+When porting numerical tables (parameter values, test reference numbers), **always write a mechanical verification script** rather than relying on visual inspection. See `verify_params.py` for the pattern:
+
+1. Download the C++ source to `test_data/`
+2. Write a Python script that parses both the C++ source and the Rust file independently
+3. Compare every value programmatically
+4. Run the script and confirm zero mismatches
+
+This catches transcription errors that are invisible to human review and undetectable by compilation.
+
+### Phase Completion Status
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 0 | COMPLETE | `uff_reference.json` (229 KB), `generate_uff_reference.py` |
+| 1 | COMPLETE | `simulation/` directory with 8 stub files, old Python stub deleted |
+| 2 | COMPLETE | 127 entries, 3 constants, `get_uff_params()` lookup. Verified via `verify_params.py` (1,397 values, 0 errors) |
+| 3–21 | Not started | |
+
+---
+
+## 8. References
 
 - **Primary porting source**: RDKit `Code/ForceField/UFF/` — [GitHub](https://github.com/rdkit/rdkit/tree/master/Code/ForceField/UFF)
 - **Atom typer source**: RDKit `Code/GraphMol/ForceFieldHelpers/UFF/AtomTyper.cpp`
@@ -408,7 +478,7 @@ A new `minimize_atom_edit(node_id, freeze_mode)` API function handles the atom_e
 
 ---
 
-## 8. Interactive Minimization (future, but architecturally planned for)
+## 9. Interactive Minimization (future, but architecturally planned for)
 
 A natural evolution of the button-press approach: as the user drags an atom, the surrounding structure continuously relaxes in real-time (as SAMSON supports via IM-UFF).
 
@@ -424,7 +494,7 @@ Nothing in the ForceField trait, energy terms, topology builder, or parameter ta
 
 ---
 
-## 9. Other Future Work (not in this plan)
+## 10. Other Future Work (not in this plan)
 
 - **Van der Waals** (Tier 3) — add after bonded terms are validated; handles steric clashes
 - **Molecular dynamics** — velocity Verlet integration with thermostat
