@@ -7,7 +7,7 @@
 // Ported from RDKit's BondStretch.cpp, AngleBend.cpp, TorsionAngle.cpp,
 // and Inversion.cpp, cross-referenced with OpenBabel's forcefielduff.cpp.
 
-use super::params::ANGLE_CORRECTION_THRESHOLD;
+use super::params::{ANGLE_CORRECTION_THRESHOLD, TorsionParams, cos_n_phi, sin_n_phi};
 
 // ============================================================================
 // Bond stretch
@@ -364,4 +364,245 @@ pub fn angle_bend_energy_and_gradient(
     gradients[k3 + 2] += factor * dcos_ds3z;
 
     energy
+}
+
+// ============================================================================
+// Torsion angle
+// ============================================================================
+//
+// E(phi) = V/2 * (1 - cos(n*phi0) * cos(n*phi))
+//
+// where phi is the dihedral angle between planes (p1,p2,p3) and (p2,p3,p4),
+// V is the force constant, n is the periodicity, and phi0 is the equilibrium
+// torsion angle (encoded as cos(n*phi0) in the `cos_term` field).
+//
+// The dihedral angle is computed via cross products of bond vectors.
+// Gradient uses the chain rule: dE/dx = dE/dCosPhi * dCosPhi/dx
+//
+// Ported from RDKit's TorsionAngle.cpp (BSD-3-Clause).
+
+/// Pre-computed parameters for a single torsion angle interaction.
+#[derive(Debug, Clone)]
+pub struct TorsionAngleParams {
+    /// Index of atom 1 (end atom).
+    pub idx1: usize,
+    /// Index of atom 2 (central bond, first atom).
+    pub idx2: usize,
+    /// Index of atom 3 (central bond, second atom).
+    pub idx3: usize,
+    /// Index of atom 4 (end atom).
+    pub idx4: usize,
+    /// Torsion parameters: force constant V, periodicity n, cos(n*phi0) term.
+    pub params: TorsionParams,
+}
+
+/// Computes the cosine of the torsion (dihedral) angle between four atoms.
+///
+/// The dihedral angle phi is the angle between:
+///   - the plane defined by atoms 1,2,3 (normal = r1 x r2)
+///   - the plane defined by atoms 2,3,4 (normal = r3 x r4)
+///
+/// Ported from RDKit's `Utils::calculateCosTorsion()` (BSD-3-Clause).
+pub fn calculate_cos_torsion(p1: [f64; 3], p2: [f64; 3], p3: [f64; 3], p4: [f64; 3]) -> f64 {
+    // r1 = p1 - p2, r2 = p3 - p2
+    let r1 = sub(p1, p2);
+    let r2 = sub(p3, p2);
+    // r3 = p2 - p3, r4 = p4 - p3
+    let r3 = sub(p2, p3);
+    let r4 = sub(p4, p3);
+
+    // t1 = r1 x r2, t2 = r3 x r4
+    let t1 = cross(r1, r2);
+    let t2 = cross(r3, r4);
+
+    let d1 = length(t1);
+    let d2 = length(t2);
+
+    if d1 < 1e-10 || d2 < 1e-10 {
+        return 0.0;
+    }
+
+    let cos_phi = dot(t1, t2) / (d1 * d2);
+    cos_phi.clamp(-1.0, 1.0)
+}
+
+/// Computes torsion energy for a single torsion angle.
+///
+/// Positions are a flat array: [x0, y0, z0, x1, y1, z1, ...].
+/// Returns energy in kcal/mol.
+pub fn torsion_energy(params: &TorsionAngleParams, positions: &[f64]) -> f64 {
+    let p1 = get_pos(positions, params.idx1);
+    let p2 = get_pos(positions, params.idx2);
+    let p3 = get_pos(positions, params.idx3);
+    let p4 = get_pos(positions, params.idx4);
+
+    let cos_phi = calculate_cos_torsion(p1, p2, p3, p4);
+    let sin_phi_sq = 1.0 - cos_phi * cos_phi;
+
+    let cos_n = cos_n_phi(cos_phi, sin_phi_sq, params.params.order);
+
+    // E = V/2 * (1 - cos_term * cos(n*phi))
+    params.params.force_constant / 2.0 * (1.0 - params.params.cos_term * cos_n)
+}
+
+/// Computes torsion energy and accumulates gradients for a single torsion angle.
+///
+/// Positions and gradients are flat arrays: [x0, y0, z0, x1, y1, z1, ...].
+/// Gradients are **accumulated** (added to existing values).
+/// Returns energy in kcal/mol.
+pub fn torsion_energy_and_gradient(
+    params: &TorsionAngleParams,
+    positions: &[f64],
+    gradients: &mut [f64],
+) -> f64 {
+    let i1 = params.idx1 * 3;
+    let i2 = params.idx2 * 3;
+    let i3 = params.idx3 * 3;
+    let i4 = params.idx4 * 3;
+
+    let p1 = get_pos(positions, params.idx1);
+    let p2 = get_pos(positions, params.idx2);
+    let p3 = get_pos(positions, params.idx3);
+    let p4 = get_pos(positions, params.idx4);
+
+    // Bond vectors (matching RDKit convention)
+    // r[0] = p1 - p2, r[1] = p3 - p2 (around atom 2)
+    // r[2] = p2 - p3, r[3] = p4 - p3 (around atom 3)
+    let r0 = sub(p1, p2);
+    let r1 = sub(p3, p2);
+    let r2 = sub(p2, p3);
+    let r3 = sub(p4, p3);
+
+    // Normal vectors to planes
+    let t0 = cross(r0, r1);
+    let t1 = cross(r2, r3);
+
+    let d0 = length(t0);
+    let d1 = length(t1);
+
+    if d0 < 1e-10 || d1 < 1e-10 {
+        // Degenerate case: atoms are collinear, no torsion contribution
+        return torsion_energy(params, positions);
+    }
+
+    let cos_phi = (dot(t0, t1) / (d0 * d1)).clamp(-1.0, 1.0);
+    let sin_phi_sq = 1.0 - cos_phi * cos_phi;
+    let sin_phi = if sin_phi_sq > 0.0 {
+        sin_phi_sq.sqrt()
+    } else {
+        0.0
+    };
+
+    // Energy
+    let cos_n = cos_n_phi(cos_phi, sin_phi_sq, params.params.order);
+    let energy = params.params.force_constant / 2.0 * (1.0 - params.params.cos_term * cos_n);
+
+    // dE/dPhi (from RDKit's getThetaDeriv)
+    let n = params.params.order;
+    let sin_n = sin_n_phi(cos_phi, sin_phi, sin_phi_sq, n);
+    let de_dphi =
+        params.params.force_constant / 2.0 * params.params.cos_term * (-1.0) * n as f64 * sin_n;
+
+    // Convert dE/dPhi to chain rule factor for Cartesian gradients.
+    // sinTerm = dE/dPhi * (1/sinPhi or 1/cosPhi when sinPhi ≈ 0)
+    let sin_term = if sin_phi.abs() > 1e-10 {
+        de_dphi / sin_phi
+    } else {
+        de_dphi / cos_phi
+    };
+
+    // dCosPhi/dT (partial derivatives with respect to normal vectors)
+    let dcos_dt = [
+        // dCosPhi/dT0[x,y,z]
+        (t1[0] / d1 - cos_phi * t0[0] / d0) / d0,
+        (t1[1] / d1 - cos_phi * t0[1] / d0) / d0,
+        (t1[2] / d1 - cos_phi * t0[2] / d0) / d0,
+        // dCosPhi/dT1[x,y,z]
+        (t0[0] / d0 - cos_phi * t1[0] / d1) / d1,
+        (t0[1] / d0 - cos_phi * t1[1] / d1) / d1,
+        (t0[2] / d0 - cos_phi * t1[2] / d1) / d1,
+    ];
+
+    // Chain rule through cross products to get Cartesian gradients.
+    // Ported from RDKit's calcTorsionGrad (BSD-3-Clause).
+    //
+    // Atom 1 (end atom): only affects t0 = r0 x r1 via r0 = p1-p2
+    gradients[i1] += sin_term * (dcos_dt[2] * r1[1] - dcos_dt[1] * r1[2]);
+    gradients[i1 + 1] += sin_term * (dcos_dt[0] * r1[2] - dcos_dt[2] * r1[0]);
+    gradients[i1 + 2] += sin_term * (dcos_dt[1] * r1[0] - dcos_dt[0] * r1[1]);
+
+    // Atom 2 (central bond, first): affects t0 (via r0 and r1) and t1 (via r2)
+    gradients[i2] += sin_term
+        * (dcos_dt[1] * (r1[2] - r0[2])
+            + dcos_dt[2] * (r0[1] - r1[1])
+            + dcos_dt[4] * (-r3[2])
+            + dcos_dt[5] * (r3[1]));
+    gradients[i2 + 1] += sin_term
+        * (dcos_dt[0] * (r0[2] - r1[2])
+            + dcos_dt[2] * (r1[0] - r0[0])
+            + dcos_dt[3] * (r3[2])
+            + dcos_dt[5] * (-r3[0]));
+    gradients[i2 + 2] += sin_term
+        * (dcos_dt[0] * (r1[1] - r0[1])
+            + dcos_dt[1] * (r0[0] - r1[0])
+            + dcos_dt[3] * (-r3[1])
+            + dcos_dt[4] * (r3[0]));
+
+    // Atom 3 (central bond, second): affects t0 (via r1) and t1 (via r2 and r3)
+    gradients[i3] += sin_term
+        * (dcos_dt[1] * (r0[2])
+            + dcos_dt[2] * (-r0[1])
+            + dcos_dt[4] * (r3[2] - r2[2])
+            + dcos_dt[5] * (r2[1] - r3[1]));
+    gradients[i3 + 1] += sin_term
+        * (dcos_dt[0] * (-r0[2])
+            + dcos_dt[2] * (r0[0])
+            + dcos_dt[3] * (r2[2] - r3[2])
+            + dcos_dt[5] * (r3[0] - r2[0]));
+    gradients[i3 + 2] += sin_term
+        * (dcos_dt[0] * (r0[1])
+            + dcos_dt[1] * (-r0[0])
+            + dcos_dt[3] * (r3[1] - r2[1])
+            + dcos_dt[4] * (r2[0] - r3[0]));
+
+    // Atom 4 (end atom): only affects t1 = r2 x r3 via r3 = p4-p3
+    gradients[i4] += sin_term * (dcos_dt[4] * r2[2] - dcos_dt[5] * r2[1]);
+    gradients[i4 + 1] += sin_term * (dcos_dt[5] * r2[0] - dcos_dt[3] * r2[2]);
+    gradients[i4 + 2] += sin_term * (dcos_dt[3] * r2[1] - dcos_dt[4] * r2[0]);
+
+    energy
+}
+
+// ============================================================================
+// Vector helpers (inline, no allocation)
+// ============================================================================
+
+#[inline]
+fn get_pos(positions: &[f64], idx: usize) -> [f64; 3] {
+    let i = idx * 3;
+    [positions[i], positions[i + 1], positions[i + 2]]
+}
+
+#[inline]
+fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+#[inline]
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+#[inline]
+fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+#[inline]
+fn length(v: [f64; 3]) -> f64 {
+    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
 }

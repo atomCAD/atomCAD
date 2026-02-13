@@ -1939,3 +1939,173 @@ pub fn calc_angle_force_constant(
     let inner_bit = 3.0 * r_term * (1.0 - cos_theta0 * cos_theta0) - r13 * r13 * cos_theta0;
     pre_factor * r_term * inner_bit
 }
+
+/// Returns true if the atomic number belongs to group 6 (chalcogens: O, S, Se, Te, Po).
+///
+/// Used for special torsion parameter handling per the UFF paper.
+pub fn is_in_group6(atomic_number: i32) -> bool {
+    matches!(atomic_number, 8 | 16 | 34 | 52 | 84)
+}
+
+/// Hybridization of an atom, for torsion parameter calculation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hybridization {
+    SP2,
+    SP3,
+}
+
+/// Pre-computed torsion parameters: force constant V, periodicity n, and cos(n*phi0) term.
+#[derive(Debug, Clone, Copy)]
+pub struct TorsionParams {
+    /// V/2 prefactor in kcal/mol.
+    pub force_constant: f64,
+    /// Periodicity (2, 3, or 6).
+    pub order: u32,
+    /// cos(n*phi0) term: +1 or -1.
+    pub cos_term: f64,
+}
+
+/// UFF equation 17: V = 5 * sqrt(U2 * U3) * (1 + 4.18 * ln(bond_order23)).
+///
+/// Used for sp2-sp2 torsions and for sp3(group6)-sp2(non-group6) special case.
+fn equation17(bond_order23: f64, at2: &UffAtomParams, at3: &UffAtomParams) -> f64 {
+    5.0 * (at2.u1 * at3.u1).sqrt() * (1.0 + 4.18 * bond_order23.ln())
+}
+
+/// Calculates the cos(n*phi) using Chebyshev polynomial expansion.
+///
+/// Avoids computing acos/cos round-trips by working directly with cos(phi).
+pub fn cos_n_phi(cos_phi: f64, sin_phi_sq: f64, n: u32) -> f64 {
+    match n {
+        2 => {
+            // cos(2x) = 2*cos^2(x) - 1 = 1 - 2*sin^2(x)
+            1.0 - 2.0 * sin_phi_sq
+        }
+        3 => {
+            // cos(3x) = 4*cos^3(x) - 3*cos(x) = cos^3(x) - 3*cos(x)*sin^2(x)
+            cos_phi * (cos_phi * cos_phi - 3.0 * sin_phi_sq)
+        }
+        6 => {
+            // cos(6x) = 1 - 32*sin^6(x) + 48*sin^4(x) - 18*sin^2(x)
+            1.0 + sin_phi_sq * (-32.0 * sin_phi_sq * sin_phi_sq + 48.0 * sin_phi_sq - 18.0)
+        }
+        _ => 1.0,
+    }
+}
+
+/// Calculates sin(n*phi) from cos(phi), sin(phi), sin^2(phi).
+///
+/// Used for torsion gradient calculation.
+pub fn sin_n_phi(cos_phi: f64, sin_phi: f64, sin_phi_sq: f64, n: u32) -> f64 {
+    match n {
+        2 => {
+            // sin(2x) = 2*sin(x)*cos(x)
+            2.0 * sin_phi * cos_phi
+        }
+        3 => {
+            // sin(3x) = 3*sin(x) - 4*sin^3(x)
+            sin_phi * (3.0 - 4.0 * sin_phi_sq)
+        }
+        6 => {
+            // sin(6x) = cos(x)*[32*sin^5(x) - 32*sin^3(x) + 6*sin(x)]
+            cos_phi * sin_phi * (32.0 * sin_phi_sq * (sin_phi_sq - 1.0) + 6.0)
+        }
+        _ => 0.0,
+    }
+}
+
+/// Calculates UFF torsion parameters for the central bond between atoms 2 and 3.
+///
+/// Determines the force constant V, periodicity n, and cos(n*phi0) based on:
+/// - Hybridization of atoms 2 and 3 (the central bond atoms)
+/// - Atomic numbers of atoms 2 and 3 (for group 6 special cases)
+/// - Bond order of the central bond
+/// - Whether either end atom (atom 1 or atom 4) is sp2
+///
+/// Ported from RDKit's `TorsionAngleContrib::calcTorsionParams()` (BSD-3-Clause).
+///
+/// # Arguments
+/// * `bond_order23` - Bond order of the central bond (between atoms 2 and 3)
+/// * `at_num2` - Atomic number of atom 2
+/// * `at_num3` - Atomic number of atom 3
+/// * `hyb2` - Hybridization of atom 2
+/// * `hyb3` - Hybridization of atom 3
+/// * `at2_params` - UFF parameters for atom 2
+/// * `at3_params` - UFF parameters for atom 3
+/// * `end_atom_is_sp2` - True if either end atom (1 or 4) is sp2 hybridized
+#[allow(clippy::too_many_arguments)]
+pub fn calc_torsion_params(
+    bond_order23: f64,
+    at_num2: i32,
+    at_num3: i32,
+    hyb2: Hybridization,
+    hyb3: Hybridization,
+    at2_params: &UffAtomParams,
+    at3_params: &UffAtomParams,
+    end_atom_is_sp2: bool,
+) -> TorsionParams {
+    match (hyb2, hyb3) {
+        (Hybridization::SP3, Hybridization::SP3) => {
+            // General sp3-sp3 case
+            let mut force_constant = (at2_params.v1 * at3_params.v1).sqrt();
+            let mut order = 3;
+            let mut cos_term = -1.0; // phi0 = 60 degrees
+
+            // Special case for single bonds between group 6 elements
+            if bond_order23 == 1.0 && is_in_group6(at_num2) && is_in_group6(at_num3) {
+                let v2: f64 = if at_num2 == 8 { 2.0 } else { 6.8 };
+                let v3: f64 = if at_num3 == 8 { 2.0 } else { 6.8 };
+                force_constant = (v2 * v3).sqrt();
+                order = 2;
+                cos_term = -1.0; // phi0 = 90 degrees
+            }
+
+            TorsionParams {
+                force_constant,
+                order,
+                cos_term,
+            }
+        }
+        (Hybridization::SP2, Hybridization::SP2) => {
+            // sp2-sp2: use equation 17
+            let force_constant = equation17(bond_order23, at2_params, at3_params);
+            TorsionParams {
+                force_constant,
+                order: 2,
+                cos_term: 1.0, // phi0 = 180 degrees
+            }
+        }
+        _ => {
+            // sp2-sp3 or sp3-sp2 (mixed)
+            let mut force_constant = 1.0;
+            let mut order = 6;
+            let mut cos_term = 1.0; // phi0 = 0 degrees
+
+            if bond_order23 == 1.0 {
+                // Special case: group 6 sp3 with non-group 6 sp2
+                let group6_sp3_with_non_group6_sp2 =
+                    (hyb2 == Hybridization::SP3 && is_in_group6(at_num2) && !is_in_group6(at_num3))
+                        || (hyb3 == Hybridization::SP3
+                            && is_in_group6(at_num3)
+                            && !is_in_group6(at_num2));
+
+                if group6_sp3_with_non_group6_sp2 {
+                    force_constant = equation17(bond_order23, at2_params, at3_params);
+                    order = 2;
+                    cos_term = -1.0; // phi0 = 90 degrees
+                } else if end_atom_is_sp2 {
+                    // Special case: sp3 - sp2 - sp2 (propene-like)
+                    force_constant = 2.0;
+                    order = 3;
+                    cos_term = -1.0; // phi0 = 180 degrees
+                }
+            }
+
+            TorsionParams {
+                force_constant,
+                order,
+                cos_term,
+            }
+        }
+    }
+}
