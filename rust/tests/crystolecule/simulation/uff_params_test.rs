@@ -1,6 +1,6 @@
 use rust_lib_flutter_cad::crystolecule::simulation::uff::params::{
-    calc_bond_force_constant, calc_bond_rest_length, get_uff_params, AMIDE_BOND_ORDER, G, LAMBDA,
-    UFF_PARAMS,
+    AMIDE_BOND_ORDER, G, LAMBDA, UFF_PARAMS, calc_bond_force_constant, calc_bond_rest_length,
+    get_uff_params,
 };
 use serde::Deserialize;
 use std::fs;

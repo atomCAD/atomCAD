@@ -30,3 +30,6 @@ mod uff_params_test;
 
 #[path = "crystolecule/simulation/uff_energy_test.rs"]
 mod uff_energy_test;
+
+#[path = "crystolecule/simulation/uff_angle_test.rs"]
+mod uff_angle_test;

@@ -91,7 +91,8 @@
       "Bash(python generate_uff_reference.py:*)",
       "Bash(python:*)",
       "Bash(test:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(xxd:*)"
     ]
   }
 }

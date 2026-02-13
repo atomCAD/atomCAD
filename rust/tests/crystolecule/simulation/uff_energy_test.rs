@@ -1,5 +1,5 @@
 use rust_lib_flutter_cad::crystolecule::simulation::uff::energy::{
-    bond_stretch_energy, bond_stretch_energy_and_gradient, BondStretchParams,
+    BondStretchParams, bond_stretch_energy, bond_stretch_energy_and_gradient,
 };
 use rust_lib_flutter_cad::crystolecule::simulation::uff::params::{
     calc_bond_force_constant, calc_bond_rest_length, get_uff_params,
@@ -191,18 +191,37 @@ fn test_a3_bond_stretch_diagonal_direction() {
     assert_approx_eq(energy, expected_energy, 1e-6, "diagonal bond energy");
 
     // All three gradient components should be equal (by symmetry)
-    assert_approx_eq(gradients[0], gradients[1], 1e-10, "grad x == grad y for atom 0");
-    assert_approx_eq(gradients[1], gradients[2], 1e-10, "grad y == grad z for atom 0");
+    assert_approx_eq(
+        gradients[0],
+        gradients[1],
+        1e-10,
+        "grad x == grad y for atom 0",
+    );
+    assert_approx_eq(
+        gradients[1],
+        gradients[2],
+        1e-10,
+        "grad y == grad z for atom 0",
+    );
 
     // Atom 1 gradients should be negative of atom 0
     assert_approx_eq(
-        gradients[3], -gradients[0], 1e-10, "Newton's third law: grad x",
+        gradients[3],
+        -gradients[0],
+        1e-10,
+        "Newton's third law: grad x",
     );
     assert_approx_eq(
-        gradients[4], -gradients[1], 1e-10, "Newton's third law: grad y",
+        gradients[4],
+        -gradients[1],
+        1e-10,
+        "Newton's third law: grad y",
     );
     assert_approx_eq(
-        gradients[5], -gradients[2], 1e-10, "Newton's third law: grad z",
+        gradients[5],
+        -gradients[2],
+        1e-10,
+        "Newton's third law: grad z",
     );
 }
 
@@ -257,11 +276,7 @@ fn numerical_gradient_bond_stretch(
     grad
 }
 
-fn assert_gradient_matches_numerical(
-    params: &BondStretchParams,
-    positions: &[f64],
-    label: &str,
-) {
+fn assert_gradient_matches_numerical(params: &BondStretchParams, positions: &[f64], label: &str) {
     let h = 1e-5;
     let rel_tol = 0.01; // 1% relative error
     let abs_tol = 1e-6; // for near-zero components
