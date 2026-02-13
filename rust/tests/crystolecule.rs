@@ -42,3 +42,6 @@ mod uff_inversion_test;
 
 #[path = "crystolecule/simulation/uff_typer_test.rs"]
 mod uff_typer_test;
+
+#[path = "crystolecule/simulation/topology_test.rs"]
+mod topology_test;
