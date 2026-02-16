@@ -388,8 +388,8 @@ A new `minimize_atom_edit(node_id, freeze_mode)` API function handles the atom_e
 | 17 | mod.rs: wire up minimize_energy() public API | Phase 16 |
 | 18 | **Tests B7,B10,B11**: ethylene optimization, known-molecule energies, convergence tests | Phase 17 |
 | 19 | **Tests B9**: butane 72-point dihedral scan | Phase 17 |
-| 20 | API + Flutter integration for atom_edit | Phase 17 |
-| 21 | (Later) uff/energy.rs: van der Waals nonbonded terms | Phase 15 |
+| 20 | uff/energy.rs: van der Waals nonbonded terms + tests (see `doc/vdw_plan.md`) | Phase 15 |
+| 21 | API + Flutter integration for atom_edit (see `doc/atom_edit_minimize_plan.md`) | Phase 20 |
 
 **Guiding principle**: Every energy term is tested (gradient correctness + reference values) before the next term is implemented. Errors compound — a wrong bond stretch will make angle tests fail in confusing ways.
 
@@ -478,7 +478,8 @@ This catches transcription errors that are invisible to human review and undetec
 | 17 | COMPLETE | `minimize_energy()` in `simulation/mod.rs` wired up: builds `MolecularTopology` from `AtomicStructure`, constructs `UffForceField`, runs L-BFGS with default config (no frozen atoms), writes optimized positions back via `set_atom_position()`. Empty structure handled (returns early). Error propagation from `UffForceField::from_topology()`. Human-readable message with convergence status, iteration count, and final energy. The `relax` node is now fully functional — no changes needed to the node itself. |
 | 18 | COMPLETE | 13 tests added to `minimize_test.rs` (total now 40). **B7**: ethylene planarity (all 6 atoms coplanar within 0.01 Å), C-H bond length uniformity. **B10**: energy decreases from input for all 9 molecules, energy self-consistency (recomputed at minimized positions matches reported), bonded-only minimum ≤ RDKit's bonded energy at vdW-optimized geometry (validates our bonded-only optimizer finds lower bonded energy than RDKit's vdW-constrained result). **B11**: end-to-end geometry for all 9 molecules — ethane (bonds ±0.002, angles ±1°), benzene (bonds ±0.002, angles ±0.5°, planarity), butane (bonds ±0.005, angles ±2°), ammonia (bonds ±0.001, angles ±1°, C3v symmetry), adamantane (bonds ±0.01, angles ±2°, 2000 iter), methanethiol (bonds ±0.002, angles ±1.5°). All-molecules bond rest length check (tol 0.005-0.01 Å), all-molecules angle equilibrium check (tol 1-2°). Note: 16 testGitHubIssue62 molecules require vdW (Tier 3) and are deferred. |
 | 19 | COMPLETE | 7 tests added to `minimize_test.rs` (total now 47). **B9**: butane 72-point dihedral scan. Constrained scan freezes all 4 carbons, rotates C3 group in 5° steps (0°-355°), minimizes H positions at each angle. Validates bonded-only 3-fold cosine profile: barrier height matches UFF V=2.119 kcal/mol (±0.01), three-fold symmetry (eclipsed maxima equal within 0.05, staggered minima equal within 0.05), cos(3φ) shape fit (max residual <0.05 kcal/mol), smoothness (adjacent points <0.5 kcal/mol), rotation accuracy (<0.1° error at 10 targets), frozen carbon preservation (<1e-12 displacement), bonded barrier < reference full-UFF barrier (2.119 < 4.68). Note: bonded-only profile is perfectly symmetric 3-fold — anti/gauche asymmetry requires vdW (Tier 3). |
-| 20–21 | Not started | |
+| 20 | Not started | vdW nonbonded terms (see `doc/vdw_plan.md`) |
+| 21 | Not started | API + Flutter atom_edit integration (see `doc/atom_edit_minimize_plan.md`) |
 
 ---
 
@@ -513,7 +514,7 @@ Nothing in the ForceField trait, energy terms, topology builder, or parameter ta
 
 ## 10. Other Future Work (not in this plan)
 
-- **Van der Waals** (Tier 3) — add after bonded terms are validated; handles steric clashes
+- **Van der Waals** (Tier 3) — Phase 20, see `doc/vdw_plan.md`
 - **Molecular dynamics** — velocity Verlet integration with thermostat
 - **DREIDING force field** — alternative FF; could use `dreid-kernel` crate or implement similarly
 - **Explicit per-atom freeze flags** — user selects atoms to freeze before minimizing
