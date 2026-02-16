@@ -278,6 +278,7 @@ impl StructureDesigner {
                 &self.node_type_registry,
                 &self.preferences.geometry_visualization_preferences,
                 self.cli_top_level_parameters.clone(),
+                self.preferences.simulation_preferences.use_vdw_cutoff,
             );
 
             // Capture the active node's unit cell
@@ -408,6 +409,7 @@ impl StructureDesigner {
                     &self.node_type_registry,
                     &self.preferences.geometry_visualization_preferences,
                     self.cli_top_level_parameters.clone(),
+                    self.preferences.simulation_preferences.use_vdw_cutoff,
                 );
 
                 // Capture the active node's unit cell
@@ -2566,6 +2568,7 @@ impl StructureDesigner {
 
         // Set up evaluation context
         let mut context = NetworkEvaluationContext::new();
+        context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
         if let Some(params) = self.cli_top_level_parameters.clone() {
             context.top_level_parameters = params;
         }

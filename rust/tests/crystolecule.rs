@@ -52,5 +52,8 @@ mod uff_force_field_test;
 #[path = "crystolecule/simulation/uff_vdw_test.rs"]
 mod uff_vdw_test;
 
+#[path = "crystolecule/simulation/spatial_grid_test.rs"]
+mod spatial_grid_test;
+
 #[path = "crystolecule/simulation/minimize_test.rs"]
 mod minimize_test;

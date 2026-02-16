@@ -1,5 +1,6 @@
 pub mod force_field;
 pub mod minimize;
+pub mod spatial_grid;
 pub mod topology;
 pub mod uff;
 
@@ -8,6 +9,7 @@ use glam::DVec3;
 use minimize::{MinimizationConfig, minimize_with_force_field};
 use topology::MolecularTopology;
 use uff::UffForceField;
+use uff::VdwMode;
 
 /// Result of an energy minimization run.
 #[derive(Debug)]
@@ -30,12 +32,16 @@ pub struct MinimizationResult {
 /// # Arguments
 ///
 /// * `structure` - A mutable reference to the atomic structure to minimize
+/// * `vdw_mode` - Van der Waals computation mode (AllPairs or Cutoff)
 ///
 /// # Returns
 ///
 /// Returns `Ok(MinimizationResult)` with final energy, iteration count, and convergence info,
 /// or `Err` with a description of what went wrong.
-pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<MinimizationResult, String> {
+pub fn minimize_energy(
+    structure: &mut AtomicStructure,
+    vdw_mode: VdwMode,
+) -> Result<MinimizationResult, String> {
     let topology = MolecularTopology::from_structure(structure);
     if topology.num_atoms == 0 {
         return Ok(MinimizationResult {
@@ -46,7 +52,7 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<MinimizationRe
         });
     }
 
-    let ff = UffForceField::from_topology(&topology)?;
+    let ff = UffForceField::from_topology_with_vdw_mode(&topology, vdw_mode)?;
     let mut positions = topology.positions.clone();
     let config = MinimizationConfig::default();
     let frozen: &[usize] = &[];

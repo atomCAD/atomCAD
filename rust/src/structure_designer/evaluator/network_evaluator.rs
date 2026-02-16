@@ -62,6 +62,8 @@ pub struct NetworkEvaluationContext {
     pub node_output_strings: HashMap<u64, String>,
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
     pub top_level_parameters: HashMap<String, NetworkResult>,
+    /// Whether to use spatial grid cutoff for vdW interactions during minimization.
+    pub use_vdw_cutoff: bool,
 }
 
 impl Default for NetworkEvaluationContext {
@@ -77,6 +79,7 @@ impl NetworkEvaluationContext {
             node_output_strings: HashMap::new(),
             selected_node_eval_cache: None,
             top_level_parameters: HashMap::new(),
+            use_vdw_cutoff: false,
         }
     }
 }
@@ -115,6 +118,7 @@ impl NetworkEvaluator {
 
     // Creates the Scene that will be displayed for the given node by the Renderer, and is retained
     // for interaction purposes
+    #[allow(clippy::too_many_arguments)]
     pub fn generate_scene(
         &mut self,
         network_name: &str,
@@ -123,6 +127,7 @@ impl NetworkEvaluator {
         registry: &NodeTypeRegistry,
         geometry_visualization_preferences: &GeometryVisualizationPreferences,
         top_level_parameters: Option<HashMap<String, NetworkResult>>,
+        use_vdw_cutoff: bool,
     ) -> NodeSceneData {
         //let _timer = Timer::new("generate_scene");
 
@@ -137,6 +142,7 @@ impl NetworkEvaluator {
         }
 
         let mut context = NetworkEvaluationContext::new();
+        context.use_vdw_cutoff = use_vdw_cutoff;
         if let Some(params) = top_level_parameters {
             context.top_level_parameters = params;
         }

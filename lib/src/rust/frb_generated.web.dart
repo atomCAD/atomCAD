@@ -747,6 +747,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SelectModifier dco_decode_select_modifier(dynamic raw);
 
   @protected
+  SimulationPreferences dco_decode_simulation_preferences(dynamic raw);
+
+  @protected
   StructureDesignerPreferences dco_decode_structure_designer_preferences(
       dynamic raw);
 
@@ -1604,6 +1607,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SelectModifier sse_decode_select_modifier(SseDeserializer deserializer);
+
+  @protected
+  SimulationPreferences sse_decode_simulation_preferences(
+      SseDeserializer deserializer);
 
   @protected
   StructureDesignerPreferences sse_decode_structure_designer_preferences(
@@ -2497,6 +2504,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_select_modifier(
       SelectModifier self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_simulation_preferences(
+      SimulationPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_structure_designer_preferences(

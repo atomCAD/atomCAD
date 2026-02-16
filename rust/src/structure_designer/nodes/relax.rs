@@ -1,6 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::simulation::minimize_energy;
+use crate::crystolecule::simulation::uff::VdwMode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -52,7 +53,12 @@ impl NodeData for RelaxData {
         }
 
         if let NetworkResult::Atomic(mut atomic_structure) = input_val {
-            match minimize_energy(&mut atomic_structure) {
+            let vdw_mode = if context.use_vdw_cutoff {
+                VdwMode::Cutoff(10.0)
+            } else {
+                VdwMode::AllPairs
+            };
+            match minimize_energy(&mut atomic_structure, vdw_mode) {
                 Ok(result) => {
                     // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
                     // Only store for direct evaluations of visible nodes, not for upstream dependency calculations

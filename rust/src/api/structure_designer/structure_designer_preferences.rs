@@ -296,6 +296,18 @@ impl From<LayoutAlgorithmPreference> for LayoutAlgorithm {
     }
 }
 
+/// Preferences for energy minimization simulation.
+#[frb]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct SimulationPreferences {
+    /// Use spatial grid with distance cutoff for van der Waals interactions.
+    /// When false (default), all nonbonded pairs are computed exactly (O(N^2)).
+    /// When true, a 10 A cutoff is used for faster computation on large structures.
+    #[frb(non_final)]
+    #[serde(default)]
+    pub use_vdw_cutoff: bool,
+}
+
 /// Preferences for auto-layout operations.
 #[frb]
 #[derive(Clone, Serialize, Deserialize)]
@@ -338,6 +350,8 @@ pub struct StructureDesignerPreferences {
     pub background_preferences: BackgroundPreferences,
     #[serde(default)]
     pub layout_preferences: LayoutPreferences,
+    #[serde(default)]
+    pub simulation_preferences: SimulationPreferences,
 }
 
 impl StructureDesignerPreferences {

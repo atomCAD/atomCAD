@@ -60,6 +60,10 @@ class PreferencesKeys {
       Key('pref_layout_algorithm_dropdown');
   static const Key autoLayoutAfterEditCheckbox =
       Key('pref_auto_layout_after_edit_checkbox');
+
+  // Simulation settings
+  static const Key useVdwCutoffCheckbox =
+      Key('pref_use_vdw_cutoff_checkbox');
 }
 
 /// A modal preferences window for the structure designer.
@@ -1033,6 +1037,61 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
                             maximumValue:
                                 const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.medium),
+
+                    // Simulation Preferences Section
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.medium),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Simulation',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // vdW cutoff toggle
+                          Tooltip(
+                            message:
+                                'Uses a 10 \u00C5 distance cutoff for van der Waals interactions.\n'
+                                'Faster on large structures (spatial grid, O(N\u00B7k) instead of O(N\u00B2)).\n'
+                                'Negligible accuracy loss for typical molecular geometries.',
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  key: PreferencesKeys.useVdwCutoffCheckbox,
+                                  value: _preferences
+                                      .simulationPreferences.useVdwCutoff,
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _preferences.simulationPreferences
+                                            .useVdwCutoff = value;
+                                      });
+                                      _applyPreferences();
+                                    }
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                      'Use vdW distance cutoff for energy minimization'),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),

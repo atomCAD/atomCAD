@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_samples_per_unit_cell`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
@@ -282,6 +282,31 @@ class NodeDisplayPreferences {
           displayPolicy == other.displayPolicy;
 }
 
+/// Preferences for energy minimization simulation.
+class SimulationPreferences {
+  /// Use spatial grid with distance cutoff for van der Waals interactions.
+  /// When false (default), all nonbonded pairs are computed exactly (O(N^2)).
+  /// When true, a 10 A cutoff is used for faster computation on large structures.
+  bool useVdwCutoff;
+
+  SimulationPreferences({
+    required this.useVdwCutoff,
+  });
+
+  static Future<SimulationPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesSimulationPreferencesDefault();
+
+  @override
+  int get hashCode => useVdwCutoff.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SimulationPreferences &&
+          runtimeType == other.runtimeType &&
+          useVdwCutoff == other.useVdwCutoff;
+}
+
 class StructureDesignerPreferences {
   final GeometryVisualizationPreferences geometryVisualizationPreferences;
   final NodeDisplayPreferences nodeDisplayPreferences;
@@ -289,6 +314,7 @@ class StructureDesignerPreferences {
       atomicStructureVisualizationPreferences;
   final BackgroundPreferences backgroundPreferences;
   final LayoutPreferences layoutPreferences;
+  final SimulationPreferences simulationPreferences;
 
   const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
@@ -296,6 +322,7 @@ class StructureDesignerPreferences {
     required this.atomicStructureVisualizationPreferences,
     required this.backgroundPreferences,
     required this.layoutPreferences,
+    required this.simulationPreferences,
   });
 
   StructureDesignerPreferences cloneSelf() => RustLib.instance.api
@@ -315,7 +342,8 @@ class StructureDesignerPreferences {
       nodeDisplayPreferences.hashCode ^
       atomicStructureVisualizationPreferences.hashCode ^
       backgroundPreferences.hashCode ^
-      layoutPreferences.hashCode;
+      layoutPreferences.hashCode ^
+      simulationPreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -328,5 +356,6 @@ class StructureDesignerPreferences {
           atomicStructureVisualizationPreferences ==
               other.atomicStructureVisualizationPreferences &&
           backgroundPreferences == other.backgroundPreferences &&
-          layoutPreferences == other.layoutPreferences;
+          layoutPreferences == other.layoutPreferences &&
+          simulationPreferences == other.simulationPreferences;
 }

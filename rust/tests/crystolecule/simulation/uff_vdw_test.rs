@@ -12,7 +12,7 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
 };
 use rust_lib_flutter_cad::crystolecule::simulation::force_field::ForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
-use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
+use rust_lib_flutter_cad::crystolecule::simulation::uff::{UffForceField, VdwMode};
 use rust_lib_flutter_cad::crystolecule::simulation::uff::energy::{
     VdwParams, vdw_energy, vdw_energy_and_gradient,
 };
@@ -204,7 +204,7 @@ fn c1_vdw_params_vs_reference() {
 
         for ref_vdw in &mol.vdw_params {
             // Find this pair in our vdw_params (our list is a superset)
-            let found = ff.vdw_params.iter().find(|vp| {
+            let found = ff.vdw_params().iter().find(|vp| {
                 (vp.idx1 == ref_vdw.atoms[0] && vp.idx2 == ref_vdw.atoms[1])
                     || (vp.idx1 == ref_vdw.atoms[1] && vp.idx2 == ref_vdw.atoms[0])
             });
@@ -813,6 +813,152 @@ fn c4_vdw_contribution_positive_for_non_equilibrium() {
             (vdw_contribution - ref_vdw).abs() < 0.5,
             "{name}: vdW contribution {vdw_contribution:.4} != ref {ref_vdw:.4} (diff={:.4})",
             (vdw_contribution - ref_vdw).abs()
+        );
+    }
+}
+
+// ============================================================================
+// C5: AllPairs vs Cutoff mode comparison tests
+// ============================================================================
+
+fn build_ff_with_mode(
+    mol: &ReferenceMolecule,
+    mode: VdwMode,
+) -> (UffForceField, MolecularTopology) {
+    let structure = build_structure_from_reference(mol);
+    let topology = MolecularTopology::from_structure(&structure);
+    let ff = UffForceField::from_topology_with_vdw_mode(&topology, mode)
+        .unwrap_or_else(|e| panic!("Failed to build UFF for {}: {}", mol.name, e));
+    (ff, topology)
+}
+
+#[test]
+fn c5_cutoff_energy_matches_allpairs_for_small_molecules() {
+    // For small molecules where all atoms are well within the cutoff radius,
+    // AllPairs and Cutoff modes must produce identical energies.
+    let data = load_reference_data();
+
+    // Use a large cutoff (100 A) to ensure all pairs are included.
+    let cutoff = 100.0;
+
+    for mol in &data.molecules {
+        let (ff_all, topo_all) = build_ff_from_reference(mol);
+        let (ff_cut, topo_cut) = build_ff_with_mode(mol, VdwMode::Cutoff(cutoff));
+
+        let positions = &topo_all.positions;
+        let n = positions.len();
+
+        let mut energy_all = 0.0;
+        let mut grad_all = vec![0.0; n];
+        ff_all.energy_and_gradients(positions, &mut energy_all, &mut grad_all);
+
+        let mut energy_cut = 0.0;
+        let mut grad_cut = vec![0.0; n];
+        ff_cut.energy_and_gradients(&topo_cut.positions, &mut energy_cut, &mut grad_cut);
+
+        // Energies must match within floating-point tolerance.
+        let energy_diff = (energy_all - energy_cut).abs();
+        assert!(
+            energy_diff < 1e-10,
+            "{}: AllPairs energy {energy_all:.10} != Cutoff energy {energy_cut:.10} (diff={energy_diff:.2e})",
+            mol.name
+        );
+
+        // Gradients must match within floating-point tolerance.
+        for i in 0..n {
+            let diff = (grad_all[i] - grad_cut[i]).abs();
+            assert!(
+                diff < 1e-8,
+                "{}: gradient[{i}] AllPairs={:.10} != Cutoff={:.10} (diff={diff:.2e})",
+                mol.name,
+                grad_all[i],
+                grad_cut[i]
+            );
+        }
+    }
+}
+
+#[test]
+fn c5_cutoff_numerical_gradient_verification() {
+    // Verify that the cutoff-mode gradients match central-difference numerical gradients.
+    let data = load_reference_data();
+    let cutoff = 100.0;
+
+    let check_molecules = ["benzene", "butane", "adamantane"];
+    for name in &check_molecules {
+        let mol = data.molecules.iter().find(|m| m.name == *name).unwrap();
+        let (ff, topology) = build_ff_with_mode(mol, VdwMode::Cutoff(cutoff));
+        let positions = &topology.positions;
+
+        verify_numerical_gradients_cutoff(&ff, positions, name);
+    }
+}
+
+fn verify_numerical_gradients_cutoff(ff: &UffForceField, positions: &[f64], mol_name: &str) {
+    let n = positions.len();
+    let h = 1e-5;
+
+    let mut energy = 0.0;
+    let mut analytical_grad = vec![0.0; n];
+    ff.energy_and_gradients(positions, &mut energy, &mut analytical_grad);
+
+    let mut pos_plus = positions.to_vec();
+    let mut pos_minus = positions.to_vec();
+
+    for i in 0..n {
+        pos_plus[i] = positions[i] + h;
+        pos_minus[i] = positions[i] - h;
+
+        let mut e_plus = 0.0;
+        let mut e_minus = 0.0;
+        let mut grad_dummy = vec![0.0; n];
+        ff.energy_and_gradients(&pos_plus, &mut e_plus, &mut grad_dummy);
+        ff.energy_and_gradients(&pos_minus, &mut e_minus, &mut grad_dummy);
+
+        let numerical = (e_plus - e_minus) / (2.0 * h);
+        let analytical = analytical_grad[i];
+        let diff = (analytical - numerical).abs();
+        let ref_mag = analytical.abs().max(numerical.abs()).max(1e-8);
+        let rel_error = diff / ref_mag;
+
+        assert!(
+            rel_error < 0.01 || diff < 1e-6,
+            "{mol_name} cutoff: coord {i}: analytical={analytical:.8}, numerical={numerical:.8}, \
+             rel_error={rel_error:.6}"
+        );
+
+        pos_plus[i] = positions[i];
+        pos_minus[i] = positions[i];
+    }
+}
+
+#[test]
+fn c5_cutoff_with_realistic_radius() {
+    // Use a realistic cutoff radius (10 A) and verify it gives results close
+    // to AllPairs for molecules where all atoms fit within 10 A.
+    let data = load_reference_data();
+    let cutoff = 10.0;
+
+    for mol in &data.molecules {
+        let (ff_all, topo) = build_ff_from_reference(mol);
+        let (ff_cut, _) = build_ff_with_mode(mol, VdwMode::Cutoff(cutoff));
+        let positions = &topo.positions;
+        let n = positions.len();
+
+        let mut energy_all = 0.0;
+        let mut grad_all = vec![0.0; n];
+        ff_all.energy_and_gradients(positions, &mut energy_all, &mut grad_all);
+
+        let mut energy_cut = 0.0;
+        let mut grad_cut = vec![0.0; n];
+        ff_cut.energy_and_gradients(positions, &mut energy_cut, &mut grad_cut);
+
+        // For small molecules all atoms are within 10 A, so results should match.
+        let energy_diff = (energy_all - energy_cut).abs();
+        assert!(
+            energy_diff < 1e-10,
+            "{}: energy diff {energy_diff:.2e} with 10 A cutoff",
+            mol.name
         );
     }
 }

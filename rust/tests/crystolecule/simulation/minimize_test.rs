@@ -15,7 +15,7 @@ use rust_lib_flutter_cad::crystolecule::simulation::minimize::{
     MinimizationConfig, minimize_with_force_field,
 };
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
-use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
+use rust_lib_flutter_cad::crystolecule::simulation::uff::{UffForceField, VdwMode};
 
 // ============================================================================
 // Test force fields: simple analytically-solvable functions
@@ -2326,5 +2326,112 @@ fn b9_butane_frozen_carbons_preserved() {
                 positions[idx]
             );
         }
+    }
+}
+
+// ============================================================================
+// Dual-mode minimization: AllPairs vs Cutoff comparison
+// ============================================================================
+
+#[test]
+fn dual_mode_minimization_produces_same_results() {
+    // Minimize all reference molecules with both AllPairs and Cutoff(100 A) modes
+    // and verify they converge to the same final energy and geometry.
+    let data = load_reference_data();
+    let config = MinimizationConfig::default();
+    let frozen: &[usize] = &[];
+    let cutoff = 100.0;
+
+    for mol in &data.molecules {
+        let structure = build_structure_from_reference(mol);
+        let topology = MolecularTopology::from_structure(&structure);
+
+        // AllPairs minimization.
+        let ff_all = UffForceField::from_topology(&topology)
+            .unwrap_or_else(|e| panic!("Failed to build UFF AllPairs for {}: {}", mol.name, e));
+        let mut pos_all = topology.positions.clone();
+        let result_all = minimize_with_force_field(&ff_all, &mut pos_all, &config, frozen);
+
+        // Cutoff minimization.
+        let ff_cut =
+            UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(cutoff))
+                .unwrap_or_else(|e| {
+                    panic!("Failed to build UFF Cutoff for {}: {}", mol.name, e)
+                });
+        let mut pos_cut = topology.positions.clone();
+        let result_cut = minimize_with_force_field(&ff_cut, &mut pos_cut, &config, frozen);
+
+        // Both should converge.
+        assert_eq!(
+            result_all.converged, result_cut.converged,
+            "{}: convergence mismatch (AllPairs={}, Cutoff={})",
+            mol.name, result_all.converged, result_cut.converged
+        );
+
+        // Final energies must match within tight tolerance.
+        let energy_diff = (result_all.energy - result_cut.energy).abs();
+        assert!(
+            energy_diff < 0.01,
+            "{}: final energy diff {energy_diff:.6} kcal/mol (AllPairs={:.6}, Cutoff={:.6})",
+            mol.name,
+            result_all.energy,
+            result_cut.energy
+        );
+
+        // Final positions must match within tight tolerance.
+        let n = pos_all.len();
+        let mut max_pos_diff = 0.0_f64;
+        for i in 0..n {
+            max_pos_diff = max_pos_diff.max((pos_all[i] - pos_cut[i]).abs());
+        }
+        assert!(
+            max_pos_diff < 0.001,
+            "{}: max position diff {max_pos_diff:.6} A",
+            mol.name
+        );
+    }
+}
+
+#[test]
+fn dual_mode_minimization_with_realistic_cutoff() {
+    // Same as above but with a realistic 10 A cutoff (small molecules still
+    // fit within 10 A so results should match).
+    let data = load_reference_data();
+    let config = MinimizationConfig::default();
+    let frozen: &[usize] = &[];
+    let cutoff = 10.0;
+
+    for mol in &data.molecules {
+        let structure = build_structure_from_reference(mol);
+        let topology = MolecularTopology::from_structure(&structure);
+
+        let ff_all = UffForceField::from_topology(&topology)
+            .unwrap_or_else(|e| panic!("Failed AllPairs for {}: {}", mol.name, e));
+        let mut pos_all = topology.positions.clone();
+        let result_all = minimize_with_force_field(&ff_all, &mut pos_all, &config, frozen);
+
+        let ff_cut =
+            UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(cutoff))
+                .unwrap_or_else(|e| panic!("Failed Cutoff for {}: {}", mol.name, e));
+        let mut pos_cut = topology.positions.clone();
+        let result_cut = minimize_with_force_field(&ff_cut, &mut pos_cut, &config, frozen);
+
+        let energy_diff = (result_all.energy - result_cut.energy).abs();
+        assert!(
+            energy_diff < 0.01,
+            "{}: energy diff {energy_diff:.6} with 10 A cutoff",
+            mol.name
+        );
+
+        let n = pos_all.len();
+        let mut max_pos_diff = 0.0_f64;
+        for i in 0..n {
+            max_pos_diff = max_pos_diff.max((pos_all[i] - pos_cut[i]).abs());
+        }
+        assert!(
+            max_pos_diff < 0.001,
+            "{}: max position diff {max_pos_diff:.6} A with 10 A cutoff",
+            mol.name
+        );
     }
 }

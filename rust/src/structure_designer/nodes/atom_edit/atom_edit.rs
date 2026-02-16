@@ -11,7 +11,7 @@ use crate::crystolecule::atomic_structure_diff::{
 use crate::crystolecule::simulation::minimize::MinimizationConfig;
 use crate::crystolecule::simulation::minimize::minimize_with_force_field;
 use crate::crystolecule::simulation::topology::MolecularTopology;
-use crate::crystolecule::simulation::uff::UffForceField;
+use crate::crystolecule::simulation::uff::{UffForceField, VdwMode};
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::data_type::DataType;
@@ -746,7 +746,16 @@ pub fn minimize_atom_edit(
         if topology.num_atoms == 0 {
             return Ok("No atoms to minimize".to_string());
         }
-        let force_field = UffForceField::from_topology(&topology)?;
+        let vdw_mode = if structure_designer
+            .preferences
+            .simulation_preferences
+            .use_vdw_cutoff
+        {
+            VdwMode::Cutoff(10.0)
+        } else {
+            VdwMode::AllPairs
+        };
+        let force_field = UffForceField::from_topology_with_vdw_mode(&topology, vdw_mode)?;
 
         // Build topology_index → AtomSource map for write-back
         let result_to_source: Vec<Option<AtomSource>> = topology

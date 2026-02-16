@@ -5,7 +5,7 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_preference
     AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
     BackgroundPreferences, GeometryVisualization, GeometryVisualizationPreferences,
     LayoutAlgorithmPreference, LayoutPreferences, MeshSmoothing, NodeDisplayPolicy,
-    NodeDisplayPreferences, StructureDesignerPreferences,
+    NodeDisplayPreferences, SimulationPreferences, StructureDesignerPreferences,
 };
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
@@ -332,6 +332,9 @@ fn test_non_default_values_roundtrip() {
             layout_algorithm: LayoutAlgorithmPreference::TopologicalGrid,
             auto_layout_after_edit: false,
         },
+        simulation_preferences: SimulationPreferences {
+            use_vdw_cutoff: true,
+        },
     };
 
     // Roundtrip
@@ -417,4 +420,6 @@ fn test_non_default_values_roundtrip() {
         LayoutAlgorithmPreference::TopologicalGrid
     );
     assert!(!loaded.layout_preferences.auto_layout_after_edit);
+
+    assert!(loaded.simulation_preferences.use_vdw_cutoff);
 }

@@ -24,8 +24,37 @@ use typer::{assign_uff_types, bond_order_to_f64, hybridization_from_label};
 
 use crate::crystolecule::atomic_structure::InlineBond;
 use crate::crystolecule::simulation::force_field::ForceField;
+use crate::crystolecule::simulation::spatial_grid::SpatialGrid;
 use crate::crystolecule::simulation::topology::MolecularTopology;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
+
+/// Strategy for computing van der Waals (nonbonded) interactions.
+#[derive(Debug, Clone)]
+pub enum VdwMode {
+    /// Compute all pre-enumerated nonbonded pairs (exact, O(N^2) per step).
+    AllPairs,
+    /// Use spatial grid with distance cutoff (approximate, O(N*k) per step).
+    /// The `f64` value is the cutoff radius in Angstroms.
+    Cutoff(f64),
+}
+
+/// Internal storage for the chosen vdW strategy.
+enum VdwStrategy {
+    /// All nonbonded pairs pre-computed during construction.
+    AllPairs {
+        params: Vec<VdwParams>,
+    },
+    /// Spatial-grid-based cutoff: pairs discovered at each energy evaluation.
+    Cutoff {
+        radius: f64,
+        /// Per-atom vdW distance parameter (x1 from UFF table).
+        atom_vdw_x: Vec<f64>,
+        /// Per-atom vdW well depth parameter (d1 from UFF table).
+        atom_vdw_d: Vec<f64>,
+        /// 1-2 and 1-3 exclusion set: `(min(i,j), max(i,j))`.
+        exclusions: FxHashSet<(usize, usize)>,
+    },
+}
 
 /// UFF force field with pre-computed interaction parameters.
 ///
@@ -42,14 +71,23 @@ pub struct UffForceField {
     pub torsion_params: Vec<TorsionAngleParams>,
     /// Pre-computed inversion parameters.
     pub inversion_params: Vec<InversionParams>,
-    /// Pre-computed van der Waals parameters.
-    pub vdw_params: Vec<VdwParams>,
+    /// Van der Waals strategy (all-pairs or cutoff).
+    vdw_strategy: VdwStrategy,
     /// Number of atoms.
     pub num_atoms: usize,
 }
 
 impl UffForceField {
-    /// Constructs a UFF force field from a molecular topology.
+    /// Constructs a UFF force field from a molecular topology using all-pairs
+    /// vdW computation (the default, exact O(N^2) mode).
+    ///
+    /// Equivalent to `from_topology_with_vdw_mode(topology, VdwMode::AllPairs)`.
+    pub fn from_topology(topology: &MolecularTopology) -> Result<Self, String> {
+        Self::from_topology_with_vdw_mode(topology, VdwMode::AllPairs)
+    }
+
+    /// Constructs a UFF force field from a molecular topology with a
+    /// configurable vdW computation strategy.
     ///
     /// Assigns UFF atom types, then pre-computes all interaction parameters
     /// (bond stretch, angle bend, torsion, inversion). Returns an error if
@@ -61,7 +99,10 @@ impl UffForceField {
     /// - Torsion: only for SP2/SP3 central atoms; force constant scaled by number of torsions
     ///   about the same central bond (matching RDKit's scaleForceConstant)
     /// - Inversion: C/N/O sp2 and group 15 centers with 3 bonds; detects C=O for enhanced K
-    pub fn from_topology(topology: &MolecularTopology) -> Result<Self, String> {
+    pub fn from_topology_with_vdw_mode(
+        topology: &MolecularTopology,
+        vdw_mode: VdwMode,
+    ) -> Result<Self, String> {
         let num_atoms = topology.num_atoms;
         if num_atoms == 0 {
             return Ok(Self {
@@ -69,7 +110,9 @@ impl UffForceField {
                 angle_params: Vec::new(),
                 torsion_params: Vec::new(),
                 inversion_params: Vec::new(),
-                vdw_params: Vec::new(),
+                vdw_strategy: VdwStrategy::AllPairs {
+                    params: Vec::new(),
+                },
                 num_atoms: 0,
             });
         }
@@ -166,30 +209,78 @@ impl UffForceField {
         // Step 7: Pre-compute inversion parameters.
         let inversion_params = Self::compute_inversion_params(topology, &typing);
 
-        // Step 8: Pre-compute van der Waals parameters for all nonbonded pairs.
-        let vdw_params: Vec<VdwParams> = topology
-            .nonbonded_pairs
-            .iter()
-            .map(|pair| {
-                let params_i = params::get_uff_params(typing.labels[pair.idx1]).unwrap();
-                let params_j = params::get_uff_params(typing.labels[pair.idx2]).unwrap();
-                VdwParams {
-                    idx1: pair.idx1,
-                    idx2: pair.idx2,
-                    x_ij: calc_vdw_distance(params_i, params_j),
-                    d_ij: calc_vdw_well_depth(params_i, params_j),
+        // Step 8: Build vdW strategy based on the chosen mode.
+        let vdw_strategy = match vdw_mode {
+            VdwMode::AllPairs => {
+                let vdw_params: Vec<VdwParams> = topology
+                    .nonbonded_pairs
+                    .iter()
+                    .map(|pair| {
+                        let params_i =
+                            params::get_uff_params(typing.labels[pair.idx1]).unwrap();
+                        let params_j =
+                            params::get_uff_params(typing.labels[pair.idx2]).unwrap();
+                        VdwParams {
+                            idx1: pair.idx1,
+                            idx2: pair.idx2,
+                            x_ij: calc_vdw_distance(params_i, params_j),
+                            d_ij: calc_vdw_well_depth(params_i, params_j),
+                        }
+                    })
+                    .collect();
+                VdwStrategy::AllPairs { params: vdw_params }
+            }
+            VdwMode::Cutoff(radius) => {
+                // Per-atom vdW parameters for on-the-fly combination.
+                let atom_vdw_x: Vec<f64> = (0..num_atoms)
+                    .map(|i| params::get_uff_params(typing.labels[i]).unwrap().x1)
+                    .collect();
+                let atom_vdw_d: Vec<f64> = (0..num_atoms)
+                    .map(|i| params::get_uff_params(typing.labels[i]).unwrap().d1)
+                    .collect();
+
+                // Build 1-2 and 1-3 exclusion set.
+                let mut exclusions: FxHashSet<(usize, usize)> = FxHashSet::default();
+                for bond in &topology.bonds {
+                    let key = (bond.idx1.min(bond.idx2), bond.idx1.max(bond.idx2));
+                    exclusions.insert(key);
                 }
-            })
-            .collect();
+                for angle in &topology.angles {
+                    let key = (angle.idx1.min(angle.idx3), angle.idx1.max(angle.idx3));
+                    exclusions.insert(key);
+                }
+
+                VdwStrategy::Cutoff {
+                    radius,
+                    atom_vdw_x,
+                    atom_vdw_d,
+                    exclusions,
+                }
+            }
+        };
 
         Ok(Self {
             bond_params,
             angle_params,
             torsion_params,
             inversion_params,
-            vdw_params,
+            vdw_strategy,
             num_atoms,
         })
+    }
+
+    /// Returns the pre-computed vdW parameter list (AllPairs mode only).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the force field was built with `VdwMode::Cutoff`.
+    pub fn vdw_params(&self) -> &[VdwParams] {
+        match &self.vdw_strategy {
+            VdwStrategy::AllPairs { params } => params,
+            VdwStrategy::Cutoff { .. } => {
+                panic!("vdw_params() is not available in Cutoff mode")
+            }
+        }
     }
 
     /// Pre-computes torsion angle parameters with per-central-bond scaling.
@@ -346,8 +437,39 @@ impl ForceField for UffForceField {
         }
 
         // Van der Waals (nonbonded) contributions
-        for vp in &self.vdw_params {
-            *energy += vdw_energy_and_gradient(vp, positions, gradients);
+        match &self.vdw_strategy {
+            VdwStrategy::AllPairs { params } => {
+                for vp in params {
+                    *energy += vdw_energy_and_gradient(vp, positions, gradients);
+                }
+            }
+            VdwStrategy::Cutoff {
+                radius,
+                atom_vdw_x,
+                atom_vdw_d,
+                exclusions,
+            } => {
+                let grid = SpatialGrid::from_positions(positions, *radius);
+                for i in 0..self.num_atoms {
+                    grid.for_each_neighbor(positions, i, *radius, |j| {
+                        if j > i {
+                            let key = (i, j);
+                            if !exclusions.contains(&key) {
+                                let x_ij = (atom_vdw_x[i] * atom_vdw_x[j]).sqrt();
+                                let d_ij = (atom_vdw_d[i] * atom_vdw_d[j]).sqrt();
+                                let vp = VdwParams {
+                                    idx1: i,
+                                    idx2: j,
+                                    x_ij,
+                                    d_ij,
+                                };
+                                *energy +=
+                                    vdw_energy_and_gradient(&vp, positions, gradients);
+                            }
+                        }
+                    });
+                }
+            }
         }
     }
 }
