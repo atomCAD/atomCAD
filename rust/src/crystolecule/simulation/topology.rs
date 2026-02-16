@@ -108,14 +108,23 @@ pub struct MolecularTopology {
 impl MolecularTopology {
     /// Builds a molecular topology from an AtomicStructure.
     ///
-    /// Enumerates all bonded interactions:
-    /// - Bonds: one per unique bond in the structure
-    /// - Angles: all i-j-k triples where j is bonded to both i and k
-    /// - Torsions: all i-j-k-l chains where j-k is a bond, i is bonded to j, l is bonded to k
-    /// - Inversions: 3 permutations per sp2 center with exactly 3 bonds
-    ///
-    /// Delete markers (atomic_number == 0) and deleted bonds are excluded.
+    /// Enumerates all bonded and nonbonded interactions. The nonbonded pair
+    /// enumeration is O(N^2) — use `from_structure_bonded_only()` when you
+    /// plan to compute nonbonded pairs via a spatial cutoff instead.
     pub fn from_structure(structure: &AtomicStructure) -> Self {
+        Self::build(structure, true)
+    }
+
+    /// Builds a molecular topology with only bonded interactions.
+    ///
+    /// Skips the O(N^2) nonbonded pair enumeration, leaving `nonbonded_pairs`
+    /// empty. Use this when nonbonded interactions will be computed via a
+    /// spatial cutoff (e.g., `VdwMode::Cutoff`).
+    pub fn from_structure_bonded_only(structure: &AtomicStructure) -> Self {
+        Self::build(structure, false)
+    }
+
+    fn build(structure: &AtomicStructure, enumerate_nonbonded: bool) -> Self {
         // Step 1: Build atom index mapping (atom_id -> topology index)
         let mut atom_ids = Vec::new();
         let mut atomic_numbers = Vec::new();
@@ -186,8 +195,12 @@ impl MolecularTopology {
         // Step 5: Enumerate inversions
         let inversions = Self::enumerate_inversions(&neighbors, &atomic_numbers);
 
-        // Step 6: Enumerate nonbonded (1-4+) pairs
-        let nonbonded_pairs = Self::enumerate_nonbonded_pairs(num_atoms, &bonds, &angles);
+        // Step 6: Enumerate nonbonded (1-4+) pairs (O(N^2), skipped for cutoff mode)
+        let nonbonded_pairs = if enumerate_nonbonded {
+            Self::enumerate_nonbonded_pairs(num_atoms, &bonds, &angles)
+        } else {
+            Vec::new()
+        };
 
         MolecularTopology {
             num_atoms,

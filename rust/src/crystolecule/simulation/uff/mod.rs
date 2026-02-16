@@ -22,6 +22,8 @@ use params::{
 };
 use typer::{assign_uff_types, bond_order_to_f64, hybridization_from_label};
 
+use std::cell::{Cell, RefCell};
+
 use crate::crystolecule::atomic_structure::InlineBond;
 use crate::crystolecule::simulation::force_field::ForceField;
 use crate::crystolecule::simulation::spatial_grid::SpatialGrid;
@@ -38,21 +40,26 @@ pub enum VdwMode {
     Cutoff(f64),
 }
 
+/// How often the cutoff neighbor list is rebuilt (in energy evaluations).
+const CUTOFF_REBUILD_INTERVAL: u32 = 10;
+
 /// Internal storage for the chosen vdW strategy.
 enum VdwStrategy {
-    /// All nonbonded pairs pre-computed during construction.
-    AllPairs {
-        params: Vec<VdwParams>,
-    },
-    /// Spatial-grid-based cutoff: pairs discovered at each energy evaluation.
+    /// All nonbonded pairs from the topology (exact, O(N^2) construction).
+    AllPairs { params: Vec<VdwParams> },
+    /// Cutoff with periodic neighbor list rebuilds via interior mutability.
+    /// The pair list is rebuilt from a spatial grid every `rebuild_interval`
+    /// energy evaluations to track atom movement during minimization.
     Cutoff {
-        radius: f64,
-        /// Per-atom vdW distance parameter (x1 from UFF table).
+        params: RefCell<Vec<VdwParams>>,
+        eval_count: Cell<u32>,
+        rebuild_interval: u32,
+        build_radius: f64,
         atom_vdw_x: Vec<f64>,
-        /// Per-atom vdW well depth parameter (d1 from UFF table).
         atom_vdw_d: Vec<f64>,
-        /// 1-2 and 1-3 exclusion set: `(min(i,j), max(i,j))`.
         exclusions: FxHashSet<(usize, usize)>,
+        /// Per-atom frozen flag. Pairs where both atoms are frozen are skipped.
+        frozen: Vec<bool>,
     },
 }
 
@@ -86,22 +93,27 @@ impl UffForceField {
         Self::from_topology_with_vdw_mode(topology, VdwMode::AllPairs)
     }
 
-    /// Constructs a UFF force field from a molecular topology with a
-    /// configurable vdW computation strategy.
+    /// Constructs a UFF force field with a configurable vdW strategy.
     ///
-    /// Assigns UFF atom types, then pre-computes all interaction parameters
-    /// (bond stretch, angle bend, torsion, inversion). Returns an error if
-    /// any atom cannot be typed or has no UFF parameters.
-    ///
-    /// The construction follows RDKit's Builder.cpp logic:
-    /// - Bond stretch: harmonic potential using calc_bond_rest_length and calc_bond_force_constant
-    /// - Angle bend: coordination order from vertex hybridization (SP→1, SP2→3, SP3D2→4, else→0)
-    /// - Torsion: only for SP2/SP3 central atoms; force constant scaled by number of torsions
-    ///   about the same central bond (matching RDKit's scaleForceConstant)
-    /// - Inversion: C/N/O sp2 and group 15 centers with 3 bonds; detects C=O for enhanced K
+    /// No frozen atoms — all pairs are included. See
+    /// `from_topology_with_frozen` to exclude frozen-frozen pairs.
     pub fn from_topology_with_vdw_mode(
         topology: &MolecularTopology,
         vdw_mode: VdwMode,
+    ) -> Result<Self, String> {
+        Self::from_topology_with_frozen(topology, vdw_mode, &[])
+    }
+
+    /// Constructs a UFF force field with a configurable vdW strategy and
+    /// frozen atom support.
+    ///
+    /// In Cutoff mode, pairs where **both** atoms are frozen are skipped
+    /// (their gradients would be zeroed anyway). This can dramatically
+    /// reduce the pair count when most atoms are frozen (e.g., FreezeBase).
+    pub fn from_topology_with_frozen(
+        topology: &MolecularTopology,
+        vdw_mode: VdwMode,
+        frozen: &[usize],
     ) -> Result<Self, String> {
         let num_atoms = topology.num_atoms;
         if num_atoms == 0 {
@@ -231,7 +243,14 @@ impl UffForceField {
                 VdwStrategy::AllPairs { params: vdw_params }
             }
             VdwMode::Cutoff(radius) => {
-                // Per-atom vdW parameters for on-the-fly combination.
+                // Pre-compute the cutoff pair list using a spatial grid.
+                // Uses a 1 Å skin beyond the cutoff so the list stays valid
+                // for several iterations as atoms move. The list is rebuilt
+                // every CUTOFF_REBUILD_INTERVAL evaluations.
+                let skin = 1.0;
+                let build_radius = radius + skin;
+
+                // Per-atom vdW parameters for combination rules.
                 let atom_vdw_x: Vec<f64> = (0..num_atoms)
                     .map(|i| params::get_uff_params(typing.labels[i]).unwrap().x1)
                     .collect();
@@ -250,11 +269,34 @@ impl UffForceField {
                     exclusions.insert(key);
                 }
 
+                // Build per-atom frozen flags from topology indices.
+                let mut frozen_flags = vec![false; num_atoms];
+                for &idx in frozen {
+                    if idx < num_atoms {
+                        frozen_flags[idx] = true;
+                    }
+                }
+
+                // Build initial pair list from spatial grid.
+                let vdw_params = Self::build_cutoff_pairs(
+                    &topology.positions,
+                    num_atoms,
+                    build_radius,
+                    &atom_vdw_x,
+                    &atom_vdw_d,
+                    &exclusions,
+                    &frozen_flags,
+                );
+
                 VdwStrategy::Cutoff {
-                    radius,
+                    params: RefCell::new(vdw_params),
+                    eval_count: Cell::new(0),
+                    rebuild_interval: CUTOFF_REBUILD_INTERVAL,
+                    build_radius,
                     atom_vdw_x,
                     atom_vdw_d,
                     exclusions,
+                    frozen: frozen_flags,
                 }
             }
         };
@@ -281,6 +323,39 @@ impl UffForceField {
                 panic!("vdw_params() is not available in Cutoff mode")
             }
         }
+    }
+
+    /// Builds a vdW pair list from current positions using a spatial grid.
+    ///
+    /// Skips pairs where both atoms are frozen (their gradients would be
+    /// zeroed by the minimizer anyway).
+    fn build_cutoff_pairs(
+        positions: &[f64],
+        num_atoms: usize,
+        build_radius: f64,
+        atom_vdw_x: &[f64],
+        atom_vdw_d: &[f64],
+        exclusions: &FxHashSet<(usize, usize)>,
+        frozen: &[bool],
+    ) -> Vec<VdwParams> {
+        let grid = SpatialGrid::from_positions(positions, build_radius);
+        let mut vdw_params: Vec<VdwParams> = Vec::new();
+        for i in 0..num_atoms {
+            grid.for_each_neighbor(positions, i, build_radius, |j| {
+                if j > i
+                    && !exclusions.contains(&(i, j))
+                    && !(frozen[i] && frozen[j])
+                {
+                    vdw_params.push(VdwParams {
+                        idx1: i,
+                        idx2: j,
+                        x_ij: (atom_vdw_x[i] * atom_vdw_x[j]).sqrt(),
+                        d_ij: (atom_vdw_d[i] * atom_vdw_d[j]).sqrt(),
+                    });
+                }
+            });
+        }
+        vdw_params
     }
 
     /// Pre-computes torsion angle parameters with per-central-bond scaling.
@@ -436,7 +511,7 @@ impl ForceField for UffForceField {
             *energy += inversion_energy_and_gradient(ip, positions, gradients);
         }
 
-        // Van der Waals (nonbonded) contributions
+        // Van der Waals (nonbonded) contributions.
         match &self.vdw_strategy {
             VdwStrategy::AllPairs { params } => {
                 for vp in params {
@@ -444,30 +519,33 @@ impl ForceField for UffForceField {
                 }
             }
             VdwStrategy::Cutoff {
-                radius,
+                params,
+                eval_count,
+                rebuild_interval,
+                build_radius,
                 atom_vdw_x,
                 atom_vdw_d,
                 exclusions,
+                frozen,
             } => {
-                let grid = SpatialGrid::from_positions(positions, *radius);
-                for i in 0..self.num_atoms {
-                    grid.for_each_neighbor(positions, i, *radius, |j| {
-                        if j > i {
-                            let key = (i, j);
-                            if !exclusions.contains(&key) {
-                                let x_ij = (atom_vdw_x[i] * atom_vdw_x[j]).sqrt();
-                                let d_ij = (atom_vdw_d[i] * atom_vdw_d[j]).sqrt();
-                                let vp = VdwParams {
-                                    idx1: i,
-                                    idx2: j,
-                                    x_ij,
-                                    d_ij,
-                                };
-                                *energy +=
-                                    vdw_energy_and_gradient(&vp, positions, gradients);
-                            }
-                        }
-                    });
+                // Periodically rebuild the neighbor list from current positions.
+                let count = eval_count.get();
+                if count > 0 && count % rebuild_interval == 0 {
+                    let new_params = Self::build_cutoff_pairs(
+                        positions,
+                        self.num_atoms,
+                        *build_radius,
+                        atom_vdw_x,
+                        atom_vdw_d,
+                        exclusions,
+                        frozen,
+                    );
+                    *params.borrow_mut() = new_params;
+                }
+                eval_count.set(count + 1);
+
+                for vp in params.borrow().iter() {
+                    *energy += vdw_energy_and_gradient(vp, positions, gradients);
                 }
             }
         }

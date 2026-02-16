@@ -42,7 +42,10 @@ pub fn minimize_energy(
     structure: &mut AtomicStructure,
     vdw_mode: VdwMode,
 ) -> Result<MinimizationResult, String> {
-    let topology = MolecularTopology::from_structure(structure);
+    let topology = match &vdw_mode {
+        VdwMode::AllPairs => MolecularTopology::from_structure(structure),
+        VdwMode::Cutoff(_) => MolecularTopology::from_structure_bonded_only(structure),
+    };
     if topology.num_atoms == 0 {
         return Ok(MinimizationResult {
             energy: 0.0,

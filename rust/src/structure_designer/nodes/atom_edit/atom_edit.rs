@@ -741,21 +741,25 @@ pub fn minimize_atom_edit(
             .get_atomic_structure_from_selected_node()
             .ok_or("No result structure")?;
 
-        // Build topology and force field from the evaluated result
-        let topology = MolecularTopology::from_structure(result_structure);
-        if topology.num_atoms == 0 {
-            return Ok("No atoms to minimize".to_string());
-        }
+        // Build topology from the evaluated result
         let vdw_mode = if structure_designer
             .preferences
             .simulation_preferences
             .use_vdw_cutoff
         {
-            VdwMode::Cutoff(10.0)
+            VdwMode::Cutoff(8.0)
         } else {
             VdwMode::AllPairs
         };
-        let force_field = UffForceField::from_topology_with_vdw_mode(&topology, vdw_mode)?;
+        let topology = match &vdw_mode {
+            VdwMode::AllPairs => MolecularTopology::from_structure(result_structure),
+            VdwMode::Cutoff(_) => {
+                MolecularTopology::from_structure_bonded_only(result_structure)
+            }
+        };
+        if topology.num_atoms == 0 {
+            return Ok("No atoms to minimize".to_string());
+        }
 
         // Build topology_index → AtomSource map for write-back
         let result_to_source: Vec<Option<AtomSource>> = topology
@@ -764,7 +768,8 @@ pub fn minimize_atom_edit(
             .map(|&result_id| eval_cache.provenance.sources.get(&result_id).cloned())
             .collect();
 
-        // Determine frozen set (topology indices)
+        // Determine frozen set (topology indices) — computed before force field
+        // so cutoff mode can skip frozen-frozen vdW pairs.
         let frozen_indices: Vec<usize> = match freeze_mode {
             MinimizeFreezeMode::FreezeBase => topology
                 .atom_ids
@@ -811,6 +816,9 @@ pub fn minimize_atom_edit(
                     .collect()
             }
         };
+
+        let force_field =
+            UffForceField::from_topology_with_frozen(&topology, vdw_mode, &frozen_indices)?;
 
         (topology, force_field, frozen_indices, result_to_source)
     };
