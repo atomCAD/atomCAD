@@ -11,13 +11,14 @@ pub mod typer;
 // Ported from RDKit's modular UFF implementation, cross-referenced with OpenBabel.
 
 use energy::{
-    AngleBendParams, BondStretchParams, InversionParams, TorsionAngleParams,
+    AngleBendParams, BondStretchParams, InversionParams, TorsionAngleParams, VdwParams,
     angle_bend_energy_and_gradient, bond_stretch_energy_and_gradient,
-    inversion_energy_and_gradient, torsion_energy_and_gradient,
+    inversion_energy_and_gradient, torsion_energy_and_gradient, vdw_energy_and_gradient,
 };
 use params::{
     Hybridization, calc_angle_force_constant, calc_bond_force_constant, calc_bond_rest_length,
-    calc_inversion_coefficients_and_force_constant, calc_torsion_params,
+    calc_inversion_coefficients_and_force_constant, calc_torsion_params, calc_vdw_distance,
+    calc_vdw_well_depth,
 };
 use typer::{assign_uff_types, bond_order_to_f64, hybridization_from_label};
 
@@ -41,6 +42,8 @@ pub struct UffForceField {
     pub torsion_params: Vec<TorsionAngleParams>,
     /// Pre-computed inversion parameters.
     pub inversion_params: Vec<InversionParams>,
+    /// Pre-computed van der Waals parameters.
+    pub vdw_params: Vec<VdwParams>,
     /// Number of atoms.
     pub num_atoms: usize,
 }
@@ -66,6 +69,7 @@ impl UffForceField {
                 angle_params: Vec::new(),
                 torsion_params: Vec::new(),
                 inversion_params: Vec::new(),
+                vdw_params: Vec::new(),
                 num_atoms: 0,
             });
         }
@@ -168,11 +172,28 @@ impl UffForceField {
         // Step 7: Pre-compute inversion parameters.
         let inversion_params = Self::compute_inversion_params(topology, &typing);
 
+        // Step 8: Pre-compute van der Waals parameters for all nonbonded pairs.
+        let vdw_params: Vec<VdwParams> = topology
+            .nonbonded_pairs
+            .iter()
+            .map(|pair| {
+                let params_i = params::get_uff_params(typing.labels[pair.idx1]).unwrap();
+                let params_j = params::get_uff_params(typing.labels[pair.idx2]).unwrap();
+                VdwParams {
+                    idx1: pair.idx1,
+                    idx2: pair.idx2,
+                    x_ij: calc_vdw_distance(params_i, params_j),
+                    d_ij: calc_vdw_well_depth(params_i, params_j),
+                }
+            })
+            .collect();
+
         Ok(Self {
             bond_params,
             angle_params,
             torsion_params,
             inversion_params,
+            vdw_params,
             num_atoms,
         })
     }
@@ -330,6 +351,11 @@ impl ForceField for UffForceField {
         // Inversion (out-of-plane) contributions
         for ip in &self.inversion_params {
             *energy += inversion_energy_and_gradient(ip, positions, gradients);
+        }
+
+        // Van der Waals (nonbonded) contributions
+        for vp in &self.vdw_params {
+            *energy += vdw_energy_and_gradient(vp, positions, gradients);
         }
     }
 }

@@ -49,5 +49,8 @@ mod topology_test;
 #[path = "crystolecule/simulation/uff_force_field_test.rs"]
 mod uff_force_field_test;
 
+#[path = "crystolecule/simulation/uff_vdw_test.rs"]
+mod uff_vdw_test;
+
 #[path = "crystolecule/simulation/minimize_test.rs"]
 mod minimize_test;

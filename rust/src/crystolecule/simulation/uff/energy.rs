@@ -767,6 +767,90 @@ pub fn inversion_energy_and_gradient(
 }
 
 // ============================================================================
+// Van der Waals (Lennard-Jones 12-6)
+// ============================================================================
+//
+// E = D_ij * [ -2 * (x_ij / r)^6 + (x_ij / r)^12 ]
+//
+// Gradient (for atom i, atom j has opposite sign):
+//   dE/dr = (12 * D_ij / r) * [ (x_ij/r)^6 - (x_ij/r)^12 ]
+//   dE/dx_i = (dE/dr) * (x_i - x_j) / r
+//
+// Ported from RDKit's Nonbonded.cpp (BSD-3-Clause).
+
+/// Pre-computed parameters for a single van der Waals pair.
+#[derive(Debug, Clone)]
+pub struct VdwParams {
+    /// Index of the first atom.
+    pub idx1: usize,
+    /// Index of the second atom.
+    pub idx2: usize,
+    /// Equilibrium vdW distance x_ij in Angstroms.
+    pub x_ij: f64,
+    /// Well depth D_ij in kcal/mol.
+    pub d_ij: f64,
+}
+
+/// Computes vdW energy for a single nonbonded pair.
+///
+/// Positions are a flat array: [x0, y0, z0, x1, y1, z1, ...].
+/// Returns energy in kcal/mol.
+pub fn vdw_energy(params: &VdwParams, positions: &[f64]) -> f64 {
+    let i3 = params.idx1 * 3;
+    let j3 = params.idx2 * 3;
+
+    let dx = positions[i3] - positions[j3];
+    let dy = positions[i3 + 1] - positions[j3 + 1];
+    let dz = positions[i3 + 2] - positions[j3 + 2];
+    let r = (dx * dx + dy * dy + dz * dz).sqrt().max(0.01);
+
+    let ratio = params.x_ij / r;
+    let ratio6 = ratio * ratio * ratio * ratio * ratio * ratio;
+    let ratio12 = ratio6 * ratio6;
+
+    params.d_ij * (-2.0 * ratio6 + ratio12)
+}
+
+/// Computes vdW energy and accumulates gradients for a single nonbonded pair.
+///
+/// Positions and gradients are flat arrays: [x0, y0, z0, x1, y1, z1, ...].
+/// Gradients are **accumulated** (added to existing values).
+/// Returns energy in kcal/mol.
+pub fn vdw_energy_and_gradient(
+    params: &VdwParams,
+    positions: &[f64],
+    gradients: &mut [f64],
+) -> f64 {
+    let i3 = params.idx1 * 3;
+    let j3 = params.idx2 * 3;
+
+    let dx = positions[i3] - positions[j3];
+    let dy = positions[i3 + 1] - positions[j3 + 1];
+    let dz = positions[i3 + 2] - positions[j3 + 2];
+    let r = (dx * dx + dy * dy + dz * dz).sqrt().max(0.01);
+
+    let ratio = params.x_ij / r;
+    let ratio6 = ratio * ratio * ratio * ratio * ratio * ratio;
+    let ratio12 = ratio6 * ratio6;
+
+    let energy = params.d_ij * (-2.0 * ratio6 + ratio12);
+
+    // dE/dr = (12 * D_ij / r) * (ratio^6 - ratio^12)
+    let de_dr = (12.0 * params.d_ij / r) * (ratio6 - ratio12);
+
+    // Chain rule: dE/dx_i = (dE/dr) * dx / r
+    let factor = de_dr / r;
+    gradients[i3] += factor * dx;
+    gradients[i3 + 1] += factor * dy;
+    gradients[i3 + 2] += factor * dz;
+    gradients[j3] -= factor * dx;
+    gradients[j3 + 1] -= factor * dy;
+    gradients[j3 + 2] -= factor * dz;
+
+    energy
+}
+
+// ============================================================================
 // Vector helpers (inline, no allocation)
 // ============================================================================
 

@@ -2063,6 +2063,20 @@ pub fn calc_inversion_coefficients_and_force_constant(
     (k, c0, c1, c2)
 }
 
+/// Compute vdW characteristic distance for a pair (geometric mean).
+///
+/// x_ij = sqrt(x_i * x_j) where x_i = UffAtomParams.x1
+pub fn calc_vdw_distance(params_i: &UffAtomParams, params_j: &UffAtomParams) -> f64 {
+    (params_i.x1 * params_j.x1).sqrt()
+}
+
+/// Compute vdW well depth for a pair (geometric mean).
+///
+/// D_ij = sqrt(D_i * D_j) where D_i = UffAtomParams.d1
+pub fn calc_vdw_well_depth(params_i: &UffAtomParams, params_j: &UffAtomParams) -> f64 {
+    (params_i.d1 * params_j.d1).sqrt()
+}
+
 /// Calculates UFF torsion parameters for the central bond between atoms 2 and 3.
 ///
 /// Determines the force constant V, periodicity n, and cos(n*phi0) based on:

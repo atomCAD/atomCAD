@@ -13,7 +13,7 @@
 
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure::inline_bond::{BOND_AROMATIC, BOND_DOUBLE};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// A bond interaction between two atoms.
 #[derive(Debug, Clone)]
@@ -71,6 +71,15 @@ pub struct InversionInteraction {
     pub idx4: usize,
 }
 
+/// A nonbonded (van der Waals) pair interaction.
+#[derive(Debug, Clone)]
+pub struct NonbondedPairInteraction {
+    /// Topology index of the first atom (idx1 < idx2).
+    pub idx1: usize,
+    /// Topology index of the second atom.
+    pub idx2: usize,
+}
+
 /// Molecular topology: interaction lists extracted from a bond graph.
 ///
 /// All atom references use topology indices (0-based, contiguous), not atom IDs.
@@ -92,6 +101,8 @@ pub struct MolecularTopology {
     pub torsions: Vec<TorsionInteraction>,
     /// Inversion (out-of-plane) interactions.
     pub inversions: Vec<InversionInteraction>,
+    /// Nonbonded (1-4+) pair interactions for van der Waals.
+    pub nonbonded_pairs: Vec<NonbondedPairInteraction>,
 }
 
 impl MolecularTopology {
@@ -175,6 +186,9 @@ impl MolecularTopology {
         // Step 5: Enumerate inversions
         let inversions = Self::enumerate_inversions(&neighbors, &atomic_numbers);
 
+        // Step 6: Enumerate nonbonded (1-4+) pairs
+        let nonbonded_pairs = Self::enumerate_nonbonded_pairs(num_atoms, &bonds, &angles);
+
         MolecularTopology {
             num_atoms,
             atom_ids,
@@ -184,6 +198,7 @@ impl MolecularTopology {
             angles,
             torsions,
             inversions,
+            nonbonded_pairs,
         }
     }
 
@@ -299,6 +314,40 @@ impl MolecularTopology {
         }
 
         inversions
+    }
+
+    /// Enumerates all nonbonded (1-4+) pair interactions.
+    ///
+    /// Builds an exclusion set of 1-2 (bond) and 1-3 (angle endpoint) pairs,
+    /// then includes every atom pair (i < j) not in the exclusion set.
+    fn enumerate_nonbonded_pairs(
+        num_atoms: usize,
+        bonds: &[BondInteraction],
+        angles: &[AngleInteraction],
+    ) -> Vec<NonbondedPairInteraction> {
+        let mut exclusions: FxHashSet<(usize, usize)> = FxHashSet::default();
+
+        // Exclude 1-2 pairs (directly bonded)
+        for bond in bonds {
+            let key = (bond.idx1.min(bond.idx2), bond.idx1.max(bond.idx2));
+            exclusions.insert(key);
+        }
+
+        // Exclude 1-3 pairs (angle endpoints)
+        for angle in angles {
+            let key = (angle.idx1.min(angle.idx3), angle.idx1.max(angle.idx3));
+            exclusions.insert(key);
+        }
+
+        let mut pairs = Vec::new();
+        for i in 0..num_atoms {
+            for j in (i + 1)..num_atoms {
+                if !exclusions.contains(&(i, j)) {
+                    pairs.push(NonbondedPairInteraction { idx1: i, idx2: j });
+                }
+            }
+        }
+        pairs
     }
 
     /// Determines if an atom should be an inversion center based on its
