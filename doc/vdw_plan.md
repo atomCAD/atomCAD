@@ -11,6 +11,14 @@ Add Lennard-Jones 12-6 van der Waals interactions to the UFF force field, comple
 
 **Scope**: vdW only — no electrostatics (standard UFF practice).
 
+**Three phases** — each ends with a green test suite:
+
+| Phase | What | Validation |
+|-------|------|------------|
+| 1 | Implementation + new `uff_vdw_test.rs` | `cargo test uff_vdw` passes |
+| 2 | Update `uff_force_field_test.rs` | `cargo test uff_force_field` passes |
+| 3 | Update `minimize_test.rs` | Full `cargo test` passes |
+
 ---
 
 ## 2. Physics
@@ -126,7 +134,7 @@ For our 9 reference molecules (none have 3-rings, so bond pairs and angle endpoi
 | adamantane | 26 | 325 | 28 | 60 | 88 | **237** | 141 |
 | methanethiol | 6 | 15 | 5 | 7 | 12 | **3** | 0 |
 
-These exact counts should be validated in tests (section 6).
+These exact counts should be validated in tests.
 
 ---
 
@@ -164,9 +172,13 @@ Note: methanethiol has **negative** total minimized energy because the attractiv
 
 ---
 
-## 5. Implementation Phases
+## Phase 1: Implementation + New vdW Tests
 
-### Phase 20a: Nonbonded pair enumeration in `topology.rs`
+**Goal**: Implement vdW in the production code and validate with new standalone tests. Existing tests in `uff_force_field_test.rs` and `minimize_test.rs` will break after this phase — that is expected and will be fixed in Phases 2 and 3.
+
+**Validation**: `cargo test uff_vdw` passes (run only the new test file). Do NOT run the full test suite — existing tests will fail.
+
+### 1.1 Nonbonded pair enumeration in `topology.rs`
 
 **Goal**: Add 1-4+ pair enumeration to `MolecularTopology`.
 
@@ -210,7 +222,7 @@ fn enumerate_nonbonded_pairs(
 
 **~40-50 lines of new code.**
 
-### Phase 20b: vdW combination rules in `params.rs`
+### 1.2 vdW combination rules in `params.rs`
 
 **Goal**: Add functions to compute cross-pair vdW parameters.
 
@@ -231,7 +243,7 @@ pub fn calc_vdw_well_depth(params_i: &UffAtomParams, params_j: &UffAtomParams) -
 
 **~15 lines of new code.**
 
-### Phase 20c: vdW energy + gradient in `energy.rs`
+### 1.3 vdW energy + gradient in `energy.rs`
 
 **Goal**: Add `VdwParams` struct and energy/gradient functions.
 
@@ -292,7 +304,7 @@ curl -sL "https://raw.githubusercontent.com/rdkit/rdkit/master/Code/ForceField/U
 
 **~50-60 lines of new code.**
 
-### Phase 20d: Wire vdW into `UffForceField` in `uff/mod.rs`
+### 1.4 Wire vdW into `UffForceField` in `uff/mod.rs`
 
 **Goal**: Pre-compute vdW params and add to energy evaluation.
 
@@ -343,11 +355,9 @@ for vp in &self.vdw_params {
 
 **~30 lines of changes.**
 
----
+### 1.5 New test file: `uff_vdw_test.rs`
 
-## 6. Tests — New file: `uff_vdw_test.rs`
-
-Register in `rust/tests/crystolecule.rs` (add before the closing blank line):
+Register in `rust/tests/crystolecule.rs` (add at the end):
 ```rust
 #[path = "crystolecule/simulation/uff_vdw_test.rs"]
 mod uff_vdw_test;
@@ -403,7 +413,7 @@ struct ReferenceVdwParam {
 }
 ```
 
-### C1 series — vdW parameter tests
+#### C1 series — vdW parameter tests
 
 **c1_vdw_combination_rules**: Verify geometric mean for known atom type pairs:
 - C_3-C_3: x_ij = 3.851, D_ij = 0.105
@@ -414,7 +424,7 @@ struct ReferenceVdwParam {
 
 **c1_vdw_params_vs_reference**: For benzene, butane, and adamantane, build `UffForceField`, then for each entry in the reference JSON's `vdw_params` list, find the matching pair in our `ff.vdw_params` and compare x_ij (tol 1e-4) and d_ij (tol 1e-6). This validates the 1-5+ pairs that the reference does list. Note: our pair list is a superset (includes 1-4 pairs too), so search our list for the reference pair, not vice versa.
 
-### C2 series — vdW energy unit tests
+#### C2 series — vdW energy unit tests
 
 These test the `vdw_energy()` and `vdw_energy_and_gradient()` functions in isolation with synthetic two-atom systems.
 
@@ -436,7 +446,7 @@ These test the `vdw_energy()` and `vdw_energy_and_gradient()` functions in isola
 
 **c2_vdw_energy_only_matches_gradient_version**: `vdw_energy()` returns same value as `vdw_energy_and_gradient()`.
 
-### C3 series — nonbonded pair enumeration
+#### C3 series — nonbonded pair enumeration
 
 **c3_pair_counts**: For all 9 reference molecules, verify our exact nonbonded pair count matches the expected values from section 3:
 
@@ -461,7 +471,7 @@ For butane: verify no bonded or angle pairs appear; verify specific known 1-4 pa
 
 **c3_pair_counts_superset_of_reference**: For molecules with reference `vdw_pairs > 0` (benzene, butane, adamantane): verify `our_count > reference_vdw_pairs` (we include 1-4 pairs they don't).
 
-### C4 series — full force field with vdW
+#### C4 series — full force field with vdW
 
 **c4_total_energy_vs_reference**: For all 9 molecules, build `UffForceField` from topology, evaluate energy at input positions, compare to `input_energy.total`:
 
@@ -493,15 +503,38 @@ This ensures adding vdW did not accidentally perturb the bonded energy terms.
 
 **c4_vdw_contribution_positive_for_non_equilibrium**: For benzene, butane, and adamantane: compute total energy minus bonded energy → should approximately equal `input_energy.vdw`. Tolerance ≤0.5 kcal/mol.
 
+### Phase 1 files modified
+
+| File | Changes |
+|------|---------|
+| `rust/src/crystolecule/simulation/topology.rs` | Add `NonbondedPairInteraction` struct, `nonbonded_pairs` field in `MolecularTopology`, `enumerate_nonbonded_pairs()` method |
+| `rust/src/crystolecule/simulation/uff/params.rs` | Add `calc_vdw_distance()`, `calc_vdw_well_depth()` functions |
+| `rust/src/crystolecule/simulation/uff/energy.rs` | Add `VdwParams` struct, `vdw_energy()`, `vdw_energy_and_gradient()` functions |
+| `rust/src/crystolecule/simulation/uff/mod.rs` | Add `vdw_params` field, import new types, compute vdW params in `from_topology()`, add vdW loop in `energy_and_gradients()` |
+| `rust/tests/crystolecule.rs` | Register `uff_vdw_test` module |
+| `rust/tests/crystolecule/simulation/uff_vdw_test.rs` | **New file** — C1-C4 test series (~300-400 lines) |
+
+### Phase 1 validation
+
+```bash
+cd /c/machine_phase_systems/flutter_cad/rust && cargo test uff_vdw
+```
+
+All C1-C4 tests pass. Do NOT run `cargo test` (full suite) — tests in `uff_force_field_test.rs` and `minimize_test.rs` will fail because they still compare against bonded-only values.
+
+**Estimated**: ~150-200 lines implementation + ~300-400 lines new tests.
+
 ---
 
-## 7. Tests — Updates to `uff_force_field_test.rs`
+## Phase 2: Update `uff_force_field_test.rs`
 
-After adding vdW, the `UffForceField::energy_and_gradients()` method returns total energy (bonded + vdW). The existing tests compare against `input_energy.bonded` and `input_gradients.bonded`, which will now fail since our output includes vdW.
+**Goal**: Fix the existing force field tests that broke in Phase 1. These are mechanical changes: swap reference values from `bonded` to `total`/`full` and adjust tolerances.
 
-### Required changes:
+**Prerequisite**: Phase 1 complete and `cargo test uff_vdw` passes.
 
-**Step 1: Update data structures** (lines 57-65):
+**Validation**: `cargo test uff_force_field` passes.
+
+### 2.1 Update data structures (lines 57-65)
 
 Change `InputEnergy` and `InputGradients` to include total/full fields:
 ```rust
@@ -518,7 +551,7 @@ struct InputGradients {
 }
 ```
 
-Also add `vdw_pairs` to `InteractionCounts` (needed for new assertions):
+Also add `vdw_pairs` to `InteractionCounts`:
 ```rust
 #[derive(serde::Deserialize)]
 #[allow(dead_code)]
@@ -531,33 +564,54 @@ struct InteractionCounts {
 }
 ```
 
-**Step 2: Update file header comment** (line 1-4):
+### 2.2 Update file header comment (lines 1-4)
+
 Change "bonded-only energy and gradients" to "full UFF energy and gradients (bonded + vdW)".
 
-**Step 3: Update all 10 energy tests** (lines ~212-353):
+### 2.3 Update all 10 energy tests (lines ~212-353)
+
 Change every `mol.input_energy.bonded` reference to `mol.input_energy.total`. Adjust tolerances:
 - methane, water, ammonia: keep 0.01 (no vdW, same values)
 - ethylene, ethane, methanethiol: change to 0.05
 - benzene, butane: change to 0.1
 - adamantane: change to 0.5
 
-**Step 4: Update all 10 gradient tests** (lines ~367-466):
+### 2.4 Update all 10 gradient tests (lines ~367-466)
+
 Change every `mol.input_gradients.bonded` reference to `mol.input_gradients.full`. Adjust tolerances:
 - Small molecules (≤ 8 atoms): 0.05
 - Medium (≤ 14 atoms): 0.1
 - Large (adamantane): 0.5
 
-**Step 5: Existing numerical gradient tests** should continue to pass without changes (they compute analytical vs numerical for our own force field — both now include vdW, so the comparison is still valid).
+### 2.5 Existing numerical gradient tests
 
-**Step 6: Update `compute_energy()` helper** — its doc comment says "bonded energy", update to say "total energy".
+Should continue to pass without changes (they compute analytical vs numerical for our own force field — both now include vdW, so the comparison is still valid).
+
+### 2.6 Update `compute_energy()` helper
+
+Its doc comment says "bonded energy", update to say "total energy".
+
+### Phase 2 validation
+
+```bash
+cd /c/machine_phase_systems/flutter_cad/rust && cargo test uff_force_field
+```
+
+All force field tests pass. Do NOT run `cargo test` (full suite) yet — `minimize_test.rs` tests still fail.
+
+**Estimated**: ~50-80 lines of changes (mostly find-and-replace with tolerance adjustments).
 
 ---
 
-## 8. Tests — Updates to `minimize_test.rs`
+## Phase 3: Update `minimize_test.rs`
 
-This file has the most extensive changes because many tests were specifically designed as bonded-only workarounds. With vdW, these tests should be updated to their full potential.
+**Goal**: Fix all remaining broken tests. Replace bonded-only workaround tests with proper full-energy comparisons. Rework butane scan for asymmetric profile.
 
-### Step 1: Update data structures (lines 106-114)
+**Prerequisite**: Phase 2 complete and `cargo test uff_force_field` passes.
+
+**Validation**: Full `cargo test` passes (all ~870+ tests green).
+
+### 3.1 Update data structures (lines 106-114)
 
 ```rust
 #[derive(serde::Deserialize)]
@@ -573,7 +627,7 @@ struct MinimizedEnergy {
 }
 ```
 
-### Step 2: Per-molecule convergence tests (lines ~411-553)
+### 3.2 Per-molecule convergence tests (lines ~411-553)
 
 Tests: `uff_methane_minimizes`, `uff_ethylene_minimizes`, ..., `uff_methanethiol_minimizes`.
 
@@ -584,7 +638,7 @@ assert!(result.energy < mol.input_energy.total + tol);
 
 The minimizer should still decrease total energy from the input. Tolerances remain the same.
 
-### Step 3: `uff_minimized_bonded_energy_near_zero` (lines ~577-621)
+### 3.3 Replace `uff_minimized_bonded_energy_near_zero` (lines ~577-621)
 
 **Replace this test.** It was a workaround that tested near-zero bonded energy (only possible without vdW). With vdW, the minimized energy won't be near zero for molecules with nonbonded pairs (benzene: ~10.5, adamantane: ~22.5).
 
@@ -604,7 +658,7 @@ Replace with **`uff_minimized_total_energy_vs_reference`**: compare our minimize
 
 Note: wider tolerances for larger molecules because our optimizer may find slightly different local minima than RDKit's (different line search, different convergence criteria). For adamantane, the optimizer may also need more iterations (use `max_iterations: 2000`).
 
-### Step 4: Geometry tests (lines ~623-900)
+### 3.4 Geometry tests (lines ~623-900)
 
 Tests: `uff_methane_minimized_geometry`, `uff_ethylene_minimized_geometry`, `uff_water_minimized_geometry`.
 
@@ -616,24 +670,24 @@ Update each test:
 - Tolerances: bond lengths ±0.01 Å, angles ±2° (same as existing)
 - For molecules with significant vdW (benzene, butane, adamantane), the geometry will now match RDKit more closely because both optimizations include the same energy terms
 
-### Step 5: `b10_energy_decreases_from_input` (lines ~1023-1055)
+### 3.5 `b10_energy_decreases_from_input` (lines ~1023-1055)
 
 Change `mol.input_energy.bonded` to `mol.input_energy.total`:
 ```rust
 assert!(result.energy < mol.input_energy.total + 0.01);
 ```
 
-### Step 6: `b10_bonded_minimum_leq_rdkit_bonded` (lines ~1062-1087)
+### 3.6 Replace `b10_bonded_minimum_leq_rdkit_bonded` (lines ~1062-1087)
 
 **Replace this test.** It was a one-sided inequality workaround (our bonded-only minimum ≤ RDKit's bonded energy at vdW-optimized geometry). With vdW, we can do a proper comparison.
 
-Replace with **`b10_minimized_energy_matches_reference`**: compare our minimized total energy to `mol.minimized_energy.total`. Use the same tolerances as the table in Step 3. This is a proper bidirectional comparison, not a one-sided inequality.
+Replace with **`b10_minimized_energy_matches_reference`**: compare our minimized total energy to `mol.minimized_energy.total`. Use the same tolerances as the table in step 3.3. This is a proper bidirectional comparison, not a one-sided inequality.
 
-### Step 7: `b10_energy_self_consistent` (if exists)
+### 3.7 `b10_energy_self_consistent` (if exists)
 
 Should work unchanged — it recomputes energy at minimized positions and checks it equals the reported energy. Both now include vdW, but the self-consistency check is the same.
 
-### Step 8: B11 geometry tests (lines ~1090-1500)
+### 3.8 B11 geometry tests (lines ~1090-1500)
 
 Tests: `b11_ethane_geometry`, `b11_benzene_geometry`, `b11_butane_geometry`, `b11_ammonia_geometry`, `b11_adamantane_geometry`, `b11_methanethiol_geometry`.
 
@@ -646,7 +700,7 @@ Tolerances may need slight widening for larger molecules:
 - butane: bonds ±0.01, angles ±2°
 - adamantane: bonds ±0.015, angles ±3° (use `max_iterations: 2000`)
 
-### Step 9: Bond/angle quality tests (lines ~1452-1510)
+### 3.9 Bond/angle quality tests (lines ~1452-1510)
 
 Tests: `b11_all_molecules_bonds_near_rest_length`, `b11_all_molecules_angles_near_equilibrium`.
 
@@ -654,7 +708,7 @@ These verify that minimized bonds/angles are near their UFF rest values. With vd
 - Bond lengths: from 0.005-0.01 Å to 0.02 Å
 - Angles: from 1-2° to 3°
 
-### Step 10: Butane dihedral scan (lines ~1519-2085)
+### 3.10 Butane dihedral scan (lines ~1519-2085)
 
 The bonded-only butane scan produces a symmetric 3-fold cosine (degenerate staggered minima, degenerate eclipsed maxima). With vdW, the profile becomes asymmetric:
 - **Anti (180°)** is the global minimum (no 1-4 H-H steric clash)
@@ -677,45 +731,30 @@ The scan tests need significant rework:
 
 Replace with **`b9_butane_barrier_vs_reference`**: barrier height (syn energy - anti energy) should be within ±2.0 kcal/mol of the reference value (11.13 kcal/mol).
 
----
+### Phase 3 validation
 
-## 9. Implementation Order
-
-| Step | What | Files | Depends On |
-|------|------|-------|------------|
-| 20a | Nonbonded pair enumeration | `topology.rs` | — |
-| 20b | vdW combination rules | `params.rs` | — |
-| 20c | vdW energy + gradient functions | `energy.rs` | 20b |
-| 20d | Wire into UffForceField | `uff/mod.rs` | 20a, 20b, 20c |
-| 20e-1 | New `uff_vdw_test.rs`: C1-C4 tests | `uff_vdw_test.rs`, `crystolecule.rs` | 20d |
-| 20e-2 | Update `uff_force_field_test.rs` | `uff_force_field_test.rs` | 20d |
-| 20e-3 | Update `minimize_test.rs` | `minimize_test.rs` | 20d |
-
-Steps 20a and 20b can be done in parallel (no dependencies). Steps 20e-1, 20e-2, and 20e-3 can be done in any order after 20d, but it's recommended to do 20e-1 first (validates the basic vdW implementation) before updating existing tests that depend on it.
-
-**Build and test after each step:**
 ```bash
 cd /c/machine_phase_systems/flutter_cad/rust && cargo test
 ```
 
-After 20d, existing tests in `uff_force_field_test.rs` and `minimize_test.rs` will **FAIL** (they compare against bonded-only values, but the force field now includes vdW). This is expected. Steps 20e-2 and 20e-3 fix these failures.
+Full test suite passes (~870+ tests). This completes the vdW implementation.
 
-**Recommended approach**: Implement 20a-20d, then immediately do 20e-1 to validate the vdW implementation with new standalone tests, then update existing tests in 20e-2 and 20e-3.
+**Estimated**: ~200-300 lines of changes (mix of mechanical updates and conceptual rework).
 
 ---
 
-## 10. Files Modified
+## Files Modified (All Phases)
 
-| File | Changes |
-|------|---------|
-| `rust/src/crystolecule/simulation/topology.rs` | Add `NonbondedPairInteraction` struct, `nonbonded_pairs` field in `MolecularTopology`, `enumerate_nonbonded_pairs()` method |
-| `rust/src/crystolecule/simulation/uff/params.rs` | Add `calc_vdw_distance()`, `calc_vdw_well_depth()` functions |
-| `rust/src/crystolecule/simulation/uff/energy.rs` | Add `VdwParams` struct, `vdw_energy()`, `vdw_energy_and_gradient()` functions |
-| `rust/src/crystolecule/simulation/uff/mod.rs` | Add `vdw_params` field, import new types, compute vdW params in `from_topology()`, add vdW loop in `energy_and_gradients()` |
-| `rust/tests/crystolecule.rs` | Register `uff_vdw_test` module |
-| `rust/tests/crystolecule/simulation/uff_vdw_test.rs` | **New file** — C1-C4 test series (~300-400 lines) |
-| `rust/tests/crystolecule/simulation/uff_force_field_test.rs` | Update data structures, change all energy comparisons from `bonded` to `total`, change all gradient comparisons from `bonded` to `full`, update tolerances |
-| `rust/tests/crystolecule/simulation/minimize_test.rs` | Update data structures, replace bonded-only workaround tests with proper full-energy comparisons, update geometry tests to compare against RDKit reference, rework butane scan for asymmetric profile |
+| File | Phase | Changes |
+|------|-------|---------|
+| `rust/src/crystolecule/simulation/topology.rs` | 1 | Add `NonbondedPairInteraction` struct, `nonbonded_pairs` field in `MolecularTopology`, `enumerate_nonbonded_pairs()` method |
+| `rust/src/crystolecule/simulation/uff/params.rs` | 1 | Add `calc_vdw_distance()`, `calc_vdw_well_depth()` functions |
+| `rust/src/crystolecule/simulation/uff/energy.rs` | 1 | Add `VdwParams` struct, `vdw_energy()`, `vdw_energy_and_gradient()` functions |
+| `rust/src/crystolecule/simulation/uff/mod.rs` | 1 | Add `vdw_params` field, import new types, compute vdW params in `from_topology()`, add vdW loop in `energy_and_gradients()` |
+| `rust/tests/crystolecule.rs` | 1 | Register `uff_vdw_test` module |
+| `rust/tests/crystolecule/simulation/uff_vdw_test.rs` | 1 | **New file** — C1-C4 test series (~300-400 lines) |
+| `rust/tests/crystolecule/simulation/uff_force_field_test.rs` | 2 | Update data structures, change all energy comparisons from `bonded` to `total`, change all gradient comparisons from `bonded` to `full`, update tolerances |
+| `rust/tests/crystolecule/simulation/minimize_test.rs` | 3 | Update data structures, replace bonded-only workaround tests with proper full-energy comparisons, update geometry tests to compare against RDKit reference, rework butane scan for asymmetric profile |
 
 No changes needed to:
 - `rust/src/crystolecule/simulation/mod.rs` — `minimize_energy()` automatically gets vdW via `UffForceField`
@@ -724,9 +763,9 @@ No changes needed to:
 
 ---
 
-## 11. Reference Sources
+## Reference Sources
 
-- **RDKit `Nonbonded.cpp/h`**: Download to `test_data/` before starting (see section 5, Phase 20c)
+- **RDKit `Nonbonded.cpp/h`**: Download to `test_data/` before starting (see Phase 1, section 1.3)
 - **RDKit `Builder.cpp`**: Already downloaded. Lines 91-131 (`buildNeighborMatrix`), lines 433-467 (`addNonbonded`)
 - **UFF paper**: Rappé et al. 1992 JACS, Eq. 20 (vdW energy), Table 1 (parameters)
 - **Reference JSON**: `uff_reference.json` — `vdw_params`, `input_energy.total`, `input_gradients.full`, `minimized_energy.total`, `minimized_geometry`
@@ -734,12 +773,12 @@ No changes needed to:
 
 ---
 
-## 12. Risk Assessment
+## Risk Assessment
 
 **Low risk**: The vdW term is the simplest energy term mathematically (just LJ 12-6 — no angular dependence, no special cases per coordination). The main complexity is pair enumeration, which is validated by exact expected pair counts (section 3).
 
-**Low risk** (revised from medium): 1-4 pair inclusion is well-understood. Our pair enumeration (exclude 1-2 and 1-3, include everything else) exactly matches RDKit's C++ behavior. The reference JSON's `vdw_params` list excludes 1-4 pairs, but the energy values (`input_energy.total`) include them. We validate against the energy values, not the pair list. The pair count table in section 3 provides exact expected values for independent verification.
+**Low risk**: 1-4 pair inclusion is well-understood. Our pair enumeration (exclude 1-2 and 1-3, include everything else) exactly matches RDKit's C++ behavior. The reference JSON's `vdw_params` list excludes 1-4 pairs, but the energy values (`input_energy.total`) include them. We validate against the energy values, not the pair list. The pair count table in section 3 provides exact expected values for independent verification.
 
-**Medium risk**: Test updates in `minimize_test.rs` are extensive. Many tests need conceptual rethinking (not just tolerance adjustment). The butane scan rework is the most complex change. However, these are test-only changes — the production code changes (sections 5a-5d) are minimal (~150 lines).
+**Medium risk**: Test updates in Phase 3 (`minimize_test.rs`) are extensive. Many tests need conceptual rethinking (not just tolerance adjustment). The butane scan rework is the most complex change. However, these are test-only changes — the production code changes (Phase 1) are minimal (~150 lines).
 
 **Estimated total**: ~150-200 lines implementation + ~500-700 lines test changes (including both new and updated tests).
