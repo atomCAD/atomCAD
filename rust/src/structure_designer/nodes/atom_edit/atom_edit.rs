@@ -809,7 +809,9 @@ pub fn minimize_atom_edit(
     // Phase 2: Minimize (no borrows on structure_designer)
     let mut positions = topology.positions.clone();
     let config = MinimizationConfig::default();
+    let start = std::time::Instant::now();
     let result = minimize_with_force_field(&force_field, &mut positions, &config, &frozen_indices);
+    let elapsed_ms = start.elapsed().as_millis();
 
     // Phase 3: Write back moved positions into the diff (mutable borrow)
     let atom_edit_data =
@@ -851,14 +853,15 @@ pub fn minimize_atom_edit(
     }
 
     Ok(format!(
-        "Minimization {} after {} iterations (energy: {:.4} kcal/mol)",
+        "Minimization {} after {} iterations (energy: {:.4} kcal/mol, {}ms)",
         if result.converged {
             "converged"
         } else {
             "stopped"
         },
         result.iterations,
-        result.energy
+        result.energy,
+        elapsed_ms
     ))
 }
 
