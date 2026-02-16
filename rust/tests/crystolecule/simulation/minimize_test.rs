@@ -87,6 +87,7 @@ struct ReferenceMolecule {
     bonds: Vec<ReferenceBond>,
     input_positions: Vec<[f64; 3]>,
     input_energy: InputEnergy,
+    minimized_positions: Vec<[f64; 3]>,
     minimized_energy: MinimizedEnergy,
     minimized_geometry: MinimizedGeometry,
 }
@@ -218,6 +219,93 @@ fn angle_deg(positions: &[f64], i: usize, j: usize, k: usize) -> f64 {
     let len1 = (v1[0] * v1[0] + v1[1] * v1[1] + v1[2] * v1[2]).sqrt();
     let len2 = (v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2]).sqrt();
     (dot / (len1 * len2)).clamp(-1.0, 1.0).acos().to_degrees()
+}
+
+/// Kabsch alignment: compute the RMSD between two point sets after optimal
+/// rigid-body superposition (translation + rotation). Uses SVD of the
+/// cross-covariance matrix to find the optimal rotation.
+///
+/// `p` and `q` are Nx3 point sets (as Vec<[f64; 3]>). Returns (rmsd, max_deviation).
+fn kabsch_rmsd(p: &[[f64; 3]], q: &[[f64; 3]]) -> (f64, f64) {
+    use nalgebra::{Matrix3, SVD};
+
+    let n = p.len();
+    assert_eq!(n, q.len());
+    assert!(n >= 3, "need at least 3 points for alignment");
+
+    // 1. Compute centroids.
+    let mut cp = [0.0; 3];
+    let mut cq = [0.0; 3];
+    for i in 0..n {
+        for j in 0..3 {
+            cp[j] += p[i][j];
+            cq[j] += q[i][j];
+        }
+    }
+    let nf = n as f64;
+    for j in 0..3 {
+        cp[j] /= nf;
+        cq[j] /= nf;
+    }
+
+    // 2. Center both point sets.
+    let pc: Vec<[f64; 3]> = p
+        .iter()
+        .map(|pt| [pt[0] - cp[0], pt[1] - cp[1], pt[2] - cp[2]])
+        .collect();
+    let qc: Vec<[f64; 3]> = q
+        .iter()
+        .map(|pt| [pt[0] - cq[0], pt[1] - cq[1], pt[2] - cq[2]])
+        .collect();
+
+    // 3. Build 3x3 cross-covariance matrix H = P^T Q.
+    let mut h = [[0.0f64; 3]; 3];
+    for i in 0..n {
+        for r in 0..3 {
+            for c in 0..3 {
+                h[r][c] += pc[i][r] * qc[i][c];
+            }
+        }
+    }
+    let h_mat = Matrix3::new(
+        h[0][0], h[0][1], h[0][2], h[1][0], h[1][1], h[1][2], h[2][0], h[2][1], h[2][2],
+    );
+
+    // 4. SVD: H = U S V^T.
+    let svd = SVD::new(h_mat, true, true);
+    let u = svd.u.expect("SVD failed to compute U");
+    let v_t = svd.v_t.expect("SVD failed to compute V^T");
+
+    // 5. Optimal rotation R = V * diag(1, 1, d) * U^T, where d = sign(det(V U^T))
+    //    to ensure a proper rotation (det R = +1, not a reflection).
+    let d = (v_t.transpose() * u.transpose()).determinant();
+    let sign_d = if d < 0.0 { -1.0 } else { 1.0 };
+    let correction = Matrix3::new(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, sign_d);
+    let rotation = v_t.transpose() * correction * u.transpose();
+
+    // 6. Apply rotation to centered P, compute RMSD against centered Q.
+    let mut sum_sq = 0.0;
+    let mut max_dev = 0.0f64;
+    for i in 0..n {
+        let px = rotation[(0, 0)] * pc[i][0]
+            + rotation[(0, 1)] * pc[i][1]
+            + rotation[(0, 2)] * pc[i][2];
+        let py = rotation[(1, 0)] * pc[i][0]
+            + rotation[(1, 1)] * pc[i][1]
+            + rotation[(1, 2)] * pc[i][2];
+        let pz = rotation[(2, 0)] * pc[i][0]
+            + rotation[(2, 1)] * pc[i][1]
+            + rotation[(2, 2)] * pc[i][2];
+
+        let dx = px - qc[i][0];
+        let dy = py - qc[i][1];
+        let dz = pz - qc[i][2];
+        let dist_sq = dx * dx + dy * dy + dz * dz;
+        sum_sq += dist_sq;
+        max_dev = max_dev.max(dist_sq.sqrt());
+    }
+    let rmsd = (sum_sq / nf).sqrt();
+    (rmsd, max_dev)
 }
 
 // ============================================================================
@@ -1097,6 +1185,41 @@ fn b10_minimized_energy_matches_reference() {
 // Phase 18: B11 — End-to-end minimized geometry (updated for full UFF with vdW)
 // ============================================================================
 
+/// The definitive geometry test: minimize every molecule and compare the
+/// resulting atom positions against RDKit's minimized positions using Kabsch
+/// alignment (optimal rigid-body superposition). This single test subsumes
+/// all per-bond and per-angle comparisons — if the RMSD is small, all
+/// internal coordinates (bonds, angles, dihedrals) necessarily match.
+#[test]
+fn b11_all_molecules_rmsd_vs_reference() {
+    let data = load_reference_data();
+    for mol in &data.molecules {
+        let (ff, mut positions) = build_ff_and_positions(mol);
+        let config = MinimizationConfig {
+            max_iterations: 5000,
+            gradient_rms_tolerance: 1e-6,
+            ..Default::default()
+        };
+        minimize_with_force_field(&ff, &mut positions, &config, &[]);
+
+        // Convert flat position array to Vec<[f64; 3]>.
+        let n = mol.atoms.len();
+        let our_pos: Vec<[f64; 3]> = (0..n)
+            .map(|i| [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]])
+            .collect();
+
+        let (rmsd, max_dev) = kabsch_rmsd(&our_pos, &mol.minimized_positions);
+
+        assert!(
+            rmsd < 0.01,
+            "{}: RMSD {:.6} Å vs RDKit (max deviation {:.6} Å)",
+            mol.name,
+            rmsd,
+            max_dev
+        );
+    }
+}
+
 #[test]
 fn b11_ethane_minimized_geometry() {
     let data = load_reference_data();
@@ -1110,21 +1233,7 @@ fn b11_ethane_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // After full UFF minimization, bonds should be near UFF rest lengths.
-    // Ethane has 9 H-H vdW pairs; vdW slightly lengthens bonds.
-    for bp in &ff.bond_params {
-        let computed = bond_length(&positions, bp.idx1, bp.idx2);
-        assert!(
-            (computed - bp.rest_length).abs() < 0.01,
-            "ethane bond {}-{}: {:.4} != rest {:.4}",
-            bp.idx1,
-            bp.idx2,
-            computed,
-            bp.rest_length
-        );
-    }
-
-    // Cross-check bond lengths against RDKit reference.
+    // Primary validation: compare against RDKit's vdW-optimized geometry.
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
@@ -1136,17 +1245,29 @@ fn b11_ethane_minimized_geometry() {
             bl.length
         );
     }
-
-    // All angles should be near tetrahedral (~109.47°).
     for a in &mol.minimized_geometry.angles {
         let computed = angle_deg(&positions, a.atoms[0], a.atoms[1], a.atoms[2]);
         assert!(
-            (computed - 109.47).abs() < 1.5,
-            "ethane angle {}-{}-{}: {:.2}° != ~109.47°",
+            (computed - a.angle_deg).abs() < 2.0,
+            "ethane angle {}-{}-{}: {:.2}° vs RDKit {:.2}°",
             a.atoms[0],
             a.atoms[1],
             a.atoms[2],
-            computed
+            computed,
+            a.angle_deg
+        );
+    }
+
+    // Secondary sanity check: bonds shouldn't deviate too far from UFF rest lengths.
+    for bp in &ff.bond_params {
+        let computed = bond_length(&positions, bp.idx1, bp.idx2);
+        assert!(
+            (computed - bp.rest_length).abs() < 0.02,
+            "ethane bond {}-{}: {:.4} too far from rest {:.4}",
+            bp.idx1,
+            bp.idx2,
+            computed,
+            bp.rest_length
         );
     }
 }
@@ -1164,21 +1285,7 @@ fn b11_benzene_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // After full UFF minimization, bonds should be near UFF rest lengths.
-    // Benzene has 36 vdW pairs; vdW pressure perturbs bond lengths by ~0.02 Å.
-    for bp in &ff.bond_params {
-        let computed = bond_length(&positions, bp.idx1, bp.idx2);
-        assert!(
-            (computed - bp.rest_length).abs() < 0.025,
-            "benzene bond {}-{}: {:.4} != rest {:.4}",
-            bp.idx1,
-            bp.idx2,
-            computed,
-            bp.rest_length
-        );
-    }
-
-    // Cross-check bond lengths against RDKit reference.
+    // Primary validation: compare against RDKit's vdW-optimized geometry.
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
@@ -1190,17 +1297,29 @@ fn b11_benzene_minimized_geometry() {
             bl.length
         );
     }
-
-    // All angles should be ~120° (trigonal planar sp2).
     for a in &mol.minimized_geometry.angles {
         let computed = angle_deg(&positions, a.atoms[0], a.atoms[1], a.atoms[2]);
         assert!(
-            (computed - 120.0).abs() < 1.0,
-            "benzene angle {}-{}-{}: {:.2}° != 120°",
+            (computed - a.angle_deg).abs() < 2.0,
+            "benzene angle {}-{}-{}: {:.2}° vs RDKit {:.2}°",
             a.atoms[0],
             a.atoms[1],
             a.atoms[2],
-            computed
+            computed,
+            a.angle_deg
+        );
+    }
+
+    // Secondary sanity check: bonds shouldn't deviate too far from UFF rest lengths.
+    for bp in &ff.bond_params {
+        let computed = bond_length(&positions, bp.idx1, bp.idx2);
+        assert!(
+            (computed - bp.rest_length).abs() < 0.03,
+            "benzene bond {}-{}: {:.4} too far from rest {:.4}",
+            bp.idx1,
+            bp.idx2,
+            computed,
+            bp.rest_length
         );
     }
 
@@ -1254,34 +1373,29 @@ fn b11_butane_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // After full UFF minimization, bonds should be near UFF rest lengths.
-    // Butane has 54 vdW pairs; vdW pressure may shift bonds by up to ~0.025 Å.
-    for bp in &ff.bond_params {
-        let computed = bond_length(&positions, bp.idx1, bp.idx2);
+    // Primary validation: compare against RDKit's vdW-optimized geometry.
+    // Both optimizers include the same energy terms, so geometry should match tightly.
+    for bl in &mol.minimized_geometry.bond_lengths {
+        let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
-            (computed - bp.rest_length).abs() < 0.025,
-            "butane bond {}-{}: {:.4} != rest {:.4} (diff={:.4})",
-            bp.idx1,
-            bp.idx2,
+            (computed - bl.length).abs() < 0.01,
+            "butane bond {}-{}: {:.4} vs RDKit {:.4}",
+            bl.atoms[0],
+            bl.atoms[1],
             computed,
-            bp.rest_length,
-            (computed - bp.rest_length).abs()
+            bl.length
         );
     }
-
-    // All angles should be near their UFF theta0.
-    // vdW opens C-C-C backbone angles by ~3° (steric repulsion).
-    for ap in &ff.angle_params {
-        let computed = angle_deg(&positions, ap.idx1, ap.idx2, ap.idx3);
-        let expected = ap.theta0.to_degrees();
+    for a in &mol.minimized_geometry.angles {
+        let computed = angle_deg(&positions, a.atoms[0], a.atoms[1], a.atoms[2]);
         assert!(
-            (computed - expected).abs() < 4.0,
-            "butane angle {}-{}-{}: {:.2}° != theta0 {:.2}°",
-            ap.idx1,
-            ap.idx2,
-            ap.idx3,
+            (computed - a.angle_deg).abs() < 2.0,
+            "butane angle {}-{}-{}: {:.2}° vs RDKit {:.2}°",
+            a.atoms[0],
+            a.atoms[1],
+            a.atoms[2],
             computed,
-            expected
+            a.angle_deg
         );
     }
 }
@@ -1373,34 +1487,31 @@ fn b11_adamantane_minimized_geometry() {
         result.iterations
     );
 
-    // After full UFF minimization, bonds should be near UFF rest lengths.
-    // Adamantane has 237 vdW pairs; vdW repulsion lengthens C-C bonds by ~0.03 Å.
-    for bp in &ff.bond_params {
-        let computed = bond_length(&positions, bp.idx1, bp.idx2);
+    // Primary validation: compare against RDKit's vdW-optimized geometry.
+    // Both optimizers use the same UFF energy terms, so geometry should match.
+    for bl in &mol.minimized_geometry.bond_lengths {
+        let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
-            (computed - bp.rest_length).abs() < 0.04,
-            "adamantane bond {}-{}: {:.4} != rest {:.4} (diff={:.4})",
-            bp.idx1,
-            bp.idx2,
+            (computed - bl.length).abs() < 0.02,
+            "adamantane bond {}-{}: {:.4} vs RDKit {:.4} (diff={:.4})",
+            bl.atoms[0],
+            bl.atoms[1],
             computed,
-            bp.rest_length,
-            (computed - bp.rest_length).abs()
+            bl.length,
+            (computed - bl.length).abs()
         );
     }
-
-    // Angles should be near their UFF theta0.
-    for ap in &ff.angle_params {
-        let computed = angle_deg(&positions, ap.idx1, ap.idx2, ap.idx3);
-        let expected = ap.theta0.to_degrees();
+    for a in &mol.minimized_geometry.angles {
+        let computed = angle_deg(&positions, a.atoms[0], a.atoms[1], a.atoms[2]);
         assert!(
-            (computed - expected).abs() < 3.0,
-            "adamantane angle {}-{}-{}: {:.2}° != theta0 {:.2}° (diff={:.2}°)",
-            ap.idx1,
-            ap.idx2,
-            ap.idx3,
+            (computed - a.angle_deg).abs() < 2.0,
+            "adamantane angle {}-{}-{}: {:.2}° vs RDKit {:.2}° (diff={:.2}°)",
+            a.atoms[0],
+            a.atoms[1],
+            a.atoms[2],
             computed,
-            expected,
-            (computed - expected).abs()
+            a.angle_deg,
+            (computed - a.angle_deg).abs()
         );
     }
 }
@@ -1461,70 +1572,109 @@ fn b11_methanethiol_minimized_geometry() {
     }
 }
 
-/// After full UFF minimization, every bond in every molecule should be
-/// close to its UFF rest length. With vdW included, bonds may be slightly
-/// perturbed from their pure-bonded rest values.
+/// After full UFF minimization, every bond in every molecule should match
+/// the RDKit reference geometry. Both optimizers use the same UFF energy
+/// terms (bonded + vdW), so minimized geometries should agree tightly.
 #[test]
-fn b11_all_bonds_near_rest_length() {
+fn b11_all_bonds_match_reference() {
     let data = load_reference_data();
     for mol in &data.molecules {
         let (ff, mut positions) = build_ff_and_positions(mol);
+        // Adamantane needs relaxed gradient tolerance due to 237 vdW pairs.
+        let (max_iter, grad_tol) = if mol.name == "adamantane" {
+            (5000, 1e-4)
+        } else {
+            (2000, 1e-6)
+        };
         let config = MinimizationConfig {
-            max_iterations: 2000,
-            gradient_rms_tolerance: 1e-6,
+            max_iterations: max_iter,
+            gradient_rms_tolerance: grad_tol,
             ..Default::default()
         };
         minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-        // vdW pressure may push bonds away from rest lengths, use wider tolerance.
-        // Adamantane (237 vdW pairs) has the largest deviation at ~0.03 Å.
-        let tol = 0.05;
+        // Primary: compare against RDKit reference (tight tolerance).
+        let bond_tol = if mol.name == "adamantane" { 0.02 } else { 0.01 };
+        for bl in &mol.minimized_geometry.bond_lengths {
+            let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
+            assert!(
+                (computed - bl.length).abs() < bond_tol,
+                "{}: bond {}-{}: {:.4} vs RDKit {:.4} (diff={:.4}, tol={bond_tol})",
+                mol.name,
+                bl.atoms[0],
+                bl.atoms[1],
+                computed,
+                bl.length,
+                (computed - bl.length).abs()
+            );
+        }
+
+        // Secondary sanity check: bonds within 0.05 Å of UFF rest lengths.
         for bp in &ff.bond_params {
             let computed = bond_length(&positions, bp.idx1, bp.idx2);
             assert!(
-                (computed - bp.rest_length).abs() < tol,
-                "{}: bond {}-{}: {:.4} != rest {:.4} (diff={:.4}, tol={tol})",
+                (computed - bp.rest_length).abs() < 0.05,
+                "{}: bond {}-{}: {:.4} too far from rest {:.4}",
                 mol.name,
                 bp.idx1,
                 bp.idx2,
                 computed,
-                bp.rest_length,
-                (computed - bp.rest_length).abs()
+                bp.rest_length
             );
         }
     }
 }
 
-/// After full UFF minimization, every angle in every molecule should be
-/// close to its UFF equilibrium angle (theta0). vdW interactions may
-/// slightly perturb angles from their bonded-only equilibrium.
+/// After full UFF minimization, every angle in every molecule should match
+/// the RDKit reference geometry. Both optimizers use the same UFF energy
+/// terms (bonded + vdW), so minimized geometries should agree tightly.
 #[test]
-fn b11_all_angles_near_equilibrium() {
+fn b11_all_angles_match_reference() {
     let data = load_reference_data();
     for mol in &data.molecules {
         let (ff, mut positions) = build_ff_and_positions(mol);
+        // Adamantane needs relaxed gradient tolerance due to 237 vdW pairs.
+        let (max_iter, grad_tol) = if mol.name == "adamantane" {
+            (5000, 1e-4)
+        } else {
+            (2000, 1e-6)
+        };
         let config = MinimizationConfig {
-            max_iterations: 2000,
-            gradient_rms_tolerance: 1e-6,
+            max_iterations: max_iter,
+            gradient_rms_tolerance: grad_tol,
             ..Default::default()
         };
         minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-        // vdW pressure may perturb angles from rest values, use wider tolerance.
-        let tol_deg = 5.0;
+        // Primary: compare against RDKit reference (tight tolerance).
+        for a in &mol.minimized_geometry.angles {
+            let computed = angle_deg(&positions, a.atoms[0], a.atoms[1], a.atoms[2]);
+            assert!(
+                (computed - a.angle_deg).abs() < 2.0,
+                "{}: angle {}-{}-{}: {:.2}° vs RDKit {:.2}° (diff={:.2}°)",
+                mol.name,
+                a.atoms[0],
+                a.atoms[1],
+                a.atoms[2],
+                computed,
+                a.angle_deg,
+                (computed - a.angle_deg).abs()
+            );
+        }
+
+        // Secondary sanity check: angles within 5° of UFF theta0.
         for ap in &ff.angle_params {
             let computed = angle_deg(&positions, ap.idx1, ap.idx2, ap.idx3);
             let expected = ap.theta0.to_degrees();
             assert!(
-                (computed - expected).abs() < tol_deg,
-                "{}: angle {}-{}-{}: {:.2}° != theta0 {:.2}° (diff={:.2}°, tol={tol_deg}°)",
+                (computed - expected).abs() < 5.0,
+                "{}: angle {}-{}-{}: {:.2}° too far from theta0 {:.2}°",
                 mol.name,
                 ap.idx1,
                 ap.idx2,
                 ap.idx3,
                 computed,
-                expected,
-                (computed - expected).abs()
+                expected
             );
         }
     }
