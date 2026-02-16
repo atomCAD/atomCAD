@@ -7,7 +7,9 @@ use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
+use crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode;
 use crate::structure_designer::nodes::atom_edit::atom_edit;
+use crate::structure_designer::nodes::atom_edit::atom_edit::MinimizeFreezeMode;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_select_by_ray(
@@ -238,6 +240,30 @@ pub fn set_atom_edit_add_atom_data(atomic_number: i16) -> bool {
                 }
             },
             false,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let internal_mode = match freeze_mode {
+                    APIMinimizeFreezeMode::FreezeBase => MinimizeFreezeMode::FreezeBase,
+                    APIMinimizeFreezeMode::FreeAll => MinimizeFreezeMode::FreeAll,
+                };
+                let result = atom_edit::minimize_atom_edit(
+                    &mut cad_instance.structure_designer,
+                    internal_mode,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(message) => message,
+                    Err(error) => format!("Error: {}", error),
+                }
+            },
+            "Error: no active instance".to_string(),
         )
     }
 }

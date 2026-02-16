@@ -258,6 +258,16 @@ pub enum APIAtomEditTool {
     AddBond,
 }
 
+/// Freeze mode for atom_edit energy minimization.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIMinimizeFreezeMode {
+    /// Only diff atoms move; base atoms are frozen.
+    FreezeBase,
+    /// All atoms move freely.
+    FreeAll,
+}
+
 pub struct APIDiffStats {
     pub atoms_added: u32,
     pub atoms_deleted: u32,

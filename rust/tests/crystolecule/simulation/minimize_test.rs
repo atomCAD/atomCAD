@@ -6,10 +6,10 @@
 // - UFF force field with reference molecules (energy reduction, convergence)
 
 use glam::DVec3;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE,
 };
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::simulation::force_field::ForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::minimize::{
     MinimizationConfig, minimize_with_force_field,
@@ -287,15 +287,12 @@ fn kabsch_rmsd(p: &[[f64; 3]], q: &[[f64; 3]]) -> (f64, f64) {
     let mut sum_sq = 0.0;
     let mut max_dev = 0.0f64;
     for i in 0..n {
-        let px = rotation[(0, 0)] * pc[i][0]
-            + rotation[(0, 1)] * pc[i][1]
-            + rotation[(0, 2)] * pc[i][2];
-        let py = rotation[(1, 0)] * pc[i][0]
-            + rotation[(1, 1)] * pc[i][1]
-            + rotation[(1, 2)] * pc[i][2];
-        let pz = rotation[(2, 0)] * pc[i][0]
-            + rotation[(2, 1)] * pc[i][1]
-            + rotation[(2, 2)] * pc[i][2];
+        let px =
+            rotation[(0, 0)] * pc[i][0] + rotation[(0, 1)] * pc[i][1] + rotation[(0, 2)] * pc[i][2];
+        let py =
+            rotation[(1, 0)] * pc[i][0] + rotation[(1, 1)] * pc[i][1] + rotation[(1, 2)] * pc[i][2];
+        let pz =
+            rotation[(2, 0)] * pc[i][0] + rotation[(2, 1)] * pc[i][1] + rotation[(2, 2)] * pc[i][2];
 
         let dx = px - qc[i][0];
         let dy = py - qc[i][1];
@@ -319,9 +316,17 @@ fn quadratic_2d_converges_to_minimum() {
     let mut pos = vec![0.0, 0.0];
     let result = minimize_with_force_field(&ff, &mut pos, &config, &[]);
     assert!(result.converged, "should converge");
-    assert!(result.energy < 1e-8, "energy should be near zero: {}", result.energy);
+    assert!(
+        result.energy < 1e-8,
+        "energy should be near zero: {}",
+        result.energy
+    );
     assert!((pos[0] - 3.0).abs() < 1e-4, "x should be ~3.0: {}", pos[0]);
-    assert!((pos[1] - (-2.0)).abs() < 1e-4, "y should be ~-2.0: {}", pos[1]);
+    assert!(
+        (pos[1] - (-2.0)).abs() < 1e-4,
+        "y should be ~-2.0: {}",
+        pos[1]
+    );
 }
 
 #[test]
@@ -334,10 +339,7 @@ fn quadratic_6d_converges() {
     let result = minimize_with_force_field(&ff, &mut pos, &config, &[]);
     assert!(result.converged);
     for (i, (&p, &c)) in pos.iter().zip(center.iter()).enumerate() {
-        assert!(
-            (p - c).abs() < 1e-3,
-            "dim {i}: pos {p} != center {c}"
-        );
+        assert!((p - c).abs() < 1e-3, "dim {i}: pos {p} != center {c}");
     }
 }
 
@@ -363,17 +365,13 @@ fn rosenbrock_converges() {
     let mut pos = vec![-1.0, 1.0];
     let result = minimize_with_force_field(&ff, &mut pos, &config, &[]);
     assert!(result.converged, "Rosenbrock should converge");
+    assert!((pos[0] - 1.0).abs() < 1e-3, "x should be ~1.0: {}", pos[0]);
+    assert!((pos[1] - 1.0).abs() < 1e-3, "y should be ~1.0: {}", pos[1]);
     assert!(
-        (pos[0] - 1.0).abs() < 1e-3,
-        "x should be ~1.0: {}",
-        pos[0]
+        result.energy < 1e-5,
+        "energy should be near zero: {}",
+        result.energy
     );
-    assert!(
-        (pos[1] - 1.0).abs() < 1e-3,
-        "y should be ~1.0: {}",
-        pos[1]
-    );
-    assert!(result.energy < 1e-5, "energy should be near zero: {}", result.energy);
 }
 
 #[test]
@@ -404,9 +402,21 @@ fn frozen_dimension_stays_fixed() {
     assert!(pos[1].abs() < 1e-12, "frozen y should be 0: {}", pos[1]);
     assert!(pos[2].abs() < 1e-12, "frozen z should be 0: {}", pos[2]);
     // Atom 1 (coords 3-5) should reach minimum.
-    assert!((pos[3] - 4.0).abs() < 1e-3, "free x should be ~4: {}", pos[3]);
-    assert!((pos[4] - 5.0).abs() < 1e-3, "free y should be ~5: {}", pos[4]);
-    assert!((pos[5] - 6.0).abs() < 1e-3, "free z should be ~6: {}", pos[5]);
+    assert!(
+        (pos[3] - 4.0).abs() < 1e-3,
+        "free x should be ~4: {}",
+        pos[3]
+    );
+    assert!(
+        (pos[4] - 5.0).abs() < 1e-3,
+        "free y should be ~5: {}",
+        pos[4]
+    );
+    assert!(
+        (pos[5] - 6.0).abs() < 1e-3,
+        "free z should be ~6: {}",
+        pos[5]
+    );
 }
 
 #[test]
@@ -619,7 +629,11 @@ fn uff_adamantane_minimizes() {
         ..Default::default()
     };
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
-    assert!(result.converged, "adamantane should converge (got {} iterations)", result.iterations);
+    assert!(
+        result.converged,
+        "adamantane should converge (got {} iterations)",
+        result.iterations
+    );
     assert!(
         result.energy < mol.input_energy.total + 0.1,
         "adamantane: minimized energy {} should be <= input energy {}",
@@ -659,9 +673,7 @@ fn uff_all_molecules_converge() {
         assert!(
             result.converged,
             "{}: did not converge after {} iterations (energy={})",
-            mol.name,
-            result.iterations,
-            result.energy
+            mol.name, result.iterations, result.energy
         );
     }
 }
@@ -1000,25 +1012,20 @@ fn b7_ethylene_planarity() {
 
     // Compute plane normal from atoms 0, 1, 2.
     let p = |idx: usize| -> [f64; 3] {
-        [positions[idx * 3], positions[idx * 3 + 1], positions[idx * 3 + 2]]
+        [
+            positions[idx * 3],
+            positions[idx * 3 + 1],
+            positions[idx * 3 + 2],
+        ]
     };
-    let v1 = [
-        p(1)[0] - p(0)[0],
-        p(1)[1] - p(0)[1],
-        p(1)[2] - p(0)[2],
-    ];
-    let v2 = [
-        p(2)[0] - p(0)[0],
-        p(2)[1] - p(0)[1],
-        p(2)[2] - p(0)[2],
-    ];
+    let v1 = [p(1)[0] - p(0)[0], p(1)[1] - p(0)[1], p(1)[2] - p(0)[2]];
+    let v2 = [p(2)[0] - p(0)[0], p(2)[1] - p(0)[1], p(2)[2] - p(0)[2]];
     let normal = [
         v1[1] * v2[2] - v1[2] * v2[1],
         v1[2] * v2[0] - v1[0] * v2[2],
         v1[0] * v2[1] - v1[1] * v2[0],
     ];
-    let normal_len =
-        (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+    let normal_len = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
     assert!(normal_len > 1e-6, "first 3 atoms are collinear");
 
     // All 6 atoms should lie on the plane.
@@ -1028,8 +1035,7 @@ fn b7_ethylene_planarity() {
             p(atom_idx)[1] - p(0)[1],
             p(atom_idx)[2] - p(0)[2],
         ];
-        let dist =
-            (d[0] * normal[0] + d[1] * normal[1] + d[2] * normal[2]).abs() / normal_len;
+        let dist = (d[0] * normal[0] + d[1] * normal[1] + d[2] * normal[2]).abs() / normal_len;
         assert!(
             dist < 0.01,
             "ethylene atom {atom_idx} is {dist:.6} Å out of plane"
@@ -1065,10 +1071,7 @@ fn b7_ethylene_bond_length_ordering() {
         }
     }
     let cc = cc_length.expect("no C=C bond found");
-    assert!(
-        !ch_lengths.is_empty(),
-        "no C-H bonds found"
-    );
+    assert!(!ch_lengths.is_empty(), "no C-H bonds found");
     for &ch in &ch_lengths {
         assert!(
             cc > ch,
@@ -1325,25 +1328,20 @@ fn b11_benzene_minimized_geometry() {
 
     // Planarity: all 12 atoms should be coplanar.
     let p = |idx: usize| -> [f64; 3] {
-        [positions[idx * 3], positions[idx * 3 + 1], positions[idx * 3 + 2]]
+        [
+            positions[idx * 3],
+            positions[idx * 3 + 1],
+            positions[idx * 3 + 2],
+        ]
     };
-    let v1 = [
-        p(1)[0] - p(0)[0],
-        p(1)[1] - p(0)[1],
-        p(1)[2] - p(0)[2],
-    ];
-    let v2 = [
-        p(2)[0] - p(0)[0],
-        p(2)[1] - p(0)[1],
-        p(2)[2] - p(0)[2],
-    ];
+    let v1 = [p(1)[0] - p(0)[0], p(1)[1] - p(0)[1], p(1)[2] - p(0)[2]];
+    let v2 = [p(2)[0] - p(0)[0], p(2)[1] - p(0)[1], p(2)[2] - p(0)[2]];
     let normal = [
         v1[1] * v2[2] - v1[2] * v2[1],
         v1[2] * v2[0] - v1[0] * v2[2],
         v1[0] * v2[1] - v1[1] * v2[0],
     ];
-    let normal_len =
-        (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+    let normal_len = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
     assert!(normal_len > 1e-6, "first 3 benzene atoms are collinear");
     for atom_idx in 0..mol.atoms.len() {
         let d = [
@@ -1351,8 +1349,7 @@ fn b11_benzene_minimized_geometry() {
             p(atom_idx)[1] - p(0)[1],
             p(atom_idx)[2] - p(0)[2],
         ];
-        let dist =
-            (d[0] * normal[0] + d[1] * normal[1] + d[2] * normal[2]).abs() / normal_len;
+        let dist = (d[0] * normal[0] + d[1] * normal[1] + d[2] * normal[2]).abs() / normal_len;
         assert!(
             dist < 0.01,
             "benzene atom {atom_idx} is {dist:.6} Å out of plane"
@@ -1747,8 +1744,7 @@ fn load_butane_scan_data() -> ButaneDihedralScan {
         "/tests/crystolecule/simulation/test_data/uff_reference.json"
     );
     let content = std::fs::read_to_string(path).expect("Failed to read uff_reference.json");
-    let value: serde_json::Value =
-        serde_json::from_str(&content).expect("Failed to parse JSON");
+    let value: serde_json::Value = serde_json::from_str(&content).expect("Failed to parse JSON");
     serde_json::from_value(value["butane_dihedral_scan"].clone())
         .expect("Failed to parse butane_dihedral_scan")
 }
@@ -2052,7 +2048,9 @@ fn b9_butane_dihedral_rotation_accuracy() {
 
     let atoms_to_rotate: [usize; 6] = [3, 9, 10, 11, 12, 13];
 
-    for target_deg in [0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 270.0, 330.0] {
+    for target_deg in [
+        0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 270.0, 330.0,
+    ] {
         let mut positions = base_positions.clone();
         let current_deg = compute_dihedral(&positions, 0, 1, 2, 3);
 
@@ -2128,18 +2126,9 @@ fn b9_butane_profile_shape() {
         relative[idx]
     };
 
-    assert!(
-        e_at(180.0) < e_at(60.0),
-        "anti < gauche violated"
-    );
-    assert!(
-        e_at(60.0) < e_at(120.0),
-        "gauche < eclipsed violated"
-    );
-    assert!(
-        e_at(120.0) < e_at(0.0),
-        "eclipsed < syn violated"
-    );
+    assert!(e_at(180.0) < e_at(60.0), "anti < gauche violated");
+    assert!(e_at(60.0) < e_at(120.0), "gauche < eclipsed violated");
+    assert!(e_at(120.0) < e_at(0.0), "eclipsed < syn violated");
 
     // Mirror symmetry: E(phi) ≈ E(360-phi) within 0.5 kcal/mol for all points.
     for i in 1..36 {
@@ -2256,13 +2245,19 @@ fn b9_butane_scan_ordering_vs_reference() {
     // Reference ordering
     let ref_kc = &scan_ref.key_conformations;
     assert!(ref_kc.anti_180 < ref_kc.gauche_60, "ref: anti < gauche");
-    assert!(ref_kc.gauche_60 < ref_kc.eclipsed_120, "ref: gauche < eclipsed");
+    assert!(
+        ref_kc.gauche_60 < ref_kc.eclipsed_120,
+        "ref: gauche < eclipsed"
+    );
     assert!(ref_kc.eclipsed_120 < ref_kc.syn_0, "ref: eclipsed < syn");
 
     // Both scans should have the minimum near 180° (anti).
-    let our_min_idx = relative.iter().enumerate()
+    let our_min_idx = relative
+        .iter()
+        .enumerate()
         .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-        .unwrap().0;
+        .unwrap()
+        .0;
     let our_min_angle = our_min_idx as f64 * 5.0;
     assert!(
         (our_min_angle - 180.0).abs() < 15.0 || (our_min_angle - 180.0).abs() > 345.0,

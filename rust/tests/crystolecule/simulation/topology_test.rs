@@ -5,10 +5,10 @@
 // plus hand-built test cases and edge cases.
 
 use glam::DVec3;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE,
 };
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
 
 // ============================================================================
@@ -118,11 +118,7 @@ fn build_simple_structure(
 // Test B8: Interaction counts for all 9 reference molecules
 // ============================================================================
 
-fn assert_topology_counts(
-    name: &str,
-    topo: &MolecularTopology,
-    expected: &InteractionCounts,
-) {
+fn assert_topology_counts(name: &str, topo: &MolecularTopology, expected: &InteractionCounts) {
     assert_eq!(
         topo.bonds.len(),
         expected.bonds,
@@ -197,11 +193,7 @@ fn test_b8_ethane_counts() {
 #[test]
 fn test_b8_benzene_counts() {
     let data = load_reference_data();
-    let mol = data
-        .molecules
-        .iter()
-        .find(|m| m.name == "benzene")
-        .unwrap();
+    let mol = data.molecules.iter().find(|m| m.name == "benzene").unwrap();
     let structure = build_structure_from_reference(mol);
     let topo = MolecularTopology::from_structure(&structure);
 
@@ -234,11 +226,7 @@ fn test_b8_water_counts() {
 #[test]
 fn test_b8_ammonia_counts() {
     let data = load_reference_data();
-    let mol = data
-        .molecules
-        .iter()
-        .find(|m| m.name == "ammonia")
-        .unwrap();
+    let mol = data.molecules.iter().find(|m| m.name == "ammonia").unwrap();
     let structure = build_structure_from_reference(mol);
     let topo = MolecularTopology::from_structure(&structure);
 
@@ -305,10 +293,10 @@ fn test_builder1_cc_o_c() {
     // RDKit reference: 3 bonds, 3 angles, 0 torsions
     let structure = build_simple_structure(
         &[
-            (6, [0.0, 0.0, 0.0]),   // C1
-            (6, [1.5, 0.0, 0.0]),   // C2
-            (8, [1.5, 1.5, 0.0]),   // O
-            (6, [3.0, 0.0, 0.0]),   // C3
+            (6, [0.0, 0.0, 0.0]), // C1
+            (6, [1.5, 0.0, 0.0]), // C2
+            (8, [1.5, 1.5, 0.0]), // O
+            (6, [3.0, 0.0, 0.0]), // C3
         ],
         &[
             (0, 1, BOND_SINGLE), // C1-C2
@@ -329,10 +317,10 @@ fn test_builder1_ccoc() {
     // RDKit reference: 3 bonds, 2 angles, 1 torsion
     let structure = build_simple_structure(
         &[
-            (6, [0.0, 0.0, 0.0]),   // C1
-            (6, [1.5, 0.0, 0.0]),   // C2
-            (8, [3.0, 0.0, 0.0]),   // O
-            (6, [4.5, 0.0, 0.0]),   // C3
+            (6, [0.0, 0.0, 0.0]), // C1
+            (6, [1.5, 0.0, 0.0]), // C2
+            (8, [3.0, 0.0, 0.0]), // O
+            (6, [4.5, 0.0, 0.0]), // C3
         ],
         &[
             (0, 1, BOND_SINGLE), // C1-C2
@@ -566,10 +554,10 @@ fn test_phosphorus_inversions() {
     // Phosphorus with 3 single bonds → pyramidal inversion (group 15)
     let structure = build_simple_structure(
         &[
-            (15, [0.0, 0.0, 0.0]),  // P
-            (1, [1.0, 0.0, 0.0]),   // H1
-            (1, [0.0, 1.0, 0.0]),   // H2
-            (1, [0.0, 0.0, 1.0]),   // H3
+            (15, [0.0, 0.0, 0.0]), // P
+            (1, [1.0, 0.0, 0.0]),  // H1
+            (1, [0.0, 1.0, 0.0]),  // H2
+            (1, [0.0, 0.0, 1.0]),  // H3
         ],
         &[
             (0, 1, BOND_SINGLE),
@@ -648,23 +636,18 @@ fn test_index_validity() {
             assert_ne!(
                 angle.idx1, angle.idx2,
                 "{}: angle {} has duplicate atoms",
-                mol.name,
-                i
+                mol.name, i
             );
             assert_ne!(
                 angle.idx2, angle.idx3,
                 "{}: angle {} has duplicate atoms",
-                mol.name,
-                i
+                mol.name, i
             );
         }
 
         for (i, torsion) in topo.torsions.iter().enumerate() {
             assert!(
-                torsion.idx1 < n
-                    && torsion.idx2 < n
-                    && torsion.idx3 < n
-                    && torsion.idx4 < n,
+                torsion.idx1 < n && torsion.idx2 < n && torsion.idx3 < n && torsion.idx4 < n,
                 "{}: torsion {} has out-of-range index",
                 mol.name,
                 i
@@ -672,8 +655,7 @@ fn test_index_validity() {
             assert_ne!(
                 torsion.idx1, torsion.idx4,
                 "{}: torsion {} has idx1 == idx4 (degenerate)",
-                mol.name,
-                i
+                mol.name, i
             );
         }
 
@@ -749,10 +731,7 @@ fn test_bond_orders_preserved() {
             (6, [1.3, 0.0, 0.0]),
             (6, [2.6, 0.0, 0.0]),
         ],
-        &[
-            (0, 1, BOND_DOUBLE),
-            (1, 2, BOND_SINGLE),
-        ],
+        &[(0, 1, BOND_DOUBLE), (1, 2, BOND_SINGLE)],
     );
 
     let topo = MolecularTopology::from_structure(&structure);
@@ -816,10 +795,7 @@ fn test_linear_chain() {
             (6, [1.5, 0.0, 0.0]),
             (6, [3.0, 0.0, 0.0]),
         ],
-        &[
-            (0, 1, BOND_SINGLE),
-            (1, 2, BOND_SINGLE),
-        ],
+        &[(0, 1, BOND_SINGLE), (1, 2, BOND_SINGLE)],
     );
 
     let topo = MolecularTopology::from_structure(&structure);
@@ -904,10 +880,7 @@ fn test_delete_markers_excluded() {
     // We can't easily do this through the public API, but we can test that
     // having zero-bond atoms doesn't cause issues
     let structure = build_simple_structure(
-        &[
-            (6, [0.0, 0.0, 0.0]),
-            (1, [1.0, 0.0, 0.0]),
-        ],
+        &[(6, [0.0, 0.0, 0.0]), (1, [1.0, 0.0, 0.0])],
         &[(0, 1, BOND_SINGLE)],
     );
 

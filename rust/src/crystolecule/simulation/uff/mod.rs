@@ -82,8 +82,7 @@ impl UffForceField {
         }
 
         // Step 2: Assign UFF atom types.
-        let bond_slices: Vec<&[InlineBond]> =
-            atom_bonds.iter().map(|v| v.as_slice()).collect();
+        let bond_slices: Vec<&[InlineBond]> = atom_bonds.iter().map(|v| v.as_slice()).collect();
         let typing = assign_uff_types(&topology.atomic_numbers, &bond_slices)?;
 
         // Step 3: Build bond order lookup: (min_idx, max_idx) → f64 bond order.
@@ -154,12 +153,7 @@ impl UffForceField {
                 }
 
                 Some(AngleBendParams::new(
-                    angle.idx1,
-                    angle.idx2,
-                    angle.idx3,
-                    ka,
-                    theta0,
-                    order,
+                    angle.idx1, angle.idx2, angle.idx3, ka, theta0, order,
                 ))
             })
             .collect();
@@ -306,10 +300,8 @@ impl UffForceField {
                             && hybridization_from_label(typing.labels[nbr_idx]) == 2
                     });
 
-                let (k, c0, c1, c2) = calc_inversion_coefficients_and_force_constant(
-                    at2_atomic_num,
-                    is_c_bound_to_o,
-                );
+                let (k, c0, c1, c2) =
+                    calc_inversion_coefficients_and_force_constant(at2_atomic_num, is_c_bound_to_o);
 
                 InversionParams {
                     idx1: inv.idx1,

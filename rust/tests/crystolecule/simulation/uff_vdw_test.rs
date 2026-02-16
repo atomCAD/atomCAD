@@ -6,19 +6,19 @@
 // C4: full force field with vdW (total energy, gradients, numerical gradient)
 
 use glam::DVec3;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE,
 };
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::simulation::force_field::ForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
+use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::uff::energy::{
-    vdw_energy, vdw_energy_and_gradient, VdwParams,
+    VdwParams, vdw_energy, vdw_energy_and_gradient,
 };
 use rust_lib_flutter_cad::crystolecule::simulation::uff::params::{
     calc_vdw_distance, calc_vdw_well_depth, get_uff_params,
 };
-use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
 
 // ============================================================================
 // Helpers: load reference data, build structures
@@ -211,18 +211,28 @@ fn c1_vdw_params_vs_reference() {
             assert!(
                 found.is_some(),
                 "{}: reference pair ({}, {}) not found in our vdw_params",
-                mol.name, ref_vdw.atoms[0], ref_vdw.atoms[1]
+                mol.name,
+                ref_vdw.atoms[0],
+                ref_vdw.atoms[1]
             );
             let vp = found.unwrap();
             assert!(
                 (vp.x_ij - ref_vdw.x_ij).abs() < 1e-4,
                 "{}: pair ({}, {}) x_ij {:.6} != ref {:.6}",
-                mol.name, ref_vdw.atoms[0], ref_vdw.atoms[1], vp.x_ij, ref_vdw.x_ij
+                mol.name,
+                ref_vdw.atoms[0],
+                ref_vdw.atoms[1],
+                vp.x_ij,
+                ref_vdw.x_ij
             );
             assert!(
                 (vp.d_ij - ref_vdw.d_ij).abs() < 1e-6,
                 "{}: pair ({}, {}) D_ij {:.6} != ref {:.6}",
-                mol.name, ref_vdw.atoms[0], ref_vdw.atoms[1], vp.d_ij, ref_vdw.d_ij
+                mol.name,
+                ref_vdw.atoms[0],
+                ref_vdw.atoms[1],
+                vp.d_ij,
+                ref_vdw.d_ij
             );
         }
     }
@@ -255,7 +265,8 @@ fn c2_vdw_energy_at_equilibrium() {
     let e = vdw_energy(&params, &positions);
     assert!(
         (e - (-d_ij)).abs() < 1e-10,
-        "At equilibrium: E={e}, expected {}", -d_ij
+        "At equilibrium: E={e}, expected {}",
+        -d_ij
     );
 }
 
@@ -330,7 +341,11 @@ fn c2_vdw_energy_zero_at_infinity() {
     let r = 100.0 * x_ij;
     let positions = make_two_atom_positions(r);
     let e = vdw_energy(&params, &positions);
-    assert!(e.abs() < 1e-10, "At 100*x_ij: |E|={} should be tiny", e.abs());
+    assert!(
+        e.abs() < 1e-10,
+        "At 100*x_ij: |E|={} should be tiny",
+        e.abs()
+    );
 }
 
 #[test]
@@ -346,20 +361,14 @@ fn c2_vdw_numerical_gradient() {
         ("1.0*x_ij", make_two_atom_positions(1.0 * x_ij)),
         ("1.2*x_ij", make_two_atom_positions(1.2 * x_ij)),
         ("2.0*x_ij", make_two_atom_positions(2.0 * x_ij)),
-        (
-            "diagonal",
-            {
-                let d = 1.0 * x_ij / 3.0_f64.sqrt();
-                vec![0.0, 0.0, 0.0, d, d, d]
-            },
-        ),
-        (
-            "non-origin",
-            {
-                let r = 1.1 * x_ij;
-                vec![1.0, 2.0, 3.0, 1.0 + r, 2.0, 3.0]
-            },
-        ),
+        ("diagonal", {
+            let d = 1.0 * x_ij / 3.0_f64.sqrt();
+            vec![0.0, 0.0, 0.0, d, d, d]
+        }),
+        ("non-origin", {
+            let r = 1.1 * x_ij;
+            vec![1.0, 2.0, 3.0, 1.0 + r, 2.0, 3.0]
+        }),
     ];
 
     for (label, positions) in &test_configs {
@@ -496,11 +505,7 @@ fn c3_pair_exclusions_ethane() {
     // Should have 9 NB pairs: all H-H 1-4 pairs (cross-methyl).
     // Ethane topology indices: 0=C, 1=C, 2-4=H(on C0), 5-7=H(on C1)
     let data = load_reference_data();
-    let mol = data
-        .molecules
-        .iter()
-        .find(|m| m.name == "ethane")
-        .unwrap();
+    let mol = data.molecules.iter().find(|m| m.name == "ethane").unwrap();
     let structure = build_structure_from_reference(mol);
     let topology = MolecularTopology::from_structure(&structure);
 
@@ -523,12 +528,14 @@ fn c3_pair_exclusions_ethane() {
         assert!(
             !bond_pairs.contains(&key),
             "NB pair ({}, {}) is a bonded pair!",
-            pair.idx1, pair.idx2
+            pair.idx1,
+            pair.idx2
         );
         assert!(
             !angle_pairs.contains(&key),
             "NB pair ({}, {}) is an angle endpoint pair!",
-            pair.idx1, pair.idx2
+            pair.idx1,
+            pair.idx2
         );
     }
 }
@@ -536,11 +543,7 @@ fn c3_pair_exclusions_ethane() {
 #[test]
 fn c3_pair_symmetry_benzene() {
     let data = load_reference_data();
-    let mol = data
-        .molecules
-        .iter()
-        .find(|m| m.name == "benzene")
-        .unwrap();
+    let mol = data.molecules.iter().find(|m| m.name == "benzene").unwrap();
     let structure = build_structure_from_reference(mol);
     let topology = MolecularTopology::from_structure(&structure);
 
@@ -549,7 +552,8 @@ fn c3_pair_symmetry_benzene() {
         assert!(
             pair.idx1 < pair.idx2,
             "Pair ({}, {}) not ordered",
-            pair.idx1, pair.idx2
+            pair.idx1,
+            pair.idx2
         );
     }
 
@@ -557,7 +561,12 @@ fn c3_pair_symmetry_benzene() {
     let mut seen: std::collections::HashSet<(usize, usize)> = std::collections::HashSet::new();
     for pair in &topology.nonbonded_pairs {
         let key = (pair.idx1, pair.idx2);
-        assert!(seen.insert(key), "Duplicate pair ({}, {})", pair.idx1, pair.idx2);
+        assert!(
+            seen.insert(key),
+            "Duplicate pair ({}, {})",
+            pair.idx1,
+            pair.idx2
+        );
     }
 }
 
@@ -573,11 +582,7 @@ fn c3_pair_counts_superset_of_reference() {
     ];
 
     for (name, our_expected, ref_count) in &superset_molecules {
-        let mol = data
-            .molecules
-            .iter()
-            .find(|m| m.name == *name)
-            .unwrap();
+        let mol = data.molecules.iter().find(|m| m.name == *name).unwrap();
         let structure = build_structure_from_reference(mol);
         let topology = MolecularTopology::from_structure(&structure);
 
@@ -617,11 +622,7 @@ fn c4_total_energy_vs_reference() {
     ];
 
     for (name, tol) in &tolerances {
-        let mol = data
-            .molecules
-            .iter()
-            .find(|m| m.name == *name)
-            .unwrap();
+        let mol = data.molecules.iter().find(|m| m.name == *name).unwrap();
         let (ff, topology) = build_ff_from_reference(mol);
         let mut energy = 0.0;
         let mut gradients = vec![0.0; topology.positions.len()];
@@ -682,11 +683,7 @@ fn c4_total_gradients_vs_reference() {
 #[test]
 fn c4_numerical_gradient_benzene() {
     let data = load_reference_data();
-    let mol = data
-        .molecules
-        .iter()
-        .find(|m| m.name == "benzene")
-        .unwrap();
+    let mol = data.molecules.iter().find(|m| m.name == "benzene").unwrap();
     let (ff, topology) = build_ff_from_reference(mol);
     verify_numerical_gradient(&ff, &topology.positions, "benzene");
 }
@@ -694,11 +691,7 @@ fn c4_numerical_gradient_benzene() {
 #[test]
 fn c4_numerical_gradient_butane() {
     let data = load_reference_data();
-    let mol = data
-        .molecules
-        .iter()
-        .find(|m| m.name == "butane")
-        .unwrap();
+    let mol = data.molecules.iter().find(|m| m.name == "butane").unwrap();
     let (ff, topology) = build_ff_from_reference(mol);
     verify_numerical_gradient(&ff, &topology.positions, "butane");
 }
@@ -789,11 +782,7 @@ fn c4_vdw_contribution_positive_for_non_equilibrium() {
 
     let check_molecules = ["benzene", "butane", "adamantane"];
     for name in &check_molecules {
-        let mol = data
-            .molecules
-            .iter()
-            .find(|m| m.name == *name)
-            .unwrap();
+        let mol = data.molecules.iter().find(|m| m.name == *name).unwrap();
         let (ff, topology) = build_ff_from_reference(mol);
         let positions = &topology.positions;
 

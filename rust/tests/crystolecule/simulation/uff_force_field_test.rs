@@ -5,10 +5,10 @@
 // matches RDKit's full UFF energy and gradients for 9 reference molecules.
 
 use glam::DVec3;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE,
 };
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::simulation::force_field::ForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
 use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
@@ -486,12 +486,7 @@ fn gradients_all_molecules() {
 /// Checks that computed gradients match reference gradients within tolerance.
 ///
 /// Uses absolute tolerance for small components and relative tolerance for large ones.
-fn check_gradients(
-    mol_name: &str,
-    computed: &[f64],
-    expected: &[[f64; 3]],
-    abs_tol: f64,
-) {
+fn check_gradients(mol_name: &str, computed: &[f64], expected: &[[f64; 3]], abs_tol: f64) {
     assert_eq!(
         computed.len(),
         expected.len() * 3,
