@@ -1515,3 +1515,635 @@ fn b11_all_angles_near_equilibrium() {
         }
     }
 }
+
+// ============================================================================
+// Phase 19: B9 — Butane 72-point dihedral scan
+// ============================================================================
+//
+// Validates the torsion potential by performing a constrained dihedral scan of
+// butane's C-C-C-C backbone. At each of 72 angles (0 to 355 degrees in 5-degree
+// steps), the four carbon atoms are frozen and the hydrogen positions are minimized.
+//
+// Key physics: With bonded-only terms (no vdW), the butane torsion profile is a
+// symmetric 3-fold cosine: E(phi) = V/2 * (1 - cos(3*phi)), where V = 2.119
+// kcal/mol (UFF sp3-sp3 C-C parameter). The three staggered conformations (60,
+// 180, -60 degrees) are degenerate minima and the three eclipsed conformations
+// (0, 120, 240 degrees) are degenerate maxima. The anti/gauche asymmetry seen
+// in real butane comes from 1-4 van der Waals interactions (Tier 3, not yet
+// implemented).
+//
+// What these tests validate:
+// - The torsion energy formula is correct (cos(n*phi) with n=3)
+// - The torsion force constant scaling works (9 torsions per central bond)
+// - The barrier height matches the UFF parameter V=2.119 kcal/mol
+// - The constrained minimization works (frozen atoms stay fixed)
+// - The dihedral rotation helper produces correct angles
+
+// --- Scan reference data structs ---
+
+#[derive(serde::Deserialize)]
+struct ButaneDihedralScan {
+    #[allow(dead_code)]
+    carbon_indices: [usize; 4],
+    num_points: usize,
+    scan_points: Vec<ScanPoint>,
+    #[allow(dead_code)]
+    min_energy: f64,
+    #[allow(dead_code)]
+    key_conformations: KeyConformations,
+}
+
+#[derive(serde::Deserialize)]
+struct ScanPoint {
+    #[allow(dead_code)]
+    target_angle_deg: f64,
+    #[allow(dead_code)]
+    actual_angle_deg: f64,
+    #[allow(dead_code)]
+    energy: f64,
+    relative_energy: f64,
+}
+
+#[derive(serde::Deserialize)]
+struct KeyConformations {
+    #[allow(dead_code)]
+    anti_180: f64,
+    #[allow(dead_code)]
+    gauche_60: f64,
+    #[allow(dead_code)]
+    eclipsed_120: f64,
+    #[allow(dead_code)]
+    syn_0: f64,
+}
+
+fn load_butane_scan_data() -> ButaneDihedralScan {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/crystolecule/simulation/test_data/uff_reference.json"
+    );
+    let content = std::fs::read_to_string(path).expect("Failed to read uff_reference.json");
+    let value: serde_json::Value =
+        serde_json::from_str(&content).expect("Failed to parse JSON");
+    serde_json::from_value(value["butane_dihedral_scan"].clone())
+        .expect("Failed to parse butane_dihedral_scan")
+}
+
+// --- Dihedral geometry helpers ---
+
+fn cross3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// Compute dihedral angle (in degrees, range (-180, 180]) for atoms i-j-k-l.
+fn compute_dihedral(positions: &[f64], i: usize, j: usize, k: usize, l: usize) -> f64 {
+    let p = |idx: usize| -> [f64; 3] {
+        [
+            positions[idx * 3],
+            positions[idx * 3 + 1],
+            positions[idx * 3 + 2],
+        ]
+    };
+    let pi = p(i);
+    let pj = p(j);
+    let pk = p(k);
+    let pl = p(l);
+
+    let b1 = [pj[0] - pi[0], pj[1] - pi[1], pj[2] - pi[2]];
+    let b2 = [pk[0] - pj[0], pk[1] - pj[1], pk[2] - pj[2]];
+    let b3 = [pl[0] - pk[0], pl[1] - pk[1], pl[2] - pk[2]];
+
+    let n1 = cross3(b1, b2);
+    let n2 = cross3(b2, b3);
+
+    let b2_len = (b2[0] * b2[0] + b2[1] * b2[1] + b2[2] * b2[2]).sqrt();
+    let b2_hat = [b2[0] / b2_len, b2[1] / b2_len, b2[2] / b2_len];
+    let m1 = cross3(n1, b2_hat);
+
+    let x = dot3(n1, n2);
+    let y = dot3(m1, n2);
+
+    y.atan2(x).to_degrees()
+}
+
+/// Rotate atoms around an axis using Rodrigues' rotation formula.
+fn rotate_atoms_around_axis(
+    positions: &mut [f64],
+    atom_indices: &[usize],
+    axis_point: [f64; 3],
+    axis_dir: [f64; 3],
+    angle_rad: f64,
+) {
+    let cos_a = angle_rad.cos();
+    let sin_a = angle_rad.sin();
+    let u = axis_dir;
+
+    for &atom_idx in atom_indices {
+        let base = atom_idx * 3;
+        let p = [
+            positions[base] - axis_point[0],
+            positions[base + 1] - axis_point[1],
+            positions[base + 2] - axis_point[2],
+        ];
+        let dot_up = u[0] * p[0] + u[1] * p[1] + u[2] * p[2];
+        let cross_up = [
+            u[1] * p[2] - u[2] * p[1],
+            u[2] * p[0] - u[0] * p[2],
+            u[0] * p[1] - u[1] * p[0],
+        ];
+
+        positions[base] =
+            p[0] * cos_a + cross_up[0] * sin_a + u[0] * dot_up * (1.0 - cos_a) + axis_point[0];
+        positions[base + 1] =
+            p[1] * cos_a + cross_up[1] * sin_a + u[1] * dot_up * (1.0 - cos_a) + axis_point[1];
+        positions[base + 2] =
+            p[2] * cos_a + cross_up[2] * sin_a + u[2] * dot_up * (1.0 - cos_a) + axis_point[2];
+    }
+}
+
+/// Perform a 72-point constrained dihedral scan on butane.
+///
+/// For each of 72 target angles (0 to 355 degrees in 5-degree steps):
+/// 1. Start from the base (minimized) geometry
+/// 2. Rotate the C3 group around the C1-C2 axis to set the target dihedral
+/// 3. Freeze the 4 carbon atoms and minimize hydrogen positions
+/// 4. Record the total bonded energy
+///
+/// Returns (target_angles_deg, energies) for each scan point.
+fn perform_butane_scan(
+    ff: &UffForceField,
+    base_positions: &[f64],
+    num_atoms: usize,
+) -> (Vec<f64>, Vec<f64>) {
+    // Butane topology: C0(0)-C1(1)-C2(2)-C3(3), H4-H6 on C0, H7-H8 on C1,
+    // H9-H10 on C2, H11-H13 on C3.
+    // Dihedral: C0-C1-C2-C3. Rotation axis: C1->C2.
+    // Atoms to rotate (on C2's side, excluding C2 on the axis):
+    // C3(3), H9(9), H10(10), H11(11), H12(12), H13(13)
+    let atoms_to_rotate: [usize; 6] = [3, 9, 10, 11, 12, 13];
+    let frozen_carbons: [usize; 4] = [0, 1, 2, 3];
+
+    let config = MinimizationConfig {
+        max_iterations: 500,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+
+    let mut target_angles = Vec::with_capacity(72);
+    let mut energies = Vec::with_capacity(72);
+
+    for point_idx in 0..72 {
+        let target_deg = point_idx as f64 * 5.0;
+        target_angles.push(target_deg);
+
+        let mut positions = base_positions.to_vec();
+
+        let current_deg = compute_dihedral(&positions, 0, 1, 2, 3);
+
+        // Convert target to [-180, 180] range for delta calculation.
+        let target_norm = if target_deg > 180.0 {
+            target_deg - 360.0
+        } else {
+            target_deg
+        };
+        let mut delta_deg = target_norm - current_deg;
+        if delta_deg > 180.0 {
+            delta_deg -= 360.0;
+        }
+        if delta_deg < -180.0 {
+            delta_deg += 360.0;
+        }
+
+        // Rotation axis: C1(1) -> C2(2).
+        let axis_point = [positions[3], positions[4], positions[5]];
+        let dx = positions[6] - positions[3];
+        let dy = positions[7] - positions[4];
+        let dz = positions[8] - positions[5];
+        let len = (dx * dx + dy * dy + dz * dz).sqrt();
+        let axis_dir = [dx / len, dy / len, dz / len];
+
+        // Negate delta: the right-hand rotation around C1->C2 changes the
+        // dihedral in the opposite direction.
+        rotate_atoms_around_axis(
+            &mut positions,
+            &atoms_to_rotate,
+            axis_point,
+            axis_dir,
+            -delta_deg.to_radians(),
+        );
+
+        minimize_with_force_field(ff, &mut positions, &config, &frozen_carbons);
+
+        let mut e = 0.0;
+        let mut g = vec![0.0; num_atoms * 3];
+        ff.energy_and_gradients(&positions, &mut e, &mut g);
+        energies.push(e);
+    }
+
+    (target_angles, energies)
+}
+
+/// B9: Full 72-point constrained dihedral scan of butane.
+///
+/// Validates the complete energy profile: 3-fold periodicity, correct barrier
+/// height, staggered minima, eclipsed maxima, and smooth cosine shape.
+#[test]
+fn b9_butane_dihedral_scan_72_points() {
+    let data = load_reference_data();
+    let scan_ref = load_butane_scan_data();
+    let mol = &data.molecules[4];
+    assert_eq!(mol.name, "butane");
+    assert_eq!(scan_ref.num_points, 72);
+
+    let (ff, mut base_positions) = build_ff_and_positions(mol);
+    let config = MinimizationConfig {
+        max_iterations: 1000,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+    minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
+
+    let (target_angles, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
+    assert_eq!(energies.len(), 72);
+
+    let min_e = energies.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_e = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let relative: Vec<f64> = energies.iter().map(|e| e - min_e).collect();
+
+    // 1. The profile should have 72 valid energy values.
+    for (i, &e) in energies.iter().enumerate() {
+        assert!(
+            e >= -0.01 && e.is_finite(),
+            "angle {}: energy {e:.6} is invalid",
+            target_angles[i]
+        );
+    }
+
+    // 2. The barrier height should match UFF V for sp3-sp3 C-C: V = 2.119 kcal/mol.
+    //    The total torsion energy at eclipsed = V/2 * (1 - cos(180)) = V.
+    let barrier = max_e - min_e;
+    assert!(
+        (barrier - 2.119).abs() < 0.2,
+        "barrier height: {barrier:.4} kcal/mol (expected ~2.119)"
+    );
+
+    // 3. Three-fold periodicity: minima at staggered, maxima at eclipsed.
+    //    The base geometry may be at any staggered minimum (60, 180, or -60 degrees).
+    //    With the scan starting from the base, the three minima appear at offsets
+    //    of 0, 120, and 240 degrees from the base dihedral.
+    //    Staggered (minima): relative energy < 0.01 kcal/mol.
+    //    Eclipsed (maxima): relative energy > 2.0 kcal/mol.
+    let mut num_minima = 0;
+    let mut num_maxima = 0;
+    for &r in &relative {
+        if r < 0.01 {
+            num_minima += 1;
+        }
+        if r > 2.0 {
+            num_maxima += 1;
+        }
+    }
+    // With 72 points and 5-degree spacing, each minimum/maximum region spans
+    // a few points. We expect ~3 minimum regions and ~3 maximum regions.
+    assert!(
+        num_minima >= 3 && num_minima <= 15,
+        "expected ~3 minimum regions, got {num_minima} near-zero points"
+    );
+    assert!(
+        num_maxima >= 3 && num_maxima <= 15,
+        "expected ~3 maximum regions, got {num_maxima} high-energy points"
+    );
+
+    // 4. Three-fold symmetry: eclipsed maxima should have equal energy.
+    //    The three eclipsed conformations (at 120-degree intervals from each other)
+    //    should all have the same energy within tolerance.
+    //    From the base dihedral, eclipsed angles are at 0, 120, 240 (or equivalent).
+    let base_dihedral = compute_dihedral(&base_positions, 0, 1, 2, 3);
+    // Eclipsed offsets from base: +60, +180, -60 (= +300) degrees from the base staggered.
+    let eclipsed_offsets = [60.0, 180.0, 300.0];
+    let mut eclipsed_energies = Vec::new();
+    for offset in eclipsed_offsets {
+        let mut angle = base_dihedral + offset;
+        if angle > 180.0 {
+            angle -= 360.0;
+        }
+        // Find the closest scan point.
+        let mut scan_angle = if angle < 0.0 { angle + 360.0 } else { angle };
+        if scan_angle >= 360.0 {
+            scan_angle -= 360.0;
+        }
+        let idx = (scan_angle / 5.0).round() as usize % 72;
+        eclipsed_energies.push(relative[idx]);
+    }
+    let eclipsed_avg = eclipsed_energies.iter().sum::<f64>() / 3.0;
+    for (i, &e) in eclipsed_energies.iter().enumerate() {
+        assert!(
+            (e - eclipsed_avg).abs() < 0.01,
+            "eclipsed symmetry: offset={} e={e:.4} avg={eclipsed_avg:.4}",
+            eclipsed_offsets[i]
+        );
+    }
+
+    // 5. Three-fold symmetry: staggered minima should have equal energy.
+    let staggered_offsets = [0.0, 120.0, 240.0];
+    let mut staggered_energies = Vec::new();
+    for offset in staggered_offsets {
+        let mut angle = base_dihedral + offset;
+        if angle > 180.0 {
+            angle -= 360.0;
+        }
+        let mut scan_angle = if angle < 0.0 { angle + 360.0 } else { angle };
+        if scan_angle >= 360.0 {
+            scan_angle -= 360.0;
+        }
+        let idx = (scan_angle / 5.0).round() as usize % 72;
+        staggered_energies.push(relative[idx]);
+    }
+    for (i, &e) in staggered_energies.iter().enumerate() {
+        assert!(
+            e < 0.01,
+            "staggered minimum at offset {}: rel E = {e:.4} (expected ~0)",
+            staggered_offsets[i]
+        );
+    }
+}
+
+/// The dihedral rotation produces the correct target angles.
+#[test]
+fn b9_butane_dihedral_rotation_accuracy() {
+    let data = load_reference_data();
+    let mol = &data.molecules[4];
+    assert_eq!(mol.name, "butane");
+
+    let (ff, mut base_positions) = build_ff_and_positions(mol);
+    let config = MinimizationConfig {
+        max_iterations: 1000,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+    minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
+
+    let atoms_to_rotate: [usize; 6] = [3, 9, 10, 11, 12, 13];
+
+    for target_deg in [0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 270.0, 330.0] {
+        let mut positions = base_positions.clone();
+        let current_deg = compute_dihedral(&positions, 0, 1, 2, 3);
+
+        let target_norm = if target_deg > 180.0 {
+            target_deg - 360.0
+        } else {
+            target_deg
+        };
+        let mut delta_deg = target_norm - current_deg;
+        if delta_deg > 180.0 {
+            delta_deg -= 360.0;
+        }
+        if delta_deg < -180.0 {
+            delta_deg += 360.0;
+        }
+
+        let axis_point = [positions[3], positions[4], positions[5]];
+        let dx = positions[6] - positions[3];
+        let dy = positions[7] - positions[4];
+        let dz = positions[8] - positions[5];
+        let len = (dx * dx + dy * dy + dz * dz).sqrt();
+        let axis_dir = [dx / len, dy / len, dz / len];
+
+        rotate_atoms_around_axis(
+            &mut positions,
+            &atoms_to_rotate,
+            axis_point,
+            axis_dir,
+            -delta_deg.to_radians(),
+        );
+
+        let actual = compute_dihedral(&positions, 0, 1, 2, 3);
+        // Normalize both to [-180, 180] for comparison.
+        let mut diff = actual - target_norm;
+        if diff > 180.0 {
+            diff -= 360.0;
+        }
+        if diff < -180.0 {
+            diff += 360.0;
+        }
+        assert!(
+            diff.abs() < 0.1,
+            "target={target_deg} actual={actual:.2} diff={diff:.2}"
+        );
+    }
+}
+
+/// The profile matches a cos(3*phi) shape (analytical 3-fold torsion potential).
+#[test]
+fn b9_butane_cosine_profile_fit() {
+    let data = load_reference_data();
+    let mol = &data.molecules[4];
+    assert_eq!(mol.name, "butane");
+
+    let (ff, mut base_positions) = build_ff_and_positions(mol);
+    let config = MinimizationConfig {
+        max_iterations: 1000,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+    minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
+
+    let (target_angles, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
+    let min_e = energies.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_e = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let v_half = (max_e - min_e) / 2.0;
+
+    // The base dihedral determines the phase of the cosine.
+    let base_dihedral = compute_dihedral(&base_positions, 0, 1, 2, 3);
+
+    // Expected energy: E(phi) = V/2 * (1 - cos(3*(phi - phi_base)))
+    // where phi_base is the base staggered angle and V/2 = barrier/2.
+    let mut max_residual = 0.0f64;
+    for (i, &e) in energies.iter().enumerate() {
+        let phi_deg = target_angles[i];
+        let phi_norm = if phi_deg > 180.0 {
+            phi_deg - 360.0
+        } else {
+            phi_deg
+        };
+        let delta = (phi_norm - base_dihedral).to_radians();
+        let expected = v_half * (1.0 - (3.0 * delta).cos()) + min_e;
+        let residual = (e - expected).abs();
+        max_residual = max_residual.max(residual);
+    }
+
+    // Nearly pure cosine; small deviations from angle/bond stretch coupling.
+    assert!(
+        max_residual < 0.05,
+        "max deviation from cos(3*phi): {max_residual:.6} kcal/mol (limit 0.05)"
+    );
+}
+
+/// The barrier height matches the UFF V parameter for sp3-sp3 C-C.
+#[test]
+fn b9_butane_barrier_matches_uff_parameter() {
+    let data = load_reference_data();
+    let mol = &data.molecules[4];
+    assert_eq!(mol.name, "butane");
+
+    let (ff, mut base_positions) = build_ff_and_positions(mol);
+    let config = MinimizationConfig {
+        max_iterations: 1000,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+    minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
+
+    let (_, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
+    let min_e = energies.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_e = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let barrier = max_e - min_e;
+
+    // UFF parameter for C_3 sp3: V1 = 2.119 kcal/mol.
+    // For sp3-sp3 C-C: V = sqrt(V1 * V2) = sqrt(2.119 * 2.119) = 2.119.
+    // Total barrier = V (from the cos(3*phi) formula summed over all 9 torsions
+    // with 1/9 scaling each).
+    let expected_v = 2.119;
+    assert!(
+        (barrier - expected_v).abs() < 0.01,
+        "barrier {barrier:.4} != UFF V={expected_v}"
+    );
+}
+
+/// The energy profile should be smooth -- no wild oscillations between adjacent points.
+#[test]
+fn b9_butane_scan_smoothness() {
+    let data = load_reference_data();
+    let mol = &data.molecules[4];
+    assert_eq!(mol.name, "butane");
+
+    let (ff, mut base_positions) = build_ff_and_positions(mol);
+    let config = MinimizationConfig {
+        max_iterations: 1000,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+    minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
+
+    let (_, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
+
+    // Adjacent points (5 degrees apart) should not differ by more than 0.5 kcal/mol.
+    // The steepest part of V/2*(1-cos(3*phi)) has derivative V/2*3*sin(3*phi),
+    // max = 3*V/2 = 3.18 kcal/mol per radian = 0.028 per degree. At 5 degrees: ~0.14.
+    for i in 0..72 {
+        let next = (i + 1) % 72;
+        let diff = (energies[i] - energies[next]).abs();
+        assert!(
+            diff < 0.5,
+            "jump between {} and {}: {:.4} kcal/mol (max 0.5)",
+            i * 5,
+            next * 5,
+            diff
+        );
+    }
+}
+
+/// Reference data cross-check: our bonded-only barrier is smaller than the
+/// reference full-UFF barrier (vdW adds steric repulsion at eclipsed conformations).
+#[test]
+fn b9_butane_bonded_barrier_less_than_reference() {
+    let scan_ref = load_butane_scan_data();
+    let data = load_reference_data();
+    let mol = &data.molecules[4];
+    assert_eq!(mol.name, "butane");
+
+    let (ff, mut base_positions) = build_ff_and_positions(mol);
+    let config = MinimizationConfig {
+        max_iterations: 1000,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+    minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
+
+    let (_, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
+    let our_barrier = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+        - energies.iter().cloned().fold(f64::INFINITY, f64::min);
+
+    // The reference syn barrier (from full UFF with vdW) should be larger.
+    let ref_barrier = scan_ref
+        .scan_points
+        .iter()
+        .map(|p| p.relative_energy)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    assert!(
+        our_barrier < ref_barrier,
+        "bonded-only barrier {our_barrier:.4} should be less than reference {ref_barrier:.4}"
+    );
+}
+
+/// The scan correctly constrains the backbone: frozen carbon positions are unchanged.
+#[test]
+fn b9_butane_frozen_carbons_preserved() {
+    let data = load_reference_data();
+    let mol = &data.molecules[4];
+    assert_eq!(mol.name, "butane");
+
+    let (ff, mut base_positions) = build_ff_and_positions(mol);
+    let config = MinimizationConfig {
+        max_iterations: 1000,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+    minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
+
+    // Run scan at a specific angle (90 degrees) and verify carbons didn't move.
+    let atoms_to_rotate: [usize; 6] = [3, 9, 10, 11, 12, 13];
+    let frozen_carbons: [usize; 4] = [0, 1, 2, 3];
+    let min_config = MinimizationConfig {
+        max_iterations: 500,
+        gradient_rms_tolerance: 1e-6,
+        ..Default::default()
+    };
+
+    let mut positions = base_positions.clone();
+    let current_deg = compute_dihedral(&positions, 0, 1, 2, 3);
+    let delta_deg = 90.0 - current_deg;
+
+    let axis_point = [positions[3], positions[4], positions[5]];
+    let dx = positions[6] - positions[3];
+    let dy = positions[7] - positions[4];
+    let dz = positions[8] - positions[5];
+    let len = (dx * dx + dy * dy + dz * dz).sqrt();
+    let axis_dir = [dx / len, dy / len, dz / len];
+
+    rotate_atoms_around_axis(
+        &mut positions,
+        &atoms_to_rotate,
+        axis_point,
+        axis_dir,
+        -delta_deg.to_radians(),
+    );
+
+    // Save carbon positions before minimization.
+    let carbon_pos_before: Vec<f64> = positions[..12].to_vec();
+
+    minimize_with_force_field(&ff, &mut positions, &min_config, &frozen_carbons);
+
+    // Verify carbon positions are unchanged.
+    for c in 0..4 {
+        for j in 0..3 {
+            let idx = c * 3 + j;
+            assert!(
+                (positions[idx] - carbon_pos_before[idx]).abs() < 1e-12,
+                "carbon {} coord {} moved: {} -> {}",
+                c,
+                j,
+                carbon_pos_before[idx],
+                positions[idx]
+            );
+        }
+    }
+}
