@@ -1063,36 +1063,38 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           ),
                           const SizedBox(height: AppSpacing.medium),
 
-                          // vdW cutoff toggle
-                          Tooltip(
-                            message:
-                                'Uses a 10 \u00C5 distance cutoff for van der Waals interactions.\n'
-                                'Faster on large structures (spatial grid, O(N\u00B7k) instead of O(N\u00B2)).\n'
-                                'Negligible accuracy loss for typical molecular geometries.',
-                            child: Row(
-                              children: [
-                                Checkbox(
-                                  key: PreferencesKeys.useVdwCutoffCheckbox,
-                                  value: _preferences
-                                      .simulationPreferences.useVdwCutoff,
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() {
-                                        _preferences.simulationPreferences
-                                            .useVdwCutoff = value;
-                                      });
-                                      _applyPreferences();
-                                    }
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                      'Use vdW distance cutoff for energy minimization'),
-                                ),
-                              ],
-                            ),
-                          ),
+                          // vdW cutoff toggle — temporarily disabled
+                          // due to issues with cutoff mode in atom_edit
+                          // energy minimization. Uncomment when fixed.
+                          // Tooltip(
+                          //   message:
+                          //       'Uses a 10 \u00C5 distance cutoff for van der Waals interactions.\n'
+                          //       'Faster on large structures (spatial grid, O(N\u00B7k) instead of O(N\u00B2)).\n'
+                          //       'Negligible accuracy loss for typical molecular geometries.',
+                          //   child: Row(
+                          //     children: [
+                          //       Checkbox(
+                          //         key: PreferencesKeys.useVdwCutoffCheckbox,
+                          //         value: _preferences
+                          //             .simulationPreferences.useVdwCutoff,
+                          //         onChanged: (value) {
+                          //           if (value != null) {
+                          //             setState(() {
+                          //               _preferences.simulationPreferences
+                          //                   .useVdwCutoff = value;
+                          //             });
+                          //             _applyPreferences();
+                          //           }
+                          //         },
+                          //       ),
+                          //       const SizedBox(width: 8),
+                          //       const Expanded(
+                          //         child: Text(
+                          //             'Use vdW distance cutoff for energy minimization'),
+                          //       ),
+                          //     ],
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),
