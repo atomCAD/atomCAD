@@ -1,4 +1,4 @@
-// Tests for the L-BFGS minimizer (Phase 16).
+// Tests for the L-BFGS minimizer (Phase 16, updated for Phase 20 vdW).
 //
 // Validates the optimizer on:
 // - Simple quadratic functions (algorithm correctness)
@@ -105,11 +105,15 @@ struct ReferenceBond {
 
 #[derive(serde::Deserialize)]
 struct InputEnergy {
+    total: f64,
+    #[allow(dead_code)]
     bonded: f64,
 }
 
 #[derive(serde::Deserialize)]
 struct MinimizedEnergy {
+    total: f64,
+    #[allow(dead_code)]
     bonded: f64,
 }
 
@@ -418,10 +422,10 @@ fn uff_methane_minimizes() {
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "methane should converge");
     assert!(
-        result.energy < mol.input_energy.bonded + 0.01,
+        result.energy < mol.input_energy.total + 0.01,
         "methane: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
     // Minimized energy should be near zero for methane (very small molecule).
     assert!(
@@ -441,10 +445,10 @@ fn uff_ethylene_minimizes() {
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "ethylene should converge");
     assert!(
-        result.energy < mol.input_energy.bonded + 0.01,
+        result.energy < mol.input_energy.total + 0.01,
         "ethylene: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
 }
 
@@ -458,10 +462,10 @@ fn uff_ethane_minimizes() {
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "ethane should converge");
     assert!(
-        result.energy < mol.input_energy.bonded + 0.01,
+        result.energy < mol.input_energy.total + 0.01,
         "ethane: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
 }
 
@@ -475,10 +479,10 @@ fn uff_benzene_minimizes() {
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "benzene should converge");
     assert!(
-        result.energy < mol.input_energy.bonded + 0.1,
+        result.energy < mol.input_energy.total + 0.1,
         "benzene: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
 }
 
@@ -492,10 +496,10 @@ fn uff_water_minimizes() {
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "water should converge");
     assert!(
-        result.energy < mol.input_energy.bonded + 0.01,
+        result.energy < mol.input_energy.total + 0.01,
         "water: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
 }
 
@@ -509,10 +513,10 @@ fn uff_ammonia_minimizes() {
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "ammonia should converge");
     assert!(
-        result.energy < mol.input_energy.bonded + 0.01,
+        result.energy < mol.input_energy.total + 0.01,
         "ammonia: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
 }
 
@@ -523,16 +527,16 @@ fn uff_adamantane_minimizes() {
     assert_eq!(mol.name, "adamantane");
     let (ff, mut positions) = build_ff_and_positions(mol);
     let config = MinimizationConfig {
-        max_iterations: 1000,
+        max_iterations: 2000,
         ..Default::default()
     };
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "adamantane should converge (got {} iterations)", result.iterations);
     assert!(
-        result.energy < mol.input_energy.bonded + 0.1,
+        result.energy < mol.input_energy.total + 0.1,
         "adamantane: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
 }
 
@@ -546,10 +550,10 @@ fn uff_methanethiol_minimizes() {
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
     assert!(result.converged, "methanethiol should converge");
     assert!(
-        result.energy < mol.input_energy.bonded + 0.01,
+        result.energy < mol.input_energy.total + 0.01,
         "methanethiol: minimized energy {} should be <= input energy {}",
         result.energy,
-        mol.input_energy.bonded
+        mol.input_energy.total
     );
 }
 
@@ -560,7 +564,7 @@ fn uff_all_molecules_converge() {
     for mol in &data.molecules {
         let (ff, mut positions) = build_ff_and_positions(mol);
         let config = MinimizationConfig {
-            max_iterations: 1000,
+            max_iterations: 2000,
             ..Default::default()
         };
         let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
@@ -575,47 +579,43 @@ fn uff_all_molecules_converge() {
 }
 
 // ============================================================================
-// Integration tests: minimized bonded energy is near zero
+// Integration tests: minimized total energy vs reference
 // ============================================================================
 
 #[test]
-fn uff_minimized_bonded_energy_near_zero() {
-    // With bonded-only optimization (no vdW), the minimizer should find a geometry
-    // where all bonds, angles, torsions, and inversions are near their rest values,
-    // giving near-zero bonded energy. This is a self-consistent test that does NOT
-    // compare against RDKit's vdW-optimized geometry.
-    //
-    // Note: RDKit's reference data includes vdW during minimization, which shifts
-    // atoms away from their bonded-optimal positions. Comparing our bonded-only
-    // minimum against RDKit's vdW-optimized bonded energy would be apples-to-oranges.
-    // Instead, we verify our minimizer reaches near-zero bonded energy on its own.
+fn uff_minimized_total_energy_vs_reference() {
+    // With full UFF (bonded + vdW), the minimized total energy should approximately
+    // match RDKit's minimized total energy. Wider tolerances for larger molecules
+    // because our optimizer may find slightly different local minima.
     let data = load_reference_data();
-    for mol in &data.molecules {
+    let tolerances = [
+        ("methane", 0.01),
+        ("ethylene", 0.1),
+        ("ethane", 0.1),
+        ("benzene", 1.0),
+        ("butane", 0.5),
+        ("water", 0.01),
+        ("ammonia", 0.01),
+        ("adamantane", 2.0),
+        ("methanethiol", 0.1),
+    ];
+    for (mol, &(expected_name, tol)) in data.molecules.iter().zip(tolerances.iter()) {
+        assert_eq!(mol.name, expected_name);
         let (ff, mut positions) = build_ff_and_positions(mol);
         let config = MinimizationConfig {
-            max_iterations: 1000,
+            max_iterations: 2000,
             gradient_rms_tolerance: 1e-6,
             ..Default::default()
         };
         let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-        // Bonded energy at the bonded-only minimum should be very small.
-        // For most molecules this is <0.01 kcal/mol. Adamantane (26 atoms,
-        // many coupled terms) may have slightly higher residual.
-        let tol = if mol.atoms.len() > 10 { 1.0 } else { 0.1 };
         assert!(
-            result.energy < tol,
-            "{}: minimized bonded energy {:.6} kcal/mol not near zero (tol={tol})",
+            (result.energy - mol.minimized_energy.total).abs() < tol,
+            "{}: minimized energy {:.6} vs reference {:.6} (diff={:.6}, tol={tol})",
             mol.name,
-            result.energy
-        );
-
-        // Energy should be non-negative (physical constraint).
-        assert!(
-            result.energy >= -0.001,
-            "{}: minimized energy {:.6} is negative",
-            mol.name,
-            result.energy
+            result.energy,
+            mol.minimized_energy.total,
+            (result.energy - mol.minimized_energy.total).abs()
         );
     }
 }
@@ -624,15 +624,11 @@ fn uff_minimized_bonded_energy_near_zero() {
 // Integration tests: minimized geometry is physically correct
 // ============================================================================
 //
-// These tests verify that minimized bond lengths and angles match the UFF
-// rest values (r0, theta0) from our own parameter table — NOT RDKit's
-// vdW-optimized geometry. This is self-consistent: our bonded-only minimizer
-// should produce bond lengths equal to the UFF rest length and angles equal
-// to the UFF natural angle.
-//
-// For small molecules where vdW barely affects geometry, the RDKit reference
-// values happen to agree within ~0.01 Å / ~1°. We cross-check against those
-// as a sanity check, but the primary validation is against our own rest params.
+// With full UFF (bonded + vdW), minimized geometries can be directly compared
+// against RDKit's reference since both optimizations include the same energy
+// terms. For small molecules without vdW pairs (methane, water, ammonia),
+// bonds match UFF rest lengths exactly. For larger molecules, vdW pressure
+// may shift bonds/angles slightly from pure-bonded rest values.
 
 #[test]
 fn uff_methane_minimized_geometry() {
@@ -647,7 +643,7 @@ fn uff_methane_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // Self-consistent check: all C-H bonds should equal UFF rest length.
+    // All C-H bonds should equal UFF rest length (methane has no vdW pairs).
     // UFF C_3-H_ rest length ≈ 1.109 Å (from calc_bond_rest_length).
     let ch_rest = ff.bond_params[0].rest_length;
     for bp in &ff.bond_params {
@@ -662,7 +658,7 @@ fn uff_methane_minimized_geometry() {
         );
     }
 
-    // Cross-check against RDKit reference (vdW effect negligible for methane).
+    // Cross-check against RDKit reference (no vdW pairs for methane).
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
@@ -704,11 +700,12 @@ fn uff_ethylene_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // Self-consistent: bonds should match UFF rest lengths.
+    // Bonds should be near UFF rest lengths (ethylene has only 4 H-H vdW pairs,
+    // minor effect on bond lengths).
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
-            (computed - bp.rest_length).abs() < 0.001,
+            (computed - bp.rest_length).abs() < 0.005,
             "ethylene bond {}-{}: {:.4} != rest {:.4}",
             bp.idx1,
             bp.idx2,
@@ -717,7 +714,7 @@ fn uff_ethylene_minimized_geometry() {
         );
     }
 
-    // Cross-check against RDKit (vdW negligible for ethylene).
+    // Cross-check against RDKit reference.
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
@@ -757,7 +754,7 @@ fn uff_water_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // Self-consistent: O-H bonds should match rest length.
+    // O-H bonds should match rest length (water has no vdW pairs).
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
@@ -770,7 +767,7 @@ fn uff_water_minimized_geometry() {
         );
     }
 
-    // Cross-check bond lengths vs RDKit.
+    // Cross-check bond lengths vs RDKit (no vdW pairs for water).
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
@@ -1003,28 +1000,28 @@ fn b7_ethylene_bond_length_ordering() {
 }
 
 // ============================================================================
-// Phase 18: B10 — Known molecule bonded energies
+// Phase 18: B10 — Known molecule energies (updated for full UFF with vdW)
 // ============================================================================
 
-/// For every reference molecule, the minimized bonded energy must be strictly
-/// less than the input bonded energy (optimizer must improve the energy).
+/// For every reference molecule, the minimized total energy must be strictly
+/// less than the input total energy (optimizer must improve the energy).
 #[test]
 fn b10_energy_decreases_from_input() {
     let data = load_reference_data();
     for mol in &data.molecules {
         let (ff, mut positions) = build_ff_and_positions(mol);
         let config = MinimizationConfig {
-            max_iterations: 1000,
+            max_iterations: 2000,
             gradient_rms_tolerance: 1e-6,
             ..Default::default()
         };
         let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
         assert!(
-            result.energy <= mol.input_energy.bonded + 1e-6,
+            result.energy <= mol.input_energy.total + 1e-6,
             "{}: minimized energy {:.6} > input energy {:.6}",
             mol.name,
             result.energy,
-            mol.input_energy.bonded
+            mol.input_energy.total
         );
     }
 }
@@ -1038,7 +1035,7 @@ fn b10_energy_self_consistent() {
     for mol in &data.molecules {
         let (ff, mut positions) = build_ff_and_positions(mol);
         let config = MinimizationConfig {
-            max_iterations: 1000,
+            max_iterations: 2000,
             gradient_rms_tolerance: 1e-6,
             ..Default::default()
         };
@@ -1059,35 +1056,45 @@ fn b10_energy_self_consistent() {
     }
 }
 
-/// Our bonded-only minimizer should achieve bonded energy ≤ RDKit's bonded
-/// energy at its vdW-optimized geometry. RDKit optimizes with vdW included,
-/// which pushes atoms away from their bonded-only optimal positions, resulting
-/// in higher bonded energy than a pure bonded-only minimum.
+/// Our minimized total energy should approximately match RDKit's minimized
+/// total energy. Both now include the same energy terms (bonded + vdW).
 #[test]
-fn b10_bonded_minimum_leq_rdkit_bonded() {
+fn b10_minimized_energy_matches_reference() {
     let data = load_reference_data();
-    for mol in &data.molecules {
+    let tolerances = [
+        ("methane", 0.01),
+        ("ethylene", 0.1),
+        ("ethane", 0.1),
+        ("benzene", 1.0),
+        ("butane", 0.5),
+        ("water", 0.01),
+        ("ammonia", 0.01),
+        ("adamantane", 2.0),
+        ("methanethiol", 0.1),
+    ];
+    for (mol, &(expected_name, tol)) in data.molecules.iter().zip(tolerances.iter()) {
+        assert_eq!(mol.name, expected_name);
         let (ff, mut positions) = build_ff_and_positions(mol);
         let config = MinimizationConfig {
-            max_iterations: 1000,
+            max_iterations: 2000,
             gradient_rms_tolerance: 1e-6,
             ..Default::default()
         };
         let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-        // Our bonded-only minimum should be ≤ RDKit's bonded energy + tolerance.
         assert!(
-            result.energy <= mol.minimized_energy.bonded + 0.01,
-            "{}: our bonded minimum {:.6} > RDKit bonded at vdW geometry {:.6}",
+            (result.energy - mol.minimized_energy.total).abs() < tol,
+            "{}: our minimum {:.6} vs RDKit {:.6} (diff={:.6}, tol={tol})",
             mol.name,
             result.energy,
-            mol.minimized_energy.bonded
+            mol.minimized_energy.total,
+            (result.energy - mol.minimized_energy.total).abs()
         );
     }
 }
 
 // ============================================================================
-// Phase 18: B11 — End-to-end minimized geometry for all 9 molecules
+// Phase 18: B11 — End-to-end minimized geometry (updated for full UFF with vdW)
 // ============================================================================
 
 #[test]
@@ -1103,11 +1110,12 @@ fn b11_ethane_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // All bonds should match UFF rest lengths.
+    // After full UFF minimization, bonds should be near UFF rest lengths.
+    // Ethane has 9 H-H vdW pairs; vdW slightly lengthens bonds.
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
-            (computed - bp.rest_length).abs() < 0.002,
+            (computed - bp.rest_length).abs() < 0.01,
             "ethane bond {}-{}: {:.4} != rest {:.4}",
             bp.idx1,
             bp.idx2,
@@ -1116,11 +1124,11 @@ fn b11_ethane_minimized_geometry() {
         );
     }
 
-    // Cross-check bond lengths against RDKit.
+    // Cross-check bond lengths against RDKit reference.
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
-            (computed - bl.length).abs() < 0.02,
+            (computed - bl.length).abs() < 0.01,
             "ethane bond {}-{}: {:.4} vs RDKit {:.4}",
             bl.atoms[0],
             bl.atoms[1],
@@ -1133,7 +1141,7 @@ fn b11_ethane_minimized_geometry() {
     for a in &mol.minimized_geometry.angles {
         let computed = angle_deg(&positions, a.atoms[0], a.atoms[1], a.atoms[2]);
         assert!(
-            (computed - 109.47).abs() < 1.0,
+            (computed - 109.47).abs() < 1.5,
             "ethane angle {}-{}-{}: {:.2}° != ~109.47°",
             a.atoms[0],
             a.atoms[1],
@@ -1156,11 +1164,12 @@ fn b11_benzene_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // All bonds should match UFF rest lengths.
+    // After full UFF minimization, bonds should be near UFF rest lengths.
+    // Benzene has 36 vdW pairs; vdW pressure perturbs bond lengths by ~0.02 Å.
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
-            (computed - bp.rest_length).abs() < 0.002,
+            (computed - bp.rest_length).abs() < 0.025,
             "benzene bond {}-{}: {:.4} != rest {:.4}",
             bp.idx1,
             bp.idx2,
@@ -1169,11 +1178,11 @@ fn b11_benzene_minimized_geometry() {
         );
     }
 
-    // Cross-check bond lengths against RDKit.
+    // Cross-check bond lengths against RDKit reference.
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
-            (computed - bl.length).abs() < 0.02,
+            (computed - bl.length).abs() < 0.01,
             "benzene bond {}-{}: {:.4} vs RDKit {:.4}",
             bl.atoms[0],
             bl.atoms[1],
@@ -1182,11 +1191,11 @@ fn b11_benzene_minimized_geometry() {
         );
     }
 
-    // All angles should be 120° (trigonal planar sp2).
+    // All angles should be ~120° (trigonal planar sp2).
     for a in &mol.minimized_geometry.angles {
         let computed = angle_deg(&positions, a.atoms[0], a.atoms[1], a.atoms[2]);
         assert!(
-            (computed - 120.0).abs() < 0.5,
+            (computed - 120.0).abs() < 1.0,
             "benzene angle {}-{}-{}: {:.2}° != 120°",
             a.atoms[0],
             a.atoms[1],
@@ -1245,12 +1254,12 @@ fn b11_butane_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // All bonds should match UFF rest lengths.
-    // Butane has more coupled terms, so use slightly wider tolerance.
+    // After full UFF minimization, bonds should be near UFF rest lengths.
+    // Butane has 54 vdW pairs; vdW pressure may shift bonds by up to ~0.025 Å.
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
-            (computed - bp.rest_length).abs() < 0.005,
+            (computed - bp.rest_length).abs() < 0.025,
             "butane bond {}-{}: {:.4} != rest {:.4} (diff={:.4})",
             bp.idx1,
             bp.idx2,
@@ -1261,11 +1270,12 @@ fn b11_butane_minimized_geometry() {
     }
 
     // All angles should be near their UFF theta0.
+    // vdW opens C-C-C backbone angles by ~3° (steric repulsion).
     for ap in &ff.angle_params {
         let computed = angle_deg(&positions, ap.idx1, ap.idx2, ap.idx3);
         let expected = ap.theta0.to_degrees();
         assert!(
-            (computed - expected).abs() < 2.0,
+            (computed - expected).abs() < 4.0,
             "butane angle {}-{}-{}: {:.2}° != theta0 {:.2}°",
             ap.idx1,
             ap.idx2,
@@ -1289,7 +1299,7 @@ fn b11_ammonia_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // All N-H bonds should match UFF rest length.
+    // All N-H bonds should match UFF rest length (ammonia has no vdW pairs).
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
@@ -1302,7 +1312,7 @@ fn b11_ammonia_minimized_geometry() {
         );
     }
 
-    // Cross-check bond lengths against RDKit (vdW negligible for ammonia).
+    // Cross-check bond lengths against RDKit (no vdW pairs for ammonia).
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
@@ -1350,9 +1360,10 @@ fn b11_adamantane_minimized_geometry() {
     let mol = &data.molecules[7];
     assert_eq!(mol.name, "adamantane");
     let (ff, mut positions) = build_ff_and_positions(mol);
+    // Adamantane with 237 vdW pairs needs relaxed convergence tolerance.
     let config = MinimizationConfig {
-        max_iterations: 2000,
-        gradient_rms_tolerance: 1e-6,
+        max_iterations: 5000,
+        gradient_rms_tolerance: 1e-4,
         ..Default::default()
     };
     let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
@@ -1362,12 +1373,12 @@ fn b11_adamantane_minimized_geometry() {
         result.iterations
     );
 
-    // All bonds should be near their UFF rest lengths.
-    // Adamantane is a rigid cage with many coupled terms; use wider tolerance.
+    // After full UFF minimization, bonds should be near UFF rest lengths.
+    // Adamantane has 237 vdW pairs; vdW repulsion lengthens C-C bonds by ~0.03 Å.
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
-            (computed - bp.rest_length).abs() < 0.01,
+            (computed - bp.rest_length).abs() < 0.04,
             "adamantane bond {}-{}: {:.4} != rest {:.4} (diff={:.4})",
             bp.idx1,
             bp.idx2,
@@ -1382,7 +1393,7 @@ fn b11_adamantane_minimized_geometry() {
         let computed = angle_deg(&positions, ap.idx1, ap.idx2, ap.idx3);
         let expected = ap.theta0.to_degrees();
         assert!(
-            (computed - expected).abs() < 2.0,
+            (computed - expected).abs() < 3.0,
             "adamantane angle {}-{}-{}: {:.2}° != theta0 {:.2}° (diff={:.2}°)",
             ap.idx1,
             ap.idx2,
@@ -1407,11 +1418,12 @@ fn b11_methanethiol_minimized_geometry() {
     };
     minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-    // All bonds should match UFF rest lengths.
+    // After full UFF minimization, bonds should be near UFF rest lengths.
+    // Methanethiol has 3 H-H vdW pairs; minor effect on geometry.
     for bp in &ff.bond_params {
         let computed = bond_length(&positions, bp.idx1, bp.idx2);
         assert!(
-            (computed - bp.rest_length).abs() < 0.002,
+            (computed - bp.rest_length).abs() < 0.005,
             "methanethiol bond {}-{}: {:.4} != rest {:.4}",
             bp.idx1,
             bp.idx2,
@@ -1420,11 +1432,11 @@ fn b11_methanethiol_minimized_geometry() {
         );
     }
 
-    // Cross-check against RDKit.
+    // Cross-check against RDKit reference.
     for bl in &mol.minimized_geometry.bond_lengths {
         let computed = bond_length(&positions, bl.atoms[0], bl.atoms[1]);
         assert!(
-            (computed - bl.length).abs() < 0.02,
+            (computed - bl.length).abs() < 0.01,
             "methanethiol bond {}-{}: {:.4} vs RDKit {:.4}",
             bl.atoms[0],
             bl.atoms[1],
@@ -1438,7 +1450,7 @@ fn b11_methanethiol_minimized_geometry() {
         let computed = angle_deg(&positions, ap.idx1, ap.idx2, ap.idx3);
         let expected = ap.theta0.to_degrees();
         assert!(
-            (computed - expected).abs() < 1.5,
+            (computed - expected).abs() < 2.0,
             "methanethiol angle {}-{}-{}: {:.2}° != theta0 {:.2}°",
             ap.idx1,
             ap.idx2,
@@ -1449,9 +1461,9 @@ fn b11_methanethiol_minimized_geometry() {
     }
 }
 
-/// After bonded-only minimization, every bond in every molecule should be
-/// close to its UFF rest length. This is the "all bonds self-consistent" check
-/// across the entire reference dataset.
+/// After full UFF minimization, every bond in every molecule should be
+/// close to its UFF rest length. With vdW included, bonds may be slightly
+/// perturbed from their pure-bonded rest values.
 #[test]
 fn b11_all_bonds_near_rest_length() {
     let data = load_reference_data();
@@ -1464,8 +1476,9 @@ fn b11_all_bonds_near_rest_length() {
         };
         minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-        // Wider tolerance for larger molecules with many coupled terms.
-        let tol = if mol.atoms.len() > 10 { 0.01 } else { 0.005 };
+        // vdW pressure may push bonds away from rest lengths, use wider tolerance.
+        // Adamantane (237 vdW pairs) has the largest deviation at ~0.03 Å.
+        let tol = 0.05;
         for bp in &ff.bond_params {
             let computed = bond_length(&positions, bp.idx1, bp.idx2);
             assert!(
@@ -1482,8 +1495,9 @@ fn b11_all_bonds_near_rest_length() {
     }
 }
 
-/// After bonded-only minimization, every angle in every molecule should be
-/// close to its UFF equilibrium angle (theta0).
+/// After full UFF minimization, every angle in every molecule should be
+/// close to its UFF equilibrium angle (theta0). vdW interactions may
+/// slightly perturb angles from their bonded-only equilibrium.
 #[test]
 fn b11_all_angles_near_equilibrium() {
     let data = load_reference_data();
@@ -1496,8 +1510,8 @@ fn b11_all_angles_near_equilibrium() {
         };
         minimize_with_force_field(&ff, &mut positions, &config, &[]);
 
-        // Wider tolerance for larger molecules.
-        let tol_deg = if mol.atoms.len() > 10 { 2.0 } else { 1.0 };
+        // vdW pressure may perturb angles from rest values, use wider tolerance.
+        let tol_deg = 5.0;
         for ap in &ff.angle_params {
             let computed = angle_deg(&positions, ap.idx1, ap.idx2, ap.idx3);
             let expected = ap.theta0.to_degrees();
@@ -1517,25 +1531,29 @@ fn b11_all_angles_near_equilibrium() {
 }
 
 // ============================================================================
-// Phase 19: B9 — Butane 72-point dihedral scan
+// Phase 19: B9 — Butane 72-point dihedral scan (updated for full UFF with vdW)
 // ============================================================================
 //
-// Validates the torsion potential by performing a constrained dihedral scan of
-// butane's C-C-C-C backbone. At each of 72 angles (0 to 355 degrees in 5-degree
-// steps), the four carbon atoms are frozen and the hydrogen positions are minimized.
+// Validates the torsion + vdW potential by performing a constrained dihedral scan
+// of butane's C-C-C-C backbone. At each of 72 angles (0 to 355 degrees in
+// 5-degree steps), the four carbon atoms are frozen and the hydrogen positions
+// are minimized.
 //
-// Key physics: With bonded-only terms (no vdW), the butane torsion profile is a
-// symmetric 3-fold cosine: E(phi) = V/2 * (1 - cos(3*phi)), where V = 2.119
-// kcal/mol (UFF sp3-sp3 C-C parameter). The three staggered conformations (60,
-// 180, -60 degrees) are degenerate minima and the three eclipsed conformations
-// (0, 120, 240 degrees) are degenerate maxima. The anti/gauche asymmetry seen
-// in real butane comes from 1-4 van der Waals interactions (Tier 3, not yet
-// implemented).
+// Key physics: With full UFF (bonded + vdW), the butane torsion profile is
+// asymmetric. The vdW interactions between 1-4 hydrogen pairs break the 3-fold
+// symmetry of the bonded-only cos(3*phi) potential:
+// - Anti (180°) is the global minimum (no 1-4 H-H steric clash)
+// - Gauche (~60°, ~300°) are local minima, higher than anti by ~1.4 kcal/mol
+// - Eclipsed (~120°, ~240°) are transition states
+// - Syn (0°) is the highest barrier (~11.13 kcal/mol above anti)
+//
+// The profile has mirror symmetry about 180° (E(phi) ≈ E(360-phi)) but NOT
+// 3-fold symmetry (anti != gauche, eclipsed at 120° != syn at 0°).
 //
 // What these tests validate:
-// - The torsion energy formula is correct (cos(n*phi) with n=3)
-// - The torsion force constant scaling works (9 torsions per central bond)
-// - The barrier height matches the UFF parameter V=2.119 kcal/mol
+// - The combined bonded + vdW energy is correct
+// - Anti/gauche asymmetry (vdW breaks 3-fold degeneracy)
+// - Barrier height matches reference (~11.13 kcal/mol)
 // - The constrained minimization works (frozen atoms stay fixed)
 // - The dihedral rotation helper produces correct angles
 
@@ -1546,10 +1564,10 @@ struct ButaneDihedralScan {
     #[allow(dead_code)]
     carbon_indices: [usize; 4],
     num_points: usize,
+    #[allow(dead_code)]
     scan_points: Vec<ScanPoint>,
     #[allow(dead_code)]
     min_energy: f64,
-    #[allow(dead_code)]
     key_conformations: KeyConformations,
 }
 
@@ -1561,18 +1579,15 @@ struct ScanPoint {
     actual_angle_deg: f64,
     #[allow(dead_code)]
     energy: f64,
+    #[allow(dead_code)]
     relative_energy: f64,
 }
 
 #[derive(serde::Deserialize)]
 struct KeyConformations {
-    #[allow(dead_code)]
     anti_180: f64,
-    #[allow(dead_code)]
     gauche_60: f64,
-    #[allow(dead_code)]
     eclipsed_120: f64,
-    #[allow(dead_code)]
     syn_0: f64,
 }
 
@@ -1752,8 +1767,8 @@ fn perform_butane_scan(
 
 /// B9: Full 72-point constrained dihedral scan of butane.
 ///
-/// Validates the complete energy profile: 3-fold periodicity, correct barrier
-/// height, staggered minima, eclipsed maxima, and smooth cosine shape.
+/// Validates the asymmetric energy profile: anti is lowest, syn is highest,
+/// gauche is intermediate. Mirror symmetry (E(phi) ≈ E(360-phi)) still holds.
 #[test]
 fn b9_butane_dihedral_scan_72_points() {
     let data = load_reference_data();
@@ -1774,105 +1789,100 @@ fn b9_butane_dihedral_scan_72_points() {
     assert_eq!(energies.len(), 72);
 
     let min_e = energies.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max_e = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let relative: Vec<f64> = energies.iter().map(|e| e - min_e).collect();
+
+    // Helper: get relative energy at a specific target angle.
+    let energy_at = |deg: f64| -> f64 {
+        let idx = ((deg / 5.0).round() as usize) % 72;
+        relative[idx]
+    };
 
     // 1. The profile should have 72 valid energy values.
     for (i, &e) in energies.iter().enumerate() {
         assert!(
-            e >= -0.01 && e.is_finite(),
+            e.is_finite(),
             "angle {}: energy {e:.6} is invalid",
             target_angles[i]
         );
     }
 
-    // 2. The barrier height should match UFF V for sp3-sp3 C-C: V = 2.119 kcal/mol.
-    //    The total torsion energy at eclipsed = V/2 * (1 - cos(180)) = V.
-    let barrier = max_e - min_e;
+    // 2. Anti (180°) should be the global minimum.
+    let e_anti = energy_at(180.0);
     assert!(
-        (barrier - 2.119).abs() < 0.2,
-        "barrier height: {barrier:.4} kcal/mol (expected ~2.119)"
+        e_anti < 0.5,
+        "anti (180°) should be near global minimum: rel E = {e_anti:.4}"
     );
 
-    // 3. Three-fold periodicity: minima at staggered, maxima at eclipsed.
-    //    The base geometry may be at any staggered minimum (60, 180, or -60 degrees).
-    //    With the scan starting from the base, the three minima appear at offsets
-    //    of 0, 120, and 240 degrees from the base dihedral.
-    //    Staggered (minima): relative energy < 0.01 kcal/mol.
-    //    Eclipsed (maxima): relative energy > 2.0 kcal/mol.
-    let mut num_minima = 0;
-    let mut num_maxima = 0;
-    for &r in &relative {
-        if r < 0.01 {
-            num_minima += 1;
-        }
-        if r > 2.0 {
-            num_maxima += 1;
-        }
-    }
-    // With 72 points and 5-degree spacing, each minimum/maximum region spans
-    // a few points. We expect ~3 minimum regions and ~3 maximum regions.
+    // 3. Anti < Gauche (vdW breaks 3-fold degeneracy).
+    let e_gauche_60 = energy_at(60.0);
+    let e_gauche_300 = energy_at(300.0);
     assert!(
-        num_minima >= 3 && num_minima <= 15,
-        "expected ~3 minimum regions, got {num_minima} near-zero points"
+        e_anti < e_gauche_60,
+        "anti ({e_anti:.4}) should be lower than gauche_60 ({e_gauche_60:.4})"
     );
     assert!(
-        num_maxima >= 3 && num_maxima <= 15,
-        "expected ~3 maximum regions, got {num_maxima} high-energy points"
+        e_anti < e_gauche_300,
+        "anti ({e_anti:.4}) should be lower than gauche_300 ({e_gauche_300:.4})"
     );
 
-    // 4. Three-fold symmetry: eclipsed maxima should have equal energy.
-    //    The three eclipsed conformations (at 120-degree intervals from each other)
-    //    should all have the same energy within tolerance.
-    //    From the base dihedral, eclipsed angles are at 0, 120, 240 (or equivalent).
-    let base_dihedral = compute_dihedral(&base_positions, 0, 1, 2, 3);
-    // Eclipsed offsets from base: +60, +180, -60 (= +300) degrees from the base staggered.
-    let eclipsed_offsets = [60.0, 180.0, 300.0];
-    let mut eclipsed_energies = Vec::new();
-    for offset in eclipsed_offsets {
-        let mut angle = base_dihedral + offset;
-        if angle > 180.0 {
-            angle -= 360.0;
-        }
-        // Find the closest scan point.
-        let mut scan_angle = if angle < 0.0 { angle + 360.0 } else { angle };
-        if scan_angle >= 360.0 {
-            scan_angle -= 360.0;
-        }
-        let idx = (scan_angle / 5.0).round() as usize % 72;
-        eclipsed_energies.push(relative[idx]);
-    }
-    let eclipsed_avg = eclipsed_energies.iter().sum::<f64>() / 3.0;
-    for (i, &e) in eclipsed_energies.iter().enumerate() {
-        assert!(
-            (e - eclipsed_avg).abs() < 0.01,
-            "eclipsed symmetry: offset={} e={e:.4} avg={eclipsed_avg:.4}",
-            eclipsed_offsets[i]
-        );
-    }
+    // 4. Mirror symmetry: gauche at 60° ≈ gauche at 300°.
+    assert!(
+        (e_gauche_60 - e_gauche_300).abs() < 0.5,
+        "gauche mirror symmetry: 60°={e_gauche_60:.4} vs 300°={e_gauche_300:.4}"
+    );
 
-    // 5. Three-fold symmetry: staggered minima should have equal energy.
-    let staggered_offsets = [0.0, 120.0, 240.0];
-    let mut staggered_energies = Vec::new();
-    for offset in staggered_offsets {
-        let mut angle = base_dihedral + offset;
-        if angle > 180.0 {
-            angle -= 360.0;
+    // 5. Eclipsed (120°) < Syn (0°) — syn is the highest barrier.
+    let e_eclipsed_120 = energy_at(120.0);
+    let e_syn = energy_at(0.0);
+    assert!(
+        e_eclipsed_120 < e_syn,
+        "eclipsed_120 ({e_eclipsed_120:.4}) should be < syn ({e_syn:.4})"
+    );
+
+    // 6. Validate against reference key conformations (±1.0 kcal/mol).
+    assert!(
+        (e_anti - scan_ref.key_conformations.anti_180).abs() < 1.0,
+        "anti: {e_anti:.4} vs ref {:.4}",
+        scan_ref.key_conformations.anti_180
+    );
+    assert!(
+        (e_gauche_60 - scan_ref.key_conformations.gauche_60).abs() < 1.0,
+        "gauche_60: {e_gauche_60:.4} vs ref {:.4}",
+        scan_ref.key_conformations.gauche_60
+    );
+    assert!(
+        (e_eclipsed_120 - scan_ref.key_conformations.eclipsed_120).abs() < 1.0,
+        "eclipsed_120: {e_eclipsed_120:.4} vs ref {:.4}",
+        scan_ref.key_conformations.eclipsed_120
+    );
+    assert!(
+        (e_syn - scan_ref.key_conformations.syn_0).abs() < 1.0,
+        "syn: {e_syn:.4} vs ref {:.4}",
+        scan_ref.key_conformations.syn_0
+    );
+
+    // 7. The profile should have 3 minima and 3 maxima (qualitatively correct shape).
+    let mut num_local_min = 0;
+    let mut num_local_max = 0;
+    for i in 0..72 {
+        let prev = relative[(i + 71) % 72];
+        let curr = relative[i];
+        let next = relative[(i + 1) % 72];
+        if curr <= prev && curr <= next && curr < 1.0 {
+            num_local_min += 1;
         }
-        let mut scan_angle = if angle < 0.0 { angle + 360.0 } else { angle };
-        if scan_angle >= 360.0 {
-            scan_angle -= 360.0;
+        if curr >= prev && curr >= next && curr > 2.0 {
+            num_local_max += 1;
         }
-        let idx = (scan_angle / 5.0).round() as usize % 72;
-        staggered_energies.push(relative[idx]);
     }
-    for (i, &e) in staggered_energies.iter().enumerate() {
-        assert!(
-            e < 0.01,
-            "staggered minimum at offset {}: rel E = {e:.4} (expected ~0)",
-            staggered_offsets[i]
-        );
-    }
+    assert!(
+        num_local_min >= 3,
+        "expected >= 3 local minima, got {num_local_min}"
+    );
+    assert!(
+        num_local_max >= 3,
+        "expected >= 3 local maxima, got {num_local_max}"
+    );
 }
 
 /// The dihedral rotation produces the correct target angles.
@@ -1940,9 +1950,12 @@ fn b9_butane_dihedral_rotation_accuracy() {
     }
 }
 
-/// The profile matches a cos(3*phi) shape (analytical 3-fold torsion potential).
+/// The scan profile is smooth and monotonic between extrema.
+/// With full UFF (bonded + vdW), the profile is NOT a pure cos(3*phi) — it's
+/// the sum of a 3-fold bonded term and an asymmetric vdW contribution.
+/// Instead of fitting cos(3*phi), verify qualitative shape correctness.
 #[test]
-fn b9_butane_cosine_profile_fit() {
+fn b9_butane_profile_shape() {
     let data = load_reference_data();
     let mol = &data.molecules[4];
     assert_eq!(mol.name, "butane");
@@ -1955,40 +1968,48 @@ fn b9_butane_cosine_profile_fit() {
     };
     minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
 
-    let (target_angles, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
+    let (_, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
     let min_e = energies.iter().cloned().fold(f64::INFINITY, f64::min);
-    let max_e = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let v_half = (max_e - min_e) / 2.0;
+    let relative: Vec<f64> = energies.iter().map(|e| e - min_e).collect();
 
-    // The base dihedral determines the phase of the cosine.
-    let base_dihedral = compute_dihedral(&base_positions, 0, 1, 2, 3);
+    // Energy ordering: anti (180°) < gauche (60°,300°) < eclipsed (120°,240°) < syn (0°).
+    let e_at = |deg: f64| -> f64 {
+        let idx = ((deg / 5.0).round() as usize) % 72;
+        relative[idx]
+    };
 
-    // Expected energy: E(phi) = V/2 * (1 - cos(3*(phi - phi_base)))
-    // where phi_base is the base staggered angle and V/2 = barrier/2.
-    let mut max_residual = 0.0f64;
-    for (i, &e) in energies.iter().enumerate() {
-        let phi_deg = target_angles[i];
-        let phi_norm = if phi_deg > 180.0 {
-            phi_deg - 360.0
-        } else {
-            phi_deg
-        };
-        let delta = (phi_norm - base_dihedral).to_radians();
-        let expected = v_half * (1.0 - (3.0 * delta).cos()) + min_e;
-        let residual = (e - expected).abs();
-        max_residual = max_residual.max(residual);
-    }
-
-    // Nearly pure cosine; small deviations from angle/bond stretch coupling.
     assert!(
-        max_residual < 0.05,
-        "max deviation from cos(3*phi): {max_residual:.6} kcal/mol (limit 0.05)"
+        e_at(180.0) < e_at(60.0),
+        "anti < gauche violated"
     );
+    assert!(
+        e_at(60.0) < e_at(120.0),
+        "gauche < eclipsed violated"
+    );
+    assert!(
+        e_at(120.0) < e_at(0.0),
+        "eclipsed < syn violated"
+    );
+
+    // Mirror symmetry: E(phi) ≈ E(360-phi) within 0.5 kcal/mol for all points.
+    for i in 1..36 {
+        let deg = i as f64 * 5.0;
+        let mirror_deg = 360.0 - deg;
+        let diff = (e_at(deg) - e_at(mirror_deg)).abs();
+        assert!(
+            diff < 0.5,
+            "mirror symmetry at {deg}°: E={:.4} vs E({mirror_deg}°)={:.4}, diff={diff:.4}",
+            e_at(deg),
+            e_at(mirror_deg)
+        );
+    }
 }
 
-/// The barrier height matches the UFF V parameter for sp3-sp3 C-C.
+/// The barrier height (syn - anti) should match the reference full-UFF value.
+/// With vdW, the barrier is ~11.13 kcal/mol (much larger than bonded-only 2.119).
 #[test]
-fn b9_butane_barrier_matches_uff_parameter() {
+fn b9_butane_barrier_vs_reference() {
+    let scan_ref = load_butane_scan_data();
     let data = load_reference_data();
     let mol = &data.molecules[4];
     assert_eq!(mol.name, "butane");
@@ -2006,14 +2027,12 @@ fn b9_butane_barrier_matches_uff_parameter() {
     let max_e = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let barrier = max_e - min_e;
 
-    // UFF parameter for C_3 sp3: V1 = 2.119 kcal/mol.
-    // For sp3-sp3 C-C: V = sqrt(V1 * V2) = sqrt(2.119 * 2.119) = 2.119.
-    // Total barrier = V (from the cos(3*phi) formula summed over all 9 torsions
-    // with 1/9 scaling each).
-    let expected_v = 2.119;
+    // Reference syn barrier from full UFF scan.
+    let ref_barrier = scan_ref.key_conformations.syn_0;
     assert!(
-        (barrier - expected_v).abs() < 0.01,
-        "barrier {barrier:.4} != UFF V={expected_v}"
+        (barrier - ref_barrier).abs() < 2.0,
+        "barrier {barrier:.4} vs reference {ref_barrier:.4} (diff={:.4})",
+        (barrier - ref_barrier).abs()
     );
 }
 
@@ -2034,15 +2053,15 @@ fn b9_butane_scan_smoothness() {
 
     let (_, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
 
-    // Adjacent points (5 degrees apart) should not differ by more than 0.5 kcal/mol.
-    // The steepest part of V/2*(1-cos(3*phi)) has derivative V/2*3*sin(3*phi),
-    // max = 3*V/2 = 3.18 kcal/mol per radian = 0.028 per degree. At 5 degrees: ~0.14.
+    // Adjacent points (5 degrees apart) should not differ by more than 2.0 kcal/mol.
+    // With vdW, the profile is steeper near eclipsed conformations (barrier ~11 kcal/mol
+    // over 180°). The steepest slope occurs near the eclipsed transition states.
     for i in 0..72 {
         let next = (i + 1) % 72;
         let diff = (energies[i] - energies[next]).abs();
         assert!(
-            diff < 0.5,
-            "jump between {} and {}: {:.4} kcal/mol (max 0.5)",
+            diff < 2.0,
+            "jump between {} and {}: {:.4} kcal/mol (max 2.0)",
             i * 5,
             next * 5,
             diff
@@ -2050,10 +2069,12 @@ fn b9_butane_scan_smoothness() {
     }
 }
 
-/// Reference data cross-check: our bonded-only barrier is smaller than the
-/// reference full-UFF barrier (vdW adds steric repulsion at eclipsed conformations).
+/// Cross-check our scan against the reference scan: the ordering of key
+/// conformations should match. Our constrained scan (freeze all 4 carbons) differs
+/// from the reference (constrain only the dihedral), so per-point energies may
+/// diverge significantly. Instead, verify that the qualitative ordering is correct.
 #[test]
-fn b9_butane_bonded_barrier_less_than_reference() {
+fn b9_butane_scan_ordering_vs_reference() {
     let scan_ref = load_butane_scan_data();
     let data = load_reference_data();
     let mol = &data.molecules[4];
@@ -2068,19 +2089,34 @@ fn b9_butane_bonded_barrier_less_than_reference() {
     minimize_with_force_field(&ff, &mut base_positions, &config, &[]);
 
     let (_, energies) = perform_butane_scan(&ff, &base_positions, mol.atoms.len());
-    let our_barrier = energies.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
-        - energies.iter().cloned().fold(f64::INFINITY, f64::min);
+    let min_e = energies.iter().cloned().fold(f64::INFINITY, f64::min);
+    let relative: Vec<f64> = energies.iter().map(|e| e - min_e).collect();
 
-    // The reference syn barrier (from full UFF with vdW) should be larger.
-    let ref_barrier = scan_ref
-        .scan_points
-        .iter()
-        .map(|p| p.relative_energy)
-        .fold(f64::NEG_INFINITY, f64::max);
+    // Both scans should have the same ordering: anti < gauche < eclipsed < syn.
+    let e_at = |deg: f64| -> f64 {
+        let idx = ((deg / 5.0).round() as usize) % 72;
+        relative[idx]
+    };
 
+    // Our ordering
+    assert!(e_at(180.0) < e_at(60.0), "our: anti < gauche");
+    assert!(e_at(60.0) < e_at(120.0), "our: gauche < eclipsed");
+    assert!(e_at(120.0) < e_at(0.0), "our: eclipsed < syn");
+
+    // Reference ordering
+    let ref_kc = &scan_ref.key_conformations;
+    assert!(ref_kc.anti_180 < ref_kc.gauche_60, "ref: anti < gauche");
+    assert!(ref_kc.gauche_60 < ref_kc.eclipsed_120, "ref: gauche < eclipsed");
+    assert!(ref_kc.eclipsed_120 < ref_kc.syn_0, "ref: eclipsed < syn");
+
+    // Both scans should have the minimum near 180° (anti).
+    let our_min_idx = relative.iter().enumerate()
+        .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+        .unwrap().0;
+    let our_min_angle = our_min_idx as f64 * 5.0;
     assert!(
-        our_barrier < ref_barrier,
-        "bonded-only barrier {our_barrier:.4} should be less than reference {ref_barrier:.4}"
+        (our_min_angle - 180.0).abs() < 15.0 || (our_min_angle - 180.0).abs() > 345.0,
+        "our minimum at {our_min_angle}° should be near anti (180°)"
     );
 }
 

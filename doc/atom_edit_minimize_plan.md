@@ -10,6 +10,12 @@ Wire the UFF energy minimizer into the `atom_edit` node so users can minimize at
 
 **Depends on**: Phase 20 (vdW) should be complete first so the minimizer produces physically meaningful results.
 
+**Implementation phases**: Two phases, split at the FRB codegen boundary.
+- **Phase A** (Rust): Steps 1–3, validate with `cargo build`
+- **Phase B** (Flutter): Steps 4–6, validate with `flutter_rust_bridge_codegen generate` + `flutter analyze`
+
+Each phase is small enough for one AI session (~100 lines Rust, ~60 lines Dart).
+
 ---
 
 ## 2. Freeze Modes
@@ -32,7 +38,7 @@ All atoms (base + diff) are free to move. The entire neighborhood relaxes togeth
 
 ## 3. The Anchor Problem
 
-When base atoms move (Mode 2), they must be added to the diff with anchors so that `apply_diff()` can still match them. This is the same mechanism that `apply_transform()` already uses (atom_edit.rs:442-468):
+When base atoms move (Mode 2), they must be added to the diff with anchors so that `apply_diff()` can still match them. This is the same mechanism that `apply_transform()` already uses (atom_edit.rs:438-468):
 
 ```rust
 // Pattern from apply_transform() — reused for minimization:
@@ -64,16 +70,6 @@ pub enum MinimizeFreezeMode {
 
 /// Minimizes the atomic structure in the active atom_edit node.
 ///
-/// Steps:
-/// 1. Evaluate the input structure (base) from pin 0
-/// 2. Apply the current diff to get the full structure
-/// 3. Build topology and force field from the full structure
-/// 4. Determine frozen atoms based on freeze_mode
-/// 5. Run L-BFGS minimization
-/// 6. Write moved positions back into the diff
-///    - Diff atoms: update position via set_atom_position
-///    - Base atoms that moved (FreeAll mode): add to diff with anchor
-///
 /// Returns the minimization result message, or an error string.
 pub fn minimize_atom_edit(
     structure_designer: &mut StructureDesigner,
@@ -81,55 +77,130 @@ pub fn minimize_atom_edit(
 ) -> Result<String, String>
 ```
 
-**Algorithm detail:**
+**New imports needed** (add to top of atom_edit.rs):
+```rust
+use crate::crystolecule::simulation::minimize_with_force_field;
+use crate::crystolecule::simulation::MinimizationConfig;
+use crate::crystolecule::simulation::topology::MolecularTopology;
+use crate::crystolecule::simulation::uff::UffForceField;
+```
+
+**Algorithm — concrete method calls:**
 
 ```
-Phase 1: Gather info (immutable borrows)
-  - Get AtomEditData (immutable)
-  - Get eval cache (AtomEditEvalCache) for provenance maps
-  - Get evaluated result structure (AtomicStructure from selected node output)
-  - Build MolecularTopology from result structure
-  - Build UffForceField from topology
-  - Determine frozen set:
-    FreezeBase → frozen = all topology indices whose atom_ids map to base atoms
-                 (i.e., atoms NOT in diff_to_result provenance)
-    FreeAll    → frozen = empty
-  - Record original positions for all atoms
+Phase 1: Gather info (immutable borrows, inside a block that returns owned data)
+  let (topology, force_field, frozen_indices, result_to_source) = {
+
+    // 1. Get AtomEditData (immutable)
+    let atom_edit_data = get_active_atom_edit_data(structure_designer)?;
+      // Returns Option<&AtomEditData> — use .ok_or("No active atom_edit node")?
+
+    // 2. Get eval cache → provenance maps
+    let eval_cache = structure_designer.get_selected_node_eval_cache()
+        .ok_or("No eval cache")?;
+    let eval_cache = eval_cache.downcast_ref::<AtomEditEvalCache>()
+        .ok_or("Wrong eval cache type")?;
+
+    // 3. Get evaluated result structure (full base+diff applied)
+    let result_structure = structure_designer
+        .get_atomic_structure_from_selected_node()
+        .ok_or("No result structure")?;
+
+    // 4. Build topology and force field
+    let topology = MolecularTopology::from_structure(result_structure);
+    let force_field = UffForceField::from_topology(&topology)?;
+
+    // 5. Build result_atom_id → AtomSource map for write-back
+    //    provenance.sources: FxHashMap<u32, AtomSource> has this directly
+    //    AtomSource::Base { base_id } or AtomSource::Diff { diff_id }
+    //    We need: topology_index → AtomSource, via topology.atom_ids
+    let result_to_source: Vec<(u32, AtomSource)> = topology.atom_ids.iter()
+        .filter_map(|&result_id| {
+            eval_cache.provenance.sources.get(&result_id)
+                .map(|source| (result_id, source.clone()))
+        })
+        .collect();
+
+    // 6. Determine frozen set (topology indices)
+    let frozen_indices: Vec<usize> = match freeze_mode {
+        MinimizeFreezeMode::FreezeBase => {
+            topology.atom_ids.iter().enumerate()
+                .filter(|(_, &result_id)| {
+                    !eval_cache.provenance.diff_to_result.values()
+                        .any(|&r| r == result_id)
+                })
+                .map(|(i, _)| i)
+                .collect()
+        }
+        MinimizeFreezeMode::FreeAll => Vec::new(),
+    };
+
+    (topology, force_field, frozen_indices, result_to_source)
+  };
 
 Phase 2: Minimize (no borrows on structure_designer)
-  - Clone positions from topology
-  - Run minimize_with_force_field()
+  let mut positions = topology.positions.clone();
+  let config = MinimizationConfig::default();
+  let result = minimize_with_force_field(
+      &force_field, &mut positions, &config, &frozen_indices,
+  );
 
 Phase 3: Write back (mutable borrow)
-  - Get AtomEditData (mutable)
-  - For each atom that moved (position changed beyond threshold):
-    - If atom is a diff atom (exists in diff_to_result):
-      Find the diff atom ID, call set_atom_position(diff_id, new_pos)
-    - If atom is a base atom (exists in base_to_result, FreeAll mode):
-      Add to diff: diff.add_atom(atomic_number, new_pos)
-      Set anchor: diff.set_anchor_position(new_id, old_pos)
-  - Return result message
+  let atom_edit_data = get_selected_atom_edit_data_mut(structure_designer)
+      .ok_or("No active atom_edit node")?;
+  // For each atom, check if position changed beyond threshold (1e-6 Å)
+  for (topo_idx, &atom_id) in topology.atom_ids.iter().enumerate() {
+      let new_pos = DVec3::new(
+          positions[topo_idx * 3],
+          positions[topo_idx * 3 + 1],
+          positions[topo_idx * 3 + 2],
+      );
+      let old_pos = DVec3::new(
+          topology.positions[topo_idx * 3],
+          topology.positions[topo_idx * 3 + 1],
+          topology.positions[topo_idx * 3 + 2],
+      );
+      if (new_pos - old_pos).length() < 1e-6 { continue; }
+
+      match &result_to_source[...for this atom...] {
+          AtomSource::Diff { diff_id } => {
+              atom_edit_data.diff.set_atom_position(*diff_id, new_pos);
+          }
+          AtomSource::Base { base_id } => {
+              // FreeAll mode only — add base atom to diff with anchor
+              let atomic_number = topology.atomic_numbers[topo_idx];
+              let new_diff_id = atom_edit_data.diff.add_atom(
+                  atomic_number as i16, new_pos,
+              );
+              atom_edit_data.diff.set_anchor_position(new_diff_id, old_pos);
+          }
+      }
+  }
+  // Return human-readable message
+  Ok(format!("Minimization {} after {} iterations (energy: {:.4} kcal/mol)",
+      if result.converged { "converged" } else { "stopped" },
+      result.iterations, result.energy))
 ```
 
 **Key implementation notes:**
 
-1. The three-phase pattern (gather → compute → mutate) matches `transform_selected` and avoids borrow conflicts.
+1. The three-phase pattern (gather → compute → mutate) matches `transform_selected` (atom_edit.rs:1615-1671) and avoids borrow conflicts.
 
-2. Use `AtomEditEvalCache.provenance` to map between result atom IDs and diff/base atom IDs. The provenance has:
-   - `base_to_result: HashMap<u32, u32>` — base atom → result atom
-   - `diff_to_result: HashMap<u32, u32>` — diff atom → result atom
-   We need the reverse: result atom → (diff or base atom).
-
-3. Build reverse maps at gather time:
+2. Use `provenance.sources` (type `FxHashMap<u32, AtomSource>`) for the result→source mapping. This is simpler than building reverse maps from `diff_to_result` / `base_to_result`, since `AtomSource` already carries the source atom ID:
    ```rust
-   let result_to_diff: HashMap<u32, u32> = provenance.diff_to_result
-       .iter().map(|(&d, &r)| (r, d)).collect();
-   let result_to_base: HashMap<u32, (u32, i16, DVec3)> = ...;
+   pub enum AtomSource {
+       Base { base_id: u32 },
+       Diff { diff_id: u32 },
+   }
    ```
+
+3. For `FreezeBase` mode, the frozen set is all topology indices whose result atom ID does NOT appear as a value in `provenance.diff_to_result`. An alternative (possibly cleaner): iterate `topology.atom_ids` and check `provenance.sources[result_id]` — if `AtomSource::Base`, it's frozen.
 
 4. Movement threshold: only write back atoms that moved more than 1e-6 Å. This avoids cluttering the diff with atoms that didn't meaningfully change.
 
-5. The topology's `atom_ids` maps topology index → result structure atom ID. Use this plus the reverse maps to identify each atom.
+5. The topology's `atom_ids: Vec<u32>` maps topology index → result structure atom ID. The `atomic_numbers: Vec<u8>` maps topology index → atomic number.
+
+6. **Note on FxHashMap**: The provenance maps use `FxHashMap` (from `rustc_hash`), not `std::collections::HashMap`. Import `AtomSource` from `crate::crystolecule::atomic_structure_diff::AtomSource`.
 
 **~100-150 lines of new code.**
 
@@ -152,9 +223,13 @@ Add conversion to internal type (or use the API type directly since it's simple 
 
 Location: `rust/src/api/structure_designer/atom_edit_api.rs`
 
-Following the established pattern:
+Following the established pattern (see existing functions like `atom_edit_transform_selected`):
 
 ```rust
+// New import needed:
+use crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode;
+use crate::structure_designer::nodes::atom_edit::atom_edit::MinimizeFreezeMode;
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
     unsafe {
@@ -182,22 +257,33 @@ pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
 
 **~20 lines of new code.**
 
-### 4.4 FRB Codegen
+### 4.4 Validate Phase A
 
-After adding the API function and type, run:
+After steps 1–3:
 ```bash
-flutter_rust_bridge_codegen generate
+cd /c/machine_phase_systems/flutter_cad/rust && cargo build
+cd /c/machine_phase_systems/flutter_cad/rust && cargo test
+cd /c/machine_phase_systems/flutter_cad/rust && cargo clippy
 ```
 
-This generates the Dart bindings in `lib/src/rust/api/structure_designer/atom_edit_api.dart`.
+All must pass before proceeding to Phase B.
 
 ---
 
-## 5. Flutter Implementation
+## 5. Flutter Implementation (Phase B)
+
+### 5.0 FRB Codegen
+
+Run first to generate Dart bindings:
+```bash
+cd /c/machine_phase_systems/flutter_cad && flutter_rust_bridge_codegen generate
+```
+
+This generates the Dart bindings including `APIMinimizeFreezeMode` and `atomEditMinimize()` in `lib/src/rust/api/structure_designer/atom_edit_api.dart`.
 
 ### 5.1 Model method in `structure_designer_model.dart`
 
-Add a method to `StructureDesignerModel`:
+Add a field and method to `StructureDesignerModel`:
 
 ```dart
 String _lastMinimizeMessage = '';
@@ -211,17 +297,31 @@ void atomEditMinimize(APIMinimizeFreezeMode freezeMode) {
 }
 ```
 
+The `atomEditApi` prefix is already imported in this file (see existing pattern: `atom_edit_api.atomEditDeleteSelected()` etc.). No new import needed — `APIMinimizeFreezeMode` comes from the already-imported `structure_designer_api_types.dart`.
+
 ### 5.2 UI in `atom_edit_editor.dart`
 
-Add a "Minimize" section to the Default Tool UI, after the "Transform Selected Atoms" section. The minimize button should always be visible (not just when atoms are selected), since minimization operates on the whole structure.
+Add a "Minimize" section that is **tool-independent** — it appears regardless of which tool (Default, AddAtom, AddBond) is active. This is because minimization operates on the whole structure, not on a selection.
 
-**Placement**: After the existing tool-specific UI, add a new Card section:
+**Placement**: In the `build()` method, add the minimize section **after** `_buildToolSpecificUI()` (line 117):
 
 ```dart
-// In _buildDefaultToolUI(), after the existing Card:
+// In build(), at the end of the Column's children list:
+const SizedBox(height: AppSpacing.large),
+// Tool-specific UI elements
+_buildToolSpecificUI(),
+// ↓↓↓ ADD THESE TWO LINES ↓↓↓
 const SizedBox(height: AppSpacing.large),
 _buildMinimizeSection(),
 ```
+
+**New import needed** at top of `atom_edit_editor.dart`:
+```dart
+import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
+    as atom_edit_api;
+```
+
+Actually — the UI calls `widget.model.atomEditMinimize()` which handles the API call internally. The only type needed in the UI file is `APIMinimizeFreezeMode`, which comes from the already-imported `structure_designer_api_types.dart` (line 2). **No new import needed.**
 
 **New method `_buildMinimizeSection()`**:
 ```dart
@@ -278,7 +378,12 @@ Widget _buildMinimizeSection() {
             const SizedBox(height: AppSpacing.small),
             Text(
               widget.model.lastMinimizeMessage,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 12,
+                color: widget.model.lastMinimizeMessage.startsWith('Error')
+                    ? Colors.red[700]
+                    : Colors.grey[600],
+              ),
             ),
           ],
         ],
@@ -288,23 +393,39 @@ Widget _buildMinimizeSection() {
 }
 ```
 
-**Note**: The minimize section is NOT tool-dependent — it appears regardless of whether Default, AddAtom, or AddBond tool is active. Place it outside `_buildToolSpecificUI()`, directly in the `build()` method's Column.
+**Key UI details:**
+- Error messages (prefixed with "Error:") render in red; success messages in grey.
+- The minimize section renders for all tools because it's placed in `build()`, not in `_buildToolSpecificUI()`.
+- `_stagedData` null check is handled by the early return in `build()` (line 56-58) — `_buildMinimizeSection()` is only called when `_stagedData != null`.
+- The result message persists across rebuilds. It is replaced whenever the user clicks either minimize button. If the user switches to a different node, the entire `AtomEditEditor` widget is replaced, so the message is lost naturally.
+
+### 5.3 Validate Phase B
+
+```bash
+cd /c/machine_phase_systems/flutter_cad && flutter analyze
+dart format lib/structure_designer/structure_designer_model.dart lib/structure_designer/node_data/atom_edit_editor.dart
+```
 
 ---
 
 ## 6. Implementation Order
 
-| Step | What | Files |
-|------|------|-------|
-| 1 | `MinimizeFreezeMode` enum + `minimize_atom_edit()` function | `atom_edit.rs` |
-| 2 | `APIMinimizeFreezeMode` enum | `structure_designer_api_types.rs` |
-| 3 | `atom_edit_minimize()` API function | `atom_edit_api.rs` |
-| 4 | Run `flutter_rust_bridge_codegen generate` | Generated files |
-| 5 | Model method `atomEditMinimize()` | `structure_designer_model.dart` |
-| 6 | UI minimize section | `atom_edit_editor.dart` |
-| 7 | Manual testing | — |
+### Phase A — Rust (one AI session)
 
-Steps 1-3 are Rust-only and can be compiled/tested before touching Flutter.
+| Step | What | Files | Validate |
+|------|------|-------|----------|
+| A1 | `MinimizeFreezeMode` enum + `minimize_atom_edit()` function | `atom_edit.rs` | `cargo build` |
+| A2 | `APIMinimizeFreezeMode` enum | `structure_designer_api_types.rs` | `cargo build` |
+| A3 | `atom_edit_minimize()` API function | `atom_edit_api.rs` | `cargo build && cargo test && cargo clippy` |
+
+### Phase B — Flutter (one AI session)
+
+| Step | What | Files | Validate |
+|------|------|-------|----------|
+| B1 | Run `flutter_rust_bridge_codegen generate` | Generated files | codegen succeeds |
+| B2 | Model method `atomEditMinimize()` + `lastMinimizeMessage` | `structure_designer_model.dart` | `flutter analyze` |
+| B3 | UI minimize section in `build()` | `atom_edit_editor.dart` | `flutter analyze` |
+| B4 | Manual testing | — | See Section 8.3 |
 
 ---
 
@@ -312,12 +433,12 @@ Steps 1-3 are Rust-only and can be compiled/tested before touching Flutter.
 
 | File | Changes |
 |------|---------|
-| `rust/src/structure_designer/nodes/atom_edit/atom_edit.rs` | Add `MinimizeFreezeMode` enum, `minimize_atom_edit()` function |
+| `rust/src/structure_designer/nodes/atom_edit/atom_edit.rs` | Add `MinimizeFreezeMode` enum, `minimize_atom_edit()` function, new imports for simulation/topology/UFF |
 | `rust/src/api/structure_designer/structure_designer_api_types.rs` | Add `APIMinimizeFreezeMode` enum |
-| `rust/src/api/structure_designer/atom_edit_api.rs` | Add `atom_edit_minimize()` function |
+| `rust/src/api/structure_designer/atom_edit_api.rs` | Add `atom_edit_minimize()` function, new imports |
 | `lib/src/rust/` | Regenerated FRB bindings (auto) |
-| `lib/structure_designer/structure_designer_model.dart` | Add `atomEditMinimize()` method, `lastMinimizeMessage` |
-| `lib/structure_designer/node_data/atom_edit_editor.dart` | Add minimize section UI |
+| `lib/structure_designer/structure_designer_model.dart` | Add `_lastMinimizeMessage` field, `lastMinimizeMessage` getter, `atomEditMinimize()` method |
+| `lib/structure_designer/node_data/atom_edit_editor.dart` | Add `_buildMinimizeSection()` method, add to `build()` Column |
 
 ---
 
@@ -331,14 +452,16 @@ The core `minimize_atom_edit` function can't easily be unit-tested in isolation 
 - `apply_diff()` — tested in atomic_structure_diff tests
 - Frozen atom support — tested in minimize_test.rs (frozen dimension tests, frozen UFF tests)
 
-### 8.2 Integration Test
+### 8.2 Integration Test (deferred — not in Phase A/B)
 
-Add a test to `rust/tests/structure_designer/` that:
+Could be added to `rust/tests/structure_designer/` later:
 1. Creates a StructureDesigner with an atom_fill → atom_edit pipeline
 2. Adds a displaced atom to the atom_edit diff
 3. Calls `minimize_atom_edit` with FreezeBase mode
 4. Verifies the diff atom moved toward equilibrium
 5. Verifies base atoms are unchanged
+
+This requires setting up a full StructureDesigner with evaluation, which is complex. The manual testing (8.3) covers this more practically. Can be added as a regression test after the feature is validated.
 
 ### 8.3 Manual Testing
 
@@ -348,6 +471,8 @@ Add a test to `rust/tests/structure_designer/` that:
 4. Click "Minimize (free all)" — verify everything relaxes
 5. Switch to diff view — verify anchors exist for moved base atoms
 6. Check the result message shows convergence info
+7. Verify error message (red text) when atom_edit has no connected input
+8. Verify both buttons work regardless of active tool (Default, AddAtom, AddBond)
 
 ---
 
