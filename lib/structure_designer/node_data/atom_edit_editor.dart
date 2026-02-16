@@ -29,6 +29,16 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   int? _replacementAtomicNumber;
   int? _addAtomAtomicNumber;
 
+  bool get _hasDiffChanges {
+    final stats = _stagedData?.diffStats;
+    if (stats == null) return false;
+    return stats.atomsAdded > 0 ||
+        stats.atomsDeleted > 0 ||
+        stats.atomsModified > 0 ||
+        stats.bondsAdded > 0 ||
+        stats.bondsDeleted > 0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -373,15 +383,17 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               children: [
                 Expanded(
                   child: SizedBox(
-                    height: AppSpacing.buttonHeight,
+                    height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        widget.model.atomEditMinimize(
-                          APIMinimizeFreezeMode.freezeBase,
-                        );
-                      },
+                      onPressed: _hasDiffChanges
+                          ? () {
+                              widget.model.atomEditMinimize(
+                                APIMinimizeFreezeMode.freezeBase,
+                              );
+                            }
+                          : null,
                       icon: const Icon(Icons.lock_outline, size: 18),
-                      label: const Text('Minimize (freeze base)'),
+                      label: const Text('Minimize\ndiff'),
                       style: AppButtonStyles.primary,
                     ),
                   ),
@@ -389,7 +401,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: SizedBox(
-                    height: AppSpacing.buttonHeight,
+                    height: 48,
                     child: ElevatedButton.icon(
                       onPressed: () {
                         widget.model.atomEditMinimize(
@@ -397,7 +409,25 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                         );
                       },
                       icon: const Icon(Icons.lock_open, size: 18),
-                      label: const Text('Minimize (free all)'),
+                      label: const Text('Minimize\nall'),
+                      style: AppButtonStyles.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: (_stagedData?.hasSelectedAtoms ?? false)
+                          ? () {
+                              widget.model.atomEditMinimize(
+                                APIMinimizeFreezeMode.freeSelected,
+                              );
+                            }
+                          : null,
+                      icon: const Icon(Icons.filter_center_focus, size: 18),
+                      label: const Text('Minimize\nselected'),
                       style: AppButtonStyles.primary,
                     ),
                   ),

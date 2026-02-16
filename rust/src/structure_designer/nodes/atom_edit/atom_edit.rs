@@ -706,6 +706,8 @@ pub enum MinimizeFreezeMode {
     FreezeBase,
     /// All atoms move freely.
     FreeAll,
+    /// Only selected atoms move; everything else is frozen.
+    FreeSelected,
 }
 
 /// Minimizes the atomic structure in the active atom_edit node using UFF.
@@ -768,6 +770,37 @@ pub fn minimize_atom_edit(
                 .map(|(i, _)| i)
                 .collect(),
             MinimizeFreezeMode::FreeAll => Vec::new(),
+            MinimizeFreezeMode::FreeSelected => {
+                // Build set of selected result atom IDs from selection + provenance
+                let mut selected_result_ids: HashSet<u32> = HashSet::new();
+                for &base_id in &atom_edit_data.selection.selected_base_atoms {
+                    if let Some(&result_id) =
+                        eval_cache.provenance.base_to_result.get(&base_id)
+                    {
+                        selected_result_ids.insert(result_id);
+                    }
+                }
+                for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
+                    if let Some(&result_id) =
+                        eval_cache.provenance.diff_to_result.get(&diff_id)
+                    {
+                        selected_result_ids.insert(result_id);
+                    }
+                }
+                if selected_result_ids.is_empty() {
+                    return Err(
+                        "No atoms selected — select atoms to minimize first".to_string(),
+                    );
+                }
+                // Freeze everything NOT selected
+                topology
+                    .atom_ids
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, result_id)| !selected_result_ids.contains(result_id))
+                    .map(|(i, _)| i)
+                    .collect()
+            }
         };
 
         (topology, force_field, frozen_indices, result_to_source)

@@ -1,6 +1,11 @@
 # Crystolecule Module - Agent Instructions
 
-The crystolecule module implements atomic structure representation, crystal lattice geometry, and lattice-filling algorithms for atomically precise manufacturing (APM).
+The crystolecule module implements atomic structure representation, crystal lattice geometry, lattice-filling algorithms, and energy minimization for atomically precise manufacturing (APM).
+
+## Subdirectory Instructions
+
+- Working in `simulation/` or any descendant → Read `simulation/AGENTS.md`
+- Working in `simulation/uff/` → Also read `simulation/uff/AGENTS.md`
 
 ## Module Structure
 
@@ -111,14 +116,26 @@ tests/crystolecule/
 ├── unit_cell_test.rs              # Round-trip conversions, multiple cell types
 ├── unit_cell_symmetries_test.rs   # All 7 crystal systems, symmetry preservation
 ├── motif_parser_test.rs           # Tokenization, all commands, error cases
-└── io/
-    ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
-    └── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
+├── io/
+│   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
+│   └── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
+└── simulation/                    # Energy minimization tests (~300+ tests)
+    ├── uff_params_test.rs         # Parameter table spot-checks
+    ├── uff_energy_test.rs         # Bond stretch energy + gradient
+    ├── uff_angle_test.rs          # Angle bend energy + gradient
+    ├── uff_torsion_test.rs        # Torsion energy + gradient
+    ├── uff_inversion_test.rs      # Inversion energy + gradient
+    ├── uff_typer_test.rs          # Atom type assignment
+    ├── topology_test.rs           # Interaction enumeration
+    ├── uff_force_field_test.rs    # Full force field validation
+    ├── uff_vdw_test.rs            # Van der Waals tests
+    ├── minimize_test.rs           # L-BFGS + end-to-end minimization
+    └── test_data/                 # Reference data from RDKit
 ```
 
 **Running:** `cd rust && cargo test crystolecule`
 
-**Tolerances:** Round-trip conversions use 1e-10; spatial/angle checks use 1e-6; I/O roundtrips use 1e-5.
+**Tolerances:** Round-trip conversions use 1e-10; spatial/angle checks use 1e-6; I/O roundtrips use 1e-5. Simulation energy tolerances: 0.01-0.5 kcal/mol depending on molecule size; gradient numerical tests use <1% relative error.
 
 ## Modifying This Module
 

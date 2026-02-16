@@ -70,6 +70,15 @@ Interactive atom editing node with command history (undo/redo):
 - `edit_atom_command.rs` - Command trait and dispatcher
 - `commands/` - Individual commands: add_atom, add_bond, delete, replace, select, transform
 
+## atom_edit/ Subdirectory
+
+Non-destructive atom editing node with diff-based architecture:
+- `atom_edit.rs` - Main logic: tools, diff operations, provenance tracking, **energy minimization** (`minimize_atom_edit()`)
+- `atom_edit_data.rs` - `AtomEditData` struct implementing `NodeData`
+- `atom_edit_eval_cache.rs` - `AtomEditEvalCache` with provenance maps (`AtomSource::Base`/`AtomSource::Diff`)
+
+**Energy minimization**: `minimize_atom_edit(structure_designer, freeze_mode)` builds a `MolecularTopology` from the evaluated structure, runs UFF minimization, and writes positions back to the diff. Two freeze modes: `FreezeBase` (only diff atoms move) and `FreeAll` (all atoms move, moved base atoms get anchors). Uses three-phase pattern (gather → compute → mutate) to avoid borrow conflicts.
+
 ## Text Format Properties
 
 Nodes that store editable state must implement `get_text_properties()` and `set_text_properties()` to support the AI text format. Use `TextValue` for typed property values.

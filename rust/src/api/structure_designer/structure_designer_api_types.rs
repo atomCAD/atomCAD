@@ -266,6 +266,8 @@ pub enum APIMinimizeFreezeMode {
     FreezeBase,
     /// All atoms move freely.
     FreeAll,
+    /// Only selected atoms move; everything else is frozen.
+    FreeSelected,
 }
 
 pub struct APIDiffStats {

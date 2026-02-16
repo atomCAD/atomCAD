@@ -886,6 +886,9 @@ enum APIMinimizeFreezeMode {
 
   /// All atoms move freely.
   freeAll,
+
+  /// Only selected atoms move; everything else is frozen.
+  freeSelected,
   ;
 }
 

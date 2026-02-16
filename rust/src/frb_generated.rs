@@ -7128,6 +7128,7 @@ impl SseDecode
         return match inner {
             0 => crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode::FreezeBase,
 1 => crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode::FreeAll,
+2 => crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode::FreeSelected,
             _ => unreachable!("Invalid variant for APIMinimizeFreezeMode: {}", inner),
         };
     }
@@ -10219,6 +10220,7 @@ impl flutter_rust_bridge::IntoDart
         match self {
             Self::FreezeBase => 0.into_dart(),
             Self::FreeAll => 1.into_dart(),
+            Self::FreeSelected => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -12025,6 +12027,7 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode::FreezeBase => { 0 }
 crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode::FreeAll => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode::FreeSelected => { 2 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

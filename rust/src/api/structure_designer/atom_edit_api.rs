@@ -252,6 +252,7 @@ pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
                 let internal_mode = match freeze_mode {
                     APIMinimizeFreezeMode::FreezeBase => MinimizeFreezeMode::FreezeBase,
                     APIMinimizeFreezeMode::FreeAll => MinimizeFreezeMode::FreeAll,
+                    APIMinimizeFreezeMode::FreeSelected => MinimizeFreezeMode::FreeSelected,
                 };
                 let result = atom_edit::minimize_atom_edit(
                     &mut cad_instance.structure_designer,
