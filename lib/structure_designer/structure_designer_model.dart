@@ -71,7 +71,11 @@ class StructureDesignerModel extends ChangeNotifier {
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
   APIAtomEditTool? activeAtomEditTool = APIAtomEditTool.default_;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
-  WireDropCallback? onWireDroppedInEmptySpace; // Callback for wire drop in empty space
+  WireDropCallback?
+      onWireDroppedInEmptySpace; // Callback for wire drop in empty space
+  String _lastMinimizeMessage = '';
+
+  String get lastMinimizeMessage => _lastMinimizeMessage;
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
   StructureDesignerPreferences? preferences;
@@ -332,7 +336,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Toggle nodes and wires in selection (for Ctrl+rectangle)
-  void toggleNodesAndWiresSelection(List<BigInt> nodeIds, List<WireView> wires) {
+  void toggleNodesAndWiresSelection(
+      List<BigInt> nodeIds, List<WireView> wires) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
@@ -367,7 +372,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   APIResult saveNodeNetworksAs(String filePath) {
-    final result = structure_designer_api.saveNodeNetworksAs(filePath: filePath);
+    final result =
+        structure_designer_api.saveNodeNetworksAs(filePath: filePath);
     refreshFromKernel();
     return result;
   }
@@ -828,6 +834,13 @@ class StructureDesignerModel extends ChangeNotifier {
         atom_edit_api.setAtomEditAddAtomData(atomicNumber: atomicNumber);
     refreshFromKernel();
     return result;
+  }
+
+  void atomEditMinimize(APIMinimizeFreezeMode freezeMode) {
+    _lastMinimizeMessage =
+        atom_edit_api.atomEditMinimize(freezeMode: freezeMode);
+    refreshFromKernel();
+    notifyListeners();
   }
 
   void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,

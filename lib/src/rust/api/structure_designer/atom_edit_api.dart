@@ -71,3 +71,7 @@ bool setAtomEditDefaultData({required int replacementAtomicNumber}) =>
 bool setAtomEditAddAtomData({required int atomicNumber}) => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiSetAtomEditAddAtomData(
         atomicNumber: atomicNumber);
+
+String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
+    RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditMinimize(
+        freezeMode: freezeMode);

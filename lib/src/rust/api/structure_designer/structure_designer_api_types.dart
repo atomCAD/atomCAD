@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -877,6 +877,16 @@ class APIMapData {
           runtimeType == other.runtimeType &&
           inputType == other.inputType &&
           outputType == other.outputType;
+}
+
+/// Freeze mode for atom_edit energy minimization.
+enum APIMinimizeFreezeMode {
+  /// Only diff atoms move; base atoms are frozen.
+  freezeBase,
+
+  /// All atoms move freely.
+  freeAll,
+  ;
 }
 
 class APIMotifData {

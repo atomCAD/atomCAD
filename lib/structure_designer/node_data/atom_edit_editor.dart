@@ -115,6 +115,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           const SizedBox(height: AppSpacing.large),
           // Tool-specific UI elements
           _buildToolSpecificUI(),
+          const SizedBox(height: AppSpacing.large),
+          _buildMinimizeSection(),
         ],
       ),
     );
@@ -277,8 +279,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                             !_stagedData!.hasSelectedAtoms)
                         ? null
                         : () {
-                            widget.model
-                                .atomEditReplaceSelected(_replacementAtomicNumber!);
+                            widget.model.atomEditReplaceSelected(
+                                _replacementAtomicNumber!);
                           },
                     style: AppButtonStyles.primary,
                     child: const Text('Replace'),
@@ -348,6 +350,72 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               hint: 'Select an element',
               required: true,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMinimizeSection() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.medium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Energy Minimization',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: AppSpacing.medium),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: AppSpacing.buttonHeight,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        widget.model.atomEditMinimize(
+                          APIMinimizeFreezeMode.freezeBase,
+                        );
+                      },
+                      icon: const Icon(Icons.lock_outline, size: 18),
+                      label: const Text('Minimize (freeze base)'),
+                      style: AppButtonStyles.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: AppSpacing.buttonHeight,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        widget.model.atomEditMinimize(
+                          APIMinimizeFreezeMode.freeAll,
+                        );
+                      },
+                      icon: const Icon(Icons.lock_open, size: 18),
+                      label: const Text('Minimize (free all)'),
+                      style: AppButtonStyles.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (widget.model.lastMinimizeMessage.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.small),
+              Text(
+                widget.model.lastMinimizeMessage,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: widget.model.lastMinimizeMessage.startsWith('Error')
+                      ? Colors.red[700]
+                      : Colors.grey[600],
+                ),
+              ),
+            ],
           ],
         ),
       ),
