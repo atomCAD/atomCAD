@@ -107,9 +107,10 @@ impl UffForceField {
     /// Constructs a UFF force field with a configurable vdW strategy and
     /// frozen atom support.
     ///
-    /// In Cutoff mode, pairs where **both** atoms are frozen are skipped
-    /// (their gradients would be zeroed anyway). This can dramatically
-    /// reduce the pair count when most atoms are frozen (e.g., FreezeBase).
+    /// Pairs where **both** atoms are frozen are skipped in both AllPairs
+    /// and Cutoff modes (their gradients would be zeroed anyway). This can
+    /// dramatically reduce the pair count when most atoms are frozen
+    /// (e.g., FreezeBase).
     pub fn from_topology_with_frozen(
         topology: &MolecularTopology,
         vdw_mode: VdwMode,
@@ -224,9 +225,18 @@ impl UffForceField {
         // Step 8: Build vdW strategy based on the chosen mode.
         let vdw_strategy = match vdw_mode {
             VdwMode::AllPairs => {
+                // Build per-atom frozen flags to skip frozen-frozen pairs.
+                let mut frozen_flags = vec![false; num_atoms];
+                for &idx in frozen {
+                    if idx < num_atoms {
+                        frozen_flags[idx] = true;
+                    }
+                }
+
                 let vdw_params: Vec<VdwParams> = topology
                     .nonbonded_pairs
                     .iter()
+                    .filter(|pair| !(frozen_flags[pair.idx1] && frozen_flags[pair.idx2]))
                     .map(|pair| {
                         let params_i =
                             params::get_uff_params(typing.labels[pair.idx1]).unwrap();

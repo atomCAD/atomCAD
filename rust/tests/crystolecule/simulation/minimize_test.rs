@@ -10,12 +10,20 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE,
 };
+use rust_lib_flutter_cad::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
+use rust_lib_flutter_cad::crystolecule::lattice_fill::{
+    LatticeFillConfig, LatticeFillOptions, fill_lattice,
+};
 use rust_lib_flutter_cad::crystolecule::simulation::force_field::ForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::minimize::{
     MinimizationConfig, minimize_with_force_field,
 };
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
 use rust_lib_flutter_cad::crystolecule::simulation::uff::{UffForceField, VdwMode};
+use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
+use rust_lib_flutter_cad::geo_tree::GeoNode;
+use rust_lib_flutter_cad::util::daabox::DAABox;
+use std::collections::HashMap;
 
 // ============================================================================
 // Test force fields: simple analytically-solvable functions
@@ -2434,4 +2442,438 @@ fn dual_mode_minimization_with_realistic_cutoff() {
             mol.name
         );
     }
+}
+
+// ============================================================================
+// Diamond lattice minimization tests
+// ============================================================================
+//
+// These tests reproduce a bug where energy minimization diverges (atoms blow up)
+// for larger diamond cuboid structures (e.g. 3×3×3 unit cells) while working
+// correctly for smaller ones (e.g. 2×2×2).
+
+/// Creates a diamond cuboid geometry (intersection of 6 half-spaces).
+fn create_diamond_cuboid_geometry(
+    unit_cell: &UnitCellStruct,
+    extent_x: i32,
+    extent_y: i32,
+    extent_z: i32,
+) -> GeoNode {
+    let a = unit_cell.a;
+    let b = unit_cell.b;
+    let c = unit_cell.c;
+
+    let extent = DVec3::new(extent_x as f64, extent_y as f64, extent_z as f64);
+    let min_corner = DVec3::ZERO;
+
+    let normal_a = b.cross(c).normalize();
+    let normal_b = c.cross(a).normalize();
+    let normal_c = a.cross(b).normalize();
+
+    let min_face_a = min_corner + (extent.y * b + extent.z * c) / 2.0;
+    let max_face_a = min_corner + extent.x * a + (extent.y * b + extent.z * c) / 2.0;
+    let min_face_b = min_corner + (extent.x * a + extent.z * c) / 2.0;
+    let max_face_b = min_corner + extent.y * b + (extent.x * a + extent.z * c) / 2.0;
+    let min_face_c = min_corner + (extent.x * a + extent.y * b) / 2.0;
+    let max_face_c = min_corner + extent.z * c + (extent.x * a + extent.y * b) / 2.0;
+
+    GeoNode::intersection_3d(vec![
+        GeoNode::half_space(-normal_a, min_face_a),
+        GeoNode::half_space(normal_a, max_face_a),
+        GeoNode::half_space(-normal_b, min_face_b),
+        GeoNode::half_space(normal_b, max_face_b),
+        GeoNode::half_space(-normal_c, min_face_c),
+        GeoNode::half_space(normal_c, max_face_c),
+    ])
+}
+
+/// Creates a diamond cuboid atomic structure using lattice fill with configurable options.
+fn create_diamond_cuboid_with_options(
+    extent_x: i32,
+    extent_y: i32,
+    extent_z: i32,
+    hydrogen_passivation: bool,
+    remove_single_bond_atoms: bool,
+    surface_reconstruction: bool,
+) -> AtomicStructure {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let geometry = create_diamond_cuboid_geometry(&unit_cell, extent_x, extent_y, extent_z);
+
+    let a = unit_cell.a;
+    let b = unit_cell.b;
+    let c = unit_cell.c;
+    let margin = 5.0;
+    let max_coord =
+        (extent_x as f64 * a.length())
+            .max(extent_y as f64 * b.length())
+            .max(extent_z as f64 * c.length());
+    let fill_region = DAABox::new(
+        DVec3::new(-margin, -margin, -margin),
+        DVec3::new(max_coord + margin, max_coord + margin, max_coord + margin),
+    );
+
+    let config = LatticeFillConfig {
+        unit_cell,
+        motif: DEFAULT_ZINCBLENDE_MOTIF.clone(),
+        parameter_element_values: HashMap::new(),
+        geometry,
+        motif_offset: DVec3::ZERO,
+    };
+
+    let options = LatticeFillOptions {
+        hydrogen_passivation,
+        remove_single_bond_atoms,
+        reconstruct_surface: surface_reconstruction,
+        invert_phase: false,
+    };
+
+    fill_lattice(&config, &options, &fill_region).atomic_structure
+}
+
+/// Creates a diamond cuboid atomic structure using lattice fill (no passivation).
+fn create_diamond_cuboid(extent_x: i32, extent_y: i32, extent_z: i32) -> AtomicStructure {
+    create_diamond_cuboid_with_options(extent_x, extent_y, extent_z, false, false, false)
+}
+
+/// Computes the maximum displacement of any atom from its initial position.
+fn max_displacement(initial: &[f64], final_pos: &[f64]) -> f64 {
+    let mut max_disp = 0.0_f64;
+    for i in (0..initial.len()).step_by(3) {
+        let dx = final_pos[i] - initial[i];
+        let dy = final_pos[i + 1] - initial[i + 1];
+        let dz = final_pos[i + 2] - initial[i + 2];
+        let disp = (dx * dx + dy * dy + dz * dz).sqrt();
+        max_disp = max_disp.max(disp);
+    }
+    max_disp
+}
+
+/// 2×2×2 diamond cuboid: minimization should converge without divergence.
+/// This is the "known good" baseline size.
+#[test]
+fn diamond_cuboid_2x2x2_minimization_stable() {
+    let structure = create_diamond_cuboid(2, 2, 2);
+    let num_atoms = structure.get_num_of_atoms();
+    println!("2x2x2 diamond cuboid: {num_atoms} atoms");
+    assert!(num_atoms > 30, "Expected at least 30 atoms, got {num_atoms}");
+
+    let topology = MolecularTopology::from_structure(&structure);
+    let ff = UffForceField::from_topology(&topology).expect("UFF build failed for 2x2x2");
+    let initial_positions = topology.positions.clone();
+    let mut positions = topology.positions.clone();
+
+    let config = MinimizationConfig::default();
+    let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
+
+    let max_disp = max_displacement(&initial_positions, &positions);
+    println!(
+        "2x2x2: energy={:.4}, iterations={}, converged={}, max_displacement={:.4} A",
+        result.energy, result.iterations, result.converged, max_disp
+    );
+
+    // Diamond lattice is already near equilibrium, atoms should barely move
+    assert!(
+        max_disp < 2.0,
+        "2x2x2 diverged: max displacement {max_disp:.4} A (should be < 2.0 A)"
+    );
+    assert!(
+        result.energy.is_finite(),
+        "2x2x2: energy is not finite: {}",
+        result.energy
+    );
+}
+
+/// 3×3×3 diamond cuboid: this is the size that triggers divergence.
+/// After a fix, this test should pass. While the bug exists, it will fail.
+#[test]
+fn diamond_cuboid_3x3x3_minimization_stable() {
+    let structure = create_diamond_cuboid(3, 3, 3);
+    let num_atoms = structure.get_num_of_atoms();
+    println!("3x3x3 diamond cuboid: {num_atoms} atoms");
+    assert!(
+        num_atoms > 100,
+        "Expected at least 100 atoms, got {num_atoms}"
+    );
+
+    let topology = MolecularTopology::from_structure(&structure);
+    let ff = UffForceField::from_topology(&topology).expect("UFF build failed for 3x3x3");
+    let initial_positions = topology.positions.clone();
+    let mut positions = topology.positions.clone();
+
+    let config = MinimizationConfig::default();
+    let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
+
+    let max_disp = max_displacement(&initial_positions, &positions);
+    println!(
+        "3x3x3: energy={:.4}, iterations={}, converged={}, max_displacement={:.4} A",
+        result.energy, result.iterations, result.converged, max_disp
+    );
+
+    // Same stability criterion as 2×2×2
+    assert!(
+        max_disp < 2.0,
+        "3x3x3 diverged: max displacement {max_disp:.4} A (should be < 2.0 A)"
+    );
+    assert!(
+        result.energy.is_finite(),
+        "3x3x3: energy is not finite: {}",
+        result.energy
+    );
+}
+
+/// 3×3×3 diamond cuboid with cutoff vdW mode — should be more stable than AllPairs.
+#[test]
+fn diamond_cuboid_3x3x3_minimization_cutoff_mode() {
+    let structure = create_diamond_cuboid(3, 3, 3);
+    let num_atoms = structure.get_num_of_atoms();
+    println!("3x3x3 cutoff mode: {num_atoms} atoms");
+
+    let topology = MolecularTopology::from_structure_bonded_only(&structure);
+    let ff = UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(8.0))
+        .expect("UFF build failed for 3x3x3 cutoff");
+    let initial_positions = topology.positions.clone();
+    let mut positions = topology.positions.clone();
+
+    let config = MinimizationConfig::default();
+    let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
+
+    let max_disp = max_displacement(&initial_positions, &positions);
+    println!(
+        "3x3x3 cutoff: energy={:.4}, iterations={}, converged={}, max_displacement={:.4} A",
+        result.energy, result.iterations, result.converged, max_disp
+    );
+
+    assert!(
+        max_disp < 2.0,
+        "3x3x3 cutoff diverged: max displacement {max_disp:.4} A (should be < 2.0 A)"
+    );
+    assert!(
+        result.energy.is_finite(),
+        "3x3x3 cutoff: energy is not finite: {}",
+        result.energy
+    );
+}
+
+/// 3×3×3 diamond cuboid WITH hydrogen passivation (the app default).
+/// This matches the actual user workflow: cuboid → atom_fill (passivate=true) → minimize.
+#[test]
+fn diamond_cuboid_3x3x3_passivated_minimization_stable() {
+    let structure = create_diamond_cuboid_with_options(3, 3, 3, true, false, false);
+    let num_atoms = structure.get_num_of_atoms();
+    println!("3x3x3 passivated: {num_atoms} atoms");
+    assert!(
+        num_atoms > 200,
+        "Expected at least 200 atoms with passivation, got {num_atoms}"
+    );
+
+    let topology = MolecularTopology::from_structure(&structure);
+    let initial_positions = topology.positions.clone();
+    let ff = UffForceField::from_topology(&topology).expect("UFF build failed for 3x3x3 passivated");
+    let mut positions = topology.positions.clone();
+
+    // Print initial diagnostics
+    let mut energy = 0.0;
+    let mut gradients = vec![0.0; positions.len()];
+    ff.energy_and_gradients(&positions, &mut energy, &mut gradients);
+    let mut max_grad = 0.0_f64;
+    for i in 0..topology.num_atoms {
+        let gx = gradients[i * 3];
+        let gy = gradients[i * 3 + 1];
+        let gz = gradients[i * 3 + 2];
+        let gmag = (gx * gx + gy * gy + gz * gz).sqrt();
+        max_grad = max_grad.max(gmag);
+    }
+    println!(
+        "  initial energy: {energy:.4} kcal/mol, max gradient: {max_grad:.4}, nonbonded pairs: {}",
+        topology.nonbonded_pairs.len()
+    );
+
+    let config = MinimizationConfig::default();
+    let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
+
+    let max_disp = max_displacement(&initial_positions, &positions);
+    println!(
+        "  result: energy={:.4}, iterations={}, converged={}, max_displacement={:.4} A",
+        result.energy, result.iterations, result.converged, max_disp
+    );
+
+    assert!(
+        max_disp < 2.0,
+        "3x3x3 passivated diverged: max displacement {max_disp:.4} A (should be < 2.0 A)"
+    );
+    assert!(
+        result.energy.is_finite(),
+        "3x3x3 passivated: energy is not finite: {}",
+        result.energy
+    );
+}
+
+/// 2×2×2 diamond cuboid WITH hydrogen passivation — baseline that should work.
+#[test]
+fn diamond_cuboid_2x2x2_passivated_minimization_stable() {
+    let structure = create_diamond_cuboid_with_options(2, 2, 2, true, false, false);
+    let num_atoms = structure.get_num_of_atoms();
+    println!("2x2x2 passivated: {num_atoms} atoms");
+
+    let topology = MolecularTopology::from_structure(&structure);
+    let initial_positions = topology.positions.clone();
+    let ff = UffForceField::from_topology(&topology).expect("UFF build failed for 2x2x2 passivated");
+    let mut positions = topology.positions.clone();
+
+    let config = MinimizationConfig::default();
+    let result = minimize_with_force_field(&ff, &mut positions, &config, &[]);
+
+    let max_disp = max_displacement(&initial_positions, &positions);
+    println!(
+        "2x2x2 passivated: energy={:.4}, iterations={}, converged={}, max_displacement={:.4} A",
+        result.energy, result.iterations, result.converged, max_disp
+    );
+
+    assert!(
+        max_disp < 2.0,
+        "2x2x2 passivated diverged: max displacement {max_disp:.4} A (should be < 2.0 A)"
+    );
+    assert!(
+        result.energy.is_finite(),
+        "2x2x2 passivated: energy is not finite: {}",
+        result.energy
+    );
+}
+
+/// Diagnostic test for passivated structure: checks for close atom contacts.
+#[test]
+fn diamond_cuboid_2x2x2_passivated_diagnose_contacts() {
+    let structure = create_diamond_cuboid_with_options(2, 2, 2, true, false, false);
+    let topology = MolecularTopology::from_structure(&structure);
+
+    println!("2x2x2 passivated: {} atoms", topology.num_atoms);
+    println!("  bonds: {}", topology.bonds.len());
+    println!("  nonbonded pairs: {}", topology.nonbonded_pairs.len());
+
+    // Check for close nonbonded contacts
+    let positions = &topology.positions;
+    let mut close_contacts = 0;
+    let mut min_nb_dist = f64::MAX;
+    let mut worst_pair = (0, 0);
+    for pair in &topology.nonbonded_pairs {
+        let i3 = pair.idx1 * 3;
+        let j3 = pair.idx2 * 3;
+        let dx = positions[i3] - positions[j3];
+        let dy = positions[i3 + 1] - positions[j3 + 1];
+        let dz = positions[i3 + 2] - positions[j3 + 2];
+        let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+        if dist < min_nb_dist {
+            min_nb_dist = dist;
+            worst_pair = (pair.idx1, pair.idx2);
+        }
+        if dist < 2.0 {
+            close_contacts += 1;
+            if close_contacts <= 20 {
+                let elem_i = topology.atomic_numbers[pair.idx1];
+                let elem_j = topology.atomic_numbers[pair.idx2];
+                let elem_name = |n: i16| match n {
+                    1 => "H",
+                    6 => "C",
+                    _ => "?",
+                };
+                println!(
+                    "  CLOSE: atoms {}({}) and {}({}) at {:.4} A",
+                    pair.idx1,
+                    elem_name(elem_i),
+                    pair.idx2,
+                    elem_name(elem_j),
+                    dist
+                );
+            }
+        }
+    }
+    println!("  min nonbonded distance: {min_nb_dist:.4} A (atoms {} and {})", worst_pair.0, worst_pair.1);
+    println!("  close contacts (< 2.0 A): {close_contacts}");
+
+    // Compute per-term energy breakdown
+    let ff = UffForceField::from_topology(&topology).expect("UFF build failed");
+    let mut energy = 0.0;
+    let mut gradients = vec![0.0; positions.len()];
+    ff.energy_and_gradients(positions, &mut energy, &mut gradients);
+    println!("  total energy: {energy:.4} kcal/mol");
+
+    // Compute vdW energy separately
+    let mut vdw_energy = 0.0;
+    for vp in ff.vdw_params() {
+        vdw_energy += rust_lib_flutter_cad::crystolecule::simulation::uff::energy::vdw_energy(
+            vp, positions,
+        );
+    }
+    println!("  vdW energy: {vdw_energy:.4} kcal/mol");
+    println!("  bonded energy: {:.4} kcal/mol", energy - vdw_energy);
+}
+
+/// Diagnostic test: prints detailed info about the 3×3×3 structure before minimization.
+/// Checks for close atom contacts that could cause vdW singularities.
+#[test]
+fn diamond_cuboid_3x3x3_diagnose_initial_contacts() {
+    let structure = create_diamond_cuboid(3, 3, 3);
+    let topology = MolecularTopology::from_structure(&structure);
+
+    println!("3x3x3 diamond: {} atoms", topology.num_atoms);
+    println!("  bonds: {}", topology.bonds.len());
+    println!("  angles: {}", topology.angles.len());
+    println!("  torsions: {}", topology.torsions.len());
+    println!("  inversions: {}", topology.inversions.len());
+    println!("  nonbonded pairs: {}", topology.nonbonded_pairs.len());
+
+    // Check for dangerously close nonbonded pairs in the initial structure
+    let positions = &topology.positions;
+    let mut close_contacts = 0;
+    let mut min_nb_dist = f64::MAX;
+    for pair in &topology.nonbonded_pairs {
+        let i3 = pair.idx1 * 3;
+        let j3 = pair.idx2 * 3;
+        let dx = positions[i3] - positions[j3];
+        let dy = positions[i3 + 1] - positions[j3 + 1];
+        let dz = positions[i3 + 2] - positions[j3 + 2];
+        let dist = (dx * dx + dy * dy + dz * dz).sqrt();
+        if dist < min_nb_dist {
+            min_nb_dist = dist;
+        }
+        if dist < 1.5 {
+            close_contacts += 1;
+            if close_contacts <= 10 {
+                println!(
+                    "  CLOSE CONTACT: atoms {} and {} at {:.4} A",
+                    pair.idx1, pair.idx2, dist
+                );
+            }
+        }
+    }
+    println!("  min nonbonded distance: {min_nb_dist:.4} A");
+    println!("  close contacts (< 1.5 A): {close_contacts}");
+
+    // Compute initial energy to see if it's already problematic
+    let ff = UffForceField::from_topology(&topology).expect("UFF build failed");
+    let mut energy = 0.0;
+    let mut gradients = vec![0.0; positions.len()];
+    ff.energy_and_gradients(positions, &mut energy, &mut gradients);
+
+    // Find max gradient magnitude
+    let mut max_grad = 0.0_f64;
+    let mut max_grad_atom = 0;
+    for i in 0..topology.num_atoms {
+        let gx = gradients[i * 3];
+        let gy = gradients[i * 3 + 1];
+        let gz = gradients[i * 3 + 2];
+        let gmag = (gx * gx + gy * gy + gz * gz).sqrt();
+        if gmag > max_grad {
+            max_grad = gmag;
+            max_grad_atom = i;
+        }
+    }
+    println!("  initial energy: {energy:.4} kcal/mol");
+    println!("  max gradient magnitude: {max_grad:.4} at atom {max_grad_atom}");
+
+    // The initial structure should have reasonable energy (not astronomical)
+    assert!(
+        energy.is_finite(),
+        "Initial energy is not finite: {energy}"
+    );
 }

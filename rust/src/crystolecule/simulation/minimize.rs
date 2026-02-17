@@ -27,6 +27,12 @@ pub struct MinimizationConfig {
     pub line_search_min_step: f64,
     /// Maximum number of backtracking steps in the line search.
     pub line_search_max_iter: u32,
+    /// Maximum displacement for any single atom per step, in Angstroms.
+    /// The initial line search step is scaled down so that no atom moves
+    /// more than this distance. Prevents divergence when initial forces
+    /// are very large (e.g., close atom contacts from hydrogen passivation).
+    /// Default: 0.3 Å.
+    pub max_displacement: f64,
 }
 
 impl Default for MinimizationConfig {
@@ -38,6 +44,7 @@ impl Default for MinimizationConfig {
             line_search_c1: 1e-4,
             line_search_min_step: 1e-16,
             line_search_max_iter: 40,
+            max_displacement: 0.3,
         }
     }
 }
@@ -171,7 +178,21 @@ pub fn minimize_with_force_field(
 
         // Backtracking line search with Armijo sufficient decrease condition.
         let dg_armijo = dot(&d, &grad);
-        let mut step = 1.0;
+
+        // Limit the initial step so no atom moves more than max_displacement.
+        // This prevents divergence when forces are very large (e.g., close
+        // contacts from hydrogen passivation produce gradients of ~10^6).
+        let mut step = if config.max_displacement > 0.0 {
+            let max_atom_disp = max_per_atom_displacement(&d);
+            if max_atom_disp > config.max_displacement {
+                config.max_displacement / max_atom_disp
+            } else {
+                1.0
+            }
+        } else {
+            1.0
+        };
+
         let mut e_new = 0.0;
         let mut ls_found = false;
 
@@ -238,6 +259,22 @@ pub fn minimize_with_force_field(
 /// Dot product of two equal-length slices.
 fn dot(a: &[f64], b: &[f64]) -> f64 {
     a.iter().zip(b.iter()).map(|(ai, bi)| ai * bi).sum()
+}
+
+/// Computes the maximum per-atom displacement magnitude from a direction vector.
+///
+/// The direction vector is a flat [x0,y0,z0,x1,y1,z1,...] array. Returns the
+/// maximum Euclidean displacement over all atoms (i.e., max |d_i| where d_i
+/// is the 3D displacement vector for atom i).
+fn max_per_atom_displacement(d: &[f64]) -> f64 {
+    let mut max_disp = 0.0_f64;
+    for chunk in d.chunks_exact(3) {
+        let disp = (chunk[0] * chunk[0] + chunk[1] * chunk[1] + chunk[2] * chunk[2]).sqrt();
+        if disp > max_disp {
+            max_disp = disp;
+        }
+    }
+    max_disp
 }
 
 /// Zeros gradient components for frozen atoms.
