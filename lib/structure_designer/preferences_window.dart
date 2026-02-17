@@ -1065,7 +1065,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           Tooltip(
                             message:
-                                'Uses a 10 \u00C5 distance cutoff for van der Waals interactions.\n'
+                                'Uses a 6 \u00C5 distance cutoff for van der Waals interactions.\n'
                                 'Faster on large structures (spatial grid, O(N\u00B7k) instead of O(N\u00B2)).\n'
                                 'Negligible accuracy loss for typical molecular geometries.',
                             child: Row(

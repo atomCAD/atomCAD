@@ -934,10 +934,10 @@ fn verify_numerical_gradients_cutoff(ff: &UffForceField, positions: &[f64], mol_
 
 #[test]
 fn c5_cutoff_with_realistic_radius() {
-    // Use a realistic cutoff radius (10 A) and verify it gives results close
-    // to AllPairs for molecules where all atoms fit within 10 A.
+    // Use a realistic cutoff radius (6 A) and verify it gives results close
+    // to AllPairs for molecules where all atoms fit within 6 A.
     let data = load_reference_data();
-    let cutoff = 10.0;
+    let cutoff = 6.0;
 
     for mol in &data.molecules {
         let (ff_all, topo) = build_ff_from_reference(mol);
@@ -953,11 +953,13 @@ fn c5_cutoff_with_realistic_radius() {
         let mut grad_cut = vec![0.0; n];
         ff_cut.energy_and_gradients(positions, &mut energy_cut, &mut grad_cut);
 
-        // For small molecules all atoms are within 10 A, so results should match.
+        // With a 6 A cutoff, vdW interactions beyond 6 A are ignored.
+        // For small molecules most interactions are within this range, so
+        // energy differences should be small (well under 0.5 kcal/mol).
         let energy_diff = (energy_all - energy_cut).abs();
         assert!(
-            energy_diff < 1e-10,
-            "{}: energy diff {energy_diff:.2e} with 10 A cutoff",
+            energy_diff < 0.5,
+            "{}: energy diff {energy_diff:.6} kcal/mol with 6 A cutoff",
             mol.name
         );
     }

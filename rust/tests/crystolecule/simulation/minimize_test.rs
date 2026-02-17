@@ -2402,12 +2402,12 @@ fn dual_mode_minimization_produces_same_results() {
 
 #[test]
 fn dual_mode_minimization_with_realistic_cutoff() {
-    // Same as above but with a realistic 10 A cutoff (small molecules still
-    // fit within 10 A so results should match).
+    // Same as above but with a realistic 6 A cutoff (small molecules still
+    // fit within 6 A so results should match).
     let data = load_reference_data();
     let config = MinimizationConfig::default();
     let frozen: &[usize] = &[];
-    let cutoff = 10.0;
+    let cutoff = 6.0;
 
     for mol in &data.molecules {
         let structure = build_structure_from_reference(mol);
@@ -2424,10 +2424,13 @@ fn dual_mode_minimization_with_realistic_cutoff() {
         let mut pos_cut = topology.positions.clone();
         let result_cut = minimize_with_force_field(&ff_cut, &mut pos_cut, &config, frozen);
 
+        // With a 6 A cutoff, long-range vdW interactions are ignored.
+        // This causes small energy and geometry differences for molecules
+        // with atoms beyond 6 A apart.
         let energy_diff = (result_all.energy - result_cut.energy).abs();
         assert!(
-            energy_diff < 0.01,
-            "{}: energy diff {energy_diff:.6} with 10 A cutoff",
+            energy_diff < 0.5,
+            "{}: energy diff {energy_diff:.6} kcal/mol with 6 A cutoff",
             mol.name
         );
 
@@ -2437,8 +2440,8 @@ fn dual_mode_minimization_with_realistic_cutoff() {
             max_pos_diff = max_pos_diff.max((pos_all[i] - pos_cut[i]).abs());
         }
         assert!(
-            max_pos_diff < 0.001,
-            "{}: max position diff {max_pos_diff:.6} A with 10 A cutoff",
+            max_pos_diff < 0.01,
+            "{}: max position diff {max_pos_diff:.6} A with 6 A cutoff",
             mol.name
         );
     }
@@ -2629,7 +2632,7 @@ fn diamond_cuboid_3x3x3_minimization_cutoff_mode() {
     println!("3x3x3 cutoff mode: {num_atoms} atoms");
 
     let topology = MolecularTopology::from_structure_bonded_only(&structure);
-    let ff = UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(8.0))
+    let ff = UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(6.0))
         .expect("UFF build failed for 3x3x3 cutoff");
     let initial_positions = topology.positions.clone();
     let mut positions = topology.positions.clone();

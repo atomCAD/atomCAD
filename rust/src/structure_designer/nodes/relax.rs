@@ -54,7 +54,7 @@ impl NodeData for RelaxData {
 
         if let NetworkResult::Atomic(mut atomic_structure) = input_val {
             let vdw_mode = if context.use_vdw_cutoff {
-                VdwMode::Cutoff(8.0)
+                VdwMode::Cutoff(6.0)
             } else {
                 VdwMode::AllPairs
             };

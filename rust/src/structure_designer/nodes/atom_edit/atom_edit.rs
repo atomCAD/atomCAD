@@ -747,7 +747,7 @@ pub fn minimize_atom_edit(
             .simulation_preferences
             .use_vdw_cutoff
         {
-            VdwMode::Cutoff(8.0)
+            VdwMode::Cutoff(6.0)
         } else {
             VdwMode::AllPairs
         };
