@@ -43,16 +43,21 @@ Introducing a separate tool would fragment a single user intent across two tools
 
 ### Why this works (addressing the overlap concern)
 
-The concern is: "What if the user wants to place a free atom where clicking would
-also hit an atom behind it?" In practice this is a non-issue because:
+The concern is: "What if the user wants to place a free atom at a screen position
+where the ray would also hit an atom deeper in the scene?" In practice this is a
+non-issue because of how free placement depth works:
 
-1. **Overlapping atoms are chemically invalid.** You almost never want a free atom
-   directly on top of an existing one. If the click hits an existing atom, the user
-   almost certainly intended to interact with it.
+1. **Free placement uses a camera-facing plane at nearby-atom depth.** The current
+   Add Atom tool places atoms on a plane whose depth is determined by the closest
+   atom to the click ray (`find_closest_atom_to_ray`). This means free-placement
+   clicks put the new atom *beside* existing atoms at the same depth — not behind
+   them. The ray never "reaches through" to hit a distant atom when the user
+   intended to place near a closer one.
 
 2. **Hit test uses visual radius.** In ball-and-stick mode the clickable radius of an
    atom is roughly 0.3–0.5 Å on screen. The gaps between atoms are large enough that
-   clicking between them reliably triggers free placement.
+   clicking between them reliably triggers free placement. Only a direct click on an
+   atom's rendered sphere triggers guided mode.
 
 3. **Guided mode is easily cancelled.** Pressing Escape or clicking empty space
    exits guided mode, so an accidental activation costs only one extra click.

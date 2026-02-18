@@ -25,7 +25,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::transform::Transform;
-use glam::f64::{DQuat, DVec2, DVec3};
+use glam::f64::{DMat4, DQuat, DVec2, DVec3, DVec4};
 use std::collections::{HashMap, HashSet};
 use std::io;
 
@@ -58,6 +58,10 @@ pub enum DefaultToolInteractionState {
     },
     PendingMarquee {
         mouse_down_screen: DVec2,
+    },
+    MarqueeActive {
+        start_screen: DVec2,
+        current_screen: DVec2,
     },
 }
 
@@ -1906,6 +1910,190 @@ use crate::api::structure_designer::structure_designer_api_types::{
     PointerUpResult,
 };
 
+/// Project a world-space position to screen coordinates using a view-projection matrix.
+/// Returns `None` if the point is behind the camera (w <= 0 in clip space).
+fn project_to_screen(
+    world_pos: DVec3,
+    view_proj: &DMat4,
+    viewport_width: f64,
+    viewport_height: f64,
+) -> Option<DVec2> {
+    let clip = *view_proj * DVec4::new(world_pos.x, world_pos.y, world_pos.z, 1.0);
+    if clip.w <= 0.0 {
+        return None;
+    }
+    let ndc = DVec3::new(clip.x / clip.w, clip.y / clip.w, clip.z / clip.w);
+    // NDC → screen: x in [-1,1] → [0, viewport_width], y in [-1,1] → [0, viewport_height]
+    // Note: NDC y points up, screen y points down, so we flip y.
+    let screen_x = (ndc.x + 1.0) * 0.5 * viewport_width;
+    let screen_y = (1.0 - ndc.y) * 0.5 * viewport_height;
+    Some(DVec2::new(screen_x, screen_y))
+}
+
+/// Select atoms whose screen-space projections fall inside a marquee rectangle.
+///
+/// This is a Rust-internal function (not an API function). It:
+/// 1. Projects all atoms in the result structure to screen coordinates
+/// 2. Tests each projected position against the screen rectangle
+/// 3. Resolves provenance (base vs diff atoms) for selected atoms
+/// 4. Applies the selection modifier and recalculates the selection transform
+///
+/// Returns true if the selection changed.
+fn select_atoms_in_screen_rect(
+    structure_designer: &mut StructureDesigner,
+    view_proj: &DMat4,
+    screen_min: DVec2,
+    screen_max: DVec2,
+    viewport_width: f64,
+    viewport_height: f64,
+    select_modifier: &SelectModifier,
+) -> bool {
+    #[derive(Clone)]
+    enum SelectTarget {
+        Base(u32),
+        Diff(u32),
+    }
+
+    // Phase 1: Gather atom projections and provenance (immutable borrows)
+    let (atoms_to_select, position_map, is_diff_view) = {
+        let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
+            Some(s) => s,
+            None => return false,
+        };
+        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+            Some(data) => data,
+            None => return false,
+        };
+        let is_diff = atom_edit_data.output_diff;
+
+        // Collect result atom IDs whose projections are inside the rectangle
+        let mut inside_atom_ids: Vec<u32> = Vec::new();
+        let mut pos_map: HashMap<(bool, u32), DVec3> = HashMap::new();
+
+        for (&atom_id, atom) in result_structure.iter_atoms() {
+            if let Some(screen_pos) =
+                project_to_screen(atom.position, view_proj, viewport_width, viewport_height)
+            {
+                if screen_pos.x >= screen_min.x
+                    && screen_pos.x <= screen_max.x
+                    && screen_pos.y >= screen_min.y
+                    && screen_pos.y <= screen_max.y
+                {
+                    inside_atom_ids.push(atom_id);
+                }
+            }
+        }
+
+        // Resolve provenance for each hit atom
+        let mut targets: Vec<SelectTarget> = Vec::new();
+
+        if is_diff {
+            // Diff view: atom IDs are diff atom IDs directly
+            for &atom_id in &inside_atom_ids {
+                if let Some(atom) = result_structure.get_atom(atom_id) {
+                    pos_map.insert((true, atom_id), atom.position);
+                }
+                targets.push(SelectTarget::Diff(atom_id));
+            }
+        } else {
+            // Result view: resolve provenance
+            let eval_cache = structure_designer.get_selected_node_eval_cache();
+            if let Some(cache) = eval_cache {
+                if let Some(cache) = cache.downcast_ref::<AtomEditEvalCache>() {
+                    for &result_id in &inside_atom_ids {
+                        if let Some(source) = cache.provenance.sources.get(&result_id) {
+                            if let Some(atom) = result_structure.get_atom(result_id) {
+                                match source {
+                                    AtomSource::BasePassthrough(base_id) => {
+                                        pos_map.insert((false, *base_id), atom.position);
+                                        targets.push(SelectTarget::Base(*base_id));
+                                    }
+                                    AtomSource::DiffMatchedBase { diff_id, .. } => {
+                                        pos_map.insert((true, *diff_id), atom.position);
+                                        targets.push(SelectTarget::Diff(*diff_id));
+                                    }
+                                    AtomSource::DiffAdded(diff_id) => {
+                                        pos_map.insert((true, *diff_id), atom.position);
+                                        targets.push(SelectTarget::Diff(*diff_id));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        (targets, pos_map, is_diff)
+    };
+
+    // Phase 2: Mutate selection
+    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(data) => data,
+        None => return false,
+    };
+
+    let was_empty_before = atom_edit_data.selection.is_empty();
+
+    // Apply modifier: Replace clears first, Expand/Toggle preserve
+    if matches!(select_modifier, SelectModifier::Replace) {
+        atom_edit_data.selection.clear();
+    }
+
+    if is_diff_view {
+        // Diff view: all targets are diff atoms
+        for target in &atoms_to_select {
+            #[allow(irrefutable_let_patterns)]
+            if let SelectTarget::Diff(diff_id) = target {
+                apply_modifier_to_set(
+                    &mut atom_edit_data.selection.selected_diff_atoms,
+                    *diff_id,
+                    select_modifier,
+                );
+            }
+        }
+    } else {
+        for target in &atoms_to_select {
+            match target {
+                SelectTarget::Base(base_id) => {
+                    apply_modifier_to_set(
+                        &mut atom_edit_data.selection.selected_base_atoms,
+                        *base_id,
+                        select_modifier,
+                    );
+                }
+                SelectTarget::Diff(diff_id) => {
+                    apply_modifier_to_set(
+                        &mut atom_edit_data.selection.selected_diff_atoms,
+                        *diff_id,
+                        select_modifier,
+                    );
+                }
+            }
+        }
+    }
+
+    // Recalculate selection transform from positions
+    let positions: Vec<DVec3> = atom_edit_data
+        .selection
+        .selected_base_atoms
+        .iter()
+        .filter_map(|&id| position_map.get(&(false, id)).copied())
+        .chain(
+            atom_edit_data
+                .selection
+                .selected_diff_atoms
+                .iter()
+                .filter_map(|&id| position_map.get(&(true, id)).copied()),
+        )
+        .collect();
+
+    atom_edit_data.selection.selection_transform = calc_transform_from_positions(&positions);
+
+    // Selection changed if we had atoms to select or if we cleared (Replace with empty rect)
+    !atoms_to_select.is_empty() || (was_empty_before != atom_edit_data.selection.is_empty())
+}
+
 /// Set the interaction state on the active Default tool. Uses transient accessor
 /// (no mark_node_data_changed) since interaction_state is not serialized.
 fn set_interaction_state(
@@ -2062,10 +2250,8 @@ pub fn default_tool_pointer_down(
     }
 }
 
-/// Handle mouse-move for the Default tool. Checks drag threshold.
-///
-/// For Phase B, threshold exceeded → transition to Idle (drag not yet implemented).
-/// Bonds ignore threshold (not draggable; always treated as click).
+/// Handle mouse-move for the Default tool. Checks drag threshold and updates
+/// active drag state (marquee rectangle or screen-plane atom drag).
 pub fn default_tool_pointer_move(
     structure_designer: &mut StructureDesigner,
     screen_pos: DVec2,
@@ -2074,58 +2260,131 @@ pub fn default_tool_pointer_move(
     _viewport_width: f64,
     _viewport_height: f64,
 ) -> PointerMoveResult {
-    let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data,
-        None => {
-            return PointerMoveResult {
-                kind: PointerMoveResultKind::StillPending,
-                marquee_rect_x: 0.0,
-                marquee_rect_y: 0.0,
-                marquee_rect_w: 0.0,
-                marquee_rect_h: 0.0,
-            };
-        }
-    };
-
-    let threshold_exceeded = match &atom_edit_data.active_tool {
-        AtomEditTool::Default(state) => match &state.interaction_state {
-            DefaultToolInteractionState::PendingAtom {
-                mouse_down_screen, ..
-            }
-            | DefaultToolInteractionState::PendingMarquee {
-                mouse_down_screen, ..
-            } => screen_pos.distance(*mouse_down_screen) > DRAG_THRESHOLD,
-            // Bonds are not draggable; threshold doesn't change behavior
-            DefaultToolInteractionState::PendingBond { .. } => false,
-            DefaultToolInteractionState::Idle => false,
-        },
-        _ => false,
-    };
-
-    if threshold_exceeded {
-        // Phase B: drag not implemented yet, reset to Idle.
-        // Phase C/D will transition to MarqueeActive / ScreenPlaneDragging here.
-        set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
-    }
-
-    PointerMoveResult {
+    let no_op = PointerMoveResult {
         kind: PointerMoveResultKind::StillPending,
         marquee_rect_x: 0.0,
         marquee_rect_y: 0.0,
         marquee_rect_w: 0.0,
         marquee_rect_h: 0.0,
+    };
+
+    let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+        Some(data) => data,
+        None => return no_op,
+    };
+
+    // Determine what transition is needed based on current state
+    enum MoveAction {
+        None,
+        ThresholdExceededOnAtom,
+        ThresholdExceededOnMarquee { start_screen: DVec2 },
+        UpdateMarquee { start_screen: DVec2 },
+    }
+
+    let action = match &atom_edit_data.active_tool {
+        AtomEditTool::Default(state) => match &state.interaction_state {
+            DefaultToolInteractionState::PendingAtom {
+                mouse_down_screen, ..
+            } => {
+                if screen_pos.distance(*mouse_down_screen) > DRAG_THRESHOLD {
+                    MoveAction::ThresholdExceededOnAtom
+                } else {
+                    MoveAction::None
+                }
+            }
+            DefaultToolInteractionState::PendingMarquee {
+                mouse_down_screen, ..
+            } => {
+                if screen_pos.distance(*mouse_down_screen) > DRAG_THRESHOLD {
+                    MoveAction::ThresholdExceededOnMarquee {
+                        start_screen: *mouse_down_screen,
+                    }
+                } else {
+                    MoveAction::None
+                }
+            }
+            DefaultToolInteractionState::MarqueeActive { start_screen, .. } => {
+                MoveAction::UpdateMarquee {
+                    start_screen: *start_screen,
+                }
+            }
+            // Bonds are not draggable; threshold doesn't change behavior
+            DefaultToolInteractionState::PendingBond { .. } | DefaultToolInteractionState::Idle => {
+                MoveAction::None
+            }
+        },
+        _ => MoveAction::None,
+    };
+
+    match action {
+        MoveAction::None => no_op,
+        MoveAction::ThresholdExceededOnAtom => {
+            // Phase D will transition to ScreenPlaneDragging here.
+            set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
+            no_op
+        }
+        MoveAction::ThresholdExceededOnMarquee { start_screen } => {
+            set_interaction_state(
+                structure_designer,
+                DefaultToolInteractionState::MarqueeActive {
+                    start_screen,
+                    current_screen: screen_pos,
+                },
+            );
+            let rect = screen_rect_from_corners(start_screen, screen_pos);
+            PointerMoveResult {
+                kind: PointerMoveResultKind::MarqueeUpdated,
+                marquee_rect_x: rect.0,
+                marquee_rect_y: rect.1,
+                marquee_rect_w: rect.2,
+                marquee_rect_h: rect.3,
+            }
+        }
+        MoveAction::UpdateMarquee { start_screen } => {
+            set_interaction_state(
+                structure_designer,
+                DefaultToolInteractionState::MarqueeActive {
+                    start_screen,
+                    current_screen: screen_pos,
+                },
+            );
+            let rect = screen_rect_from_corners(start_screen, screen_pos);
+            PointerMoveResult {
+                kind: PointerMoveResultKind::MarqueeUpdated,
+                marquee_rect_x: rect.0,
+                marquee_rect_y: rect.1,
+                marquee_rect_w: rect.2,
+                marquee_rect_h: rect.3,
+            }
+        }
     }
 }
 
-/// Handle mouse-up for the Default tool. Commits click-select or clears selection.
+/// Compute an LTWH rectangle from two corner points (handles any drag direction).
+fn screen_rect_from_corners(a: DVec2, b: DVec2) -> (f64, f64, f64, f64) {
+    let x = a.x.min(b.x);
+    let y = a.y.min(b.y);
+    let w = (a.x - b.x).abs();
+    let h = (a.y - b.y).abs();
+    (x, y, w, h)
+}
+
+/// Handle mouse-up for the Default tool. Commits click-select, marquee selection,
+/// or clears selection.
+///
+/// The `view_proj` matrix is needed for marquee selection (projecting atoms to screen
+/// coordinates). It comes from `Camera::build_view_projection_matrix()` and is passed
+/// through from the API layer which has access to the full `CadInstance`.
+#[allow(clippy::too_many_arguments)]
 pub fn default_tool_pointer_up(
     structure_designer: &mut StructureDesigner,
     _screen_pos: DVec2,
     _ray_origin: &DVec3,
     _ray_direction: &DVec3,
     select_modifier: SelectModifier,
-    _viewport_width: f64,
-    _viewport_height: f64,
+    viewport_width: f64,
+    viewport_height: f64,
+    view_proj: &DMat4,
 ) -> PointerUpResult {
     // Read the current interaction state (owned copy of the data we need)
     let pending_info = {
@@ -2151,6 +2410,13 @@ pub fn default_tool_pointer_up(
                     })
                 }
                 DefaultToolInteractionState::PendingMarquee { .. } => Some(PendingClickInfo::Empty),
+                DefaultToolInteractionState::MarqueeActive {
+                    start_screen,
+                    current_screen,
+                } => Some(PendingClickInfo::Marquee {
+                    start_screen: *start_screen,
+                    end_screen: *current_screen,
+                }),
                 DefaultToolInteractionState::Idle => None,
             },
             _ => None,
@@ -2186,6 +2452,40 @@ pub fn default_tool_pointer_up(
             select_result_bond(structure_designer, &bond_reference, select_modifier);
             PointerUpResult::SelectionChanged
         }
+        Some(PendingClickInfo::Marquee {
+            start_screen,
+            end_screen,
+        }) => {
+            // Compute the screen-space AABB from the two marquee corners
+            let screen_min = DVec2::new(
+                start_screen.x.min(end_screen.x),
+                start_screen.y.min(end_screen.y),
+            );
+            let screen_max = DVec2::new(
+                start_screen.x.max(end_screen.x),
+                start_screen.y.max(end_screen.y),
+            );
+            let changed = select_atoms_in_screen_rect(
+                structure_designer,
+                view_proj,
+                screen_min,
+                screen_max,
+                viewport_width,
+                viewport_height,
+                &select_modifier,
+            );
+            if changed {
+                PointerUpResult::MarqueeCommitted
+            } else {
+                // Empty marquee with Replace: selection was cleared in select_atoms_in_screen_rect
+                // Empty marquee with Expand/Toggle: nothing happened
+                if matches!(select_modifier, SelectModifier::Replace) {
+                    PointerUpResult::MarqueeCommitted
+                } else {
+                    PointerUpResult::NothingHappened
+                }
+            }
+        }
         Some(PendingClickInfo::Empty) => {
             // Click on empty space: clear selection (Replace) or no-op (Expand/Toggle)
             if matches!(select_modifier, SelectModifier::Replace) {
@@ -2217,4 +2517,8 @@ enum PendingClickInfo {
         bond_reference: BondReference,
     },
     Empty,
+    Marquee {
+        start_screen: DVec2,
+        end_screen: DVec2,
+    },
 }

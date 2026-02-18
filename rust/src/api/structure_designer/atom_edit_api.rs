@@ -346,6 +346,7 @@ pub fn default_tool_pointer_up(
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                let view_proj = cad_instance.renderer.camera.build_view_projection_matrix();
                 let result = atom_edit::default_tool_pointer_up(
                     &mut cad_instance.structure_designer,
                     from_api_vec2(&screen_pos),
@@ -354,6 +355,7 @@ pub fn default_tool_pointer_up(
                     select_modifier,
                     viewport_width,
                     viewport_height,
+                    &view_proj,
                 );
                 // Refresh after selection change (re-evaluates decorations)
                 if !matches!(result, PointerUpResult::NothingHappened) {
