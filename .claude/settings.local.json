@@ -93,7 +93,10 @@
       "Bash(test:*)",
       "Bash(python3:*)",
       "Bash(xxd:*)",
-      "WebFetch(domain:docs.rs)"
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:two.avogadro.cc)",
+      "WebFetch(domain:discuss.avogadro.cc)",
+      "WebFetch(domain:avogadro.cc)"
     ]
   }
 }
