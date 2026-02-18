@@ -314,14 +314,22 @@ pub fn default_tool_pointer_move(
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                atom_edit::default_tool_pointer_move(
+                let camera = &cad_instance.renderer.camera;
+                let camera_forward = (camera.target - camera.eye).normalize();
+                let result = atom_edit::default_tool_pointer_move(
                     &mut cad_instance.structure_designer,
                     from_api_vec2(&screen_pos),
                     &from_api_vec3(&ray_origin),
                     &from_api_vec3(&ray_direction),
                     viewport_width,
                     viewport_height,
-                )
+                    &camera_forward,
+                );
+                // During drag, re-evaluate so atom positions update visually
+                if matches!(result.kind, PointerMoveResultKind::Dragging) {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                result
             },
             PointerMoveResult {
                 kind: PointerMoveResultKind::StillPending,

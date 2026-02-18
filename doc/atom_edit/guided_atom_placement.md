@@ -124,12 +124,6 @@ At any point during guide display, the user can:
 - Click **empty space** to cancel and return to Idle
 - Click a **different atom** to switch the anchor (recomputes guides)
 
-### 4.3 Hover preview (stretch goal)
-
-When the cursor hovers over a guide dot, the system could show a translucent preview
-of the atom at that position — giving the user confidence before clicking. This is
-a nice-to-have that can be added after the core flow works.
-
 ## 5. Visual Design
 
 ### 5.1 Guide dots
@@ -140,37 +134,42 @@ They should be visually distinct from real atoms.
 | Property             | Value                                     |
 |----------------------|-------------------------------------------|
 | Shape                | Sphere                                    |
-| Size                 | ~0.2 Å radius (smaller than most atoms)   |
-| Color (primary)      | Dark gray / charcoal (#404040)            |
-| Color (secondary)    | Lighter gray (#808080)                    |
-| Opacity              | Semi-transparent (70%)                    |
-| Highlight on hover   | Brighten to element color of selected element |
+| Size (primary)       | ~0.2 Å radius (smaller than most atoms)   |
+| Size (secondary)     | ~0.15 Å radius                             |
+| Color                | Selection color (bright magenta, `to_selected_color`) |
 
-**Why gray, not element-colored?** Guide dots represent *potential* positions, not
-real atoms. Gray makes them visually subordinate to the actual structure. On hover,
-they shift to the element color as a preview of what will be placed.
+**Why selection color?** The selection highlight (bright magenta, rgb(1.0, 0.2, 1.0))
+is the most distinct color from any element color in the periodic table. During
+guided placement the user is unlikely to be using selection, so repurposing the
+magenta avoids visual confusion. Gray (the alternative) is too close to carbon's
+color.
 
 ### 5.2 Trans vs cis differentiation (sp3 case 1 only)
 
-When 6 guide dots are shown (3 trans + 3 cis), differentiate them:
+When 6 guide dots are shown (3 trans + 3 cis), differentiate them by **size only**
+(both use selection color):
 
-| Type  | Radius   | Color        | Meaning                              |
-|-------|----------|--------------|--------------------------------------|
-| Trans | 0.22 Å   | Dark (#404040) | Preferred staggered positions (ABC) |
-| Cis   | 0.15 Å   | Light (#909090) | Eclipsed positions (ABA)           |
+| Type  | Radius   | Meaning                              |
+|-------|----------|--------------------------------------|
+| Trans | 0.20 Å   | Preferred staggered positions (ABC) |
+| Cis   | 0.15 Å   | Eclipsed positions (ABA)            |
 
 This matches the proposal's "bigger black dots" vs "smaller black dots."
 
-### 5.3 Bond preview lines
+### 5.3 Bond preview cylinders
 
-A thin dashed line connects the anchor atom to each guide dot, indicating the
-potential bond. This helps the user understand the spatial relationship.
+A cylinder connects the anchor atom to each guide dot, indicating the potential
+bond. This reuses the existing **anchor arrow** rendering used in diff view (when
+an atom has been moved from its anchor position).
 
-| Property   | Value                         |
-|------------|-------------------------------|
-| Style      | Thin line (1px / 0.02 Å)     |
-| Color      | Same as guide dot color       |
-| Opacity    | 40%                           |
+| Property   | Value                                          |
+|------------|------------------------------------------------|
+| Style      | Cylinder (same as diff anchor arrow)           |
+| Radius     | Same as anchor arrow cylinder radius           |
+| Color      | Same as anchor arrow color (`ANCHOR_ARROW_COLOR`, orange) |
+
+This requires no new rendering code — the anchor arrow tessellation already
+produces cylinders between two 3D points.
 
 ### 5.4 Anchor highlight
 
@@ -178,10 +177,10 @@ The anchor atom (the one the user clicked) should be visually distinguished:
 
 | Property    | Value                         |
 |-------------|-------------------------------|
-| Effect      | Bright ring / outline         |
-| Color       | Yellow (matching selection)    |
+| Effect      | Marker ring / outline                               |
+| Color       | Yellow (`MARKER_COLOR`, rgb(1.0, 1.0, 0.0))        |
 
-This can reuse the existing `AtomDisplayState::Marked` rendering (yellow highlight),
+This reuses the existing `AtomDisplayState::Marked` rendering (yellow marker),
 already used by the Add Bond tool for the same purpose.
 
 ### 5.5 Saturation feedback
@@ -204,7 +203,7 @@ When the anchor has no bonds, the system cannot determine bond angles. Instead:
 |-------------|----------------------------------------------|
 | Shape       | Wireframe sphere centered on anchor          |
 | Radius      | Sum of covalent radii (anchor + new element) |
-| Color       | Gray (#606060), 30% opacity                  |
+| Color       | Gray (#606060)                               |
 | Interaction | Click anywhere on the user-facing hemisphere |
 
 A single guide dot appears under the cursor as it moves over the sphere surface,
@@ -480,45 +479,126 @@ Cancel, transition to Idle.
 
 ## 8. Rendering Integration
 
-### 8.1 Guide dot rendering
+### 8.1 Approach considered: Gadget system
 
-Guide dots need to be rendered in the 3D viewport alongside regular atoms. Options:
+The existing **gadget system** (`NodeNetworkGadget` trait) provides built-in 3D
+rendering, hit testing, and drag interaction. It was considered for guide dots
+but rejected due to several mismatches:
 
-**Option A: Render as special atoms in the AtomicStructure (recommended)**
-Add guide dot positions as temporary atoms with a special display state
-(`AtomDisplayState::GuideDot`) during the decoration phase of evaluation. This
-reuses the existing atom rendering pipeline with minimal changes.
+1. **Drag-centric API.** Gadgets have `start_drag()`, `drag()`, `end_drag()` —
+   designed for continuous handle dragging. Guide dot selection is a single click,
+   not a drag. The interaction model is fundamentally different.
 
-Pros: No new rendering code, just a new display state and color.
-Cons: Guide dots are spheres only (cannot easily do wireframes).
+2. **Lifecycle tied to evaluation.** The gadget is recreated via `provide_gadget()`
+   after every partial/full network evaluation. But guided placement is transient
+   tool state that should appear/disappear based on user clicks, not evaluation
+   cycles. A background re-evaluation would reset the guide state.
 
-**Option B: Render as overlay geometry**
-Add a separate rendering pass for guide dots, bond preview lines, and the
-sphere/ring wireframes.
+3. **`sync_data()` pattern mismatch.** Gadgets sync continuous parameter changes
+   back into `NodeData` (e.g., translation offset after dragging). Guided placement
+   produces a discrete action (add atom + bond), not a parameter update.
 
-Pros: Full visual control (wireframe spheres, dashed lines, etc.).
-Cons: Significant rendering work.
+4. **Single gadget slot.** `StructureDesigner` has one `gadget: Option<Box<dyn
+   NodeNetworkGadget>>`. Using it for guide dots would block future gadget uses
+   on the atom_edit node (e.g., a transform gizmo for moving selected atoms).
 
-**Recommendation:** Start with Option A for guide dot spheres (minimal effort),
-add Option B later for wireframe sphere/ring in cases 0 and 1-without-reference.
-For the initial implementation, cases 0 and 1-without-reference can show
-individual dots evenly distributed on the sphere/ring as an approximation.
+### 8.2 Renderer capabilities analysis
 
-### 8.2 Hit testing guide dots
+The renderer supports four rendering paths in its primary render pass, all sharing
+the same depth buffer (correct mutual occlusion):
+
+| Path | Mesh type | Pipeline | Topology | Use case |
+|------|-----------|----------|----------|----------|
+| Triangle mesh | `Mesh` | `triangle_pipeline` | TriangleList | Solid surfaces, gadgets |
+| Line mesh | `LineMesh` | `line_pipeline` | LineList | Wireframes, grid, axes |
+| Atom impostors | `AtomImpostorMesh` | `atom_impostor_pipeline` | TriangleList | Billboard spheres |
+| Bond impostors | `BondImpostorMesh` | `bond_impostor_pipeline` | TriangleList | Billboard cylinders |
+
+Key facts:
+
+1. **Line rendering is fully supported.** `LineMesh` (`renderer/line_mesh.rs`)
+   provides `add_line_with_positions()` and even `add_dotted_line()` with
+   configurable dot/gap lengths. Lines have their own shader (`line_mesh.wgsl`)
+   with per-vertex color and depth testing. Wireframe spheres and circles are
+   feasible using existing infrastructure.
+
+2. **Impostors and triangle meshes are mutually exclusive for atoms.** The scene
+   tessellator (`display/scene_tessellator.rs`) branches on
+   `AtomicRenderingMethod` — atoms either go to impostor meshes or to the
+   triangle mesh, never both. Guide dots rendered as atoms in the
+   `AtomicStructure` will automatically use whichever mode is active.
+
+3. **All mesh types share the depth buffer.** Lines, triangles, atom impostors,
+   and bond impostors all depth-test against each other in the primary render
+   pass. A wireframe circle (line mesh) correctly occludes and is occluded by
+   impostor atoms.
+
+4. **The gadget render pass is separate.** It clears the depth buffer and renders
+   on top of everything (always-visible). This is **not** suitable for guide dots
+   since they should be occluded by atoms in front of them.
+
+5. **`TessellationOutput` contains both meshes.** The struct has `mesh: Mesh`
+   (triangles) and `line_mesh: LineMesh` (lines), so a single tessellation step
+   can output both solid and wireframe geometry.
+
+### 8.3 Chosen approach: Decoration phase rendering
+
+Guide dots and wireframe guides are rendered during the atom_edit node's
+**decoration phase** — the same mechanism used for existing visual overlays:
+selection highlights, anchor arrows, and delete markers.
+
+**How the decoration phase works:** The `eval()` method of `AtomEditData` receives
+a `decorate: bool` flag, which is `true` only when the atom_edit node is the
+selected node in the node network editor (`is_node_selected(node_id)`). All
+interactive visual state — selection, markers, guide dots — is added during this
+phase.
+
+**Why this fits:**
+- Guide dots only need to appear when the atom_edit node is selected (the user
+  can't use the Add Atom tool on an unselected node anyway).
+- If the user deselects the node, guide dots disappear — which is correct behavior
+  (deselecting should cancel guided placement).
+- No new rendering pipeline needed: guide dots are small spheres rendered by the
+  existing atom renderer with a new `AtomDisplayState` variant.
+- The decoration phase already has access to the full evaluated structure (needed
+  to compute neighbor bonds and hybridization).
+
+**Guide dot rendering (all cases):** When `decorate` is true and the active tool
+is in `GuidedPlacement` state, the decoration code adds phantom atoms at guide dot
+positions to the output `AtomicStructure` with `AtomDisplayState::GuideDot`
+(primary) or `AtomDisplayState::GuideDotSecondary` (for cis positions). The
+tessellator renders these with the appropriate colors and sizes from Section 5.
+This works automatically with both impostor and triangle mesh rendering modes.
+
+**Anchor-to-dot cylinders (all cases):** Reuse the existing anchor arrow
+tessellation code which already renders cylinders between two 3D points (used in
+diff view for showing atom movement). Same color (`ANCHOR_ARROW_COLOR`, orange)
+and radius.
+
+**Wireframe sphere (case 0) and wireframe ring (case 1 without dihedral
+reference):** Rendered as `LineMesh` geometry using the existing line rendering
+pipeline. The wireframe sphere is tessellated as 3 great circles (XY, XZ, YZ
+planes) using `add_line_with_positions()`. The wireframe ring is a single circle
+of line segments. Both participate in depth testing with the rest of the scene
+(atoms, bonds) via the shared depth buffer, so they are correctly occluded by
+atoms in front and visible through gaps.
+
+### 8.4 Hit testing guide dots
 
 Guide dots need to be clickable. Since they're rendered as small spheres, the
 existing ray-sphere hit test works. Approach:
 
-- Store guide dot positions in the tool state
-- Before testing real atoms, test ray against guide dot spheres
-- Guide dots have priority over atoms in the hit test (they're always in front
-  of or near the anchor, so the user's intent when clicking near them is clear)
+- Store guide dot positions in the tool state (`GuidedPlacement` variant)
+- In the tool's pointer handler, test ray against guide dot spheres **before**
+  testing against real atoms
+- Guide dots have priority over atoms in the hit test (they're always near the
+  anchor, so the user's intent when clicking near them is clear)
 
-### 8.3 Anchor atom highlighting
+### 8.5 Anchor atom highlighting
 
 When in GuidedPlacement state, mark the anchor atom using
-`AtomDisplayState::Marked` (yellow). This is identical to how the Add Bond tool
-marks the first-clicked atom.
+`AtomDisplayState::Marked` (yellow `MARKER_COLOR`). This is identical to how the
+Add Bond tool marks the first-clicked atom.
 
 ## 9. API Design
 

@@ -51,6 +51,7 @@ pub enum DefaultToolInteractionState {
         is_diff_view: bool,
         was_selected: bool,
         mouse_down_screen: DVec2,
+        select_modifier: SelectModifier,
     },
     PendingBond {
         bond_reference: BondReference,
@@ -58,6 +59,16 @@ pub enum DefaultToolInteractionState {
     },
     PendingMarquee {
         mouse_down_screen: DVec2,
+    },
+    ScreenPlaneDragging {
+        /// Camera forward direction (plane normal).
+        plane_normal: DVec3,
+        /// A point on the constraint plane (selection centroid at drag start).
+        plane_point: DVec3,
+        /// World position on the constraint plane at drag start.
+        start_world_pos: DVec3,
+        /// World position on the constraint plane at the last frame.
+        last_world_pos: DVec3,
     },
     MarqueeActive {
         start_screen: DVec2,
@@ -2094,6 +2105,95 @@ fn select_atoms_in_screen_rect(
     !atoms_to_select.is_empty() || (was_empty_before != atom_edit_data.selection.is_empty())
 }
 
+/// Apply a world-space displacement to all selected atom positions.
+///
+/// During screen-plane dragging, this is called on every mouse-move frame.
+/// - Diff atoms: position updated in-place, anchor set on first move
+/// - Base atoms: added to diff with anchor at original position, then moved to
+///   the provenance-based diff selection so subsequent deltas update the same atom
+///
+/// Uses `get_selected_atom_edit_data_mut` (which marks node data changed) because
+/// it modifies the diff.
+fn drag_selected_by_delta(structure_designer: &mut StructureDesigner, delta: DVec3) {
+    // Phase 1: Gather info about base atoms that need to be added to the diff
+    let base_atoms_info: Vec<(u32, i16, DVec3)> = {
+        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+            Some(data) => data,
+            None => return,
+        };
+
+        // In diff view, there are no base atoms to convert
+        if atom_edit_data.output_diff {
+            Vec::new()
+        } else {
+            let eval_cache = match structure_designer.get_selected_node_eval_cache() {
+                Some(cache) => cache,
+                None => return,
+            };
+            let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
+                Some(cache) => cache,
+                None => return,
+            };
+            let result_structure =
+                match structure_designer.get_atomic_structure_from_selected_node() {
+                    Some(s) => s,
+                    None => return,
+                };
+
+            let mut info: Vec<(u32, i16, DVec3)> = Vec::new();
+            for &base_id in &atom_edit_data.selection.selected_base_atoms {
+                if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
+                    if let Some(atom) = result_structure.get_atom(result_id) {
+                        info.push((base_id, atom.atomic_number, atom.position));
+                    }
+                }
+            }
+            info
+        }
+    };
+
+    // Phase 2: Apply delta to diff atoms & convert base atoms to diff
+    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(data) => data,
+        None => return,
+    };
+
+    // Move existing diff atoms
+    let diff_ids: Vec<u32> = atom_edit_data
+        .selection
+        .selected_diff_atoms
+        .iter()
+        .copied()
+        .collect();
+    for diff_id in diff_ids {
+        if let Some(atom) = atom_edit_data.diff.get_atom(diff_id) {
+            let new_pos = atom.position + delta;
+            atom_edit_data.move_in_diff(diff_id, new_pos);
+        }
+    }
+
+    // Convert base atoms to diff atoms (first move only — subsequent frames
+    // will find them in selected_diff_atoms since we move them there)
+    for (base_id, atomic_number, old_position) in &base_atoms_info {
+        let new_position = *old_position + delta;
+        let new_diff_id = atom_edit_data.diff.add_atom(*atomic_number, new_position);
+        atom_edit_data
+            .diff
+            .set_anchor_position(new_diff_id, *old_position);
+        atom_edit_data.selection.selected_base_atoms.remove(base_id);
+        atom_edit_data
+            .selection
+            .selected_diff_atoms
+            .insert(new_diff_id);
+    }
+
+    // Update selection transform to reflect the displacement
+    if let Some(ref mut transform) = atom_edit_data.selection.selection_transform {
+        transform.translation += delta;
+    }
+    atom_edit_data.selection.clear_bonds();
+}
+
 /// Set the interaction state on the active Default tool. Uses transient accessor
 /// (no mark_node_data_changed) since interaction_state is not serialized.
 fn set_interaction_state(
@@ -2113,7 +2213,7 @@ pub fn default_tool_pointer_down(
     screen_pos: DVec2,
     ray_origin: &DVec3,
     ray_direction: &DVec3,
-    _select_modifier: SelectModifier,
+    select_modifier: SelectModifier,
 ) -> PointerDownResult {
     // Phase 1: Hit test and gather info (immutable borrows)
     let (hit_result, is_diff_view, was_selected) = {
@@ -2215,6 +2315,7 @@ pub fn default_tool_pointer_down(
                     is_diff_view,
                     was_selected,
                     mouse_down_screen: screen_pos,
+                    select_modifier,
                 },
             );
             PointerDownResult {
@@ -2252,13 +2353,17 @@ pub fn default_tool_pointer_down(
 
 /// Handle mouse-move for the Default tool. Checks drag threshold and updates
 /// active drag state (marquee rectangle or screen-plane atom drag).
+///
+/// `camera_forward` is the camera's forward direction (eye → target, normalized).
+/// It's used as the constraint plane normal for screen-plane dragging.
 pub fn default_tool_pointer_move(
     structure_designer: &mut StructureDesigner,
     screen_pos: DVec2,
-    _ray_origin: &DVec3,
-    _ray_direction: &DVec3,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
     _viewport_width: f64,
     _viewport_height: f64,
+    camera_forward: &DVec3,
 ) -> PointerMoveResult {
     let no_op = PointerMoveResult {
         kind: PointerMoveResultKind::StillPending,
@@ -2276,7 +2381,18 @@ pub fn default_tool_pointer_move(
     // Determine what transition is needed based on current state
     enum MoveAction {
         None,
-        ThresholdExceededOnAtom,
+        StartDrag {
+            hit_atom_id: u32,
+            is_diff_view: bool,
+            was_selected: bool,
+            select_modifier: SelectModifier,
+        },
+        ContinueDrag {
+            plane_normal: DVec3,
+            plane_point: DVec3,
+            start_world_pos: DVec3,
+            last_world_pos: DVec3,
+        },
         ThresholdExceededOnMarquee { start_screen: DVec2 },
         UpdateMarquee { start_screen: DVec2 },
     }
@@ -2284,10 +2400,19 @@ pub fn default_tool_pointer_move(
     let action = match &atom_edit_data.active_tool {
         AtomEditTool::Default(state) => match &state.interaction_state {
             DefaultToolInteractionState::PendingAtom {
-                mouse_down_screen, ..
+                mouse_down_screen,
+                hit_atom_id,
+                is_diff_view,
+                was_selected,
+                select_modifier,
             } => {
                 if screen_pos.distance(*mouse_down_screen) > DRAG_THRESHOLD {
-                    MoveAction::ThresholdExceededOnAtom
+                    MoveAction::StartDrag {
+                        hit_atom_id: *hit_atom_id,
+                        is_diff_view: *is_diff_view,
+                        was_selected: *was_selected,
+                        select_modifier: select_modifier.clone(),
+                    }
                 } else {
                     MoveAction::None
                 }
@@ -2308,20 +2433,123 @@ pub fn default_tool_pointer_move(
                     start_screen: *start_screen,
                 }
             }
+            DefaultToolInteractionState::ScreenPlaneDragging {
+                plane_normal,
+                plane_point,
+                start_world_pos,
+                last_world_pos,
+            } => MoveAction::ContinueDrag {
+                plane_normal: *plane_normal,
+                plane_point: *plane_point,
+                start_world_pos: *start_world_pos,
+                last_world_pos: *last_world_pos,
+            },
             // Bonds are not draggable; threshold doesn't change behavior
-            DefaultToolInteractionState::PendingBond { .. } | DefaultToolInteractionState::Idle => {
-                MoveAction::None
-            }
+            DefaultToolInteractionState::PendingBond { .. }
+            | DefaultToolInteractionState::Idle => MoveAction::None,
         },
         _ => MoveAction::None,
     };
 
     match action {
         MoveAction::None => no_op,
-        MoveAction::ThresholdExceededOnAtom => {
-            // Phase D will transition to ScreenPlaneDragging here.
-            set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
-            no_op
+        MoveAction::StartDrag {
+            hit_atom_id,
+            is_diff_view,
+            was_selected,
+            select_modifier,
+        } => {
+            // If the atom was not selected, apply tentative selection first
+            if !was_selected {
+                if is_diff_view {
+                    select_diff_atom_directly(
+                        structure_designer,
+                        hit_atom_id,
+                        select_modifier,
+                    );
+                } else {
+                    select_result_atom(
+                        structure_designer,
+                        hit_atom_id,
+                        select_modifier,
+                    );
+                }
+            }
+
+            // Compute the constraint plane: camera-parallel, through selection centroid
+            let plane_normal = *camera_forward;
+            let plane_point = match get_active_atom_edit_data(structure_designer) {
+                Some(data) => match &data.selection.selection_transform {
+                    Some(t) => t.translation,
+                    None => return no_op,
+                },
+                None => return no_op,
+            };
+
+            // Intersect the current ray with the constraint plane to get start_world_pos
+            let start_world_pos =
+                match ray_plane_intersect(ray_origin, ray_direction, &plane_normal, &plane_point) {
+                    Some(pos) => pos,
+                    None => return no_op, // Ray parallel to plane
+                };
+
+            set_interaction_state(
+                structure_designer,
+                DefaultToolInteractionState::ScreenPlaneDragging {
+                    plane_normal,
+                    plane_point,
+                    start_world_pos,
+                    last_world_pos: start_world_pos,
+                },
+            );
+
+            PointerMoveResult {
+                kind: PointerMoveResultKind::Dragging,
+                marquee_rect_x: 0.0,
+                marquee_rect_y: 0.0,
+                marquee_rect_w: 0.0,
+                marquee_rect_h: 0.0,
+            }
+        }
+        MoveAction::ContinueDrag {
+            plane_normal,
+            plane_point,
+            start_world_pos,
+            last_world_pos,
+        } => {
+            // Intersect the current ray with the constraint plane
+            let current_world_pos =
+                match ray_plane_intersect(ray_origin, ray_direction, &plane_normal, &plane_point) {
+                    Some(pos) => pos,
+                    None => return no_op, // Ray parallel to plane
+                };
+
+            // Compute incremental delta from last frame
+            let delta = current_world_pos - last_world_pos;
+
+            if delta.length_squared() > 0.0 {
+                // Apply delta to all selected atoms
+                drag_selected_by_delta(structure_designer, delta);
+
+                // Update the last_world_pos in the interaction state
+                set_interaction_state(
+                    structure_designer,
+                    DefaultToolInteractionState::ScreenPlaneDragging {
+                        plane_normal,
+                        plane_point,
+                        start_world_pos,
+                        last_world_pos: current_world_pos,
+                    },
+                );
+            }
+
+            PointerMoveResult {
+                kind: PointerMoveResultKind::Dragging,
+                marquee_rect_x: 0.0,
+                marquee_rect_y: 0.0,
+                marquee_rect_w: 0.0,
+                marquee_rect_h: 0.0,
+            }
         }
         MoveAction::ThresholdExceededOnMarquee { start_screen } => {
             set_interaction_state(
@@ -2358,6 +2586,24 @@ pub fn default_tool_pointer_move(
             }
         }
     }
+}
+
+/// Intersect a ray with a plane. Returns the intersection point, or None if
+/// the ray is parallel to the plane.
+///
+/// Plane defined by: dot(point - plane_point, plane_normal) = 0
+fn ray_plane_intersect(
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
+    plane_normal: &DVec3,
+    plane_point: &DVec3,
+) -> Option<DVec3> {
+    let denom = ray_direction.dot(*plane_normal);
+    if denom.abs() < 1e-10 {
+        return None; // Ray parallel to plane
+    }
+    let t = (*plane_point - *ray_origin).dot(*plane_normal) / denom;
+    Some(*ray_origin + *ray_direction * t)
 }
 
 /// Compute an LTWH rectangle from two corner points (handles any drag direction).
@@ -2417,6 +2663,9 @@ pub fn default_tool_pointer_up(
                     start_screen: *start_screen,
                     end_screen: *current_screen,
                 }),
+                DefaultToolInteractionState::ScreenPlaneDragging { .. } => {
+                    Some(PendingClickInfo::DragCompleted)
+                }
                 DefaultToolInteractionState::Idle => None,
             },
             _ => None,
@@ -2486,6 +2735,14 @@ pub fn default_tool_pointer_up(
                 }
             }
         }
+        Some(PendingClickInfo::DragCompleted) => {
+            // Screen-plane drag finished. Atoms are already at their new positions
+            // (updated incrementally during drag). The state has been reset to Idle.
+            // mark_node_data_changed was already called by drag_selected_by_delta,
+            // and refresh_structure_designer_auto will be called by the API layer.
+            // The full refresh on commit re-evaluates downstream nodes.
+            PointerUpResult::DragCommitted
+        }
         Some(PendingClickInfo::Empty) => {
             // Click on empty space: clear selection (Replace) or no-op (Expand/Toggle)
             if matches!(select_modifier, SelectModifier::Replace) {
@@ -2521,4 +2778,5 @@ enum PendingClickInfo {
         start_screen: DVec2,
         end_screen: DVec2,
     },
+    DragCompleted,
 }

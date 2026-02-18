@@ -98,7 +98,8 @@
       "WebFetch(domain:discuss.avogadro.cc)",
       "WebFetch(domain:avogadro.cc)",
       "Bash(awk:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(select-string:*)"
     ]
   }
 }
