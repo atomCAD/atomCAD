@@ -270,6 +270,60 @@ pub enum APIMinimizeFreezeMode {
     FreeSelected,
 }
 
+// --- Default tool pointer event result types ---
+
+/// Discriminant for default_tool_pointer_down result.
+pub enum PointerDownResultKind {
+    /// A gadget handle was hit. Flutter should start existing gadget drag.
+    /// See `PointerDownResult.gadget_handle_index` for the handle.
+    GadgetHit,
+    /// Mouse-down on an atom. Entered PendingAtom state.
+    StartedOnAtom,
+    /// Mouse-down on a bond. Entered PendingBond state.
+    StartedOnBond,
+    /// Mouse-down on empty space. Entered PendingMarquee state.
+    StartedOnEmpty,
+}
+
+/// Result of default_tool_pointer_down.
+pub struct PointerDownResult {
+    pub kind: PointerDownResultKind,
+    /// Only valid when kind == GadgetHit.
+    pub gadget_handle_index: i32,
+}
+
+/// Discriminant for default_tool_pointer_move result.
+pub enum PointerMoveResultKind {
+    /// Threshold not exceeded yet.
+    StillPending,
+    /// Screen-plane drag in progress (atoms moved).
+    Dragging,
+    /// Marquee rectangle updated.
+    MarqueeUpdated,
+}
+
+/// Result of default_tool_pointer_move.
+pub struct PointerMoveResult {
+    pub kind: PointerMoveResultKind,
+    /// Marquee rectangle in screen coords [x, y, w, h]. Only valid when kind == MarqueeUpdated.
+    pub marquee_rect_x: f64,
+    pub marquee_rect_y: f64,
+    pub marquee_rect_w: f64,
+    pub marquee_rect_h: f64,
+}
+
+/// Result of default_tool_pointer_up.
+pub enum PointerUpResult {
+    /// Click-select happened.
+    SelectionChanged,
+    /// Screen-plane drag finished.
+    DragCommitted,
+    /// Marquee selection applied.
+    MarqueeCommitted,
+    /// No-op (e.g., click on empty with no prior selection).
+    NothingHappened,
+}
+
 pub struct APIDiffStats {
     pub atoms_added: u32,
     pub atoms_deleted: u32,

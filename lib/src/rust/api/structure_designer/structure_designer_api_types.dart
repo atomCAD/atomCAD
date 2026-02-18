@@ -1703,6 +1703,114 @@ class NodeView {
           commentHeight == other.commentHeight;
 }
 
+/// Result of default_tool_pointer_down.
+class PointerDownResult {
+  final PointerDownResultKind kind;
+
+  /// Only valid when kind == GadgetHit.
+  final int gadgetHandleIndex;
+
+  const PointerDownResult({
+    required this.kind,
+    required this.gadgetHandleIndex,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ gadgetHandleIndex.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PointerDownResult &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          gadgetHandleIndex == other.gadgetHandleIndex;
+}
+
+/// Discriminant for default_tool_pointer_down result.
+enum PointerDownResultKind {
+  /// A gadget handle was hit. Flutter should start existing gadget drag.
+  /// See `PointerDownResult.gadget_handle_index` for the handle.
+  gadgetHit,
+
+  /// Mouse-down on an atom. Entered PendingAtom state.
+  startedOnAtom,
+
+  /// Mouse-down on a bond. Entered PendingBond state.
+  startedOnBond,
+
+  /// Mouse-down on empty space. Entered PendingMarquee state.
+  startedOnEmpty,
+  ;
+}
+
+/// Result of default_tool_pointer_move.
+class PointerMoveResult {
+  final PointerMoveResultKind kind;
+
+  /// Marquee rectangle in screen coords [x, y, w, h]. Only valid when kind == MarqueeUpdated.
+  final double marqueeRectX;
+  final double marqueeRectY;
+  final double marqueeRectW;
+  final double marqueeRectH;
+
+  const PointerMoveResult({
+    required this.kind,
+    required this.marqueeRectX,
+    required this.marqueeRectY,
+    required this.marqueeRectW,
+    required this.marqueeRectH,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      marqueeRectX.hashCode ^
+      marqueeRectY.hashCode ^
+      marqueeRectW.hashCode ^
+      marqueeRectH.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PointerMoveResult &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          marqueeRectX == other.marqueeRectX &&
+          marqueeRectY == other.marqueeRectY &&
+          marqueeRectW == other.marqueeRectW &&
+          marqueeRectH == other.marqueeRectH;
+}
+
+/// Discriminant for default_tool_pointer_move result.
+enum PointerMoveResultKind {
+  /// Threshold not exceeded yet.
+  stillPending,
+
+  /// Screen-plane drag in progress (atoms moved).
+  dragging,
+
+  /// Marquee rectangle updated.
+  marqueeUpdated,
+  ;
+}
+
+/// Result of default_tool_pointer_up.
+enum PointerUpResult {
+  /// Click-select happened.
+  selectionChanged,
+
+  /// Screen-plane drag finished.
+  dragCommitted,
+
+  /// Marquee selection applied.
+  marqueeCommitted,
+
+  /// No-op (e.g., click on empty with no prior selection).
+  nothingHappened,
+  ;
+}
+
 /// Wire identifier for batch selection operations
 class WireIdentifier {
   final BigInt sourceNodeId;

@@ -2361,11 +2361,8 @@ fn dual_mode_minimization_produces_same_results() {
         let result_all = minimize_with_force_field(&ff_all, &mut pos_all, &config, frozen);
 
         // Cutoff minimization.
-        let ff_cut =
-            UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(cutoff))
-                .unwrap_or_else(|e| {
-                    panic!("Failed to build UFF Cutoff for {}: {}", mol.name, e)
-                });
+        let ff_cut = UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(cutoff))
+            .unwrap_or_else(|e| panic!("Failed to build UFF Cutoff for {}: {}", mol.name, e));
         let mut pos_cut = topology.positions.clone();
         let result_cut = minimize_with_force_field(&ff_cut, &mut pos_cut, &config, frozen);
 
@@ -2418,9 +2415,8 @@ fn dual_mode_minimization_with_realistic_cutoff() {
         let mut pos_all = topology.positions.clone();
         let result_all = minimize_with_force_field(&ff_all, &mut pos_all, &config, frozen);
 
-        let ff_cut =
-            UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(cutoff))
-                .unwrap_or_else(|e| panic!("Failed Cutoff for {}: {}", mol.name, e));
+        let ff_cut = UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(cutoff))
+            .unwrap_or_else(|e| panic!("Failed Cutoff for {}: {}", mol.name, e));
         let mut pos_cut = topology.positions.clone();
         let result_cut = minimize_with_force_field(&ff_cut, &mut pos_cut, &config, frozen);
 
@@ -2506,10 +2502,9 @@ fn create_diamond_cuboid_with_options(
     let b = unit_cell.b;
     let c = unit_cell.c;
     let margin = 5.0;
-    let max_coord =
-        (extent_x as f64 * a.length())
-            .max(extent_y as f64 * b.length())
-            .max(extent_z as f64 * c.length());
+    let max_coord = (extent_x as f64 * a.length())
+        .max(extent_y as f64 * b.length())
+        .max(extent_z as f64 * c.length());
     let fill_region = DAABox::new(
         DVec3::new(-margin, -margin, -margin),
         DVec3::new(max_coord + margin, max_coord + margin, max_coord + margin),
@@ -2558,7 +2553,10 @@ fn diamond_cuboid_2x2x2_minimization_stable() {
     let structure = create_diamond_cuboid(2, 2, 2);
     let num_atoms = structure.get_num_of_atoms();
     println!("2x2x2 diamond cuboid: {num_atoms} atoms");
-    assert!(num_atoms > 30, "Expected at least 30 atoms, got {num_atoms}");
+    assert!(
+        num_atoms > 30,
+        "Expected at least 30 atoms, got {num_atoms}"
+    );
 
     let topology = MolecularTopology::from_structure(&structure);
     let ff = UffForceField::from_topology(&topology).expect("UFF build failed for 2x2x2");
@@ -2671,7 +2669,8 @@ fn diamond_cuboid_3x3x3_passivated_minimization_stable() {
 
     let topology = MolecularTopology::from_structure(&structure);
     let initial_positions = topology.positions.clone();
-    let ff = UffForceField::from_topology(&topology).expect("UFF build failed for 3x3x3 passivated");
+    let ff =
+        UffForceField::from_topology(&topology).expect("UFF build failed for 3x3x3 passivated");
     let mut positions = topology.positions.clone();
 
     // Print initial diagnostics
@@ -2720,7 +2719,8 @@ fn diamond_cuboid_2x2x2_passivated_minimization_stable() {
 
     let topology = MolecularTopology::from_structure(&structure);
     let initial_positions = topology.positions.clone();
-    let ff = UffForceField::from_topology(&topology).expect("UFF build failed for 2x2x2 passivated");
+    let ff =
+        UffForceField::from_topology(&topology).expect("UFF build failed for 2x2x2 passivated");
     let mut positions = topology.positions.clone();
 
     let config = MinimizationConfig::default();
@@ -2790,7 +2790,10 @@ fn diamond_cuboid_2x2x2_passivated_diagnose_contacts() {
             }
         }
     }
-    println!("  min nonbonded distance: {min_nb_dist:.4} A (atoms {} and {})", worst_pair.0, worst_pair.1);
+    println!(
+        "  min nonbonded distance: {min_nb_dist:.4} A (atoms {} and {})",
+        worst_pair.0, worst_pair.1
+    );
     println!("  close contacts (< 2.0 A): {close_contacts}");
 
     // Compute per-term energy breakdown
@@ -2803,9 +2806,8 @@ fn diamond_cuboid_2x2x2_passivated_diagnose_contacts() {
     // Compute vdW energy separately
     let mut vdw_energy = 0.0;
     for vp in ff.vdw_params() {
-        vdw_energy += rust_lib_flutter_cad::crystolecule::simulation::uff::energy::vdw_energy(
-            vp, positions,
-        );
+        vdw_energy +=
+            rust_lib_flutter_cad::crystolecule::simulation::uff::energy::vdw_energy(vp, positions);
     }
     println!("  vdW energy: {vdw_energy:.4} kcal/mol");
     println!("  bonded energy: {:.4} kcal/mol", energy - vdw_energy);
@@ -2875,8 +2877,5 @@ fn diamond_cuboid_3x3x3_diagnose_initial_contacts() {
     println!("  max gradient magnitude: {max_grad:.4} at atom {max_grad_atom}");
 
     // The initial structure should have reasonable energy (not astronomical)
-    assert!(
-        energy.is_finite(),
-        "Initial energy is not finite: {energy}"
-    );
+    assert!(energy.is_finite(), "Initial energy is not finite: {energy}");
 }

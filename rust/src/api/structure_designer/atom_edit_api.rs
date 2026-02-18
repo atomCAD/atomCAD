@@ -4,10 +4,16 @@ use crate::api::api_common::refresh_structure_designer_auto;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::common_api_types::APITransform;
+use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode;
+use crate::api::structure_designer::structure_designer_api_types::PointerDownResult;
+use crate::api::structure_designer::structure_designer_api_types::PointerDownResultKind;
+use crate::api::structure_designer::structure_designer_api_types::PointerMoveResult;
+use crate::api::structure_designer::structure_designer_api_types::PointerMoveResultKind;
+use crate::api::structure_designer::structure_designer_api_types::PointerUpResult;
 use crate::structure_designer::nodes::atom_edit::atom_edit;
 use crate::structure_designer::nodes::atom_edit::atom_edit::MinimizeFreezeMode;
 
@@ -267,4 +273,66 @@ pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
             "Error: no active instance".to_string(),
         )
     }
+}
+
+// --- Default tool pointer event API ---
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn default_tool_pointer_down(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+    select_modifier: SelectModifier,
+) -> PointerDownResult {
+    let _ = (screen_pos, ray_origin, ray_direction, select_modifier);
+    // Stub: return StartedOnEmpty so the delegate consumes the event
+    // but no real state change happens yet.
+    PointerDownResult {
+        kind: PointerDownResultKind::StartedOnEmpty,
+        gadget_handle_index: -1,
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn default_tool_pointer_move(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+    viewport_width: f64,
+    viewport_height: f64,
+) -> PointerMoveResult {
+    let _ = (
+        screen_pos,
+        ray_origin,
+        ray_direction,
+        viewport_width,
+        viewport_height,
+    );
+    PointerMoveResult {
+        kind: PointerMoveResultKind::StillPending,
+        marquee_rect_x: 0.0,
+        marquee_rect_y: 0.0,
+        marquee_rect_w: 0.0,
+        marquee_rect_h: 0.0,
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn default_tool_pointer_up(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+    select_modifier: SelectModifier,
+    viewport_width: f64,
+    viewport_height: f64,
+) -> PointerUpResult {
+    let _ = (
+        screen_pos,
+        ray_origin,
+        ray_direction,
+        select_modifier,
+        viewport_width,
+        viewport_height,
+    );
+    PointerUpResult::NothingHappened
 }

@@ -123,9 +123,7 @@ impl UffForceField {
                 angle_params: Vec::new(),
                 torsion_params: Vec::new(),
                 inversion_params: Vec::new(),
-                vdw_strategy: VdwStrategy::AllPairs {
-                    params: Vec::new(),
-                },
+                vdw_strategy: VdwStrategy::AllPairs { params: Vec::new() },
                 num_atoms: 0,
             });
         }
@@ -238,10 +236,8 @@ impl UffForceField {
                     .iter()
                     .filter(|pair| !(frozen_flags[pair.idx1] && frozen_flags[pair.idx2]))
                     .map(|pair| {
-                        let params_i =
-                            params::get_uff_params(typing.labels[pair.idx1]).unwrap();
-                        let params_j =
-                            params::get_uff_params(typing.labels[pair.idx2]).unwrap();
+                        let params_i = params::get_uff_params(typing.labels[pair.idx1]).unwrap();
+                        let params_j = params::get_uff_params(typing.labels[pair.idx2]).unwrap();
                         VdwParams {
                             idx1: pair.idx1,
                             idx2: pair.idx2,
@@ -355,10 +351,7 @@ impl UffForceField {
         let mut vdw_params: Vec<VdwParams> = Vec::new();
         for i in 0..num_atoms {
             grid.for_each_neighbor(positions, i, build_radius, |j| {
-                if j > i
-                    && !exclusions.contains(&(i, j))
-                    && !(frozen[i] && frozen[j])
-                {
+                if j > i && !exclusions.contains(&(i, j)) && !(frozen[i] && frozen[j]) {
                     vdw_params.push(VdwParams {
                         idx1: i,
                         idx2: j,

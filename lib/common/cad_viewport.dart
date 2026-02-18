@@ -68,6 +68,23 @@ vector_math.Vector3 rotatePointAroundAxis(vector_math.Vector3 axisPos,
   return rotation.rotated(point - axisPos) + axisPos;
 }
 
+/// Interface for tools that need to take over primary mouse button interactions.
+/// When the delegate returns true, the base class skips its own click-threshold
+/// / gadget logic. When it returns false, the base class runs normally.
+abstract class PrimaryPointerDelegate {
+  /// Called on primary button down. Return true to consume (base won't do
+  /// click-threshold / gadget hit test). Return false to let base handle it.
+  bool onPrimaryDown(Offset pos);
+
+  /// Called on primary button move while consumed. Return true to consume.
+  /// Return false to let base handle it (e.g., for gadget dragging).
+  bool onPrimaryMove(Offset pos);
+
+  /// Called on primary button up while consumed. Return true to consume.
+  /// Return false to let base handle it.
+  bool onPrimaryUp(Offset pos);
+}
+
 abstract class CadViewport extends StatefulWidget {
   const CadViewport({super.key});
 }
@@ -95,9 +112,31 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   double _cameraMovePerPixel = 0.0;
 
   bool isGadgetDragging = false;
+  bool _delegateConsumedDown = false;
 
   int draggedGadgetHandle =
       -1; // Relevant when _dragState == ViewportDragState.gadgetDrag
+
+  /// Override in subclass to provide a delegate for the active tool.
+  @protected
+  PrimaryPointerDelegate? get primaryPointerDelegate => null;
+
+  /// Start a gadget drag from a known handle index (no Flutter-side hit test).
+  /// Used when Rust already determined the gadget was hit.
+  @protected
+  void startGadgetDragFromHandle(int handleIndex, Offset pointerPos) {
+    dragState = ViewportDragState.defaultDrag;
+    _dragStartPointerPos = pointerPos;
+    final ray = getRayFromPointerPos(pointerPos);
+    isGadgetDragging = true;
+    draggedGadgetHandle = transformDraggedGadgetHandle(handleIndex);
+    gadgetStartDrag(
+      handleIndex: draggedGadgetHandle,
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    renderingNeeded();
+  }
 
   void onPointerSignal(PointerSignalEvent pointerSignal) {
     if (pointerSignal is PointerScrollEvent) {
@@ -186,7 +225,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     if (event.kind == PointerDeviceKind.mouse) {
       switch (event.buttons) {
         case kPrimaryMouseButton:
-          //print('Left mouse button pressed at ${event.position}');
+          final delegate = primaryPointerDelegate;
+          if (delegate != null && delegate.onPrimaryDown(event.localPosition)) {
+            _delegateConsumedDown = true;
+            return;
+          }
+          _delegateConsumedDown = false;
           startPrimaryDrag(event.localPosition);
           break;
         case kSecondaryMouseButton:
@@ -208,7 +252,13 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
   void onPointerMove(PointerMoveEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
-      //print('Mouse moved to ${event.position}');
+      if (_delegateConsumedDown) {
+        final delegate = primaryPointerDelegate;
+        if (delegate != null && delegate.onPrimaryMove(event.localPosition)) {
+          return;
+        }
+        // Delegate declined move (e.g., gadget dragging) — fall through to base
+      }
       switch (dragState) {
         case ViewportDragState.move:
           cameraMove(event.localPosition);
@@ -226,7 +276,15 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
   void onPointerUp(PointerUpEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
-      //print('Mouse button released at ${event.position}');
+      if (_delegateConsumedDown) {
+        final delegate = primaryPointerDelegate;
+        if (delegate != null && delegate.onPrimaryUp(event.localPosition)) {
+          _delegateConsumedDown = false;
+          return;
+        }
+        // Delegate declined up (e.g., gadget dragging) — fall through to base
+        _delegateConsumedDown = false;
+      }
       endDrag(event.localPosition);
     }
   }

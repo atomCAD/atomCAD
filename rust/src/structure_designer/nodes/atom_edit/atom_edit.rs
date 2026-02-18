@@ -38,9 +38,23 @@ pub const DEFAULT_TOLERANCE: f64 = 0.1;
 
 // --- Tool state structs ---
 
+/// Interaction state machine for the Default tool.
+/// Tracks the current mouse interaction from down → move → up.
+#[derive(Debug)]
+pub enum DefaultToolInteractionState {
+    Idle,
+}
+
+impl Default for DefaultToolInteractionState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
 #[derive(Debug)]
 pub struct DefaultToolState {
     pub replacement_atomic_number: i16,
+    pub interaction_state: DefaultToolInteractionState,
 }
 
 #[derive(Debug)]
@@ -166,6 +180,7 @@ impl AtomEditData {
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6, // Default to carbon
+                interaction_state: DefaultToolInteractionState::default(),
             }),
             last_stats: None,
         }
@@ -189,6 +204,7 @@ impl AtomEditData {
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
+                interaction_state: DefaultToolInteractionState::default(),
             }),
             last_stats: None,
         }
@@ -277,6 +293,7 @@ impl AtomEditData {
         self.active_tool = match api_tool {
             APIAtomEditTool::Default => AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
+                interaction_state: DefaultToolInteractionState::default(),
             }),
             APIAtomEditTool::AddAtom => {
                 AtomEditTool::AddAtom(AddAtomToolState { atomic_number: 6 })
@@ -606,6 +623,7 @@ impl NodeData for AtomEditData {
             active_tool: match &self.active_tool {
                 AtomEditTool::Default(state) => AtomEditTool::Default(DefaultToolState {
                     replacement_atomic_number: state.replacement_atomic_number,
+                    interaction_state: DefaultToolInteractionState::default(),
                 }),
                 AtomEditTool::AddAtom(state) => AtomEditTool::AddAtom(AddAtomToolState {
                     atomic_number: state.atomic_number,
@@ -753,9 +771,7 @@ pub fn minimize_atom_edit(
         };
         let topology = match &vdw_mode {
             VdwMode::AllPairs => MolecularTopology::from_structure(result_structure),
-            VdwMode::Cutoff(_) => {
-                MolecularTopology::from_structure_bonded_only(result_structure)
-            }
+            VdwMode::Cutoff(_) => MolecularTopology::from_structure_bonded_only(result_structure),
         };
         if topology.num_atoms == 0 {
             return Ok("No atoms to minimize".to_string());
@@ -788,23 +804,17 @@ pub fn minimize_atom_edit(
                 // Build set of selected result atom IDs from selection + provenance
                 let mut selected_result_ids: HashSet<u32> = HashSet::new();
                 for &base_id in &atom_edit_data.selection.selected_base_atoms {
-                    if let Some(&result_id) =
-                        eval_cache.provenance.base_to_result.get(&base_id)
-                    {
+                    if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
                         selected_result_ids.insert(result_id);
                     }
                 }
                 for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
-                    if let Some(&result_id) =
-                        eval_cache.provenance.diff_to_result.get(&diff_id)
-                    {
+                    if let Some(&result_id) = eval_cache.provenance.diff_to_result.get(&diff_id) {
                         selected_result_ids.insert(result_id);
                     }
                 }
                 if selected_result_ids.is_empty() {
-                    return Err(
-                        "No atoms selected — select atoms to minimize first".to_string(),
-                    );
+                    return Err("No atoms selected — select atoms to minimize first".to_string());
                 }
                 // Freeze everything NOT selected
                 topology

@@ -727,6 +727,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  PointerDownResult dco_decode_pointer_down_result(dynamic raw);
+
+  @protected
+  PointerDownResultKind dco_decode_pointer_down_result_kind(dynamic raw);
+
+  @protected
+  PointerMoveResult dco_decode_pointer_move_result(dynamic raw);
+
+  @protected
+  PointerMoveResultKind dco_decode_pointer_move_result_kind(dynamic raw);
+
+  @protected
+  PointerUpResult dco_decode_pointer_up_result(dynamic raw);
+
+  @protected
   (int, String, String) dco_decode_record_i_32_string_string(dynamic raw);
 
   @protected
@@ -1583,6 +1598,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PointerDownResult sse_decode_pointer_down_result(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerDownResultKind sse_decode_pointer_down_result_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerMoveResult sse_decode_pointer_move_result(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerMoveResultKind sse_decode_pointer_move_result_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerUpResult sse_decode_pointer_up_result(SseDeserializer deserializer);
 
   @protected
   (int, String, String) sse_decode_record_i_32_string_string(
@@ -2478,6 +2512,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_down_result(
+      PointerDownResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_down_result_kind(
+      PointerDownResultKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_move_result(
+      PointerMoveResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_move_result_kind(
+      PointerMoveResultKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_up_result(
+      PointerUpResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_i_32_string_string(

@@ -75,3 +75,45 @@ bool setAtomEditAddAtomData({required int atomicNumber}) => RustLib.instance.api
 String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
     RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditMinimize(
         freezeMode: freezeMode);
+
+PointerDownResult defaultToolPointerDown(
+        {required APIVec2 screenPos,
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection,
+        required SelectModifier selectModifier}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiDefaultToolPointerDown(
+            screenPos: screenPos,
+            rayOrigin: rayOrigin,
+            rayDirection: rayDirection,
+            selectModifier: selectModifier);
+
+PointerMoveResult defaultToolPointerMove(
+        {required APIVec2 screenPos,
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection,
+        required double viewportWidth,
+        required double viewportHeight}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiDefaultToolPointerMove(
+            screenPos: screenPos,
+            rayOrigin: rayOrigin,
+            rayDirection: rayDirection,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight);
+
+PointerUpResult defaultToolPointerUp(
+        {required APIVec2 screenPos,
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection,
+        required SelectModifier selectModifier,
+        required double viewportWidth,
+        required double viewportHeight}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiDefaultToolPointerUp(
+            screenPos: screenPos,
+            rayOrigin: rayOrigin,
+            rayDirection: rayDirection,
+            selectModifier: selectModifier,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight);

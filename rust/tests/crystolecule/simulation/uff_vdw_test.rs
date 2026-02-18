@@ -12,13 +12,13 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
 };
 use rust_lib_flutter_cad::crystolecule::simulation::force_field::ForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
-use rust_lib_flutter_cad::crystolecule::simulation::uff::{UffForceField, VdwMode};
 use rust_lib_flutter_cad::crystolecule::simulation::uff::energy::{
     VdwParams, vdw_energy, vdw_energy_and_gradient,
 };
 use rust_lib_flutter_cad::crystolecule::simulation::uff::params::{
     calc_vdw_distance, calc_vdw_well_depth, get_uff_params,
 };
+use rust_lib_flutter_cad::crystolecule::simulation::uff::{UffForceField, VdwMode};
 
 // ============================================================================
 // Helpers: load reference data, build structures
