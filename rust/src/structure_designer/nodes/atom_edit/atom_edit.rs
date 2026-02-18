@@ -25,7 +25,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::transform::Transform;
-use glam::f64::{DQuat, DVec3};
+use glam::f64::{DQuat, DVec2, DVec3};
 use std::collections::{HashMap, HashSet};
 use std::io;
 
@@ -38,11 +38,27 @@ pub const DEFAULT_TOLERANCE: f64 = 0.1;
 
 // --- Tool state structs ---
 
+/// Pixel threshold (logical pixels) distinguishing click from drag.
+const DRAG_THRESHOLD: f64 = 5.0;
+
 /// Interaction state machine for the Default tool.
 /// Tracks the current mouse interaction from down → move → up.
 #[derive(Debug)]
 pub enum DefaultToolInteractionState {
     Idle,
+    PendingAtom {
+        hit_atom_id: u32,
+        is_diff_view: bool,
+        was_selected: bool,
+        mouse_down_screen: DVec2,
+    },
+    PendingBond {
+        bond_reference: BondReference,
+        mouse_down_screen: DVec2,
+    },
+    PendingMarquee {
+        mouse_down_screen: DVec2,
+    },
 }
 
 impl Default for DefaultToolInteractionState {
@@ -899,6 +915,16 @@ pub fn get_active_atom_edit_data(structure_designer: &StructureDesigner) -> Opti
     let selected_node_id = structure_designer.get_selected_node_id_with_type("atom_edit")?;
     let node_data = structure_designer.get_node_network_data(selected_node_id)?;
     node_data.as_any_ref().downcast_ref::<AtomEditData>()
+}
+
+/// Gets mutable access to AtomEditData WITHOUT marking the node data as changed.
+/// Use for transient state changes (interaction_state) that don't affect evaluation.
+fn get_atom_edit_data_mut_transient(
+    structure_designer: &mut StructureDesigner,
+) -> Option<&mut AtomEditData> {
+    let selected_node_id = structure_designer.get_selected_node_id_with_type("atom_edit")?;
+    let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;
+    node_data.as_any_mut().downcast_mut::<AtomEditData>()
 }
 
 /// Gets the AtomEditData for the currently selected atom_edit node (mutable)
@@ -1869,4 +1895,326 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
     };
 
     atom_edit_data.apply_transform(&relative, &base_atoms_info);
+}
+
+// =============================================================================
+// Default Tool Pointer Event Handlers (State Machine)
+// =============================================================================
+
+use crate::api::structure_designer::structure_designer_api_types::{
+    PointerDownResult, PointerDownResultKind, PointerMoveResult, PointerMoveResultKind,
+    PointerUpResult,
+};
+
+/// Set the interaction state on the active Default tool. Uses transient accessor
+/// (no mark_node_data_changed) since interaction_state is not serialized.
+fn set_interaction_state(
+    structure_designer: &mut StructureDesigner,
+    state: DefaultToolInteractionState,
+) {
+    if let Some(data) = get_atom_edit_data_mut_transient(structure_designer) {
+        if let AtomEditTool::Default(ref mut default_state) = data.active_tool {
+            default_state.interaction_state = state;
+        }
+    }
+}
+
+/// Handle mouse-down for the Default tool. Performs hit test and enters pending state.
+pub fn default_tool_pointer_down(
+    structure_designer: &mut StructureDesigner,
+    screen_pos: DVec2,
+    ray_origin: &DVec3,
+    ray_direction: &DVec3,
+    _select_modifier: SelectModifier,
+) -> PointerDownResult {
+    // Phase 1: Hit test and gather info (immutable borrows)
+    let (hit_result, is_diff_view, was_selected) = {
+        let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
+            Some(s) => s,
+            None => {
+                set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
+                return PointerDownResult {
+                    kind: PointerDownResultKind::StartedOnEmpty,
+                    gadget_handle_index: -1,
+                };
+            }
+        };
+
+        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+            Some(data) => data,
+            None => {
+                set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
+                return PointerDownResult {
+                    kind: PointerDownResultKind::StartedOnEmpty,
+                    gadget_handle_index: -1,
+                };
+            }
+        };
+
+        let is_diff = atom_edit_data.output_diff;
+
+        let visualization = &structure_designer
+            .preferences
+            .atomic_structure_visualization_preferences
+            .visualization;
+        let display_visualization = match visualization {
+            AtomicStructureVisualization::BallAndStick => {
+                display_prefs::AtomicStructureVisualization::BallAndStick
+            }
+            AtomicStructureVisualization::SpaceFilling => {
+                display_prefs::AtomicStructureVisualization::SpaceFilling
+            }
+        };
+
+        let hit = result_structure.hit_test(
+            ray_origin,
+            ray_direction,
+            visualization,
+            |atom| get_displayed_atom_radius(atom, &display_visualization),
+            BAS_STICK_RADIUS,
+        );
+
+        // Check was_selected for atom hits
+        let was_sel = match &hit {
+            HitTestResult::Atom(atom_id, _) => {
+                if is_diff {
+                    atom_edit_data
+                        .selection
+                        .selected_diff_atoms
+                        .contains(atom_id)
+                } else {
+                    // Check via provenance (need separate borrows, but eval_cache
+                    // and atom_edit_data are both immutable borrows from structure_designer)
+                    let eval_cache = structure_designer.get_selected_node_eval_cache();
+                    if let Some(cache) = eval_cache {
+                        if let Some(cache) = cache.downcast_ref::<AtomEditEvalCache>() {
+                            match cache.provenance.sources.get(atom_id) {
+                                Some(AtomSource::BasePassthrough(base_id)) => atom_edit_data
+                                    .selection
+                                    .selected_base_atoms
+                                    .contains(base_id),
+                                Some(AtomSource::DiffMatchedBase { diff_id, .. }) => atom_edit_data
+                                    .selection
+                                    .selected_diff_atoms
+                                    .contains(diff_id),
+                                Some(AtomSource::DiffAdded(diff_id)) => atom_edit_data
+                                    .selection
+                                    .selected_diff_atoms
+                                    .contains(diff_id),
+                                None => false,
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+            }
+            _ => false,
+        };
+
+        (hit, is_diff, was_sel)
+    };
+
+    // Phase 2: Set interaction state (transient — no mark_node_data_changed)
+    match hit_result {
+        HitTestResult::Atom(atom_id, _) => {
+            set_interaction_state(
+                structure_designer,
+                DefaultToolInteractionState::PendingAtom {
+                    hit_atom_id: atom_id,
+                    is_diff_view,
+                    was_selected,
+                    mouse_down_screen: screen_pos,
+                },
+            );
+            PointerDownResult {
+                kind: PointerDownResultKind::StartedOnAtom,
+                gadget_handle_index: -1,
+            }
+        }
+        HitTestResult::Bond(bond_ref, _) => {
+            set_interaction_state(
+                structure_designer,
+                DefaultToolInteractionState::PendingBond {
+                    bond_reference: bond_ref,
+                    mouse_down_screen: screen_pos,
+                },
+            );
+            PointerDownResult {
+                kind: PointerDownResultKind::StartedOnBond,
+                gadget_handle_index: -1,
+            }
+        }
+        HitTestResult::None => {
+            set_interaction_state(
+                structure_designer,
+                DefaultToolInteractionState::PendingMarquee {
+                    mouse_down_screen: screen_pos,
+                },
+            );
+            PointerDownResult {
+                kind: PointerDownResultKind::StartedOnEmpty,
+                gadget_handle_index: -1,
+            }
+        }
+    }
+}
+
+/// Handle mouse-move for the Default tool. Checks drag threshold.
+///
+/// For Phase B, threshold exceeded → transition to Idle (drag not yet implemented).
+/// Bonds ignore threshold (not draggable; always treated as click).
+pub fn default_tool_pointer_move(
+    structure_designer: &mut StructureDesigner,
+    screen_pos: DVec2,
+    _ray_origin: &DVec3,
+    _ray_direction: &DVec3,
+    _viewport_width: f64,
+    _viewport_height: f64,
+) -> PointerMoveResult {
+    let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+        Some(data) => data,
+        None => {
+            return PointerMoveResult {
+                kind: PointerMoveResultKind::StillPending,
+                marquee_rect_x: 0.0,
+                marquee_rect_y: 0.0,
+                marquee_rect_w: 0.0,
+                marquee_rect_h: 0.0,
+            };
+        }
+    };
+
+    let threshold_exceeded = match &atom_edit_data.active_tool {
+        AtomEditTool::Default(state) => match &state.interaction_state {
+            DefaultToolInteractionState::PendingAtom {
+                mouse_down_screen, ..
+            }
+            | DefaultToolInteractionState::PendingMarquee {
+                mouse_down_screen, ..
+            } => screen_pos.distance(*mouse_down_screen) > DRAG_THRESHOLD,
+            // Bonds are not draggable; threshold doesn't change behavior
+            DefaultToolInteractionState::PendingBond { .. } => false,
+            DefaultToolInteractionState::Idle => false,
+        },
+        _ => false,
+    };
+
+    if threshold_exceeded {
+        // Phase B: drag not implemented yet, reset to Idle.
+        // Phase C/D will transition to MarqueeActive / ScreenPlaneDragging here.
+        set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
+    }
+
+    PointerMoveResult {
+        kind: PointerMoveResultKind::StillPending,
+        marquee_rect_x: 0.0,
+        marquee_rect_y: 0.0,
+        marquee_rect_w: 0.0,
+        marquee_rect_h: 0.0,
+    }
+}
+
+/// Handle mouse-up for the Default tool. Commits click-select or clears selection.
+pub fn default_tool_pointer_up(
+    structure_designer: &mut StructureDesigner,
+    _screen_pos: DVec2,
+    _ray_origin: &DVec3,
+    _ray_direction: &DVec3,
+    select_modifier: SelectModifier,
+    _viewport_width: f64,
+    _viewport_height: f64,
+) -> PointerUpResult {
+    // Read the current interaction state (owned copy of the data we need)
+    let pending_info = {
+        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+            Some(data) => data,
+            None => return PointerUpResult::NothingHappened,
+        };
+        match &atom_edit_data.active_tool {
+            AtomEditTool::Default(state) => match &state.interaction_state {
+                DefaultToolInteractionState::PendingAtom {
+                    hit_atom_id,
+                    is_diff_view,
+                    was_selected,
+                    ..
+                } => Some(PendingClickInfo::Atom {
+                    atom_id: *hit_atom_id,
+                    is_diff_view: *is_diff_view,
+                    was_selected: *was_selected,
+                }),
+                DefaultToolInteractionState::PendingBond { bond_reference, .. } => {
+                    Some(PendingClickInfo::Bond {
+                        bond_reference: bond_reference.clone(),
+                    })
+                }
+                DefaultToolInteractionState::PendingMarquee { .. } => Some(PendingClickInfo::Empty),
+                DefaultToolInteractionState::Idle => None,
+            },
+            _ => None,
+        }
+    };
+
+    // Reset to Idle
+    set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
+
+    match pending_info {
+        Some(PendingClickInfo::Atom {
+            atom_id,
+            is_diff_view,
+            was_selected,
+        }) => {
+            // Click on an already-selected atom with Replace modifier: keep selection unchanged
+            if was_selected && matches!(select_modifier, SelectModifier::Replace) {
+                return PointerUpResult::SelectionChanged;
+            }
+            // Click on an already-selected atom with Expand modifier: already selected, no-op
+            if was_selected && matches!(select_modifier, SelectModifier::Expand) {
+                return PointerUpResult::SelectionChanged;
+            }
+            // All other cases: delegate to existing selection functions
+            if is_diff_view {
+                select_diff_atom_directly(structure_designer, atom_id, select_modifier);
+            } else {
+                select_result_atom(structure_designer, atom_id, select_modifier);
+            }
+            PointerUpResult::SelectionChanged
+        }
+        Some(PendingClickInfo::Bond { bond_reference }) => {
+            select_result_bond(structure_designer, &bond_reference, select_modifier);
+            PointerUpResult::SelectionChanged
+        }
+        Some(PendingClickInfo::Empty) => {
+            // Click on empty space: clear selection (Replace) or no-op (Expand/Toggle)
+            if matches!(select_modifier, SelectModifier::Replace) {
+                let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+                    Some(data) => data,
+                    None => return PointerUpResult::NothingHappened,
+                };
+                if atom_edit_data.selection.is_empty() {
+                    return PointerUpResult::NothingHappened;
+                }
+                atom_edit_data.selection.clear();
+                PointerUpResult::SelectionChanged
+            } else {
+                PointerUpResult::NothingHappened
+            }
+        }
+        None => PointerUpResult::NothingHappened,
+    }
+}
+
+/// Owned snapshot of pending state info needed for click-select in pointer_up.
+enum PendingClickInfo {
+    Atom {
+        atom_id: u32,
+        is_diff_view: bool,
+        was_selected: bool,
+    },
+    Bond {
+        bond_reference: BondReference,
+    },
+    Empty,
 }

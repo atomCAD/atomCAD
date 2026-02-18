@@ -96,7 +96,9 @@
       "WebFetch(domain:docs.rs)",
       "WebFetch(domain:two.avogadro.cc)",
       "WebFetch(domain:discuss.avogadro.cc)",
-      "WebFetch(domain:avogadro.cc)"
+      "WebFetch(domain:avogadro.cc)",
+      "Bash(awk:*)",
+      "Bash(tee:*)"
     ]
   }
 }

@@ -21,31 +21,32 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
 
   _AtomEditDefaultDelegate(this._viewport);
 
-  // Phase A: The delegate calls the Rust stub to verify FFI wiring, but
-  // always returns false from onPrimaryDown so the base class runs the
-  // existing click/gadget path unchanged. Phase B will activate consumption
-  // once the Rust state machine handles hit-testing and selection.
-
   @override
   bool onPrimaryDown(Offset pos) {
     final ray = _viewport.getRayFromPointerPos(pos);
     _storedModifier = getSelectModifierFromKeyboard();
 
-    // Call Rust stub — exercises FFI; result ignored for now.
-    atom_edit_api.defaultToolPointerDown(
+    final result = atom_edit_api.defaultToolPointerDown(
       screenPos: offsetToApiVec2(pos),
       rayOrigin: vector3ToApiVec3(ray.start),
       rayDirection: vector3ToApiVec3(ray.direction),
       selectModifier: _storedModifier!,
     );
 
-    // Decline to consume — base class runs startPrimaryDrag / onDefaultClick.
-    return false;
+    if (result.kind == PointerDownResultKind.gadgetHit) {
+      // Hand off to the EXISTING gadget system. Consume the down event
+      // (preventing startPrimaryDrag from double-starting), but return false
+      // on move/up so base class drives the gadget drag.
+      _viewport.delegateStartGadgetDrag(result.gadgetHandleIndex, pos);
+      return true;
+    }
+
+    // PendingAtom, PendingBond, or PendingMarquee — delegate owns the interaction
+    return true;
   }
 
   @override
   bool onPrimaryMove(Offset pos) {
-    // Not reachable during Phase A (onPrimaryDown returns false).
     if (_viewport.isGadgetDragging) return false;
 
     final ray = _viewport.getRayFromPointerPos(pos);
@@ -73,7 +74,6 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
 
   @override
   bool onPrimaryUp(Offset pos) {
-    // Not reachable during Phase A (onPrimaryDown returns false).
     if (_viewport.isGadgetDragging) return false;
 
     final ray = _viewport.getRayFromPointerPos(pos);
@@ -138,6 +138,11 @@ class _StructureDesignerViewportState
     setState(() => _marqueeRect = rect);
   }
 
+  /// Forward to the protected startGadgetDragFromHandle for the delegate.
+  void delegateStartGadgetDrag(int handleIndex, Offset pos) {
+    startGadgetDragFromHandle(handleIndex, pos);
+  }
+
   @override
   PrimaryPointerDelegate? get primaryPointerDelegate {
     if (!widget.graphModel.isNodeTypeActive("atom_edit")) return null;
@@ -197,14 +202,8 @@ class _StructureDesignerViewportState
         ray.start,
         ray.direction,
       );
-    } else if (activeAtomEditTool == APIAtomEditTool.default_) {
-      final selectModifier = getSelectModifierFromKeyboard();
-      widget.graphModel.atomEditSelectByRay(
-        ray.start,
-        ray.direction,
-        selectModifier,
-      );
     }
+    // Default tool is handled by _AtomEditDefaultDelegate (not through onDefaultClick)
   }
 
   void onEditAtomClick(Offset pointerPos) {

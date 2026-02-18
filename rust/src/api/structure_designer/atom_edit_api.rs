@@ -1,8 +1,8 @@
-use crate::api::api_common::from_api_transform;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::refresh_structure_designer_auto;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
+use crate::api::api_common::{from_api_transform, from_api_vec2};
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
@@ -284,12 +284,22 @@ pub fn default_tool_pointer_down(
     ray_direction: APIVec3,
     select_modifier: SelectModifier,
 ) -> PointerDownResult {
-    let _ = (screen_pos, ray_origin, ray_direction, select_modifier);
-    // Stub: return StartedOnEmpty so the delegate consumes the event
-    // but no real state change happens yet.
-    PointerDownResult {
-        kind: PointerDownResultKind::StartedOnEmpty,
-        gadget_handle_index: -1,
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                atom_edit::default_tool_pointer_down(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                    select_modifier,
+                )
+            },
+            PointerDownResult {
+                kind: PointerDownResultKind::StartedOnEmpty,
+                gadget_handle_index: -1,
+            },
+        )
     }
 }
 
@@ -301,19 +311,26 @@ pub fn default_tool_pointer_move(
     viewport_width: f64,
     viewport_height: f64,
 ) -> PointerMoveResult {
-    let _ = (
-        screen_pos,
-        ray_origin,
-        ray_direction,
-        viewport_width,
-        viewport_height,
-    );
-    PointerMoveResult {
-        kind: PointerMoveResultKind::StillPending,
-        marquee_rect_x: 0.0,
-        marquee_rect_y: 0.0,
-        marquee_rect_w: 0.0,
-        marquee_rect_h: 0.0,
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                atom_edit::default_tool_pointer_move(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                    viewport_width,
+                    viewport_height,
+                )
+            },
+            PointerMoveResult {
+                kind: PointerMoveResultKind::StillPending,
+                marquee_rect_x: 0.0,
+                marquee_rect_y: 0.0,
+                marquee_rect_w: 0.0,
+                marquee_rect_h: 0.0,
+            },
+        )
     }
 }
 
@@ -326,13 +343,25 @@ pub fn default_tool_pointer_up(
     viewport_width: f64,
     viewport_height: f64,
 ) -> PointerUpResult {
-    let _ = (
-        screen_pos,
-        ray_origin,
-        ray_direction,
-        select_modifier,
-        viewport_width,
-        viewport_height,
-    );
-    PointerUpResult::NothingHappened
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = atom_edit::default_tool_pointer_up(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                    select_modifier,
+                    viewport_width,
+                    viewport_height,
+                );
+                // Refresh after selection change (re-evaluates decorations)
+                if !matches!(result, PointerUpResult::NothingHappened) {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                result
+            },
+            PointerUpResult::NothingHappened,
+        )
+    }
 }
