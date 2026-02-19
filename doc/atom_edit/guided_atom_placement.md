@@ -55,8 +55,16 @@ User selects Add Atom tool, picks an element (e.g., Carbon)
             +- User presses Escape -> cancel, return to Idle
 ```
 
-**Anchor selection:** ray-cast hit test -> determine hybridization via UFF atom type
-assignment -> count existing neighbors -> compute candidate positions.
+**Anchor selection:** ray-cast hit test -> determine hybridization (auto-detect via
+UFF, or use manual override from UI dropdown) -> count existing neighbors -> compute
+candidate positions.
+
+**Hybridization override:** The atom edit panel includes a **Hybridization** dropdown
+with options: **Auto** (default), **sp3**, **sp2**, **sp1**. When set to Auto, the
+system infers hybridization from the anchor atom's current bonding state via UFF type
+assignment. When the user explicitly selects sp3/sp2/sp1, that override is used
+instead, resolving any ambiguity (e.g., a carbon with 1 bond could be sp3, sp2, or
+sp1 — the user decides). The dropdown resets to Auto when switching tools.
 
 **Placement:** add new atom at guide position, create single bond, clear guides,
 return to Idle.
@@ -82,8 +90,10 @@ trans = 0.20 A (preferred staggered), cis = 0.15 A (eclipsed).
 
 ### 5.3 Bond preview cylinders
 
-Reuse existing **anchor arrow** rendering (orange cylinders, `ANCHOR_ARROW_COLOR`)
-from diff view. No new rendering code needed.
+Orange cylinders (`ANCHOR_ARROW_COLOR`, `ANCHOR_ARROW_RADIUS`) from anchor atom to
+each guide dot, tessellated directly via `tessellate_cylinder()` calls during the
+decoration phase. Same visual style as diff-view anchor arrows but without the
+red anchor sphere (which would be semantically wrong here).
 
 ### 5.4 Anchor highlight
 
@@ -91,8 +101,10 @@ Use existing `AtomDisplayState::Marked` (yellow `MARKER_COLOR`), same as Add Bon
 
 ### 5.5 Saturation feedback
 
-Brief red flash (~300ms) on the atom + status bar text "Atom is fully bonded".
-No guide dots shown; tool stays in Idle.
+Show a SnackBar notification: "Atom is fully bonded" using the existing
+`ScaffoldMessenger.of(context).showSnackBar()` pattern (used throughout the app, e.g.,
+`factor_into_subnetwork_dialog.dart`, `import_cnnd_library_dialog.dart`). Duration
+~2 seconds. No guide dots shown; tool stays in Idle.
 
 ### 5.6 Free placement sphere (case 0 — no existing bonds)
 
@@ -132,7 +144,16 @@ Using `ATOM_INFO` from `atomic_constants.rs`. Special case: C-H uses 1.09 A
 
 ### 6.2 Hybridization detection
 
-Use `assign_uff_type()` from `simulation/uff/typer.rs`:
+**Two modes:** automatic (default) and manual override.
+
+**Manual override:** The user selects sp3, sp2, or sp1 from the Hybridization dropdown
+in the atom edit panel. When set, this value is used directly — no inference needed.
+This resolves the fundamental ambiguity: when an atom has few bonds, its intended
+hybridization cannot be reliably inferred from the current bonding state alone (e.g., a
+carbon with 1 single bond could be building toward sp3, sp2, or sp1).
+
+**Auto mode** (dropdown set to "Auto"): use `assign_uff_type()` from
+`simulation/uff/typer.rs`:
 
 | UFF suffix | Hybridization | Max neighbors | Geometry        |
 |------------|---------------|---------------|-----------------|
@@ -143,6 +164,10 @@ Use `assign_uff_type()` from `simulation/uff/typer.rs`:
 
 **Fallback for bare atoms:** C,Si,Ge -> sp3; N,P -> sp3 (max 3); O,S -> sp3 (max 2);
 B,Al -> sp2; Halogens -> max 1.
+
+Auto mode works well when there are enough existing bonds to disambiguate (sp3 with
+2+ bonds, any saturated atom). For atoms with 0-1 bonds, the user should use the
+manual override if the default (sp3) is not the intended hybridization.
 
 ### 6.3 Saturation check
 
@@ -168,9 +193,9 @@ of existing directions.
 
 **Case 2 (2 remaining):** Given `b1, b2`:
 1. `mid = normalize(b1 + b2)`, `n = normalize(b1 x b2)`
-2. Two unknowns lie symmetrically about `-mid` in the plane of `-mid` and `n`
-3. Reconstruct: fit ideal tetrahedron to b1,b2 via Rodrigues' rotation, extract
-   other two vertices
+2. Two new directions lie symmetrically about `-mid`:
+   `d = -mid * cos(a) +/- n * sin(a)` where `a` is chosen so that
+   `dot(b1, d) = cos(109.47 deg)`
 
 **Case 1 (3 remaining):** 3 directions on a cone of half-angle 109.47 deg around
 `-b1`, spaced 120 deg apart. Requires **dihedral reference** for orientation:
@@ -281,17 +306,23 @@ Impostors and triangle meshes are mutually exclusive per atom (auto-selected by
 `AtomicRenderingMethod`). All mesh types share the depth buffer. The gadget render
 pass is separate (always-on-top) and unsuitable for guide dots.
 
-### 8.3 Chosen approach: Decoration phase rendering
+### 8.3 Chosen approach: Direct tessellation in decoration phase
 
 Guide dots render during the atom_edit node's **decoration phase** (`eval()` with
 `decorate: bool`), the same mechanism used for selection highlights, anchor arrows,
 and delete markers. This fits because guide dots only appear when the atom_edit node
 is selected, and the phase has access to the full evaluated structure.
 
-- **Guide dots:** phantom atoms with `AtomDisplayState::GuideDot`/`GuideDotSecondary`,
-  rendered by existing atom renderer with overridden color/size
-- **Anchor-to-dot cylinders:** reuse anchor arrow tessellation by setting
-  `set_anchor_position(guide_dot_atom_id, anchor_atom_position)`
+Guide dot geometry is tessellated directly into the scene's triangle `Mesh` — no
+phantom atoms are added to the `AtomicStructure`, and no changes to
+`AtomDisplayState` are needed. This keeps tool-specific visualization out of the
+`crystolecule` module.
+
+- **Guide dot spheres:** `tessellate_sphere()` calls with magenta material and
+  appropriate radius (0.2 A primary, 0.15 A secondary)
+- **Anchor-to-dot cylinders:** `tessellate_cylinder()` calls with `ANCHOR_ARROW_COLOR`
+  material from anchor atom position to each guide dot position
+- **Anchor highlight:** mark anchor atom with `AtomDisplayState::Marked` (yellow)
 - **Wireframe sphere/ring:** `LineMesh` geometry via line rendering pipeline,
   depth-tested with the rest of the scene
 
@@ -313,6 +344,7 @@ pub fn compute_guided_placement(
     structure: &AtomicStructure,
     anchor_atom_id: u32,
     new_element_atomic_number: i16,
+    hybridization_override: Option<Hybridization>,  // None = auto-detect
 ) -> Option<GuidedPlacementInfo>
 
 pub struct GuidedPlacementInfo {
@@ -326,12 +358,16 @@ pub struct GuidedPlacementInfo {
 pub enum Hybridization { Sp3, Sp2, Sp1 }
 ```
 
+When `hybridization_override` is `Some(h)`, `h` is used directly. When `None`,
+hybridization is auto-detected via UFF type assignment (see Section 6.2).
+
 ### 9.2 API entry points (exposed to Flutter)
 
 ```rust
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_start_guided_placement(
     ray_start: APIVec3, ray_dir: APIVec3, atomic_number: i16,
+    hybridization_override: Option<APIHybridization>,  // added in Phase D; None = auto
 ) -> GuidedPlacementApiResult
 
 #[flutter_rust_bridge::frb(sync)]
@@ -343,11 +379,20 @@ pub fn atom_edit_place_guided_atom(
 pub fn atom_edit_cancel_guided_placement()
 ```
 
+`APIHybridization` is an FRB-friendly enum: `{ auto_, sp3, sp2, sp1 }`. The Flutter
+dropdown maps directly to this. Both are introduced in Phase D.
+
 ### 9.3 Flutter-side changes
 
 In `structure_designer_viewport.dart`, upgrade the Add Atom pointer handler from
 direct `atom_edit_add_atom_by_ray` to a state-aware dispatcher that attempts guided
 placement first, falling back to free placement if no atom is hit.
+
+**Hybridization dropdown (Phase D):** Add a dropdown selector to the atom edit panel
+(alongside the element selector) with options: Auto (default), sp3, sp2, sp1. The
+selected value is passed to `atom_edit_start_guided_placement()` as
+`hybridization_override`. The dropdown resets to Auto when switching away from the
+Add Atom tool.
 
 ## 10. File Locations
 
@@ -360,7 +405,7 @@ placement first, falling back to free placement if no atom is hit.
 | Data accessors / tool mgmt    | `rust/src/structure_designer/nodes/atom_edit/atom_edit_data.rs`   |
 | API entry points              | `rust/src/api/structure_designer/atom_edit_api.rs`                |
 | Viewport interaction (Flutter)| `lib/structure_designer/structure_designer_viewport.dart`          |
-| Guide dot rendering           | `rust/src/display/atomic_tessellator.rs`                          |
+| Guide dot tessellation        | `rust/src/display/atomic_tessellator.rs` (new function, no atom pipeline changes) |
 | Wireframe rendering           | `rust/src/display/guided_placement_tessellator.rs` (new)          |
 | Hybridization detection       | `rust/src/crystolecule/simulation/uff/typer.rs` (reuse)           |
 | Bond distances                | `rust/src/crystolecule/atomic_constants.rs` (reuse)               |
@@ -374,6 +419,16 @@ placement first, falling back to free placement if no atom is hit.
 4. **Lattice snapping:** Snap guide dots to crystal lattice positions?
 5. **Multi-atom placement:** Extend to molecular fragments (-CH3, -OH)?
 6. **Undo integration:** Placement should be a single undo step (atom + bond).
+
+## 12. Resolved Decisions
+
+1. **Hybridization ambiguity:** Rather than inferring hybridization solely from the
+   current bonding state (which is ambiguous for atoms with 0-1 bonds) or using
+   placeholder "radical" atoms, the system provides a **Hybridization dropdown** in
+   the atom edit panel (Auto / sp3 / sp2 / sp1). Auto-detection via UFF handles the
+   common case; the manual override resolves ambiguity when needed. This avoids
+   complicating the data model with phantom atoms while giving expert users explicit
+   control.
 
 ---
 
@@ -408,9 +463,16 @@ Pure-geometry library, no dependencies on node system/rendering/API. Independent
 ```rust
 pub enum Hybridization { Sp3, Sp2, Sp1 }
 
-pub fn detect_hybridization(structure: &AtomicStructure, atom_id: u32) -> Hybridization
+pub fn detect_hybridization(
+    structure: &AtomicStructure,
+    atom_id: u32,
+    hybridization_override: Option<Hybridization>,
+) -> Hybridization
 ```
 
+If `hybridization_override` is `Some(h)`, return `h` directly (user explicitly chose).
+
+Otherwise (auto-detect):
 1. Get atom's `atomic_number` and `bonds` (as `InlineBond` slice)
 2. Call `assign_uff_type(atomic_number, bonds)` from `simulation/uff/typer.rs`
 3. `hybridization_from_label(label)` returns `'3'`/`'2'`/`'1'`/`'R'`
@@ -446,8 +508,11 @@ pub fn compute_sp3_candidates(
 ```
 
 **Case 4:** Empty vec. **Case 3:** `d4 = normalize(-(b1+b2+b3))`, 1 Primary dot.
-**Case 2:** Fit ideal tetrahedron to b1,b2 via Rodrigues' rotation, extract other
-two vertices. 2 Primary dots. **Case 1/0:** Empty vec (stubs for Phase B/C).
+**Case 2:** Given `b1, b2`: `mid = normalize(b1 + b2)`, `n = normalize(b1 x b2)`.
+The two new directions lie symmetrically about `-mid`:
+`d = -mid * cos(a) +/- n * sin(a)` where `a` is chosen so that `dot(b1, d)` equals
+`cos(109.47 deg)`. Yields 2 Primary dots. **Case 1/0:** Empty vec (stubs for
+Phase B/C).
 
 #### A.1.5 Top-level entry point
 
@@ -471,11 +536,13 @@ pub fn compute_guided_placement(
     structure: &AtomicStructure,
     anchor_atom_id: u32,
     new_element_atomic_number: i16,
+    hybridization_override: Option<Hybridization>,  // None = auto-detect
 ) -> GuidedPlacementResult
 ```
 
-Orchestrates: detect hybridization -> check saturation -> compute bond distance ->
-dispatch to `compute_sp3_candidates` (sp2/sp1 in future phases).
+Orchestrates: detect hybridization (using override or auto-detect) -> check saturation
+-> compute bond distance -> dispatch to `compute_sp3_candidates` (sp2/sp1 in future
+phases).
 
 #### A.1.6 Tests
 
@@ -485,7 +552,7 @@ dispatch to `compute_sp3_candidates` (sp2/sp1 in future phases).
 - **sp3 case 2:** CH2 -> 2 guides, all 4 mutual angles ~109.47 deg
 - **sp3 saturated:** CH4 -> 0 dots, `remaining_slots == 0`
 - **Bond distance:** C-C ~1.52 A, C-H 1.09 A, C-N ~1.47 A
-- **Hybridization:** C+4 single -> Sp3, C+double -> Sp2, N+3 single -> Sp3
+- **Hybridization auto:** C+4 single -> Sp3, C+double -> Sp2, N+3 single -> Sp3
 - **Saturation limits:** N(sp3) at 3, O(sp3) at 2, F at 1
 
 ### A.2 Tool State Machine
@@ -531,7 +598,7 @@ like `set_add_atom_tool_atomic_number`, `set_active_tool`), and `atom_edit_api.r
 1. Hit test result structure -> if miss: return `NoAtomHit`
 2. Resolve hit atom to diff atom ID (same pattern as `draw_bond_by_ray`)
 3. If not in diff, promote it (same pattern as drag)
-4. Call `compute_guided_placement()`
+4. Call `compute_guided_placement()` (auto-detect hybridization; override added in Phase D)
 5. If `remaining_slots == 0` -> return `AtomSaturated`
 6. Store GuidedPlacement state, mark data changed
 7. Return `GuidedPlacementStarted`
@@ -548,9 +615,14 @@ Extract atomic_number, transition to Idle, mark data changed.
 
 In `eval()` within `if decorate { ... }`, for `AddAtom(GuidedPlacement { .. })`:
 1. Mark anchor atom with `AtomDisplayState::Marked`
-2. For each guide dot: add phantom atom with `GuideDot`/`GuideDotSecondary` display state
-3. For each guide dot: set anchor position to anchor atom's position (triggers anchor
-   arrow cylinder rendering automatically)
+2. Store guide dot positions and anchor position in the `AtomicStructureDecorator`
+   (new field: `guide_placement_visuals: Option<GuidePlacementVisuals>`)
+
+The tessellator reads `guide_placement_visuals` from the decorator and renders:
+- `tessellate_sphere()` for each guide dot (magenta, 0.2/0.15 A radius)
+- `tessellate_cylinder()` for each anchor-to-dot line (orange, `ANCHOR_ARROW_RADIUS`)
+
+No phantom atoms are added to the structure. No changes to `AtomDisplayState`.
 
 #### A.2.4 Guide dot hit testing — `add_atom_tool.rs`
 
@@ -564,33 +636,41 @@ pub fn hit_test_guide_dots(
 Uses `sphere_hit_test` from `hit_test_utils`, returns index of closest hit (or None).
 Called from API layer before atom/empty-space hit testing.
 
-### A.3 Rendering — Display States and Tessellation
+### A.3 Rendering — Direct Tessellation
 
-#### A.3.1 New `AtomDisplayState` variants
+No changes to `AtomDisplayState` or the per-atom rendering pipeline. Guide dot
+visuals are tessellated directly from decorator data.
+
+#### A.3.1 Decorator extension
+
+Add to `AtomicStructureDecorator`:
 
 ```rust
-pub enum AtomDisplayState {
-    Normal, Marked, SecondaryMarked,
-    GuideDot,           // primary (magenta, 0.2 A radius)
-    GuideDotSecondary,  // secondary (magenta, 0.15 A radius)
+pub struct GuidePlacementVisuals {
+    pub anchor_pos: DVec3,
+    pub guide_dots: Vec<GuideDot>,  // from guided_placement.rs
 }
 ```
 
-#### A.3.2 Tessellator changes
+#### A.3.2 Tessellator additions — `atomic_tessellator.rs`
 
-In `tessellate_atom()` and the impostor path:
+New function called after atom/bond tessellation:
 
-- **Color override:** `GuideDot`/`GuideDotSecondary` -> `Vec3::new(1.0, 0.2, 1.0)`
-- **Size override:** `GuideDot` -> 0.2, `GuideDotSecondary` -> 0.15
-- **No crosshair:** these variants skip the 3D crosshair rendering
-- **Impostor path:** override `albedo` and `radius` in `add_atom_quad()` too
+```rust
+pub fn tessellate_guide_placement(
+    output_mesh: &mut Mesh,
+    visuals: &GuidePlacementVisuals,
+)
+```
 
-#### A.3.3 Anchor-to-dot cylinders
+For each guide dot:
+- `tessellate_sphere()` at dot position with magenta material
+  `Vec3::new(1.0, 0.2, 1.0)`, radius 0.2 A (Primary) or 0.15 A (Secondary)
+- `tessellate_cylinder()` from `anchor_pos` to dot position with
+  `ANCHOR_ARROW_COLOR` material, `ANCHOR_ARROW_RADIUS`
 
-Set `result.set_anchor_position(guide_dot_atom_id, anchor_atom_position)` for each
-phantom atom. The existing anchor arrow rendering draws orange cylinders automatically.
-Enable `show_anchor_arrows` during guided placement, or conditionally render for
-guide-dot atoms regardless of the toggle.
+This reuses existing tessellation helpers with no changes to the atom/impostor
+rendering paths.
 
 ### A.4 API Layer — `atom_edit_api.rs`
 
@@ -611,7 +691,10 @@ operation -> `refresh_structure_designer_auto`):
 
 ```rust
 #[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_start_guided_placement(ray_start: APIVec3, ray_dir: APIVec3, atomic_number: i16) -> GuidedPlacementApiResult
+pub fn atom_edit_start_guided_placement(
+    ray_start: APIVec3, ray_dir: APIVec3, atomic_number: i16,
+) -> GuidedPlacementApiResult
+// hybridization_override parameter added in Phase D
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_place_guided_atom(ray_start: APIVec3, ray_dir: APIVec3) -> bool
@@ -665,48 +748,60 @@ if (activeAtomEditTool == APIAtomEditTool.addAtom) {
 }
 ```
 
-#### A.5.2 New model methods
+#### A.5.2 Hybridization dropdown
+
+Deferred to Phase D. In Phase A, auto-detection via UFF is always used (sp3 for most
+common cases). The dropdown and `hybridization_override` API parameter are added in
+Phase D when sp2/sp1 geometry makes the override meaningful.
+
+#### A.5.3 New model methods
 
 Three methods following existing pattern (API call -> `refreshFromKernel()`):
 `atomEditStartGuidedPlacement()`, `atomEditPlaceGuidedAtom()`,
 `atomEditCancelGuidedPlacement()`.
 
-#### A.5.3 Escape key handling
+#### A.5.4 Escape key handling
 
 Add handler in `_StructureDesignerViewportState`: if Escape pressed and
 `isInGuidedPlacement()`, call `cancelGuidedPlacement()`.
 
-#### A.5.4 Tool switch cancellation
+#### A.5.5 Tool switch cancellation
 
 In `AtomEditData::set_active_tool()` (in `atom_edit_data.rs`), if current tool is
 `AddAtom(GuidedPlacement)` and switching away, transition to `Idle` first.
 
 ### A.6 Saturation Feedback
 
-When `AtomSaturated` is returned:
-1. **Rust:** Set `saturated_flash_atom_id: Option<u32>` on `AtomEditData` (in
-   `atom_edit_data.rs`). In decoration phase of `eval()`, render with
-   `AtomDisplayState::SaturationFlash` (red, `DELETE_MARKER_COLOR`).
-2. **Flutter:** Start 300ms timer, then call `atom_edit_clear_saturation_flash()`.
-3. Clear on next click, tool switch, or explicit clear call.
+When `AtomSaturated` is returned, Flutter shows a SnackBar notification:
 
-**Simpler alternative for v1:** Skip the flash, just show status bar message.
+```dart
+ScaffoldMessenger.of(context).showSnackBar(
+  const SnackBar(
+    content: Text('Atom is fully bonded'),
+    duration: Duration(seconds: 2),
+  ),
+);
+```
+
+This follows the existing notification pattern used throughout the app (e.g.,
+`factor_into_subnetwork_dialog.dart`, `import_cnnd_library_dialog.dart`). No Rust-side
+rendering changes needed — purely a Flutter-side notification.
 
 ### A.7 Implementation Order
 
 1. Geometry module (A.1) — pure computation, independently testable
 2. Tests for geometry (A.1.6) — validate math before integration
-3. Display state enum (A.3.1) — small, no-risk change in `atomic_structure_decorator.rs`
-4. Tessellator changes (A.3.2) — both triangle mesh and impostor paths
+3. Decorator extension (A.3.1) — add `GuidePlacementVisuals` to decorator
+4. Tessellation function (A.3.2) — `tessellate_guide_placement()` in `atomic_tessellator.rs`
 5. Tool state enum (A.2.1) — change `AddAtomToolState` in `types.rs`, fix match arms
    across `types.rs`, `atom_edit_data.rs`, and `atom_edit_api.rs`
 6. Decoration phase (A.2.3) — connect geometry to rendering in `atom_edit_data.rs` `eval()`
 7. Tool functions (A.2.2) — start/place/cancel logic in `add_atom_tool.rs`
 8. API layer (A.4) — expose to Flutter via `atom_edit_api.rs`
 9. FRB codegen
-10. Flutter model methods (A.5.2)
+10. Flutter model methods (A.5.3)
 11. Flutter click dispatch (A.5.1)
-12. Flutter escape handling (A.5.3)
+12. Flutter escape handling (A.5.4)
 13. Saturation feedback (A.6)
 14. Integration testing
 
@@ -850,6 +945,21 @@ pub enum GuidedPlacementMode {
 
 **Prerequisite:** Phase A. Phases B/C can run in parallel with D.
 
+**Note:** This phase adds the **Hybridization dropdown** to the atom edit panel
+(Auto / sp3 / sp2 / sp1). With only sp3 (Phase A), auto-detection is almost always
+correct. Once sp2/sp1 geometry is available, the user needs the override to tell the
+system "this carbon should be sp2" when the current bonding state is ambiguous.
+
+### D.0 Hybridization Dropdown and API Changes
+
+Add `hybridization_override: Option<APIHybridization>` parameter to
+`atom_edit_start_guided_placement()`. Add `hybridizationOverride` property to
+`AtomEditData` (Flutter model), backed by a dropdown in the atom edit panel. Values:
+`null` (Auto), `sp3`, `sp2`, `sp1`. Resets to `null` when switching away from Add
+Atom tool. Update Flutter click dispatch to pass the override through to the Rust API.
+
+`APIHybridization` is an FRB-friendly enum: `{ auto_, sp3, sp2, sp1 }`.
+
 ### D.1 sp2 Candidates
 
 ```rust
@@ -883,9 +993,11 @@ pub fn compute_sp1_candidates(
 
 ### D.3 Hybridization-Aware Dispatch
 
-Update `compute_guided_placement()` to match on hybridization and dispatch to
-`compute_sp3/sp2/sp1_candidates`. Verify `effective_max_neighbors` covers all
-element+hybridization combos (C sp2=3, C sp1=2, N sp2=3, O sp2=2, B sp2=3).
+Update `compute_guided_placement()` to match on hybridization (from override or
+auto-detect) and dispatch to `compute_sp3/sp2/sp1_candidates`. When the user sets the
+dropdown to sp2 or sp1, the override flows through and selects the correct geometry
+even when auto-detection would default to sp3. Verify `effective_max_neighbors` covers
+all element+hybridization combos (C sp2=3, C sp1=2, N sp2=3, O sp2=2, B sp2=3).
 
 ### D.4 Tests
 
@@ -893,5 +1005,6 @@ element+hybridization combos (C sp2=3, C sp1=2, N sp2=3, O sp2=2, B sp2=3).
 - **sp2 case 1:** C=O only -> 2 guides at +/-120 deg in correct plane
 - **sp1 case 1:** C triple bond -> guide at 180 deg (opposite)
 - **Hybridization dispatch:** C+double -> sp2, C+triple -> sp1, aromatic C -> sp2
+- **Hybridization override:** C+1 single with override=Sp2 -> uses Sp2 geometry
 - **Saturation:** C sp2 at 3, C sp1 at 2, N sp2 at 3
 - **sp2 ring fallback:** ring uses 120 deg, not 109.47 deg
