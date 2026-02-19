@@ -523,9 +523,55 @@ impl AtomEditData {
 impl NodeData for AtomEditData {
     fn provide_gadget(
         &self,
-        _structure_designer: &StructureDesigner,
+        structure_designer: &StructureDesigner,
     ) -> Option<Box<dyn NodeNetworkGadget>> {
-        None
+        use super::atom_edit_gadget::AtomEditSelectionGadget;
+
+        if !self.selection.has_selected_atoms() {
+            return None;
+        }
+
+        // Use existing selection_transform centroid as gadget position.
+        let center = self.selection.selection_transform.as_ref()?.translation;
+
+        // Gather diff atom positions directly from the diff.
+        let mut diff_atom_positions: Vec<(u32, DVec3)> = Vec::new();
+        for &diff_id in &self.selection.selected_diff_atoms {
+            if let Some(atom) = self.diff.get_atom(diff_id) {
+                diff_atom_positions.push((diff_id, atom.position));
+            }
+        }
+
+        // Gather base atom info (needs eval cache for provenance → result positions).
+        let mut base_atoms_info: Vec<(u32, i16, DVec3)> = Vec::new();
+        if !self.selection.selected_base_atoms.is_empty() && !self.output_diff {
+            if let Some(eval_cache) = structure_designer.get_selected_node_eval_cache() {
+                if let Some(cache) = eval_cache.downcast_ref::<AtomEditEvalCache>() {
+                    if let Some(result) =
+                        structure_designer.get_atomic_structure_from_selected_node()
+                    {
+                        for &base_id in &self.selection.selected_base_atoms {
+                            if let Some(&result_id) = cache.provenance.base_to_result.get(&base_id)
+                            {
+                                if let Some(atom) = result.get_atom(result_id) {
+                                    base_atoms_info.push((
+                                        base_id,
+                                        atom.atomic_number,
+                                        atom.position,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Some(Box::new(AtomEditSelectionGadget::new(
+            center,
+            diff_atom_positions,
+            base_atoms_info,
+        )))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -2208,6 +2254,8 @@ fn set_interaction_state(
 }
 
 /// Handle mouse-down for the Default tool. Performs hit test and enters pending state.
+///
+/// Hit test priority: gadget → atom → bond → empty (per design Section 6).
 pub fn default_tool_pointer_down(
     structure_designer: &mut StructureDesigner,
     screen_pos: DVec2,
@@ -2215,6 +2263,17 @@ pub fn default_tool_pointer_down(
     ray_direction: &DVec3,
     select_modifier: SelectModifier,
 ) -> PointerDownResult {
+    // Test gadget FIRST — gadget handles have priority over atoms/bonds.
+    if let Some(handle_index) =
+        structure_designer.gadget_hit_test(*ray_origin, *ray_direction)
+    {
+        set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
+        return PointerDownResult {
+            kind: PointerDownResultKind::GadgetHit,
+            gadget_handle_index: handle_index,
+        };
+    }
+
     // Phase 1: Hit test and gather info (immutable borrows)
     let (hit_result, is_diff_view, was_selected) = {
         let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
@@ -2393,8 +2452,12 @@ pub fn default_tool_pointer_move(
             start_world_pos: DVec3,
             last_world_pos: DVec3,
         },
-        ThresholdExceededOnMarquee { start_screen: DVec2 },
-        UpdateMarquee { start_screen: DVec2 },
+        ThresholdExceededOnMarquee {
+            start_screen: DVec2,
+        },
+        UpdateMarquee {
+            start_screen: DVec2,
+        },
     }
 
     let action = match &atom_edit_data.active_tool {
@@ -2445,8 +2508,9 @@ pub fn default_tool_pointer_move(
                 last_world_pos: *last_world_pos,
             },
             // Bonds are not draggable; threshold doesn't change behavior
-            DefaultToolInteractionState::PendingBond { .. }
-            | DefaultToolInteractionState::Idle => MoveAction::None,
+            DefaultToolInteractionState::PendingBond { .. } | DefaultToolInteractionState::Idle => {
+                MoveAction::None
+            }
         },
         _ => MoveAction::None,
     };
@@ -2462,17 +2526,9 @@ pub fn default_tool_pointer_move(
             // If the atom was not selected, apply tentative selection first
             if !was_selected {
                 if is_diff_view {
-                    select_diff_atom_directly(
-                        structure_designer,
-                        hit_atom_id,
-                        select_modifier,
-                    );
+                    select_diff_atom_directly(structure_designer, hit_atom_id, select_modifier);
                 } else {
-                    select_result_atom(
-                        structure_designer,
-                        hit_atom_id,
-                        select_modifier,
-                    );
+                    select_result_atom(structure_designer, hit_atom_id, select_modifier);
                 }
             }
 
