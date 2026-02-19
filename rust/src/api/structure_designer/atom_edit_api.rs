@@ -303,6 +303,16 @@ pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
 // --- Default tool pointer event API ---
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn default_tool_pointer_cancel() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            atom_edit::default_tool_reset_interaction(&mut cad_instance.structure_designer);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn default_tool_pointer_down(
     screen_pos: APIVec2,
     ray_origin: APIVec3,
@@ -350,8 +360,10 @@ pub fn default_tool_pointer_move(
                     viewport_height,
                     &camera_forward,
                 );
-                // During drag, re-evaluate so atom positions update visually
+                // During drag, re-evaluate the atom_edit node so atom positions
+                // update visually, but skip downstream dependents for performance.
                 if matches!(result.kind, PointerMoveResultKind::Dragging) {
+                    cad_instance.structure_designer.mark_skip_downstream();
                     refresh_structure_designer_auto(cad_instance);
                 }
                 result

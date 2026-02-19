@@ -83,6 +83,10 @@ abstract class PrimaryPointerDelegate {
   /// Called on primary button up while consumed. Return true to consume.
   /// Return false to let base handle it.
   bool onPrimaryUp(Offset pos);
+
+  /// Called when the pointer interaction is cancelled (e.g., system steal,
+  /// window focus loss). Resets any in-progress interaction.
+  void onPrimaryCancel();
 }
 
 abstract class CadViewport extends StatefulWidget {
@@ -286,6 +290,22 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
         _delegateConsumedDown = false;
       }
       endDrag(event.localPosition);
+    }
+  }
+
+  void onPointerCancel(PointerCancelEvent event) {
+    if (_delegateConsumedDown) {
+      final delegate = primaryPointerDelegate;
+      delegate?.onPrimaryCancel();
+      _delegateConsumedDown = false;
+    }
+    // Reset any base-class drag state
+    if (dragState != ViewportDragState.noDrag) {
+      dragState = ViewportDragState.noDrag;
+      if (isGadgetDragging) {
+        gadgetEndDrag();
+        isGadgetDragging = false;
+      }
     }
   }
 
@@ -691,6 +711,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
                   },
                   onPointerUp: (PointerUpEvent event) {
                     onPointerUp(event);
+                  },
+                  onPointerCancel: (PointerCancelEvent event) {
+                    onPointerCancel(event);
                   },
                   child: Texture(
                     textureId: textureId!,

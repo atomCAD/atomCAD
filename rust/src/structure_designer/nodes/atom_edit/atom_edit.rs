@@ -326,6 +326,10 @@ impl AtomEditData {
     }
 
     pub fn set_active_tool(&mut self, api_tool: APIAtomEditTool) {
+        // Reset interaction state if switching away from Default tool mid-interaction
+        if let AtomEditTool::Default(ref mut state) = self.active_tool {
+            state.interaction_state = DefaultToolInteractionState::Idle;
+        }
         self.active_tool = match api_tool {
             APIAtomEditTool::Default => AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
@@ -2265,6 +2269,37 @@ fn set_interaction_state(
     }
 }
 
+/// Reset the Default tool interaction state to Idle. Called on pointer cancel or when
+/// switching away from the Default tool mid-interaction.
+/// If a drag was in progress, the atoms remain at their current positions (already moved
+/// incrementally) and the node is marked as data-changed so the next refresh commits them.
+pub fn default_tool_reset_interaction(structure_designer: &mut StructureDesigner) {
+    let was_dragging = {
+        let data = match get_active_atom_edit_data(structure_designer) {
+            Some(d) => d,
+            None => return,
+        };
+        match &data.active_tool {
+            AtomEditTool::Default(state) => {
+                matches!(
+                    state.interaction_state,
+                    DefaultToolInteractionState::ScreenPlaneDragging { .. }
+                )
+            }
+            _ => false,
+        }
+    };
+
+    set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
+
+    // If we were mid-drag, mark node data changed so the next refresh commits the positions
+    if was_dragging {
+        if let Some(node_id) = structure_designer.get_selected_node_id_with_type("atom_edit") {
+            structure_designer.mark_node_data_changed(node_id);
+        }
+    }
+}
+
 /// Handle mouse-down for the Default tool. Performs hit test and enters pending state.
 ///
 /// Hit test priority: gadget → atom → bond → empty (per design Section 6).
@@ -2276,9 +2311,7 @@ pub fn default_tool_pointer_down(
     select_modifier: SelectModifier,
 ) -> PointerDownResult {
     // Test gadget FIRST — gadget handles have priority over atoms/bonds.
-    if let Some(handle_index) =
-        structure_designer.gadget_hit_test(*ray_origin, *ray_direction)
-    {
+    if let Some(handle_index) = structure_designer.gadget_hit_test(*ray_origin, *ray_direction) {
         set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
         return PointerDownResult {
             kind: PointerDownResultKind::GadgetHit,

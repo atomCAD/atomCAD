@@ -208,6 +208,12 @@ impl StructureDesigner {
         self.pending_changes.set_mode(RefreshMode::Lightweight);
     }
 
+    /// Marks that the next Partial refresh should skip downstream dependents.
+    /// Used during interactive drag to avoid expensive downstream re-evaluation.
+    pub fn mark_skip_downstream(&mut self) {
+        self.pending_changes.skip_downstream = true;
+    }
+
     /// Marks that selection changed
     pub fn mark_selection_changed(
         &mut self,
@@ -331,10 +337,19 @@ impl StructureDesigner {
 
         // Step 2: Compute transitive dependencies of data changes and invalidate cache
         let affected_by_data_changes = if !changes.data_changed.is_empty() {
-            let affected = compute_downstream_dependents(network, &changes.data_changed);
-            self.last_generated_structure_designer_scene
-                .invalidate_cached_nodes(&affected);
-            affected
+            if changes.skip_downstream {
+                // During interactive drag: only re-evaluate the directly changed nodes,
+                // skip computing downstream dependents for better performance.
+                let directly_changed = changes.data_changed.clone();
+                self.last_generated_structure_designer_scene
+                    .invalidate_cached_nodes(&directly_changed);
+                directly_changed
+            } else {
+                let affected = compute_downstream_dependents(network, &changes.data_changed);
+                self.last_generated_structure_designer_scene
+                    .invalidate_cached_nodes(&affected);
+                affected
+            }
         } else {
             HashSet::new()
         };

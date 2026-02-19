@@ -27,6 +27,10 @@ pub struct StructureDesignerChanges {
     pub previous_selection: Option<u64>,
     pub current_selection: Option<u64>,
     pub selection_changed: bool,
+    /// When true, Partial refresh re-evaluates only the directly changed nodes
+    /// without propagating to downstream dependents. Used during interactive drag
+    /// to avoid expensive downstream re-evaluation on every frame.
+    pub skip_downstream: bool,
 }
 
 impl StructureDesignerChanges {
@@ -43,6 +47,7 @@ impl StructureDesignerChanges {
         self.previous_selection = None;
         self.current_selection = None;
         self.selection_changed = false;
+        self.skip_downstream = false;
     }
 
     /// Sets the refresh mode

@@ -79,6 +79,9 @@ String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
     RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditMinimize(
         freezeMode: freezeMode);
 
+void defaultToolPointerCancel() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiDefaultToolPointerCancel();
+
 PointerDownResult defaultToolPointerDown(
         {required APIVec2 screenPos,
         required APIVec3 rayOrigin,

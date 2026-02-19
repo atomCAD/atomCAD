@@ -91,6 +91,14 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
     _viewport.renderingNeeded();
     return true;
   }
+
+  @override
+  void onPrimaryCancel() {
+    atom_edit_api.defaultToolPointerCancel();
+    _viewport._setMarqueeRect(null);
+    _viewport.refreshFromKernel();
+    _viewport.renderingNeeded();
+  }
 }
 
 /// Custom painter that draws the marquee selection rectangle.
@@ -145,9 +153,11 @@ class _StructureDesignerViewportState
 
   @override
   PrimaryPointerDelegate? get primaryPointerDelegate {
-    if (!widget.graphModel.isNodeTypeActive("atom_edit")) return null;
-    final tool = atom_edit_api.getActiveAtomEditTool();
-    if (tool != APIAtomEditTool.default_) return null;
+    if (!widget.graphModel.isNodeTypeActive("atom_edit") ||
+        atom_edit_api.getActiveAtomEditTool() != APIAtomEditTool.default_) {
+      _atomEditDefaultDelegate = null;
+      return null;
+    }
     _atomEditDefaultDelegate ??= _AtomEditDefaultDelegate(this);
     return _atomEditDefaultDelegate;
   }
