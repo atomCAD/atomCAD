@@ -18,6 +18,8 @@ pub struct GuidePlacementVisuals {
     pub guide_dots: Vec<GuideDot>,
     /// If set, render a wireframe sphere for free sphere placement (case 0).
     pub wireframe_sphere: Option<WireframeSphereVisuals>,
+    /// If set, render a wireframe ring for free ring placement (sp3 case 1, no dihedral ref).
+    pub wireframe_ring: Option<WireframeRingVisuals>,
 }
 
 /// Visual data for a wireframe sphere (free sphere placement mode).
@@ -27,6 +29,14 @@ pub struct WireframeSphereVisuals {
     pub radius: f64,
     /// If set, a preview guide dot tracks the cursor on the sphere surface.
     pub preview_position: Option<DVec3>,
+}
+
+/// Visual data for a wireframe ring (sp3 case 1 free ring placement mode).
+#[derive(Debug, Clone)]
+pub struct WireframeRingVisuals {
+    pub center: DVec3,
+    pub normal: DVec3,
+    pub radius: f64,
 }
 
 #[derive(Debug, Clone)]

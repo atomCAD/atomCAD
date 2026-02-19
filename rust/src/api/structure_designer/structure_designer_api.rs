@@ -2154,6 +2154,8 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedPlacement { .. }
                     ) | AtomEditTool::AddAtom(
                         crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedFreeSphere { .. }
+                    ) | AtomEditTool::AddAtom(
+                        crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedFreeRing { .. }
                     )
                 );
 

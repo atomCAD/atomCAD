@@ -7,7 +7,7 @@ use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::guided_placement::{
     BondLengthMode, BondMode, GuideDot, GuidedPlacementMode, compute_guided_placement,
-    ray_sphere_nearest_point,
+    compute_ring_preview_positions, ray_ring_nearest_point, ray_sphere_nearest_point,
 };
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
@@ -186,11 +186,12 @@ pub fn start_guided_placement(
         };
     }
 
-    // Check if we have something to show (guide dots or free sphere)
+    // Check if we have something to show (guide dots, free sphere, or free ring)
     let is_free_sphere = placement_result.mode.is_free_sphere();
+    let is_free_ring = placement_result.mode.is_free_ring();
     let guide_dots_empty = placement_result.guide_dots().is_empty();
-    if !is_free_sphere && guide_dots_empty {
-        // No guide dots computed (e.g., case 1 stub) — stay in Idle
+    if !is_free_sphere && !is_free_ring && guide_dots_empty {
+        // No guide dots computed — stay in Idle
         if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
             *state = AddAtomToolState::Idle { atomic_number };
         }
@@ -240,6 +241,28 @@ pub fn start_guided_placement(
                 };
             }
             0 // No fixed guide dots; sphere is interactive
+        }
+        GuidedPlacementMode::FreeRing {
+            ring_center,
+            ring_normal,
+            ring_radius,
+            bond_distance,
+            anchor_pos,
+            ..
+        } => {
+            if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+                *state = AddAtomToolState::GuidedFreeRing {
+                    atomic_number,
+                    anchor_atom_id: diff_atom_id,
+                    ring_center: *ring_center,
+                    ring_normal: *ring_normal,
+                    ring_radius: *ring_radius,
+                    bond_distance: *bond_distance,
+                    anchor_pos: *anchor_pos,
+                    preview_positions: None,
+                };
+            }
+            0 // No fixed guide dots; ring is interactive
         }
     };
 
@@ -309,6 +332,31 @@ pub fn place_guided_atom(
                 ray_sphere_nearest_point(ray_start, ray_dir, center, *radius)
                     .map(|hit_pos| (*atomic_number, *anchor_atom_id, hit_pos))
             }
+            AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing {
+                atomic_number,
+                anchor_atom_id,
+                ring_center,
+                ring_normal,
+                ring_radius,
+                bond_distance,
+                anchor_pos,
+                ..
+            }) => {
+                // Find the closest point on the ring, then compute the 3 positions
+                ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius)
+                    .map(|point_on_ring| {
+                        let positions = compute_ring_preview_positions(
+                            *ring_center,
+                            *ring_normal,
+                            *ring_radius,
+                            *anchor_pos,
+                            *bond_distance,
+                            point_on_ring,
+                        );
+                        // Place at the first position (the one closest to cursor click)
+                        (*atomic_number, *anchor_atom_id, positions[0])
+                    })
+            }
             _ => None,
         }
     };
@@ -335,7 +383,7 @@ pub fn place_guided_atom(
     true
 }
 
-/// Update the preview position for FreeSphere mode based on cursor ray.
+/// Update the preview position for FreeSphere or FreeRing mode based on cursor ray.
 ///
 /// Returns true if the preview position changed (needs re-render).
 pub fn guided_placement_pointer_move(
@@ -351,13 +399,41 @@ pub fn guided_placement_pointer_move(
     if let AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
         center,
         radius,
-        ref mut preview_position,
+        preview_position,
         ..
-    }) = atom_edit_data.active_tool
+    }) = &mut atom_edit_data.active_tool
     {
-        let new_pos = ray_sphere_nearest_point(ray_start, ray_dir, &center, radius);
+        let new_pos = ray_sphere_nearest_point(ray_start, ray_dir, center, *radius);
         if new_pos != *preview_position {
             *preview_position = new_pos;
+            return true;
+        }
+    }
+
+    if let AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing {
+        ring_center,
+        ring_normal,
+        ring_radius,
+        bond_distance,
+        anchor_pos,
+        preview_positions,
+        ..
+    }) = &mut atom_edit_data.active_tool
+    {
+        let new_positions =
+            ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius)
+                .map(|point_on_ring| {
+                    compute_ring_preview_positions(
+                        *ring_center,
+                        *ring_normal,
+                        *ring_radius,
+                        *anchor_pos,
+                        *bond_distance,
+                        point_on_ring,
+                    )
+                });
+        if new_positions != *preview_positions {
+            *preview_positions = new_positions;
             return true;
         }
     }
@@ -377,13 +453,14 @@ pub fn cancel_guided_placement(structure_designer: &mut StructureDesigner) {
     }
 }
 
-/// Check if the tool is currently in guided placement mode (FixedDots or FreeSphere).
+/// Check if the tool is currently in guided placement mode (FixedDots, FreeSphere, or FreeRing).
 pub fn is_in_guided_placement(structure_designer: &StructureDesigner) -> bool {
     match get_active_atom_edit_data(structure_designer) {
         Some(data) => matches!(
             &data.active_tool,
             AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement { .. })
                 | AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere { .. })
+                | AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing { .. })
         ),
         None => false,
     }

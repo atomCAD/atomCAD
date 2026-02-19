@@ -1,4 +1,6 @@
-use crate::crystolecule::atomic_structure::atomic_structure_decorator::WireframeSphereVisuals;
+use crate::crystolecule::atomic_structure::atomic_structure_decorator::{
+    WireframeRingVisuals, WireframeSphereVisuals,
+};
 use crate::renderer::line_mesh::LineMesh;
 use glam::f32::Vec3;
 use glam::f64::DVec3;
@@ -63,7 +65,7 @@ pub fn tessellate_wireframe_sphere(
 }
 
 /// Tessellate wireframe sphere visuals from the decorator into a LineMesh.
-pub fn tessellate_guided_wireframe(
+pub fn tessellate_guided_wireframe_sphere(
     line_mesh: &mut LineMesh,
     sphere_visuals: &WireframeSphereVisuals,
 ) {
@@ -71,6 +73,21 @@ pub fn tessellate_guided_wireframe(
         line_mesh,
         &sphere_visuals.center,
         sphere_visuals.radius,
+        &WIREFRAME_COLOR,
+    );
+}
+
+/// Tessellate wireframe ring visuals from the decorator into a LineMesh.
+pub fn tessellate_guided_wireframe_ring(
+    line_mesh: &mut LineMesh,
+    ring_visuals: &WireframeRingVisuals,
+) {
+    tessellate_wireframe_circle(
+        line_mesh,
+        &ring_visuals.center,
+        ring_visuals.radius,
+        &ring_visuals.normal,
+        SPHERE_SEGMENTS,
         &WIREFRAME_COLOR,
     );
 }

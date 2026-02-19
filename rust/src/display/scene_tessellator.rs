@@ -159,12 +159,18 @@ fn tessellate_non_lightweight_content(
                     }
                 }
 
-                // Render wireframe sphere for free sphere placement (shared between rendering methods)
+                // Render wireframe visuals for free placement (shared between rendering methods)
                 if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals {
                     if let Some(sphere_visuals) = &visuals.wireframe_sphere {
-                        guided_placement_tessellator::tessellate_guided_wireframe(
+                        guided_placement_tessellator::tessellate_guided_wireframe_sphere(
                             &mut wireframe_mesh,
                             sphere_visuals,
+                        );
+                    }
+                    if let Some(ring_visuals) = &visuals.wireframe_ring {
+                        guided_placement_tessellator::tessellate_guided_wireframe_ring(
+                            &mut wireframe_mesh,
+                            ring_visuals,
                         );
                     }
                 }

@@ -50,6 +50,22 @@ pub enum GuidedPlacementMode {
         /// Cursor-tracked preview position on the sphere surface (updated by pointer_move).
         preview_position: Option<DVec3>,
     },
+    /// sp3 case 1 without dihedral reference: wireframe ring where 3 guide dots
+    /// rotate together as the user moves the cursor.
+    FreeRing {
+        /// Center of the ring (on the cone axis, offset from anchor).
+        ring_center: DVec3,
+        /// Normal of the ring plane (points away from the existing bond).
+        ring_normal: DVec3,
+        /// Radius of the ring circle.
+        ring_radius: f64,
+        /// Bond distance from anchor to guide dot positions.
+        bond_distance: f64,
+        /// Anchor atom position (needed for placement).
+        anchor_pos: DVec3,
+        /// Cursor-tracked preview: 3 positions at 120° spacing on the ring.
+        preview_positions: Option<[DVec3; 3]>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -68,13 +84,18 @@ impl GuidedPlacementMode {
     pub fn guide_dots(&self) -> &[GuideDot] {
         match self {
             GuidedPlacementMode::FixedDots { guide_dots } => guide_dots,
-            GuidedPlacementMode::FreeSphere { .. } => &[],
+            GuidedPlacementMode::FreeSphere { .. } | GuidedPlacementMode::FreeRing { .. } => &[],
         }
     }
 
     /// Returns true if this is a FreeSphere mode.
     pub fn is_free_sphere(&self) -> bool {
         matches!(self, GuidedPlacementMode::FreeSphere { .. })
+    }
+
+    /// Returns true if this is a FreeRing mode.
+    pub fn is_free_ring(&self) -> bool {
+        matches!(self, GuidedPlacementMode::FreeRing { .. })
     }
 }
 
@@ -329,22 +350,69 @@ fn compute_uff_bond_distance(anchor_uff_label: &str, new_atomic_number: i16) -> 
 /// Tetrahedral angle in radians: arccos(-1/3) ≈ 109.47°
 const TETRAHEDRAL_ANGLE: f64 = 1.9106332362490186;
 
+/// Result of sp3 candidate computation, accounting for case 1 which may need
+/// either fixed dots (with dihedral reference) or a free ring (without).
+pub enum Sp3CandidateResult {
+    /// Fixed guide dots at computed positions.
+    Dots(Vec<GuideDot>),
+    /// sp3 case 1 result that may be FixedDots or FreeRing.
+    Case1(Sp3Case1Result),
+}
+
 /// Compute sp3 candidate positions for guided placement.
 ///
-/// - Case 4 (saturated): empty vec
+/// - Case 4 (saturated): empty dots
 /// - Case 3 (1 remaining): single dot opposite centroid of existing bonds
 /// - Case 2 (2 remaining): two dots symmetric about the existing bond plane
-/// - Case 1/0: empty vec (stubs for Phase B/C)
+/// - Case 1 (3 remaining): dihedral-aware (6 dots) or ring fallback
+/// - Case 0: handled by caller (FreeSphere)
 pub fn compute_sp3_candidates(
+    structure: &AtomicStructure,
+    anchor_atom_id: u32,
     anchor_pos: DVec3,
     existing_bond_dirs: &[DVec3],
     bond_dist: f64,
-) -> Vec<GuideDot> {
+) -> Sp3CandidateResult {
     match existing_bond_dirs.len() {
-        4.. => vec![], // saturated
-        3 => sp3_case3(anchor_pos, existing_bond_dirs, bond_dist),
-        2 => sp3_case2(anchor_pos, existing_bond_dirs, bond_dist),
-        _ => vec![], // case 1 and case 0: stubs for Phase B/C
+        4.. => Sp3CandidateResult::Dots(vec![]), // saturated
+        3 => Sp3CandidateResult::Dots(sp3_case3(anchor_pos, existing_bond_dirs, bond_dist)),
+        2 => Sp3CandidateResult::Dots(sp3_case2(anchor_pos, existing_bond_dirs, bond_dist)),
+        1 => {
+            let bond_dir = existing_bond_dirs[0];
+            // Find the neighbor atom for dihedral reference
+            let neighbor_id = structure
+                .get_atom(anchor_atom_id)
+                .and_then(|atom| {
+                    atom.bonds
+                        .iter()
+                        .find(|b| !b.is_delete_marker())
+                        .map(|b| b.other_atom_id())
+                });
+
+            if let Some(neighbor_id) = neighbor_id {
+                if let Some(ref_perp) =
+                    find_dihedral_reference(structure, anchor_atom_id, neighbor_id)
+                {
+                    // Dihedral reference found: 6 fixed dots
+                    Sp3CandidateResult::Case1(Sp3Case1Result::FixedDots(
+                        compute_sp3_case1_with_dihedral(anchor_pos, bond_dir, ref_perp, bond_dist),
+                    ))
+                } else {
+                    // No dihedral reference: ring fallback
+                    let (ring_center, ring_normal, ring_radius) =
+                        compute_sp3_case1_ring(anchor_pos, bond_dir, bond_dist);
+                    Sp3CandidateResult::Case1(Sp3Case1Result::FreeRing {
+                        ring_center,
+                        ring_normal,
+                        ring_radius,
+                    })
+                }
+            } else {
+                // No neighbor found (shouldn't happen with 1 bond, but handle gracefully)
+                Sp3CandidateResult::Dots(vec![])
+            }
+        }
+        _ => Sp3CandidateResult::Dots(vec![]), // case 0: handled by caller (FreeSphere)
     }
 }
 
@@ -435,6 +503,202 @@ fn sp3_case2(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot>
 }
 
 // ============================================================================
+// sp3 case 1: dihedral-aware + ring fallback
+// ============================================================================
+
+/// Result of the sp3 case 1 computation.
+#[derive(Debug, Clone)]
+pub enum Sp3Case1Result {
+    /// Dihedral reference found: 6 fixed dots (3 trans + 3 cis).
+    FixedDots(Vec<GuideDot>),
+    /// No dihedral reference: free ring mode.
+    FreeRing {
+        ring_center: DVec3,
+        ring_normal: DVec3,
+        ring_radius: f64,
+    },
+}
+
+/// Find a dihedral reference direction for sp3 case 1.
+///
+/// Walk upstream: anchor A has one neighbor B. If B has another neighbor C,
+/// project B→C perpendicular to the A→B axis and return the normalized result.
+pub fn find_dihedral_reference(
+    structure: &AtomicStructure,
+    anchor_atom_id: u32,
+    neighbor_atom_id: u32,
+) -> Option<DVec3> {
+    let neighbor = structure.get_atom(neighbor_atom_id)?;
+    let anchor = structure.get_atom(anchor_atom_id)?;
+
+    let bond_axis = (neighbor.position - anchor.position).normalize();
+
+    // Look for another neighbor of B (not A)
+    for bond in &neighbor.bonds {
+        if bond.is_delete_marker() {
+            continue;
+        }
+        let other_id = bond.other_atom_id();
+        if other_id == anchor_atom_id {
+            continue;
+        }
+        if let Some(other_atom) = structure.get_atom(other_id) {
+            let bc_dir = other_atom.position - neighbor.position;
+            // Project perpendicular to bond axis
+            let perp = bc_dir - bond_axis * bc_dir.dot(bond_axis);
+            if perp.length_squared() > 1e-12 {
+                return Some(perp.normalize());
+            }
+        }
+    }
+
+    None
+}
+
+/// Compute sp3 case 1 with dihedral reference: 6 guide dots.
+///
+/// 3 Primary (trans/staggered) at 60°, 180°, 300° offset from reference.
+/// 3 Secondary (cis/eclipsed) at 0°, 120°, 240° offset from reference.
+///
+/// All positions lie on a cone with axis = -bond_dir and half-angle = 180° - 109.47° = 70.53°.
+pub fn compute_sp3_case1_with_dihedral(
+    anchor_pos: DVec3,
+    bond_dir: DVec3,
+    ref_perp: DVec3,
+    bond_dist: f64,
+) -> Vec<GuideDot> {
+    // Cone axis points away from the existing bond
+    let cone_axis = -bond_dir;
+    // Half-angle of the cone from the cone axis: 180° - 109.47° = 70.53°
+    let cone_half_angle = std::f64::consts::PI - TETRAHEDRAL_ANGLE; // ≈ 1.2310 rad (70.53°)
+    let cos_cone = cone_half_angle.cos();
+    let sin_cone = cone_half_angle.sin();
+
+    // Build orthonormal basis in the plane perpendicular to the bond axis:
+    // ref_perp is already perpendicular to bond_dir (from find_dihedral_reference)
+    let u = ref_perp;
+    let v = bond_dir.cross(u).normalize();
+
+    let mut dots = Vec::with_capacity(6);
+
+    // Trans (staggered) positions: 60°, 180°, 300° from reference
+    for &angle_deg in &[60.0_f64, 180.0, 300.0] {
+        let angle = angle_deg.to_radians();
+        let (sin_a, cos_a) = angle.sin_cos();
+        let radial = u * cos_a + v * sin_a;
+        let dir = cone_axis * cos_cone + radial * sin_cone;
+        dots.push(GuideDot {
+            position: anchor_pos + dir.normalize() * bond_dist,
+            dot_type: GuideDotType::Primary,
+        });
+    }
+
+    // Cis (eclipsed) positions: 0°, 120°, 240° from reference
+    for &angle_deg in &[0.0_f64, 120.0, 240.0] {
+        let angle = angle_deg.to_radians();
+        let (sin_a, cos_a) = angle.sin_cos();
+        let radial = u * cos_a + v * sin_a;
+        let dir = cone_axis * cos_cone + radial * sin_cone;
+        dots.push(GuideDot {
+            position: anchor_pos + dir.normalize() * bond_dist,
+            dot_type: GuideDotType::Secondary,
+        });
+    }
+
+    dots
+}
+
+/// Compute the ring geometry for sp3 case 1 without dihedral reference.
+///
+/// Ring center is along -bond_dir at the projection of bond_dist onto the cone axis.
+/// Ring radius is the perpendicular component.
+pub fn compute_sp3_case1_ring(
+    anchor_pos: DVec3,
+    bond_dir: DVec3,
+    bond_dist: f64,
+) -> (DVec3, DVec3, f64) {
+    let cone_half_angle = std::f64::consts::PI - TETRAHEDRAL_ANGLE;
+    let cos_cone = cone_half_angle.cos();
+    let sin_cone = cone_half_angle.sin();
+
+    let ring_normal = -bond_dir;
+    let ring_center = anchor_pos + ring_normal * (bond_dist * cos_cone);
+    let ring_radius = bond_dist * sin_cone;
+
+    (ring_center, ring_normal, ring_radius)
+}
+
+/// Compute 3 preview positions on the ring at 120° spacing, anchored to a reference angle.
+///
+/// `point_on_ring` is the closest point on the ring to the cursor. The 3 dots are placed
+/// at 0°, 120°, 240° from that point.
+pub fn compute_ring_preview_positions(
+    ring_center: DVec3,
+    ring_normal: DVec3,
+    _ring_radius: f64,
+    anchor_pos: DVec3,
+    bond_distance: f64,
+    point_on_ring: DVec3,
+) -> [DVec3; 3] {
+    let radial = (point_on_ring - ring_center).normalize();
+    let tangent = ring_normal.cross(radial).normalize();
+
+    // We need positions at bond_distance from the anchor, not at ring_radius from ring_center.
+    // Since the ring is the intersection of the cone with a plane, all ring points
+    // are equidistant from the anchor. Compute the actual positions from the anchor.
+    let cone_half_angle = std::f64::consts::PI - TETRAHEDRAL_ANGLE;
+    let cos_cone = cone_half_angle.cos();
+    let sin_cone = cone_half_angle.sin();
+    let cone_axis = ring_normal; // -bond_dir
+
+    let mut positions = [DVec3::ZERO; 3];
+    for (i, &angle_deg) in [0.0_f64, 120.0, 240.0].iter().enumerate() {
+        let angle = angle_deg.to_radians();
+        let (sin_a, cos_a) = angle.sin_cos();
+        let r = radial * cos_a + tangent * sin_a;
+        let dir = cone_axis * cos_cone + r * sin_cone;
+        positions[i] = anchor_pos + dir.normalize() * bond_distance;
+    }
+    positions
+}
+
+/// Project a ray onto the ring plane and find the closest point on the ring circle.
+///
+/// Returns `None` if the ray is parallel to the ring plane.
+pub fn ray_ring_nearest_point(
+    ray_start: &DVec3,
+    ray_dir: &DVec3,
+    ring_center: &DVec3,
+    ring_normal: &DVec3,
+    ring_radius: f64,
+) -> Option<DVec3> {
+    // Intersect ray with the ring plane
+    let denom = ray_dir.dot(*ring_normal);
+    if denom.abs() < 1e-10 {
+        return None; // Ray parallel to ring plane
+    }
+    let t = (*ring_center - *ray_start).dot(*ring_normal) / denom;
+
+    // Allow slightly negative t for robustness (plane behind camera is still useful for projection)
+    let plane_point = *ray_start + *ray_dir * t;
+
+    // Project onto the ring circle
+    let offset = plane_point - *ring_center;
+    if offset.length_squared() < 1e-12 {
+        // Ray hits ring center — pick an arbitrary point on the ring
+        let arb = if ring_normal.x.abs() < 0.9 {
+            DVec3::X
+        } else {
+            DVec3::Y
+        };
+        let radial = ring_normal.cross(arb).normalize();
+        return Some(*ring_center + radial * ring_radius);
+    }
+
+    Some(*ring_center + offset.normalize() * ring_radius)
+}
+
+// ============================================================================
 // Top-level entry point
 // ============================================================================
 
@@ -503,16 +767,42 @@ pub fn compute_guided_placement(
             preview_position: None,
         }
     } else {
-        let guide_dots = match hybridization {
+        match hybridization {
             Hybridization::Sp3 => {
-                compute_sp3_candidates(anchor_pos, &existing_bond_dirs, bond_dist)
+                match compute_sp3_candidates(
+                    structure,
+                    anchor_atom_id,
+                    anchor_pos,
+                    &existing_bond_dirs,
+                    bond_dist,
+                ) {
+                    Sp3CandidateResult::Dots(guide_dots) => {
+                        GuidedPlacementMode::FixedDots { guide_dots }
+                    }
+                    Sp3CandidateResult::Case1(Sp3Case1Result::FixedDots(guide_dots)) => {
+                        GuidedPlacementMode::FixedDots { guide_dots }
+                    }
+                    Sp3CandidateResult::Case1(Sp3Case1Result::FreeRing {
+                        ring_center,
+                        ring_normal,
+                        ring_radius,
+                    }) => GuidedPlacementMode::FreeRing {
+                        ring_center,
+                        ring_normal,
+                        ring_radius,
+                        bond_distance: bond_dist,
+                        anchor_pos,
+                        preview_positions: None,
+                    },
+                }
             }
             Hybridization::Sp2 | Hybridization::Sp1 => {
                 // Stubs for Phase D
-                vec![]
+                GuidedPlacementMode::FixedDots {
+                    guide_dots: vec![],
+                }
             }
-        };
-        GuidedPlacementMode::FixedDots { guide_dots }
+        }
     };
 
     GuidedPlacementResult {

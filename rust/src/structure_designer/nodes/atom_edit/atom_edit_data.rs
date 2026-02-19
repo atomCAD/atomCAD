@@ -233,7 +233,7 @@ impl AtomEditData {
     ) {
         use crate::crystolecule::atomic_structure::AtomDisplayState;
         use crate::crystolecule::atomic_structure::atomic_structure_decorator::{
-            GuidePlacementVisuals, WireframeSphereVisuals,
+            GuidePlacementVisuals, WireframeRingVisuals, WireframeSphereVisuals,
         };
 
         // Helper to resolve anchor_atom_id to output atom ID
@@ -260,6 +260,7 @@ impl AtomEditData {
                                 anchor_pos: anchor_atom.position,
                                 guide_dots: guide_dots.clone(),
                                 wireframe_sphere: None,
+                                wireframe_ring: None,
                             });
                     }
                 }
@@ -295,6 +296,46 @@ impl AtomEditData {
                                     center: *center,
                                     radius: *radius,
                                     preview_position: *preview_position,
+                                }),
+                                wireframe_ring: None,
+                            });
+                    }
+                }
+            }
+            AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing {
+                anchor_atom_id,
+                ring_center,
+                ring_normal,
+                ring_radius,
+                preview_positions,
+                ..
+            }) => {
+                if let Some(output_id) = resolve_anchor(*anchor_atom_id) {
+                    output
+                        .decorator_mut()
+                        .set_atom_display_state(output_id, AtomDisplayState::Marked);
+                    if let Some(anchor_atom) = output.get_atom(output_id) {
+                        // Build guide dots from preview positions (3 dots at 120° spacing)
+                        let preview_dots: Vec<crate::crystolecule::guided_placement::GuideDot> =
+                            preview_positions
+                                .iter()
+                                .flat_map(|positions| positions.iter())
+                                .map(|pos| crate::crystolecule::guided_placement::GuideDot {
+                                    position: *pos,
+                                    dot_type:
+                                        crate::crystolecule::guided_placement::GuideDotType::Primary,
+                                })
+                                .collect();
+
+                        output.decorator_mut().guide_placement_visuals =
+                            Some(GuidePlacementVisuals {
+                                anchor_pos: anchor_atom.position,
+                                guide_dots: preview_dots,
+                                wireframe_sphere: None,
+                                wireframe_ring: Some(WireframeRingVisuals {
+                                    center: *ring_center,
+                                    normal: *ring_normal,
+                                    radius: *ring_radius,
                                 }),
                             });
                     }
