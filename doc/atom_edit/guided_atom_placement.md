@@ -19,9 +19,10 @@ interactive guide points. Clicking a guide point places and bonds the atom in on
 ## 2. Scope
 
 **In scope:** sp3/sp2/sp1 guided placement (all bond-count cases), dihedral-aware
-positioning, saturation detection, integration with existing Add Atom tool.
+positioning, saturation detection, dative bond awareness (via bond mode toggle),
+integration with existing Add Atom tool.
 
-**Out of scope:** Dative bonds, exotic chemistry, metal haptic bonds, aromatic ring
+**Out of scope:** Exotic chemistry, metal haptic bonds, aromatic ring
 shortcuts, auto-chain building.
 
 ## 3. Tool Integration Decision
@@ -66,6 +67,44 @@ assignment. When the user explicitly selects sp3/sp2/sp1, that override is used
 instead, resolving any ambiguity (e.g., a carbon with 1 bond could be sp3, sp2, or
 sp1 — the user decides). The dropdown resets to Auto when switching tools.
 
+**Bond mode toggle:** The atom edit panel includes a **Bond Mode** toggle with options:
+**Covalent** (default) and **Dative**. This controls the saturation limit used when
+computing guide dots:
+
+- **Covalent:** uses conservative element-specific max neighbors (e.g., N sp3 = 3,
+  O sp3 = 2). This is the safe default for standard covalent bonding.
+- **Dative:** uses the geometric max — the full number of hybridization directions
+  (sp3 = 4, sp2 = 3, sp1 = 2). This unlocks lone pair and empty orbital positions
+  for coordinate bonding (e.g., NH3 nitrogen shows 1 additional guide dot at the
+  lone pair position).
+
+The two controls are independent: hybridization determines geometry (bond angles),
+bond mode determines how many of those directions are available for bonding. The
+toggle resets to Covalent when switching tools.
+
+**Important:** dative bonding is a placement-time consideration only. The bond created
+is stored as a regular bond in `AtomicStructure` — no `BondKind` distinction is
+persisted. Once formed, a dative bond is physically identical to a covalent bond;
+the distinction only matters for determining which positions are available during
+guide dot computation.
+
+**Bond length mode dropdown:** The atom edit panel includes a **Bond Length** dropdown
+with options: **Crystal** (default) and **UFF**. This controls how the bond distance
+(anchor-to-guide-dot distance) is computed:
+
+- **Crystal:** uses a hardcoded lookup table of experimentally determined bond lengths
+  from common semiconductor crystal structures (diamond, silicon, SiC, III-V, II-VI
+  compounds). When the (anchor element, new element) pair is in the table, the crystal
+  value is used. When the pair is not in the table, falls back to UFF rest bond length.
+  This is the correct choice when extending crystal lattice structures, as it places
+  atoms exactly at lattice-compatible positions.
+- **UFF:** always uses the Universal Force Field rest bond length formula
+  (`calc_bond_rest_length`), which accounts for hybridization-specific covalent radii,
+  bond order correction, and electronegativity correction. Better suited for molecular
+  chemistry where crystal lattice context is not relevant.
+
+The dropdown resets to Crystal when switching tools.
+
 **Placement:** add new atom at guide position, create single bond, clear guides,
 return to Idle.
 
@@ -101,17 +140,25 @@ Use existing `AtomDisplayState::Marked` (yellow `MARKER_COLOR`), same as Add Bon
 
 ### 5.5 Saturation feedback
 
-Show a SnackBar notification: "Atom is fully bonded" using the existing
+Show a SnackBar notification using the existing
 `ScaffoldMessenger.of(context).showSnackBar()` pattern (used throughout the app, e.g.,
 `factor_into_subnetwork_dialog.dart`, `import_cnnd_library_dialog.dart`). Duration
 ~2 seconds. No guide dots shown; tool stays in Idle.
+
+The message depends on the atom's bonding capacity:
+
+- **Fully saturated (no lone pairs/empty orbitals):** "Atom is fully bonded"
+- **Covalently saturated but has lone pairs/empty orbitals:** "Atom is covalently
+  saturated. Switch to Dative bond mode to access additional bonding positions."
+
+This guides the user toward the bond mode toggle when appropriate.
 
 ### 5.6 Free placement sphere (case 0 — no existing bonds)
 
 | Property    | Value                                        |
 |-------------|----------------------------------------------|
 | Shape       | Wireframe sphere centered on anchor          |
-| Radius      | Sum of covalent radii (anchor + new element) |
+| Radius      | Bond distance (from bond length mode)        |
 | Color       | Gray (#606060)                               |
 | Interaction | Click anywhere on user-facing hemisphere     |
 
@@ -135,12 +182,58 @@ at the clicked position.
 
 ### 6.1 Bond distance
 
+Bond distance depends on the **bond length mode** dropdown:
+
+**Crystal mode** (default): look up `(min(Z_a, Z_b), max(Z_a, Z_b))` in a hardcoded
+table of sp3 semiconductor crystal bond lengths. If found, use that value. If not
+found, fall back to UFF mode.
+
+| Crystal        | Pair   | Bond length (A) | Source             |
+|----------------|--------|------------------|--------------------|
+| Diamond        | C-C    | 1.545            | a=3.567, a*sqrt(3)/4 |
+| Silicon        | Si-Si  | 2.352            | a=5.431            |
+| 3C-SiC         | Si-C   | 1.889            | a=4.358            |
+| Germanium      | Ge-Ge  | 2.450            | a=5.658            |
+| alpha-Sn       | Sn-Sn  | 2.810            | a=6.489            |
+| c-BN           | B-N    | 1.567            | a=3.615            |
+| BP             | B-P    | 1.966            | a=4.538            |
+| AlN (ZB)       | Al-N   | 1.897            | a=4.380            |
+| AlP            | Al-P   | 2.367            | a=5.463            |
+| AlAs           | Al-As  | 2.443            | a=5.639            |
+| GaN (ZB)       | Ga-N   | 1.946            | a=4.492            |
+| GaP            | Ga-P   | 2.360            | a=5.450            |
+| GaAs           | Ga-As  | 2.448            | a=5.653            |
+| InP            | In-P   | 2.541            | a=5.869            |
+| InAs           | In-As  | 2.623            | a=6.058            |
+| InSb           | In-Sb  | 2.806            | a=6.479            |
+| ZnS (ZB)       | Zn-S   | 2.342            | a=5.409            |
+| ZnSe           | Zn-Se  | 2.454            | a=5.667            |
+| ZnTe           | Zn-Te  | 2.637            | a=6.089            |
+| CdTe           | Cd-Te  | 2.806            | a=6.482            |
+
+All values derived from zinc blende / diamond cubic unit cell parameter `a` via
+`bond_length = a * sqrt(3) / 4`. The table is keyed by ordered atomic number pair
+`(min(Z_a, Z_b), max(Z_a, Z_b))` — element order does not matter.
+
+**UFF mode**: use `calc_bond_rest_length(bond_order, uff_params_a, uff_params_b)` from
+`simulation/uff/params.rs`. This computes:
+
 ```
-bond_distance = covalent_radius(A) + covalent_radius(B)
+r0 = ri + rj - lambda*(ri+rj)*ln(bond_order) - electronegativity_correction
 ```
 
-Using `ATOM_INFO` from `atomic_constants.rs`. Special case: C-H uses 1.09 A
-(`C_H_BOND_LENGTH`).
+Where `ri`, `rj` are hybridization-specific UFF covalent radii (e.g., C\_3 = 0.757,
+C\_2 = 0.732) and the electronegativity correction accounts for polar bonds. In
+Phase A, `bond_order` is always 1.0 (single bond). UFF params for the anchor atom
+come from its detected UFF type (already computed for hybridization detection); UFF
+params for the new atom use the default type for that element.
+
+**Why two modes:** atomCAD's primary use case is extending crystal lattice structures,
+where bond lengths must match the lattice geometry exactly. Sum-of-covalent-radii
+gives Si-Si = 2.22 A (5.6% error vs crystal 2.352 A); UFF gives ~2.30 A (2.2% error).
+Only the crystal table value places atoms at real lattice sites. For molecular
+chemistry without lattice context, UFF provides physically-motivated values that
+handle hybridization and electronegativity naturally.
 
 ### 6.2 Hybridization detection
 
@@ -171,18 +264,30 @@ manual override if the default (sp3) is not the intended hybridization.
 
 ### 6.3 Saturation check
 
-| Element group           | Hybridization | Effective max neighbors |
-|-------------------------|---------------|------------------------|
-| C, Si, Ge, Sn          | sp3           | 4                      |
-| N, P, As, Sb           | sp3           | 3                      |
-| O, S, Se, Te           | sp3           | 2                      |
-| F, Cl, Br, I           | any           | 1                      |
-| B, Al                  | sp2           | 3                      |
-| C (double bond context)| sp2           | 3                      |
-| C (triple bond context)| sp1           | 2                      |
-| Noble gases            | --            | 0                      |
+The saturation limit depends on the **bond mode** toggle:
 
-`remaining_slots = effective_max_neighbors - current_neighbor_count`
+| Element group           | Hybridization | Covalent max | Geometric max |
+|-------------------------|---------------|--------------|---------------|
+| C, Si, Ge, Sn          | sp3           | 4            | 4             |
+| N, P, As, Sb           | sp3           | 3            | 4             |
+| O, S, Se, Te           | sp3           | 2            | 4             |
+| F, Cl, Br, I           | any           | 1            | 1             |
+| B, Al                  | sp2           | 3            | 3             |
+| C (double bond context)| sp2           | 3            | 3             |
+| C (triple bond context)| sp1           | 2            | 2             |
+| Noble gases            | --            | 0            | 0             |
+| N, P                   | sp2           | 3            | 3             |
+| O, S                   | sp2           | 2            | 3             |
+
+**Covalent max** (bond mode = Covalent): element-specific limit reflecting standard
+covalent bonding. Used by default.
+
+**Geometric max** (bond mode = Dative): the full number of hybridization directions
+(sp3 = 4, sp2 = 3, sp1 = 2). Unlocks lone pair and empty orbital positions for
+coordinate bonding. For elements where covalent max already equals geometric max
+(e.g., carbon sp3), the toggle has no effect.
+
+`remaining_slots = effective_max_neighbors(bond_mode) - current_neighbor_count`
 
 ### 6.4 sp3 candidate positions (tetrahedral, 109.47 deg)
 
@@ -345,6 +450,8 @@ pub fn compute_guided_placement(
     anchor_atom_id: u32,
     new_element_atomic_number: i16,
     hybridization_override: Option<Hybridization>,  // None = auto-detect
+    bond_mode: BondMode,                            // Covalent or Dative
+    bond_length_mode: BondLengthMode,               // Crystal or Uff
 ) -> Option<GuidedPlacementInfo>
 
 pub struct GuidedPlacementInfo {
@@ -356,10 +463,19 @@ pub struct GuidedPlacementInfo {
 }
 
 pub enum Hybridization { Sp3, Sp2, Sp1 }
+pub enum BondMode { Covalent, Dative }
+pub enum BondLengthMode { Crystal, Uff }
 ```
 
 When `hybridization_override` is `Some(h)`, `h` is used directly. When `None`,
 hybridization is auto-detected via UFF type assignment (see Section 6.2).
+
+`bond_mode` controls which saturation limit is used: `Covalent` uses element-specific
+max, `Dative` uses geometric max (see Section 6.3).
+
+`bond_length_mode` controls bond distance computation: `Crystal` uses the hardcoded
+semiconductor crystal bond length table with UFF fallback; `Uff` always uses the UFF
+rest bond length formula (see Section 6.1).
 
 ### 9.2 API entry points (exposed to Flutter)
 
@@ -368,6 +484,8 @@ hybridization is auto-detected via UFF type assignment (see Section 6.2).
 pub fn atom_edit_start_guided_placement(
     ray_start: APIVec3, ray_dir: APIVec3, atomic_number: i16,
     hybridization_override: Option<APIHybridization>,  // added in Phase D; None = auto
+    bond_mode: APIBondMode,                            // added in Phase D; Covalent default
+    bond_length_mode: APIBondLengthMode,               // Crystal default
 ) -> GuidedPlacementApiResult
 
 #[flutter_rust_bridge::frb(sync)]
@@ -379,8 +497,11 @@ pub fn atom_edit_place_guided_atom(
 pub fn atom_edit_cancel_guided_placement()
 ```
 
-`APIHybridization` is an FRB-friendly enum: `{ auto_, sp3, sp2, sp1 }`. The Flutter
-dropdown maps directly to this. Both are introduced in Phase D.
+`APIHybridization` is an FRB-friendly enum: `{ auto_, sp3, sp2, sp1 }`.
+`APIBondMode` is an FRB-friendly enum: `{ covalent, dative }`.
+`APIBondLengthMode` is an FRB-friendly enum: `{ crystal, uff }`.
+The Flutter dropdowns map directly to these. Hybridization and bond mode are
+introduced in Phase D; bond length mode is introduced in Phase A.
 
 ### 9.3 Flutter-side changes
 
@@ -393,6 +514,18 @@ placement first, falling back to free placement if no atom is hit.
 selected value is passed to `atom_edit_start_guided_placement()` as
 `hybridization_override`. The dropdown resets to Auto when switching away from the
 Add Atom tool.
+
+**Bond mode toggle (Phase D):** Add a Covalent/Dative toggle to the atom edit panel
+(alongside the hybridization dropdown). The selected value is passed to
+`atom_edit_start_guided_placement()` as `bond_mode`. The toggle resets to Covalent
+when switching away from the Add Atom tool.
+
+**Bond length mode dropdown (Phase A):** Add a Crystal/UFF dropdown to the atom edit
+panel. The selected value is passed to `atom_edit_start_guided_placement()` as
+`bond_length_mode`. Default: Crystal. The dropdown resets to Crystal when switching
+away from the Add Atom tool. This control is introduced in Phase A because crystal
+bond lengths are immediately valuable for the primary use case (sp3 semiconductor
+lattice building).
 
 ## 10. File Locations
 
@@ -408,7 +541,8 @@ Add Atom tool.
 | Guide dot tessellation        | `rust/src/display/atomic_tessellator.rs` (new function, no atom pipeline changes) |
 | Wireframe rendering           | `rust/src/display/guided_placement_tessellator.rs` (new)          |
 | Hybridization detection       | `rust/src/crystolecule/simulation/uff/typer.rs` (reuse)           |
-| Bond distances                | `rust/src/crystolecule/atomic_constants.rs` (reuse)               |
+| Crystal bond length table     | `rust/src/crystolecule/guided_placement.rs` (new, inline table)   |
+| UFF bond length               | `rust/src/crystolecule/simulation/uff/params.rs` (reuse `calc_bond_rest_length`) |
 | Tests                         | `rust/tests/crystolecule/guided_placement_test.rs` (new)          |
 
 ## 11. Open Questions
@@ -416,7 +550,9 @@ Add Atom tool.
 1. **Auto-chain placement:** Should the newly placed atom auto-become the next anchor?
 2. **Bond order selection:** Should double/triple bonds be selectable during placement?
 3. **Energy preview:** Show UFF energy before confirming? (Probably overkill for v1.)
-4. **Lattice snapping:** Snap guide dots to crystal lattice positions?
+4. **Lattice snapping:** Snap guide dots to crystal lattice positions? (The crystal
+   bond length table ensures correct *distances* for semiconductor lattices, but true
+   lattice snapping would also require matching crystal orientation and lattice sites.)
 5. **Multi-atom placement:** Extend to molecular fragments (-CH3, -OH)?
 6. **Undo integration:** Placement should be a single undo step (atom + bond).
 
@@ -430,6 +566,47 @@ Add Atom tool.
    complicating the data model with phantom atoms while giving expert users explicit
    control.
 
+2. **Dative bonds:** The guided placement system supports dative (coordinate) bonding
+   via a **Bond Mode toggle** (Covalent / Dative) that is independent of the
+   Hybridization dropdown. The two controls address orthogonal concerns:
+   - **Hybridization** determines geometry (number of orbital directions and their
+     angles): sp3 = 4 directions at 109.47 deg, sp2 = 3 at 120 deg, sp1 = 2 at 180 deg.
+   - **Bond mode** determines how many of those directions are available for bonding:
+     Covalent uses element-specific limits (e.g., N sp3 = 3, reserving 1 lone pair),
+     Dative uses the geometric maximum (all hybridization directions).
+
+   **No bond model changes:** dative bonding is a placement-time consideration only.
+   The bond created is stored as a regular bond in `AtomicStructure`. Once formed, a
+   dative bond is physically identical to a covalent bond; the distinction only matters
+   for which guide dot positions are offered. This avoids complicating the bond model,
+   serialization, and simulation systems. If dative bond rendering (arrows) or export
+   distinction is needed in the future, that would be a separate feature adding
+   `BondKind` to the bond model — not a guided placement concern.
+
+   **Saturation feedback** is context-aware: when an atom is covalently saturated but
+   has lone pairs or empty orbitals, the SnackBar message tells the user to switch to
+   Dative bond mode, rather than just saying "fully bonded."
+
+3. **Bond length strategy:** Rather than using a simple sum of covalent radii (which
+   gives Si-Si = 2.22 A, 5.6% off the crystal value of 2.352 A), the system uses a
+   **two-tier approach** controlled by a **Bond Length dropdown** (Crystal / UFF):
+
+   - **Crystal** (default): a hardcoded lookup table of ~20 sp3 semiconductor bond
+     lengths derived from experimentally determined zinc blende / diamond cubic unit
+     cell parameters via `bond_length = a * sqrt(3) / 4`. Covers group IV (C, Si, Ge,
+     Sn, SiC), III-V (BN, AlP, GaAs, InSb, etc.), and II-VI (ZnS, CdTe, etc.)
+     compounds. Falls back to UFF when the element pair is not in the table.
+   - **UFF**: uses the existing `calc_bond_rest_length()` from the UFF force field
+     module, which accounts for hybridization-specific covalent radii, bond order
+     correction, and electronegativity correction.
+
+   This was chosen because: (1) atomCAD's primary use case is extending crystal
+   lattice structures, where only lattice-derived bond lengths place atoms at real
+   lattice sites; (2) the UFF dependency already exists (for hybridization detection),
+   so using `calc_bond_rest_length()` adds no new dependencies; (3) UFF eliminates
+   the need for special cases (e.g., hardcoded C-H = 1.09 A) in the molecular
+   chemistry case; (4) a simple dropdown gives the user explicit control.
+
 ---
 
 # Part II — Implementation Plan
@@ -440,10 +617,10 @@ Four phases, each independently shippable. Ordered by value and complexity.
 
 | Phase | Scope | Key deliverables |
 |-------|-------|------------------|
-| A | sp3 cases 2, 3, 4 | Core infrastructure: geometry, state machine, rendering, API, Flutter integration, saturation feedback |
+| A | sp3 cases 2, 3, 4 | Core infrastructure: geometry, state machine, rendering, API, Flutter integration, saturation feedback, bond length mode dropdown |
 | B | sp3 case 0 (free sphere) | Wireframe sphere rendering, ray-sphere placement, pointer-move tracking |
 | C | sp3 case 1 (dihedral + ring) | Topology walking, trans/cis dots, wireframe ring, ring rotation interaction |
-| D | sp2 and sp1 | 120 deg and 180 deg geometry, hybridization-aware dispatch |
+| D | sp2/sp1 + expert controls | 120 deg and 180 deg geometry, hybridization dropdown, bond mode toggle (dative support) |
 
 ---
 
@@ -456,7 +633,8 @@ for 4 bonds. Builds ALL scaffolding that later phases extend.
 
 **New file:** `rust/src/crystolecule/guided_placement.rs`
 
-Pure-geometry library, no dependencies on node system/rendering/API. Independently testable.
+Pure-geometry library with UFF dependency (for hybridization detection and bond length
+computation), no dependencies on node system/rendering/API. Independently testable.
 
 #### A.1.1 Hybridization detection
 
@@ -482,20 +660,72 @@ Otherwise (auto-detect):
 #### A.1.2 Saturation check
 
 ```rust
-pub fn effective_max_neighbors(atomic_number: i16, hybridization: Hybridization) -> usize
-pub fn remaining_slots(structure: &AtomicStructure, atom_id: u32, hybridization: Hybridization) -> usize
+pub fn effective_max_neighbors(
+    atomic_number: i16, hybridization: Hybridization, bond_mode: BondMode,
+) -> usize
+pub fn remaining_slots(
+    structure: &AtomicStructure, atom_id: u32,
+    hybridization: Hybridization, bond_mode: BondMode,
+) -> usize
 ```
 
 Counts active bonds (bond_order > 0), subtracts from `effective_max_neighbors`.
+In Phase A, `bond_mode` is always `Covalent` (the toggle is added in Phase D).
+The `BondMode` parameter is included from the start so the function signature is
+stable across phases.
 
 #### A.1.3 Bond distance
 
 ```rust
-pub fn bond_distance(anchor_atomic_number: i16, new_atomic_number: i16) -> f64
+pub enum BondLengthMode { Crystal, Uff }
+
+/// Hardcoded table of sp3 semiconductor crystal bond lengths.
+/// Key: (min(Z_a, Z_b), max(Z_a, Z_b)). Values in Angstroms.
+/// Derived from zinc blende / diamond cubic unit cell parameter a
+/// via bond_length = a * sqrt(3) / 4.
+const CRYSTAL_BOND_LENGTHS: &[((i16, i16), f64)] = &[
+    ((6, 6), 1.545),    // Diamond C-C
+    ((14, 14), 2.352),  // Silicon Si-Si
+    ((6, 14), 1.889),   // 3C-SiC
+    ((32, 32), 2.450),  // Germanium Ge-Ge
+    ((50, 50), 2.810),  // alpha-Sn
+    ((5, 7), 1.567),    // c-BN
+    ((5, 15), 1.966),   // BP
+    ((13, 7), 1.897),   // AlN (zinc blende)
+    ((13, 15), 2.367),  // AlP
+    ((13, 33), 2.443),  // AlAs
+    ((31, 7), 1.946),   // GaN (zinc blende)
+    ((31, 15), 2.360),  // GaP
+    ((31, 33), 2.448),  // GaAs
+    ((49, 15), 2.541),  // InP
+    ((49, 33), 2.623),  // InAs
+    ((49, 51), 2.806),  // InSb
+    ((30, 16), 2.342),  // ZnS (zinc blende)
+    ((30, 34), 2.454),  // ZnSe
+    ((30, 52), 2.637),  // ZnTe
+    ((48, 52), 2.806),  // CdTe
+];
+
+pub fn bond_distance(
+    anchor_atomic_number: i16,
+    new_atomic_number: i16,
+    anchor_uff_type: &str,        // from hybridization detection
+    new_element_default_uff_type: &str,  // default UFF type for new element
+    bond_length_mode: BondLengthMode,
+) -> f64
 ```
 
-Returns `covalent_radius(A) + covalent_radius(B)` from `ATOM_INFO`. Special case:
-C-H returns 1.09 A (`C_H_BOND_LENGTH` — move/re-export to `atomic_constants.rs`).
+**Crystal mode:** look up `(min(Z_a, Z_b), max(Z_a, Z_b))` in `CRYSTAL_BOND_LENGTHS`.
+If found, return the crystal value. If not found, fall back to UFF mode.
+
+**UFF mode:** call `calc_bond_rest_length(1.0, uff_params_a, uff_params_b)` using the
+anchor atom's detected UFF params and the new element's default UFF params. The UFF
+params are already available from the hybridization detection step (A.1.1), which
+calls `assign_uff_type()` — no additional UFF dependency is needed.
+
+For the new atom's UFF type, use the default type for that element (e.g., `"C_3"` for
+carbon, `"N_3"` for nitrogen). This is the same fallback used by `assign_uff_type()`
+for atoms with no bonds.
 
 #### A.1.4 sp3 candidate position computation
 
@@ -537,12 +767,16 @@ pub fn compute_guided_placement(
     anchor_atom_id: u32,
     new_element_atomic_number: i16,
     hybridization_override: Option<Hybridization>,  // None = auto-detect
+    bond_mode: BondMode,                            // Covalent or Dative
+    bond_length_mode: BondLengthMode,               // Crystal or Uff
 ) -> GuidedPlacementResult
 ```
 
 Orchestrates: detect hybridization (using override or auto-detect) -> check saturation
--> compute bond distance -> dispatch to `compute_sp3_candidates` (sp2/sp1 in future
-phases).
+(using bond_mode) -> compute bond distance (using bond_length_mode; crystal table
+lookup with UFF fallback, or pure UFF) -> dispatch to `compute_sp3_candidates`
+(sp2/sp1 in future phases). In Phase A, callers always pass `BondMode::Covalent`.
+`BondLengthMode` defaults to `Crystal`.
 
 #### A.1.6 Tests
 
@@ -551,7 +785,13 @@ phases).
 - **sp3 case 3:** CH3 -> 4th direction opposite centroid, angle ~109.47 deg to each bond
 - **sp3 case 2:** CH2 -> 2 guides, all 4 mutual angles ~109.47 deg
 - **sp3 saturated:** CH4 -> 0 dots, `remaining_slots == 0`
-- **Bond distance:** C-C ~1.52 A, C-H 1.09 A, C-N ~1.47 A
+- **Bond distance (crystal):** C-C = 1.545 A, Si-Si = 2.352 A, Si-C = 1.889 A,
+  GaAs = 2.448 A, BN = 1.567 A
+- **Bond distance (UFF):** C-C ~1.51 A (UFF rest length, not sum of covalent radii),
+  C-H ~1.08 A (no special case needed)
+- **Bond distance (crystal fallback):** C-H not in crystal table -> falls back to UFF
+- **Bond distance (UFF mode):** C-C in UFF mode -> uses UFF even though crystal table
+  has an entry
 - **Hybridization auto:** C+4 single -> Sp3, C+double -> Sp2, N+3 single -> Sp3
 - **Saturation limits:** N(sp3) at 3, O(sp3) at 2, F at 1
 
@@ -598,7 +838,7 @@ like `set_add_atom_tool_atomic_number`, `set_active_tool`), and `atom_edit_api.r
 1. Hit test result structure -> if miss: return `NoAtomHit`
 2. Resolve hit atom to diff atom ID (same pattern as `draw_bond_by_ray`)
 3. If not in diff, promote it (same pattern as drag)
-4. Call `compute_guided_placement()` (auto-detect hybridization; override added in Phase D)
+4. Call `compute_guided_placement()` with `bond_length_mode` (auto-detect hybridization; override added in Phase D)
 5. If `remaining_slots == 0` -> return `AtomSaturated`
 6. Store GuidedPlacement state, mark data changed
 7. Return `GuidedPlacementStarted`
@@ -679,10 +919,14 @@ rendering paths.
 ```rust
 pub enum GuidedPlacementApiResult {
     NoAtomHit,
-    AtomSaturated,
+    AtomSaturated { has_additional_capacity: bool },
     GuidedPlacementStarted { guide_count: usize, anchor_atom_id: u32 },
 }
 ```
+
+`has_additional_capacity` is `true` when the atom is covalently saturated but has
+lone pairs or empty orbitals (i.e., geometric max > covalent max). Flutter uses this
+to show a context-aware SnackBar message directing the user to the bond mode toggle.
 
 #### A.4.2 New API functions
 
@@ -693,6 +937,7 @@ operation -> `refresh_structure_designer_auto`):
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_start_guided_placement(
     ray_start: APIVec3, ray_dir: APIVec3, atomic_number: i16,
+    bond_length_mode: APIBondLengthMode,  // Crystal default
 ) -> GuidedPlacementApiResult
 // hybridization_override parameter added in Phase D
 
@@ -731,7 +976,7 @@ if (activeAtomEditTool == APIAtomEditTool.addAtom) {
     if (!placed) {
       // Try switching anchor
       final result = widget.graphModel.atomEditStartGuidedPlacement(
-        ray.start, ray.direction, atomicNumber);
+        ray.start, ray.direction, atomicNumber, atomEditData.bondLengthMode);
       if (result == GuidedPlacementApiResult.noAtomHit) {
         widget.graphModel.atomEditCancelGuidedPlacement();
       }
@@ -739,7 +984,7 @@ if (activeAtomEditTool == APIAtomEditTool.addAtom) {
   } else {
     // Try to start guided placement
     final result = widget.graphModel.atomEditStartGuidedPlacement(
-      ray.start, ray.direction, atomicNumber);
+      ray.start, ray.direction, atomicNumber, atomEditData.bondLengthMode);
     if (result == GuidedPlacementApiResult.noAtomHit) {
       // Fall back to free placement
       widget.graphModel.atomEditAddAtomByRay(atomicNumber, planeNormal, ray.start, ray.direction);
@@ -753,6 +998,18 @@ if (activeAtomEditTool == APIAtomEditTool.addAtom) {
 Deferred to Phase D. In Phase A, auto-detection via UFF is always used (sp3 for most
 common cases). The dropdown and `hybridization_override` API parameter are added in
 Phase D when sp2/sp1 geometry makes the override meaningful.
+
+#### A.5.2b Bond length mode dropdown
+
+Add a Crystal/UFF dropdown to the atom edit panel (alongside the element selector).
+Add `bondLengthMode` property to `AtomEditData` (Flutter model), default:
+`APIBondLengthMode.crystal`. The selected value is passed to
+`atomEditStartGuidedPlacement()`. The dropdown resets to `crystal` when switching
+away from the Add Atom tool.
+
+This is introduced in Phase A (not deferred to Phase D) because crystal bond lengths
+are immediately valuable for the primary use case — building on sp3 semiconductor
+crystal lattices.
 
 #### A.5.3 New model methods
 
@@ -775,17 +1032,21 @@ In `AtomEditData::set_active_tool()` (in `atom_edit_data.rs`), if current tool i
 When `AtomSaturated` is returned, Flutter shows a SnackBar notification:
 
 ```dart
-ScaffoldMessenger.of(context).showSnackBar(
-  const SnackBar(
-    content: Text('Atom is fully bonded'),
-    duration: Duration(seconds: 2),
-  ),
-);
+if (result case GuidedPlacementApiResult.atomSaturated(:final hasAdditionalCapacity)) {
+  final message = hasAdditionalCapacity
+      ? 'Atom is covalently saturated. Switch to Dative bond mode to access additional bonding positions.'
+      : 'Atom is fully bonded';
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+  );
+}
 ```
 
 This follows the existing notification pattern used throughout the app (e.g.,
 `factor_into_subnetwork_dialog.dart`, `import_cnnd_library_dialog.dart`). No Rust-side
-rendering changes needed — purely a Flutter-side notification.
+rendering changes needed — purely a Flutter-side notification. The context-aware
+message guides the user toward the bond mode toggle when the atom has unused lone
+pairs or empty orbitals.
 
 ### A.7 Implementation Order
 
@@ -800,12 +1061,66 @@ rendering changes needed — purely a Flutter-side notification.
 8. API layer (A.4) — expose to Flutter via `atom_edit_api.rs`
 9. FRB codegen
 10. Flutter model methods (A.5.3)
-11. Flutter click dispatch (A.5.1)
-12. Flutter escape handling (A.5.4)
-13. Saturation feedback (A.6)
-14. Integration testing
+11. Flutter bond length mode dropdown (A.5.2b)
+12. Flutter click dispatch (A.5.1)
+13. Flutter escape handling (A.5.4)
+14. Saturation feedback (A.6)
+15. Integration testing
 
-Steps 1-2 in isolation; 3-4 safe additions; 5-8 Rust integration; 9-13 Flutter; 14 full app.
+Steps 1-2 in isolation; 3-4 safe additions; 5-8 Rust integration; 9-14 Flutter; 15 full app.
+
+### A.8 Manual Testing Checklist
+
+After Phase A is complete, you can manually verify these behaviors in the running app:
+
+1. **Basic guided placement (sp3 case 3 — e.g., CH3 methyl):**
+   - Create an atom edit node. Place a carbon atom (free placement in empty space).
+   - Add 3 hydrogens bonded to it manually (or use any method to get a carbon with 3 bonds).
+   - Select the **Add Atom** tool, pick an element (e.g., H).
+   - Click the carbon atom. You should see:
+     - The carbon turns **yellow** (anchor highlight).
+     - **1 magenta guide dot** appears at the 4th tetrahedral position, opposite the
+       centroid of the 3 existing bonds.
+     - An **orange cylinder** connects the carbon to the guide dot.
+   - Click the guide dot → a hydrogen is placed and bonded. Guides disappear.
+
+2. **sp3 case 2 (e.g., CH2 methylene):**
+   - Start with a carbon with 2 bonds (e.g., C bonded to 2 H's).
+   - Click it with Add Atom tool → **2 magenta guide dots** should appear, symmetrically
+     placed so all 4 bond angles are ~109.5 deg.
+   - Click either dot → atom placed, guides cleared.
+
+3. **Saturated atom feedback (sp3 case 4):**
+   - Click a fully bonded atom (e.g., CH4 carbon with 4 bonds).
+   - A **SnackBar** should appear: "Atom is fully bonded". No guide dots shown.
+
+4. **Saturation with additional capacity (e.g., NH3 nitrogen):**
+   - Click a nitrogen with 3 bonds. In covalent mode (default), it's saturated.
+   - SnackBar should say: "Atom is covalently saturated. Switch to Dative bond mode
+     to access additional bonding positions."
+
+5. **Cancel and navigation:**
+   - Enter guided placement (click an atom with open slots).
+   - Press **Escape** → guides disappear, return to idle.
+   - Enter guided placement again, then click **empty space** → cancel.
+   - Enter guided placement, then click a **different atom** → guides recompute for
+     the new anchor.
+
+6. **Free placement still works:**
+   - With Add Atom tool active, click empty space (not on any atom) → atom is placed
+     at ray-plane intersection as before. Guided placement is not triggered.
+
+7. **Bond length mode dropdown:**
+   - The atom edit panel should show a **Crystal / UFF** dropdown.
+   - With Crystal mode: place a carbon on an existing silicon atom → bond distance
+     should be ~1.889 A (SiC crystal value).
+   - Switch to UFF mode, repeat → bond distance should be the UFF-computed value
+     (slightly different).
+   - The dropdown resets to Crystal when switching tools.
+
+8. **Tool switching:**
+   - Enter guided placement, then switch to a different tool (e.g., Default or Add Bond).
+   - Guided placement should be cancelled automatically (no lingering guide dots).
 
 ---
 
@@ -877,6 +1192,38 @@ Reuse `atom_edit_place_guided_atom` API. Rust checks for `FreeSphere` mode and u
 - Wireframe circle: points on correct plane at correct radius
 - Case 0 dispatch: 0 bonds -> `FreeSphere` result
 
+### B.6 Manual Testing Checklist
+
+After Phase B is complete (requires Phase A), test these in the running app:
+
+1. **Wireframe sphere on bare atom:**
+   - Place a single carbon atom in empty space (no bonds).
+   - Select Add Atom tool, pick an element (e.g., H), click the bare carbon.
+   - You should see:
+     - The carbon turns **yellow** (anchor highlight).
+     - A **gray wireframe sphere** appears centered on the carbon, with radius equal
+       to the bond distance (C-H in crystal or UFF mode).
+   - No fixed guide dots — instead, a guide dot should **track your cursor** on the
+     sphere surface as you move the mouse.
+
+2. **Placement on sphere:**
+   - Move your cursor to a desired position on the sphere surface.
+   - Click → the new atom is placed at that position and bonded to the anchor.
+   - The wireframe sphere disappears, tool returns to idle.
+
+3. **Front hemisphere only:**
+   - Move the cursor behind the sphere (from the camera's perspective). The guide dot
+     should only appear on the user-facing (front) hemisphere — it should not snap to
+     the back side of the sphere.
+
+4. **Sphere radius matches bond length mode:**
+   - Switch between Crystal and UFF bond length modes.
+   - The wireframe sphere radius should change accordingly.
+
+5. **Cancel from sphere mode:**
+   - Enter sphere mode (click bare atom), then press Escape → sphere disappears.
+   - Click bare atom again, then click empty space away from the sphere → cancels.
+
 ---
 
 ## Phase C — sp3 Case 1 (Dihedral-Aware + Ring Fallback)
@@ -937,28 +1284,78 @@ pub enum GuidedPlacementMode {
 - **Ring geometry:** center, normal, radius match cone/sphere intersection
 - **No-reference:** C-C where second C has no other bonds -> returns `None`
 
+### C.5 Manual Testing Checklist
+
+After Phase C is complete (requires Phase A + B), test these in the running app:
+
+1. **Dihedral-aware placement (trans/cis dots):**
+   - Build an ethane-like fragment: C-C where the second carbon has at least one hydrogen.
+   - Select Add Atom tool (e.g., H), click the first carbon (which has 1 bond to the
+     second carbon).
+   - You should see **6 magenta guide dots** on a cone around the bond axis:
+     - **3 larger dots** (primary, 0.2 A radius) — trans/staggered positions.
+     - **3 smaller dots** (secondary, 0.15 A radius) — cis/eclipsed positions.
+   - Orange cylinders connect the anchor to each dot.
+   - Click a trans (larger) dot → atom placed at staggered position. Verify the
+     resulting dihedral angle is ~60 deg relative to the reference atom on the other carbon.
+   - Repeat, click a cis (smaller) dot → atom placed at eclipsed position (0 deg dihedral).
+
+2. **Ring fallback (no dihedral reference):**
+   - Place two carbons bonded together, with no other atoms on the second carbon
+     (e.g., C-C where the second C is bare).
+   - Click the first carbon with Add Atom tool.
+   - You should see a **gray wireframe ring** (circle) around the bond axis, at the
+     tetrahedral cone angle (109.47 deg from the existing bond).
+   - **3 guide dots** should appear on the ring, spaced 120 deg apart, and they should
+     **rotate together** as you move the mouse around the ring.
+   - Click → one atom is placed at the clicked position.
+
+3. **Ring geometry verification:**
+   - The ring should be centered along the bond axis at the correct distance.
+   - The 3 dots should maintain 120 deg spacing at all cursor positions.
+   - Rotating the view should show the ring is perpendicular to the bond axis.
+
+4. **Transition from ring to fixed dots:**
+   - Start with C-C (bare, ring mode). Place one atom via the ring.
+   - Now the first carbon has 2 bonds → click it again → should show 2 fixed guide
+     dots (sp3 case 2 from Phase A), not a ring.
+
+5. **Cancel from ring mode:**
+   - Enter ring mode, press Escape → ring disappears. Click empty space → also cancels.
+
 ---
 
-## Phase D — sp2 and sp1 Geometry
+## Phase D — sp2/sp1 Geometry, Hybridization Dropdown, Bond Mode Toggle
 
-**Goal:** sp2 (120 deg) and sp1 (180 deg) support.
+**Goal:** sp2 (120 deg) and sp1 (180 deg) support. Hybridization override and dative
+bond mode UI controls.
 
 **Prerequisite:** Phase A. Phases B/C can run in parallel with D.
 
-**Note:** This phase adds the **Hybridization dropdown** to the atom edit panel
-(Auto / sp3 / sp2 / sp1). With only sp3 (Phase A), auto-detection is almost always
-correct. Once sp2/sp1 geometry is available, the user needs the override to tell the
-system "this carbon should be sp2" when the current bonding state is ambiguous.
+**Note:** This phase adds both the **Hybridization dropdown** and the **Bond Mode
+toggle** to the atom edit panel. With only sp3 (Phase A), auto-detection is almost
+always correct and covalent mode suffices. Once sp2/sp1 geometry is available, the
+user needs the hybridization override to tell the system "this carbon should be sp2"
+when the current bonding state is ambiguous. The bond mode toggle enables dative
+bonding by unlocking lone pair and empty orbital positions.
 
-### D.0 Hybridization Dropdown and API Changes
+### D.0 Hybridization Dropdown, Bond Mode Toggle, and API Changes
 
-Add `hybridization_override: Option<APIHybridization>` parameter to
-`atom_edit_start_guided_placement()`. Add `hybridizationOverride` property to
-`AtomEditData` (Flutter model), backed by a dropdown in the atom edit panel. Values:
-`null` (Auto), `sp3`, `sp2`, `sp1`. Resets to `null` when switching away from Add
-Atom tool. Update Flutter click dispatch to pass the override through to the Rust API.
+**Hybridization dropdown:** Add `hybridization_override: Option<APIHybridization>`
+parameter to `atom_edit_start_guided_placement()`. Add `hybridizationOverride`
+property to `AtomEditData` (Flutter model), backed by a dropdown in the atom edit
+panel. Values: `null` (Auto), `sp3`, `sp2`, `sp1`. Resets to `null` when switching
+away from Add Atom tool.
+
+**Bond mode toggle:** Add `bond_mode: APIBondMode` parameter to
+`atom_edit_start_guided_placement()`. Add `bondMode` property to `AtomEditData`
+(Flutter model), backed by a Covalent/Dative toggle in the atom edit panel. Default:
+`covalent`. Resets to `covalent` when switching away from Add Atom tool.
+
+Update Flutter click dispatch to pass both overrides through to the Rust API.
 
 `APIHybridization` is an FRB-friendly enum: `{ auto_, sp3, sp2, sp1 }`.
+`APIBondMode` is an FRB-friendly enum: `{ covalent, dative }`.
 
 ### D.1 sp2 Candidates
 
@@ -991,13 +1388,22 @@ pub fn compute_sp1_candidates(
 **Case 2 (saturated):** empty. **Case 1:** `d2 = -b1`, 1 dot opposite.
 **Case 0:** sphere.
 
-### D.3 Hybridization-Aware Dispatch
+### D.3 Hybridization-Aware and Bond-Mode-Aware Dispatch
 
-Update `compute_guided_placement()` to match on hybridization (from override or
-auto-detect) and dispatch to `compute_sp3/sp2/sp1_candidates`. When the user sets the
-dropdown to sp2 or sp1, the override flows through and selects the correct geometry
-even when auto-detection would default to sp3. Verify `effective_max_neighbors` covers
-all element+hybridization combos (C sp2=3, C sp1=2, N sp2=3, O sp2=2, B sp2=3).
+Update `compute_guided_placement()` to accept `bond_mode` and match on hybridization
+(from override or auto-detect) to dispatch to `compute_sp3/sp2/sp1_candidates`.
+
+When the user sets the hybridization dropdown to sp2 or sp1, the override flows
+through and selects the correct geometry even when auto-detection would default to sp3.
+
+When the user sets bond mode to Dative, `effective_max_neighbors` returns the geometric
+max (sp3=4, sp2=3, sp1=2) instead of the element-specific covalent max. This unlocks
+lone pair and empty orbital positions. For elements where covalent max already equals
+geometric max (e.g., carbon sp3 = 4), the toggle has no effect.
+
+Verify `effective_max_neighbors` covers all element+hybridization+bond_mode combos:
+- Covalent: C sp2=3, C sp1=2, N sp3=3, N sp2=3, O sp3=2, O sp2=2, B sp2=3
+- Dative: N sp3=4, O sp3=4, O sp2=3, B sp2=3 (same; empty p-orbital is out of scope)
 
 ### D.4 Tests
 
@@ -1008,3 +1414,72 @@ all element+hybridization combos (C sp2=3, C sp1=2, N sp2=3, O sp2=2, B sp2=3).
 - **Hybridization override:** C+1 single with override=Sp2 -> uses Sp2 geometry
 - **Saturation:** C sp2 at 3, C sp1 at 2, N sp2 at 3
 - **sp2 ring fallback:** ring uses 120 deg, not 109.47 deg
+- **Bond mode — dative N sp3:** NH3 (3 bonds) + Covalent -> 0 dots (saturated);
+  NH3 + Dative -> 1 dot at lone pair position
+- **Bond mode — dative O sp3:** H2O (2 bonds) + Covalent -> 0 dots;
+  H2O + Dative -> 2 dots at lone pair positions
+- **Bond mode — no effect on C sp3:** CH3 (3 bonds) + Covalent -> 1 dot;
+  CH3 + Dative -> 1 dot (same, because covalent max = geometric max = 4)
+- **Bond mode — dative B:** BH3 (3 bonds, sp2) + Covalent -> 0 dots;
+  user overrides hybridization to sp3 + Dative -> 1 dot (acceptor orbital)
+- **Saturation feedback:** NH3 + Covalent -> `AtomSaturated` with
+  `has_additional_capacity: true` (for context-aware SnackBar message)
+
+### D.5 Manual Testing Checklist
+
+After Phase D is complete (requires Phase A; B/C independent), test these in the running app:
+
+1. **Hybridization dropdown:**
+   - The atom edit panel should show a **Hybridization** dropdown: Auto / sp3 / sp2 / sp1.
+   - Default is Auto. It resets to Auto when switching away from Add Atom tool.
+
+2. **sp2 geometry (120 deg):**
+   - Place a carbon, set hybridization to **sp2**.
+   - Bond 2 atoms to it. Click the carbon with Add Atom → **1 guide dot** should appear
+     in the molecular plane at ~120 deg from both existing bonds.
+   - With only 1 bond: **2 guide dots** at +/-120 deg in the plane (if upstream reference
+     exists) or a ring (if no reference).
+
+3. **sp1 geometry (180 deg):**
+   - Place a carbon, set hybridization to **sp1**.
+   - Bond 1 atom to it. Click with Add Atom → **1 guide dot** directly opposite the
+     existing bond (180 deg).
+
+4. **Hybridization override resolves ambiguity:**
+   - Place a carbon with 1 single bond. In Auto mode it defaults to sp3.
+   - Switch dropdown to sp2 → guide dots change to 120 deg geometry.
+   - Switch to sp1 → single dot at 180 deg.
+   - Switch back to Auto → returns to sp3 (tetrahedral).
+
+5. **Bond mode toggle (Covalent / Dative):**
+   - The atom edit panel should show a **Bond Mode** toggle: Covalent (default) / Dative.
+   - It resets to Covalent when switching away from Add Atom tool.
+
+6. **Dative mode — nitrogen (NH3):**
+   - Build NH3: nitrogen with 3 hydrogen bonds.
+   - In Covalent mode, click the nitrogen → SnackBar says "Atom is covalently saturated.
+     Switch to Dative bond mode to access additional bonding positions."
+   - Switch to Dative mode, click the nitrogen → **1 guide dot** appears at the lone
+     pair position (4th tetrahedral direction).
+
+7. **Dative mode — oxygen (H2O):**
+   - Build H2O: oxygen with 2 hydrogen bonds.
+   - Covalent mode → saturated (SnackBar). Dative mode → **2 guide dots** at the two
+     lone pair positions.
+
+8. **Dative mode — no effect on carbon:**
+   - Build CH3 (carbon with 3 bonds). Both Covalent and Dative modes should show
+     **1 guide dot** (carbon sp3 covalent max = geometric max = 4).
+
+9. **Combined controls:**
+   - Build a boron with 3 bonds (sp2 auto-detected).
+   - Covalent mode → saturated (sp2 = 3 max).
+   - Override hybridization to sp3 + Dative mode → **1 guide dot** appears
+     (acceptor orbital position above/below the plane).
+
+10. **All three dropdowns together:**
+    - Verify that Hybridization, Bond Mode, and Bond Length Mode dropdowns all appear
+      in the atom edit panel and work independently.
+    - Change each one and confirm guided placement responds correctly.
+    - Switch to a different tool and back → all three reset to defaults
+      (Auto, Covalent, Crystal).
