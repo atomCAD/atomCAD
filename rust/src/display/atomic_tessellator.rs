@@ -643,6 +643,13 @@ pub fn tessellate_atom_impostor(
     let radius = get_displayed_atom_radius(atom, visualization) as f32;
     let (color, roughness, metallic) = get_atom_color_and_material(atom);
 
+    // Override color for marked atoms
+    let color = match display_state {
+        AtomDisplayState::Marked => MARKER_COLOR,
+        AtomDisplayState::SecondaryMarked => SECONDARY_MARKER_COLOR,
+        AtomDisplayState::Normal => color,
+    };
+
     // Add the atom quad to the impostor mesh
     atom_impostor_mesh.add_atom_quad(
         &atom.position.as_vec3(),
@@ -651,18 +658,6 @@ pub fn tessellate_atom_impostor(
         roughness,
         metallic,
     );
-
-    // TODO: Handle markers for marked atoms (AtomDisplayState::Marked, AtomDisplayState::SecondaryMarked)
-    // For now, we'll skip marker rendering in impostors - can be added later if needed
-    match display_state {
-        AtomDisplayState::Marked | AtomDisplayState::SecondaryMarked => {
-            // Marker rendering for impostors could be implemented later
-            // This would require additional impostor quads or a separate marker system
-        }
-        AtomDisplayState::Normal => {
-            // No marker for normal atoms
-        }
-    }
 }
 
 /// Tessellate bond impostor using inline bond data
