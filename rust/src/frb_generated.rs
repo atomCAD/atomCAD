@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -896,9 +896,11 @@ fn wire__crate__api__structure_designer__atom_edit_api__atom_edit_start_guided_p
             let api_ray_start = <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
 let api_ray_dir = <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
 let api_atomic_number = <i16>::sse_decode(&mut deserializer);
+let api_hybridization_override = <crate::api::structure_designer::structure_designer_api_types::APIHybridization>::sse_decode(&mut deserializer);
+let api_bond_mode = <crate::api::structure_designer::structure_designer_api_types::APIBondMode>::sse_decode(&mut deserializer);
 let api_bond_length_mode = <crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::atom_edit_api::atom_edit_start_guided_placement(api_ray_start, api_ray_dir, api_atomic_number, api_bond_length_mode))?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::atom_edit_api::atom_edit_start_guided_placement(api_ray_start, api_ray_dir, api_atomic_number, api_hybridization_override, api_bond_mode, api_bond_length_mode))?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__atom_edit_api__atom_edit_toggle_include_base_bonds_in_diff_impl(
@@ -6996,6 +6998,20 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIBondMode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => {
+                crate::api::structure_designer::structure_designer_api_types::APIBondMode::Covalent
+            }
+            1 => crate::api::structure_designer::structure_designer_api_types::APIBondMode::Dative,
+            _ => unreachable!("Invalid variant for APIBondMode: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIBoolData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7359,6 +7375,28 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             center: var_center,
             shift: var_shift,
             subdivision: var_subdivision,
+        };
+    }
+}
+
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIHybridization {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => {
+                crate::api::structure_designer::structure_designer_api_types::APIHybridization::Auto
+            }
+            1 => {
+                crate::api::structure_designer::structure_designer_api_types::APIHybridization::Sp3
+            }
+            2 => {
+                crate::api::structure_designer::structure_designer_api_types::APIHybridization::Sp2
+            }
+            3 => {
+                crate::api::structure_designer::structure_designer_api_types::APIHybridization::Sp1
+            }
+            _ => unreachable!("Invalid variant for APIHybridization: {}", inner),
         };
     }
 }
@@ -9920,6 +9958,33 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIBondMode
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Covalent => 0.into_dart(),
+            Self::Dative => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIBondMode
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIBondMode,
+    > for crate::api::structure_designer::structure_designer_api_types::APIBondMode
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIBondMode {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIBoolData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -10543,6 +10608,35 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIHybridization
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Auto => 0.into_dart(),
+            Self::Sp3 => 1.into_dart(),
+            Self::Sp2 => 2.into_dart(),
+            Self::Sp1 => 3.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIHybridization
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIHybridization,
+    > for crate::api::structure_designer::structure_designer_api_types::APIHybridization
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIHybridization {
         self
     }
 }
@@ -12404,6 +12498,15 @@ crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode:
     }
 }
 
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIBondMode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIBondMode::Covalent => { 0 }
+crate::api::structure_designer::structure_designer_api_types::APIBondMode::Dative => { 1 }
+ _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIBoolData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12657,6 +12760,17 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.center, serializer);
         <i32>::sse_encode(self.shift, serializer);
         <i32>::sse_encode(self.subdivision, serializer);
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIHybridization {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIHybridization::Auto => { 0 }
+crate::api::structure_designer::structure_designer_api_types::APIHybridization::Sp3 => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIHybridization::Sp2 => { 2 }
+crate::api::structure_designer::structure_designer_api_types::APIHybridization::Sp1 => { 3 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 
@@ -14355,7 +14469,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -14379,7 +14493,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

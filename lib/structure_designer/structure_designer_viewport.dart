@@ -252,6 +252,8 @@ class _StructureDesignerViewportState
               ray.start,
               ray.direction,
               atomicNumber,
+              widget.graphModel.hybridizationOverride,
+              widget.graphModel.bondMode,
               widget.graphModel.bondLengthMode,
             );
             switch (result) {
@@ -272,6 +274,8 @@ class _StructureDesignerViewportState
             ray.start,
             ray.direction,
             atomicNumber,
+            widget.graphModel.hybridizationOverride,
+            widget.graphModel.bondMode,
             widget.graphModel.bondLengthMode,
           );
           switch (result) {

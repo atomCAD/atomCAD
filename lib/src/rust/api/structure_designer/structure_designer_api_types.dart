@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -221,6 +221,16 @@ enum APIBondLengthMode {
 
   /// Always use UFF rest bond length formula.
   uff,
+  ;
+}
+
+/// Bond mode for guided atom placement saturation limits.
+enum APIBondMode {
+  /// Use element-specific covalent max neighbors.
+  covalent,
+
+  /// Use geometric max (unlocks lone pair / empty orbital positions).
+  dative,
   ;
 }
 
@@ -745,6 +755,23 @@ class APIHalfSpaceData {
           center == other.center &&
           shift == other.shift &&
           subdivision == other.subdivision;
+}
+
+/// Hybridization override for guided atom placement.
+/// When set to Auto, hybridization is auto-detected via UFF type assignment.
+enum APIHybridization {
+  /// Auto-detect hybridization from bonding state.
+  auto,
+
+  /// sp3 tetrahedral (109.47°).
+  sp3,
+
+  /// sp2 trigonal planar (120°).
+  sp2,
+
+  /// sp1 linear (180°).
+  sp1,
+  ;
 }
 
 class APIImportXYZData {

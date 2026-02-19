@@ -50,8 +50,8 @@ pub enum GuidedPlacementMode {
         /// Cursor-tracked preview position on the sphere surface (updated by pointer_move).
         preview_position: Option<DVec3>,
     },
-    /// sp3 case 1 without dihedral reference: wireframe ring where 3 guide dots
-    /// rotate together as the user moves the cursor.
+    /// Ring without reference (sp3 case 1 or sp2 case 1): wireframe ring where
+    /// guide dots rotate together as the user moves the cursor.
     FreeRing {
         /// Center of the ring (on the cone axis, offset from anchor).
         ring_center: DVec3,
@@ -63,8 +63,10 @@ pub enum GuidedPlacementMode {
         bond_distance: f64,
         /// Anchor atom position (needed for placement).
         anchor_pos: DVec3,
-        /// Cursor-tracked preview: 3 positions at 120° spacing on the ring.
-        preview_positions: Option<[DVec3; 3]>,
+        /// Number of preview dots (3 for sp3, 2 for sp2).
+        num_ring_dots: usize,
+        /// Cursor-tracked preview positions on the ring.
+        preview_positions: Option<Vec<DVec3>>,
     },
 }
 
@@ -155,26 +157,26 @@ pub fn ray_sphere_nearest_point(
 /// Derived from zinc blende / diamond cubic unit cell parameter `a`
 /// via `bond_length = a * sqrt(3) / 4`.
 const CRYSTAL_BOND_LENGTHS: &[((i16, i16), f64)] = &[
-    ((6, 6), 1.545),    // Diamond C-C
-    ((14, 14), 2.352),  // Silicon Si-Si
-    ((6, 14), 1.889),   // 3C-SiC
-    ((32, 32), 2.450),  // Germanium Ge-Ge
-    ((50, 50), 2.810),  // alpha-Sn
-    ((5, 7), 1.567),    // c-BN
-    ((5, 15), 1.966),   // BP
-    ((7, 13), 1.897),   // AlN (zinc blende)
-    ((13, 15), 2.367),  // AlP
-    ((13, 33), 2.443),  // AlAs
-    ((7, 31), 1.946),   // GaN (zinc blende)
-    ((15, 31), 2.360),  // GaP
-    ((31, 33), 2.448),  // GaAs
-    ((15, 49), 2.541),  // InP
-    ((33, 49), 2.623),  // InAs
-    ((49, 51), 2.806),  // InSb
-    ((16, 30), 2.342),  // ZnS (zinc blende)
-    ((30, 34), 2.454),  // ZnSe
-    ((30, 52), 2.637),  // ZnTe
-    ((48, 52), 2.806),  // CdTe
+    ((6, 6), 1.545),   // Diamond C-C
+    ((14, 14), 2.352), // Silicon Si-Si
+    ((6, 14), 1.889),  // 3C-SiC
+    ((32, 32), 2.450), // Germanium Ge-Ge
+    ((50, 50), 2.810), // alpha-Sn
+    ((5, 7), 1.567),   // c-BN
+    ((5, 15), 1.966),  // BP
+    ((7, 13), 1.897),  // AlN (zinc blende)
+    ((13, 15), 2.367), // AlP
+    ((13, 33), 2.443), // AlAs
+    ((7, 31), 1.946),  // GaN (zinc blende)
+    ((15, 31), 2.360), // GaP
+    ((31, 33), 2.448), // GaAs
+    ((15, 49), 2.541), // InP
+    ((33, 49), 2.623), // InAs
+    ((49, 51), 2.806), // InSb
+    ((16, 30), 2.342), // ZnS (zinc blende)
+    ((30, 34), 2.454), // ZnSe
+    ((30, 52), 2.637), // ZnTe
+    ((48, 52), 2.806), // CdTe
 ];
 
 fn crystal_bond_length(z_a: i16, z_b: i16) -> Option<f64> {
@@ -276,11 +278,7 @@ pub fn effective_max_neighbors(
 /// Count active (non-deleted) bonds on an atom.
 fn count_active_neighbors(structure: &AtomicStructure, atom_id: u32) -> usize {
     match structure.get_atom(atom_id) {
-        Some(atom) => atom
-            .bonds
-            .iter()
-            .filter(|b| !b.is_delete_marker())
-            .count(),
+        Some(atom) => atom.bonds.iter().filter(|b| !b.is_delete_marker()).count(),
         None => 0,
     }
 }
@@ -380,14 +378,12 @@ pub fn compute_sp3_candidates(
         1 => {
             let bond_dir = existing_bond_dirs[0];
             // Find the neighbor atom for dihedral reference
-            let neighbor_id = structure
-                .get_atom(anchor_atom_id)
-                .and_then(|atom| {
-                    atom.bonds
-                        .iter()
-                        .find(|b| !b.is_delete_marker())
-                        .map(|b| b.other_atom_id())
-                });
+            let neighbor_id = structure.get_atom(anchor_atom_id).and_then(|atom| {
+                atom.bonds
+                    .iter()
+                    .find(|b| !b.is_delete_marker())
+                    .map(|b| b.other_atom_id())
+            });
 
             if let Some(neighbor_id) = neighbor_id {
                 if let Some(ref_perp) =
@@ -447,11 +443,7 @@ fn sp3_case2(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot>
     if n.length_squared() < 1e-12 || mid.length_squared() < 1e-12 {
         // Degenerate: bonds are parallel or anti-parallel
         // Pick perpendicular directions
-        let arb = if b1.x.abs() < 0.9 {
-            DVec3::X
-        } else {
-            DVec3::Y
-        };
+        let arb = if b1.x.abs() < 0.9 { DVec3::X } else { DVec3::Y };
         let perp1 = b1.cross(arb).normalize();
         let perp2 = b1.cross(perp1).normalize();
         return vec![
@@ -628,10 +620,11 @@ pub fn compute_sp3_case1_ring(
     (ring_center, ring_normal, ring_radius)
 }
 
-/// Compute 3 preview positions on the ring at 120° spacing, anchored to a reference angle.
+/// Compute preview positions on the ring at equal angular spacing, anchored to a reference angle.
 ///
-/// `point_on_ring` is the closest point on the ring to the cursor. The 3 dots are placed
-/// at 0°, 120°, 240° from that point.
+/// `point_on_ring` is the closest point on the ring to the cursor.
+/// `num_dots` determines the number of positions (3 for sp3, 2 for sp2).
+/// `cone_half_angle` is the half-angle of the cone that defines the ring.
 pub fn compute_ring_preview_positions(
     ring_center: DVec3,
     ring_normal: DVec3,
@@ -639,27 +632,41 @@ pub fn compute_ring_preview_positions(
     anchor_pos: DVec3,
     bond_distance: f64,
     point_on_ring: DVec3,
-) -> [DVec3; 3] {
+    num_dots: usize,
+    cone_half_angle: f64,
+) -> Vec<DVec3> {
     let radial = (point_on_ring - ring_center).normalize();
     let tangent = ring_normal.cross(radial).normalize();
 
     // We need positions at bond_distance from the anchor, not at ring_radius from ring_center.
     // Since the ring is the intersection of the cone with a plane, all ring points
     // are equidistant from the anchor. Compute the actual positions from the anchor.
-    let cone_half_angle = std::f64::consts::PI - TETRAHEDRAL_ANGLE;
     let cos_cone = cone_half_angle.cos();
     let sin_cone = cone_half_angle.sin();
     let cone_axis = ring_normal; // -bond_dir
 
-    let mut positions = [DVec3::ZERO; 3];
-    for (i, &angle_deg) in [0.0_f64, 120.0, 240.0].iter().enumerate() {
-        let angle = angle_deg.to_radians();
-        let (sin_a, cos_a) = angle.sin_cos();
-        let r = radial * cos_a + tangent * sin_a;
-        let dir = cone_axis * cos_cone + r * sin_cone;
-        positions[i] = anchor_pos + dir.normalize() * bond_distance;
+    let angle_step = 360.0 / num_dots as f64;
+    (0..num_dots)
+        .map(|i| {
+            let angle = (i as f64 * angle_step).to_radians();
+            let (sin_a, cos_a) = angle.sin_cos();
+            let r = radial * cos_a + tangent * sin_a;
+            let dir = cone_axis * cos_cone + r * sin_cone;
+            anchor_pos + dir.normalize() * bond_distance
+        })
+        .collect()
+}
+
+/// Compute the cone half-angle based on the number of ring dots.
+///
+/// sp3 (3 dots): cone half-angle = π - tetrahedral_angle ≈ 70.53°
+/// sp2 (2 dots): cone half-angle = π - 120° = 60°
+pub fn cone_half_angle_for_ring(num_ring_dots: usize) -> f64 {
+    if num_ring_dots == 2 {
+        std::f64::consts::PI - TRIGONAL_ANGLE // 60°
+    } else {
+        std::f64::consts::PI - TETRAHEDRAL_ANGLE // 70.53°
     }
-    positions
 }
 
 /// Project a ray onto the ring plane and find the closest point on the ring circle.
@@ -696,6 +703,274 @@ pub fn ray_ring_nearest_point(
     }
 
     Some(*ring_center + offset.normalize() * ring_radius)
+}
+
+// ============================================================================
+// sp2 candidate position computation (trigonal planar, 120°)
+// ============================================================================
+
+/// Trigonal planar angle in radians: 120° = 2π/3
+const TRIGONAL_ANGLE: f64 = 2.0 * std::f64::consts::PI / 3.0;
+
+/// Compute sp2 candidate positions for guided placement.
+///
+/// - Case 3 (saturated): empty dots
+/// - Case 2 (1 remaining): single dot opposite the midpoint of existing bonds, in-plane
+/// - Case 1 (2 remaining): planar-reference-aware (2 dots) or ring fallback
+/// - Case 0: handled by caller (FreeSphere)
+pub fn compute_sp2_candidates(
+    structure: &AtomicStructure,
+    anchor_atom_id: u32,
+    anchor_pos: DVec3,
+    existing_bond_dirs: &[DVec3],
+    bond_dist: f64,
+) -> Sp2CandidateResult {
+    match existing_bond_dirs.len() {
+        3.. => Sp2CandidateResult::Dots(vec![]), // saturated
+        2 => Sp2CandidateResult::Dots(sp2_case2(anchor_pos, existing_bond_dirs, bond_dist)),
+        1 => {
+            let bond_dir = existing_bond_dirs[0];
+            let neighbor_id = structure.get_atom(anchor_atom_id).and_then(|atom| {
+                atom.bonds
+                    .iter()
+                    .find(|b| !b.is_delete_marker())
+                    .map(|b| b.other_atom_id())
+            });
+
+            if let Some(neighbor_id) = neighbor_id {
+                if let Some(plane_normal) =
+                    find_sp2_planar_reference(structure, anchor_atom_id, neighbor_id, bond_dir)
+                {
+                    // Planar reference found: 2 fixed dots at ±120° in the plane
+                    Sp2CandidateResult::Dots(compute_sp2_case1_with_reference(
+                        anchor_pos,
+                        bond_dir,
+                        plane_normal,
+                        bond_dist,
+                    ))
+                } else {
+                    // No planar reference: ring fallback (cone half-angle = 60° from -bond_dir)
+                    let (ring_center, ring_normal, ring_radius) =
+                        compute_sp2_case1_ring(anchor_pos, bond_dir, bond_dist);
+                    Sp2CandidateResult::FreeRing {
+                        ring_center,
+                        ring_normal,
+                        ring_radius,
+                    }
+                }
+            } else {
+                Sp2CandidateResult::Dots(vec![])
+            }
+        }
+        _ => Sp2CandidateResult::Dots(vec![]), // case 0: handled by caller (FreeSphere)
+    }
+}
+
+/// Result of sp2 candidate computation, accounting for case 1 ring fallback.
+#[derive(Debug, Clone)]
+pub enum Sp2CandidateResult {
+    /// Fixed guide dots at computed positions.
+    Dots(Vec<GuideDot>),
+    /// sp2 case 1 without planar reference: free ring mode.
+    FreeRing {
+        ring_center: DVec3,
+        ring_normal: DVec3,
+        ring_radius: f64,
+    },
+}
+
+/// sp2 case 2: one remaining direction, opposite the midpoint of existing bonds.
+/// The result naturally lies in the b1-b2 plane.
+fn sp2_case2(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot> {
+    let sum = dirs[0] + dirs[1];
+    let d3 = if sum.length_squared() < 1e-12 {
+        // Degenerate: bonds cancel out (180° apart). Pick perpendicular.
+        let arb = if dirs[0].x.abs() < 0.9 {
+            DVec3::X
+        } else {
+            DVec3::Y
+        };
+        arb.cross(dirs[0]).normalize()
+    } else {
+        (-sum).normalize()
+    };
+    vec![GuideDot {
+        position: anchor_pos + d3 * bond_dist,
+        dot_type: GuideDotType::Primary,
+    }]
+}
+
+/// Find a planar reference for sp2 case 1.
+///
+/// Walk upstream: anchor A has one neighbor B. If B has another neighbor C,
+/// compute the plane normal from the A-B-C triangle. The sp2 directions
+/// must lie in this plane.
+pub fn find_sp2_planar_reference(
+    structure: &AtomicStructure,
+    anchor_atom_id: u32,
+    neighbor_atom_id: u32,
+    bond_dir: DVec3,
+) -> Option<DVec3> {
+    let neighbor = structure.get_atom(neighbor_atom_id)?;
+
+    // Look for another neighbor of B (not A)
+    for bond in &neighbor.bonds {
+        if bond.is_delete_marker() {
+            continue;
+        }
+        let other_id = bond.other_atom_id();
+        if other_id == anchor_atom_id {
+            continue;
+        }
+        if let Some(other_atom) = structure.get_atom(other_id) {
+            let anchor = structure.get_atom(anchor_atom_id)?;
+            let ba = anchor.position - neighbor.position;
+            let bc = other_atom.position - neighbor.position;
+            let normal = ba.cross(bc);
+            if normal.length_squared() > 1e-12 {
+                return Some(normal.normalize());
+            }
+        }
+    }
+
+    // Also check anchor's other neighbors for a plane reference
+    let anchor = structure.get_atom(anchor_atom_id)?;
+    for bond in &anchor.bonds {
+        if bond.is_delete_marker() {
+            continue;
+        }
+        let other_id = bond.other_atom_id();
+        if other_id == neighbor_atom_id {
+            continue;
+        }
+        if let Some(other_atom) = structure.get_atom(other_id) {
+            let dir_to_other = (other_atom.position - anchor.position).normalize();
+            let normal = bond_dir.cross(dir_to_other);
+            if normal.length_squared() > 1e-12 {
+                return Some(normal.normalize());
+            }
+        }
+    }
+
+    None
+}
+
+/// Compute sp2 case 1 with planar reference: 2 guide dots at ±120° from existing bond.
+///
+/// Both positions lie in the plane defined by the bond direction and the plane normal.
+fn compute_sp2_case1_with_reference(
+    anchor_pos: DVec3,
+    bond_dir: DVec3,
+    plane_normal: DVec3,
+    bond_dist: f64,
+) -> Vec<GuideDot> {
+    // Build an in-plane perpendicular to the bond direction
+    let in_plane_perp = plane_normal.cross(bond_dir);
+    let in_plane_perp = if in_plane_perp.length_squared() < 1e-12 {
+        // plane_normal parallel to bond_dir — pick arbitrary perpendicular
+        let arb = if bond_dir.x.abs() < 0.9 {
+            DVec3::X
+        } else {
+            DVec3::Y
+        };
+        bond_dir.cross(arb).normalize()
+    } else {
+        in_plane_perp.normalize()
+    };
+
+    // Two directions at ±120° from bond_dir in the plane:
+    // d = bond_dir * cos(120°) + in_plane_perp * sin(120°)
+    let cos_120 = (TRIGONAL_ANGLE).cos(); // cos(120°) = -0.5
+    let sin_120 = (TRIGONAL_ANGLE).sin(); // sin(120°) = √3/2
+
+    let d1 = (bond_dir * cos_120 + in_plane_perp * sin_120).normalize();
+    let d2 = (bond_dir * cos_120 - in_plane_perp * sin_120).normalize();
+
+    vec![
+        GuideDot {
+            position: anchor_pos + d1 * bond_dist,
+            dot_type: GuideDotType::Primary,
+        },
+        GuideDot {
+            position: anchor_pos + d2 * bond_dist,
+            dot_type: GuideDotType::Primary,
+        },
+    ]
+}
+
+/// Compute the ring geometry for sp2 case 1 without planar reference.
+///
+/// Ring lies on a cone with half-angle 60° (= 180° - 120°) from -bond_dir.
+pub fn compute_sp2_case1_ring(
+    anchor_pos: DVec3,
+    bond_dir: DVec3,
+    bond_dist: f64,
+) -> (DVec3, DVec3, f64) {
+    let cone_half_angle = std::f64::consts::PI - TRIGONAL_ANGLE; // 180° - 120° = 60°
+    let cos_cone = cone_half_angle.cos();
+    let sin_cone = cone_half_angle.sin();
+
+    let ring_normal = -bond_dir;
+    let ring_center = anchor_pos + ring_normal * (bond_dist * cos_cone);
+    let ring_radius = bond_dist * sin_cone;
+
+    (ring_center, ring_normal, ring_radius)
+}
+
+/// Compute 2 preview positions on the sp2 ring at 180° spacing (opposite each other).
+///
+/// `point_on_ring` is the closest point on the ring to the cursor.
+pub fn compute_sp2_ring_preview_positions(
+    ring_center: DVec3,
+    ring_normal: DVec3,
+    anchor_pos: DVec3,
+    bond_distance: f64,
+    point_on_ring: DVec3,
+) -> [DVec3; 2] {
+    let radial = (point_on_ring - ring_center).normalize();
+    let tangent = ring_normal.cross(radial).normalize();
+
+    let cone_half_angle = std::f64::consts::PI - TRIGONAL_ANGLE;
+    let cos_cone = cone_half_angle.cos();
+    let sin_cone = cone_half_angle.sin();
+    let cone_axis = ring_normal;
+
+    let mut positions = [DVec3::ZERO; 2];
+    for (i, &angle_deg) in [0.0_f64, 180.0].iter().enumerate() {
+        let angle = angle_deg.to_radians();
+        let (sin_a, cos_a) = angle.sin_cos();
+        let r = radial * cos_a + tangent * sin_a;
+        let dir = cone_axis * cos_cone + r * sin_cone;
+        positions[i] = anchor_pos + dir.normalize() * bond_distance;
+    }
+    positions
+}
+
+// ============================================================================
+// sp1 candidate position computation (linear, 180°)
+// ============================================================================
+
+/// Compute sp1 candidate positions for guided placement.
+///
+/// - Case 2 (saturated): empty dots
+/// - Case 1 (1 remaining): single dot directly opposite the existing bond
+/// - Case 0: handled by caller (FreeSphere)
+pub fn compute_sp1_candidates(
+    anchor_pos: DVec3,
+    existing_bond_dirs: &[DVec3],
+    bond_dist: f64,
+) -> Vec<GuideDot> {
+    match existing_bond_dirs.len() {
+        2.. => vec![], // saturated
+        1 => {
+            let d2 = -existing_bond_dirs[0];
+            vec![GuideDot {
+                position: anchor_pos + d2 * bond_dist,
+                dot_type: GuideDotType::Primary,
+            }]
+        }
+        _ => vec![], // case 0: handled by caller (FreeSphere)
+    }
 }
 
 // ============================================================================
@@ -756,9 +1031,7 @@ pub fn compute_guided_placement(
     // Dispatch to geometry computation based on hybridization
     // Only compute if there are remaining slots
     let mode = if slots == 0 {
-        GuidedPlacementMode::FixedDots {
-            guide_dots: vec![],
-        }
+        GuidedPlacementMode::FixedDots { guide_dots: vec![] }
     } else if existing_bond_dirs.is_empty() {
         // Case 0: no existing bonds → free sphere placement
         GuidedPlacementMode::FreeSphere {
@@ -792,15 +1065,40 @@ pub fn compute_guided_placement(
                         ring_radius,
                         bond_distance: bond_dist,
                         anchor_pos,
+                        num_ring_dots: 3,
                         preview_positions: None,
                     },
                 }
             }
-            Hybridization::Sp2 | Hybridization::Sp1 => {
-                // Stubs for Phase D
-                GuidedPlacementMode::FixedDots {
-                    guide_dots: vec![],
+            Hybridization::Sp2 => {
+                match compute_sp2_candidates(
+                    structure,
+                    anchor_atom_id,
+                    anchor_pos,
+                    &existing_bond_dirs,
+                    bond_dist,
+                ) {
+                    Sp2CandidateResult::Dots(guide_dots) => {
+                        GuidedPlacementMode::FixedDots { guide_dots }
+                    }
+                    Sp2CandidateResult::FreeRing {
+                        ring_center,
+                        ring_normal,
+                        ring_radius,
+                    } => GuidedPlacementMode::FreeRing {
+                        ring_center,
+                        ring_normal,
+                        ring_radius,
+                        bond_distance: bond_dist,
+                        anchor_pos,
+                        num_ring_dots: 2,
+                        preview_positions: None,
+                    },
                 }
+            }
+            Hybridization::Sp1 => {
+                let guide_dots = compute_sp1_candidates(anchor_pos, &existing_bond_dirs, bond_dist);
+                GuidedPlacementMode::FixedDots { guide_dots }
             }
         }
     };

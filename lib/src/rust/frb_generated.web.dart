@@ -69,6 +69,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIBondLengthMode dco_decode_api_bond_length_mode(dynamic raw);
 
   @protected
+  APIBondMode dco_decode_api_bond_mode(dynamic raw);
+
+  @protected
   APIBoolData dco_decode_api_bool_data(dynamic raw);
 
   @protected
@@ -133,6 +136,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
+
+  @protected
+  APIHybridization dco_decode_api_hybridization(dynamic raw);
 
   @protected
   APIImportXYZData dco_decode_api_import_xyz_data(dynamic raw);
@@ -835,6 +841,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIBondMode sse_decode_api_bond_mode(SseDeserializer deserializer);
+
+  @protected
   APIBoolData sse_decode_api_bool_data(SseDeserializer deserializer);
 
   @protected
@@ -902,6 +911,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
+
+  @protected
+  APIHybridization sse_decode_api_hybridization(SseDeserializer deserializer);
 
   @protected
   APIImportXYZData sse_decode_api_import_xyz_data(SseDeserializer deserializer);
@@ -1732,6 +1744,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIBondLengthMode self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_bond_mode(APIBondMode self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_bool_data(APIBoolData self, SseSerializer serializer);
 
   @protected
@@ -1809,6 +1824,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_hybridization(
+      APIHybridization self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_import_xyz_data(

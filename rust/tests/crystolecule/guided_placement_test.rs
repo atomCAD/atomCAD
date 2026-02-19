@@ -1,6 +1,6 @@
+use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::guided_placement::*;
-use glam::f64::DVec3;
 
 /// Helper: create a structure with one anchor atom at origin and N neighbors.
 fn make_structure_with_neighbors(
@@ -48,8 +48,7 @@ fn sp3_case3_methyl_fourth_direction() {
     let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
     let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
 
-    let (structure, anchor_id) =
-        make_structure_with_neighbors(6, &[(1, h1), (1, h2), (1, h3)]);
+    let (structure, anchor_id) = make_structure_with_neighbors(6, &[(1, h1), (1, h2), (1, h3)]);
 
     let result = compute_guided_placement(
         &structure,
@@ -76,12 +75,7 @@ fn sp3_case3_methyl_fourth_direction() {
     );
 
     // Verify all 4 mutual angles are tetrahedral
-    let all_dirs: Vec<DVec3> = vec![
-        h1.normalize(),
-        h2.normalize(),
-        h3.normalize(),
-        guide_dir,
-    ];
+    let all_dirs: Vec<DVec3> = vec![h1.normalize(), h2.normalize(), h3.normalize(), guide_dir];
     assert_tetrahedral_angles(&all_dirs, 1.0);
 }
 
@@ -108,7 +102,12 @@ fn sp3_case2_two_bonds_two_guides() {
 
     assert_eq!(result.remaining_slots, 2);
     assert_eq!(result.guide_dots().len(), 2);
-    assert!(result.guide_dots().iter().all(|d| d.dot_type == GuideDotType::Primary));
+    assert!(
+        result
+            .guide_dots()
+            .iter()
+            .all(|d| d.dot_type == GuideDotType::Primary)
+    );
 
     // Verify all 4 mutual angles are tetrahedral
     let all_dirs: Vec<DVec3> = vec![
@@ -394,8 +393,7 @@ fn guide_dot_distance_matches_bond_distance() {
     let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
     let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
 
-    let (structure, anchor_id) =
-        make_structure_with_neighbors(6, &[(1, h1), (1, h2), (1, h3)]);
+    let (structure, anchor_id) = make_structure_with_neighbors(6, &[(1, h1), (1, h2), (1, h3)]);
 
     let result = compute_guided_placement(
         &structure,
@@ -440,7 +438,12 @@ fn sp3_case0_bare_atom_returns_free_sphere() {
     assert!(result.guide_dots().is_empty()); // FreeSphere has no fixed dots
 
     // Check sphere parameters
-    if let GuidedPlacementMode::FreeSphere { center, radius, preview_position } = &result.mode {
+    if let GuidedPlacementMode::FreeSphere {
+        center,
+        radius,
+        preview_position,
+    } = &result.mode
+    {
         assert_eq!(*center, DVec3::ZERO);
         assert!((*radius - result.bond_distance).abs() < 1e-10);
         assert!(preview_position.is_none());
@@ -777,11 +780,7 @@ fn sp3_case1_ring_geometry_correct() {
     } = &result.mode
     {
         // Bond distance should be C-C crystal
-        assert!(
-            (*bd - bond_dist).abs() < 0.001,
-            "Bond distance = {}",
-            bd
-        );
+        assert!((*bd - bond_dist).abs() < 0.001, "Bond distance = {}", bd);
 
         // Ring normal should point away from the existing bond (i.e., -X direction)
         let expected_normal = DVec3::new(-1.0, 0.0, 0.0);
@@ -934,6 +933,8 @@ fn ring_preview_positions_120_apart() {
     let bond_distance = 1.545;
     let point_on_ring = DVec3::new(ring_radius, 0.0, -0.5);
 
+    use rust_lib_flutter_cad::crystolecule::guided_placement::cone_half_angle_for_ring;
+    let num_dots = 3;
     let positions = compute_ring_preview_positions(
         ring_center,
         ring_normal,
@@ -941,6 +942,8 @@ fn ring_preview_positions_120_apart() {
         anchor_pos,
         bond_distance,
         point_on_ring,
+        num_dots,
+        cone_half_angle_for_ring(num_dots),
     );
 
     // All 3 positions should be at bond_distance from anchor
@@ -1010,4 +1013,558 @@ fn case1_with_dihedral_then_case2_after_placing() {
     assert!(!result.mode.is_free_sphere());
     assert!(!result.mode.is_free_ring());
     assert_eq!(result.guide_dots().len(), 2);
+}
+
+// ============================================================================
+// Phase D: sp2 geometry (120° trigonal planar)
+// ============================================================================
+
+#[test]
+fn sp2_case2_two_bonds_one_guide() {
+    // Formaldehyde-like: C=O + 1H, but we model as 2 single bonds for simplicity.
+    // Carbon at origin with 2 bonds in the XY plane at ~120°.
+    let d = 1.5;
+    let b1 = DVec3::new(d, 0.0, 0.0);
+    let b2 = DVec3::new(-d * 0.5, d * 0.866, 0.0); // 120° from b1
+    let (structure, anchor) = make_structure_with_neighbors(6, &[(1, b1), (8, b2)]);
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1, // H
+        Some(Hybridization::Sp2),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.hybridization, Hybridization::Sp2);
+    assert_eq!(result.remaining_slots, 1);
+    assert_eq!(result.guide_dots().len(), 1);
+
+    // The guide dot should be at ~120° from both existing bonds (opposite their midpoint)
+    let anchor_pos = DVec3::ZERO;
+    let dot_dir = (result.guide_dots()[0].position - anchor_pos).normalize();
+    let b1_dir = b1.normalize();
+    let b2_dir = b2.normalize();
+
+    let angle1 = dot_dir.angle_between(b1_dir).to_degrees();
+    let angle2 = dot_dir.angle_between(b2_dir).to_degrees();
+
+    assert!(
+        (angle1 - 120.0).abs() < 2.0,
+        "Angle to b1 = {:.2}° (expected ~120°)",
+        angle1
+    );
+    assert!(
+        (angle2 - 120.0).abs() < 2.0,
+        "Angle to b2 = {:.2}° (expected ~120°)",
+        angle2
+    );
+}
+
+#[test]
+fn sp2_case1_with_reference_two_guides() {
+    // Carbon with 1 bond along +X, neighbor has another bond (planar reference).
+    let mut structure = AtomicStructure::new();
+    let c1 = structure.add_atom(6, DVec3::ZERO); // anchor
+    let c2 = structure.add_atom(6, DVec3::new(1.5, 0.0, 0.0)); // neighbor
+    structure.add_bond(c1, c2, 1);
+    // Give neighbor a second bond to provide planar reference
+    let h = structure.add_atom(1, DVec3::new(1.5, 1.0, 0.0));
+    structure.add_bond(c2, h, 1);
+
+    let result = compute_guided_placement(
+        &structure,
+        c1,
+        1, // H
+        Some(Hybridization::Sp2),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.hybridization, Hybridization::Sp2);
+    assert_eq!(result.remaining_slots, 2);
+    assert_eq!(result.guide_dots().len(), 2);
+
+    // Both guide dots should be at 120° from the existing bond
+    let bond_dir = DVec3::new(1.0, 0.0, 0.0);
+    for (i, dot) in result.guide_dots().iter().enumerate() {
+        let dot_dir = dot.position.normalize();
+        let angle = dot_dir.angle_between(bond_dir).to_degrees();
+        assert!(
+            (angle - 120.0).abs() < 2.0,
+            "Guide dot {} angle to bond = {:.2}° (expected ~120°)",
+            i,
+            angle
+        );
+    }
+
+    // The two guides should be 120° apart from each other
+    let d1 = result.guide_dots()[0].position.normalize();
+    let d2 = result.guide_dots()[1].position.normalize();
+    let mutual_angle = d1.angle_between(d2).to_degrees();
+    assert!(
+        (mutual_angle - 120.0).abs() < 2.0,
+        "Mutual angle = {:.2}° (expected ~120°)",
+        mutual_angle
+    );
+}
+
+#[test]
+fn sp2_case1_no_reference_returns_ring() {
+    // Carbon with 1 bond, neighbor has no other bonds → ring fallback
+    let (structure, anchor) = make_structure_with_neighbors(6, &[(6, DVec3::new(1.5, 0.0, 0.0))]);
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1, // H
+        Some(Hybridization::Sp2),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.hybridization, Hybridization::Sp2);
+    assert!(
+        result.mode.is_free_ring(),
+        "Expected FreeRing mode for sp2 case 1 without reference"
+    );
+    if let GuidedPlacementMode::FreeRing { num_ring_dots, .. } = &result.mode {
+        assert_eq!(*num_ring_dots, 2, "sp2 ring should have 2 dots");
+    }
+}
+
+#[test]
+fn sp2_case0_returns_free_sphere() {
+    // Bare atom with sp2 override → free sphere
+    let (structure, anchor) = make_structure_with_neighbors(6, &[]);
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp2),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert!(result.mode.is_free_sphere());
+}
+
+#[test]
+fn sp2_saturated_no_guides() {
+    // Carbon with 3 bonds and sp2 → saturated
+    let d = 1.5;
+    let (structure, anchor) = make_structure_with_neighbors(
+        6,
+        &[
+            (1, DVec3::new(d, 0.0, 0.0)),
+            (1, DVec3::new(-d * 0.5, d * 0.866, 0.0)),
+            (1, DVec3::new(-d * 0.5, -d * 0.866, 0.0)),
+        ],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp2),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.remaining_slots, 0);
+    assert_eq!(result.guide_dots().len(), 0);
+}
+
+// ============================================================================
+// Phase D: sp1 geometry (180° linear)
+// ============================================================================
+
+#[test]
+fn sp1_case1_opposite_direction() {
+    // Carbon with 1 bond along +X → guide dot at -X
+    let (structure, anchor) = make_structure_with_neighbors(6, &[(6, DVec3::new(1.5, 0.0, 0.0))]);
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp1),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.hybridization, Hybridization::Sp1);
+    assert_eq!(result.remaining_slots, 1);
+    assert_eq!(result.guide_dots().len(), 1);
+
+    let dot_dir = result.guide_dots()[0].position.normalize();
+    let bond_dir = DVec3::new(1.0, 0.0, 0.0);
+    let angle = dot_dir.angle_between(bond_dir).to_degrees();
+    assert!(
+        (angle - 180.0).abs() < 1.0,
+        "sp1 guide should be at 180° from bond, got {:.2}°",
+        angle
+    );
+}
+
+#[test]
+fn sp1_saturated_no_guides() {
+    // Carbon with 2 bonds and sp1 → saturated
+    let (structure, anchor) = make_structure_with_neighbors(
+        6,
+        &[
+            (6, DVec3::new(1.5, 0.0, 0.0)),
+            (6, DVec3::new(-1.5, 0.0, 0.0)),
+        ],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp1),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.remaining_slots, 0);
+    assert_eq!(result.guide_dots().len(), 0);
+}
+
+#[test]
+fn sp1_case0_returns_free_sphere() {
+    let (structure, anchor) = make_structure_with_neighbors(6, &[]);
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp1),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert!(result.mode.is_free_sphere());
+}
+
+// ============================================================================
+// Phase D: hybridization override dispatch
+// ============================================================================
+
+#[test]
+fn hybridization_override_sp2_changes_geometry() {
+    // Carbon with 1 single bond: auto=sp3, override=sp2 should use 120° geometry
+    let (structure, anchor) = make_structure_with_neighbors(6, &[(6, DVec3::new(1.5, 0.0, 0.0))]);
+
+    // Auto: should be sp3
+    let result_auto = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+    assert_eq!(result_auto.hybridization, Hybridization::Sp3);
+
+    // Override sp2: should give sp2 geometry
+    let result_sp2 = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp2),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+    assert_eq!(result_sp2.hybridization, Hybridization::Sp2);
+}
+
+#[test]
+fn hybridization_override_sp1_changes_geometry() {
+    // Carbon with 1 bond: override=sp1 should give 180° opposite dot
+    let (structure, anchor) = make_structure_with_neighbors(6, &[(6, DVec3::new(1.5, 0.0, 0.0))]);
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp1),
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.hybridization, Hybridization::Sp1);
+    assert_eq!(result.guide_dots().len(), 1);
+}
+
+// ============================================================================
+// Phase D: bond mode (dative) tests
+// ============================================================================
+
+#[test]
+fn dative_nitrogen_sp3_unlocks_lone_pair() {
+    // NH3: nitrogen with 3 bonds. Covalent → saturated. Dative → 1 dot.
+    let d = 1.0;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7, // N
+        &[
+            (1, DVec3::new(d, 0.0, 0.0)),
+            (1, DVec3::new(-0.333 * d, 0.942 * d, 0.0)),
+            (1, DVec3::new(-0.333 * d, -0.471 * d, 0.816 * d)),
+        ],
+    );
+
+    // Covalent mode: saturated
+    let result_cov = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_cov.remaining_slots, 0);
+    assert!(result_cov.has_additional_geometric_capacity);
+
+    // Dative mode: 1 remaining slot (lone pair position)
+    let result_dat = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_dat.remaining_slots, 1);
+    assert_eq!(result_dat.guide_dots().len(), 1);
+}
+
+#[test]
+fn dative_oxygen_sp3_unlocks_two_lone_pairs() {
+    // H2O: oxygen with 2 bonds. Covalent → saturated. Dative → 2 dots.
+    let d = 0.96;
+    let (structure, anchor) = make_structure_with_neighbors(
+        8, // O
+        &[
+            (1, DVec3::new(d, 0.0, 0.0)),
+            (1, DVec3::new(-d * 0.5, d * 0.866, 0.0)),
+        ],
+    );
+
+    // Covalent: saturated
+    let result_cov = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_cov.remaining_slots, 0);
+    assert!(result_cov.has_additional_geometric_capacity);
+
+    // Dative: 2 remaining (lone pair positions)
+    let result_dat = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_dat.remaining_slots, 2);
+    assert_eq!(result_dat.guide_dots().len(), 2);
+}
+
+#[test]
+fn dative_no_effect_on_carbon_sp3() {
+    // CH3: carbon with 3 bonds. Both modes give 1 remaining slot.
+    let d = 1.09;
+    let tet = std::f64::consts::FRAC_PI_4; // placeholder for tetrahedral angle
+    let _ = tet;
+    let (structure, anchor) = make_structure_with_neighbors(
+        6, // C
+        &[
+            (1, DVec3::new(d, 0.0, 0.0)),
+            (1, DVec3::new(-d * 0.333, d * 0.943, 0.0)),
+            (1, DVec3::new(-d * 0.333, -d * 0.471, d * 0.816)),
+        ],
+    );
+
+    let result_cov = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    let result_dat = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+
+    assert_eq!(result_cov.remaining_slots, 1);
+    assert_eq!(result_dat.remaining_slots, 1);
+    assert!(!result_cov.has_additional_geometric_capacity);
+}
+
+#[test]
+fn saturation_feedback_nitrogen_has_additional_capacity() {
+    // NH3 in covalent mode: saturated but has additional capacity for dative
+    let d = 1.0;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7,
+        &[
+            (1, DVec3::new(d, 0.0, 0.0)),
+            (1, DVec3::new(-0.333 * d, 0.942 * d, 0.0)),
+            (1, DVec3::new(-0.333 * d, -0.471 * d, 0.816 * d)),
+        ],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+
+    assert_eq!(result.remaining_slots, 0);
+    assert!(
+        result.has_additional_geometric_capacity,
+        "NH3 should report additional geometric capacity (lone pair)"
+    );
+}
+
+#[test]
+fn carbon_sp3_no_additional_capacity() {
+    // CH3 in covalent mode: not saturated, but also no additional capacity
+    let d = 1.09;
+    let (structure, anchor) = make_structure_with_neighbors(
+        6,
+        &[
+            (1, DVec3::new(d, 0.0, 0.0)),
+            (1, DVec3::new(-d * 0.333, d * 0.943, 0.0)),
+            (1, DVec3::new(-d * 0.333, -d * 0.471, d * 0.816)),
+        ],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+
+    assert!(
+        !result.has_additional_geometric_capacity,
+        "Carbon sp3 should NOT report additional capacity (covalent max = geometric max = 4)"
+    );
+}
+
+// ============================================================================
+// Phase D: sp2 ring preview positions
+// ============================================================================
+
+#[test]
+fn sp2_ring_preview_positions_180_apart() {
+    use rust_lib_flutter_cad::crystolecule::guided_placement::compute_ring_preview_positions;
+
+    let ring_center = DVec3::new(0.0, 0.0, -0.5);
+    let ring_normal = DVec3::new(0.0, 0.0, -1.0);
+    let ring_radius = 0.9;
+    let anchor_pos = DVec3::ZERO;
+    let bond_distance = 1.545;
+    let point_on_ring = DVec3::new(ring_radius, 0.0, -0.5);
+
+    let num_dots = 2;
+    let cone_half_angle = cone_half_angle_for_ring(num_dots);
+    let positions = compute_ring_preview_positions(
+        ring_center,
+        ring_normal,
+        ring_radius,
+        anchor_pos,
+        bond_distance,
+        point_on_ring,
+        num_dots,
+        cone_half_angle,
+    );
+
+    assert_eq!(positions.len(), 2);
+
+    // Both positions should be at bond_distance from anchor
+    for (i, pos) in positions.iter().enumerate() {
+        let dist = pos.length();
+        assert!(
+            (dist - bond_distance).abs() < 0.01,
+            "Position {} distance = {} (expected {})",
+            i,
+            dist,
+            bond_distance,
+        );
+    }
+
+    // The two positions should be 180° apart projected onto the ring plane
+    let bond_axis = DVec3::new(0.0, 0.0, 1.0);
+    let p1_proj = (positions[0] - bond_axis * positions[0].dot(bond_axis)).normalize();
+    let p2_proj = (positions[1] - bond_axis * positions[1].dot(bond_axis)).normalize();
+    let proj_angle = p1_proj.angle_between(p2_proj).to_degrees();
+    assert!(
+        (proj_angle - 180.0).abs() < 1.0,
+        "Projected angle between sp2 ring dots = {:.2}° (expected ~180°)",
+        proj_angle,
+    );
+}
+
+// ============================================================================
+// Phase D: combined hybridization + bond mode
+// ============================================================================
+
+#[test]
+fn boron_sp2_covalent_saturated_sp3_dative_unlocks() {
+    // BH3: boron with 3 bonds (sp2 auto-detected).
+    // Covalent sp2 → saturated (3 max).
+    // Override to sp3 + Dative → 1 remaining slot.
+    let d = 1.2;
+    let (structure, anchor) = make_structure_with_neighbors(
+        5, // B
+        &[
+            (1, DVec3::new(d, 0.0, 0.0)),
+            (1, DVec3::new(-d * 0.5, d * 0.866, 0.0)),
+            (1, DVec3::new(-d * 0.5, -d * 0.866, 0.0)),
+        ],
+    );
+
+    // Covalent sp2: saturated
+    let result_cov = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp2),
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_cov.remaining_slots, 0);
+
+    // Override sp3 + Dative: 1 remaining
+    let result_sp3_dat = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        Some(Hybridization::Sp3),
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_sp3_dat.remaining_slots, 1);
+    assert_eq!(result_sp3_dat.guide_dots().len(), 1);
 }

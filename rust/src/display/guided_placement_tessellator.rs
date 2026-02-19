@@ -25,11 +25,7 @@ pub fn tessellate_wireframe_circle(
 ) {
     // Build orthonormal basis from normal
     let n = normal.normalize();
-    let arb = if n.x.abs() < 0.9 {
-        DVec3::X
-    } else {
-        DVec3::Y
-    };
+    let arb = if n.x.abs() < 0.9 { DVec3::X } else { DVec3::Y };
     let u = n.cross(arb).normalize();
     let v = n.cross(u);
 

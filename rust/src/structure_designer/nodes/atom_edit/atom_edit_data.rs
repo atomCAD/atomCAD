@@ -315,7 +315,7 @@ impl AtomEditData {
                         .decorator_mut()
                         .set_atom_display_state(output_id, AtomDisplayState::Marked);
                     if let Some(anchor_atom) = output.get_atom(output_id) {
-                        // Build guide dots from preview positions (3 dots at 120° spacing)
+                        // Build guide dots from preview positions (sp3: 3 dots, sp2: 2 dots)
                         let preview_dots: Vec<crate::crystolecule::guided_placement::GuideDot> =
                             preview_positions
                                 .iter()
@@ -657,10 +657,7 @@ impl NodeData for AtomEditData {
                 }
 
                 // Mark guided placement anchor and store guide visuals
-                self.apply_guided_placement_decoration(
-                    &mut result,
-                    Some(&diff_result.provenance),
-                );
+                self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
             }
 
             // Store provenance and stats in eval cache for root-level evaluations
@@ -692,11 +689,9 @@ impl NodeData for AtomEditData {
                     interaction_state: DefaultToolInteractionState::default(),
                     show_gadget: state.show_gadget,
                 }),
-                AtomEditTool::AddAtom(state) => AtomEditTool::AddAtom(
-                    AddAtomToolState::Idle {
-                        atomic_number: state.atomic_number(),
-                    },
-                ),
+                AtomEditTool::AddAtom(state) => AtomEditTool::AddAtom(AddAtomToolState::Idle {
+                    atomic_number: state.atomic_number(),
+                }),
                 AtomEditTool::AddBond(state) => AtomEditTool::AddBond(AddBondToolState {
                     last_atom_id: state.last_atom_id,
                 }),

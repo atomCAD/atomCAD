@@ -307,19 +307,31 @@ pub fn atom_edit_start_guided_placement(
     ray_start: APIVec3,
     ray_dir: APIVec3,
     atomic_number: i16,
+    hybridization_override: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
+    bond_mode: crate::api::structure_designer::structure_designer_api_types::APIBondMode,
     bond_length_mode: crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode,
 ) -> crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult {
     use crate::api::structure_designer::structure_designer_api_types::{
-        APIBondLengthMode, GuidedPlacementApiResult,
+        APIBondLengthMode, APIBondMode, APIHybridization, GuidedPlacementApiResult,
     };
-    use crate::crystolecule::guided_placement::BondLengthMode;
+    use crate::crystolecule::guided_placement::{BondLengthMode, BondMode, Hybridization};
 
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let ray_start_vec3 = from_api_vec3(&ray_start);
                 let ray_dir_vec3 = from_api_vec3(&ray_dir);
-                let mode = match bond_length_mode {
+                let hyb_override = match hybridization_override {
+                    APIHybridization::Auto => None,
+                    APIHybridization::Sp3 => Some(Hybridization::Sp3),
+                    APIHybridization::Sp2 => Some(Hybridization::Sp2),
+                    APIHybridization::Sp1 => Some(Hybridization::Sp1),
+                };
+                let bond_mode_internal = match bond_mode {
+                    APIBondMode::Covalent => BondMode::Covalent,
+                    APIBondMode::Dative => BondMode::Dative,
+                };
+                let length_mode = match bond_length_mode {
                     APIBondLengthMode::Crystal => BondLengthMode::Crystal,
                     APIBondLengthMode::Uff => BondLengthMode::Uff,
                 };
@@ -328,7 +340,9 @@ pub fn atom_edit_start_guided_placement(
                     &ray_start_vec3,
                     &ray_dir_vec3,
                     atomic_number,
-                    mode,
+                    hyb_override,
+                    bond_mode_internal,
+                    length_mode,
                 );
                 refresh_structure_designer_auto(cad_instance);
                 match result {
@@ -389,9 +403,7 @@ pub fn atom_edit_is_in_guided_placement() -> bool {
     use crate::api::api_common::with_cad_instance_or;
     unsafe {
         with_cad_instance_or(
-            |cad_instance| {
-                atom_edit::is_in_guided_placement(&cad_instance.structure_designer)
-            },
+            |cad_instance| atom_edit::is_in_guided_placement(&cad_instance.structure_designer),
             false,
         )
     }
@@ -400,10 +412,7 @@ pub fn atom_edit_is_in_guided_placement() -> bool {
 /// Update the preview position for free sphere guided placement.
 /// Returns true if the preview changed (needs re-render).
 #[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_guided_placement_pointer_move(
-    ray_start: APIVec3,
-    ray_dir: APIVec3,
-) -> bool {
+pub fn atom_edit_guided_placement_pointer_move(ray_start: APIVec3, ray_dir: APIVec3) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {

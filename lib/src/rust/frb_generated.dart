@@ -186,6 +186,8 @@ abstract class RustLibApi extends BaseApi {
           {required APIVec3 rayStart,
           required APIVec3 rayDir,
           required int atomicNumber,
+          required APIHybridization hybridizationOverride,
+          required APIBondMode bondMode,
           required APIBondLengthMode bondLengthMode});
 
   bool
@@ -1655,6 +1657,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           {required APIVec3 rayStart,
           required APIVec3 rayDir,
           required int atomicNumber,
+          required APIHybridization hybridizationOverride,
+          required APIBondMode bondMode,
           required APIBondLengthMode bondLengthMode}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -1662,6 +1666,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_box_autoadd_api_vec_3(rayStart, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDir, serializer);
         sse_encode_i_16(atomicNumber, serializer);
+        sse_encode_api_hybridization(hybridizationOverride, serializer);
+        sse_encode_api_bond_mode(bondMode, serializer);
         sse_encode_api_bond_length_mode(bondLengthMode, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
       },
@@ -1671,7 +1677,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerAtomEditApiAtomEditStartGuidedPlacementConstMeta,
-      argValues: [rayStart, rayDir, atomicNumber, bondLengthMode],
+      argValues: [
+        rayStart,
+        rayDir,
+        atomicNumber,
+        hybridizationOverride,
+        bondMode,
+        bondLengthMode
+      ],
       apiImpl: this,
     ));
   }
@@ -1680,7 +1693,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerAtomEditApiAtomEditStartGuidedPlacementConstMeta =>
           const TaskConstMeta(
             debugName: "atom_edit_start_guided_placement",
-            argNames: ["rayStart", "rayDir", "atomicNumber", "bondLengthMode"],
+            argNames: [
+              "rayStart",
+              "rayDir",
+              "atomicNumber",
+              "hybridizationOverride",
+              "bondMode",
+              "bondLengthMode"
+            ],
           );
 
   @override
@@ -7823,6 +7843,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIBondMode dco_decode_api_bond_mode(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return APIBondMode.values[raw as int];
+  }
+
+  @protected
   APIBoolData dco_decode_api_bool_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -8099,6 +8125,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       shift: dco_decode_i_32(arr[3]),
       subdivision: dco_decode_i_32(arr[4]),
     );
+  }
+
+  @protected
+  APIHybridization dco_decode_api_hybridization(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return APIHybridization.values[raw as int];
   }
 
   @protected
@@ -10009,6 +10041,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIBondMode sse_decode_api_bond_mode(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return APIBondMode.values[inner];
+  }
+
+  @protected
   APIBoolData sse_decode_api_bool_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_value = sse_decode_bool(deserializer);
@@ -10278,6 +10317,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         center: var_center,
         shift: var_shift,
         subdivision: var_subdivision);
+  }
+
+  @protected
+  APIHybridization sse_decode_api_hybridization(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return APIHybridization.values[inner];
   }
 
   @protected
@@ -12559,6 +12605,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_bond_mode(APIBondMode self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_api_bool_data(APIBoolData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.value, serializer);
@@ -12756,6 +12808,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_apii_vec_3(self.center, serializer);
     sse_encode_i_32(self.shift, serializer);
     sse_encode_i_32(self.subdivision, serializer);
+  }
+
+  @protected
+  void sse_encode_api_hybridization(
+      APIHybridization self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected

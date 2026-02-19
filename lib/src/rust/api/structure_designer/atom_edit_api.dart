@@ -83,12 +83,16 @@ GuidedPlacementApiResult atomEditStartGuidedPlacement(
         {required APIVec3 rayStart,
         required APIVec3 rayDir,
         required int atomicNumber,
+        required APIHybridization hybridizationOverride,
+        required APIBondMode bondMode,
         required APIBondLengthMode bondLengthMode}) =>
     RustLib.instance.api
         .crateApiStructureDesignerAtomEditApiAtomEditStartGuidedPlacement(
             rayStart: rayStart,
             rayDir: rayDir,
             atomicNumber: atomicNumber,
+            hybridizationOverride: hybridizationOverride,
+            bondMode: bondMode,
             bondLengthMode: bondLengthMode);
 
 bool atomEditPlaceGuidedAtom(

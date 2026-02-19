@@ -83,8 +83,8 @@ pub enum AddAtomToolState {
         /// Cursor-tracked preview position on the sphere surface.
         preview_position: Option<DVec3>,
     },
-    /// Free ring placement: sp3 case 1 without dihedral reference.
-    /// 3 guide dots rotate together on a cone ring as the user moves the cursor.
+    /// Free ring placement: ring without reference (sp3 case 1 or sp2 case 1).
+    /// Guide dots rotate together on a cone ring as the user moves the cursor.
     GuidedFreeRing {
         atomic_number: i16,
         anchor_atom_id: u32,
@@ -93,8 +93,10 @@ pub enum AddAtomToolState {
         ring_radius: f64,
         bond_distance: f64,
         anchor_pos: DVec3,
-        /// Cursor-tracked preview: 3 positions at 120° spacing on the ring.
-        preview_positions: Option<[DVec3; 3]>,
+        /// Number of preview dots to show (3 for sp3, 2 for sp2).
+        num_ring_dots: usize,
+        /// Cursor-tracked preview positions on the ring.
+        preview_positions: Option<Vec<DVec3>>,
     },
 }
 

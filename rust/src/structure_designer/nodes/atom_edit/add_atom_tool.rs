@@ -6,8 +6,9 @@ use crate::api::structure_designer::structure_designer_preferences::AtomicStruct
 use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::guided_placement::{
-    BondLengthMode, BondMode, GuideDot, GuidedPlacementMode, compute_guided_placement,
-    compute_ring_preview_positions, ray_ring_nearest_point, ray_sphere_nearest_point,
+    BondLengthMode, BondMode, GuideDot, GuidedPlacementMode, Hybridization,
+    compute_guided_placement, compute_ring_preview_positions, cone_half_angle_for_ring,
+    ray_ring_nearest_point, ray_sphere_nearest_point,
 };
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
@@ -91,6 +92,8 @@ pub fn start_guided_placement(
     ray_start: &DVec3,
     ray_dir: &DVec3,
     atomic_number: i16,
+    hybridization_override: Option<Hybridization>,
+    bond_mode: BondMode,
     bond_length_mode: BondLengthMode,
 ) -> GuidedPlacementStartResult {
     // Phase 1: Hit test, resolve provenance, and compute guided placement (immutable)
@@ -135,8 +138,8 @@ pub fn start_guided_placement(
             result_structure,
             result_atom_id,
             atomic_number,
-            None, // hybridization_override: auto-detect (Phase D adds dropdown)
-            BondMode::Covalent, // Phase D adds bond mode toggle
+            hybridization_override,
+            bond_mode,
             bond_length_mode,
         );
 
@@ -203,11 +206,9 @@ pub fn start_guided_placement(
         hit_atom_info.0
     } else {
         match &atom_source {
-            Some(AtomSource::BasePassthrough(_)) => {
-                atom_edit_data
-                    .diff
-                    .add_atom(hit_atom_info.1 .0, hit_atom_info.1 .1)
-            }
+            Some(AtomSource::BasePassthrough(_)) => atom_edit_data
+                .diff
+                .add_atom(hit_atom_info.1.0, hit_atom_info.1.1),
             Some(AtomSource::DiffMatchedBase { diff_id, .. })
             | Some(AtomSource::DiffAdded(diff_id)) => *diff_id,
             None => return GuidedPlacementStartResult::NoAtomHit,
@@ -228,9 +229,7 @@ pub fn start_guided_placement(
             }
             count
         }
-        GuidedPlacementMode::FreeSphere {
-            center, radius, ..
-        } => {
+        GuidedPlacementMode::FreeSphere { center, radius, .. } => {
             if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
                 *state = AddAtomToolState::GuidedFreeSphere {
                     atomic_number,
@@ -248,6 +247,7 @@ pub fn start_guided_placement(
             ring_radius,
             bond_distance,
             anchor_pos,
+            num_ring_dots,
             ..
         } => {
             if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
@@ -259,6 +259,7 @@ pub fn start_guided_placement(
                     ring_radius: *ring_radius,
                     bond_distance: *bond_distance,
                     anchor_pos: *anchor_pos,
+                    num_ring_dots: *num_ring_dots,
                     preview_positions: None,
                 };
             }
@@ -340,9 +341,11 @@ pub fn place_guided_atom(
                 ring_radius,
                 bond_distance,
                 anchor_pos,
+                num_ring_dots,
                 ..
             }) => {
-                // Find the closest point on the ring, then compute the 3 positions
+                // Find the closest point on the ring, then compute positions
+                let cone_half_angle = cone_half_angle_for_ring(*num_ring_dots);
                 ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius)
                     .map(|point_on_ring| {
                         let positions = compute_ring_preview_positions(
@@ -352,6 +355,8 @@ pub fn place_guided_atom(
                             *anchor_pos,
                             *bond_distance,
                             point_on_ring,
+                            *num_ring_dots,
+                            cone_half_angle,
                         );
                         // Place at the first position (the one closest to cursor click)
                         (*atomic_number, *anchor_atom_id, positions[0])
@@ -416,13 +421,16 @@ pub fn guided_placement_pointer_move(
         ring_radius,
         bond_distance,
         anchor_pos,
+        num_ring_dots,
         preview_positions,
         ..
     }) = &mut atom_edit_data.active_tool
     {
+        let n_dots = *num_ring_dots;
+        let half_angle = cone_half_angle_for_ring(n_dots);
         let new_positions =
-            ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius)
-                .map(|point_on_ring| {
+            ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius).map(
+                |point_on_ring| {
                     compute_ring_preview_positions(
                         *ring_center,
                         *ring_normal,
@@ -430,8 +438,11 @@ pub fn guided_placement_pointer_move(
                         *anchor_pos,
                         *bond_distance,
                         point_on_ring,
+                        n_dots,
+                        half_angle,
                     )
-                });
+                },
+            );
         if new_positions != *preview_positions {
             *preview_positions = new_positions;
             return true;

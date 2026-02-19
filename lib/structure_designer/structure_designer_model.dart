@@ -75,11 +75,25 @@ class StructureDesignerModel extends ChangeNotifier {
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
   String _lastMinimizeMessage = '';
   APIBondLengthMode _bondLengthMode = APIBondLengthMode.crystal;
+  APIHybridization _hybridizationOverride = APIHybridization.auto;
+  APIBondMode _bondMode = APIBondMode.covalent;
 
   String get lastMinimizeMessage => _lastMinimizeMessage;
   APIBondLengthMode get bondLengthMode => _bondLengthMode;
   set bondLengthMode(APIBondLengthMode value) {
     _bondLengthMode = value;
+    notifyListeners();
+  }
+
+  APIHybridization get hybridizationOverride => _hybridizationOverride;
+  set hybridizationOverride(APIHybridization value) {
+    _hybridizationOverride = value;
+    notifyListeners();
+  }
+
+  APIBondMode get bondMode => _bondMode;
+  set bondMode(APIBondMode value) {
+    _bondMode = value;
     notifyListeners();
   }
 
@@ -760,6 +774,8 @@ class StructureDesignerModel extends ChangeNotifier {
   void setActiveAtomEditTool(APIAtomEditTool tool) {
     atom_edit_api.setActiveAtomEditTool(tool: tool);
     _bondLengthMode = APIBondLengthMode.crystal;
+    _hybridizationOverride = APIHybridization.auto;
+    _bondMode = APIBondMode.covalent;
     refreshFromKernel();
   }
 
@@ -862,12 +878,16 @@ class StructureDesignerModel extends ChangeNotifier {
     vector_math.Vector3 rayStart,
     vector_math.Vector3 rayDir,
     int atomicNumber,
+    APIHybridization hybridizationOverride,
+    APIBondMode bondMode,
     APIBondLengthMode bondLengthMode,
   ) {
     final result = atom_edit_api.atomEditStartGuidedPlacement(
       rayStart: vector3ToApiVec3(rayStart),
       rayDir: vector3ToApiVec3(rayDir),
       atomicNumber: atomicNumber,
+      hybridizationOverride: hybridizationOverride,
+      bondMode: bondMode,
       bondLengthMode: bondLengthMode,
     );
     refreshFromKernel();

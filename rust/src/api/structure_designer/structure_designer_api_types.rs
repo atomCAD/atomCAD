@@ -348,6 +348,31 @@ pub struct APIAtomEditData {
     pub diff_stats: APIDiffStats,
 }
 
+/// Hybridization override for guided atom placement.
+/// When set to Auto, hybridization is auto-detected via UFF type assignment.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIHybridization {
+    /// Auto-detect hybridization from bonding state.
+    Auto,
+    /// sp3 tetrahedral (109.47°).
+    Sp3,
+    /// sp2 trigonal planar (120°).
+    Sp2,
+    /// sp1 linear (180°).
+    Sp1,
+}
+
+/// Bond mode for guided atom placement saturation limits.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIBondMode {
+    /// Use element-specific covalent max neighbors.
+    Covalent,
+    /// Use geometric max (unlocks lone pair / empty orbital positions).
+    Dative,
+}
+
 /// Bond length computation mode for guided atom placement.
 #[flutter_rust_bridge::frb]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
