@@ -260,8 +260,34 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Default Tool Settings',
-                style: TextStyle(fontWeight: FontWeight.w500)),
+            Row(
+              children: [
+                Text('Default Tool Settings',
+                    style: TextStyle(fontWeight: FontWeight.w500)),
+                const Spacer(),
+                Tooltip(
+                  message: 'Show axis gadget on selection',
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.open_with,
+                      color: _stagedData!.showGadget
+                          ? AppColors.primaryAccent
+                          : Colors.grey,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      widget.model.toggleAtomEditShowGadget();
+                    },
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: AppSpacing.medium),
             Row(
               children: [

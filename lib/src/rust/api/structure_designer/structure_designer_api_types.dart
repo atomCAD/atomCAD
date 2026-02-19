@@ -41,6 +41,7 @@ class APIAtomEditData {
   final bool outputDiff;
   final bool showAnchorArrows;
   final bool includeBaseBondsInDiff;
+  final bool showGadget;
   final APIDiffStats diffStats;
 
   const APIAtomEditData({
@@ -54,6 +55,7 @@ class APIAtomEditData {
     required this.outputDiff,
     required this.showAnchorArrows,
     required this.includeBaseBondsInDiff,
+    required this.showGadget,
     required this.diffStats,
   });
 
@@ -69,6 +71,7 @@ class APIAtomEditData {
       outputDiff.hashCode ^
       showAnchorArrows.hashCode ^
       includeBaseBondsInDiff.hashCode ^
+      showGadget.hashCode ^
       diffStats.hashCode;
 
   @override
@@ -86,6 +89,7 @@ class APIAtomEditData {
           outputDiff == other.outputDiff &&
           showAnchorArrows == other.showAnchorArrows &&
           includeBaseBondsInDiff == other.includeBaseBondsInDiff &&
+          showGadget == other.showGadget &&
           diffStats == other.diffStats;
 }
 

@@ -820,6 +820,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void toggleAtomEditShowGadget() {
+    atom_edit_api.atomEditToggleShowGadget();
+    refreshFromKernel();
+  }
+
   bool setAtomEditDefaultData(int replacementAtomicNumber) {
     if (nodeNetworkView == null) return false;
     final result = atom_edit_api.setAtomEditDefaultData(
