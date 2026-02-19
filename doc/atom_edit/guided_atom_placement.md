@@ -221,7 +221,7 @@ reference: 2 dots at +/-120 deg from b1 in that plane. Without: show a ring.
    (current behavior)    new anchor atom
 ```
 
-### 7.2 Rust state representation
+### 7.2 Rust state representation (`types.rs`)
 
 ```rust
 pub enum AddAtomToolState {
@@ -262,7 +262,8 @@ if same/miss: cancel to Idle.
 The gadget system (`NodeNetworkGadget`) was rejected because: (1) drag-centric API
 vs our click interaction; (2) lifecycle tied to evaluation cycles vs transient tool
 state; (3) `sync_data()` syncs continuous parameters vs our discrete action;
-(4) single gadget slot would block future uses.
+(4) the gadget slot is already used by `AtomEditSelectionGadget` (XYZ translation
+gizmo for selection dragging).
 
 ### 8.2 Renderer capabilities
 
@@ -350,17 +351,20 @@ placement first, falling back to free placement if no atom is hit.
 
 ## 10. File Locations
 
-| Component                     | Location                                                 |
-|-------------------------------|----------------------------------------------------------|
-| Guided placement logic        | `rust/src/crystolecule/guided_placement.rs` (new)        |
-| Tool state machine            | `rust/src/structure_designer/nodes/atom_edit/atom_edit.rs`|
-| API entry points              | `rust/src/api/structure_designer/atom_edit_api.rs`        |
-| Viewport interaction (Flutter)| `lib/structure_designer/structure_designer_viewport.dart` |
-| Guide dot rendering           | `rust/src/display/atomic_tessellator.rs`                 |
-| Wireframe rendering           | `rust/src/display/guided_placement_tessellator.rs` (new) |
-| Hybridization detection       | `rust/src/crystolecule/simulation/uff/typer.rs` (reuse)  |
-| Bond distances                | `rust/src/crystolecule/atomic_constants.rs` (reuse)      |
-| Tests                         | `rust/tests/crystolecule/guided_placement_test.rs` (new) |
+| Component                     | Location                                                          |
+|-------------------------------|-------------------------------------------------------------------|
+| Guided placement logic        | `rust/src/crystolecule/guided_placement.rs` (new)                 |
+| Tool state types              | `rust/src/structure_designer/nodes/atom_edit/types.rs`            |
+| Add Atom tool functions       | `rust/src/structure_designer/nodes/atom_edit/add_atom_tool.rs`    |
+| Decoration phase (eval)       | `rust/src/structure_designer/nodes/atom_edit/atom_edit_data.rs`   |
+| Data accessors / tool mgmt    | `rust/src/structure_designer/nodes/atom_edit/atom_edit_data.rs`   |
+| API entry points              | `rust/src/api/structure_designer/atom_edit_api.rs`                |
+| Viewport interaction (Flutter)| `lib/structure_designer/structure_designer_viewport.dart`          |
+| Guide dot rendering           | `rust/src/display/atomic_tessellator.rs`                          |
+| Wireframe rendering           | `rust/src/display/guided_placement_tessellator.rs` (new)          |
+| Hybridization detection       | `rust/src/crystolecule/simulation/uff/typer.rs` (reuse)           |
+| Bond distances                | `rust/src/crystolecule/atomic_constants.rs` (reuse)               |
+| Tests                         | `rust/tests/crystolecule/guided_placement_test.rs` (new)          |
 
 ## 11. Open Questions
 
@@ -484,9 +488,22 @@ dispatch to `compute_sp3_candidates` (sp2/sp1 in future phases).
 - **Hybridization:** C+4 single -> Sp3, C+double -> Sp2, N+3 single -> Sp3
 - **Saturation limits:** N(sp3) at 3, O(sp3) at 2, F at 1
 
-### A.2 Tool State Machine — `atom_edit.rs`
+### A.2 Tool State Machine
 
-#### A.2.1 State enum change
+The atom_edit module is split across multiple files under
+`rust/src/structure_designer/nodes/atom_edit/`:
+
+| File                  | Responsibility                                      |
+|-----------------------|-----------------------------------------------------|
+| `types.rs`            | `AddAtomToolState`, `AtomEditTool`, shared types     |
+| `add_atom_tool.rs`    | Add Atom tool interaction logic (placement functions)|
+| `atom_edit_data.rs`   | `AtomEditData` struct, `eval()`, decoration phase    |
+| `selection.rs`        | Ray-based and marquee selection                      |
+| `operations.rs`       | Shared mutation operations (delete, replace, move)   |
+| `default_tool.rs`     | Default tool pointer event state machine             |
+| `add_bond_tool.rs`    | Add Bond tool interaction logic                      |
+
+#### A.2.1 State enum change — `types.rs`
 
 Current: `pub struct AddAtomToolState { pub atomic_number: i16 }`
 
@@ -504,8 +521,11 @@ pub enum AddAtomToolState {
 ```
 
 **Migration:** All match arms accessing `atomic_number` must handle both variants.
+These are spread across `types.rs` (enum definition), `atom_edit_data.rs` (accessors
+like `set_add_atom_tool_atomic_number`, `set_active_tool`), and `atom_edit_api.rs`
+(API functions that read/write the tool state).
 
-#### A.2.2 New functions in `atom_edit.rs`
+#### A.2.2 New functions in `add_atom_tool.rs`
 
 **`start_guided_placement(structure_designer, ray_start, ray_dir, atomic_number) -> GuidedPlacementApiResult`:**
 1. Hit test result structure -> if miss: return `NoAtomHit`
@@ -524,7 +544,7 @@ pub enum AddAtomToolState {
 **`cancel_guided_placement(structure_designer)`:**
 Extract atomic_number, transition to Idle, mark data changed.
 
-#### A.2.3 Decoration phase integration
+#### A.2.3 Decoration phase integration — `atom_edit_data.rs`
 
 In `eval()` within `if decorate { ... }`, for `AddAtom(GuidedPlacement { .. })`:
 1. Mark anchor atom with `AtomDisplayState::Marked`
@@ -532,7 +552,7 @@ In `eval()` within `if decorate { ... }`, for `AddAtom(GuidedPlacement { .. })`:
 3. For each guide dot: set anchor position to anchor atom's position (triggers anchor
    arrow cylinder rendering automatically)
 
-#### A.2.4 Guide dot hit testing
+#### A.2.4 Guide dot hit testing — `add_atom_tool.rs`
 
 ```rust
 pub fn hit_test_guide_dots(
@@ -606,7 +626,8 @@ pub fn atom_edit_is_in_guided_placement() -> bool
 
 #### A.4.3 Existing API updates
 
-`set_add_atom_tool_atomic_number` and `get_active_tool()` must match both
+`set_add_atom_tool_atomic_number` (in `atom_edit_data.rs`) and
+`get_active_atom_edit_tool` (in `atom_edit_api.rs`) must match both
 `Idle { atomic_number }` and `GuidedPlacement { atomic_number, .. }` variants.
 
 ### A.5 Flutter Integration
@@ -657,14 +678,15 @@ Add handler in `_StructureDesignerViewportState`: if Escape pressed and
 
 #### A.5.4 Tool switch cancellation
 
-In `set_active_atom_edit_tool`, if current tool is `AddAtom(GuidedPlacement)` and
-switching away, transition to `Idle` first.
+In `AtomEditData::set_active_tool()` (in `atom_edit_data.rs`), if current tool is
+`AddAtom(GuidedPlacement)` and switching away, transition to `Idle` first.
 
 ### A.6 Saturation Feedback
 
 When `AtomSaturated` is returned:
-1. **Rust:** Set `saturated_flash_atom_id: Option<u32>` on `AtomEditData`. In decoration,
-   render with `AtomDisplayState::SaturationFlash` (red, `DELETE_MARKER_COLOR`).
+1. **Rust:** Set `saturated_flash_atom_id: Option<u32>` on `AtomEditData` (in
+   `atom_edit_data.rs`). In decoration phase of `eval()`, render with
+   `AtomDisplayState::SaturationFlash` (red, `DELETE_MARKER_COLOR`).
 2. **Flutter:** Start 300ms timer, then call `atom_edit_clear_saturation_flash()`.
 3. Clear on next click, tool switch, or explicit clear call.
 
@@ -674,12 +696,13 @@ When `AtomSaturated` is returned:
 
 1. Geometry module (A.1) — pure computation, independently testable
 2. Tests for geometry (A.1.6) — validate math before integration
-3. Display state enum (A.3.1) — small, no-risk change
+3. Display state enum (A.3.1) — small, no-risk change in `atomic_structure_decorator.rs`
 4. Tessellator changes (A.3.2) — both triangle mesh and impostor paths
-5. Tool state enum (A.2.1) — fix all match arms
-6. Decoration phase (A.2.3) — connect geometry to rendering
-7. Tool functions (A.2.2) — start/place/cancel logic
-8. API layer (A.4) — expose to Flutter
+5. Tool state enum (A.2.1) — change `AddAtomToolState` in `types.rs`, fix match arms
+   across `types.rs`, `atom_edit_data.rs`, and `atom_edit_api.rs`
+6. Decoration phase (A.2.3) — connect geometry to rendering in `atom_edit_data.rs` `eval()`
+7. Tool functions (A.2.2) — start/place/cancel logic in `add_atom_tool.rs`
+8. API layer (A.4) — expose to Flutter via `atom_edit_api.rs`
 9. FRB codegen
 10. Flutter model methods (A.5.2)
 11. Flutter click dispatch (A.5.1)
