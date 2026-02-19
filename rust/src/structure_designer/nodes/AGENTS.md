@@ -72,12 +72,19 @@ Interactive atom editing node with command history (undo/redo):
 
 ## atom_edit/ Subdirectory
 
-Non-destructive atom editing node with diff-based architecture:
-- `atom_edit.rs` - Main logic: tools, diff operations, provenance tracking, **energy minimization** (`minimize_atom_edit()`)
-- `atom_edit_data.rs` - `AtomEditData` struct implementing `NodeData`
-- `atom_edit_eval_cache.rs` - `AtomEditEvalCache` with provenance maps (`AtomSource::Base`/`AtomSource::Diff`)
+Non-destructive atom editing node with diff-based architecture. See `atom_edit/AGENTS.md` for full details.
 
-**Energy minimization**: `minimize_atom_edit(structure_designer, freeze_mode)` builds a `MolecularTopology` from the evaluated structure, runs UFF minimization, and writes positions back to the diff. Two freeze modes: `FreezeBase` (only diff atoms move) and `FreeAll` (all atoms move, moved base atoms get anchors). Uses three-phase pattern (gather → compute → mutate) to avoid borrow conflicts.
+Key files:
+- `types.rs` - Shared type definitions (tool enums, selection, eval cache)
+- `atom_edit_data.rs` - `AtomEditData` struct, `NodeData` impl, accessors
+- `selection.rs` - Ray-based and marquee atom/bond selection
+- `operations.rs` - Shared mutation operations (delete, replace, transform, drag)
+- `default_tool.rs` - Default tool pointer event state machine
+- `add_atom_tool.rs` - Add Atom tool interaction
+- `add_bond_tool.rs` - Add Bond tool interaction
+- `minimization.rs` - UFF energy minimization
+- `atom_edit_gadget.rs` - XYZ selection gadget
+- `text_format.rs` - Human-readable diff text format
 
 ## Text Format Properties
 

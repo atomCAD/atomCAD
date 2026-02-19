@@ -99,7 +99,8 @@
       "WebFetch(domain:avogadro.cc)",
       "Bash(awk:*)",
       "Bash(tee:*)",
-      "Bash(select-string:*)"
+      "Bash(select-string:*)",
+      "Bash(wc:*)"
     ]
   }
 }

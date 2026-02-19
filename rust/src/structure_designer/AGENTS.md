@@ -5,6 +5,7 @@ The bulk of atomCAD's Rust backend. Contains the node network system, built-in n
 ## Subdirectory Instructions
 
 - Working in `nodes/` → Read `nodes/AGENTS.md`
+- Working in `nodes/atom_edit/` → Also read `nodes/atom_edit/AGENTS.md`
 - Working in `evaluator/` → Read `evaluator/AGENTS.md`
 - Working in `text_format/` → Read `text_format/AGENTS.md`
 - Working in `serialization/` → Read `serialization/AGENTS.md`
