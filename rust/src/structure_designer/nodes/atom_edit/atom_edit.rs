@@ -86,6 +86,9 @@ impl Default for DefaultToolInteractionState {
 pub struct DefaultToolState {
     pub replacement_atomic_number: i16,
     pub interaction_state: DefaultToolInteractionState,
+    /// When true, the selection gadget (XYZ axes) is visible.
+    /// Off by default to avoid occluding selected atoms.
+    pub show_gadget: bool,
 }
 
 #[derive(Debug)]
@@ -212,6 +215,7 @@ impl AtomEditData {
             active_tool: AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6, // Default to carbon
                 interaction_state: DefaultToolInteractionState::default(),
+                show_gadget: false,
             }),
             last_stats: None,
         }
@@ -236,6 +240,7 @@ impl AtomEditData {
             active_tool: AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
                 interaction_state: DefaultToolInteractionState::default(),
+                show_gadget: false,
             }),
             last_stats: None,
         }
@@ -325,6 +330,7 @@ impl AtomEditData {
             APIAtomEditTool::Default => AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
                 interaction_state: DefaultToolInteractionState::default(),
+                show_gadget: false,
             }),
             APIAtomEditTool::AddAtom => {
                 AtomEditTool::AddAtom(AddAtomToolState { atomic_number: 6 })
@@ -527,7 +533,12 @@ impl NodeData for AtomEditData {
     ) -> Option<Box<dyn NodeNetworkGadget>> {
         use super::atom_edit_gadget::AtomEditSelectionGadget;
 
-        if !self.selection.has_selected_atoms() {
+        // Gadget is only shown when the Default tool has show_gadget enabled.
+        let show = match &self.active_tool {
+            AtomEditTool::Default(state) => state.show_gadget,
+            _ => false,
+        };
+        if !show || !self.selection.has_selected_atoms() {
             return None;
         }
 
@@ -701,6 +712,7 @@ impl NodeData for AtomEditData {
                 AtomEditTool::Default(state) => AtomEditTool::Default(DefaultToolState {
                     replacement_atomic_number: state.replacement_atomic_number,
                     interaction_state: DefaultToolInteractionState::default(),
+                    show_gadget: state.show_gadget,
                 }),
                 AtomEditTool::AddAtom(state) => AtomEditTool::AddAtom(AddAtomToolState {
                     atomic_number: state.atomic_number,

@@ -154,6 +154,31 @@ pub fn atom_edit_toggle_show_anchor_arrows() -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_toggle_show_gadget() -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                if let Some(atom_edit_data) =
+                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+                {
+                    if let atom_edit::AtomEditTool::Default(ref mut state) =
+                        atom_edit_data.active_tool
+                    {
+                        state.show_gadget = !state.show_gadget;
+                        refresh_structure_designer_auto(cad_instance);
+                        return true;
+                    }
+                    false
+                } else {
+                    false
+                }
+            },
+            false,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_toggle_include_base_bonds_in_diff() -> bool {
     unsafe {
         with_mut_cad_instance_or(
