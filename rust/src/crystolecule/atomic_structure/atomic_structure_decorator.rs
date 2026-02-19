@@ -16,6 +16,17 @@ pub enum AtomDisplayState {
 pub struct GuidePlacementVisuals {
     pub anchor_pos: DVec3,
     pub guide_dots: Vec<GuideDot>,
+    /// If set, render a wireframe sphere for free sphere placement (case 0).
+    pub wireframe_sphere: Option<WireframeSphereVisuals>,
+}
+
+/// Visual data for a wireframe sphere (free sphere placement mode).
+#[derive(Debug, Clone)]
+pub struct WireframeSphereVisuals {
+    pub center: DVec3,
+    pub radius: f64,
+    /// If set, a preview guide dot tracks the cursor on the sphere surface.
+    pub preview_position: Option<DVec3>,
 }
 
 #[derive(Debug, Clone)]

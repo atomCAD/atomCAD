@@ -2,6 +2,7 @@
 
 use crate::display::atomic_tessellator;
 use crate::display::coordinate_system_tessellator;
+use crate::display::guided_placement_tessellator;
 use crate::display::poly_mesh_tessellator::{
     tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh,
 };
@@ -155,6 +156,16 @@ fn tessellate_non_lightweight_content(
                                 visuals,
                             );
                         }
+                    }
+                }
+
+                // Render wireframe sphere for free sphere placement (shared between rendering methods)
+                if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals {
+                    if let Some(sphere_visuals) = &visuals.wireframe_sphere {
+                        guided_placement_tessellator::tessellate_guided_wireframe(
+                            &mut wireframe_mesh,
+                            sphere_visuals,
+                        );
                     }
                 }
             }

@@ -1,10 +1,13 @@
-use super::atom_edit_data::{get_active_atom_edit_data, get_selected_atom_edit_data_mut};
+use super::atom_edit_data::{
+    get_active_atom_edit_data, get_atom_edit_data_mut_transient, get_selected_atom_edit_data_mut,
+};
 use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::guided_placement::{
-    BondLengthMode, BondMode, GuideDot, compute_guided_placement,
+    BondLengthMode, BondMode, GuideDot, GuidedPlacementMode, compute_guided_placement,
+    ray_sphere_nearest_point,
 };
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
@@ -183,8 +186,11 @@ pub fn start_guided_placement(
         };
     }
 
-    if placement_result.guide_dots.is_empty() {
-        // No guide dots computed (e.g., case 0/1 stubs) — stay in Idle
+    // Check if we have something to show (guide dots or free sphere)
+    let is_free_sphere = placement_result.mode.is_free_sphere();
+    let guide_dots_empty = placement_result.guide_dots().is_empty();
+    if !is_free_sphere && guide_dots_empty {
+        // No guide dots computed (e.g., case 1 stub) — stay in Idle
         if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
             *state = AddAtomToolState::Idle { atomic_number };
         }
@@ -207,16 +213,35 @@ pub fn start_guided_placement(
         }
     };
 
-    // Enter guided placement mode
-    let guide_count = placement_result.guide_dots.len();
-    if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
-        *state = AddAtomToolState::GuidedPlacement {
-            atomic_number,
-            anchor_atom_id: diff_atom_id,
-            guide_dots: placement_result.guide_dots,
-            bond_distance: placement_result.bond_distance,
-        };
-    }
+    // Enter guided placement mode based on the placement result
+    let guide_count = match &placement_result.mode {
+        GuidedPlacementMode::FixedDots { guide_dots } => {
+            let count = guide_dots.len();
+            if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+                *state = AddAtomToolState::GuidedPlacement {
+                    atomic_number,
+                    anchor_atom_id: diff_atom_id,
+                    guide_dots: guide_dots.clone(),
+                    bond_distance: placement_result.bond_distance,
+                };
+            }
+            count
+        }
+        GuidedPlacementMode::FreeSphere {
+            center, radius, ..
+        } => {
+            if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+                *state = AddAtomToolState::GuidedFreeSphere {
+                    atomic_number,
+                    anchor_atom_id: diff_atom_id,
+                    center: *center,
+                    radius: *radius,
+                    preview_position: None,
+                };
+            }
+            0 // No fixed guide dots; sphere is interactive
+        }
+    };
 
     GuidedPlacementStartResult::Started {
         guide_count,
@@ -243,39 +268,54 @@ pub fn hit_test_guide_dots(
     closest.map(|(i, _)| i)
 }
 
-/// Attempt to place an atom at a guide dot hit by the ray.
+/// Attempt to place an atom at a guide dot hit by the ray (FixedDots mode),
+/// or at the preview position (FreeSphere mode).
 ///
-/// Returns true if an atom was placed, false if no guide dot was hit.
+/// Returns true if an atom was placed, false if no valid placement target was found.
 pub fn place_guided_atom(
     structure_designer: &mut StructureDesigner,
     ray_start: &DVec3,
     ray_dir: &DVec3,
 ) -> bool {
-    // Phase 1: Extract state and hit test (immutable borrow)
+    // Phase 1: Extract state and determine placement position (immutable borrow)
     let placement_info = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
             None => return false,
         };
 
-        let (atomic_number, anchor_atom_id, guide_dots, _bond_distance) =
-            match &atom_edit_data.active_tool {
-                AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
-                    atomic_number,
-                    anchor_atom_id,
-                    guide_dots,
-                    bond_distance,
-                }) => (*atomic_number, *anchor_atom_id, guide_dots.clone(), *bond_distance),
-                _ => return false,
-            };
+        match &atom_edit_data.active_tool {
+            AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
+                atomic_number,
+                anchor_atom_id,
+                guide_dots,
+                ..
+            }) => {
+                let dot_index = match hit_test_guide_dots(ray_start, ray_dir, guide_dots) {
+                    Some(i) => i,
+                    None => return false,
+                };
+                let position = guide_dots[dot_index].position;
+                Some((*atomic_number, *anchor_atom_id, position))
+            }
+            AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
+                atomic_number,
+                anchor_atom_id,
+                center,
+                radius,
+                ..
+            }) => {
+                // Use ray-sphere intersection for placement
+                ray_sphere_nearest_point(ray_start, ray_dir, center, *radius)
+                    .map(|hit_pos| (*atomic_number, *anchor_atom_id, hit_pos))
+            }
+            _ => None,
+        }
+    };
 
-        let dot_index = match hit_test_guide_dots(ray_start, ray_dir, &guide_dots) {
-            Some(i) => i,
-            None => return false,
-        };
-
-        let position = guide_dots[dot_index].position;
-        (atomic_number, anchor_atom_id, position)
+    let (atomic_number, anchor_atom_id, position) = match placement_info {
+        Some(info) => info,
+        None => return false,
     };
 
     // Phase 2: Add atom and bond to diff
@@ -284,7 +324,6 @@ pub fn place_guided_atom(
         None => return false,
     };
 
-    let (atomic_number, anchor_atom_id, position) = placement_info;
     let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, position);
     atom_edit_data.add_bond_in_diff(anchor_atom_id, new_atom_id, 1);
 
@@ -294,6 +333,35 @@ pub fn place_guided_atom(
     }
 
     true
+}
+
+/// Update the preview position for FreeSphere mode based on cursor ray.
+///
+/// Returns true if the preview position changed (needs re-render).
+pub fn guided_placement_pointer_move(
+    structure_designer: &mut StructureDesigner,
+    ray_start: &DVec3,
+    ray_dir: &DVec3,
+) -> bool {
+    let atom_edit_data = match get_atom_edit_data_mut_transient(structure_designer) {
+        Some(data) => data,
+        None => return false,
+    };
+
+    if let AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
+        center,
+        radius,
+        ref mut preview_position,
+        ..
+    }) = atom_edit_data.active_tool
+    {
+        let new_pos = ray_sphere_nearest_point(ray_start, ray_dir, &center, radius);
+        if new_pos != *preview_position {
+            *preview_position = new_pos;
+            return true;
+        }
+    }
+    false
 }
 
 /// Cancel guided placement and return to Idle state.
@@ -309,12 +377,13 @@ pub fn cancel_guided_placement(structure_designer: &mut StructureDesigner) {
     }
 }
 
-/// Check if the tool is currently in guided placement mode.
+/// Check if the tool is currently in guided placement mode (FixedDots or FreeSphere).
 pub fn is_in_guided_placement(structure_designer: &StructureDesigner) -> bool {
     match get_active_atom_edit_data(structure_designer) {
         Some(data) => matches!(
             &data.active_tool,
             AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement { .. })
+                | AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere { .. })
         ),
         None => false,
     }

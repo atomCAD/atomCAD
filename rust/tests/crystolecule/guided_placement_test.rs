@@ -61,12 +61,12 @@ fn sp3_case3_methyl_fourth_direction() {
     );
 
     assert_eq!(result.remaining_slots, 1);
-    assert_eq!(result.guide_dots.len(), 1);
-    assert_eq!(result.guide_dots[0].dot_type, GuideDotType::Primary);
+    assert_eq!(result.guide_dots().len(), 1);
+    assert_eq!(result.guide_dots()[0].dot_type, GuideDotType::Primary);
 
     // The 4th direction should be opposite the centroid of the first 3
     // Expected: (1, -1, -1).normalize()
-    let guide_dir = (result.guide_dots[0].position - DVec3::ZERO).normalize();
+    let guide_dir = (result.guide_dots()[0].position - DVec3::ZERO).normalize();
     let expected_dir = DVec3::new(1.0, -1.0, -1.0).normalize();
     let dot = guide_dir.dot(expected_dir);
     assert!(
@@ -107,15 +107,15 @@ fn sp3_case2_two_bonds_two_guides() {
     );
 
     assert_eq!(result.remaining_slots, 2);
-    assert_eq!(result.guide_dots.len(), 2);
-    assert!(result.guide_dots.iter().all(|d| d.dot_type == GuideDotType::Primary));
+    assert_eq!(result.guide_dots().len(), 2);
+    assert!(result.guide_dots().iter().all(|d| d.dot_type == GuideDotType::Primary));
 
     // Verify all 4 mutual angles are tetrahedral
     let all_dirs: Vec<DVec3> = vec![
         h1.normalize(),
         h2.normalize(),
-        (result.guide_dots[0].position).normalize(),
-        (result.guide_dots[1].position).normalize(),
+        (result.guide_dots()[0].position).normalize(),
+        (result.guide_dots()[1].position).normalize(),
     ];
     assert_tetrahedral_angles(&all_dirs, 1.5);
 }
@@ -145,7 +145,7 @@ fn sp3_saturated_no_guides() {
     );
 
     assert_eq!(result.remaining_slots, 0);
-    assert_eq!(result.guide_dots.len(), 0);
+    assert_eq!(result.guide_dots().len(), 0);
 }
 
 // ============================================================================
@@ -353,7 +353,7 @@ fn nitrogen_has_additional_capacity() {
 
     assert_eq!(result.remaining_slots, 0);
     assert!(result.has_additional_geometric_capacity);
-    assert_eq!(result.guide_dots.len(), 0);
+    assert_eq!(result.guide_dots().len(), 0);
 }
 
 #[test]
@@ -380,7 +380,7 @@ fn carbon_no_additional_capacity() {
 
     assert_eq!(result.remaining_slots, 1);
     assert!(!result.has_additional_geometric_capacity);
-    assert_eq!(result.guide_dots.len(), 1);
+    assert_eq!(result.guide_dots().len(), 1);
 }
 
 // ============================================================================
@@ -406,12 +406,191 @@ fn guide_dot_distance_matches_bond_distance() {
         BondLengthMode::Uff,
     );
 
-    assert_eq!(result.guide_dots.len(), 1);
-    let guide_dist = result.guide_dots[0].position.length(); // anchor is at origin
+    assert_eq!(result.guide_dots().len(), 1);
+    let guide_dist = result.guide_dots()[0].position.length(); // anchor is at origin
     assert!(
         (guide_dist - result.bond_distance).abs() < 0.01,
         "Guide dot distance ({:.4}) should match bond_distance ({:.4})",
         guide_dist,
         result.bond_distance
     );
+}
+
+// ============================================================================
+// Phase B: sp3 case 0 — bare atom → FreeSphere
+// ============================================================================
+
+#[test]
+fn sp3_case0_bare_atom_returns_free_sphere() {
+    // Bare carbon with no bonds → should return FreeSphere mode
+    let mut structure = AtomicStructure::new();
+    let anchor_id = structure.add_atom(6, DVec3::ZERO);
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor_id,
+        1, // placing hydrogen
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.remaining_slots, 4); // sp3 carbon, 0 bonds
+    assert!(result.mode.is_free_sphere());
+    assert!(result.guide_dots().is_empty()); // FreeSphere has no fixed dots
+
+    // Check sphere parameters
+    if let GuidedPlacementMode::FreeSphere { center, radius, preview_position } = &result.mode {
+        assert_eq!(*center, DVec3::ZERO);
+        assert!((*radius - result.bond_distance).abs() < 1e-10);
+        assert!(preview_position.is_none());
+    } else {
+        panic!("Expected FreeSphere mode");
+    }
+}
+
+#[test]
+fn sp3_case0_sphere_radius_matches_bond_distance() {
+    // Silicon bare atom placing carbon → crystal bond length for Si-C
+    let mut structure = AtomicStructure::new();
+    let anchor_id = structure.add_atom(14, DVec3::new(1.0, 2.0, 3.0));
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor_id,
+        6, // placing carbon
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert!(result.mode.is_free_sphere());
+    if let GuidedPlacementMode::FreeSphere { center, radius, .. } = &result.mode {
+        assert_eq!(*center, DVec3::new(1.0, 2.0, 3.0));
+        assert!((*radius - 1.889).abs() < 0.001, "Si-C crystal = {}", radius); // Si-C crystal
+    }
+}
+
+// ============================================================================
+// Phase B: Ray-sphere intersection
+// ============================================================================
+
+#[test]
+fn ray_sphere_hit_front() {
+    // Ray from (0, 0, -5) toward +Z, sphere at origin radius 1
+    let hit = ray_sphere_nearest_point(
+        &DVec3::new(0.0, 0.0, -5.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &DVec3::ZERO,
+        1.0,
+    );
+    assert!(hit.is_some());
+    let p = hit.unwrap();
+    assert!((p.z - (-1.0)).abs() < 1e-6, "Front hit z = {}", p.z);
+    assert!(p.x.abs() < 1e-6);
+    assert!(p.y.abs() < 1e-6);
+}
+
+#[test]
+fn ray_sphere_miss() {
+    // Ray that misses the sphere entirely
+    let hit = ray_sphere_nearest_point(
+        &DVec3::new(5.0, 0.0, -5.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &DVec3::ZERO,
+        1.0,
+    );
+    assert!(hit.is_none());
+}
+
+#[test]
+fn ray_sphere_tangent() {
+    // Ray tangent to sphere (edge case)
+    let hit = ray_sphere_nearest_point(
+        &DVec3::new(1.0, 0.0, -5.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &DVec3::ZERO,
+        1.0,
+    );
+    // Tangent: should hit at exactly z=0
+    assert!(hit.is_some());
+    let p = hit.unwrap();
+    assert!((p.x - 1.0).abs() < 1e-6);
+    assert!(p.z.abs() < 1e-6);
+}
+
+#[test]
+fn ray_sphere_behind_ray() {
+    // Sphere is entirely behind the ray origin
+    let hit = ray_sphere_nearest_point(
+        &DVec3::new(0.0, 0.0, 5.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &DVec3::ZERO,
+        1.0,
+    );
+    assert!(hit.is_none());
+}
+
+#[test]
+fn ray_sphere_origin_inside() {
+    // Ray origin inside the sphere → should hit the exit point (front hemisphere)
+    let hit = ray_sphere_nearest_point(
+        &DVec3::new(0.0, 0.0, 0.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &DVec3::ZERO,
+        1.0,
+    );
+    assert!(hit.is_some());
+    let p = hit.unwrap();
+    // Should hit the far side of the sphere at z=1
+    assert!((p.z - 1.0).abs() < 1e-6, "Exit hit z = {}", p.z);
+}
+
+#[test]
+fn ray_sphere_hit_on_surface() {
+    // Hit point should be on the sphere surface
+    let center = DVec3::new(1.0, 2.0, 3.0);
+    let radius = 2.5;
+    let hit = ray_sphere_nearest_point(
+        &DVec3::new(1.0, 2.0, -5.0),
+        &DVec3::new(0.0, 0.0, 1.0),
+        &center,
+        radius,
+    );
+    assert!(hit.is_some());
+    let p = hit.unwrap();
+    let dist_from_center = (p - center).length();
+    assert!(
+        (dist_from_center - radius).abs() < 1e-6,
+        "Hit point should be on sphere surface, dist = {}",
+        dist_from_center
+    );
+}
+
+// ============================================================================
+// Phase B: case 1 still returns empty (stub for Phase C)
+// ============================================================================
+
+#[test]
+fn sp3_case1_still_stub() {
+    // Carbon with 1 bond → case 1 is still a stub (empty dots)
+    let d = 1.09;
+    let (structure, anchor_id) = make_structure_with_neighbors(
+        6,
+        &[(1, DVec3::new(1.0, 0.0, 0.0) * d)],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor_id,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Crystal,
+    );
+
+    assert_eq!(result.remaining_slots, 3);
+    // Case 1 is still a stub → FixedDots with empty guide_dots
+    assert!(!result.mode.is_free_sphere());
+    assert!(result.guide_dots().is_empty());
 }

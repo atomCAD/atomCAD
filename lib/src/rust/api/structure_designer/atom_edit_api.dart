@@ -103,6 +103,14 @@ void atomEditCancelGuidedPlacement() => RustLib.instance.api
 bool atomEditIsInGuidedPlacement() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditIsInGuidedPlacement();
 
+/// Update the preview position for free sphere guided placement.
+/// Returns true if the preview changed (needs re-render).
+bool atomEditGuidedPlacementPointerMove(
+        {required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditGuidedPlacementPointerMove(
+            rayStart: rayStart, rayDir: rayDir);
+
 void defaultToolPointerCancel() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiDefaultToolPointerCancel();
 

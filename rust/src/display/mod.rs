@@ -2,6 +2,7 @@ pub mod atomic_tessellator;
 pub mod coordinate_system_tessellator;
 pub mod csg_to_poly_mesh;
 pub mod gadget;
+pub mod guided_placement_tessellator;
 pub mod poly_mesh;
 pub mod poly_mesh_tessellator;
 pub mod preferences;

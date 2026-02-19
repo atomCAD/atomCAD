@@ -74,13 +74,23 @@ pub enum AddAtomToolState {
         guide_dots: Vec<crate::crystolecule::guided_placement::GuideDot>,
         bond_distance: f64,
     },
+    /// Free sphere placement: bare atom with no bonds, user clicks anywhere on sphere.
+    GuidedFreeSphere {
+        atomic_number: i16,
+        anchor_atom_id: u32,
+        center: DVec3,
+        radius: f64,
+        /// Cursor-tracked preview position on the sphere surface.
+        preview_position: Option<DVec3>,
+    },
 }
 
 impl AddAtomToolState {
     pub fn atomic_number(&self) -> i16 {
         match self {
-            AddAtomToolState::Idle { atomic_number } => *atomic_number,
-            AddAtomToolState::GuidedPlacement { atomic_number, .. } => *atomic_number,
+            AddAtomToolState::Idle { atomic_number }
+            | AddAtomToolState::GuidedPlacement { atomic_number, .. }
+            | AddAtomToolState::GuidedFreeSphere { atomic_number, .. } => *atomic_number,
         }
     }
 }

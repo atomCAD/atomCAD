@@ -38,15 +38,91 @@ pub enum GuideDotType {
     Secondary,
 }
 
+/// The placement mode determines how guide positions are presented.
+#[derive(Debug, Clone)]
+pub enum GuidedPlacementMode {
+    /// Fixed guide dots at computed positions (sp3 cases 2, 3; sp2/sp1 in future).
+    FixedDots { guide_dots: Vec<GuideDot> },
+    /// Bare atom with no bonds: wireframe sphere where the user can click anywhere.
+    FreeSphere {
+        center: DVec3,
+        radius: f64,
+        /// Cursor-tracked preview position on the sphere surface (updated by pointer_move).
+        preview_position: Option<DVec3>,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub struct GuidedPlacementResult {
     pub anchor_atom_id: u32,
     pub hybridization: Hybridization,
-    pub guide_dots: Vec<GuideDot>,
+    pub mode: GuidedPlacementMode,
     pub bond_distance: f64,
     pub remaining_slots: usize,
     /// True when geometric max > covalent max (atom has lone pairs / empty orbitals)
     pub has_additional_geometric_capacity: bool,
+}
+
+impl GuidedPlacementMode {
+    /// Returns guide dots if in FixedDots mode, empty slice otherwise.
+    pub fn guide_dots(&self) -> &[GuideDot] {
+        match self {
+            GuidedPlacementMode::FixedDots { guide_dots } => guide_dots,
+            GuidedPlacementMode::FreeSphere { .. } => &[],
+        }
+    }
+
+    /// Returns true if this is a FreeSphere mode.
+    pub fn is_free_sphere(&self) -> bool {
+        matches!(self, GuidedPlacementMode::FreeSphere { .. })
+    }
+}
+
+impl GuidedPlacementResult {
+    /// Convenience accessor: returns guide dots from the mode (empty for FreeSphere).
+    pub fn guide_dots(&self) -> &[GuideDot] {
+        self.mode.guide_dots()
+    }
+}
+
+// ============================================================================
+// Ray-sphere intersection
+// ============================================================================
+
+/// Compute ray-sphere intersection, returning the front-hemisphere hit point.
+///
+/// Only returns a point on the front hemisphere (facing the ray origin).
+/// Returns `None` if the ray misses the sphere entirely.
+pub fn ray_sphere_nearest_point(
+    ray_start: &DVec3,
+    ray_dir: &DVec3,
+    sphere_center: &DVec3,
+    sphere_radius: f64,
+) -> Option<DVec3> {
+    let oc = *ray_start - *sphere_center;
+    let a = ray_dir.dot(*ray_dir);
+    let b = 2.0 * ray_dir.dot(oc);
+    let c = oc.length_squared() - sphere_radius * sphere_radius;
+    let discriminant = b * b - 4.0 * a * c;
+
+    if discriminant < 0.0 {
+        return None;
+    }
+
+    let sqrt_disc = discriminant.sqrt();
+    let t1 = (-b - sqrt_disc) / (2.0 * a);
+    let t2 = (-b + sqrt_disc) / (2.0 * a);
+
+    // Prefer the nearest positive intersection (front hit)
+    let t = if t1 > 0.0 {
+        t1
+    } else if t2 > 0.0 {
+        t2
+    } else {
+        return None; // Both behind the ray
+    };
+
+    Some(*ray_start + *ray_dir * t)
 }
 
 // ============================================================================
@@ -414,11 +490,20 @@ pub fn compute_guided_placement(
         .collect();
 
     // Dispatch to geometry computation based on hybridization
-    // Only compute guide dots if there are remaining slots
-    let guide_dots = if slots == 0 {
-        vec![]
+    // Only compute if there are remaining slots
+    let mode = if slots == 0 {
+        GuidedPlacementMode::FixedDots {
+            guide_dots: vec![],
+        }
+    } else if existing_bond_dirs.is_empty() {
+        // Case 0: no existing bonds → free sphere placement
+        GuidedPlacementMode::FreeSphere {
+            center: anchor_pos,
+            radius: bond_dist,
+            preview_position: None,
+        }
     } else {
-        match hybridization {
+        let guide_dots = match hybridization {
             Hybridization::Sp3 => {
                 compute_sp3_candidates(anchor_pos, &existing_bond_dirs, bond_dist)
             }
@@ -426,13 +511,14 @@ pub fn compute_guided_placement(
                 // Stubs for Phase D
                 vec![]
             }
-        }
+        };
+        GuidedPlacementMode::FixedDots { guide_dots }
     };
 
     GuidedPlacementResult {
         anchor_atom_id,
         hybridization,
-        guide_dots,
+        mode,
         bond_distance: bond_dist,
         remaining_slots: slots,
         has_additional_geometric_capacity: has_additional,

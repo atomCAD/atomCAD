@@ -397,6 +397,33 @@ pub fn atom_edit_is_in_guided_placement() -> bool {
     }
 }
 
+/// Update the preview position for free sphere guided placement.
+/// Returns true if the preview changed (needs re-render).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_guided_placement_pointer_move(
+    ray_start: APIVec3,
+    ray_dir: APIVec3,
+) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let ray_start_vec3 = from_api_vec3(&ray_start);
+                let ray_dir_vec3 = from_api_vec3(&ray_dir);
+                let changed = atom_edit::guided_placement_pointer_move(
+                    &mut cad_instance.structure_designer,
+                    &ray_start_vec3,
+                    &ray_dir_vec3,
+                );
+                if changed {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                changed
+            },
+            false,
+        )
+    }
+}
+
 // --- Default tool pointer event API ---
 
 #[flutter_rust_bridge::frb(sync)]

@@ -220,6 +220,90 @@ impl AtomEditData {
         }
     }
 
+    // --- Decoration helpers ---
+
+    /// Apply guided placement decoration (anchor highlight + guide visuals) to an output structure.
+    ///
+    /// In diff view (`provenance` is None), anchor_atom_id is used directly.
+    /// In result view (`provenance` is Some), anchor_atom_id is mapped through provenance.
+    fn apply_guided_placement_decoration(
+        &self,
+        output: &mut AtomicStructure,
+        provenance: Option<&crate::crystolecule::atomic_structure_diff::DiffProvenance>,
+    ) {
+        use crate::crystolecule::atomic_structure::AtomDisplayState;
+        use crate::crystolecule::atomic_structure::atomic_structure_decorator::{
+            GuidePlacementVisuals, WireframeSphereVisuals,
+        };
+
+        // Helper to resolve anchor_atom_id to output atom ID
+        let resolve_anchor = |anchor_atom_id: u32| -> Option<u32> {
+            match provenance {
+                None => Some(anchor_atom_id), // diff view: direct
+                Some(prov) => prov.diff_to_result.get(&anchor_atom_id).copied(),
+            }
+        };
+
+        match &self.active_tool {
+            AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
+                anchor_atom_id,
+                guide_dots,
+                ..
+            }) => {
+                if let Some(output_id) = resolve_anchor(*anchor_atom_id) {
+                    output
+                        .decorator_mut()
+                        .set_atom_display_state(output_id, AtomDisplayState::Marked);
+                    if let Some(anchor_atom) = output.get_atom(output_id) {
+                        output.decorator_mut().guide_placement_visuals =
+                            Some(GuidePlacementVisuals {
+                                anchor_pos: anchor_atom.position,
+                                guide_dots: guide_dots.clone(),
+                                wireframe_sphere: None,
+                            });
+                    }
+                }
+            }
+            AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
+                anchor_atom_id,
+                center,
+                radius,
+                preview_position,
+                ..
+            }) => {
+                if let Some(output_id) = resolve_anchor(*anchor_atom_id) {
+                    output
+                        .decorator_mut()
+                        .set_atom_display_state(output_id, AtomDisplayState::Marked);
+                    if let Some(anchor_atom) = output.get_atom(output_id) {
+                        // Build guide dots from preview position (if cursor is on sphere)
+                        let preview_dots: Vec<crate::crystolecule::guided_placement::GuideDot> =
+                            preview_position
+                                .iter()
+                                .map(|pos| crate::crystolecule::guided_placement::GuideDot {
+                                    position: *pos,
+                                    dot_type:
+                                        crate::crystolecule::guided_placement::GuideDotType::Primary,
+                                })
+                                .collect();
+
+                        output.decorator_mut().guide_placement_visuals =
+                            Some(GuidePlacementVisuals {
+                                anchor_pos: anchor_atom.position,
+                                guide_dots: preview_dots,
+                                wireframe_sphere: Some(WireframeSphereVisuals {
+                                    center: *center,
+                                    radius: *radius,
+                                    preview_position: *preview_position,
+                                }),
+                            });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     // --- Core mutation methods (testable without StructureDesigner) ---
 
     /// Convert a matched diff atom to a delete marker.
@@ -477,26 +561,7 @@ impl NodeData for AtomEditData {
                     }
 
                     // Mark guided placement anchor and store guide visuals
-                    if let AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
-                        anchor_atom_id,
-                        guide_dots,
-                        ..
-                    }) = &self.active_tool
-                    {
-                        // In diff view, anchor_atom_id IS the diff atom ID
-                        diff_clone.decorator_mut().set_atom_display_state(
-                            *anchor_atom_id,
-                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
-                        );
-                        if let Some(anchor_atom) = diff_clone.get_atom(*anchor_atom_id) {
-                            diff_clone.decorator_mut().guide_placement_visuals = Some(
-                                crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals {
-                                    anchor_pos: anchor_atom.position,
-                                    guide_dots: guide_dots.clone(),
-                                },
-                            );
-                        }
-                    }
+                    self.apply_guided_placement_decoration(&mut diff_clone, None);
                 }
                 return NetworkResult::Atomic(diff_clone);
             }
@@ -551,31 +616,10 @@ impl NodeData for AtomEditData {
                 }
 
                 // Mark guided placement anchor and store guide visuals
-                if let AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
-                    anchor_atom_id,
-                    guide_dots,
-                    ..
-                }) = &self.active_tool
-                {
-                    // Map anchor diff atom ID to result atom ID and mark it
-                    if let Some(&result_id) =
-                        diff_result.provenance.diff_to_result.get(anchor_atom_id)
-                    {
-                        result.decorator_mut().set_atom_display_state(
-                            result_id,
-                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
-                        );
-                        // Store guide placement visuals for rendering
-                        if let Some(anchor_atom) = result.get_atom(result_id) {
-                            result.decorator_mut().guide_placement_visuals = Some(
-                                crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals {
-                                    anchor_pos: anchor_atom.position,
-                                    guide_dots: guide_dots.clone(),
-                                },
-                            );
-                        }
-                    }
-                }
+                self.apply_guided_placement_decoration(
+                    &mut result,
+                    Some(&diff_result.provenance),
+                );
             }
 
             // Store provenance and stats in eval cache for root-level evaluations

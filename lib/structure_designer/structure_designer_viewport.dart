@@ -165,6 +165,20 @@ class _StructureDesignerViewportState
     return KeyEventResult.ignored;
   }
 
+  void _onHover(PointerHoverEvent event) {
+    // Track cursor for free sphere guided placement mode
+    if (atom_edit_api.atomEditIsInGuidedPlacement()) {
+      final ray = getRayFromPointerPos(event.localPosition);
+      final changed = atom_edit_api.atomEditGuidedPlacementPointerMove(
+        rayStart: vector3ToApiVec3(ray.start),
+        rayDir: vector3ToApiVec3(ray.direction),
+      );
+      if (changed) {
+        renderingNeeded();
+      }
+    }
+  }
+
   /// Forward to the protected startGadgetDragFromHandle for the delegate.
   void delegateStartGadgetDrag(int handleIndex, Offset pos) {
     startGadgetDragFromHandle(handleIndex, pos);
@@ -347,6 +361,7 @@ class _StructureDesignerViewportState
       onKeyEvent: _onKeyEvent,
       child: MouseRegion(
         onEnter: (_) => _focusNode.requestFocus(),
+        onHover: _onHover,
         child: Stack(
           children: [
             super.build(context),
