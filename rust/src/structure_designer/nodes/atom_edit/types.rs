@@ -64,8 +64,25 @@ pub struct DefaultToolState {
 }
 
 #[derive(Debug)]
-pub struct AddAtomToolState {
-    pub atomic_number: i16,
+pub enum AddAtomToolState {
+    Idle {
+        atomic_number: i16,
+    },
+    GuidedPlacement {
+        atomic_number: i16,
+        anchor_atom_id: u32,
+        guide_dots: Vec<crate::crystolecule::guided_placement::GuideDot>,
+        bond_distance: f64,
+    },
+}
+
+impl AddAtomToolState {
+    pub fn atomic_number(&self) -> i16 {
+        match self {
+            AddAtomToolState::Idle { atomic_number } => *atomic_number,
+            AddAtomToolState::GuidedPlacement { atomic_number, .. } => *atomic_number,
+        }
+    }
 }
 
 #[derive(Debug)]

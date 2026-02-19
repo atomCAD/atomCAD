@@ -2115,7 +2115,7 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     AtomEditTool::Default(state) => {
                         (Some(state.replacement_atomic_number), None, None)
                     }
-                    AtomEditTool::AddAtom(state) => (None, Some(state.atomic_number), None),
+                    AtomEditTool::AddAtom(state) => (None, Some(state.atomic_number()), None),
                     AtomEditTool::AddBond(state) => (None, None, state.last_atom_id),
                 };
 
@@ -2148,11 +2148,19 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         bonds_deleted: 0,
                     });
 
+                let is_in_guided_placement = matches!(
+                    &atom_edit_data.active_tool,
+                    AtomEditTool::AddAtom(
+                        crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedPlacement { .. }
+                    )
+                );
+
                 Some(APIAtomEditData {
                     active_tool: atom_edit_data.get_active_tool(),
                     bond_tool_last_atom_id,
                     replacement_atomic_number,
                     add_atom_tool_atomic_number,
+                    is_in_guided_placement,
                     has_selected_atoms,
                     has_selection,
                     selection_transform: atom_edit_data

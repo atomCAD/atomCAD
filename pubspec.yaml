@@ -52,6 +52,7 @@ dependencies:
   # CLI dependencies (also used by bin/atomcad_cli.dart)
   args: ^2.4.0
   http: ^1.1.0
+  freezed_annotation: ^3.1.0
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +67,8 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.13.1
+  freezed: ^3.0.6
+  build_runner: ^2.4.15
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

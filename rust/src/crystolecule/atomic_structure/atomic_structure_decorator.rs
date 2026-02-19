@@ -1,5 +1,7 @@
 use crate::crystolecule::atomic_structure::bond_reference::BondReference;
+use crate::crystolecule::guided_placement::GuideDot;
 use crate::util::transform::Transform;
+use glam::f64::DVec3;
 use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone)]
@@ -7,6 +9,13 @@ pub enum AtomDisplayState {
     Normal,
     Marked,
     SecondaryMarked,
+}
+
+/// Visual data for rendering guided placement guide dots and anchor arrows.
+#[derive(Debug, Clone)]
+pub struct GuidePlacementVisuals {
+    pub anchor_pos: DVec3,
+    pub guide_dots: Vec<GuideDot>,
 }
 
 #[derive(Debug, Clone)]
@@ -17,6 +26,8 @@ pub struct AtomicStructureDecorator {
     pub selection_transform: Option<Transform>,
     /// Transient rendering hint: when true and the structure is a diff, render anchor arrows
     pub show_anchor_arrows: bool,
+    /// Transient rendering hint: guide placement visuals for the Add Atom tool
+    pub guide_placement_visuals: Option<GuidePlacementVisuals>,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -33,6 +44,7 @@ impl AtomicStructureDecorator {
             from_selected_node: false,
             selection_transform: None,
             show_anchor_arrows: false,
+            guide_placement_visuals: None,
         }
     }
 

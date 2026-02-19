@@ -182,6 +182,8 @@ impl AtomEditData {
         if let AtomEditTool::Default(ref mut state) = self.active_tool {
             state.interaction_state = DefaultToolInteractionState::Idle;
         }
+        // Cancel guided placement if switching away from AddAtom tool
+        // (no special action needed — the new tool state replaces the old one)
         self.active_tool = match api_tool {
             APIAtomEditTool::Default => AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
@@ -189,7 +191,7 @@ impl AtomEditData {
                 show_gadget: false,
             }),
             APIAtomEditTool::AddAtom => {
-                AtomEditTool::AddAtom(AddAtomToolState { atomic_number: 6 })
+                AtomEditTool::AddAtom(AddAtomToolState::Idle { atomic_number: 6 })
             }
             APIAtomEditTool::AddBond => {
                 AtomEditTool::AddBond(AddBondToolState { last_atom_id: None })
@@ -210,7 +212,8 @@ impl AtomEditData {
     pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i16) -> bool {
         match &mut self.active_tool {
             AtomEditTool::AddAtom(state) => {
-                state.atomic_number = atomic_number;
+                // Reset to Idle with new atomic number (cancel any guided placement)
+                *state = AddAtomToolState::Idle { atomic_number };
                 true
             }
             _ => false,
@@ -472,6 +475,28 @@ impl NodeData for AtomEditData {
                     if let Some(ref transform) = self.selection.selection_transform {
                         diff_clone.decorator_mut().selection_transform = Some(transform.clone());
                     }
+
+                    // Mark guided placement anchor and store guide visuals
+                    if let AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
+                        anchor_atom_id,
+                        guide_dots,
+                        ..
+                    }) = &self.active_tool
+                    {
+                        // In diff view, anchor_atom_id IS the diff atom ID
+                        diff_clone.decorator_mut().set_atom_display_state(
+                            *anchor_atom_id,
+                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                        );
+                        if let Some(anchor_atom) = diff_clone.get_atom(*anchor_atom_id) {
+                            diff_clone.decorator_mut().guide_placement_visuals = Some(
+                                crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals {
+                                    anchor_pos: anchor_atom.position,
+                                    guide_dots: guide_dots.clone(),
+                                },
+                            );
+                        }
+                    }
                 }
                 return NetworkResult::Atomic(diff_clone);
             }
@@ -524,6 +549,33 @@ impl NodeData for AtomEditData {
                         }
                     }
                 }
+
+                // Mark guided placement anchor and store guide visuals
+                if let AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
+                    anchor_atom_id,
+                    guide_dots,
+                    ..
+                }) = &self.active_tool
+                {
+                    // Map anchor diff atom ID to result atom ID and mark it
+                    if let Some(&result_id) =
+                        diff_result.provenance.diff_to_result.get(anchor_atom_id)
+                    {
+                        result.decorator_mut().set_atom_display_state(
+                            result_id,
+                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                        );
+                        // Store guide placement visuals for rendering
+                        if let Some(anchor_atom) = result.get_atom(result_id) {
+                            result.decorator_mut().guide_placement_visuals = Some(
+                                crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals {
+                                    anchor_pos: anchor_atom.position,
+                                    guide_dots: guide_dots.clone(),
+                                },
+                            );
+                        }
+                    }
+                }
             }
 
             // Store provenance and stats in eval cache for root-level evaluations
@@ -555,9 +607,11 @@ impl NodeData for AtomEditData {
                     interaction_state: DefaultToolInteractionState::default(),
                     show_gadget: state.show_gadget,
                 }),
-                AtomEditTool::AddAtom(state) => AtomEditTool::AddAtom(AddAtomToolState {
-                    atomic_number: state.atomic_number,
-                }),
+                AtomEditTool::AddAtom(state) => AtomEditTool::AddAtom(
+                    AddAtomToolState::Idle {
+                        atomic_number: state.atomic_number(),
+                    },
+                ),
                 AtomEditTool::AddBond(state) => AtomEditTool::AddBond(AddBondToolState {
                     last_atom_id: state.last_atom_id,
                 }),

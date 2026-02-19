@@ -1095,9 +1095,12 @@ After Phase A is complete, you can manually verify these behaviors in the runnin
    - A **SnackBar** should appear: "Atom is fully bonded". No guide dots shown.
 
 4. **Saturation with additional capacity (e.g., NH3 nitrogen):**
-   - Click a nitrogen with 3 bonds. In covalent mode (default), it's saturated.
+   - Click a nitrogen with 3 bonds. It's covalently saturated (3 is the sp3 covalent
+     max for nitrogen).
    - SnackBar should say: "Atom is covalently saturated. Switch to Dative bond mode
      to access additional bonding positions."
+   - (The Dative bond mode toggle is added in Phase D. For now, verify the SnackBar
+     appears with this forward-looking message.)
 
 5. **Cancel and navigation:**
    - Enter guided placement (click an atom with open slots).

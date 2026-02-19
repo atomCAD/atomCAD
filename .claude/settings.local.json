@@ -100,7 +100,8 @@
       "Bash(awk:*)",
       "Bash(tee:*)",
       "Bash(select-string:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(dart pub add:*)"
     ]
   }
 }

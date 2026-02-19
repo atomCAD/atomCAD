@@ -10,4 +10,5 @@ pub mod motif;
 pub mod motif_parser;
 pub mod simulation;
 pub mod unit_cell_struct;
+pub mod guided_placement;
 pub mod unit_cell_symmetries;

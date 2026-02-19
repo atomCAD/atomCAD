@@ -6,8 +6,10 @@
 import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -35,6 +37,7 @@ class APIAtomEditData {
   final int? bondToolLastAtomId;
   final int? replacementAtomicNumber;
   final int? addAtomToolAtomicNumber;
+  final bool isInGuidedPlacement;
   final bool hasSelectedAtoms;
   final bool hasSelection;
   final APITransform? selectionTransform;
@@ -49,6 +52,7 @@ class APIAtomEditData {
     this.bondToolLastAtomId,
     this.replacementAtomicNumber,
     this.addAtomToolAtomicNumber,
+    required this.isInGuidedPlacement,
     required this.hasSelectedAtoms,
     required this.hasSelection,
     this.selectionTransform,
@@ -65,6 +69,7 @@ class APIAtomEditData {
       bondToolLastAtomId.hashCode ^
       replacementAtomicNumber.hashCode ^
       addAtomToolAtomicNumber.hashCode ^
+      isInGuidedPlacement.hashCode ^
       hasSelectedAtoms.hashCode ^
       hasSelection.hashCode ^
       selectionTransform.hashCode ^
@@ -83,6 +88,7 @@ class APIAtomEditData {
           bondToolLastAtomId == other.bondToolLastAtomId &&
           replacementAtomicNumber == other.replacementAtomicNumber &&
           addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
+          isInGuidedPlacement == other.isInGuidedPlacement &&
           hasSelectedAtoms == other.hasSelectedAtoms &&
           hasSelection == other.hasSelection &&
           selectionTransform == other.selectionTransform &&
@@ -206,6 +212,16 @@ class APIAtomTransData {
           runtimeType == other.runtimeType &&
           translation == other.translation &&
           rotation == other.rotation;
+}
+
+/// Bond length computation mode for guided atom placement.
+enum APIBondLengthMode {
+  /// Use crystal lattice bond length table (with UFF fallback).
+  crystal,
+
+  /// Always use UFF rest bond length formula.
+  uff,
+  ;
 }
 
 class APIBoolData {
@@ -1549,6 +1565,28 @@ class FactorSelectionResult {
           success == other.success &&
           error == other.error &&
           newNodeId == other.newNodeId;
+}
+
+@freezed
+sealed class GuidedPlacementApiResult with _$GuidedPlacementApiResult {
+  const GuidedPlacementApiResult._();
+
+  /// No atom was hit by the ray.
+  const factory GuidedPlacementApiResult.noAtomHit() =
+      GuidedPlacementApiResult_NoAtomHit;
+
+  /// The hit atom is saturated.
+  const factory GuidedPlacementApiResult.atomSaturated({
+    /// True when the atom has lone pairs / empty orbitals
+    /// (switch to Dative bond mode to access them).
+    required bool hasAdditionalCapacity,
+  }) = GuidedPlacementApiResult_AtomSaturated;
+
+  /// Guided placement started successfully.
+  const factory GuidedPlacementApiResult.guidedPlacementStarted({
+    required int guideCount,
+    required int anchorAtomId,
+  }) = GuidedPlacementApiResult_GuidedPlacementStarted;
 }
 
 class InputPinView {

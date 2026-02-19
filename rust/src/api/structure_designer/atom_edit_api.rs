@@ -300,6 +300,103 @@ pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
     }
 }
 
+// --- Guided atom placement API ---
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_start_guided_placement(
+    ray_start: APIVec3,
+    ray_dir: APIVec3,
+    atomic_number: i16,
+    bond_length_mode: crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode,
+) -> crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult {
+    use crate::api::structure_designer::structure_designer_api_types::{
+        APIBondLengthMode, GuidedPlacementApiResult,
+    };
+    use crate::crystolecule::guided_placement::BondLengthMode;
+
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let ray_start_vec3 = from_api_vec3(&ray_start);
+                let ray_dir_vec3 = from_api_vec3(&ray_dir);
+                let mode = match bond_length_mode {
+                    APIBondLengthMode::Crystal => BondLengthMode::Crystal,
+                    APIBondLengthMode::Uff => BondLengthMode::Uff,
+                };
+                let result = atom_edit::start_guided_placement(
+                    &mut cad_instance.structure_designer,
+                    &ray_start_vec3,
+                    &ray_dir_vec3,
+                    atomic_number,
+                    mode,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    atom_edit::GuidedPlacementStartResult::NoAtomHit => {
+                        GuidedPlacementApiResult::NoAtomHit
+                    }
+                    atom_edit::GuidedPlacementStartResult::AtomSaturated {
+                        has_additional_capacity,
+                    } => GuidedPlacementApiResult::AtomSaturated {
+                        has_additional_capacity,
+                    },
+                    atom_edit::GuidedPlacementStartResult::Started {
+                        guide_count,
+                        anchor_atom_id,
+                    } => GuidedPlacementApiResult::GuidedPlacementStarted {
+                        guide_count: guide_count as i32,
+                        anchor_atom_id: anchor_atom_id as i32,
+                    },
+                }
+            },
+            GuidedPlacementApiResult::NoAtomHit,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_place_guided_atom(ray_start: APIVec3, ray_dir: APIVec3) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let ray_start_vec3 = from_api_vec3(&ray_start);
+                let ray_dir_vec3 = from_api_vec3(&ray_dir);
+                let result = atom_edit::place_guided_atom(
+                    &mut cad_instance.structure_designer,
+                    &ray_start_vec3,
+                    &ray_dir_vec3,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                result
+            },
+            false,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_cancel_guided_placement() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            atom_edit::cancel_guided_placement(&mut cad_instance.structure_designer);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_is_in_guided_placement() -> bool {
+    use crate::api::api_common::with_cad_instance_or;
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                atom_edit::is_in_guided_placement(&cad_instance.structure_designer)
+            },
+            false,
+        )
+    }
+}
+
 // --- Default tool pointer event API ---
 
 #[flutter_rust_bridge::frb(sync)]

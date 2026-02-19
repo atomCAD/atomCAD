@@ -386,6 +386,32 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               hint: 'Select an element',
               required: true,
             ),
+            const SizedBox(height: AppSpacing.medium),
+            Row(
+              children: [
+                Text('Bond length:', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 8),
+                SegmentedButton<APIBondLengthMode>(
+                  segments: const [
+                    ButtonSegment<APIBondLengthMode>(
+                      value: APIBondLengthMode.crystal,
+                      label: Text('Crystal'),
+                    ),
+                    ButtonSegment<APIBondLengthMode>(
+                      value: APIBondLengthMode.uff,
+                      label: Text('UFF'),
+                    ),
+                  ],
+                  selected: {widget.model.bondLengthMode},
+                  onSelectionChanged: (Set<APIBondLengthMode> selection) {
+                    widget.model.bondLengthMode = selection.first;
+                  },
+                  style: ButtonStyle(
+                    visualDensity: AppSpacing.compactVerticalDensity,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

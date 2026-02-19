@@ -79,6 +79,30 @@ String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
     RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditMinimize(
         freezeMode: freezeMode);
 
+GuidedPlacementApiResult atomEditStartGuidedPlacement(
+        {required APIVec3 rayStart,
+        required APIVec3 rayDir,
+        required int atomicNumber,
+        required APIBondLengthMode bondLengthMode}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditStartGuidedPlacement(
+            rayStart: rayStart,
+            rayDir: rayDir,
+            atomicNumber: atomicNumber,
+            bondLengthMode: bondLengthMode);
+
+bool atomEditPlaceGuidedAtom(
+        {required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditPlaceGuidedAtom(
+            rayStart: rayStart, rayDir: rayDir);
+
+void atomEditCancelGuidedPlacement() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditCancelGuidedPlacement();
+
+bool atomEditIsInGuidedPlacement() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditIsInGuidedPlacement();
+
 void defaultToolPointerCancel() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiDefaultToolPointerCancel();
 

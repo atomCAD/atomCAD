@@ -127,6 +127,16 @@ fn tessellate_non_lightweight_content(
                             &atomic_tessellation_params,
                             &preferences.atomic_structure_visualization,
                         );
+                        // Render guide placement visuals (guide dots + anchor arrows)
+                        if let Some(visuals) =
+                            &atomic_structure.decorator().guide_placement_visuals
+                        {
+                            atomic_tessellator::tessellate_guide_placement(
+                                &mut main_mesh,
+                                visuals,
+                                &atomic_tessellation_params,
+                            );
+                        }
                     }
                     AtomicRenderingMethod::Impostors => {
                         atomic_tessellator::tessellate_atomic_structure_impostors(
@@ -135,6 +145,16 @@ fn tessellate_non_lightweight_content(
                             atomic_structure,
                             &preferences.atomic_structure_visualization,
                         );
+                        // Render guide placement visuals (guide dots + anchor arrows)
+                        if let Some(visuals) =
+                            &atomic_structure.decorator().guide_placement_visuals
+                        {
+                            atomic_tessellator::tessellate_guide_placement_impostors(
+                                &mut atom_impostor_mesh,
+                                &mut bond_impostor_mesh,
+                                visuals,
+                            );
+                        }
                     }
                 }
             }

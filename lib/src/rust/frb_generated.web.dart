@@ -66,6 +66,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAtomTransData dco_decode_api_atom_trans_data(dynamic raw);
 
   @protected
+  APIBondLengthMode dco_decode_api_bond_length_mode(dynamic raw);
+
+  @protected
   APIBoolData dco_decode_api_bool_data(dynamic raw);
 
   @protected
@@ -456,6 +459,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dco_decode_geometry_visualization_preferences(dynamic raw);
 
   @protected
+  GuidedPlacementApiResult dco_decode_guided_placement_api_result(dynamic raw);
+
+  @protected
   int dco_decode_i_16(dynamic raw);
 
   @protected
@@ -823,6 +829,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomTransData sse_decode_api_atom_trans_data(SseDeserializer deserializer);
+
+  @protected
+  APIBondLengthMode sse_decode_api_bond_length_mode(
+      SseDeserializer deserializer);
 
   @protected
   APIBoolData sse_decode_api_bool_data(SseDeserializer deserializer);
@@ -1275,6 +1285,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
           SseDeserializer deserializer);
 
   @protected
+  GuidedPlacementApiResult sse_decode_guided_placement_api_result(
+      SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_16(SseDeserializer deserializer);
 
   @protected
@@ -1712,6 +1726,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_atom_trans_data(
       APIAtomTransData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_bond_length_mode(
+      APIBondLengthMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_bool_data(APIBoolData self, SseSerializer serializer);
@@ -2182,6 +2200,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_geometry_visualization_preferences(
       GeometryVisualizationPreferences self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_guided_placement_api_result(
+      GuidedPlacementApiResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_16(int self, SseSerializer serializer);

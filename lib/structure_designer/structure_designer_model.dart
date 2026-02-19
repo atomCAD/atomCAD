@@ -74,8 +74,15 @@ class StructureDesignerModel extends ChangeNotifier {
   WireDropCallback?
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
   String _lastMinimizeMessage = '';
+  APIBondLengthMode _bondLengthMode = APIBondLengthMode.crystal;
 
   String get lastMinimizeMessage => _lastMinimizeMessage;
+  APIBondLengthMode get bondLengthMode => _bondLengthMode;
+  set bondLengthMode(APIBondLengthMode value) {
+    _bondLengthMode = value;
+    notifyListeners();
+  }
+
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
   StructureDesignerPreferences? preferences;
@@ -752,6 +759,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setActiveAtomEditTool(APIAtomEditTool tool) {
     atom_edit_api.setActiveAtomEditTool(tool: tool);
+    _bondLengthMode = APIBondLengthMode.crystal;
     refreshFromKernel();
   }
 
@@ -846,6 +854,41 @@ class StructureDesignerModel extends ChangeNotifier {
         atom_edit_api.atomEditMinimize(freezeMode: freezeMode);
     refreshFromKernel();
     notifyListeners();
+  }
+
+  // ===== GUIDED ATOM PLACEMENT =====
+
+  GuidedPlacementApiResult atomEditStartGuidedPlacement(
+    vector_math.Vector3 rayStart,
+    vector_math.Vector3 rayDir,
+    int atomicNumber,
+    APIBondLengthMode bondLengthMode,
+  ) {
+    final result = atom_edit_api.atomEditStartGuidedPlacement(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+      atomicNumber: atomicNumber,
+      bondLengthMode: bondLengthMode,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  bool atomEditPlaceGuidedAtom(
+    vector_math.Vector3 rayStart,
+    vector_math.Vector3 rayDir,
+  ) {
+    final placed = atom_edit_api.atomEditPlaceGuidedAtom(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+    );
+    refreshFromKernel();
+    return placed;
+  }
+
+  void atomEditCancelGuidedPlacement() {
+    atom_edit_api.atomEditCancelGuidedPlacement();
+    refreshFromKernel();
   }
 
   void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,

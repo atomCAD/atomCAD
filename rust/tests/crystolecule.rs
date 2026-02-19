@@ -57,3 +57,6 @@ mod spatial_grid_test;
 
 #[path = "crystolecule/simulation/minimize_test.rs"]
 mod minimize_test;
+
+#[path = "crystolecule/guided_placement_test.rs"]
+mod guided_placement_test;

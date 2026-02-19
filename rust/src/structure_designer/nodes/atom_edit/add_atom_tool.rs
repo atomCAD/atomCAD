@@ -1,6 +1,19 @@
-use super::atom_edit_data::get_selected_atom_edit_data_mut;
+use super::atom_edit_data::{get_active_atom_edit_data, get_selected_atom_edit_data_mut};
+use super::types::*;
+use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
+use crate::crystolecule::atomic_structure::HitTestResult;
+use crate::crystolecule::atomic_structure_diff::AtomSource;
+use crate::crystolecule::guided_placement::{
+    BondLengthMode, BondMode, GuideDot, compute_guided_placement,
+};
+use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
+use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::util::hit_test_utils;
 use glam::f64::DVec3;
+
+/// Hit radius for guide dot spheres (Angstroms).
+const GUIDE_DOT_HIT_RADIUS: f64 = 0.3;
 
 /// Add an atom at the ray-plane intersection point.
 ///
@@ -46,4 +59,263 @@ pub fn add_atom_by_ray(
     };
 
     atom_edit_data.add_atom_to_diff(atomic_number, position);
+}
+
+/// Result of attempting to start guided placement.
+#[derive(Debug)]
+pub enum GuidedPlacementStartResult {
+    /// No atom was hit by the ray.
+    NoAtomHit,
+    /// The hit atom is saturated (no remaining bonding slots).
+    AtomSaturated {
+        /// True when geometric max > covalent max (atom has lone pairs / empty orbitals
+        /// that could be used with dative bond mode).
+        has_additional_capacity: bool,
+    },
+    /// Guided placement started successfully.
+    Started {
+        guide_count: usize,
+        anchor_atom_id: u32,
+    },
+}
+
+/// Start guided placement by ray-casting to find an anchor atom.
+///
+/// Phase 1: Hit test the result structure, compute guided placement (immutable borrows).
+/// Phase 2: Promote base atom if needed, store state (mutable borrow).
+pub fn start_guided_placement(
+    structure_designer: &mut StructureDesigner,
+    ray_start: &DVec3,
+    ray_dir: &DVec3,
+    atomic_number: i16,
+    bond_length_mode: BondLengthMode,
+) -> GuidedPlacementStartResult {
+    // Phase 1: Hit test, resolve provenance, and compute guided placement (immutable)
+    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
+        Some(data) => data.output_diff,
+        None => return GuidedPlacementStartResult::NoAtomHit,
+    };
+
+    // Gather: atom source, hit atom info (atomic_number, position), and guided placement result
+    let (atom_source, hit_atom_info, placement_result) = {
+        let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
+            Some(s) => s,
+            None => return GuidedPlacementStartResult::NoAtomHit,
+        };
+
+        let visualization = &structure_designer
+            .preferences
+            .atomic_structure_visualization_preferences
+            .visualization;
+        let display_visualization = match visualization {
+            AtomicStructureVisualization::BallAndStick => {
+                display_prefs::AtomicStructureVisualization::BallAndStick
+            }
+            AtomicStructureVisualization::SpaceFilling => {
+                display_prefs::AtomicStructureVisualization::SpaceFilling
+            }
+        };
+
+        let result_atom_id = match result_structure.hit_test(
+            ray_start,
+            ray_dir,
+            visualization,
+            |atom| get_displayed_atom_radius(atom, &display_visualization),
+            BAS_STICK_RADIUS,
+        ) {
+            HitTestResult::Atom(id, _) => id,
+            _ => return GuidedPlacementStartResult::NoAtomHit,
+        };
+
+        // Compute guided placement on the result structure (has all bonds from apply_diff)
+        let placement = compute_guided_placement(
+            result_structure,
+            result_atom_id,
+            atomic_number,
+            None, // hybridization_override: auto-detect (Phase D adds dropdown)
+            BondMode::Covalent, // Phase D adds bond mode toggle
+            bond_length_mode,
+        );
+
+        if is_diff_view {
+            let atom = match result_structure.get_atom(result_atom_id) {
+                Some(a) => (a.atomic_number, a.position),
+                None => return GuidedPlacementStartResult::NoAtomHit,
+            };
+            (None, (result_atom_id, atom), placement)
+        } else {
+            let eval_cache = match structure_designer.get_selected_node_eval_cache() {
+                Some(cache) => cache,
+                None => return GuidedPlacementStartResult::NoAtomHit,
+            };
+            let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
+                Some(cache) => cache,
+                None => return GuidedPlacementStartResult::NoAtomHit,
+            };
+
+            let source = match eval_cache.provenance.sources.get(&result_atom_id) {
+                Some(s) => s.clone(),
+                None => return GuidedPlacementStartResult::NoAtomHit,
+            };
+
+            let atom = match result_structure.get_atom(result_atom_id) {
+                Some(a) => (a.atomic_number, a.position),
+                None => return GuidedPlacementStartResult::NoAtomHit,
+            };
+
+            (Some(source), (result_atom_id, atom), placement)
+        }
+    };
+
+    // Phase 2: Resolve to diff atom ID, store state (mutable)
+    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(data) => data,
+        None => return GuidedPlacementStartResult::NoAtomHit,
+    };
+
+    // Check saturation before promoting
+    if placement_result.remaining_slots == 0 {
+        if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+            *state = AddAtomToolState::Idle { atomic_number };
+        }
+        return GuidedPlacementStartResult::AtomSaturated {
+            has_additional_capacity: placement_result.has_additional_geometric_capacity,
+        };
+    }
+
+    if placement_result.guide_dots.is_empty() {
+        // No guide dots computed (e.g., case 0/1 stubs) — stay in Idle
+        if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+            *state = AddAtomToolState::Idle { atomic_number };
+        }
+        return GuidedPlacementStartResult::NoAtomHit;
+    }
+
+    // Resolve to diff atom ID (promote base atom if needed)
+    let diff_atom_id = if is_diff_view {
+        hit_atom_info.0
+    } else {
+        match &atom_source {
+            Some(AtomSource::BasePassthrough(_)) => {
+                atom_edit_data
+                    .diff
+                    .add_atom(hit_atom_info.1 .0, hit_atom_info.1 .1)
+            }
+            Some(AtomSource::DiffMatchedBase { diff_id, .. })
+            | Some(AtomSource::DiffAdded(diff_id)) => *diff_id,
+            None => return GuidedPlacementStartResult::NoAtomHit,
+        }
+    };
+
+    // Enter guided placement mode
+    let guide_count = placement_result.guide_dots.len();
+    if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+        *state = AddAtomToolState::GuidedPlacement {
+            atomic_number,
+            anchor_atom_id: diff_atom_id,
+            guide_dots: placement_result.guide_dots,
+            bond_distance: placement_result.bond_distance,
+        };
+    }
+
+    GuidedPlacementStartResult::Started {
+        guide_count,
+        anchor_atom_id: diff_atom_id,
+    }
+}
+
+/// Hit test guide dots against a ray. Returns the index of the closest hit dot.
+pub fn hit_test_guide_dots(
+    ray_start: &DVec3,
+    ray_dir: &DVec3,
+    guide_dots: &[GuideDot],
+) -> Option<usize> {
+    let mut closest: Option<(usize, f64)> = None;
+    for (i, dot) in guide_dots.iter().enumerate() {
+        if let Some(distance) =
+            hit_test_utils::sphere_hit_test(&dot.position, GUIDE_DOT_HIT_RADIUS, ray_start, ray_dir)
+        {
+            if closest.is_none() || distance < closest.unwrap().1 {
+                closest = Some((i, distance));
+            }
+        }
+    }
+    closest.map(|(i, _)| i)
+}
+
+/// Attempt to place an atom at a guide dot hit by the ray.
+///
+/// Returns true if an atom was placed, false if no guide dot was hit.
+pub fn place_guided_atom(
+    structure_designer: &mut StructureDesigner,
+    ray_start: &DVec3,
+    ray_dir: &DVec3,
+) -> bool {
+    // Phase 1: Extract state and hit test (immutable borrow)
+    let placement_info = {
+        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
+            Some(data) => data,
+            None => return false,
+        };
+
+        let (atomic_number, anchor_atom_id, guide_dots, _bond_distance) =
+            match &atom_edit_data.active_tool {
+                AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
+                    atomic_number,
+                    anchor_atom_id,
+                    guide_dots,
+                    bond_distance,
+                }) => (*atomic_number, *anchor_atom_id, guide_dots.clone(), *bond_distance),
+                _ => return false,
+            };
+
+        let dot_index = match hit_test_guide_dots(ray_start, ray_dir, &guide_dots) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        let position = guide_dots[dot_index].position;
+        (atomic_number, anchor_atom_id, position)
+    };
+
+    // Phase 2: Add atom and bond to diff
+    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(data) => data,
+        None => return false,
+    };
+
+    let (atomic_number, anchor_atom_id, position) = placement_info;
+    let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, position);
+    atom_edit_data.add_bond_in_diff(anchor_atom_id, new_atom_id, 1);
+
+    // Transition back to Idle
+    if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+        *state = AddAtomToolState::Idle { atomic_number };
+    }
+
+    true
+}
+
+/// Cancel guided placement and return to Idle state.
+pub fn cancel_guided_placement(structure_designer: &mut StructureDesigner) {
+    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(data) => data,
+        None => return,
+    };
+
+    if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
+        let atomic_number = state.atomic_number();
+        *state = AddAtomToolState::Idle { atomic_number };
+    }
+}
+
+/// Check if the tool is currently in guided placement mode.
+pub fn is_in_guided_placement(structure_designer: &StructureDesigner) -> bool {
+    match get_active_atom_edit_data(structure_designer) {
+        Some(data) => matches!(
+            &data.active_tool,
+            AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement { .. })
+        ),
+        None => false,
+    }
 }

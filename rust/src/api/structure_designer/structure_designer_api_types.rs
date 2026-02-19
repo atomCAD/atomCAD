@@ -337,6 +337,7 @@ pub struct APIAtomEditData {
     pub bond_tool_last_atom_id: Option<u32>,
     pub replacement_atomic_number: Option<i16>,
     pub add_atom_tool_atomic_number: Option<i16>,
+    pub is_in_guided_placement: bool,
     pub has_selected_atoms: bool,
     pub has_selection: bool,
     pub selection_transform: Option<APITransform>,
@@ -345,6 +346,35 @@ pub struct APIAtomEditData {
     pub include_base_bonds_in_diff: bool,
     pub show_gadget: bool,
     pub diff_stats: APIDiffStats,
+}
+
+/// Bond length computation mode for guided atom placement.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIBondLengthMode {
+    /// Use crystal lattice bond length table (with UFF fallback).
+    Crystal,
+    /// Always use UFF rest bond length formula.
+    Uff,
+}
+
+/// Result of attempting to start guided atom placement.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone)]
+pub enum GuidedPlacementApiResult {
+    /// No atom was hit by the ray.
+    NoAtomHit,
+    /// The hit atom is saturated.
+    AtomSaturated {
+        /// True when the atom has lone pairs / empty orbitals
+        /// (switch to Dative bond mode to access them).
+        has_additional_capacity: bool,
+    },
+    /// Guided placement started successfully.
+    GuidedPlacementStarted {
+        guide_count: i32,
+        anchor_atom_id: i32,
+    },
 }
 
 pub struct APIRegPolyData {

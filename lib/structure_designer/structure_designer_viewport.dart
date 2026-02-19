@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -141,9 +142,27 @@ class _StructureDesignerViewportState
     extends CadViewportState<StructureDesignerViewport> {
   _AtomEditDefaultDelegate? _atomEditDefaultDelegate;
   Rect? _marqueeRect;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   void _setMarqueeRect(Rect? rect) {
     setState(() => _marqueeRect = rect);
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape &&
+        atom_edit_api.atomEditIsInGuidedPlacement()) {
+      widget.graphModel.atomEditCancelGuidedPlacement();
+      renderingNeeded();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   /// Forward to the protected startGadgetDragFromHandle for the delegate.
@@ -181,6 +200,15 @@ class _StructureDesignerViewportState
     );
   }
 
+  void _showSaturationFeedback(bool hasAdditionalCapacity) {
+    final message = hasAdditionalCapacity
+        ? 'Atom is covalently saturated. Switch to Dative bond mode to access additional bonding positions.'
+        : 'Atom is fully bonded';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+  }
+
   void onAtomEditClick(Offset pointerPos) {
     final ray = getRayFromPointerPos(pointerPos);
     final activeAtomEditTool = atom_edit_api.getActiveAtomEditTool();
@@ -196,16 +224,62 @@ class _StructureDesignerViewportState
       );
 
       if (atomEditData != null) {
-        final camera = common_api.getCamera();
-        final cameraTransform = getCameraTransform(camera);
-        final planeNormal = cameraTransform!.forward;
+        final atomicNumber = atomEditData.addAtomToolAtomicNumber!;
 
-        widget.graphModel.atomEditAddAtomByRay(
-          atomEditData.addAtomToolAtomicNumber!,
-          planeNormal,
-          ray.start,
-          ray.direction,
-        );
+        if (atomEditData.isInGuidedPlacement) {
+          // Already in guided placement — try placing at a guide dot
+          final placed = widget.graphModel.atomEditPlaceGuidedAtom(
+            ray.start,
+            ray.direction,
+          );
+          if (!placed) {
+            // Missed guide dot — try switching anchor to a different atom
+            final result = widget.graphModel.atomEditStartGuidedPlacement(
+              ray.start,
+              ray.direction,
+              atomicNumber,
+              widget.graphModel.bondLengthMode,
+            );
+            switch (result) {
+              case GuidedPlacementApiResult_NoAtomHit():
+                // Clicked empty space — cancel guided placement
+                widget.graphModel.atomEditCancelGuidedPlacement();
+              case GuidedPlacementApiResult_AtomSaturated(
+                  :final hasAdditionalCapacity
+                ):
+                _showSaturationFeedback(hasAdditionalCapacity);
+              case GuidedPlacementApiResult_GuidedPlacementStarted():
+                break; // Switched anchor — guides already shown
+            }
+          }
+        } else {
+          // Not in guided placement — try to start it
+          final result = widget.graphModel.atomEditStartGuidedPlacement(
+            ray.start,
+            ray.direction,
+            atomicNumber,
+            widget.graphModel.bondLengthMode,
+          );
+          switch (result) {
+            case GuidedPlacementApiResult_NoAtomHit():
+              // No atom hit — fall back to free placement
+              final camera = common_api.getCamera();
+              final cameraTransform = getCameraTransform(camera);
+              final planeNormal = cameraTransform!.forward;
+              widget.graphModel.atomEditAddAtomByRay(
+                atomicNumber,
+                planeNormal,
+                ray.start,
+                ray.direction,
+              );
+            case GuidedPlacementApiResult_AtomSaturated(
+                :final hasAdditionalCapacity
+              ):
+              _showSaturationFeedback(hasAdditionalCapacity);
+            case GuidedPlacementApiResult_GuidedPlacementStarted():
+              break; // Guided placement started — guides shown
+          }
+        }
       }
     } else if (activeAtomEditTool == APIAtomEditTool.addBond) {
       widget.graphModel.atomEditDrawBondByRay(
@@ -268,18 +342,25 @@ class _StructureDesignerViewportState
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        super.build(context),
-        if (_marqueeRect != null)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: MarqueePainter(rect: _marqueeRect!),
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: _onKeyEvent,
+      child: MouseRegion(
+        onEnter: (_) => _focusNode.requestFocus(),
+        child: Stack(
+          children: [
+            super.build(context),
+            if (_marqueeRect != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: MarqueePainter(rect: _marqueeRect!),
+                  ),
+                ),
               ),
-            ),
-          ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 }

@@ -709,3 +709,87 @@ fn tessellate_bond_delete_marker_impostor(
         &color.to_array(),
     );
 }
+
+// ============================================================================
+// Guide placement tessellation
+// ============================================================================
+
+/// Color for guide dot spheres (selection magenta)
+const GUIDE_DOT_COLOR: Vec3 = Vec3::new(1.0, 0.2, 1.0);
+/// Radius for primary guide dots (Angstroms)
+const GUIDE_DOT_PRIMARY_RADIUS: f64 = 0.20;
+/// Radius for secondary guide dots (Angstroms)
+const GUIDE_DOT_SECONDARY_RADIUS: f64 = 0.15;
+
+/// Tessellate guide placement visuals (guide dot spheres + anchor-to-dot cylinders)
+/// into the triangle mesh. Called after atom/bond tessellation.
+pub fn tessellate_guide_placement(
+    output_mesh: &mut Mesh,
+    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals,
+    params: &AtomicTessellatorParams,
+) {
+    use crate::crystolecule::guided_placement::GuideDotType;
+
+    for dot in &visuals.guide_dots {
+        let radius = match dot.dot_type {
+            GuideDotType::Primary => GUIDE_DOT_PRIMARY_RADIUS,
+            GuideDotType::Secondary => GUIDE_DOT_SECONDARY_RADIUS,
+        };
+
+        // Guide dot sphere (magenta)
+        tessellator::tessellate_sphere(
+            output_mesh,
+            &dot.position,
+            radius,
+            params.ball_and_stick_sphere_horizontal_divisions,
+            params.ball_and_stick_sphere_vertical_divisions,
+            &Material::new(&GUIDE_DOT_COLOR, 0.3, 0.0),
+        );
+
+        // Orange cylinder from anchor to guide dot
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &visuals.anchor_pos,
+            &dot.position,
+            ANCHOR_ARROW_RADIUS,
+            params.cylinder_divisions,
+            &Material::new(&ANCHOR_ARROW_COLOR, 0.5, 0.0),
+            false,
+            None,
+            None,
+        );
+    }
+}
+
+/// Tessellate guide placement visuals using impostor rendering.
+pub fn tessellate_guide_placement_impostors(
+    atom_impostor_mesh: &mut AtomImpostorMesh,
+    bond_impostor_mesh: &mut BondImpostorMesh,
+    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals,
+) {
+    use crate::crystolecule::guided_placement::GuideDotType;
+
+    for dot in &visuals.guide_dots {
+        let radius = match dot.dot_type {
+            GuideDotType::Primary => GUIDE_DOT_PRIMARY_RADIUS,
+            GuideDotType::Secondary => GUIDE_DOT_SECONDARY_RADIUS,
+        };
+
+        // Guide dot sphere (magenta)
+        atom_impostor_mesh.add_atom_quad(
+            &dot.position.as_vec3(),
+            radius as f32,
+            &GUIDE_DOT_COLOR.to_array(),
+            0.3,
+            0.0,
+        );
+
+        // Orange cylinder from anchor to guide dot
+        bond_impostor_mesh.add_bond_quad(
+            &visuals.anchor_pos.as_vec3(),
+            &dot.position.as_vec3(),
+            ANCHOR_ARROW_RADIUS as f32,
+            &ANCHOR_ARROW_COLOR.to_array(),
+        );
+    }
+}
