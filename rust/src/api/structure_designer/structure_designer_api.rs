@@ -1,4 +1,5 @@
 use super::structure_designer_api_types::APIAtomFillData;
+use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
@@ -2128,11 +2129,13 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                 let has_selection =
                     atomic_structure.map_or(false, |structure| structure.has_selection());
 
-                // Read diff stats from eval cache
-                let diff_stats = cad_instance
+                // Read diff stats and measurement from eval cache
+                let eval_cache = cad_instance
                     .structure_designer
                     .get_selected_node_eval_cache()
-                    .and_then(|cache| cache.downcast_ref::<AtomEditEvalCache>())
+                    .and_then(|cache| cache.downcast_ref::<AtomEditEvalCache>());
+
+                let diff_stats = eval_cache
                     .map(|cache| APIDiffStats {
                         atoms_added: cache.stats.atoms_added,
                         atoms_deleted: cache.stats.atoms_deleted,
@@ -2147,6 +2150,13 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         bonds_added: 0,
                         bonds_deleted: 0,
                     });
+
+                // Compute measurement from selected atoms (2-4 atoms)
+                let measurement = compute_selection_measurement(
+                    atom_edit_data,
+                    atomic_structure,
+                    eval_cache,
+                );
 
                 let is_in_guided_placement = matches!(
                     &atom_edit_data.active_tool,
@@ -2180,11 +2190,84 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         _ => false,
                     },
                     diff_stats,
+                    measurement,
                 })
             },
             None,
         )
     }
+}
+
+/// Resolve selected atom positions and compute measurement.
+fn compute_selection_measurement(
+    atom_edit_data: &AtomEditData,
+    result_structure: Option<&crate::crystolecule::atomic_structure::AtomicStructure>,
+    eval_cache: Option<&AtomEditEvalCache>,
+) -> Option<APIMeasurement> {
+    use crate::structure_designer::nodes::atom_edit::measurement::{
+        MeasurementResult, SelectedAtomInfo, compute_measurement,
+    };
+
+    let result_structure = result_structure?;
+
+    // Count selected atoms; only compute for 2-4
+    let total_selected = atom_edit_data.selection.selected_base_atoms.len()
+        + atom_edit_data.selection.selected_diff_atoms.len();
+    if !(2..=4).contains(&total_selected) {
+        return None;
+    }
+
+    let mut selected_atoms: Vec<SelectedAtomInfo> = Vec::with_capacity(total_selected);
+
+    if atom_edit_data.output_diff {
+        // Diff view: diff atom IDs ARE the output atom IDs
+        for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
+            if let Some(atom) = result_structure.get_atom(diff_id) {
+                selected_atoms.push(SelectedAtomInfo {
+                    result_atom_id: diff_id,
+                    position: atom.position,
+                });
+            }
+        }
+    } else {
+        // Result view: resolve through provenance
+        let cache = eval_cache?;
+        for &base_id in &atom_edit_data.selection.selected_base_atoms {
+            if let Some(&result_id) = cache.provenance.base_to_result.get(&base_id) {
+                if let Some(atom) = result_structure.get_atom(result_id) {
+                    selected_atoms.push(SelectedAtomInfo {
+                        result_atom_id: result_id,
+                        position: atom.position,
+                    });
+                }
+            }
+        }
+        for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
+            if let Some(&result_id) = cache.provenance.diff_to_result.get(&diff_id) {
+                if let Some(atom) = result_structure.get_atom(result_id) {
+                    selected_atoms.push(SelectedAtomInfo {
+                        result_atom_id: result_id,
+                        position: atom.position,
+                    });
+                }
+            }
+        }
+    }
+
+    if !(2..=4).contains(&selected_atoms.len()) {
+        return None;
+    }
+
+    let measurement = compute_measurement(&selected_atoms, result_structure)?;
+    Some(match measurement {
+        MeasurementResult::Distance { distance } => APIMeasurement::Distance { distance },
+        MeasurementResult::Angle { angle_degrees, .. } => {
+            APIMeasurement::Angle { angle_degrees }
+        }
+        MeasurementResult::Dihedral { angle_degrees, .. } => {
+            APIMeasurement::Dihedral { angle_degrees }
+        }
+    })
 }
 
 #[flutter_rust_bridge::frb(sync)]

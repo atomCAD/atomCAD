@@ -346,6 +346,19 @@ pub struct APIAtomEditData {
     pub include_base_bonds_in_diff: bool,
     pub show_gadget: bool,
     pub diff_stats: APIDiffStats,
+    pub measurement: Option<APIMeasurement>,
+}
+
+/// Measurement computed from selected atoms (2-4 atoms).
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone)]
+pub enum APIMeasurement {
+    /// Distance between 2 atoms in Angstroms.
+    Distance { distance: f64 },
+    /// Angle at a vertex atom, in degrees.
+    Angle { angle_degrees: f64 },
+    /// Dihedral (torsion) angle around the central bond axis, in degrees.
+    Dihedral { angle_degrees: f64 },
 }
 
 /// Hybridization override for guided atom placement.

@@ -2,6 +2,7 @@ mod add_atom_tool;
 mod add_bond_tool;
 mod atom_edit_data;
 mod default_tool;
+pub mod measurement;
 mod minimization;
 mod operations;
 mod selection;
@@ -17,6 +18,7 @@ pub mod atom_edit {
     pub use super::add_bond_tool::*;
     pub use super::atom_edit_data::*;
     pub use super::default_tool::*;
+    pub use super::measurement::*;
     pub use super::minimization::*;
     pub use super::operations::*;
     pub use super::selection::*;

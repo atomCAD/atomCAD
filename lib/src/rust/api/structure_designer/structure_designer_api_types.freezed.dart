@@ -14,6 +14,226 @@ part of 'structure_designer_api_types.dart';
 T _$identity<T>(T value) => value;
 
 /// @nodoc
+mixin _$APIMeasurement {
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APIMeasurement);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIMeasurement()';
+  }
+}
+
+/// @nodoc
+class $APIMeasurementCopyWith<$Res> {
+  $APIMeasurementCopyWith(APIMeasurement _, $Res Function(APIMeasurement) __);
+}
+
+/// @nodoc
+
+class APIMeasurement_Distance extends APIMeasurement {
+  const APIMeasurement_Distance({required this.distance}) : super._();
+
+  final double distance;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIMeasurement_DistanceCopyWith<APIMeasurement_Distance> get copyWith =>
+      _$APIMeasurement_DistanceCopyWithImpl<APIMeasurement_Distance>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIMeasurement_Distance &&
+            (identical(other.distance, distance) ||
+                other.distance == distance));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, distance);
+
+  @override
+  String toString() {
+    return 'APIMeasurement.distance(distance: $distance)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIMeasurement_DistanceCopyWith<$Res>
+    implements $APIMeasurementCopyWith<$Res> {
+  factory $APIMeasurement_DistanceCopyWith(APIMeasurement_Distance value,
+          $Res Function(APIMeasurement_Distance) _then) =
+      _$APIMeasurement_DistanceCopyWithImpl;
+  @useResult
+  $Res call({double distance});
+}
+
+/// @nodoc
+class _$APIMeasurement_DistanceCopyWithImpl<$Res>
+    implements $APIMeasurement_DistanceCopyWith<$Res> {
+  _$APIMeasurement_DistanceCopyWithImpl(this._self, this._then);
+
+  final APIMeasurement_Distance _self;
+  final $Res Function(APIMeasurement_Distance) _then;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? distance = null,
+  }) {
+    return _then(APIMeasurement_Distance(
+      distance: null == distance
+          ? _self.distance
+          : distance // ignore: cast_nullable_to_non_nullable
+              as double,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APIMeasurement_Angle extends APIMeasurement {
+  const APIMeasurement_Angle({required this.angleDegrees}) : super._();
+
+  final double angleDegrees;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIMeasurement_AngleCopyWith<APIMeasurement_Angle> get copyWith =>
+      _$APIMeasurement_AngleCopyWithImpl<APIMeasurement_Angle>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIMeasurement_Angle &&
+            (identical(other.angleDegrees, angleDegrees) ||
+                other.angleDegrees == angleDegrees));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, angleDegrees);
+
+  @override
+  String toString() {
+    return 'APIMeasurement.angle(angleDegrees: $angleDegrees)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIMeasurement_AngleCopyWith<$Res>
+    implements $APIMeasurementCopyWith<$Res> {
+  factory $APIMeasurement_AngleCopyWith(APIMeasurement_Angle value,
+          $Res Function(APIMeasurement_Angle) _then) =
+      _$APIMeasurement_AngleCopyWithImpl;
+  @useResult
+  $Res call({double angleDegrees});
+}
+
+/// @nodoc
+class _$APIMeasurement_AngleCopyWithImpl<$Res>
+    implements $APIMeasurement_AngleCopyWith<$Res> {
+  _$APIMeasurement_AngleCopyWithImpl(this._self, this._then);
+
+  final APIMeasurement_Angle _self;
+  final $Res Function(APIMeasurement_Angle) _then;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? angleDegrees = null,
+  }) {
+    return _then(APIMeasurement_Angle(
+      angleDegrees: null == angleDegrees
+          ? _self.angleDegrees
+          : angleDegrees // ignore: cast_nullable_to_non_nullable
+              as double,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APIMeasurement_Dihedral extends APIMeasurement {
+  const APIMeasurement_Dihedral({required this.angleDegrees}) : super._();
+
+  final double angleDegrees;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIMeasurement_DihedralCopyWith<APIMeasurement_Dihedral> get copyWith =>
+      _$APIMeasurement_DihedralCopyWithImpl<APIMeasurement_Dihedral>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIMeasurement_Dihedral &&
+            (identical(other.angleDegrees, angleDegrees) ||
+                other.angleDegrees == angleDegrees));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, angleDegrees);
+
+  @override
+  String toString() {
+    return 'APIMeasurement.dihedral(angleDegrees: $angleDegrees)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIMeasurement_DihedralCopyWith<$Res>
+    implements $APIMeasurementCopyWith<$Res> {
+  factory $APIMeasurement_DihedralCopyWith(APIMeasurement_Dihedral value,
+          $Res Function(APIMeasurement_Dihedral) _then) =
+      _$APIMeasurement_DihedralCopyWithImpl;
+  @useResult
+  $Res call({double angleDegrees});
+}
+
+/// @nodoc
+class _$APIMeasurement_DihedralCopyWithImpl<$Res>
+    implements $APIMeasurement_DihedralCopyWith<$Res> {
+  _$APIMeasurement_DihedralCopyWithImpl(this._self, this._then);
+
+  final APIMeasurement_Dihedral _self;
+  final $Res Function(APIMeasurement_Dihedral) _then;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? angleDegrees = null,
+  }) {
+    return _then(APIMeasurement_Dihedral(
+      angleDegrees: null == angleDegrees
+          ? _self.angleDegrees
+          : angleDegrees // ignore: cast_nullable_to_non_nullable
+              as double,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$GuidedPlacementApiResult {
   @override
   bool operator ==(Object other) {

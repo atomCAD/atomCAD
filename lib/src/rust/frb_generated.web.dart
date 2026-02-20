@@ -159,6 +159,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData dco_decode_api_map_data(dynamic raw);
 
   @protected
+  APIMeasurement dco_decode_api_measurement(dynamic raw);
+
+  @protected
   APIMinimizeFreezeMode dco_decode_api_minimize_freeze_mode(dynamic raw);
 
   @protected
@@ -351,6 +354,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData dco_decode_box_autoadd_api_map_data(dynamic raw);
+
+  @protected
+  APIMeasurement dco_decode_box_autoadd_api_measurement(dynamic raw);
 
   @protected
   APIMotifData dco_decode_box_autoadd_api_motif_data(dynamic raw);
@@ -653,6 +659,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData? dco_decode_opt_box_autoadd_api_map_data(dynamic raw);
 
   @protected
+  APIMeasurement? dco_decode_opt_box_autoadd_api_measurement(dynamic raw);
+
+  @protected
   APIMotifData? dco_decode_opt_box_autoadd_api_motif_data(dynamic raw);
 
   @protected
@@ -937,6 +946,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData sse_decode_api_map_data(SseDeserializer deserializer);
 
   @protected
+  APIMeasurement sse_decode_api_measurement(SseDeserializer deserializer);
+
+  @protected
   APIMinimizeFreezeMode sse_decode_api_minimize_freeze_mode(
       SseDeserializer deserializer);
 
@@ -1162,6 +1174,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData sse_decode_box_autoadd_api_map_data(SseDeserializer deserializer);
+
+  @protected
+  APIMeasurement sse_decode_box_autoadd_api_measurement(
+      SseDeserializer deserializer);
 
   @protected
   APIMotifData sse_decode_box_autoadd_api_motif_data(
@@ -1524,6 +1540,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMeasurement? sse_decode_opt_box_autoadd_api_measurement(
+      SseDeserializer deserializer);
+
+  @protected
   APIMotifData? sse_decode_opt_box_autoadd_api_motif_data(
       SseDeserializer deserializer);
 
@@ -1852,6 +1872,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_map_data(APIMapData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_measurement(
+      APIMeasurement self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_minimize_freeze_mode(
       APIMinimizeFreezeMode self, SseSerializer serializer);
 
@@ -2085,6 +2109,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_map_data(
       APIMapData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_measurement(
+      APIMeasurement self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_motif_data(
@@ -2450,6 +2478,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_map_data(
       APIMapData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_measurement(
+      APIMeasurement? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_motif_data(

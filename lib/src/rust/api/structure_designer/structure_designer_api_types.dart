@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -46,6 +46,7 @@ class APIAtomEditData {
   final bool includeBaseBondsInDiff;
   final bool showGadget;
   final APIDiffStats diffStats;
+  final APIMeasurement? measurement;
 
   const APIAtomEditData({
     required this.activeTool,
@@ -61,6 +62,7 @@ class APIAtomEditData {
     required this.includeBaseBondsInDiff,
     required this.showGadget,
     required this.diffStats,
+    this.measurement,
   });
 
   @override
@@ -77,7 +79,8 @@ class APIAtomEditData {
       showAnchorArrows.hashCode ^
       includeBaseBondsInDiff.hashCode ^
       showGadget.hashCode ^
-      diffStats.hashCode;
+      diffStats.hashCode ^
+      measurement.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -96,7 +99,8 @@ class APIAtomEditData {
           showAnchorArrows == other.showAnchorArrows &&
           includeBaseBondsInDiff == other.includeBaseBondsInDiff &&
           showGadget == other.showGadget &&
-          diffStats == other.diffStats;
+          diffStats == other.diffStats &&
+          measurement == other.measurement;
 }
 
 enum APIAtomEditTool {
@@ -924,6 +928,26 @@ class APIMapData {
           runtimeType == other.runtimeType &&
           inputType == other.inputType &&
           outputType == other.outputType;
+}
+
+@freezed
+sealed class APIMeasurement with _$APIMeasurement {
+  const APIMeasurement._();
+
+  /// Distance between 2 atoms in Angstroms.
+  const factory APIMeasurement.distance({
+    required double distance,
+  }) = APIMeasurement_Distance;
+
+  /// Angle at a vertex atom, in degrees.
+  const factory APIMeasurement.angle({
+    required double angleDegrees,
+  }) = APIMeasurement_Angle;
+
+  /// Dihedral (torsion) angle around the central bond axis, in degrees.
+  const factory APIMeasurement.dihedral({
+    required double angleDegrees,
+  }) = APIMeasurement_Dihedral;
 }
 
 /// Freeze mode for atom_edit energy minimization.

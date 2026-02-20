@@ -72,3 +72,6 @@ mod atom_edit_text_format_test;
 
 #[path = "structure_designer/atom_edit_mutations_test.rs"]
 mod atom_edit_mutations_test;
+
+#[path = "structure_designer/atom_edit_measurement_test.rs"]
+mod atom_edit_measurement_test;

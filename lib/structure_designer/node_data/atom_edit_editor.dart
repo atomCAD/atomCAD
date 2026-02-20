@@ -125,6 +125,11 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           const SizedBox(height: AppSpacing.large),
           // Tool-specific UI elements
           _buildToolSpecificUI(),
+          // Measurement display (tool-independent, shown when 2-4 atoms selected)
+          if (_stagedData!.measurement != null) ...[
+            const SizedBox(height: AppSpacing.large),
+            _buildMeasurementDisplay(_stagedData!.measurement!),
+          ],
           const SizedBox(height: AppSpacing.large),
           _buildMinimizeSection(),
         ],
@@ -483,6 +488,58 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMeasurementDisplay(APIMeasurement measurement) {
+    final String label;
+    final String value;
+    final IconData icon;
+
+    switch (measurement) {
+      case APIMeasurement_Distance(:final distance):
+        label = 'Distance';
+        value = '${distance.toStringAsFixed(3)} \u00C5';
+        icon = Icons.straighten;
+      case APIMeasurement_Angle(:final angleDegrees):
+        label = 'Angle';
+        value = '${angleDegrees.toStringAsFixed(1)}\u00B0';
+        icon = Icons.architecture;
+      case APIMeasurement_Dihedral(:final angleDegrees):
+        label = 'Dihedral';
+        value = '${angleDegrees.toStringAsFixed(1)}\u00B0';
+        icon = Icons.rotate_right;
+    }
+
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.blue[50],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.medium),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: Colors.blue[700]),
+            const SizedBox(width: 8),
+            Text(
+              '$label: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.blue[900],
+                fontSize: 13,
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.blue[900],
+                fontSize: 14,
+              ),
             ),
           ],
         ),

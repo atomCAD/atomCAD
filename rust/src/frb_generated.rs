@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -6897,6 +6897,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_includeBaseBondsInDiff = <bool>::sse_decode(deserializer);
         let mut var_showGadget = <bool>::sse_decode(deserializer);
         let mut var_diffStats = <crate::api::structure_designer::structure_designer_api_types::APIDiffStats>::sse_decode(deserializer);
+        let mut var_measurement = <Option<
+            crate::api::structure_designer::structure_designer_api_types::APIMeasurement,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIAtomEditData {
             active_tool: var_activeTool,
             bond_tool_last_atom_id: var_bondToolLastAtomId,
@@ -6911,6 +6914,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             include_base_bonds_in_diff: var_includeBaseBondsInDiff,
             show_gadget: var_showGadget,
             diff_stats: var_diffStats,
+            measurement: var_measurement,
         };
     }
 }
@@ -7497,6 +7501,30 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             input_type: var_inputType,
             output_type: var_outputType,
         };
+    }
+}
+
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIMeasurement {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_distance = <f64>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Distance{distance: var_distance};
+            }
+            1 => {
+                let mut var_angleDegrees = <f64>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Angle{angle_degrees: var_angleDegrees};
+            }
+            2 => {
+                let mut var_angleDegrees = <f64>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Dihedral{angle_degrees: var_angleDegrees};
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 
@@ -8861,6 +8889,19 @@ impl SseDecode
 }
 
 impl SseDecode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIMeasurement>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIMeasurement>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIMotifData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9769,6 +9810,7 @@ impl flutter_rust_bridge::IntoDart
             self.include_base_bonds_in_diff.into_into_dart().into_dart(),
             self.show_gadget.into_into_dart().into_dart(),
             self.diff_stats.into_into_dart().into_dart(),
+            self.measurement.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -10799,6 +10841,35 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIMapData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIMeasurement
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Distance{distance} => { [0.into_dart(),
+distance.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Angle{angle_degrees} => { [1.into_dart(),
+angle_degrees.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Dihedral{angle_degrees} => { [2.into_dart(),
+angle_degrees.into_into_dart().into_dart()].into_dart() }
+ _ => { unimplemented!(""); }}
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIMeasurement
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIMeasurement,
+    > for crate::api::structure_designer::structure_designer_api_types::APIMeasurement
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIMeasurement {
         self
     }
 }
@@ -12441,6 +12512,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
             self.diff_stats,
             serializer,
         );
+        <Option<crate::api::structure_designer::structure_designer_api_types::APIMeasurement>>::sse_encode(self.measurement, serializer);
     }
 }
 
@@ -12836,6 +12908,19 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
             self.output_type,
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIMeasurement {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Distance{distance} => { <i32>::sse_encode(0, serializer); <f64>::sse_encode(distance, serializer);
+ }
+crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Angle{angle_degrees} => { <i32>::sse_encode(1, serializer); <f64>::sse_encode(angle_degrees, serializer);
+ }
+crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Dihedral{angle_degrees} => { <i32>::sse_encode(2, serializer); <f64>::sse_encode(angle_degrees, serializer);
+ }
+ _ => { unimplemented!(""); }}
     }
 }
 
@@ -13946,6 +14031,18 @@ impl SseEncode
 }
 
 impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIMeasurement>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIMeasurement>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIMotifData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -14472,7 +14569,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -14496,7 +14593,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

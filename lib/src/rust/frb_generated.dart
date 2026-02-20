@@ -7758,8 +7758,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIAtomEditData dco_decode_api_atom_edit_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return APIAtomEditData(
       activeTool: dco_decode_api_atom_edit_tool(arr[0]),
       bondToolLastAtomId: dco_decode_opt_box_autoadd_u_32(arr[1]),
@@ -7774,6 +7774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       includeBaseBondsInDiff: dco_decode_bool(arr[10]),
       showGadget: dco_decode_bool(arr[11]),
       diffStats: dco_decode_api_diff_stats(arr[12]),
+      measurement: dco_decode_opt_box_autoadd_api_measurement(arr[13]),
     );
   }
 
@@ -8208,6 +8209,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       inputType: dco_decode_api_data_type(arr[0]),
       outputType: dco_decode_api_data_type(arr[1]),
     );
+  }
+
+  @protected
+  APIMeasurement dco_decode_api_measurement(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return APIMeasurement_Distance(
+          distance: dco_decode_f_64(raw[1]),
+        );
+      case 1:
+        return APIMeasurement_Angle(
+          angleDegrees: dco_decode_f_64(raw[1]),
+        );
+      case 2:
+        return APIMeasurement_Dihedral(
+          angleDegrees: dco_decode_f_64(raw[1]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
   }
 
   @protected
@@ -8792,6 +8814,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMapData dco_decode_box_autoadd_api_map_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_map_data(raw);
+  }
+
+  @protected
+  APIMeasurement dco_decode_box_autoadd_api_measurement(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_measurement(raw);
   }
 
   @protected
@@ -9517,6 +9545,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIMeasurement? dco_decode_opt_box_autoadd_api_measurement(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_measurement(raw);
+  }
+
+  @protected
   APIMotifData? dco_decode_opt_box_autoadd_api_motif_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_api_motif_data(raw);
@@ -9961,6 +9995,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_includeBaseBondsInDiff = sse_decode_bool(deserializer);
     var var_showGadget = sse_decode_bool(deserializer);
     var var_diffStats = sse_decode_api_diff_stats(deserializer);
+    var var_measurement =
+        sse_decode_opt_box_autoadd_api_measurement(deserializer);
     return APIAtomEditData(
         activeTool: var_activeTool,
         bondToolLastAtomId: var_bondToolLastAtomId,
@@ -9974,7 +10010,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         showAnchorArrows: var_showAnchorArrows,
         includeBaseBondsInDiff: var_includeBaseBondsInDiff,
         showGadget: var_showGadget,
-        diffStats: var_diffStats);
+        diffStats: var_diffStats,
+        measurement: var_measurement);
   }
 
   @protected
@@ -10397,6 +10434,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_inputType = sse_decode_api_data_type(deserializer);
     var var_outputType = sse_decode_api_data_type(deserializer);
     return APIMapData(inputType: var_inputType, outputType: var_outputType);
+  }
+
+  @protected
+  APIMeasurement sse_decode_api_measurement(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_distance = sse_decode_f_64(deserializer);
+        return APIMeasurement_Distance(distance: var_distance);
+      case 1:
+        var var_angleDegrees = sse_decode_f_64(deserializer);
+        return APIMeasurement_Angle(angleDegrees: var_angleDegrees);
+      case 2:
+        var var_angleDegrees = sse_decode_f_64(deserializer);
+        return APIMeasurement_Dihedral(angleDegrees: var_angleDegrees);
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -10958,6 +11015,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMapData sse_decode_box_autoadd_api_map_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_map_data(deserializer));
+  }
+
+  @protected
+  APIMeasurement sse_decode_box_autoadd_api_measurement(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_measurement(deserializer));
   }
 
   @protected
@@ -11968,6 +12032,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIMeasurement? sse_decode_opt_box_autoadd_api_measurement(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_measurement(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   APIMotifData? sse_decode_opt_box_autoadd_api_motif_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -12554,6 +12630,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.includeBaseBondsInDiff, serializer);
     sse_encode_bool(self.showGadget, serializer);
     sse_encode_api_diff_stats(self.diffStats, serializer);
+    sse_encode_opt_box_autoadd_api_measurement(self.measurement, serializer);
   }
 
   @protected
@@ -12871,6 +12948,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_data_type(self.inputType, serializer);
     sse_encode_api_data_type(self.outputType, serializer);
+  }
+
+  @protected
+  void sse_encode_api_measurement(
+      APIMeasurement self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case APIMeasurement_Distance(distance: final distance):
+        sse_encode_i_32(0, serializer);
+        sse_encode_f_64(distance, serializer);
+      case APIMeasurement_Angle(angleDegrees: final angleDegrees):
+        sse_encode_i_32(1, serializer);
+        sse_encode_f_64(angleDegrees, serializer);
+      case APIMeasurement_Dihedral(angleDegrees: final angleDegrees):
+        sse_encode_i_32(2, serializer);
+        sse_encode_f_64(angleDegrees, serializer);
+    }
   }
 
   @protected
@@ -13358,6 +13452,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIMapData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_map_data(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_measurement(
+      APIMeasurement self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_measurement(self, serializer);
   }
 
   @protected
@@ -14239,6 +14340,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_map_data(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_measurement(
+      APIMeasurement? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_measurement(self, serializer);
     }
   }
 
