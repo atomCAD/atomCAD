@@ -394,6 +394,9 @@ pub enum GuidedPlacementApiResult {
         /// True when the atom has lone pairs / empty orbitals
         /// (switch to Dative bond mode to access them).
         has_additional_capacity: bool,
+        /// True when has_additional_capacity is true but the new element cannot
+        /// form a dative bond with the anchor (no valid donor-acceptor pair).
+        dative_incompatible: bool,
     },
     /// Guided placement started successfully.
     GuidedPlacementStarted {

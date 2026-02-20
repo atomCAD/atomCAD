@@ -439,7 +439,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                     ),
                     ButtonSegment<APIBondMode>(
                       value: APIBondMode.dative,
-                      label: Text('Dative'),
+                      label: Text('Covalent + Dative'),
                     ),
                   ],
                   selected: {widget.model.bondMode},
@@ -448,6 +448,12 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                   },
                   style: ButtonStyle(
                     visualDensity: AppSpacing.compactVerticalDensity,
+                    textStyle: WidgetStatePropertyAll(
+                      TextStyle(fontSize: 12),
+                    ),
+                    padding: WidgetStatePropertyAll(
+                      EdgeInsets.symmetric(horizontal: 4),
+                    ),
                   ),
                 ),
               ],

@@ -34,7 +34,7 @@ structure_designer/
 |------|---------|
 | `structure_designer.dart` | Top-level widget, menu bar (File/View/Edit), layout |
 | `structure_designer_model.dart` | `ChangeNotifier` state: wraps all Rust API calls |
-| `structure_designer_viewport.dart` | `CadViewport` subclass for 3D ray-cast interaction |
+| `structure_designer_viewport.dart` | `CadViewport` subclass for 3D ray-cast interaction + guided placement dispatch |
 | `main_content_area.dart` | Resizable split between viewport and node editor |
 
 ## State Management Pattern
@@ -55,6 +55,14 @@ Three-panel layout:
 - **Left sidebar:** Display policy, camera controls, network list (tabs: List/Tree)
 - **Main area:** Resizable split between 3D viewport and node network editor
 - Supports vertical (side-by-side) and horizontal (stacked) layout modes
+
+## Guided Atom Placement (in viewport)
+
+The Add Atom tool in `structure_designer_viewport.dart` has a state-aware click dispatcher: click empty space → free placement; click existing atom → guided placement (Rust computes guide dot positions, Flutter dispatches click/cancel/place). Pointer-move events update cursor-tracked previews for free-sphere and free-ring modes.
+
+The atom edit panel exposes three dropdowns for guided placement: **Bond Length** (Crystal / UFF), **Hybridization** (Auto / sp3 / sp2 / sp1), and **Bond Mode** (Covalent / Dative). All reset to defaults when switching tools. The corresponding model properties are passed through to the Rust API. Saturation feedback uses SnackBar notifications with context-aware messages.
+
+Design doc: `doc/atom_edit/guided_atom_placement.md`.
 
 ## node_networks_list/ Subdirectory
 

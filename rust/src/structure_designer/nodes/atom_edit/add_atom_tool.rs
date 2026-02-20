@@ -75,6 +75,10 @@ pub enum GuidedPlacementStartResult {
         /// True when geometric max > covalent max (atom has lone pairs / empty orbitals
         /// that could be used with dative bond mode).
         has_additional_capacity: bool,
+        /// True when has_additional_capacity is true but the anchor-new element pair
+        /// is incompatible for dative bonding (no valid donor-acceptor relationship).
+        /// When true, the "switch to dative mode" message should NOT be shown.
+        dative_incompatible: bool,
     },
     /// Guided placement started successfully.
     Started {
@@ -186,6 +190,7 @@ pub fn start_guided_placement(
         }
         return GuidedPlacementStartResult::AtomSaturated {
             has_additional_capacity: placement_result.has_additional_geometric_capacity,
+            dative_incompatible: placement_result.dative_incompatible,
         };
     }
 
@@ -216,6 +221,7 @@ pub fn start_guided_placement(
     };
 
     // Enter guided placement mode based on the placement result
+    let is_dative = placement_result.is_dative_bond;
     let guide_count = match &placement_result.mode {
         GuidedPlacementMode::FixedDots { guide_dots } => {
             let count = guide_dots.len();
@@ -225,6 +231,7 @@ pub fn start_guided_placement(
                     anchor_atom_id: diff_atom_id,
                     guide_dots: guide_dots.clone(),
                     bond_distance: placement_result.bond_distance,
+                    is_dative_bond: is_dative,
                 };
             }
             count
@@ -237,6 +244,7 @@ pub fn start_guided_placement(
                     center: *center,
                     radius: *radius,
                     preview_position: None,
+                    is_dative_bond: is_dative,
                 };
             }
             0 // No fixed guide dots; sphere is interactive
@@ -261,6 +269,7 @@ pub fn start_guided_placement(
                     anchor_pos: *anchor_pos,
                     num_ring_dots: *num_ring_dots,
                     preview_positions: None,
+                    is_dative_bond: is_dative,
                 };
             }
             0 // No fixed guide dots; ring is interactive
@@ -313,6 +322,7 @@ pub fn place_guided_atom(
                 atomic_number,
                 anchor_atom_id,
                 guide_dots,
+                is_dative_bond,
                 ..
             }) => {
                 let dot_index = match hit_test_guide_dots(ray_start, ray_dir, guide_dots) {
@@ -320,18 +330,20 @@ pub fn place_guided_atom(
                     None => return false,
                 };
                 let position = guide_dots[dot_index].position;
-                Some((*atomic_number, *anchor_atom_id, position))
+                Some((*atomic_number, *anchor_atom_id, position, *is_dative_bond))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
                 atomic_number,
                 anchor_atom_id,
                 center,
                 radius,
+                is_dative_bond,
                 ..
             }) => {
                 // Use ray-sphere intersection for placement
+                let dative = *is_dative_bond;
                 ray_sphere_nearest_point(ray_start, ray_dir, center, *radius)
-                    .map(|hit_pos| (*atomic_number, *anchor_atom_id, hit_pos))
+                    .map(|hit_pos| (*atomic_number, *anchor_atom_id, hit_pos, dative))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing {
                 atomic_number,
@@ -342,9 +354,11 @@ pub fn place_guided_atom(
                 bond_distance,
                 anchor_pos,
                 num_ring_dots,
+                is_dative_bond,
                 ..
             }) => {
                 // Find the closest point on the ring, then compute positions
+                let dative = *is_dative_bond;
                 let cone_half_angle = cone_half_angle_for_ring(*num_ring_dots);
                 ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius)
                     .map(|point_on_ring| {
@@ -359,14 +373,14 @@ pub fn place_guided_atom(
                             cone_half_angle,
                         );
                         // Place at the first position (the one closest to cursor click)
-                        (*atomic_number, *anchor_atom_id, positions[0])
+                        (*atomic_number, *anchor_atom_id, positions[0], dative)
                     })
             }
             _ => None,
         }
     };
 
-    let (atomic_number, anchor_atom_id, position) = match placement_info {
+    let (atomic_number, anchor_atom_id, position, is_dative_bond) = match placement_info {
         Some(info) => info,
         None => return false,
     };
@@ -377,8 +391,13 @@ pub fn place_guided_atom(
         None => return false,
     };
 
+    let bond_order = if is_dative_bond {
+        crate::crystolecule::atomic_structure::inline_bond::BOND_DATIVE
+    } else {
+        crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE
+    };
     let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, position);
-    atom_edit_data.add_bond_in_diff(anchor_atom_id, new_atom_id, 1);
+    atom_edit_data.add_bond_in_diff(anchor_atom_id, new_atom_id, bond_order);
 
     // Transition back to Idle
     if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {

@@ -1607,6 +1607,10 @@ sealed class GuidedPlacementApiResult with _$GuidedPlacementApiResult {
     /// True when the atom has lone pairs / empty orbitals
     /// (switch to Dative bond mode to access them).
     required bool hasAdditionalCapacity,
+
+    /// True when has_additional_capacity is true but the new element cannot
+    /// form a dative bond with the anchor (no valid donor-acceptor pair).
+    required bool dativeIncompatible,
   }) = GuidedPlacementApiResult_AtomSaturated;
 
   /// Guided placement started successfully.

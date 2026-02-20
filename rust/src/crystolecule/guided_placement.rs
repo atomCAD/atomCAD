@@ -1,4 +1,5 @@
 use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
 use crate::crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
 use crate::crystolecule::simulation::uff::typer::{assign_uff_type, hybridization_from_label};
 use glam::f64::DVec3;
@@ -14,6 +15,16 @@ pub enum Hybridization {
     Sp1,
 }
 
+/// Controls the saturation limit used when computing guide dot positions.
+///
+/// - `Covalent`: uses element-specific max neighbors (e.g., N sp3 = 3, O sp3 = 2).
+/// - `Dative`: uses geometric max (sp3 = 4, sp2 = 3, sp1 = 2), unlocking lone pair
+///   and empty orbital positions for coordinate bonding.
+///
+/// **Design decision:** Dative bonding is a placement-time consideration only. The bond
+/// created is stored as a regular bond in `AtomicStructure` — no `BondKind` distinction
+/// is persisted. Once formed, a dative bond is physically identical to a covalent bond;
+/// the distinction only matters for which guide dot positions are offered during placement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BondMode {
     Covalent,
@@ -79,6 +90,14 @@ pub struct GuidedPlacementResult {
     pub remaining_slots: usize,
     /// True when geometric max > covalent max (atom has lone pairs / empty orbitals)
     pub has_additional_geometric_capacity: bool,
+    /// True when in dative mode but the anchor-new element pair is incompatible
+    /// (no valid donor-acceptor relationship). Only meaningful when
+    /// has_additional_geometric_capacity is true and remaining_slots is 0.
+    pub dative_incompatible: bool,
+    /// True when the bond to be placed should be marked as dative (BOND_DATIVE).
+    /// This is the case when the anchor atom is at or beyond its covalent max,
+    /// meaning the new bond was only possible because of dative mode.
+    pub is_dative_bond: bool,
 }
 
 impl GuidedPlacementMode {
@@ -193,6 +212,10 @@ fn crystal_bond_length(z_a: i16, z_b: i16) -> Option<f64> {
 
 /// Detect hybridization for an atom, using an explicit override if provided,
 /// otherwise auto-detecting via UFF type assignment.
+///
+/// If the atom has any dative bonds (BOND_DATIVE), it has accepted a lone pair
+/// from a donor, which fills an empty orbital and promotes hybridization to sp3.
+/// For example, boron normally sp2 becomes sp3 when it accepts a dative bond.
 pub fn detect_hybridization(
     structure: &AtomicStructure,
     atom_id: u32,
@@ -206,6 +229,18 @@ pub fn detect_hybridization(
         Some(a) => a,
         None => return Hybridization::Sp3,
     };
+
+    // Check if the atom has any dative bonds — receiving a dative bond fills an
+    // empty orbital, promoting hybridization (e.g., B sp2 → sp3 in H3N-BH3).
+    let has_dative = atom
+        .bonds
+        .iter()
+        .any(|b| !b.is_delete_marker() && b.bond_order() == BOND_DATIVE);
+
+    if has_dative {
+        // Accepting a dative bond promotes to sp3
+        return Hybridization::Sp3;
+    }
 
     match assign_uff_type(atom.atomic_number, &atom.bonds) {
         Ok(label) => {
@@ -243,6 +278,18 @@ pub fn effective_max_neighbors(
     }
 
     // Covalent mode: element-specific limits
+    covalent_max_neighbors(atomic_number, hybridization)
+}
+
+/// Returns the covalent max neighbors for the given element and hybridization.
+/// This is the element-specific bonding limit (without dative override).
+pub fn covalent_max_neighbors(atomic_number: i16, hybridization: Hybridization) -> usize {
+    let geometric_max = match hybridization {
+        Hybridization::Sp3 => 4,
+        Hybridization::Sp2 => 3,
+        Hybridization::Sp1 => 2,
+    };
+
     match atomic_number {
         // Group 14: C, Si, Ge, Sn — full tetrahedral
         6 | 14 | 32 | 50 => geometric_max,
@@ -272,6 +319,138 @@ pub fn effective_max_neighbors(
         1 => 1,
         // Default: use geometric max
         _ => geometric_max,
+    }
+}
+
+// ============================================================================
+// Dative bond validation
+// ============================================================================
+
+/// Returns the number of valence electrons for main group elements (rows 1-3).
+/// Used for dative bond donor/acceptor classification.
+pub fn valence_electrons(atomic_number: i16) -> usize {
+    match atomic_number {
+        // Row 1
+        1 => 1, // H
+        2 => 2, // He (noble gas)
+        // Row 2
+        3 => 1,  // Li
+        4 => 2,  // Be
+        5 => 3,  // B
+        6 => 4,  // C
+        7 => 5,  // N
+        8 => 6,  // O
+        9 => 7,  // F
+        10 => 8, // Ne (noble gas)
+        // Row 3
+        11 => 1, // Na
+        12 => 2, // Mg
+        13 => 3, // Al
+        14 => 4, // Si
+        15 => 5, // P
+        16 => 6, // S
+        17 => 7, // Cl
+        18 => 8, // Ar (noble gas)
+        // Row 4+ main group (same group pattern)
+        31 => 3, // Ga
+        32 => 4, // Ge
+        33 => 5, // As
+        34 => 6, // Se
+        35 => 7, // Br
+        36 => 8, // Kr
+        49 => 3, // In
+        50 => 4, // Sn
+        51 => 5, // Sb
+        52 => 6, // Te
+        53 => 7, // I
+        54 => 8, // Xe
+        // Default: assume 4 (group 14 behavior — no lone pairs, no empty orbitals)
+        _ => 4,
+    }
+}
+
+/// Dative capability of an atom: how many lone pairs and empty orbitals it has
+/// after forming its maximum covalent bonds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DativeCapability {
+    /// Number of lone pairs (filled non-bonding orbitals). Donor capability.
+    pub lone_pairs: usize,
+    /// Number of empty orbitals (unfilled non-bonding orbitals). Acceptor capability.
+    pub empty_orbitals: usize,
+}
+
+impl DativeCapability {
+    pub fn is_donor(&self) -> bool {
+        self.lone_pairs > 0
+    }
+
+    pub fn is_acceptor(&self) -> bool {
+        self.empty_orbitals > 0
+    }
+
+    pub fn is_neither(&self) -> bool {
+        self.lone_pairs == 0 && self.empty_orbitals == 0
+    }
+}
+
+/// Compute the dative capability of an element at its maximum covalent bonding.
+///
+/// Uses first-principles orbital accounting:
+/// - `leftover_electrons = valence_electrons - covalent_max`
+/// - `leftover_slots = hybrid_slots - covalent_max`
+/// - `lone_pairs = leftover_electrons / 2`
+/// - `empty_orbitals = leftover_slots - lone_pairs`
+pub fn dative_capability(atomic_number: i16, hybridization: Hybridization) -> DativeCapability {
+    // Hydrogen and helium (row 1) have only 1 valence slot (the 1s orbital).
+    // All other elements (rows 2+) have 4 valence slots (s + 3p).
+    let hybrid_slots = match atomic_number {
+        1 | 2 => 1usize,
+        _ => 4usize,
+    };
+    let cov_max = covalent_max_neighbors(atomic_number, hybridization);
+    let val_e = valence_electrons(atomic_number);
+
+    let leftover_electrons = val_e.saturating_sub(cov_max);
+    let leftover_slots = hybrid_slots.saturating_sub(cov_max);
+    let lone_pairs = leftover_electrons / 2;
+    let empty_orbitals = leftover_slots.saturating_sub(lone_pairs);
+
+    DativeCapability {
+        lone_pairs,
+        empty_orbitals,
+    }
+}
+
+/// Check whether a dative bond can form between an anchor atom and a new element.
+///
+/// A valid dative bond requires one atom to be a donor (has lone pairs) and the
+/// other to be an acceptor (has empty orbitals). The anchor's capability is
+/// computed from its current hybridization; the new element's capability is
+/// computed from its default hybridization (sp3 for most, sp2 for B/Al).
+///
+/// Returns `true` if the pair is compatible for dative bonding.
+pub fn is_dative_compatible(
+    anchor_atomic_number: i16,
+    anchor_hybridization: Hybridization,
+    new_element_atomic_number: i16,
+) -> bool {
+    let anchor_cap = dative_capability(anchor_atomic_number, anchor_hybridization);
+    // New element uses its default hybridization (same as what assign_uff_type gives for 0 bonds)
+    let new_hyb = default_hybridization(new_element_atomic_number);
+    let new_cap = dative_capability(new_element_atomic_number, new_hyb);
+
+    // Anchor donor + new acceptor, or anchor acceptor + new donor
+    (anchor_cap.is_donor() && new_cap.is_acceptor())
+        || (anchor_cap.is_acceptor() && new_cap.is_donor())
+}
+
+/// Returns the default hybridization for a bare atom (0 bonds).
+fn default_hybridization(atomic_number: i16) -> Hybridization {
+    match atomic_number {
+        // B, Al default to sp2
+        5 | 13 => Hybridization::Sp2,
+        // Everything else defaults to sp3
+        _ => Hybridization::Sp3,
     }
 }
 
@@ -993,12 +1172,33 @@ pub fn compute_guided_placement(
     let anchor_atomic_number = anchor_atom.atomic_number;
 
     // Compute remaining slots
-    let slots = remaining_slots(structure, anchor_atom_id, hybridization, bond_mode);
-    let covalent_max =
-        effective_max_neighbors(anchor_atomic_number, hybridization, BondMode::Covalent);
-    let geometric_max =
-        effective_max_neighbors(anchor_atomic_number, hybridization, BondMode::Dative);
+    let covalent_max = covalent_max_neighbors(anchor_atomic_number, hybridization);
+    let geometric_max = match hybridization {
+        Hybridization::Sp3 => 4,
+        Hybridization::Sp2 => 3,
+        Hybridization::Sp1 => 2,
+    };
     let has_additional = geometric_max > covalent_max;
+    let current_bonds = count_active_neighbors(structure, anchor_atom_id);
+
+    // Dative bond validation: when in dative mode, check donor/acceptor compatibility
+    let dative_compatible = if bond_mode == BondMode::Dative {
+        is_dative_compatible(
+            anchor_atomic_number,
+            hybridization,
+            new_element_atomic_number,
+        )
+    } else {
+        false // Not relevant in covalent mode
+    };
+
+    // Effective remaining slots: in dative mode, only use geometric max if compatible
+    let effective_max = if bond_mode == BondMode::Dative && dative_compatible {
+        geometric_max
+    } else {
+        covalent_max
+    };
+    let slots = effective_max.saturating_sub(current_bonds);
 
     // Get anchor's UFF label for bond distance computation
     let anchor_uff_label = assign_uff_type(anchor_atomic_number, &anchor_atom.bonds)
@@ -1103,6 +1303,23 @@ pub fn compute_guided_placement(
         }
     };
 
+    // Dative incompatible: in dative mode, atom has additional capacity but pair is incompatible.
+    // Also set in covalent mode when has_additional is true but pair would be incompatible
+    // (so the "switch to dative mode" message can be conditional).
+    let dative_incompat = if has_additional {
+        !is_dative_compatible(
+            anchor_atomic_number,
+            hybridization,
+            new_element_atomic_number,
+        )
+    } else {
+        false
+    };
+
+    // The bond is dative when the anchor is already at or beyond its covalent max.
+    // In that case the bond was only possible because of dative mode.
+    let is_dative_bond = bond_mode == BondMode::Dative && current_bonds >= covalent_max;
+
     GuidedPlacementResult {
         anchor_atom_id,
         hybridization,
@@ -1110,5 +1327,7 @@ pub fn compute_guided_placement(
         bond_distance: bond_dist,
         remaining_slots: slots,
         has_additional_geometric_capacity: has_additional,
+        dative_incompatible: dative_incompat,
+        is_dative_bond,
     }
 }

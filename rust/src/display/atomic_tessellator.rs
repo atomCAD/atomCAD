@@ -265,9 +265,20 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
     (atom_color, roughness, metallic)
 }
 
-/// Get bond color based on selection state from decorator
-fn get_bond_color_inline(atom_id1: u32, atom_id2: u32, atomic_structure: &AtomicStructure) -> Vec3 {
-    let base_color = Vec3::new(0.8, 0.8, 0.8);
+/// Get bond color based on bond type and selection state from decorator.
+/// Dative bonds are yellow; regular bonds are grey. Selection overrides both.
+fn get_bond_color_inline(
+    atom_id1: u32,
+    atom_id2: u32,
+    bond_order: u8,
+    atomic_structure: &AtomicStructure,
+) -> Vec3 {
+    use crate::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
+    let base_color = if bond_order == BOND_DATIVE {
+        Vec3::new(0.9, 0.8, 0.2) // Yellow for dative bonds
+    } else {
+        Vec3::new(0.8, 0.8, 0.8) // Grey for regular bonds
+    };
     let bond_ref = BondReference { atom_id1, atom_id2 };
     if atomic_structure.decorator().is_bond_selected(&bond_ref) {
         to_selected_color(&base_color)
@@ -454,7 +465,7 @@ fn tessellate_bond_inline(
     atomic_structure: &AtomicStructure,
     atom1: &Atom,
     atom2: &Atom,
-    _bond_order: u8,
+    bond_order: u8,
     params: &AtomicTessellatorParams,
 ) {
     let bond_ref = BondReference {
@@ -462,7 +473,7 @@ fn tessellate_bond_inline(
         atom_id2: atom2.id,
     };
     let selected = atomic_structure.decorator().is_bond_selected(&bond_ref);
-    let color = get_bond_color_inline(atom1.id, atom2.id, atomic_structure);
+    let color = get_bond_color_inline(atom1.id, atom2.id, bond_order, atomic_structure);
 
     tessellator::tessellate_cylinder(
         output_mesh,
@@ -666,9 +677,9 @@ fn tessellate_bond_impostor_inline(
     atomic_structure: &AtomicStructure,
     atom1: &Atom,
     atom2: &Atom,
-    _bond_order: u8,
+    bond_order: u8,
 ) {
-    let color = get_bond_color_inline(atom1.id, atom2.id, atomic_structure);
+    let color = get_bond_color_inline(atom1.id, atom2.id, bond_order, atomic_structure);
 
     bond_impostor_mesh.add_bond_quad(
         &atom1.position.as_vec3(),

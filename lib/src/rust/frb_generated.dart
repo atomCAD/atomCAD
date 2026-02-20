@@ -9068,6 +9068,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 1:
         return GuidedPlacementApiResult_AtomSaturated(
           hasAdditionalCapacity: dco_decode_bool(raw[1]),
+          dativeIncompatible: dco_decode_bool(raw[2]),
         );
       case 2:
         return GuidedPlacementApiResult_GuidedPlacementStarted(
@@ -11251,8 +11252,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return GuidedPlacementApiResult_NoAtomHit();
       case 1:
         var var_hasAdditionalCapacity = sse_decode_bool(deserializer);
+        var var_dativeIncompatible = sse_decode_bool(deserializer);
         return GuidedPlacementApiResult_AtomSaturated(
-            hasAdditionalCapacity: var_hasAdditionalCapacity);
+            hasAdditionalCapacity: var_hasAdditionalCapacity,
+            dativeIncompatible: var_dativeIncompatible);
       case 2:
         var var_guideCount = sse_decode_i_32(deserializer);
         var var_anchorAtomId = sse_decode_i_32(deserializer);
@@ -13624,10 +13627,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case GuidedPlacementApiResult_NoAtomHit():
         sse_encode_i_32(0, serializer);
       case GuidedPlacementApiResult_AtomSaturated(
-          hasAdditionalCapacity: final hasAdditionalCapacity
+          hasAdditionalCapacity: final hasAdditionalCapacity,
+          dativeIncompatible: final dativeIncompatible
         ):
         sse_encode_i_32(1, serializer);
         sse_encode_bool(hasAdditionalCapacity, serializer);
+        sse_encode_bool(dativeIncompatible, serializer);
       case GuidedPlacementApiResult_GuidedPlacementStarted(
           guideCount: final guideCount,
           anchorAtomId: final anchorAtomId

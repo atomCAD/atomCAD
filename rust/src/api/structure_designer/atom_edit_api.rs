@@ -351,8 +351,10 @@ pub fn atom_edit_start_guided_placement(
                     }
                     atom_edit::GuidedPlacementStartResult::AtomSaturated {
                         has_additional_capacity,
+                        dative_incompatible,
                     } => GuidedPlacementApiResult::AtomSaturated {
                         has_additional_capacity,
+                        dative_incompatible,
                     },
                     atom_edit::GuidedPlacementStartResult::Started {
                         guide_count,

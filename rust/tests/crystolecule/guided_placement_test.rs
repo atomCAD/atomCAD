@@ -1305,7 +1305,7 @@ fn hybridization_override_sp1_changes_geometry() {
 
 #[test]
 fn dative_nitrogen_sp3_unlocks_lone_pair() {
-    // NH3: nitrogen with 3 bonds. Covalent → saturated. Dative → 1 dot.
+    // NH3: nitrogen with 3 bonds. Covalent → saturated. Dative with B → 1 dot.
     let d = 1.0;
     let (structure, anchor) = make_structure_with_neighbors(
         7, // N
@@ -1320,7 +1320,7 @@ fn dative_nitrogen_sp3_unlocks_lone_pair() {
     let result_cov = compute_guided_placement(
         &structure,
         anchor,
-        1,
+        5, // B (acceptor)
         None,
         BondMode::Covalent,
         BondLengthMode::Uff,
@@ -1328,11 +1328,11 @@ fn dative_nitrogen_sp3_unlocks_lone_pair() {
     assert_eq!(result_cov.remaining_slots, 0);
     assert!(result_cov.has_additional_geometric_capacity);
 
-    // Dative mode: 1 remaining slot (lone pair position)
+    // Dative mode with B (acceptor): 1 remaining slot (lone pair position)
     let result_dat = compute_guided_placement(
         &structure,
         anchor,
-        1,
+        5, // B (acceptor)
         None,
         BondMode::Dative,
         BondLengthMode::Uff,
@@ -1343,7 +1343,7 @@ fn dative_nitrogen_sp3_unlocks_lone_pair() {
 
 #[test]
 fn dative_oxygen_sp3_unlocks_two_lone_pairs() {
-    // H2O: oxygen with 2 bonds. Covalent → saturated. Dative → 2 dots.
+    // H2O: oxygen with 2 bonds. Covalent → saturated. Dative with B → 2 dots.
     let d = 0.96;
     let (structure, anchor) = make_structure_with_neighbors(
         8, // O
@@ -1357,7 +1357,7 @@ fn dative_oxygen_sp3_unlocks_two_lone_pairs() {
     let result_cov = compute_guided_placement(
         &structure,
         anchor,
-        1,
+        5, // B (acceptor)
         None,
         BondMode::Covalent,
         BondLengthMode::Uff,
@@ -1365,11 +1365,11 @@ fn dative_oxygen_sp3_unlocks_two_lone_pairs() {
     assert_eq!(result_cov.remaining_slots, 0);
     assert!(result_cov.has_additional_geometric_capacity);
 
-    // Dative: 2 remaining (lone pair positions)
+    // Dative with B (acceptor): 2 remaining (lone pair positions)
     let result_dat = compute_guided_placement(
         &structure,
         anchor,
-        1,
+        5, // B (acceptor)
         None,
         BondMode::Dative,
         BondLengthMode::Uff,
@@ -1567,4 +1567,516 @@ fn boron_sp2_covalent_saturated_sp3_dative_unlocks() {
     );
     assert_eq!(result_sp3_dat.remaining_slots, 1);
     assert_eq!(result_sp3_dat.guide_dots().len(), 1);
+}
+
+// ============================================================================
+// Dative bond validation tests
+// ============================================================================
+
+#[test]
+fn valence_electrons_row1() {
+    assert_eq!(valence_electrons(1), 1); // H
+    assert_eq!(valence_electrons(2), 2); // He
+}
+
+#[test]
+fn valence_electrons_row2() {
+    assert_eq!(valence_electrons(5), 3); // B
+    assert_eq!(valence_electrons(6), 4); // C
+    assert_eq!(valence_electrons(7), 5); // N
+    assert_eq!(valence_electrons(8), 6); // O
+    assert_eq!(valence_electrons(9), 7); // F
+}
+
+#[test]
+fn valence_electrons_row3() {
+    assert_eq!(valence_electrons(13), 3); // Al
+    assert_eq!(valence_electrons(14), 4); // Si
+    assert_eq!(valence_electrons(15), 5); // P
+    assert_eq!(valence_electrons(16), 6); // S
+    assert_eq!(valence_electrons(17), 7); // Cl
+}
+
+#[test]
+fn dative_capability_nitrogen_sp3() {
+    let cap = dative_capability(7, Hybridization::Sp3); // N sp3
+    assert_eq!(cap.lone_pairs, 1);
+    assert_eq!(cap.empty_orbitals, 0);
+    assert!(cap.is_donor());
+    assert!(!cap.is_acceptor());
+}
+
+#[test]
+fn dative_capability_oxygen_sp3() {
+    let cap = dative_capability(8, Hybridization::Sp3); // O sp3
+    assert_eq!(cap.lone_pairs, 2);
+    assert_eq!(cap.empty_orbitals, 0);
+    assert!(cap.is_donor());
+    assert!(!cap.is_acceptor());
+}
+
+#[test]
+fn dative_capability_boron_sp2() {
+    let cap = dative_capability(5, Hybridization::Sp2); // B sp2
+    assert_eq!(cap.lone_pairs, 0);
+    assert_eq!(cap.empty_orbitals, 1);
+    assert!(!cap.is_donor());
+    assert!(cap.is_acceptor());
+}
+
+#[test]
+fn dative_capability_carbon_sp3() {
+    let cap = dative_capability(6, Hybridization::Sp3); // C sp3
+    assert_eq!(cap.lone_pairs, 0);
+    assert_eq!(cap.empty_orbitals, 0);
+    assert!(cap.is_neither());
+}
+
+#[test]
+fn dative_capability_hydrogen() {
+    let cap = dative_capability(1, Hybridization::Sp3); // H
+    assert_eq!(cap.lone_pairs, 0);
+    assert_eq!(cap.empty_orbitals, 0);
+    assert!(cap.is_neither());
+}
+
+#[test]
+fn dative_capability_fluorine() {
+    let cap = dative_capability(9, Hybridization::Sp3); // F sp3
+    assert_eq!(cap.lone_pairs, 3);
+    assert_eq!(cap.empty_orbitals, 0);
+    assert!(cap.is_donor());
+}
+
+#[test]
+fn dative_capability_aluminum_sp2() {
+    let cap = dative_capability(13, Hybridization::Sp2); // Al sp2
+    assert_eq!(cap.lone_pairs, 0);
+    assert_eq!(cap.empty_orbitals, 1);
+    assert!(cap.is_acceptor());
+}
+
+#[test]
+fn dative_compatible_n_b() {
+    // N (donor) + B (acceptor) = compatible
+    assert!(is_dative_compatible(7, Hybridization::Sp3, 5));
+}
+
+#[test]
+fn dative_compatible_b_n() {
+    // B (acceptor) + N (donor) = compatible (reversed direction)
+    assert!(is_dative_compatible(5, Hybridization::Sp2, 7));
+}
+
+#[test]
+fn dative_compatible_o_b() {
+    // O (donor) + B (acceptor) = compatible
+    assert!(is_dative_compatible(8, Hybridization::Sp3, 5));
+}
+
+#[test]
+fn dative_compatible_n_al() {
+    // N (donor) + Al (acceptor) = compatible
+    assert!(is_dative_compatible(7, Hybridization::Sp3, 13));
+}
+
+#[test]
+fn dative_incompatible_n_h() {
+    // N (donor) + H (neither) = incompatible
+    assert!(!is_dative_compatible(7, Hybridization::Sp3, 1));
+}
+
+#[test]
+fn dative_incompatible_n_c() {
+    // N (donor) + C (neither) = incompatible
+    assert!(!is_dative_compatible(7, Hybridization::Sp3, 6));
+}
+
+#[test]
+fn dative_incompatible_b_h() {
+    // B (acceptor) + H (neither) = incompatible
+    assert!(!is_dative_compatible(5, Hybridization::Sp2, 1));
+}
+
+#[test]
+fn dative_incompatible_c_c() {
+    // C (neither) + C (neither) = incompatible
+    assert!(!is_dative_compatible(6, Hybridization::Sp3, 6));
+}
+
+#[test]
+fn dative_incompatible_n_n() {
+    // N (donor) + N (donor) = incompatible (both donors, no acceptor)
+    assert!(!is_dative_compatible(7, Hybridization::Sp3, 7));
+}
+
+#[test]
+fn dative_incompatible_b_b() {
+    // B (acceptor) + B (acceptor) = incompatible (both acceptors, no donor)
+    assert!(!is_dative_compatible(5, Hybridization::Sp2, 5));
+}
+
+/// NH3 nitrogen in dative mode trying to place H: should be rejected.
+/// The guide dots should not appear because H cannot accept a lone pair.
+#[test]
+fn nh3_dative_h_rejected() {
+    let d = 1.09;
+    let h1 = DVec3::new(1.0, 1.0, 1.0).normalize() * d;
+    let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
+    let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7, // N
+        &[(1, h1), (1, h2), (1, h3)],
+    );
+
+    // Dative mode, placing H: should get 0 remaining slots
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1, // H
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result.remaining_slots, 0, "H cannot accept N's lone pair");
+    assert!(
+        result.dative_incompatible,
+        "Should flag dative incompatibility"
+    );
+    assert!(
+        result.has_additional_geometric_capacity,
+        "N sp3 has additional capacity"
+    );
+}
+
+/// NH3 nitrogen in dative mode trying to place B: should succeed.
+#[test]
+fn nh3_dative_b_allowed() {
+    let d = 1.09;
+    let h1 = DVec3::new(1.0, 1.0, 1.0).normalize() * d;
+    let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
+    let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7, // N
+        &[(1, h1), (1, h2), (1, h3)],
+    );
+
+    // Dative mode, placing B: should work (N donor, B acceptor)
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        5, // B
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result.remaining_slots, 1, "B can accept N's lone pair");
+    assert!(!result.dative_incompatible);
+    assert_eq!(result.guide_dots().len(), 1);
+}
+
+/// H2O oxygen in dative mode trying to place B: should give 2 dots (2 lone pairs).
+#[test]
+fn h2o_dative_b_allowed() {
+    let d = 0.96;
+    let h1 = DVec3::new(1.0, 0.0, 0.0) * d;
+    let h2 = DVec3::new(-0.33, 0.94, 0.0) * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        8, // O
+        &[(1, h1), (1, h2)],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        5, // B
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(
+        result.remaining_slots, 2,
+        "O has 2 lone pairs for B to accept"
+    );
+    assert!(!result.dative_incompatible);
+    assert_eq!(result.guide_dots().len(), 2);
+}
+
+/// H2O oxygen in dative mode trying to place H: should be rejected.
+#[test]
+fn h2o_dative_h_rejected() {
+    let d = 0.96;
+    let h1 = DVec3::new(1.0, 0.0, 0.0) * d;
+    let h2 = DVec3::new(-0.33, 0.94, 0.0) * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        8, // O
+        &[(1, h1), (1, h2)],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        1, // H
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result.remaining_slots, 0, "H cannot accept O's lone pair");
+    assert!(result.dative_incompatible);
+}
+
+/// CH3 carbon dative mode: covalent max = geometric max = 4, so dative
+/// compatibility doesn't matter. 1 slot remaining regardless.
+#[test]
+fn ch3_dative_irrelevant() {
+    let d = 1.09;
+    let h1 = DVec3::new(1.0, 1.0, 1.0).normalize() * d;
+    let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
+    let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        6, // C
+        &[(1, h1), (1, h2), (1, h3)],
+    );
+
+    // Dative or covalent, placing H: both should show 1 remaining slot
+    let result_cov = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    let result_dat = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_cov.remaining_slots, 1);
+    assert_eq!(result_dat.remaining_slots, 1);
+    // Not dative_incompatible because carbon has no additional capacity
+    assert!(!result_dat.dative_incompatible);
+    assert!(!result_dat.has_additional_geometric_capacity);
+}
+
+/// NH3 covalent mode: saturated. has_additional_capacity true but dative_incompatible
+/// depends on the new element.
+#[test]
+fn nh3_covalent_saturated_message_depends_on_new_element() {
+    let d = 1.09;
+    let h1 = DVec3::new(1.0, 1.0, 1.0).normalize() * d;
+    let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
+    let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7, // N
+        &[(1, h1), (1, h2), (1, h3)],
+    );
+
+    // Covalent mode, new element H: saturated, has additional, but dative incompatible
+    let result_h = compute_guided_placement(
+        &structure,
+        anchor,
+        1,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_h.remaining_slots, 0);
+    assert!(result_h.has_additional_geometric_capacity);
+    assert!(
+        result_h.dative_incompatible,
+        "N+H: should NOT suggest dative mode"
+    );
+
+    // Covalent mode, new element B: saturated, has additional, dative compatible
+    let result_b = compute_guided_placement(
+        &structure,
+        anchor,
+        5,
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    assert_eq!(result_b.remaining_slots, 0);
+    assert!(result_b.has_additional_geometric_capacity);
+    assert!(
+        !result_b.dative_incompatible,
+        "N+B: SHOULD suggest dative mode"
+    );
+}
+
+// ============================================================================
+// is_dative_bond field tests
+// ============================================================================
+
+/// Helper: create a structure with one anchor at origin and N neighbors,
+/// with explicit bond orders (not always 1).
+fn make_structure_with_bond_orders(
+    anchor_z: i16,
+    neighbors: &[(i16, DVec3, u8)], // (element, position, bond_order)
+) -> (AtomicStructure, u32) {
+    let mut structure = AtomicStructure::new();
+    let anchor_id = structure.add_atom(anchor_z, DVec3::ZERO);
+    for &(z, pos, order) in neighbors {
+        let neighbor_id = structure.add_atom(z, pos);
+        structure.add_bond(anchor_id, neighbor_id, order);
+    }
+    (structure, anchor_id)
+}
+
+#[test]
+fn is_dative_bond_true_when_anchor_at_covalent_max() {
+    // NH3: N with 3 H bonds (at covalent max for N sp3 = 3)
+    // Adding B in dative mode → is_dative_bond should be true
+    let d = 1.09;
+    let h1 = DVec3::new(1.0, 1.0, 1.0).normalize() * d;
+    let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
+    let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7, // N
+        &[(1, h1), (1, h2), (1, h3)],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        5, // B (acceptor)
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert!(result.is_dative_bond, "Bond from N(3 bonds) to B in dative mode should be dative");
+}
+
+#[test]
+fn is_dative_bond_false_in_covalent_mode() {
+    // NH3: N with 3 H bonds, adding B in covalent mode
+    let d = 1.09;
+    let h1 = DVec3::new(1.0, 1.0, 1.0).normalize() * d;
+    let h2 = DVec3::new(-1.0, -1.0, 1.0).normalize() * d;
+    let h3 = DVec3::new(-1.0, 1.0, -1.0).normalize() * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7, // N
+        &[(1, h1), (1, h2), (1, h3)],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        5, // B
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    assert!(!result.is_dative_bond, "Covalent mode should never produce dative bond");
+}
+
+#[test]
+fn is_dative_bond_false_when_anchor_below_covalent_max() {
+    // N with 1 H bond (below covalent max of 3)
+    // Adding B in dative mode → still a covalent bond (N has room)
+    let d = 1.09;
+    let h1 = DVec3::new(1.0, 1.0, 1.0).normalize() * d;
+    let (structure, anchor) = make_structure_with_neighbors(
+        7, // N
+        &[(1, h1)],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        anchor,
+        5, // B
+        None,
+        BondMode::Dative,
+        BondLengthMode::Uff,
+    );
+    assert!(!result.is_dative_bond, "N with 1 bond is below covalent max, bond is covalent");
+}
+
+// ============================================================================
+// detect_hybridization with dative bonds
+// ============================================================================
+
+#[test]
+fn detect_hybridization_boron_with_dative_bond_is_sp3() {
+    // Boron with 1 dative bond (from N) → should detect as sp3
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
+    let (structure, boron_id) = make_structure_with_bond_orders(
+        5, // B
+        &[(7, DVec3::new(1.5, 0.0, 0.0), BOND_DATIVE)], // N bonded with dative
+    );
+
+    let hyb = detect_hybridization(&structure, boron_id, None);
+    assert_eq!(hyb, Hybridization::Sp3, "Boron with dative bond should be sp3");
+}
+
+#[test]
+fn detect_hybridization_boron_without_dative_bond_is_sp2() {
+    // Boron with 1 single bond (no dative) → should detect as sp2
+    let (structure, boron_id) = make_structure_with_neighbors(
+        5, // B
+        &[(7, DVec3::new(1.5, 0.0, 0.0))], // N bonded with single
+    );
+
+    let hyb = detect_hybridization(&structure, boron_id, None);
+    assert_eq!(hyb, Hybridization::Sp2, "Boron with single bond should be sp2");
+}
+
+#[test]
+fn detect_hybridization_override_takes_precedence_over_dative() {
+    // Even with a dative bond, explicit override should win
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
+    let (structure, boron_id) = make_structure_with_bond_orders(
+        5, // B
+        &[(7, DVec3::new(1.5, 0.0, 0.0), BOND_DATIVE)],
+    );
+
+    let hyb = detect_hybridization(&structure, boron_id, Some(Hybridization::Sp2));
+    assert_eq!(hyb, Hybridization::Sp2, "Override should take precedence");
+}
+
+#[test]
+fn boron_with_dative_bond_shows_3_guide_dots() {
+    // Boron with 1 dative bond to N → sp3 → 3 remaining slots → 3 guide dots
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
+    let (structure, boron_id) = make_structure_with_bond_orders(
+        5, // B
+        &[(7, DVec3::new(1.5, 0.0, 0.0), BOND_DATIVE)],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        boron_id,
+        1, // H
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    // sp3 with 1 bond → 3 remaining slots
+    assert_eq!(result.remaining_slots, 3, "B(sp3 via dative) with 1 bond should have 3 slots");
+    assert_eq!(result.hybridization, Hybridization::Sp3);
+}
+
+#[test]
+fn boron_without_dative_bond_shows_2_guide_dots() {
+    // Boron with 1 single bond to N → sp2 → 2 remaining slots
+    let (structure, boron_id) = make_structure_with_neighbors(
+        5, // B
+        &[(7, DVec3::new(1.5, 0.0, 0.0))],
+    );
+
+    let result = compute_guided_placement(
+        &structure,
+        boron_id,
+        1, // H
+        None,
+        BondMode::Covalent,
+        BondLengthMode::Uff,
+    );
+    // sp2 with 1 bond → 2 remaining slots
+    assert_eq!(result.remaining_slots, 2, "B(sp2) with 1 bond should have 2 slots");
+    assert_eq!(result.hybridization, Hybridization::Sp2);
 }

@@ -73,6 +73,8 @@ pub enum AddAtomToolState {
         anchor_atom_id: u32,
         guide_dots: Vec<crate::crystolecule::guided_placement::GuideDot>,
         bond_distance: f64,
+        /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
+        is_dative_bond: bool,
     },
     /// Free sphere placement: bare atom with no bonds, user clicks anywhere on sphere.
     GuidedFreeSphere {
@@ -82,6 +84,8 @@ pub enum AddAtomToolState {
         radius: f64,
         /// Cursor-tracked preview position on the sphere surface.
         preview_position: Option<DVec3>,
+        /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
+        is_dative_bond: bool,
     },
     /// Free ring placement: ring without reference (sp3 case 1 or sp2 case 1).
     /// Guide dots rotate together on a cone ring as the user moves the cursor.
@@ -97,6 +101,8 @@ pub enum AddAtomToolState {
         num_ring_dots: usize,
         /// Cursor-tracked preview positions on the ring.
         preview_positions: Option<Vec<DVec3>>,
+        /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
+        is_dative_bond: bool,
     },
 }
 

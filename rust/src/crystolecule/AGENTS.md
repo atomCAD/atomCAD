@@ -18,6 +18,7 @@ crystolecule/
 ├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
 ├── motif_parser.rs                 # Text format parser for motifs
+├── guided_placement.rs             # Guided atom placement geometry (bond directions, saturation)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
 ├── unit_cell_symmetries.rs         # Crystal system classification (7 systems)
 ├── atomic_structure/
@@ -63,6 +64,10 @@ crystolecule/
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
+| `GuidedPlacementResult` | `guided_placement.rs` | Computed guide dot positions for bonded atom placement |
+| `Hybridization` | `guided_placement.rs` | Sp3 / Sp2 / Sp1 orbital hybridization |
+| `BondMode` | `guided_placement.rs` | Covalent (element-specific max) vs Dative (geometric max) |
+| `BondLengthMode` | `guided_placement.rs` | Crystal (lattice-derived table) vs Uff (force field formula) |
 
 ## Core Concepts
 
@@ -73,6 +78,8 @@ crystolecule/
 **Lattice Filling**: `fill_lattice()` recursively subdivides a bounding box, evaluates an SDF geometry at motif sites, places atoms where SDF ≤ 0.01, creates bonds from the motif template, then applies cleanup → surface reconstruction → hydrogen passivation.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries.
+
+**Guided Placement** (`guided_placement.rs`): Computes chemically valid candidate positions for bonded atom placement. Given an anchor atom, determines hybridization (sp3/sp2/sp1 via UFF type assignment or manual override), checks saturation, computes bond distance, and returns guide dot positions at correct bond angles. Three placement modes: `FixedDots` (deterministic positions), `FreeSphere` (bare atom, click anywhere), `FreeRing` (single bond without dihedral reference, rotating dots on cone). Includes a crystal bond length table for ~20 semiconductor compounds (diamond cubic / zinc blende lattice parameters) with UFF fallback. Dative bond mode unlocks lone pair / empty orbital positions but does not persist any bond kind distinction — dative is a placement-time consideration only. Design doc: `doc/atom_edit/guided_atom_placement.md`.
 
 ## Important Constants (`crystolecule_constants.rs`)
 
@@ -98,6 +105,7 @@ drawing_plane →  UnitCellStruct
 motif_parser  →  Motif, atomic_constants
 atomic_structure_utils → AtomicStructure, atomic_constants
 io/*          →  AtomicStructure, atomic_constants
+guided_placement → AtomicStructure, simulation/uff (typer, params)
 ```
 
 `GeoNode` (from `geo_tree`) is the only external module dependency — used as the SDF geometry input to `fill_lattice()`.
@@ -110,6 +118,7 @@ Tests live in `rust/tests/crystolecule/` (never inline `#[cfg(test)]`). Test mod
 
 ```
 tests/crystolecule/
+├── guided_placement_test.rs       # Guided placement geometry, saturation, bond distances
 ├── atomic_structure_test.rs       # CRUD, grid, bonds, selection, transforms
 ├── drawing_plane_test.rs          # Plane axes, Miller indices, 2D↔3D mappings
 ├── lattice_fill_test.rs           # Tracker, statistics, integration with sphere geometry

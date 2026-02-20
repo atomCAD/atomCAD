@@ -24,6 +24,7 @@ atom_edit/
 | Type | Purpose |
 |------|---------|
 | `AtomEditTool` | Enum: `Default`, `AddAtom`, `AddBond` |
+| `AddAtomToolState` | Enum: `Idle`, `GuidedPlacement`, `GuidedFreeSphere`, `GuidedFreeRing` |
 | `DefaultToolInteractionState` | State machine: Idle → Pending → Dragging/Marquee |
 | `AtomEditSelection` | Provenance-based selection (base + diff atom IDs) |
 | `AtomEditEvalCache` | Provenance maps from most recent `apply_diff()` |
@@ -66,7 +67,7 @@ In **diff view** (`output_diff = true`), atom IDs from hit tests are diff-native
 ## Tool Files
 
 - **`default_tool.rs`**: Pointer event state machine (`pointer_down` → `pointer_move` → `pointer_up`). Handles click-select, drag threshold, screen-plane dragging, and marquee selection.
-- **`add_atom_tool.rs`**: Places atoms at ray-plane intersection points.
+- **`add_atom_tool.rs`**: Add Atom tool with guided placement. Click empty space → free placement (ray-plane intersection). Click existing atom → guided placement: compute candidate positions via `crystolecule::guided_placement`, show guide dots, click dot to place and bond. Three guided modes: `GuidedPlacement` (fixed dots for sp3/sp2/sp1 cases with 2+ bonds), `GuidedFreeSphere` (bare atom, cursor-tracked dot on wireframe sphere), `GuidedFreeRing` (single bond without dihedral reference, rotating dots on cone ring). Guide dot hit testing (`GUIDE_DOT_HIT_RADIUS = 0.3 A`) runs before atom hit testing. Design doc: `doc/atom_edit/guided_atom_placement.md`.
 - **`add_bond_tool.rs`**: Two-click bond creation workflow with provenance resolution.
 
 ## Backward Compatibility

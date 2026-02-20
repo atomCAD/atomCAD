@@ -214,10 +214,19 @@ class _StructureDesignerViewportState
     );
   }
 
-  void _showSaturationFeedback(bool hasAdditionalCapacity) {
-    final message = hasAdditionalCapacity
-        ? 'Atom is covalently saturated. Switch to Dative bond mode to access additional bonding positions.'
-        : 'Atom is fully bonded';
+  void _showSaturationFeedback(
+      bool hasAdditionalCapacity, bool dativeIncompatible) {
+    final String message;
+    final inDativeMode =
+        widget.graphModel.bondMode == APIBondMode.dative;
+    if (hasAdditionalCapacity && inDativeMode && dativeIncompatible) {
+      message = 'No dative bond possible between these elements.';
+    } else if (hasAdditionalCapacity && !inDativeMode && !dativeIncompatible) {
+      message =
+          'Atom is covalently saturated. Switch to Dative bond mode to access additional bonding positions.';
+    } else {
+      message = 'Atom is fully bonded';
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
@@ -261,9 +270,11 @@ class _StructureDesignerViewportState
                 // Clicked empty space — cancel guided placement
                 widget.graphModel.atomEditCancelGuidedPlacement();
               case GuidedPlacementApiResult_AtomSaturated(
-                  :final hasAdditionalCapacity
+                  :final hasAdditionalCapacity,
+                  :final dativeIncompatible
                 ):
-                _showSaturationFeedback(hasAdditionalCapacity);
+                _showSaturationFeedback(
+                    hasAdditionalCapacity, dativeIncompatible);
               case GuidedPlacementApiResult_GuidedPlacementStarted():
                 break; // Switched anchor — guides already shown
             }
@@ -291,9 +302,11 @@ class _StructureDesignerViewportState
                 ray.direction,
               );
             case GuidedPlacementApiResult_AtomSaturated(
-                :final hasAdditionalCapacity
+                :final hasAdditionalCapacity,
+                :final dativeIncompatible
               ):
-              _showSaturationFeedback(hasAdditionalCapacity);
+              _showSaturationFeedback(
+                  hasAdditionalCapacity, dativeIncompatible);
             case GuidedPlacementApiResult_GuidedPlacementStarted():
               break; // Guided placement started — guides shown
           }

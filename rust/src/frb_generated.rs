@@ -8048,7 +8048,8 @@ impl SseDecode
             }
             1 => {
                 let mut var_hasAdditionalCapacity = <bool>::sse_decode(deserializer);
-                return crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::AtomSaturated{has_additional_capacity: var_hasAdditionalCapacity};
+                let mut var_dativeIncompatible = <bool>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::AtomSaturated{has_additional_capacity: var_hasAdditionalCapacity, dative_incompatible: var_dativeIncompatible};
             }
             2 => {
                 let mut var_guideCount = <i32>::sse_decode(deserializer);
@@ -11785,8 +11786,9 @@ impl flutter_rust_bridge::IntoDart
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::NoAtomHit => { [0.into_dart()].into_dart() }
-crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::AtomSaturated{has_additional_capacity} => { [1.into_dart(),
-has_additional_capacity.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::AtomSaturated{has_additional_capacity,dative_incompatible} => { [1.into_dart(),
+has_additional_capacity.into_into_dart().into_dart(),
+dative_incompatible.into_into_dart().into_dart()].into_dart() }
 crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::GuidedPlacementStarted{guide_count,anchor_atom_id} => { [2.into_dart(),
 guide_count.into_into_dart().into_dart(),
 anchor_atom_id.into_into_dart().into_dart()].into_dart() }
@@ -13240,7 +13242,8 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         match self {crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::NoAtomHit => { <i32>::sse_encode(0, serializer);  }
-crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::AtomSaturated{has_additional_capacity} => { <i32>::sse_encode(1, serializer); <bool>::sse_encode(has_additional_capacity, serializer);
+crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::AtomSaturated{has_additional_capacity,dative_incompatible} => { <i32>::sse_encode(1, serializer); <bool>::sse_encode(has_additional_capacity, serializer);
+<bool>::sse_encode(dative_incompatible, serializer);
  }
 crate::api::structure_designer::structure_designer_api_types::GuidedPlacementApiResult::GuidedPlacementStarted{guide_count,anchor_atom_id} => { <i32>::sse_encode(2, serializer); <i32>::sse_encode(guide_count, serializer);
 <i32>::sse_encode(anchor_atom_id, serializer);

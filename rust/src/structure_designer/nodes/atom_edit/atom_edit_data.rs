@@ -568,13 +568,19 @@ impl NodeData for AtomEditData {
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
     ) -> NetworkResult {
         let input_val =
-            network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = input_val {
             return input_val;
         }
 
-        if let NetworkResult::Atomic(input_structure) = input_val {
+        let input_structure = match input_val {
+            NetworkResult::Atomic(s) => s,
+            NetworkResult::None => AtomicStructure::new(),
+            _ => AtomicStructure::new(),
+        };
+
+        {
             if self.output_diff {
                 // Output the diff itself for visualization/debugging
                 let mut diff_clone = self.diff.clone();
@@ -670,8 +676,6 @@ impl NodeData for AtomEditData {
             }
 
             NetworkResult::Atomic(result)
-        } else {
-            NetworkResult::Atomic(AtomicStructure::new())
         }
     }
 
@@ -772,7 +776,7 @@ impl NodeData for AtomEditData {
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("molecule".to_string(), (true, None)); // required
+        m.insert("molecule".to_string(), (false, None)); // optional: allows creating from scratch
         m
     }
 }

@@ -61,12 +61,16 @@ class GuidedPlacementApiResult_NoAtomHit extends GuidedPlacementApiResult {
 
 class GuidedPlacementApiResult_AtomSaturated extends GuidedPlacementApiResult {
   const GuidedPlacementApiResult_AtomSaturated(
-      {required this.hasAdditionalCapacity})
+      {required this.hasAdditionalCapacity, required this.dativeIncompatible})
       : super._();
 
   /// True when the atom has lone pairs / empty orbitals
   /// (switch to Dative bond mode to access them).
   final bool hasAdditionalCapacity;
+
+  /// True when has_additional_capacity is true but the new element cannot
+  /// form a dative bond with the anchor (no valid donor-acceptor pair).
+  final bool dativeIncompatible;
 
   /// Create a copy of GuidedPlacementApiResult
   /// with the given fields replaced by the non-null parameter values.
@@ -83,15 +87,18 @@ class GuidedPlacementApiResult_AtomSaturated extends GuidedPlacementApiResult {
         (other.runtimeType == runtimeType &&
             other is GuidedPlacementApiResult_AtomSaturated &&
             (identical(other.hasAdditionalCapacity, hasAdditionalCapacity) ||
-                other.hasAdditionalCapacity == hasAdditionalCapacity));
+                other.hasAdditionalCapacity == hasAdditionalCapacity) &&
+            (identical(other.dativeIncompatible, dativeIncompatible) ||
+                other.dativeIncompatible == dativeIncompatible));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, hasAdditionalCapacity);
+  int get hashCode =>
+      Object.hash(runtimeType, hasAdditionalCapacity, dativeIncompatible);
 
   @override
   String toString() {
-    return 'GuidedPlacementApiResult.atomSaturated(hasAdditionalCapacity: $hasAdditionalCapacity)';
+    return 'GuidedPlacementApiResult.atomSaturated(hasAdditionalCapacity: $hasAdditionalCapacity, dativeIncompatible: $dativeIncompatible)';
   }
 }
 
@@ -103,7 +110,7 @@ abstract mixin class $GuidedPlacementApiResult_AtomSaturatedCopyWith<$Res>
           $Res Function(GuidedPlacementApiResult_AtomSaturated) _then) =
       _$GuidedPlacementApiResult_AtomSaturatedCopyWithImpl;
   @useResult
-  $Res call({bool hasAdditionalCapacity});
+  $Res call({bool hasAdditionalCapacity, bool dativeIncompatible});
 }
 
 /// @nodoc
@@ -119,11 +126,16 @@ class _$GuidedPlacementApiResult_AtomSaturatedCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   $Res call({
     Object? hasAdditionalCapacity = null,
+    Object? dativeIncompatible = null,
   }) {
     return _then(GuidedPlacementApiResult_AtomSaturated(
       hasAdditionalCapacity: null == hasAdditionalCapacity
           ? _self.hasAdditionalCapacity
           : hasAdditionalCapacity // ignore: cast_nullable_to_non_nullable
+              as bool,
+      dativeIncompatible: null == dativeIncompatible
+          ? _self.dativeIncompatible
+          : dativeIncompatible // ignore: cast_nullable_to_non_nullable
               as bool,
     ));
   }
