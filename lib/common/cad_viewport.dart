@@ -118,6 +118,10 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   bool isGadgetDragging = false;
   bool _delegateConsumedDown = false;
 
+  // Coalesced camera drag position — multiple mouse events between frames
+  // are merged so only the last position is processed before each render.
+  Offset? _pendingCameraDragPos;
+
   int draggedGadgetHandle =
       -1; // Relevant when _dragState == ViewportDragState.gadgetDrag
 
@@ -265,10 +269,11 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
       }
       switch (dragState) {
         case ViewportDragState.move:
-          cameraMove(event.localPosition);
-          break;
         case ViewportDragState.rotate:
-          rotateCamera(event.localPosition);
+          // Coalesce camera drag events — just store latest position,
+          // actual update happens once in _handlePersistentFrame before render.
+          _pendingCameraDragPos = event.localPosition;
+          renderingNeeded();
           break;
         case ViewportDragState.defaultDrag:
           defaultDrag(event.localPosition);
@@ -383,7 +388,28 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void _handlePersistentFrame(Duration timeStamp) {
     // Check if widget is still mounted to prevent errors
     if (mounted && _texturePtr != null) {
+      // Process coalesced camera drag before rendering — many mouse events
+      // may have queued up while the previous render was blocking; only the
+      // last position matters.
+      _flushPendingCameraDrag();
       provideTexture(texturePtr: _texturePtr!);
+    }
+  }
+
+  void _flushPendingCameraDrag([ViewportDragState? overrideState]) {
+    final pos = _pendingCameraDragPos;
+    if (pos == null) return;
+    _pendingCameraDragPos = null;
+
+    switch (overrideState ?? dragState) {
+      case ViewportDragState.move:
+        cameraMove(pos);
+        break;
+      case ViewportDragState.rotate:
+        rotateCamera(pos);
+        break;
+      default:
+        break;
     }
   }
 
@@ -587,9 +613,11 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
     dragState = ViewportDragState.noDrag;
 
-    // Refresh after camera drags — was skipped during drag for performance
+    // Flush any coalesced camera move so the final position is applied,
+    // then refresh the full UI state (was skipped during drag for performance).
     if (oldDragState == ViewportDragState.move ||
         oldDragState == ViewportDragState.rotate) {
+      _flushPendingCameraDrag(oldDragState);
       refreshFromKernel();
     }
 
