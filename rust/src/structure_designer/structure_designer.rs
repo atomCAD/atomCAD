@@ -271,6 +271,13 @@ impl StructureDesigner {
         // Track selected node's unit cell
         let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
 
+        // Clear input caches on all displayed nodes (full refresh: upstream may have changed)
+        for node_entry in &network.displayed_node_ids {
+            if let Some(data) = network.get_node_network_data(*node_entry.0) {
+                data.clear_input_cache();
+            }
+        }
+
         // Generate NodeSceneData for each displayed node and populate node_data HashMap
         for node_entry in &network.displayed_node_ids {
             let node_id = *node_entry.0;
@@ -346,6 +353,12 @@ impl StructureDesigner {
                 directly_changed
             } else {
                 let affected = compute_downstream_dependents(network, &changes.data_changed);
+                // Clear input caches on affected nodes (upstream may have changed)
+                for &node_id in &affected {
+                    if let Some(data) = network.get_node_network_data(node_id) {
+                        data.clear_input_cache();
+                    }
+                }
                 self.last_generated_structure_designer_scene
                     .invalidate_cached_nodes(&affected);
                 affected

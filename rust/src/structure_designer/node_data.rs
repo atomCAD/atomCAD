@@ -58,6 +58,11 @@ pub trait NodeData: Any + AsAny {
         Ok(())
     }
 
+    /// Clears any cached input data used for interactive editing performance.
+    /// Called by the refresh system before evaluation when upstream may have changed.
+    /// Default implementation does nothing.
+    fn clear_input_cache(&self) {}
+
     /// Returns metadata for input parameters that cannot be derived from get_text_properties().
     ///
     /// This is used by the `describe` command to provide accurate information about inputs.

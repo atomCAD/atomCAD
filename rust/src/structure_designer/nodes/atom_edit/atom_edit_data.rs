@@ -20,6 +20,7 @@ use crate::util::transform::Transform;
 use glam::f64::{DQuat, DVec3};
 use std::collections::{HashMap, HashSet};
 use std::io;
+use std::sync::Mutex;
 
 use crate::structure_designer::serialization::atom_edit_data_serialization::{
     SerializableAtomEditData, atom_edit_data_to_serializable, serializable_to_atom_edit_data,
@@ -53,6 +54,10 @@ pub struct AtomEditData {
     pub active_tool: AtomEditTool,
     /// Last known diff stats (updated during eval, used by get_subtitle)
     last_stats: Option<crate::crystolecule::atomic_structure_diff::DiffStats>,
+    /// Cached input molecule for interactive editing performance.
+    /// When present, reused instead of re-evaluating upstream.
+    /// Cleared by `clear_input_cache()` when upstream may have changed.
+    cached_input: Mutex<Option<AtomicStructure>>,
 }
 
 impl Default for AtomEditData {
@@ -76,6 +81,7 @@ impl AtomEditData {
                 show_gadget: false,
             }),
             last_stats: None,
+            cached_input: Mutex::new(None),
         }
     }
 
@@ -101,6 +107,7 @@ impl AtomEditData {
                 show_gadget: false,
             }),
             last_stats: None,
+            cached_input: Mutex::new(None),
         }
     }
 
@@ -567,18 +574,26 @@ impl NodeData for AtomEditData {
         decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
     ) -> NetworkResult {
-        let input_val =
-            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
-
-        if let NetworkResult::Error(_) = input_val {
-            return input_val;
-        }
-
-        let input_structure = match input_val {
-            NetworkResult::Atomic(s) => s,
-            NetworkResult::None => AtomicStructure::new(),
-            _ => AtomicStructure::new(),
-        };
+        // Use cached input if available (populated during previous eval,
+        // cleared by clear_input_cache() when upstream may have changed).
+        let input_structure =
+            if let Some(cached) = self.cached_input.lock().ok().and_then(|guard| guard.clone()) {
+                cached
+            } else {
+                let input_val =
+                    network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
+                if let NetworkResult::Error(_) = input_val {
+                    return input_val;
+                }
+                let structure = match input_val {
+                    NetworkResult::Atomic(s) => s,
+                    _ => AtomicStructure::new(),
+                };
+                if let Ok(mut guard) = self.cached_input.lock() {
+                    *guard = Some(structure.clone());
+                }
+                structure
+            };
 
         {
             if self.output_diff {
@@ -701,7 +716,14 @@ impl NodeData for AtomEditData {
                 }),
             },
             last_stats: self.last_stats.clone(),
+            cached_input: Mutex::new(None),
         })
+    }
+
+    fn clear_input_cache(&self) {
+        if let Ok(mut guard) = self.cached_input.lock() {
+            *guard = None;
+        }
     }
 
     fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
