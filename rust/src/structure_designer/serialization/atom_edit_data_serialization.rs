@@ -153,9 +153,9 @@ pub fn serializable_to_atom_edit_data(
         }
     }
 
-    // Restore bonds
+    // Restore bonds (use add_bond_checked to silently deduplicate any legacy duplicates)
     for bond in &serializable.diff.bonds {
-        diff.add_bond(bond.atom_id1, bond.atom_id2, bond.bond_order);
+        diff.add_bond_checked(bond.atom_id1, bond.atom_id2, bond.bond_order);
     }
 
     // Restore anchor positions

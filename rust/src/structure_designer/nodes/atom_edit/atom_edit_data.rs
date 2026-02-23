@@ -153,7 +153,7 @@ impl AtomEditData {
     /// Add a bond between two atoms in the diff.
     pub fn add_bond_in_diff(&mut self, atom_id1: u32, atom_id2: u32, order: u8) {
         self.selection.clear_bonds();
-        self.diff.add_bond(atom_id1, atom_id2, order);
+        self.diff.add_bond_checked(atom_id1, atom_id2, order);
     }
 
     /// Add a bond delete marker between two atoms in the diff.
