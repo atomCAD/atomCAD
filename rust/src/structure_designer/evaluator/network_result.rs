@@ -1,4 +1,8 @@
-use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_constants::ATOM_INFO;
+use crate::crystolecule::atomic_structure::{
+    AtomicStructure, BOND_AROMATIC, BOND_DATIVE, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
+    BOND_SINGLE, BOND_TRIPLE,
+};
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::motif::Motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
@@ -10,6 +14,7 @@ use glam::f64::DVec2;
 use glam::f64::DVec3;
 use glam::i32::IVec2;
 use glam::i32::IVec3;
+use std::collections::BTreeMap;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -511,7 +516,7 @@ impl NetworkResult {
             }
             NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
             NetworkResult::Geometry(_) => "Geometry".to_string(),
-            NetworkResult::Atomic(_) => "Atomic".to_string(),
+            NetworkResult::Atomic(atomic) => format_atomic_display_string(atomic),
             NetworkResult::Motif(_) => "Motif".to_string(),
             NetworkResult::Error(_) => "Error".to_string(),
         }
@@ -644,6 +649,113 @@ impl NetworkResult {
             _ => Err(format!("Unsupported CLI parameter type: {}", data_type)),
         }
     }
+}
+
+fn format_atomic_display_string(atomic: &AtomicStructure) -> String {
+    let num_atoms = atomic.get_num_of_atoms();
+    let num_bonds = atomic.get_num_of_bonds();
+
+    // Molecular formula: count atoms by element, sorted by atomic number
+    let mut element_counts: BTreeMap<i16, usize> = BTreeMap::new();
+    let mut bond_type_counts = [0usize; 8]; // indexed by bond order constant
+    for atom in atomic.atoms_values() {
+        *element_counts.entry(atom.atomic_number).or_insert(0) += 1;
+        for bond in &atom.bonds {
+            let order = bond.bond_order();
+            if (order as usize) < bond_type_counts.len() {
+                bond_type_counts[order as usize] += 1;
+            }
+        }
+    }
+    // Each bond is stored in both atoms, so divide by 2
+    for count in &mut bond_type_counts {
+        *count /= 2;
+    }
+
+    // Build molecular formula string (C, H first if present, then rest alphabetically)
+    let mut formula_parts: Vec<String> = Vec::new();
+    let mut remaining: BTreeMap<&str, usize> = BTreeMap::new();
+    // Collect symbols, prioritize C and H (Hill system)
+    let mut c_count = 0usize;
+    let mut h_count = 0usize;
+    for (&atomic_number, &count) in &element_counts {
+        if let Some(info) = ATOM_INFO.get(&(atomic_number as i32)) {
+            match info.symbol.as_str() {
+                "C" => c_count = count,
+                "H" => h_count = count,
+                _ => {
+                    remaining.insert(&info.symbol, count);
+                }
+            }
+        }
+    }
+    if c_count > 0 {
+        if c_count == 1 {
+            formula_parts.push("C".to_string());
+        } else {
+            formula_parts.push(format!("C{}", c_count));
+        }
+    }
+    if h_count > 0 {
+        if h_count == 1 {
+            formula_parts.push("H".to_string());
+        } else {
+            formula_parts.push(format!("H{}", h_count));
+        }
+    }
+    for (symbol, count) in &remaining {
+        if *count == 1 {
+            formula_parts.push(symbol.to_string());
+        } else {
+            formula_parts.push(format!("{}{}", symbol, count));
+        }
+    }
+    let formula = if formula_parts.is_empty() {
+        String::new()
+    } else {
+        formula_parts.join("")
+    };
+
+    // Bond type breakdown
+    let bond_labels: &[(u8, &str)] = &[
+        (BOND_SINGLE, "single"),
+        (BOND_DOUBLE, "double"),
+        (BOND_TRIPLE, "triple"),
+        (BOND_QUADRUPLE, "quadruple"),
+        (BOND_AROMATIC, "aromatic"),
+        (BOND_DATIVE, "dative"),
+        (BOND_METALLIC, "metallic"),
+    ];
+    let bond_parts: Vec<String> = bond_labels
+        .iter()
+        .filter(|(order, _)| bond_type_counts[*order as usize] > 0)
+        .map(|(order, label)| format!("{} {}", bond_type_counts[*order as usize], label))
+        .collect();
+
+    // Bounding box
+    let mut min_pos = DVec3::new(f64::MAX, f64::MAX, f64::MAX);
+    let mut max_pos = DVec3::new(f64::MIN, f64::MIN, f64::MIN);
+    for atom in atomic.atoms_values() {
+        min_pos = min_pos.min(atom.position);
+        max_pos = max_pos.max(atom.position);
+    }
+
+    let mut lines = Vec::new();
+    lines.push(format!("{} atoms, {} bonds", num_atoms, num_bonds));
+    if !formula.is_empty() {
+        lines.push(formula);
+    }
+    if !bond_parts.is_empty() {
+        lines.push(format!("bonds: {}", bond_parts.join(", ")));
+    }
+    if num_atoms > 0 {
+        let size = max_pos - min_pos;
+        lines.push(format!(
+            "bbox: {:.1} x {:.1} x {:.1} A",
+            size.x, size.y, size.z
+        ));
+    }
+    lines.join("\n")
 }
 
 /// Creates a consistent error message for missing input in node evaluation
