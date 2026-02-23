@@ -316,7 +316,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void _moveCameraAndRender(
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) {
     moveCamera(eye: eye, target: target, up: up);
-    refreshFromKernel();
+    // Skip refreshFromKernel() during camera drags — only camera data changed,
+    // node networks/tools/preferences are untouched. Refresh on drag end instead.
     renderingNeeded();
   }
 
@@ -585,6 +586,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     }
 
     dragState = ViewportDragState.noDrag;
+
+    // Refresh after camera drags — was skipped during drag for performance
+    if (oldDragState == ViewportDragState.move ||
+        oldDragState == ViewportDragState.rotate) {
+      refreshFromKernel();
+    }
 
     if (oldDragState == ViewportDragState.defaultDrag && isGadgetDragging) {
       gadgetEndDrag();
