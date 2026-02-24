@@ -202,18 +202,19 @@ class AddBondPreviewPainter extends CustomPainter {
     final bool useDashed;
     final double lineWidth;
 
-    // Bond order visual styling
+    // Bond order visual styling — colors match 3D tessellation
+    // (atomic_tessellator.rs get_bond_color_inline)
     switch (bondOrder) {
-      case 5: // Aromatic
+      case 5: // Aromatic — amber
         lineColor = Colors.amber;
         useDashed = !snapped;
         lineWidth = 1.5;
-      case 6: // Dative
-        lineColor = Colors.cyan;
+      case 6: // Dative — teal
+        lineColor = Colors.teal;
         useDashed = !snapped;
         lineWidth = 1.5;
-      case 7: // Metallic
-        lineColor = Colors.grey.shade400;
+      case 7: // Metallic — steel blue
+        lineColor = Colors.blueGrey;
         useDashed = !snapped;
         lineWidth = 2.5;
       default:

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::atom_edit_data::*;
 use super::types::*;
 use crate::crystolecule::atomic_structure::BondReference;
@@ -602,18 +604,23 @@ fn change_selected_bonds_order_result_view(
     };
 
     let mut written_pairs: Vec<(u32, u32)> = Vec::new();
+    let mut promoted: HashMap<(i16, u64, u64, u64), u32> = HashMap::new();
     for info in &bond_infos {
         let actual_a = match info.diff_id_a {
             Some(id) => id,
             None => match info.identity_a {
-                Some((an, pos)) => atom_edit_data.diff.add_atom(an, pos),
+                Some((an, pos)) => *promoted
+                    .entry((an, pos.x.to_bits(), pos.y.to_bits(), pos.z.to_bits()))
+                    .or_insert_with(|| atom_edit_data.diff.add_atom(an, pos)),
                 None => continue,
             },
         };
         let actual_b = match info.diff_id_b {
             Some(id) => id,
             None => match info.identity_b {
-                Some((an, pos)) => atom_edit_data.diff.add_atom(an, pos),
+                Some((an, pos)) => *promoted
+                    .entry((an, pos.x.to_bits(), pos.y.to_bits(), pos.z.to_bits()))
+                    .or_insert_with(|| atom_edit_data.diff.add_atom(an, pos)),
                 None => continue,
             },
         };
