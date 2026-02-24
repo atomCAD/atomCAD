@@ -846,3 +846,249 @@ fn test_both_empty() {
     assert_eq!(result.result.get_num_of_bonds(), 0);
     assert_eq!(result.stats, DiffStats::default());
 }
+
+// ============================================================================
+// Group 18: Tracked atom propagation (anchor-based skip)
+// ============================================================================
+
+#[test]
+fn test_unmatched_anchored_atom_skipped() {
+    // An anchored diff atom whose base atom was deleted should NOT be added.
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // C at origin
+
+    let mut diff = AtomicStructure::new_diff();
+    // Tracked atom: anchor at (5,0,0) — no base atom there → should be skipped
+    let d1 = diff.add_atom(6, DVec3::new(5.5, 0.0, 0.0));
+    diff.set_anchor_position(d1, DVec3::new(5.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Only the base C at origin should survive; the tracked atom should be skipped
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+    assert_eq!(result.stats.atoms_added, 0);
+}
+
+#[test]
+fn test_unmatched_non_anchored_atom_still_added() {
+    // A genuine addition (no anchor) that doesn't match any base atom should still be added.
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    let mut diff = AtomicStructure::new_diff();
+    // Genuine addition: no anchor, far from base
+    diff.add_atom(7, DVec3::new(5.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    assert_eq!(result.result.get_num_of_atoms(), 2); // base C + added N
+    assert_eq!(result.stats.atoms_added, 1);
+}
+
+#[test]
+fn test_anchored_atom_matched_still_works() {
+    // An anchored diff atom that DOES match a base atom should work normally (move).
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    let mut diff = AtomicStructure::new_diff();
+    // Move C from (0,0,0) to (0.3,0,0)
+    let d1 = diff.add_atom(6, DVec3::new(0.3, 0.0, 0.0));
+    diff.set_anchor_position(d1, DVec3::new(0.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+    assert_eq!(result.stats.atoms_modified, 1);
+    assert_eq!(result.stats.atoms_added, 0);
+    // Verify atom is at the new position
+    let atom = result.result.atoms_values().next().unwrap();
+    assert!((atom.position - DVec3::new(0.3, 0.0, 0.0)).length() < 1e-10);
+}
+
+#[test]
+fn test_mixed_tracked_and_genuine_additions() {
+    // Mix of tracked atoms (anchored, base gone) and genuine additions (no anchor).
+    // Only genuine additions should survive.
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // C at origin
+
+    let mut diff = AtomicStructure::new_diff();
+    // Tracked atom: anchor at (5,0,0) — base atom gone → should be skipped
+    let tracked = diff.add_atom(6, DVec3::new(5.5, 0.0, 0.0));
+    diff.set_anchor_position(tracked, DVec3::new(5.0, 0.0, 0.0));
+    // Genuine addition: no anchor
+    diff.add_atom(7, DVec3::new(10.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Base C + genuine N = 2; tracked atom skipped
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+    assert_eq!(count_element(&result.result, 6), 1); // base C
+    assert_eq!(count_element(&result.result, 7), 1); // genuine N
+    assert_eq!(result.stats.atoms_added, 1);
+}
+
+#[test]
+fn test_upstream_deletion_propagates_through_chained_diffs() {
+    // Simulates chained atom_edit nodes:
+    // Step 1: base structure has CH4 (C + 4H)
+    // Step 2: upstream diff deletes one H
+    // Step 3: downstream diff has tracked entries for all original atoms
+    // Expected: the deleted H should NOT reappear in the downstream result.
+
+    // Base: CH4
+    let mut base = AtomicStructure::new();
+    let c = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let h1 = base.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
+    let h2 = base.add_atom(1, DVec3::new(-1.0, 0.0, 0.0));
+    let h3 = base.add_atom(1, DVec3::new(0.0, 1.0, 0.0));
+    let h4 = base.add_atom(1, DVec3::new(0.0, -1.0, 0.0));
+    base.add_bond(c, h1, 1);
+    base.add_bond(c, h2, 1);
+    base.add_bond(c, h3, 1);
+    base.add_bond(c, h4, 1);
+
+    // Upstream diff: delete H4
+    let mut upstream_diff = AtomicStructure::new_diff();
+    upstream_diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::new(0.0, -1.0, 0.0));
+
+    let upstream_result = apply_diff(&base, &upstream_diff, DEFAULT_TOLERANCE);
+    assert_eq!(upstream_result.result.get_num_of_atoms(), 4); // C + 3H
+
+    // Downstream diff: has tracked entries for ALL original atoms (including deleted H4)
+    // This simulates what happens when the downstream node was created before the deletion.
+    let mut downstream_diff = AtomicStructure::new_diff();
+    // Tracked entries for surviving atoms (anchored at their positions)
+    let dc = downstream_diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    downstream_diff.set_anchor_position(dc, DVec3::new(0.0, 0.0, 0.0));
+    let dh1 = downstream_diff.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
+    downstream_diff.set_anchor_position(dh1, DVec3::new(1.0, 0.0, 0.0));
+    let dh2 = downstream_diff.add_atom(1, DVec3::new(-1.0, 0.0, 0.0));
+    downstream_diff.set_anchor_position(dh2, DVec3::new(-1.0, 0.0, 0.0));
+    let dh3 = downstream_diff.add_atom(1, DVec3::new(0.0, 1.0, 0.0));
+    downstream_diff.set_anchor_position(dh3, DVec3::new(0.0, 1.0, 0.0));
+    // Tracked entry for deleted H4 — anchor at (0,-1,0) but base no longer has it
+    let dh4 = downstream_diff.add_atom(1, DVec3::new(0.0, -1.0, 0.0));
+    downstream_diff.set_anchor_position(dh4, DVec3::new(0.0, -1.0, 0.0));
+
+    let downstream_result =
+        apply_diff(&upstream_result.result, &downstream_diff, DEFAULT_TOLERANCE);
+
+    // H4 should NOT reappear — the tracked entry should be skipped
+    assert_eq!(downstream_result.result.get_num_of_atoms(), 4); // C + 3H
+    assert_eq!(count_element(&downstream_result.result, 1), 3);
+    assert_eq!(count_element(&downstream_result.result, 6), 1);
+}
+
+#[test]
+fn test_moved_atom_beyond_tolerance_no_stale_copy() {
+    // Simulates: upstream moves atom far away, downstream diff has tracked entry at old position.
+    // The stale tracked atom should be skipped (not duplicated).
+
+    // Base: two atoms
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
+
+    // Upstream diff: move H from (1,0,0) to (5,0,0)
+    let mut upstream_diff = AtomicStructure::new_diff();
+    let uh = upstream_diff.add_atom(1, DVec3::new(5.0, 0.0, 0.0));
+    upstream_diff.set_anchor_position(uh, DVec3::new(1.0, 0.0, 0.0));
+
+    let upstream_result = apply_diff(&base, &upstream_diff, DEFAULT_TOLERANCE);
+    assert_eq!(upstream_result.result.get_num_of_atoms(), 2);
+
+    // Downstream diff: tracked entry for H at OLD position (1,0,0)
+    let mut downstream_diff = AtomicStructure::new_diff();
+    let dc = downstream_diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    downstream_diff.set_anchor_position(dc, DVec3::new(0.0, 0.0, 0.0));
+    let dh = downstream_diff.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
+    downstream_diff.set_anchor_position(dh, DVec3::new(1.0, 0.0, 0.0));
+
+    let downstream_result =
+        apply_diff(&upstream_result.result, &downstream_diff, DEFAULT_TOLERANCE);
+
+    // Should have exactly 2 atoms: C at origin + H at (5,0,0)
+    // The stale tracked H at (1,0,0) should NOT reappear
+    assert_eq!(downstream_result.result.get_num_of_atoms(), 2);
+    assert_eq!(count_element(&downstream_result.result, 1), 1);
+}
+
+#[test]
+fn test_bonds_not_created_for_skipped_tracked_atoms() {
+    // If a tracked atom is skipped, bonds involving it should not be created.
+    let mut base = AtomicStructure::new();
+    let c = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let h = base.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
+    base.add_bond(c, h, 1);
+
+    // Diff: tracked C (matches base), tracked H at wrong position (base H is gone),
+    // plus a bond between them in the diff.
+    let mut diff = AtomicStructure::new_diff();
+    let dc = diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    diff.set_anchor_position(dc, DVec3::new(0.0, 0.0, 0.0));
+    let dh = diff.add_atom(1, DVec3::new(5.0, 0.0, 0.0)); // far from actual base H
+    diff.set_anchor_position(dh, DVec3::new(5.0, 0.0, 0.0)); // anchor also far
+    diff.add_bond(dc, dh, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // C matches, H at (1,0,0) passes through as base passthrough.
+    // Tracked dh at (5,0,0) is skipped (anchor doesn't match any base atom).
+    // The diff bond dc-dh should NOT be created (dh is not in result).
+    assert_eq!(result.result.get_num_of_atoms(), 2); // C + base H passthrough
+    // Only the base bond C-H survives
+    assert_eq!(result.result.get_num_of_bonds(), 1);
+}
+
+#[test]
+fn test_ch3_deletion_propagates_downstream() {
+    // End-to-end scenario matching the reported bug:
+    // Node 1 creates a molecule. Node 2 (downstream) has tracked entries.
+    // CH3 is deleted from node 1. Downstream should reflect the deletion.
+
+    // Node 1 output: ring atom + CH3 (C + 3H)
+    let mut node1_base = AtomicStructure::new();
+    let ring_n = node1_base.add_atom(7, DVec3::new(0.0, 0.0, 0.0)); // ring nitrogen
+    let ch3_c = node1_base.add_atom(6, DVec3::new(1.5, 0.0, 0.0)); // CH3 carbon
+    let ch3_h1 = node1_base.add_atom(1, DVec3::new(2.0, 0.5, 0.0));
+    let ch3_h2 = node1_base.add_atom(1, DVec3::new(2.0, -0.5, 0.0));
+    let ch3_h3 = node1_base.add_atom(1, DVec3::new(2.0, 0.0, 0.5));
+    node1_base.add_bond(ring_n, ch3_c, 1);
+    node1_base.add_bond(ch3_c, ch3_h1, 1);
+    node1_base.add_bond(ch3_c, ch3_h2, 1);
+    node1_base.add_bond(ch3_c, ch3_h3, 1);
+
+    // Node 2 diff: tracked entries for ALL atoms (created when CH3 existed)
+    let mut node2_diff = AtomicStructure::new_diff();
+    let dn = node2_diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    node2_diff.set_anchor_position(dn, DVec3::new(0.0, 0.0, 0.0));
+    let dc = node2_diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    node2_diff.set_anchor_position(dc, DVec3::new(1.5, 0.0, 0.0));
+    let dh1 = node2_diff.add_atom(1, DVec3::new(2.0, 0.5, 0.0));
+    node2_diff.set_anchor_position(dh1, DVec3::new(2.0, 0.5, 0.0));
+    let dh2 = node2_diff.add_atom(1, DVec3::new(2.0, -0.5, 0.0));
+    node2_diff.set_anchor_position(dh2, DVec3::new(2.0, -0.5, 0.0));
+    let dh3 = node2_diff.add_atom(1, DVec3::new(2.0, 0.0, 0.5));
+    node2_diff.set_anchor_position(dh3, DVec3::new(2.0, 0.0, 0.5));
+
+    // Verify: before deletion, node 2 produces full molecule
+    let before = apply_diff(&node1_base, &node2_diff, DEFAULT_TOLERANCE);
+    assert_eq!(before.result.get_num_of_atoms(), 5);
+    assert_eq!(before.result.get_num_of_bonds(), 4);
+
+    // Now simulate CH3 deletion from node 1: remove CH3 atoms
+    let mut node1_after_deletion = AtomicStructure::new();
+    node1_after_deletion.add_atom(7, DVec3::new(0.0, 0.0, 0.0)); // only ring N remains
+
+    // Apply node 2's diff to the post-deletion base
+    let after = apply_diff(&node1_after_deletion, &node2_diff, DEFAULT_TOLERANCE);
+
+    // CH3 atoms should NOT reappear — all tracked entries for CH3 should be skipped
+    assert_eq!(after.result.get_num_of_atoms(), 1); // only ring N
+    assert_eq!(count_element(&after.result, 7), 1);
+    assert_eq!(count_element(&after.result, 6), 0); // CH3 C gone
+    assert_eq!(count_element(&after.result, 1), 0); // CH3 H's gone
+    assert_eq!(after.result.get_num_of_bonds(), 0); // no bonds
+}

@@ -137,6 +137,15 @@ pub fn apply_diff(
             continue;
         }
 
+        if diff.has_anchor_position(diff_id) {
+            // Tracked atom whose base atom no longer exists → skip.
+            // Anchored diff atoms were created to match/modify a specific base atom.
+            // If the anchor doesn't match any base atom, the base was deleted upstream
+            // and this tracked atom should disappear with it.
+            // Only genuinely added atoms (no anchor) survive as additions.
+            continue;
+        }
+
         let result_id = result.add_atom(diff_atom.atomic_number, diff_atom.position);
         provenance
             .sources
