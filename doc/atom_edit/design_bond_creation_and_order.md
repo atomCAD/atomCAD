@@ -115,7 +115,7 @@ Notes:
 
 #[derive(Debug)]
 pub struct AddBondToolState {
-    pub bond_order: u8,  // BOND_SINGLE, BOND_DOUBLE, BOND_TRIPLE (default: BOND_SINGLE)
+    pub bond_order: u8,  // Any valid bond order 1-7 (default: BOND_SINGLE)
     pub interaction_state: AddBondInteractionState,
 }
 
@@ -142,6 +142,7 @@ Replace the single `atom_edit_draw_bond_by_ray` with three pointer event functio
 // In atom_edit_api.rs
 
 /// Pointer down in AddBond tool. Returns whether an atom was hit.
+/// Triggers one refresh if an atom is hit (to show source atom highlight).
 fn add_bond_pointer_down(
     screen_pos: APIVec2,
     ray_origin: APIVec3,
@@ -149,6 +150,7 @@ fn add_bond_pointer_down(
 ) -> bool;
 
 /// Pointer move in AddBond tool. Returns preview state for rubber-band rendering.
+/// NO refresh, NO evaluation — only a ray-cast hit test. See Section 8.
 fn add_bond_pointer_move(
     screen_pos: APIVec2,
     ray_origin: APIVec3,
@@ -156,6 +158,7 @@ fn add_bond_pointer_move(
 ) -> AddBondMoveResult;
 
 /// Pointer up in AddBond tool. Creates bond if released on valid target.
+/// Triggers one refresh to show the new bond (or remove source highlight on cancel).
 fn add_bond_pointer_up(
     ray_origin: APIVec3,
     ray_direction: APIVec3,
@@ -173,10 +176,11 @@ pub struct AddBondMoveResult {
     pub source_atom_pos: Option<APIVec3>,   // world position of source atom
     pub preview_end_pos: Option<APIVec3>,   // world position of cursor or snapped target
     pub snapped_to_atom: bool,              // true if hovering over a valid target
+    pub bond_order: u8,                     // current bond order for visual styling
 }
 ```
 
-Flutter uses this to draw a rubber-band line from `source_atom_pos` to `preview_end_pos`, with distinct styling when `snapped_to_atom` is true (e.g., thicker line, target atom highlight).
+Flutter uses this to draw a rubber-band line from `source_atom_pos` to `preview_end_pos`, with distinct styling based on `snapped_to_atom` and `bond_order` (see Section 7 for visual details).
 
 ### Provenance handling
 
@@ -185,6 +189,15 @@ Same as current `draw_bond_by_ray`: when an atom is hit in result view, resolve 
 ---
 
 ## 4. Bond Order Control in AddBond Tool
+
+### Bond order categories
+
+The 7 user-facing bond orders fall into two tiers based on usage frequency:
+
+| Tier | Orders | Rationale |
+|---|---|---|
+| **Common** (always visible) | Single, Double, Triple | Used in >95% of bond creation. Standard covalent bonds. |
+| **Specialized** (expandable) | Quadruple, Aromatic, Dative, Metallic | Domain-specific. Dative/Metallic relevant to APM; Aromatic to organic chemistry; Quadruple rare but exists. |
 
 ### Tool panel UI
 
@@ -196,15 +209,22 @@ Replace `SizedBox.shrink()` with:
 │  ┌──────┬──────┬──────┐             │
 │  │Single│Double│Triple│             │
 │  └──────┴──────┴──────┘             │
+│  ┌────┬────────┬──────┬────────┐    │
+│  │Quad│Aromatic│Dative│Metallic│    │
+│  └────┴────────┴──────┴────────┘    │
 │                                      │
 │  Drag from atom to atom to bond.     │
 └──────────────────────────────────────┘
 ```
 
-- Segmented control with three options: Single (default), Double, Triple
+- **Two rows of segmented buttons** — common orders on top, specialized below
+- Both rows behave as a single radio group (exactly one selected at a time)
+- Default selection: Single
 - The selected order is stored in `AddBondToolState.bond_order`
-- Keyboard shortcuts 1/2/3 also change the selection (see Section 6)
+- Keyboard shortcuts 1-7 change the selection (see Section 6)
 - Status text shows the current interaction hint
+- The specialized row may use smaller text or abbreviated labels to fit the panel width
+- This is the **`BondOrderSelector` widget** — a shared Flutter widget reused by both tools (see Section 5 panel and Section 8 Phase C)
 
 ### Bond creation uses selected order
 
@@ -221,11 +241,13 @@ atom_edit_data.add_bond_in_diff(source_id, target_id, state.bond_order);
 
 ### Click selected bond to cycle order
 
-When a bond is already selected and the user clicks it again, cycle its order:
+When a bond is already selected and the user clicks it again, cycle its order through the **common** orders only:
 
 ```
 single → double → triple → single → ...
 ```
+
+Cycling is limited to single/double/triple because cycling through all 7 orders would require too many clicks to reach common targets. Specialized orders (quadruple, aromatic, dative, metallic) are set via keyboard shortcuts or the panel buttons.
 
 Implementation location: `default_tool.rs` `pointer_up`, in the `PendingBond` handling path (`default_tool.rs:567-569`). Currently this unconditionally calls `select_result_bond()`. New logic:
 
@@ -236,9 +258,23 @@ else:
     select the bond (existing behavior)
 ```
 
-### Keyboard 1/2/3 to set order directly
+Note: if the bond's current order is a specialized type (e.g. aromatic), clicking it cycles into the common sequence starting at single. This prevents users from getting "stuck" on a specialized order with no way to click out of it.
 
-When one or more bonds are selected in the Default tool, pressing 1/2/3 sets their order to single/double/triple respectively.
+### Keyboard 1-7 to set order directly
+
+When one or more bonds are selected in the Default tool, pressing a number key sets their order directly:
+
+| Key | Bond order |
+|---|---|
+| `1` | Single |
+| `2` | Double |
+| `3` | Triple |
+| `4` | Quadruple |
+| `5` | Aromatic |
+| `6` | Dative |
+| `7` | Metallic |
+
+This provides direct access to all bond orders without cycling, making specialized orders equally accessible to power users.
 
 ### New operation: `change_bond_order`
 
@@ -260,6 +296,8 @@ pub fn change_selected_bonds_order(
 );
 ```
 
+The `new_order` parameter accepts any valid bond order (1-7). Values of 0 (`BOND_DELETED`) or >7 are rejected.
+
 The implementation follows the same pattern as `delete_selected_atoms_and_bonds` for result view:
 1. Look up provenance of both bond endpoints
 2. If either is `BasePassthrough`, promote to diff identity entry
@@ -269,7 +307,7 @@ For diff view: directly modify the bond in the diff.
 
 ### Bond info in panel
 
-When a bond is selected in the Default tool, show its current order in the property panel:
+When a bond is selected in the Default tool, show its current order in the property panel. Use the same two-row layout as the AddBond tool:
 
 ```
 ┌──────────────────────────────────────┐
@@ -278,11 +316,16 @@ When a bond is selected in the Default tool, show its current order in the prope
 │  ┌──────┬──────┬──────┐             │
 │  │Single│Double│Triple│             │
 │  └──────┴──────┴──────┘             │
+│  ┌────┬────────┬──────┬────────┐    │
+│  │Quad│Aromatic│Dative│Metallic│    │
+│  └────┴────────┴──────┴────────┘    │
 │  [Delete Selected]                   │
 └──────────────────────────────────────┘
 ```
 
-The segmented control here is both a display and an edit control — clicking an order button immediately changes the selected bond's order.
+The segmented control here is both a display and an edit control — clicking an order button immediately changes the selected bond's order. When multiple bonds are selected with different orders, no button is highlighted (mixed state); clicking a button sets all selected bonds to that order.
+
+This uses the same **`BondOrderSelector` widget** as the AddBond tool panel (see Section 8 Phase C for widget specification).
 
 ---
 
@@ -303,11 +346,17 @@ Edge case: if B is released during an active drag (between pointer_down and poin
 
 | Key | In AddBond tool | In Default tool (bond selected) |
 |---|---|---|
-| `1` | Set bond order to single | Change selected bond(s) to single |
-| `2` | Set bond order to double | Change selected bond(s) to double |
-| `3` | Set bond order to triple | Change selected bond(s) to triple |
+| `1` | Set bond order to Single | Change selected bond(s) to Single |
+| `2` | Set bond order to Double | Change selected bond(s) to Double |
+| `3` | Set bond order to Triple | Change selected bond(s) to Triple |
+| `4` | Set bond order to Quadruple | Change selected bond(s) to Quadruple |
+| `5` | Set bond order to Aromatic | Change selected bond(s) to Aromatic |
+| `6` | Set bond order to Dative | Change selected bond(s) to Dative |
+| `7` | Set bond order to Metallic | Change selected bond(s) to Metallic |
 
-These keys are handled in Flutter's key event handler and routed to the appropriate Rust API call based on the active tool and selection state.
+Keys 1-3 cover common workflows. Keys 4-7 provide power-user access to specialized bond types without navigating the panel.
+
+These keys are handled in Flutter's key event handler and routed to the appropriate Rust API call based on the active tool and selection state. When no bond is selected in the Default tool, number keys are no-ops (they don't conflict with other shortcuts).
 
 ---
 
@@ -317,15 +366,40 @@ These keys are handled in Flutter's key event handler and routed to the appropri
 
 During AddBond dragging, Flutter draws a line overlay on the 3D viewport:
 
+**Snap state styling:**
+
 | State | Visual |
 |---|---|
 | `Dragging`, no snap target | Thin dashed line from source atom to cursor position |
 | `Dragging`, snapped to target | Solid line from source atom to target atom, target atom highlighted |
-| Bond order 1 | Single line |
-| Bond order 2 | Double line (two parallel lines) |
-| Bond order 3 | Triple line (three parallel lines) |
+
+**Bond order styling (applied to the rubber-band line):**
+
+| Bond order | Visual | Color hint |
+|---|---|---|
+| Single (1) | Single line | Default (white/light gray) |
+| Double (2) | Two parallel lines | Default |
+| Triple (3) | Three parallel lines | Default |
+| Quadruple (4) | Four parallel lines | Default |
+| Aromatic (5) | Solid + dashed parallel lines | Distinct color (e.g., amber) |
+| Dative (6) | Arrow line (→ from source to target) | Distinct color (e.g., cyan) |
+| Metallic (7) | Thick single line | Distinct color (e.g., silver/gray) |
+
+The visual style for aromatic/dative/metallic should match how these bonds are rendered in the 3D view (ball-and-stick mode), providing consistency between the preview and the final result.
 
 The line is drawn in screen space after projecting `source_atom_pos` and `preview_end_pos` from the `AddBondMoveResult`. This is a 2D overlay on the viewport, not a 3D rendered object.
+
+The `AddBondMoveResult` includes the active `bond_order` so Flutter can select the correct visual style:
+
+```rust
+pub struct AddBondMoveResult {
+    pub is_dragging: bool,
+    pub source_atom_pos: Option<APIVec3>,
+    pub preview_end_pos: Option<APIVec3>,
+    pub snapped_to_atom: bool,
+    pub bond_order: u8,  // current bond order setting for visual styling
+}
+```
 
 ### Source atom highlight
 
@@ -333,7 +407,62 @@ When dragging starts (transition from Pending to Dragging), the source atom shou
 
 ---
 
-## 8. Implementation Plan
+## 8. Performance: No Per-Frame Evaluation
+
+### Contrast with atom dragging
+
+Atom dragging (Default tool `ScreenPlaneDragging`) is the existing interactive performance benchmark. It mutates atom positions in the diff **every frame**, which requires per-frame:
+
+1. `drag_selected_by_delta()` → mutates diff atom positions
+2. `mark_node_data_changed()` → flags atom_edit node dirty
+3. `mark_skip_downstream()` → skips downstream BFS + re-evaluation
+4. `refresh_structure_designer_auto()` → triggers partial refresh
+5. `eval()` with `cached_input` → skips upstream re-evaluation, but runs `apply_diff()` on the cached input molecule
+6. Full tessellation → rebuild atom + bond impostor meshes
+7. GPU mesh upload
+
+The optimizations (`skip_downstream` + `cached_input`) make this fast enough, but `apply_diff` + tessellation + GPU upload still run every frame.
+
+### Why rubber-band preview needs none of this
+
+During an AddBond drag, **nothing in the diff changes per frame**. No atoms move, no bonds are created — the bond is only created on `pointer_up`. The only thing changing frame-to-frame is:
+
+- The cursor position (known to Flutter already)
+- Whether the cursor is hovering over a target atom (requires a ray-cast hit test)
+
+The rubber-band line is a **2D Flutter overlay** (`CustomPainter`), not a 3D rendered object. It requires zero Rust-side evaluation, zero tessellation, zero GPU mesh updates per frame.
+
+### Per-frame data flow
+
+| Phase | Rust work | Evaluation? | Tessellation? |
+|---|---|---|---|
+| **Drag start** (threshold crossed) | Mark source atom as `Marked`, store world position | Once | Once |
+| **Each `pointer_move`** | Ray-cast for snap target (spatial grid lookup, ~microseconds). Return `AddBondMoveResult` with positions. | **No** | **No** |
+| **Snap target changes** | Update `preview_target` in state. Flutter handles highlight as 2D overlay. | **No** | **No** |
+| **`pointer_up` on atom** | Create bond in diff. Normal partial refresh. | Once | Once |
+| **`pointer_up` on empty** | Cancel. Unmark source atom. | Once | Once |
+
+### API implementation requirement
+
+The `add_bond_pointer_move()` API function must:
+
+1. Ray-cast against the current scene's spatial grid (lightweight hit test)
+2. Update the `preview_target` in `AddBondInteractionState::Dragging`
+3. Return `AddBondMoveResult` with source position, cursor/target position, snap state
+4. **NOT** call `mark_node_data_changed()`
+5. **NOT** call `refresh_structure_designer_auto()`
+
+This matches the pattern of `default_tool_pointer_down()` (line 450 of `atom_edit_api.rs`) which also performs a hit test without triggering a refresh.
+
+Flutter then projects the 3D positions to screen space and draws the rubber-band line via `CustomPainter` — entirely on the Flutter side with no Rust re-evaluation.
+
+### Target atom highlighting
+
+Rather than marking the target atom via `AtomDisplayState` (which would require evaluation + tessellation on each snap change), the target highlight is rendered as a **2D overlay** by Flutter — e.g., a circle or ring drawn at the projected screen position of the target atom. This keeps snap-target changes completely evaluation-free.
+
+---
+
+## 9. Implementation Plan
 
 ### Phase A: Rust core (bond order infrastructure)
 
@@ -366,36 +495,47 @@ When dragging starts (transition from Pending to Dragging), the source atom shou
 
 ### Phase C: Flutter UI
 
-6. **AddBond tool panel** in `atom_edit_editor.dart`
-   - Bond order segmented control (Single / Double / Triple)
-   - Status text ("Drag from atom to atom")
-   - Wire up to `set_add_bond_order` API
+6. **`BondOrderSelector` shared widget** in `atom_edit_editor.dart`
+   - Reusable `StatelessWidget` used by both the AddBond tool panel and the Default tool bond info panel
+   - Two-row layout: common row (Single/Double/Triple) + specialized row (Quad/Aromatic/Dative/Metallic)
+   - Acts as a single radio group across both rows
+   - Props:
+     - `selectedOrder: int?` — currently selected bond order (1-7), or `null` for mixed/no-selection state
+     - `onOrderChanged: void Function(int order)` — callback when user clicks a button
+   - When `selectedOrder` is `null`, no button is highlighted (mixed state for multi-bond selection)
+   - Clicking a button calls `onOrderChanged` with the corresponding bond order constant
 
-7. **Default tool panel: bond info** in `atom_edit_editor.dart`
-   - When bond(s) selected: show count, current order, order segmented control
-   - Wire up segmented control to `change_selected_bonds_order` API
+7. **AddBond tool panel** in `atom_edit_editor.dart`
+   - Replace `SizedBox.shrink()` with `BondOrderSelector` + status text
+   - `selectedOrder` bound to `AddBondToolState.bond_order` from Rust
+   - `onOrderChanged` calls `set_add_bond_order` API
 
-8. **Pointer event routing for AddBond tool** in Flutter viewport
+8. **Default tool panel: bond info** in `atom_edit_editor.dart`
+   - When bond(s) selected: show count, current order label, and `BondOrderSelector`
+   - `selectedOrder` derived from selected bonds (single value if all same, `null` if mixed)
+   - `onOrderChanged` calls `change_selected_bonds_order` API
+
+9. **Pointer event routing for AddBond tool** in Flutter viewport
    - Route left pointer down/move/up to `add_bond_pointer_down/move/up` when AddBond tool is active
    - Draw rubber-band line overlay from `AddBondMoveResult`
 
-9. **Keyboard shortcuts** in Flutter
-   - Hold B: spring-loaded tool activation with deferred release during drag
-   - 1/2/3: bond order shortcuts routed by active tool and selection state
+10. **Keyboard shortcuts** in Flutter
+    - Hold B: spring-loaded tool activation with deferred release during drag
+    - 1-7: bond order shortcuts routed by active tool and selection state
 
 ### Phase D: FRB codegen & testing
 
-10. **Run `flutter_rust_bridge_codegen generate`** after API changes
+11. **Run `flutter_rust_bridge_codegen generate`** after API changes
 
-11. **Tests**
-    - Rust unit tests for `change_bond_order` operation (single bond, selected bonds, provenance promotion)
-    - Rust unit tests for AddBond drag state machine (idle → pending → dragging → create/cancel)
-    - Rust unit tests for bond order cycling in Default tool
+12. **Tests**
+    - Rust unit tests for `change_bond_order` operation (all 7 orders, selected bonds, provenance promotion, reject order 0/invalid)
+    - Rust unit tests for AddBond drag state machine (idle → pending → dragging → create/cancel, with various bond orders)
+    - Rust unit tests for bond order cycling in Default tool (single→double→triple→single, and specialized-order-enters-cycle-at-single)
     - Verify existing mutation tests still pass (bond creation with order 1 should be unchanged)
 
 ---
 
-## 9. Key Files
+## 10. Key Files
 
 ### Files to modify
 
