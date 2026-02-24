@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
@@ -102,6 +103,62 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
   }
 }
 
+/// Delegate that handles primary mouse button events for the atom_edit AddBond
+/// tool. Implements drag-to-bond interaction: pointer down on atom, drag to
+/// target atom, release to create bond.
+class _AtomEditAddBondDelegate implements PrimaryPointerDelegate {
+  final _StructureDesignerViewportState _viewport;
+
+  _AtomEditAddBondDelegate(this._viewport);
+
+  @override
+  bool onPrimaryDown(Offset pos) {
+    final ray = _viewport.getRayFromPointerPos(pos);
+    final hit = atom_edit_api.addBondPointerDown(
+      screenPos: offsetToApiVec2(pos),
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    if (hit) {
+      _viewport.renderingNeeded();
+    }
+    return true;
+  }
+
+  @override
+  bool onPrimaryMove(Offset pos) {
+    final ray = _viewport.getRayFromPointerPos(pos);
+    final result = atom_edit_api.addBondPointerMove(
+      screenPos: offsetToApiVec2(pos),
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    _viewport._setAddBondPreview(result);
+    return true;
+  }
+
+  @override
+  bool onPrimaryUp(Offset pos) {
+    final ray = _viewport.getRayFromPointerPos(pos);
+    atom_edit_api.addBondPointerUp(
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    _viewport._setAddBondPreview(null);
+    _viewport.refreshFromKernel();
+    _viewport.renderingNeeded();
+    return true;
+  }
+
+  @override
+  void onPrimaryCancel() {
+    atom_edit_api.addBondPointerCancel();
+    _viewport._setAddBondPreview(null);
+    _viewport.refreshFromKernel();
+    _viewport.renderingNeeded();
+  }
+}
+
 /// Custom painter that draws the marquee selection rectangle.
 class MarqueePainter extends CustomPainter {
   final Rect rect;
@@ -125,6 +182,142 @@ class MarqueePainter extends CustomPainter {
   bool shouldRepaint(MarqueePainter oldDelegate) => rect != oldDelegate.rect;
 }
 
+/// Custom painter that draws the rubber-band preview line during AddBond drag.
+class AddBondPreviewPainter extends CustomPainter {
+  final Offset startPos;
+  final Offset endPos;
+  final bool snapped;
+  final int bondOrder;
+
+  AddBondPreviewPainter({
+    required this.startPos,
+    required this.endPos,
+    required this.snapped,
+    required this.bondOrder,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Color lineColor;
+    final bool useDashed;
+    final double lineWidth;
+
+    // Bond order visual styling
+    switch (bondOrder) {
+      case 5: // Aromatic
+        lineColor = Colors.amber;
+        useDashed = !snapped;
+        lineWidth = 1.5;
+      case 6: // Dative
+        lineColor = Colors.cyan;
+        useDashed = !snapped;
+        lineWidth = 1.5;
+      case 7: // Metallic
+        lineColor = Colors.grey.shade400;
+        useDashed = !snapped;
+        lineWidth = 2.5;
+      default:
+        lineColor = snapped ? Colors.white : Colors.white70;
+        useDashed = !snapped;
+        lineWidth = 1.5;
+    }
+
+    final paint = Paint()
+      ..color = lineColor
+      ..strokeWidth = lineWidth
+      ..style = PaintingStyle.stroke;
+
+    if (useDashed) {
+      // Draw dashed line
+      final dx = endPos.dx - startPos.dx;
+      final dy = endPos.dy - startPos.dy;
+      final length = sqrt(dx * dx + dy * dy);
+      if (length < 1.0) return;
+      final nx = dx / length;
+      final ny = dy / length;
+      const dashLen = 6.0;
+      const gapLen = 4.0;
+      var d = 0.0;
+      while (d < length) {
+        final segEnd = min(d + dashLen, length);
+        canvas.drawLine(
+          Offset(startPos.dx + nx * d, startPos.dy + ny * d),
+          Offset(startPos.dx + nx * segEnd, startPos.dy + ny * segEnd),
+          paint,
+        );
+        d += dashLen + gapLen;
+      }
+    } else {
+      // Draw solid line(s) based on bond order
+      final dx = endPos.dx - startPos.dx;
+      final dy = endPos.dy - startPos.dy;
+      final length = sqrt(dx * dx + dy * dy);
+      if (length < 1.0) return;
+
+      // Perpendicular direction for parallel line offsets
+      final px = -dy / length;
+      final py = dx / length;
+
+      final lineCount = bondOrder <= 4 ? bondOrder : 1;
+      const spacing = 3.0;
+      final totalWidth = (lineCount - 1) * spacing;
+
+      for (int i = 0; i < lineCount; i++) {
+        final offset = -totalWidth / 2 + i * spacing;
+        canvas.drawLine(
+          Offset(startPos.dx + px * offset, startPos.dy + py * offset),
+          Offset(endPos.dx + px * offset, endPos.dy + py * offset),
+          paint,
+        );
+      }
+
+      // Dative arrow head
+      if (bondOrder == 6 && length > 12) {
+        final arrowSize = 8.0;
+        final tipX = endPos.dx;
+        final tipY = endPos.dy;
+        final nx = dx / length;
+        final ny = dy / length;
+        final path = Path()
+          ..moveTo(tipX, tipY)
+          ..lineTo(tipX - nx * arrowSize + px * arrowSize * 0.5,
+              tipY - ny * arrowSize + py * arrowSize * 0.5)
+          ..lineTo(tipX - nx * arrowSize - px * arrowSize * 0.5,
+              tipY - ny * arrowSize - py * arrowSize * 0.5)
+          ..close();
+        canvas.drawPath(
+            path,
+            Paint()
+              ..color = lineColor
+              ..style = PaintingStyle.fill);
+      }
+    }
+
+    // Draw snap target highlight circle
+    if (snapped) {
+      final highlightPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+      canvas.drawCircle(endPos, 8.0, highlightPaint);
+    }
+
+    // Draw source atom highlight circle
+    final sourcePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(startPos, 6.0, sourcePaint);
+  }
+
+  @override
+  bool shouldRepaint(AddBondPreviewPainter oldDelegate) =>
+      startPos != oldDelegate.startPos ||
+      endPos != oldDelegate.endPos ||
+      snapped != oldDelegate.snapped ||
+      bondOrder != oldDelegate.bondOrder;
+}
+
 class StructureDesignerViewport extends CadViewport {
   final StructureDesignerModel graphModel;
 
@@ -141,8 +334,15 @@ class StructureDesignerViewport extends CadViewport {
 class _StructureDesignerViewportState
     extends CadViewportState<StructureDesignerViewport> {
   _AtomEditDefaultDelegate? _atomEditDefaultDelegate;
+  _AtomEditAddBondDelegate? _atomEditAddBondDelegate;
   Rect? _marqueeRect;
+  APIAddBondMoveResult? _addBondPreview;
   final FocusNode _focusNode = FocusNode();
+
+  // Spring-loaded B key state
+  APIAtomEditTool? _springLoadedPreviousTool;
+  bool _springLoadedActive = false;
+  bool _springLoadedDeferRelease = false;
 
   @override
   void dispose() {
@@ -154,7 +354,47 @@ class _StructureDesignerViewportState
     setState(() => _marqueeRect = rect);
   }
 
+  void _setAddBondPreview(APIAddBondMoveResult? result) {
+    setState(() => _addBondPreview = result);
+  }
+
+  /// Project a 3D world position to 2D screen coordinates.
+  Offset? _projectWorldToScreen(double wx, double wy, double wz) {
+    final camera = common_api.getCamera();
+    final ct = getCameraTransform(camera);
+    if (ct == null || camera == null) return null;
+
+    final dx = wx - ct.eye.x;
+    final dy = wy - ct.eye.y;
+    final dz = wz - ct.eye.z;
+
+    final xView = dx * ct.right.x + dy * ct.right.y + dz * ct.right.z;
+    final yView = dx * ct.up.x + dy * ct.up.y + dz * ct.up.z;
+    final zView = dx * ct.forward.x + dy * ct.forward.y + dz * ct.forward.z;
+
+    if (camera.orthographic) {
+      final orthoHalfWidth =
+          camera.orthoHalfHeight * (viewportWidth / viewportHeight);
+      final sx = (xView / orthoHalfWidth) * (viewportWidth * 0.5) +
+          viewportWidth * 0.5;
+      final sy = -(yView / camera.orthoHalfHeight) * (viewportHeight * 0.5) +
+          viewportHeight * 0.5;
+      return Offset(sx, sy);
+    } else {
+      if (zView <= 0.001) return null; // Behind camera
+      final d = viewportHeight * 0.5 / tan(camera.fovy * 0.5);
+      final sx = (xView / zView) * d + viewportWidth * 0.5;
+      final sy = -(yView / zView) * d + viewportHeight * 0.5;
+      return Offset(sx, sy);
+    }
+  }
+
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (!widget.graphModel.isNodeTypeActive("atom_edit")) {
+      return KeyEventResult.ignored;
+    }
+
+    // Escape: cancel guided placement
     if (event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.escape &&
         atom_edit_api.atomEditIsInGuidedPlacement()) {
@@ -162,7 +402,79 @@ class _StructureDesignerViewportState
       renderingNeeded();
       return KeyEventResult.handled;
     }
+
+    // B key: spring-loaded AddBond tool activation
+    if (event.logicalKey == LogicalKeyboardKey.keyB) {
+      if (event is KeyDownEvent && !_springLoadedActive) {
+        final currentTool = atom_edit_api.getActiveAtomEditTool();
+        if (currentTool != null && currentTool != APIAtomEditTool.addBond) {
+          _springLoadedPreviousTool = currentTool;
+          _springLoadedActive = true;
+          _springLoadedDeferRelease = false;
+          widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.addBond);
+          return KeyEventResult.handled;
+        }
+      } else if (event is KeyUpEvent && _springLoadedActive) {
+        // Check if there's an active drag — if so, defer tool switch
+        if (_addBondPreview != null && _addBondPreview!.isDragging) {
+          _springLoadedDeferRelease = true;
+        } else {
+          _completeSpringLoadedRelease();
+        }
+        return KeyEventResult.handled;
+      }
+    }
+
+    // Number keys 1-7: bond order shortcuts
+    if (event is KeyDownEvent) {
+      final int? bondOrder = _bondOrderFromKey(event.logicalKey);
+      if (bondOrder != null) {
+        final tool = atom_edit_api.getActiveAtomEditTool();
+        if (tool == APIAtomEditTool.addBond) {
+          atom_edit_api.setAddBondOrder(order: bondOrder);
+          widget.graphModel.refreshFromKernel();
+          return KeyEventResult.handled;
+        } else if (tool == APIAtomEditTool.default_) {
+          // Only act if bonds are selected
+          final selectedNode = widget.graphModel.nodeNetworkView?.nodes.entries
+              .where((entry) => entry.value.selected)
+              .map((entry) => entry.value)
+              .firstOrNull;
+          if (selectedNode != null) {
+            final data =
+                structure_designer_api.getAtomEditData(nodeId: selectedNode.id);
+            if (data != null && data.hasSelectedBonds) {
+              atom_edit_api.changeSelectedBondsOrder(newOrder: bondOrder);
+              widget.graphModel.refreshFromKernel();
+              renderingNeeded();
+              return KeyEventResult.handled;
+            }
+          }
+        }
+      }
+    }
+
     return KeyEventResult.ignored;
+  }
+
+  int? _bondOrderFromKey(LogicalKeyboardKey key) {
+    if (key == LogicalKeyboardKey.digit1) return 1;
+    if (key == LogicalKeyboardKey.digit2) return 2;
+    if (key == LogicalKeyboardKey.digit3) return 3;
+    if (key == LogicalKeyboardKey.digit4) return 4;
+    if (key == LogicalKeyboardKey.digit5) return 5;
+    if (key == LogicalKeyboardKey.digit6) return 6;
+    if (key == LogicalKeyboardKey.digit7) return 7;
+    return null;
+  }
+
+  void _completeSpringLoadedRelease() {
+    if (_springLoadedPreviousTool != null) {
+      widget.graphModel.setActiveAtomEditTool(_springLoadedPreviousTool!);
+    }
+    _springLoadedActive = false;
+    _springLoadedPreviousTool = null;
+    _springLoadedDeferRelease = false;
   }
 
   void _onHover(PointerHoverEvent event) {
@@ -186,13 +498,26 @@ class _StructureDesignerViewportState
 
   @override
   PrimaryPointerDelegate? get primaryPointerDelegate {
-    if (!widget.graphModel.isNodeTypeActive("atom_edit") ||
-        atom_edit_api.getActiveAtomEditTool() != APIAtomEditTool.default_) {
+    if (!widget.graphModel.isNodeTypeActive("atom_edit")) {
       _atomEditDefaultDelegate = null;
+      _atomEditAddBondDelegate = null;
       return null;
     }
-    _atomEditDefaultDelegate ??= _AtomEditDefaultDelegate(this);
-    return _atomEditDefaultDelegate;
+
+    final tool = atom_edit_api.getActiveAtomEditTool();
+    if (tool == APIAtomEditTool.default_) {
+      _atomEditAddBondDelegate = null;
+      _atomEditDefaultDelegate ??= _AtomEditDefaultDelegate(this);
+      return _atomEditDefaultDelegate;
+    } else if (tool == APIAtomEditTool.addBond) {
+      _atomEditDefaultDelegate = null;
+      _atomEditAddBondDelegate ??= _AtomEditAddBondDelegate(this);
+      return _atomEditAddBondDelegate;
+    }
+
+    _atomEditDefaultDelegate = null;
+    _atomEditAddBondDelegate = null;
+    return null;
   }
 
   @override
@@ -217,8 +542,7 @@ class _StructureDesignerViewportState
   void _showSaturationFeedback(
       bool hasAdditionalCapacity, bool dativeIncompatible) {
     final String message;
-    final inDativeMode =
-        widget.graphModel.bondMode == APIBondMode.dative;
+    final inDativeMode = widget.graphModel.bondMode == APIBondMode.dative;
     if (hasAdditionalCapacity && inDativeMode && dativeIncompatible) {
       message = 'No dative bond possible between these elements.';
     } else if (hasAdditionalCapacity && !inDativeMode && !dativeIncompatible) {
@@ -312,12 +636,8 @@ class _StructureDesignerViewportState
           }
         }
       }
-    } else if (activeAtomEditTool == APIAtomEditTool.addBond) {
-      widget.graphModel.atomEditDrawBondByRay(
-        ray.start,
-        ray.direction,
-      );
     }
+    // AddBond tool is handled by _AtomEditAddBondDelegate (not through onDefaultClick)
     // Default tool is handled by _AtomEditDefaultDelegate (not through onDefaultClick)
   }
 
@@ -369,10 +689,48 @@ class _StructureDesignerViewportState
   @override
   void refreshFromKernel() {
     widget.graphModel.refreshFromKernel();
+    // Complete deferred spring-loaded release after drag finishes
+    if (_springLoadedDeferRelease) {
+      _completeSpringLoadedRelease();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Build rubber-band overlay if dragging in AddBond tool
+    Widget? addBondOverlay;
+    if (_addBondPreview != null &&
+        _addBondPreview!.isDragging &&
+        _addBondPreview!.hasSourcePos) {
+      final startScreen = _projectWorldToScreen(
+        _addBondPreview!.sourceAtomX,
+        _addBondPreview!.sourceAtomY,
+        _addBondPreview!.sourceAtomZ,
+      );
+      Offset? endScreen;
+      if (_addBondPreview!.hasPreviewEnd) {
+        endScreen = _projectWorldToScreen(
+          _addBondPreview!.previewEndX,
+          _addBondPreview!.previewEndY,
+          _addBondPreview!.previewEndZ,
+        );
+      }
+      if (startScreen != null && endScreen != null) {
+        addBondOverlay = Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: AddBondPreviewPainter(
+                startPos: startScreen,
+                endPos: endScreen,
+                snapped: _addBondPreview!.snappedToAtom,
+                bondOrder: _addBondPreview!.bondOrder,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
@@ -390,6 +748,7 @@ class _StructureDesignerViewportState
                   ),
                 ),
               ),
+            if (addBondOverlay != null) addBondOverlay,
           ],
         ),
       ),

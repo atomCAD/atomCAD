@@ -2132,6 +2132,39 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                 let has_selection =
                     atomic_structure.map_or(false, |structure| structure.has_selection());
 
+                // Compute selected bond info
+                let selected_bond_count = atom_edit_data.selection.selected_bonds.len() as u32;
+                let has_selected_bonds = selected_bond_count > 0;
+                let selected_bond_order = if has_selected_bonds {
+                    // Look up bond orders from the result structure
+                    let mut unique_order: Option<u8> = None;
+                    let mut mixed = false;
+                    if let Some(structure) = atomic_structure {
+                        for bond_ref in &atom_edit_data.selection.selected_bonds {
+                            if let Some(atom) = structure.get_atom(bond_ref.atom_id1) {
+                                if let Some(bond) = atom
+                                    .bonds
+                                    .iter()
+                                    .find(|b| b.other_atom_id() == bond_ref.atom_id2)
+                                {
+                                    let order = bond.bond_order();
+                                    match unique_order {
+                                        None => unique_order = Some(order),
+                                        Some(prev) if prev != order => {
+                                            mixed = true;
+                                            break;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if mixed { None } else { unique_order }
+                } else {
+                    None
+                };
+
                 // Read diff stats and measurement from eval cache
                 let eval_cache = cad_instance
                     .structure_designer
@@ -2177,6 +2210,9 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     add_atom_tool_atomic_number,
                     is_in_guided_placement,
                     has_selected_atoms,
+                    has_selected_bonds,
+                    selected_bond_count,
+                    selected_bond_order,
                     has_selection,
                     selection_transform: atom_edit_data
                         .selection

@@ -114,6 +114,11 @@ class APIAtomEditData {
   final int? addAtomToolAtomicNumber;
   final bool isInGuidedPlacement;
   final bool hasSelectedAtoms;
+  final bool hasSelectedBonds;
+  final int selectedBondCount;
+
+  /// Bond order of selected bonds (1-7), or None if no bonds selected or mixed orders.
+  final int? selectedBondOrder;
   final bool hasSelection;
   final APITransform? selectionTransform;
   final bool outputDiff;
@@ -131,6 +136,9 @@ class APIAtomEditData {
     this.addAtomToolAtomicNumber,
     required this.isInGuidedPlacement,
     required this.hasSelectedAtoms,
+    required this.hasSelectedBonds,
+    required this.selectedBondCount,
+    this.selectedBondOrder,
     required this.hasSelection,
     this.selectionTransform,
     required this.outputDiff,
@@ -150,6 +158,9 @@ class APIAtomEditData {
       addAtomToolAtomicNumber.hashCode ^
       isInGuidedPlacement.hashCode ^
       hasSelectedAtoms.hashCode ^
+      hasSelectedBonds.hashCode ^
+      selectedBondCount.hashCode ^
+      selectedBondOrder.hashCode ^
       hasSelection.hashCode ^
       selectionTransform.hashCode ^
       outputDiff.hashCode ^
@@ -171,6 +182,9 @@ class APIAtomEditData {
           addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
           isInGuidedPlacement == other.isInGuidedPlacement &&
           hasSelectedAtoms == other.hasSelectedAtoms &&
+          hasSelectedBonds == other.hasSelectedBonds &&
+          selectedBondCount == other.selectedBondCount &&
+          selectedBondOrder == other.selectedBondOrder &&
           hasSelection == other.hasSelection &&
           selectionTransform == other.selectionTransform &&
           outputDiff == other.outputDiff &&

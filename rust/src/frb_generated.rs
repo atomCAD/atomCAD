@@ -7089,6 +7089,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_addAtomToolAtomicNumber = <Option<i16>>::sse_decode(deserializer);
         let mut var_isInGuidedPlacement = <bool>::sse_decode(deserializer);
         let mut var_hasSelectedAtoms = <bool>::sse_decode(deserializer);
+        let mut var_hasSelectedBonds = <bool>::sse_decode(deserializer);
+        let mut var_selectedBondCount = <u32>::sse_decode(deserializer);
+        let mut var_selectedBondOrder = <Option<u8>>::sse_decode(deserializer);
         let mut var_hasSelection = <bool>::sse_decode(deserializer);
         let mut var_selectionTransform =
             <Option<crate::api::common_api_types::APITransform>>::sse_decode(deserializer);
@@ -7108,6 +7111,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             add_atom_tool_atomic_number: var_addAtomToolAtomicNumber,
             is_in_guided_placement: var_isInGuidedPlacement,
             has_selected_atoms: var_hasSelectedAtoms,
+            has_selected_bonds: var_hasSelectedBonds,
+            selected_bond_count: var_selectedBondCount,
+            selected_bond_order: var_selectedBondOrder,
             has_selection: var_hasSelection,
             selection_transform: var_selectionTransform,
             output_diff: var_outputDiff,
@@ -9385,6 +9391,17 @@ impl SseDecode for Option<u64> {
     }
 }
 
+impl SseDecode for Option<u8> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u8>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<usize> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10046,6 +10063,9 @@ impl flutter_rust_bridge::IntoDart
                 .into_dart(),
             self.is_in_guided_placement.into_into_dart().into_dart(),
             self.has_selected_atoms.into_into_dart().into_dart(),
+            self.has_selected_bonds.into_into_dart().into_dart(),
+            self.selected_bond_count.into_into_dart().into_dart(),
+            self.selected_bond_order.into_into_dart().into_dart(),
             self.has_selection.into_into_dart().into_dart(),
             self.selection_transform.into_into_dart().into_dart(),
             self.output_diff.into_into_dart().into_dart(),
@@ -12762,6 +12782,9 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <Option<i16>>::sse_encode(self.add_atom_tool_atomic_number, serializer);
         <bool>::sse_encode(self.is_in_guided_placement, serializer);
         <bool>::sse_encode(self.has_selected_atoms, serializer);
+        <bool>::sse_encode(self.has_selected_bonds, serializer);
+        <u32>::sse_encode(self.selected_bond_count, serializer);
+        <Option<u8>>::sse_encode(self.selected_bond_order, serializer);
         <bool>::sse_encode(self.has_selection, serializer);
         <Option<crate::api::common_api_types::APITransform>>::sse_encode(
             self.selection_transform,
@@ -14561,6 +14584,16 @@ impl SseEncode for Option<u64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <u64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<u8> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u8>::sse_encode(value, serializer);
         }
     }
 }

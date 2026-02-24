@@ -365,6 +365,10 @@ pub struct APIAtomEditData {
     pub add_atom_tool_atomic_number: Option<i16>,
     pub is_in_guided_placement: bool,
     pub has_selected_atoms: bool,
+    pub has_selected_bonds: bool,
+    pub selected_bond_count: u32,
+    /// Bond order of selected bonds (1-7), or None if no bonds selected or mixed orders.
+    pub selected_bond_order: Option<u8>,
     pub has_selection: bool,
     pub selection_transform: Option<APITransform>,
     pub output_diff: bool,

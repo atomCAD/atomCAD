@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
+    as atom_edit_api;
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
@@ -247,11 +249,17 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   Widget _buildToolSpecificUI() {
     switch (_stagedData!.activeTool) {
       case APIAtomEditTool.default_:
-        return _buildDefaultToolUI();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDefaultToolUI(),
+            _buildDefaultToolBondInfo(),
+          ],
+        );
       case APIAtomEditTool.addAtom:
         return _buildAddAtomToolUI();
       case APIAtomEditTool.addBond:
-        return const SizedBox.shrink();
+        return _buildAddBondToolUI();
     }
   }
 
@@ -633,6 +641,83 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     );
   }
 
+  Widget _buildAddBondToolUI() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.medium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Add Bond Settings',
+                style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: AppSpacing.medium),
+            BondOrderSelector(
+              selectedOrder: _stagedData!.bondToolBondOrder,
+              onOrderChanged: (int order) {
+                atom_edit_api.setAddBondOrder(order: order);
+                widget.model.refreshFromKernel();
+              },
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Text(
+              'Drag from atom to atom to bond.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultToolBondInfo() {
+    if (!_stagedData!.hasSelectedBonds) return const SizedBox.shrink();
+
+    final count = _stagedData!.selectedBondCount;
+    final order = _stagedData!.selectedBondOrder;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.large),
+        Card(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          color: Colors.grey[50],
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.medium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Selected: $count bond${count == 1 ? '' : 's'}',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                if (order != null) ...[
+                  const SizedBox(height: AppSpacing.small),
+                  Text(
+                    'Order: ${BondOrderSelector.labelForOrder(order)}',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.medium),
+                BondOrderSelector(
+                  selectedOrder: order,
+                  onOrderChanged: (int newOrder) {
+                    atom_edit_api.changeSelectedBondsOrder(newOrder: newOrder);
+                    widget.model.refreshFromKernel();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildToolButton(
     BuildContext context,
     APIAtomEditTool tool,
@@ -661,6 +746,114 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Bond order constants matching Rust InlineBond values.
+const int BOND_SINGLE = 1;
+const int BOND_DOUBLE = 2;
+const int BOND_TRIPLE = 3;
+const int BOND_QUADRUPLE = 4;
+const int BOND_AROMATIC = 5;
+const int BOND_DATIVE = 6;
+const int BOND_METALLIC = 7;
+
+/// Shared widget for selecting bond order. Used by both AddBond tool panel
+/// and Default tool bond info panel. Two rows: common (Single/Double/Triple)
+/// and specialized (Quad/Aromatic/Dative/Metallic), acting as a single radio group.
+class BondOrderSelector extends StatelessWidget {
+  /// Currently selected bond order (1-7), or null for mixed/no-selection state.
+  final int? selectedOrder;
+
+  /// Callback when user clicks a bond order button.
+  final void Function(int order) onOrderChanged;
+
+  const BondOrderSelector({
+    super.key,
+    required this.selectedOrder,
+    required this.onOrderChanged,
+  });
+
+  static String labelForOrder(int order) {
+    switch (order) {
+      case BOND_SINGLE:
+        return 'Single';
+      case BOND_DOUBLE:
+        return 'Double';
+      case BOND_TRIPLE:
+        return 'Triple';
+      case BOND_QUADRUPLE:
+        return 'Quad';
+      case BOND_AROMATIC:
+        return 'Aromatic';
+      case BOND_DATIVE:
+        return 'Dative';
+      case BOND_METALLIC:
+        return 'Metallic';
+      default:
+        return '?';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Common bond orders (row 1)
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment<int>(value: BOND_SINGLE, label: Text('Single')),
+            ButtonSegment<int>(value: BOND_DOUBLE, label: Text('Double')),
+            ButtonSegment<int>(value: BOND_TRIPLE, label: Text('Triple')),
+          ],
+          selected: selectedOrder != null &&
+                  selectedOrder! >= BOND_SINGLE &&
+                  selectedOrder! <= BOND_TRIPLE
+              ? {selectedOrder!}
+              : {},
+          emptySelectionAllowed: true,
+          onSelectionChanged: (Set<int> selection) {
+            if (selection.isNotEmpty) {
+              onOrderChanged(selection.first);
+            }
+          },
+          style: ButtonStyle(
+            visualDensity: AppSpacing.compactVerticalDensity,
+            textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+            padding:
+                WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 4)),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        // Specialized bond orders (row 2)
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment<int>(value: BOND_QUADRUPLE, label: Text('Quad')),
+            ButtonSegment<int>(value: BOND_AROMATIC, label: Text('Arom')),
+            ButtonSegment<int>(value: BOND_DATIVE, label: Text('Dative')),
+            ButtonSegment<int>(value: BOND_METALLIC, label: Text('Metal')),
+          ],
+          selected: selectedOrder != null &&
+                  selectedOrder! >= BOND_QUADRUPLE &&
+                  selectedOrder! <= BOND_METALLIC
+              ? {selectedOrder!}
+              : {},
+          emptySelectionAllowed: true,
+          onSelectionChanged: (Set<int> selection) {
+            if (selection.isNotEmpty) {
+              onOrderChanged(selection.first);
+            }
+          },
+          style: ButtonStyle(
+            visualDensity: AppSpacing.compactVerticalDensity,
+            textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 11)),
+            padding:
+                WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 2)),
+          ),
+        ),
+      ],
     );
   }
 }

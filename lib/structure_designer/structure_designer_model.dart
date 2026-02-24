@@ -801,15 +801,8 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void atomEditDrawBondByRay(
-      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
-    if (nodeNetworkView == null) return;
-    atom_edit_api.atomEditDrawBondByRay(
-      rayStart: vector3ToApiVec3(rayStart),
-      rayDir: vector3ToApiVec3(rayDir),
-    );
-    refreshFromKernel();
-  }
+  // Note: atomEditDrawBondByRay removed — replaced by drag-to-bond interaction
+  // in _AtomEditAddBondDelegate (structure_designer_viewport.dart).
 
   void atomEditDeleteSelected() {
     if (nodeNetworkView == null) return;

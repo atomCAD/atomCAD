@@ -7936,8 +7936,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIAtomEditData dco_decode_api_atom_edit_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return APIAtomEditData(
       activeTool: dco_decode_api_atom_edit_tool(arr[0]),
       bondToolLastAtomId: dco_decode_opt_box_autoadd_u_32(arr[1]),
@@ -7946,14 +7946,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       addAtomToolAtomicNumber: dco_decode_opt_box_autoadd_i_16(arr[4]),
       isInGuidedPlacement: dco_decode_bool(arr[5]),
       hasSelectedAtoms: dco_decode_bool(arr[6]),
-      hasSelection: dco_decode_bool(arr[7]),
-      selectionTransform: dco_decode_opt_box_autoadd_api_transform(arr[8]),
-      outputDiff: dco_decode_bool(arr[9]),
-      showAnchorArrows: dco_decode_bool(arr[10]),
-      includeBaseBondsInDiff: dco_decode_bool(arr[11]),
-      showGadget: dco_decode_bool(arr[12]),
-      diffStats: dco_decode_api_diff_stats(arr[13]),
-      measurement: dco_decode_opt_box_autoadd_api_measurement(arr[14]),
+      hasSelectedBonds: dco_decode_bool(arr[7]),
+      selectedBondCount: dco_decode_u_32(arr[8]),
+      selectedBondOrder: dco_decode_opt_box_autoadd_u_8(arr[9]),
+      hasSelection: dco_decode_bool(arr[10]),
+      selectionTransform: dco_decode_opt_box_autoadd_api_transform(arr[11]),
+      outputDiff: dco_decode_bool(arr[12]),
+      showAnchorArrows: dco_decode_bool(arr[13]),
+      includeBaseBondsInDiff: dco_decode_bool(arr[14]),
+      showGadget: dco_decode_bool(arr[15]),
+      diffStats: dco_decode_api_diff_stats(arr[16]),
+      measurement: dco_decode_opt_box_autoadd_api_measurement(arr[17]),
     );
   }
 
@@ -9167,6 +9170,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   BigInt dco_decode_box_autoadd_usize(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_usize(raw);
@@ -9874,6 +9883,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_8(raw);
+  }
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_usize(raw);
@@ -10196,6 +10211,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_opt_box_autoadd_i_16(deserializer);
     var var_isInGuidedPlacement = sse_decode_bool(deserializer);
     var var_hasSelectedAtoms = sse_decode_bool(deserializer);
+    var var_hasSelectedBonds = sse_decode_bool(deserializer);
+    var var_selectedBondCount = sse_decode_u_32(deserializer);
+    var var_selectedBondOrder = sse_decode_opt_box_autoadd_u_8(deserializer);
     var var_hasSelection = sse_decode_bool(deserializer);
     var var_selectionTransform =
         sse_decode_opt_box_autoadd_api_transform(deserializer);
@@ -10214,6 +10232,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         addAtomToolAtomicNumber: var_addAtomToolAtomicNumber,
         isInGuidedPlacement: var_isInGuidedPlacement,
         hasSelectedAtoms: var_hasSelectedAtoms,
+        hasSelectedBonds: var_hasSelectedBonds,
+        selectedBondCount: var_selectedBondCount,
+        selectedBondOrder: var_selectedBondOrder,
         hasSelection: var_hasSelection,
         selectionTransform: var_selectionTransform,
         outputDiff: var_outputDiff,
@@ -11416,6 +11437,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_8(deserializer));
+  }
+
+  @protected
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_usize(deserializer));
@@ -12526,6 +12553,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_8(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -12850,6 +12888,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_16(self.addAtomToolAtomicNumber, serializer);
     sse_encode_bool(self.isInGuidedPlacement, serializer);
     sse_encode_bool(self.hasSelectedAtoms, serializer);
+    sse_encode_bool(self.hasSelectedBonds, serializer);
+    sse_encode_u_32(self.selectedBondCount, serializer);
+    sse_encode_opt_box_autoadd_u_8(self.selectedBondOrder, serializer);
     sse_encode_bool(self.hasSelection, serializer);
     sse_encode_opt_box_autoadd_api_transform(
         self.selectionTransform, serializer);
@@ -13874,6 +13915,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(self, serializer);
@@ -14827,6 +14874,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_u_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_8(self, serializer);
     }
   }
 
