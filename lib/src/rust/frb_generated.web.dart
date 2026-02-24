@@ -45,6 +45,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  APIAddBondMoveResult dco_decode_api_add_bond_move_result(dynamic raw);
+
+  @protected
   APIAtomCutData dco_decode_api_atom_cut_data(dynamic raw);
 
   @protected
@@ -823,6 +826,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  APIAddBondMoveResult sse_decode_api_add_bond_move_result(
+      SseDeserializer deserializer);
 
   @protected
   APIAtomCutData sse_decode_api_atom_cut_data(SseDeserializer deserializer);
@@ -1730,6 +1737,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_add_bond_move_result(
+      APIAddBondMoveResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_atom_cut_data(

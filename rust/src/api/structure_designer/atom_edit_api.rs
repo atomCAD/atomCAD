@@ -7,6 +7,7 @@ use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::SelectModifier;
+use crate::api::structure_designer::structure_designer_api_types::APIAddBondMoveResult;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode;
 use crate::api::structure_designer::structure_designer_api_types::PointerDownResult;
@@ -66,17 +67,133 @@ pub fn atom_edit_add_atom_by_ray(
     }
 }
 
+// --- AddBond tool pointer event API ---
+
+/// Pointer down in AddBond tool. Returns whether an atom was hit.
+/// Triggers one refresh if an atom is hit (to show source atom highlight).
 #[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_draw_bond_by_ray(ray_start: APIVec3, ray_dir: APIVec3) {
+pub fn add_bond_pointer_down(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = atom_edit::add_bond_pointer_down(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                );
+                if result {
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                result
+            },
+            false,
+        )
+    }
+}
+
+/// Pointer move in AddBond tool. Returns preview state for rubber-band rendering.
+/// NO refresh, NO evaluation — only a ray-cast hit test.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_bond_pointer_move(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+) -> APIAddBondMoveResult {
+    let no_op = APIAddBondMoveResult {
+        is_dragging: false,
+        source_atom_x: 0.0,
+        source_atom_y: 0.0,
+        source_atom_z: 0.0,
+        has_source_pos: false,
+        preview_end_x: 0.0,
+        preview_end_y: 0.0,
+        preview_end_z: 0.0,
+        has_preview_end: false,
+        snapped_to_atom: false,
+        bond_order: 1,
+    };
+
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = atom_edit::add_bond_pointer_move(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                );
+                // Convert from internal AddBondMoveResult to API type
+                APIAddBondMoveResult {
+                    is_dragging: result.is_dragging,
+                    source_atom_x: result.source_atom_pos.map_or(0.0, |p| p.x),
+                    source_atom_y: result.source_atom_pos.map_or(0.0, |p| p.y),
+                    source_atom_z: result.source_atom_pos.map_or(0.0, |p| p.z),
+                    has_source_pos: result.source_atom_pos.is_some(),
+                    preview_end_x: result.preview_end_pos.map_or(0.0, |p| p.x),
+                    preview_end_y: result.preview_end_pos.map_or(0.0, |p| p.y),
+                    preview_end_z: result.preview_end_pos.map_or(0.0, |p| p.z),
+                    has_preview_end: result.preview_end_pos.is_some(),
+                    snapped_to_atom: result.snapped_to_atom,
+                    bond_order: result.bond_order,
+                }
+            },
+            no_op,
+        )
+    }
+}
+
+/// Pointer up in AddBond tool. Creates bond if released on valid target.
+/// Triggers one refresh to show the new bond (or remove source highlight on cancel).
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_bond_pointer_up(ray_origin: APIVec3, ray_direction: APIVec3) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = atom_edit::add_bond_pointer_up(
+                    &mut cad_instance.structure_designer,
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                );
+                refresh_structure_designer_auto(cad_instance);
+                result
+            },
+            false,
+        )
+    }
+}
+
+/// Cancel AddBond tool interaction (reset to Idle).
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_bond_pointer_cancel() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let ray_start_dvec3 = from_api_vec3(&ray_start);
-            let ray_dir_dvec3 = from_api_vec3(&ray_dir);
-            atom_edit::draw_bond_by_ray(
-                &mut cad_instance.structure_designer,
-                &ray_start_dvec3,
-                &ray_dir_dvec3,
-            );
+            atom_edit::add_bond_reset_interaction(&mut cad_instance.structure_designer);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Set the bond order for the AddBond tool (1-7).
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_add_bond_order(order: u8) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            atom_edit::set_add_bond_order(&mut cad_instance.structure_designer, order);
+        });
+    }
+}
+
+/// Change the order of all selected bonds (in Default tool).
+#[flutter_rust_bridge::frb(sync)]
+pub fn change_selected_bonds_order(new_order: u8) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            atom_edit::change_selected_bonds_order(&mut cad_instance.structure_designer, new_order);
             refresh_structure_designer_auto(cad_instance);
         });
     }

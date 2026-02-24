@@ -24,7 +24,10 @@ fn test_distance_simple() {
     let result = compute_measurement(&atoms, &structure).unwrap();
     match result {
         MeasurementResult::Distance { distance } => {
-            assert!((distance - 1.54).abs() < 1e-10, "Expected 1.54, got {distance}");
+            assert!(
+                (distance - 1.54).abs() < 1e-10,
+                "Expected 1.54, got {distance}"
+            );
         }
         _ => panic!("Expected Distance, got {result:?}"),
     }
@@ -39,7 +42,10 @@ fn test_distance_3d() {
     match result {
         MeasurementResult::Distance { distance } => {
             let expected = (9.0 + 16.0_f64).sqrt(); // sqrt(25) = 5.0
-            assert!((distance - expected).abs() < 1e-10, "Expected {expected}, got {distance}");
+            assert!(
+                (distance - expected).abs() < 1e-10,
+                "Expected {expected}, got {distance}"
+            );
         }
         _ => panic!("Expected Distance"),
     }
@@ -409,7 +415,10 @@ fn test_angle_triangle_all_bonded() {
         MeasurementResult::Angle { vertex_index, .. } => {
             // All atoms have degree 2, so geometric fallback is used.
             // Most distant pair: 0 and 1 (distance 2.0), so vertex = 2
-            assert_eq!(vertex_index, 2, "Vertex should be atom 2 (geometric fallback)");
+            assert_eq!(
+                vertex_index, 2,
+                "Vertex should be atom 2 (geometric fallback)"
+            );
         }
         _ => panic!("Expected Angle"),
     }

@@ -28,11 +28,43 @@ void atomEditAddAtomByRay(
             rayStart: rayStart,
             rayDir: rayDir);
 
-void atomEditDrawBondByRay(
-        {required APIVec3 rayStart, required APIVec3 rayDir}) =>
-    RustLib.instance.api
-        .crateApiStructureDesignerAtomEditApiAtomEditDrawBondByRay(
-            rayStart: rayStart, rayDir: rayDir);
+/// Pointer down in AddBond tool. Returns whether an atom was hit.
+/// Triggers one refresh if an atom is hit (to show source atom highlight).
+bool addBondPointerDown(
+        {required APIVec2 screenPos,
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection}) =>
+    RustLib.instance.api.crateApiStructureDesignerAtomEditApiAddBondPointerDown(
+        screenPos: screenPos, rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+/// Pointer move in AddBond tool. Returns preview state for rubber-band rendering.
+/// NO refresh, NO evaluation — only a ray-cast hit test.
+APIAddBondMoveResult addBondPointerMove(
+        {required APIVec2 screenPos,
+        required APIVec3 rayOrigin,
+        required APIVec3 rayDirection}) =>
+    RustLib.instance.api.crateApiStructureDesignerAtomEditApiAddBondPointerMove(
+        screenPos: screenPos, rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+/// Pointer up in AddBond tool. Creates bond if released on valid target.
+/// Triggers one refresh to show the new bond (or remove source highlight on cancel).
+bool addBondPointerUp(
+        {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
+    RustLib.instance.api.crateApiStructureDesignerAtomEditApiAddBondPointerUp(
+        rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+/// Cancel AddBond tool interaction (reset to Idle).
+void addBondPointerCancel() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAddBondPointerCancel();
+
+/// Set the bond order for the AddBond tool (1-7).
+void setAddBondOrder({required int order}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiSetAddBondOrder(order: order);
+
+/// Change the order of all selected bonds (in Default tool).
+void changeSelectedBondsOrder({required int newOrder}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiChangeSelectedBondsOrder(
+        newOrder: newOrder);
 
 void atomEditDeleteSelected() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditDeleteSelected();

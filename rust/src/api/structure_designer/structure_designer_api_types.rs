@@ -324,6 +324,31 @@ pub enum PointerUpResult {
     NothingHappened,
 }
 
+// --- AddBond tool pointer event result types ---
+
+/// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
+/// the rubber-band preview line as a 2D overlay.
+pub struct APIAddBondMoveResult {
+    /// True if we are in the Dragging state (rubber-band should be drawn).
+    pub is_dragging: bool,
+    /// World position of the source atom (start of the rubber-band).
+    pub source_atom_x: f64,
+    pub source_atom_y: f64,
+    pub source_atom_z: f64,
+    /// True if source_atom position is valid.
+    pub has_source_pos: bool,
+    /// World position of the preview end point.
+    pub preview_end_x: f64,
+    pub preview_end_y: f64,
+    pub preview_end_z: f64,
+    /// True if preview_end position is valid.
+    pub has_preview_end: bool,
+    /// True if the cursor is hovering over a valid snap target atom.
+    pub snapped_to_atom: bool,
+    /// Current bond order setting, for visual styling of the preview line.
+    pub bond_order: u8,
+}
+
 pub struct APIDiffStats {
     pub atoms_added: u32,
     pub atoms_deleted: u32,
@@ -335,6 +360,7 @@ pub struct APIDiffStats {
 pub struct APIAtomEditData {
     pub active_tool: APIAtomEditTool,
     pub bond_tool_last_atom_id: Option<u32>,
+    pub bond_tool_bond_order: u8,
     pub replacement_atomic_number: Option<i16>,
     pub add_atom_tool_atomic_number: Option<i16>,
     pub is_in_guided_placement: bool,

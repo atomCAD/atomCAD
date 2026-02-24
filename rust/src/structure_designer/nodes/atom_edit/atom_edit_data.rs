@@ -200,13 +200,11 @@ impl AtomEditData {
             APIAtomEditTool::AddAtom => {
                 AtomEditTool::AddAtom(AddAtomToolState::Idle { atomic_number: 6 })
             }
-            APIAtomEditTool::AddBond => {
-                AtomEditTool::AddBond(AddBondToolState {
-                    bond_order: crate::crystolecule::atomic_structure::BOND_SINGLE,
-                    interaction_state: AddBondInteractionState::default(),
-                    last_atom_id: None,
-                })
-            }
+            APIAtomEditTool::AddBond => AtomEditTool::AddBond(AddBondToolState {
+                bond_order: crate::crystolecule::atomic_structure::BOND_SINGLE,
+                interaction_state: AddBondInteractionState::default(),
+                last_atom_id: None,
+            }),
         }
     }
 
@@ -580,24 +578,28 @@ impl NodeData for AtomEditData {
     ) -> NetworkResult {
         // Use cached input if available (populated during previous eval,
         // cleared by clear_input_cache() when upstream may have changed).
-        let input_structure =
-            if let Some(cached) = self.cached_input.lock().ok().and_then(|guard| guard.clone()) {
-                cached
-            } else {
-                let input_val =
-                    network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
-                if let NetworkResult::Error(_) = input_val {
-                    return input_val;
-                }
-                let structure = match input_val {
-                    NetworkResult::Atomic(s) => s,
-                    _ => AtomicStructure::new(),
-                };
-                if let Ok(mut guard) = self.cached_input.lock() {
-                    *guard = Some(structure.clone());
-                }
-                structure
+        let input_structure = if let Some(cached) = self
+            .cached_input
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+        {
+            cached
+        } else {
+            let input_val =
+                network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
+            if let NetworkResult::Error(_) = input_val {
+                return input_val;
+            }
+            let structure = match input_val {
+                NetworkResult::Atomic(s) => s,
+                _ => AtomicStructure::new(),
             };
+            if let Ok(mut guard) = self.cached_input.lock() {
+                *guard = Some(structure.clone());
+            }
+            structure
+        };
 
         {
             if self.output_diff {
@@ -666,12 +668,19 @@ impl NodeData for AtomEditData {
                     result.decorator_mut().selection_transform = Some(transform.clone());
                 }
 
-                // Mark AddBond tool's last atom if applicable
+                // Mark AddBond tool's source atom if in Pending or Dragging state
                 if let AtomEditTool::AddBond(state) = &self.active_tool {
-                    if let Some(last_diff_id) = state.last_atom_id {
+                    let mark_diff_id = match &state.interaction_state {
+                        AddBondInteractionState::Pending { hit_atom_id, .. } => Some(*hit_atom_id),
+                        AddBondInteractionState::Dragging { source_atom_id, .. } => {
+                            Some(*source_atom_id)
+                        }
+                        AddBondInteractionState::Idle => state.last_atom_id,
+                    };
+                    if let Some(diff_id) = mark_diff_id {
                         // Map diff atom ID to result atom ID
                         if let Some(&result_id) =
-                            diff_result.provenance.diff_to_result.get(&last_diff_id)
+                            diff_result.provenance.diff_to_result.get(&diff_id)
                         {
                             result.decorator_mut().set_atom_display_state(
                                 result_id,

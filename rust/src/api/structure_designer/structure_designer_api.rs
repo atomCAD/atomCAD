@@ -1,5 +1,4 @@
 use super::structure_designer_api_types::APIAtomFillData;
-use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
@@ -10,6 +9,7 @@ use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIMapData;
+use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
@@ -2112,12 +2112,15 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     replacement_atomic_number,
                     add_atom_tool_atomic_number,
                     bond_tool_last_atom_id,
+                    bond_tool_bond_order,
                 ) = match &atom_edit_data.active_tool {
                     AtomEditTool::Default(state) => {
-                        (Some(state.replacement_atomic_number), None, None)
+                        (Some(state.replacement_atomic_number), None, None, 0)
                     }
-                    AtomEditTool::AddAtom(state) => (None, Some(state.atomic_number()), None),
-                    AtomEditTool::AddBond(state) => (None, None, state.last_atom_id),
+                    AtomEditTool::AddAtom(state) => (None, Some(state.atomic_number()), None, 0),
+                    AtomEditTool::AddBond(state) => {
+                        (None, None, state.last_atom_id, state.bond_order)
+                    }
                 };
 
                 // Read selection state from the evaluated result (correct for visible atoms)
@@ -2152,11 +2155,8 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     });
 
                 // Compute measurement from selected atoms (2-4 atoms)
-                let measurement = compute_selection_measurement(
-                    atom_edit_data,
-                    atomic_structure,
-                    eval_cache,
-                );
+                let measurement =
+                    compute_selection_measurement(atom_edit_data, atomic_structure, eval_cache);
 
                 let is_in_guided_placement = matches!(
                     &atom_edit_data.active_tool,
@@ -2172,6 +2172,7 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                 Some(APIAtomEditData {
                     active_tool: atom_edit_data.get_active_tool(),
                     bond_tool_last_atom_id,
+                    bond_tool_bond_order,
                     replacement_atomic_number,
                     add_atom_tool_atomic_number,
                     is_in_guided_placement,
@@ -2261,9 +2262,7 @@ fn compute_selection_measurement(
     let measurement = compute_measurement(&selected_atoms, result_structure)?;
     Some(match measurement {
         MeasurementResult::Distance { distance } => APIMeasurement::Distance { distance },
-        MeasurementResult::Angle { angle_degrees, .. } => {
-            APIMeasurement::Angle { angle_degrees }
-        }
+        MeasurementResult::Angle { angle_degrees, .. } => APIMeasurement::Angle { angle_degrees },
         MeasurementResult::Dihedral { angle_degrees, .. } => {
             APIMeasurement::Dihedral { angle_degrees }
         }

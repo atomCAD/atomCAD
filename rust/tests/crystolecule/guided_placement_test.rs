@@ -1948,7 +1948,10 @@ fn is_dative_bond_true_when_anchor_at_covalent_max() {
         BondMode::Dative,
         BondLengthMode::Uff,
     );
-    assert!(result.is_dative_bond, "Bond from N(3 bonds) to B in dative mode should be dative");
+    assert!(
+        result.is_dative_bond,
+        "Bond from N(3 bonds) to B in dative mode should be dative"
+    );
 }
 
 #[test]
@@ -1971,7 +1974,10 @@ fn is_dative_bond_false_in_covalent_mode() {
         BondMode::Covalent,
         BondLengthMode::Uff,
     );
-    assert!(!result.is_dative_bond, "Covalent mode should never produce dative bond");
+    assert!(
+        !result.is_dative_bond,
+        "Covalent mode should never produce dative bond"
+    );
 }
 
 #[test]
@@ -1993,7 +1999,10 @@ fn is_dative_bond_false_when_anchor_below_covalent_max() {
         BondMode::Dative,
         BondLengthMode::Uff,
     );
-    assert!(!result.is_dative_bond, "N with 1 bond is below covalent max, bond is covalent");
+    assert!(
+        !result.is_dative_bond,
+        "N with 1 bond is below covalent max, bond is covalent"
+    );
 }
 
 // ============================================================================
@@ -2005,24 +2014,32 @@ fn detect_hybridization_boron_with_dative_bond_is_sp3() {
     // Boron with 1 dative bond (from N) → should detect as sp3
     use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
     let (structure, boron_id) = make_structure_with_bond_orders(
-        5, // B
+        5,                                              // B
         &[(7, DVec3::new(1.5, 0.0, 0.0), BOND_DATIVE)], // N bonded with dative
     );
 
     let hyb = detect_hybridization(&structure, boron_id, None);
-    assert_eq!(hyb, Hybridization::Sp3, "Boron with dative bond should be sp3");
+    assert_eq!(
+        hyb,
+        Hybridization::Sp3,
+        "Boron with dative bond should be sp3"
+    );
 }
 
 #[test]
 fn detect_hybridization_boron_without_dative_bond_is_sp2() {
     // Boron with 1 single bond (no dative) → should detect as sp2
     let (structure, boron_id) = make_structure_with_neighbors(
-        5, // B
+        5,                                 // B
         &[(7, DVec3::new(1.5, 0.0, 0.0))], // N bonded with single
     );
 
     let hyb = detect_hybridization(&structure, boron_id, None);
-    assert_eq!(hyb, Hybridization::Sp2, "Boron with single bond should be sp2");
+    assert_eq!(
+        hyb,
+        Hybridization::Sp2,
+        "Boron with single bond should be sp2"
+    );
 }
 
 #[test]
@@ -2056,7 +2073,10 @@ fn boron_with_dative_bond_shows_3_guide_dots() {
         BondLengthMode::Uff,
     );
     // sp3 with 1 bond → 3 remaining slots
-    assert_eq!(result.remaining_slots, 3, "B(sp3 via dative) with 1 bond should have 3 slots");
+    assert_eq!(
+        result.remaining_slots, 3,
+        "B(sp3 via dative) with 1 bond should have 3 slots"
+    );
     assert_eq!(result.hybridization, Hybridization::Sp3);
 }
 
@@ -2077,6 +2097,9 @@ fn boron_without_dative_bond_shows_2_guide_dots() {
         BondLengthMode::Uff,
     );
     // sp2 with 1 bond → 2 remaining slots
-    assert_eq!(result.remaining_slots, 2, "B(sp2) with 1 bond should have 2 slots");
+    assert_eq!(
+        result.remaining_slots, 2,
+        "B(sp2) with 1 bond should have 2 slots"
+    );
     assert_eq!(result.hybridization, Hybridization::Sp2);
 }

@@ -11,6 +11,80 @@ part 'structure_designer_api_types.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
 
+/// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
+/// the rubber-band preview line as a 2D overlay.
+class APIAddBondMoveResult {
+  /// True if we are in the Dragging state (rubber-band should be drawn).
+  final bool isDragging;
+
+  /// World position of the source atom (start of the rubber-band).
+  final double sourceAtomX;
+  final double sourceAtomY;
+  final double sourceAtomZ;
+
+  /// True if source_atom position is valid.
+  final bool hasSourcePos;
+
+  /// World position of the preview end point.
+  final double previewEndX;
+  final double previewEndY;
+  final double previewEndZ;
+
+  /// True if preview_end position is valid.
+  final bool hasPreviewEnd;
+
+  /// True if the cursor is hovering over a valid snap target atom.
+  final bool snappedToAtom;
+
+  /// Current bond order setting, for visual styling of the preview line.
+  final int bondOrder;
+
+  const APIAddBondMoveResult({
+    required this.isDragging,
+    required this.sourceAtomX,
+    required this.sourceAtomY,
+    required this.sourceAtomZ,
+    required this.hasSourcePos,
+    required this.previewEndX,
+    required this.previewEndY,
+    required this.previewEndZ,
+    required this.hasPreviewEnd,
+    required this.snappedToAtom,
+    required this.bondOrder,
+  });
+
+  @override
+  int get hashCode =>
+      isDragging.hashCode ^
+      sourceAtomX.hashCode ^
+      sourceAtomY.hashCode ^
+      sourceAtomZ.hashCode ^
+      hasSourcePos.hashCode ^
+      previewEndX.hashCode ^
+      previewEndY.hashCode ^
+      previewEndZ.hashCode ^
+      hasPreviewEnd.hashCode ^
+      snappedToAtom.hashCode ^
+      bondOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAddBondMoveResult &&
+          runtimeType == other.runtimeType &&
+          isDragging == other.isDragging &&
+          sourceAtomX == other.sourceAtomX &&
+          sourceAtomY == other.sourceAtomY &&
+          sourceAtomZ == other.sourceAtomZ &&
+          hasSourcePos == other.hasSourcePos &&
+          previewEndX == other.previewEndX &&
+          previewEndY == other.previewEndY &&
+          previewEndZ == other.previewEndZ &&
+          hasPreviewEnd == other.hasPreviewEnd &&
+          snappedToAtom == other.snappedToAtom &&
+          bondOrder == other.bondOrder;
+}
+
 class APIAtomCutData {
   final double cutSdfValue;
   final double unitCellSize;
@@ -35,6 +109,7 @@ class APIAtomCutData {
 class APIAtomEditData {
   final APIAtomEditTool activeTool;
   final int? bondToolLastAtomId;
+  final int bondToolBondOrder;
   final int? replacementAtomicNumber;
   final int? addAtomToolAtomicNumber;
   final bool isInGuidedPlacement;
@@ -51,6 +126,7 @@ class APIAtomEditData {
   const APIAtomEditData({
     required this.activeTool,
     this.bondToolLastAtomId,
+    required this.bondToolBondOrder,
     this.replacementAtomicNumber,
     this.addAtomToolAtomicNumber,
     required this.isInGuidedPlacement,
@@ -69,6 +145,7 @@ class APIAtomEditData {
   int get hashCode =>
       activeTool.hashCode ^
       bondToolLastAtomId.hashCode ^
+      bondToolBondOrder.hashCode ^
       replacementAtomicNumber.hashCode ^
       addAtomToolAtomicNumber.hashCode ^
       isInGuidedPlacement.hashCode ^
@@ -89,6 +166,7 @@ class APIAtomEditData {
           runtimeType == other.runtimeType &&
           activeTool == other.activeTool &&
           bondToolLastAtomId == other.bondToolLastAtomId &&
+          bondToolBondOrder == other.bondToolBondOrder &&
           replacementAtomicNumber == other.replacementAtomicNumber &&
           addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
           isInGuidedPlacement == other.isInGuidedPlacement &&

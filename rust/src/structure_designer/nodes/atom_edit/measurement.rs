@@ -5,9 +5,7 @@ use glam::f64::DVec3;
 #[derive(Debug, Clone)]
 pub enum MeasurementResult {
     /// Distance between 2 atoms in Angstroms.
-    Distance {
-        distance: f64,
-    },
+    Distance { distance: f64 },
     /// Angle at the vertex atom, in degrees.
     Angle {
         angle_degrees: f64,
