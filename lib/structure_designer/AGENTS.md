@@ -64,6 +64,16 @@ The atom edit panel exposes three dropdowns for guided placement: **Bond Length*
 
 Design doc: `doc/atom_edit/guided_atom_placement.md`.
 
+## AddBond Tool (drag-to-bond + bond order)
+
+The AddBond tool uses drag-to-bond interaction: pointer down on atom → drag → release on target atom to create bond. Flutter routes pointer down/move/up events to the Rust `add_bond_pointer_down/move/up` API. During drag, `pointer_move` returns `AddBondMoveResult` with 3D positions; Flutter projects these to screen space and draws a rubber-band line via `CustomPainter` (2D overlay, no Rust evaluation per frame).
+
+The `BondOrderSelector` widget (shared between AddBond tool panel and Default tool bond-info panel) provides two rows of segmented buttons: common orders (Single/Double/Triple) and specialized orders (Quad/Aromatic/Dative/Metallic), acting as a single radio group.
+
+Keyboard shortcuts: hold **B** for spring-loaded AddBond tool activation (deferred release during active drag); **1-7** set bond order in AddBond tool or change selected bond(s) order in Default tool.
+
+Design doc: `doc/atom_edit/design_bond_creation_and_order.md`.
+
 ## node_networks_list/ Subdirectory
 
 Network management panel with:

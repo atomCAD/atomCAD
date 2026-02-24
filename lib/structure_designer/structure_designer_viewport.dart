@@ -217,7 +217,9 @@ class AddBondPreviewPainter extends CustomPainter {
         useDashed = !snapped;
         lineWidth = 2.5;
       default:
-        lineColor = snapped ? Colors.white : Colors.white70;
+        lineColor = snapped
+            ? const Color(0xFF4FC3F7)
+            : const Color(0xFF4FC3F7).withValues(alpha: 0.7);
         useDashed = !snapped;
         lineWidth = 1.5;
     }
@@ -296,7 +298,7 @@ class AddBondPreviewPainter extends CustomPainter {
     // Draw snap target highlight circle
     if (snapped) {
       final highlightPaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.6)
+        ..color = const Color(0xFF4FC3F7).withValues(alpha: 0.6)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
       canvas.drawCircle(endPos, 8.0, highlightPaint);
@@ -304,7 +306,7 @@ class AddBondPreviewPainter extends CustomPainter {
 
     // Draw source atom highlight circle
     final sourcePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.4)
+      ..color = const Color(0xFF4FC3F7).withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawCircle(startPos, 6.0, sourcePaint);

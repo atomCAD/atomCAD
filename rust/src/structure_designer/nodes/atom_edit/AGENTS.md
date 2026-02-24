@@ -10,7 +10,7 @@ atom_edit/
 ├── types.rs            # Shared type definitions (enums, structs, constants)
 ├── atom_edit_data.rs   # AtomEditData struct, NodeData impl, accessors, utilities
 ├── selection.rs        # Ray-based and marquee atom/bond selection
-├── operations.rs       # Shared mutation operations (delete, replace, transform, drag)
+├── operations.rs       # Shared mutation operations (delete, replace, transform, drag, bond order)
 ├── default_tool.rs     # Default tool pointer event state machine
 ├── add_atom_tool.rs    # Add Atom tool interaction
 ├── add_bond_tool.rs    # Add Bond tool interaction
@@ -28,8 +28,12 @@ atom_edit/
 | `DefaultToolInteractionState` | State machine: Idle → Pending → Dragging/Marquee |
 | `AtomEditSelection` | Provenance-based selection (base + diff atom IDs) |
 | `AtomEditEvalCache` | Provenance maps from most recent `apply_diff()` |
+| `AddBondInteractionState` | State machine: Idle → Pending → Dragging |
+| `AddBondToolState` | Bond order (1-7) + interaction state for AddBond tool |
 | `DiffAtomKind` | Classification: DeleteMarker, MatchedBase, PureAddition |
 | `BondDeletionInfo` | Info for deleting bonds via diff |
+| `BondEndpointInfo` | Info for changing bond order (diff IDs + identity for promotion) |
+| `AddBondMoveResult` | Rubber-band preview data returned by `add_bond_pointer_move` |
 
 ## Core Data (`atom_edit_data.rs`)
 
@@ -66,9 +70,10 @@ In **diff view** (`output_diff = true`), atom IDs from hit tests are diff-native
 
 ## Tool Files
 
-- **`default_tool.rs`**: Pointer event state machine (`pointer_down` → `pointer_move` → `pointer_up`). Handles click-select, drag threshold, screen-plane dragging, and marquee selection.
+- **`default_tool.rs`**: Pointer event state machine (`pointer_down` → `pointer_move` → `pointer_up`). Handles click-select, drag threshold, screen-plane dragging, and marquee selection. Clicking an already-selected bond cycles its order (single→double→triple→single; specialized orders enter cycle at single).
 - **`add_atom_tool.rs`**: Add Atom tool with guided placement. Click empty space → free placement (ray-plane intersection). Click existing atom → guided placement: compute candidate positions via `crystolecule::guided_placement`, show guide dots, click dot to place and bond. Three guided modes: `GuidedPlacement` (fixed dots for sp3/sp2/sp1 cases with 2+ bonds), `GuidedFreeSphere` (bare atom, cursor-tracked dot on wireframe sphere), `GuidedFreeRing` (single bond without dihedral reference, rotating dots on cone ring). Guide dot hit testing (`GUIDE_DOT_HIT_RADIUS = 0.3 A`) runs before atom hit testing. Design doc: `doc/atom_edit/guided_atom_placement.md`.
-- **`add_bond_tool.rs`**: Two-click bond creation workflow with provenance resolution.
+- **`add_bond_tool.rs`**: Drag-to-bond interaction with configurable bond order (1-7). State machine: Idle → Pending (pointer down on atom) → Dragging (drag threshold exceeded) → bond creation on pointer up over target atom, or cancel on empty/same atom. `pointer_move` performs lightweight ray-cast only (no evaluation/tessellation) and returns `AddBondMoveResult` for Flutter's 2D rubber-band overlay. Design doc: `doc/atom_edit/design_bond_creation_and_order.md`.
+- **`operations.rs`**: Includes `change_bond_order` (single bond), `change_selected_bonds_order` (batch), and `cycle_bond_order` (single→double→triple→single). Both change functions handle result view (provenance promotion) and diff view (direct edit).
 
 ## Backward Compatibility
 

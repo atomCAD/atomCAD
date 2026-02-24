@@ -1,7 +1,7 @@
 use super::atom_edit_data::*;
 use super::types::*;
 use crate::crystolecule::atomic_structure::BondReference;
-use crate::crystolecule::atomic_structure_diff::AtomSource;
+use crate::crystolecule::atomic_structure_diff::{AtomSource, apply_diff};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::util::transform::Transform;
 use glam::f64::DVec3;
@@ -481,6 +481,22 @@ fn change_bond_order_result_view(
     };
 
     atom_edit_data.add_bond_in_diff(actual_a, actual_b, new_order);
+
+    // Re-select the bond using fresh provenance from apply_diff.
+    // add_bond_in_diff cleared selected_bonds, but we know the diff atom IDs
+    // of the bond we just wrote. Re-run apply_diff to get the new result IDs.
+    if let Some(input) = atom_edit_data.get_cached_input() {
+        let fresh = apply_diff(&input, &atom_edit_data.diff, atom_edit_data.tolerance);
+        if let (Some(&ra), Some(&rb)) = (
+            fresh.provenance.diff_to_result.get(&actual_a),
+            fresh.provenance.diff_to_result.get(&actual_b),
+        ) {
+            atom_edit_data
+                .selection
+                .selected_bonds
+                .insert(BondReference { atom_id1: ra, atom_id2: rb });
+        }
+    }
 }
 
 fn change_bond_order_diff_view(
@@ -493,8 +509,11 @@ fn change_bond_order_diff_view(
         None => return,
     };
 
-    // In diff view, bond_reference atom IDs are diff-native
+    // In diff view, bond_reference atom IDs are diff-native (stable across re-eval).
+    // Save and restore bond selection since add_bond_in_diff clears it.
+    let saved_bonds = atom_edit_data.selection.selected_bonds.clone();
     atom_edit_data.add_bond_in_diff(bond_reference.atom_id1, bond_reference.atom_id2, new_order);
+    atom_edit_data.selection.selected_bonds = saved_bonds;
 }
 
 /// Change the order of all selected bonds.
@@ -582,6 +601,7 @@ fn change_selected_bonds_order_result_view(
         None => return,
     };
 
+    let mut written_pairs: Vec<(u32, u32)> = Vec::new();
     for info in &bond_infos {
         let actual_a = match info.diff_id_a {
             Some(id) => id,
@@ -599,6 +619,25 @@ fn change_selected_bonds_order_result_view(
         };
 
         atom_edit_data.add_bond_in_diff(actual_a, actual_b, new_order);
+        written_pairs.push((actual_a, actual_b));
+    }
+
+    // Re-select the bonds using fresh provenance from apply_diff.
+    // add_bond_in_diff cleared selected_bonds, but we know the diff atom IDs
+    // of the bonds we just wrote. Re-run apply_diff to get the new result IDs.
+    if let Some(input) = atom_edit_data.get_cached_input() {
+        let fresh = apply_diff(&input, &atom_edit_data.diff, atom_edit_data.tolerance);
+        for (diff_a, diff_b) in &written_pairs {
+            if let (Some(&ra), Some(&rb)) = (
+                fresh.provenance.diff_to_result.get(diff_a),
+                fresh.provenance.diff_to_result.get(diff_b),
+            ) {
+                atom_edit_data
+                    .selection
+                    .selected_bonds
+                    .insert(BondReference { atom_id1: ra, atom_id2: rb });
+            }
+        }
     }
 }
 
@@ -626,9 +665,13 @@ fn change_selected_bonds_order_diff_view(
         None => return,
     };
 
+    // In diff view, atom IDs are stable (diff IDs = result IDs).
+    // Save and restore bond selection since add_bond_in_diff clears it.
+    let saved_bonds = atom_edit_data.selection.selected_bonds.clone();
     for bond_ref in &bonds {
         atom_edit_data.add_bond_in_diff(bond_ref.atom_id1, bond_ref.atom_id2, new_order);
     }
+    atom_edit_data.selection.selected_bonds = saved_bonds;
 }
 
 /// Cycle bond order through common types: single → double → triple → single.

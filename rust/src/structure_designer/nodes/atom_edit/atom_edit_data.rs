@@ -167,6 +167,12 @@ impl AtomEditData {
         );
     }
 
+    /// Get a clone of the cached input structure (if available).
+    /// Used by bond order change operations to resolve result-space IDs.
+    pub fn get_cached_input(&self) -> Option<AtomicStructure> {
+        self.cached_input.lock().ok().and_then(|g| g.clone())
+    }
+
     /// Remove an atom from the diff entirely (and its anchor if any).
     pub fn remove_from_diff(&mut self, diff_atom_id: u32) {
         self.selection.clear_bonds();

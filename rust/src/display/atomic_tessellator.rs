@@ -28,6 +28,11 @@ const BAS_ATOM_RADIUS_FACTOR: f64 = 0.5;
 // radius of a bond cylinder (stick) in the 'balls and sticks' view
 pub const BAS_STICK_RADIUS: f64 = 0.1;
 
+// radius of each cylinder in a multi-bond (double/triple/quadruple)
+const MULTI_BOND_CYLINDER_RADIUS: f64 = 0.06;
+// offset distance from bond axis center to each parallel cylinder center
+const MULTI_BOND_OFFSET: f64 = 0.10;
+
 // color for primary markers (bright yellow)
 const MARKER_COLOR: Vec3 = Vec3::new(1.0, 1.0, 0.0);
 // color for secondary markers (blue)
@@ -459,6 +464,114 @@ fn to_selected_color(_color: &Vec3) -> Vec3 {
     Vec3::new(1.0, 0.2, 1.0) // Bright magenta for selected atoms
 }
 
+/// Compute a unit vector perpendicular to the bond axis between two atoms.
+///
+/// Uses the position of a neighbor atom to define a reference plane. If no suitable
+/// neighbor exists, falls back to the cardinal axis least aligned with the bond direction.
+fn compute_bond_perpendicular(
+    atom1: &Atom,
+    atom2: &Atom,
+    atomic_structure: &AtomicStructure,
+) -> DVec3 {
+    let bond_dir = atom2.position - atom1.position;
+    let bond_len = bond_dir.length();
+    if bond_len < 1e-12 {
+        return DVec3::X;
+    }
+    let bond_axis = bond_dir / bond_len;
+
+    const COLLINEAR_THRESHOLD: f64 = 1e-4;
+
+    // Try neighbors of atom1 then atom2 to find a non-collinear reference
+    for (anchor, exclude_id) in [(atom1, atom2.id), (atom2, atom1.id)] {
+        for bond in &anchor.bonds {
+            let neighbor_id = bond.other_atom_id();
+            if neighbor_id == exclude_id {
+                continue;
+            }
+            if let Some(neighbor) = atomic_structure.get_atom(neighbor_id) {
+                let to_neighbor = neighbor.position - anchor.position;
+                let cross = bond_axis.cross(to_neighbor);
+                let cross_len = cross.length();
+                if cross_len > COLLINEAR_THRESHOLD {
+                    return cross / cross_len;
+                }
+            }
+        }
+    }
+
+    // Fallback: pick the cardinal axis least aligned with the bond
+    let abs_x = bond_axis.x.abs();
+    let abs_y = bond_axis.y.abs();
+    let abs_z = bond_axis.z.abs();
+    let fallback = if abs_x <= abs_y && abs_x <= abs_z {
+        DVec3::X
+    } else if abs_y <= abs_z {
+        DVec3::Y
+    } else {
+        DVec3::Z
+    };
+    bond_axis.cross(fallback).normalize()
+}
+
+/// Layout of cylinders for a given bond order.
+struct MultiBondLayout {
+    offsets: [(DVec3, f64); 4],
+    count: usize,
+}
+
+/// Compute the cylinder offsets for multi-bond rendering.
+fn compute_multi_bond_layout(bond_order: u8, perp: DVec3, bond_axis: DVec3) -> MultiBondLayout {
+    use crate::crystolecule::atomic_structure::inline_bond::*;
+
+    let zero = (DVec3::ZERO, 0.0);
+
+    match bond_order {
+        BOND_DOUBLE | BOND_AROMATIC => MultiBondLayout {
+            offsets: [
+                (perp * MULTI_BOND_OFFSET, MULTI_BOND_CYLINDER_RADIUS),
+                (perp * (-MULTI_BOND_OFFSET), MULTI_BOND_CYLINDER_RADIUS),
+                zero,
+                zero,
+            ],
+            count: 2,
+        },
+        BOND_TRIPLE => {
+            let perp2 = bond_axis.cross(perp);
+            // 120-degree triangular arrangement
+            let d0 = perp;
+            let d1 = perp * (-0.5) + perp2 * 0.866_025_403_784_438_6;
+            let d2 = perp * (-0.5) - perp2 * 0.866_025_403_784_438_6;
+            MultiBondLayout {
+                offsets: [
+                    (d0 * MULTI_BOND_OFFSET, MULTI_BOND_CYLINDER_RADIUS),
+                    (d1 * MULTI_BOND_OFFSET, MULTI_BOND_CYLINDER_RADIUS),
+                    (d2 * MULTI_BOND_OFFSET, MULTI_BOND_CYLINDER_RADIUS),
+                    zero,
+                ],
+                count: 3,
+            }
+        }
+        BOND_QUADRUPLE => {
+            let perp2 = bond_axis.cross(perp);
+            // 90-degree square arrangement
+            MultiBondLayout {
+                offsets: [
+                    (perp * MULTI_BOND_OFFSET, MULTI_BOND_CYLINDER_RADIUS),
+                    (perp2 * MULTI_BOND_OFFSET, MULTI_BOND_CYLINDER_RADIUS),
+                    (perp * (-MULTI_BOND_OFFSET), MULTI_BOND_CYLINDER_RADIUS),
+                    (perp2 * (-MULTI_BOND_OFFSET), MULTI_BOND_CYLINDER_RADIUS),
+                ],
+                count: 4,
+            }
+        }
+        _ => MultiBondLayout {
+            offsets: [(DVec3::ZERO, BAS_STICK_RADIUS), zero, zero, zero],
+            count: 1,
+        },
+    }
+}
+
 /// Tessellate bond using inline bond data
 fn tessellate_bond_inline(
     output_mesh: &mut Mesh,
@@ -474,18 +587,30 @@ fn tessellate_bond_inline(
     };
     let selected = atomic_structure.decorator().is_bond_selected(&bond_ref);
     let color = get_bond_color_inline(atom1.id, atom2.id, bond_order, atomic_structure);
+    let material = Material::new(&color, if selected { 0.2 } else { 0.8 }, 0.0);
 
-    tessellator::tessellate_cylinder(
-        output_mesh,
-        &atom2.position,
-        &atom1.position,
-        BAS_STICK_RADIUS,
-        params.cylinder_divisions,
-        &Material::new(&color, if selected { 0.2 } else { 0.8 }, 0.0),
-        false,
-        None,
-        None,
-    );
+    let bond_dir = atom2.position - atom1.position;
+    if bond_dir.length() < 1e-12 {
+        return;
+    }
+    let bond_axis = bond_dir.normalize();
+    let perp = compute_bond_perpendicular(atom1, atom2, atomic_structure);
+    let layout = compute_multi_bond_layout(bond_order, perp, bond_axis);
+
+    for i in 0..layout.count {
+        let (offset, radius) = layout.offsets[i];
+        tessellator::tessellate_cylinder(
+            output_mesh,
+            &(atom2.position + offset),
+            &(atom1.position + offset),
+            radius,
+            params.cylinder_divisions,
+            &material,
+            false,
+            None,
+            None,
+        );
+    }
 }
 
 /// Tessellate a bond delete marker as a red cylinder (triangle mesh path).
@@ -543,11 +668,12 @@ pub fn tessellate_atomic_structure_impostors(
     let total_atoms = atomic_structure.get_num_of_atoms();
     let total_bonds = atomic_structure.get_num_of_bonds();
 
-    // Each atom = 4 vertices + 6 indices, each bond = 4 vertices + 6 indices
+    // Each atom = 4 vertices + 6 indices
+    // Each bond = up to 4 quads (quadruple bonds), each quad = 4 vertices + 6 indices
     atom_impostor_mesh.vertices.reserve(total_atoms * 4);
     atom_impostor_mesh.indices.reserve(total_atoms * 6);
-    bond_impostor_mesh.vertices.reserve(total_bonds * 4);
-    bond_impostor_mesh.indices.reserve(total_bonds * 6);
+    bond_impostor_mesh.vertices.reserve(total_bonds * 4 * 4);
+    bond_impostor_mesh.indices.reserve(total_bonds * 6 * 4);
 
     let mut culled_count = 0;
     let mut tessellated_count = 0;
@@ -637,11 +763,6 @@ pub fn tessellate_atomic_structure_impostors(
             }
         }
     }
-
-    println!(
-        "Atomic impostor tessellation: {:?} visualization, {} atoms tessellated, {} atoms culled",
-        atomic_viz_prefs.visualization, tessellated_count, culled_count
-    );
 }
 
 /// Tessellate a single atom as an impostor (4 vertices, 6 indices)
@@ -681,12 +802,25 @@ fn tessellate_bond_impostor_inline(
 ) {
     let color = get_bond_color_inline(atom1.id, atom2.id, bond_order, atomic_structure);
 
-    bond_impostor_mesh.add_bond_quad(
-        &atom1.position.as_vec3(),
-        &atom2.position.as_vec3(),
-        BAS_STICK_RADIUS as f32,
-        &color.to_array(),
-    );
+    let bond_dir = atom2.position - atom1.position;
+    if bond_dir.length() < 1e-12 {
+        return;
+    }
+    let bond_axis = bond_dir.normalize();
+    let perp = compute_bond_perpendicular(atom1, atom2, atomic_structure);
+    let layout = compute_multi_bond_layout(bond_order, perp, bond_axis);
+
+    for i in 0..layout.count {
+        let (offset, radius) = layout.offsets[i];
+        let start = atom1.position + offset;
+        let end = atom2.position + offset;
+        bond_impostor_mesh.add_bond_quad(
+            &start.as_vec3(),
+            &end.as_vec3(),
+            radius as f32,
+            &color.to_array(),
+        );
+    }
 }
 
 /// Tessellate a bond delete marker as a red cylinder (impostor path).
