@@ -213,8 +213,8 @@ class AddBondPreviewPainter extends CustomPainter {
         lineColor = Colors.teal;
         useDashed = !snapped;
         lineWidth = 1.5;
-      case 7: // Metallic — steel blue
-        lineColor = Colors.blueGrey;
+      case 7: // Metallic — copper/bronze
+        lineColor = Colors.deepOrange.shade300;
         useDashed = !snapped;
         lineWidth = 2.5;
       default:
