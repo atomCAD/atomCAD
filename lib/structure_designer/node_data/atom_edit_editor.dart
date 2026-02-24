@@ -132,8 +132,14 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             const SizedBox(height: AppSpacing.large),
             _buildMeasurementDisplay(_stagedData!.measurement!),
           ],
-          const SizedBox(height: AppSpacing.large),
-          _buildMinimizeSection(),
+          if (_stagedData!.activeTool == APIAtomEditTool.default_) ...[
+            const SizedBox(height: AppSpacing.large),
+            _buildCollapsibleMinimizeSection(),
+            if (_stagedData!.hasSelection) ...[
+              const SizedBox(height: AppSpacing.small),
+              _buildCollapsibleTransformSection(),
+            ],
+          ],
         ],
       ),
     );
@@ -351,21 +357,6 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: const Text('Delete Selected'),
               ),
             ),
-            if (_stagedData!.hasSelection) ...[
-              const SizedBox(height: AppSpacing.large),
-              const Divider(),
-              const SizedBox(height: AppSpacing.small),
-              Text('Transform Selected Atoms',
-                  style: TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: AppSpacing.medium),
-              TransformControlWidget(
-                initialTransform: _stagedData!.selectionTransform,
-                title: 'Transform',
-                onApplyTransform: (APITransform transform) {
-                  widget.model.atomEditTransformSelected(transform);
-                },
-              ),
-            ],
           ],
         ),
       ),
@@ -555,89 +546,128 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     );
   }
 
-  Widget _buildMinimizeSection() {
+  Widget _buildCollapsibleMinimizeSection() {
     return Card(
       elevation: 0,
       margin: EdgeInsets.zero,
       color: Colors.grey[50],
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.medium),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        title: Text('Energy Minimization',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+        tilePadding:
+            const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+        childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
+        initiallyExpanded: false,
+        dense: true,
+        children: [
+          _buildMinimizeSectionContent(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCollapsibleTransformSection() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        title: Text('Transform Selected Atoms',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+        tilePadding:
+            const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+        childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
+        initiallyExpanded: false,
+        dense: true,
+        children: [
+          TransformControlWidget(
+            initialTransform: _stagedData!.selectionTransform,
+            title: 'Transform',
+            onApplyTransform: (APITransform transform) {
+              widget.model.atomEditTransformSelected(transform);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMinimizeSectionContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Text('Energy Minimization',
-                style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: AppSpacing.medium),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _hasDiffChanges
-                          ? () {
-                              widget.model.atomEditMinimize(
-                                APIMinimizeFreezeMode.freezeBase,
-                              );
-                            }
-                          : null,
-                      icon: const Icon(Icons.lock_outline, size: 18),
-                      label: const Text('Minimize\ndiff'),
-                      style: AppButtonStyles.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        widget.model.atomEditMinimize(
-                          APIMinimizeFreezeMode.freeAll,
-                        );
-                      },
-                      icon: const Icon(Icons.lock_open, size: 18),
-                      label: const Text('Minimize\nall'),
-                      style: AppButtonStyles.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: (_stagedData?.hasSelectedAtoms ?? false)
-                          ? () {
-                              widget.model.atomEditMinimize(
-                                APIMinimizeFreezeMode.freeSelected,
-                              );
-                            }
-                          : null,
-                      icon: const Icon(Icons.filter_center_focus, size: 18),
-                      label: const Text('Minimize\nselected'),
-                      style: AppButtonStyles.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (widget.model.lastMinimizeMessage.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.small),
-              Text(
-                widget.model.lastMinimizeMessage,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: widget.model.lastMinimizeMessage.startsWith('Error')
-                      ? Colors.red[700]
-                      : Colors.grey[600],
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: _hasDiffChanges
+                      ? () {
+                          widget.model.atomEditMinimize(
+                            APIMinimizeFreezeMode.freezeBase,
+                          );
+                        }
+                      : null,
+                  icon: const Icon(Icons.lock_outline, size: 18),
+                  label: const Text('Minimize\ndiff'),
+                  style: AppButtonStyles.primary,
                 ),
               ),
-            ],
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    widget.model.atomEditMinimize(
+                      APIMinimizeFreezeMode.freeAll,
+                    );
+                  },
+                  icon: const Icon(Icons.lock_open, size: 18),
+                  label: const Text('Minimize\nall'),
+                  style: AppButtonStyles.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: (_stagedData?.hasSelectedAtoms ?? false)
+                      ? () {
+                          widget.model.atomEditMinimize(
+                            APIMinimizeFreezeMode.freeSelected,
+                          );
+                        }
+                      : null,
+                  icon: const Icon(Icons.filter_center_focus, size: 18),
+                  label: const Text('Minimize\nselected'),
+                  style: AppButtonStyles.primary,
+                ),
+              ),
+            ),
           ],
         ),
-      ),
+        if (widget.model.lastMinimizeMessage.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.small),
+          Text(
+            widget.model.lastMinimizeMessage,
+            style: TextStyle(
+              fontSize: 12,
+              color: widget.model.lastMinimizeMessage.startsWith('Error')
+                  ? Colors.red[700]
+                  : Colors.grey[600],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
