@@ -1,5 +1,5 @@
 use super::atom_edit_data::*;
-use super::operations::drag_selected_by_delta;
+use super::operations::{change_bond_order, cycle_bond_order, drag_selected_by_delta};
 use super::selection::*;
 use super::types::*;
 use crate::api::common_api_types::SelectModifier;
@@ -565,8 +565,35 @@ pub fn default_tool_pointer_up(
             PointerUpResult::SelectionChanged
         }
         Some(PendingClickInfo::Bond { bond_reference }) => {
-            select_result_bond(structure_designer, &bond_reference, select_modifier);
-            PointerUpResult::SelectionChanged
+            // If the bond is already selected, cycle its order instead of re-selecting
+            let already_selected = {
+                let data = get_active_atom_edit_data(structure_designer);
+                data.is_some_and(|d| d.selection.selected_bonds.contains(&bond_reference))
+            };
+
+            if already_selected {
+                // Look up current bond order from the structure
+                let current_order = {
+                    let result_structure =
+                        structure_designer.get_atomic_structure_from_selected_node();
+                    result_structure.and_then(|s| {
+                        let atom = s.get_atom(bond_reference.atom_id1)?;
+                        atom.bonds
+                            .iter()
+                            .find(|b| b.other_atom_id() == bond_reference.atom_id2)
+                            .map(|b| b.bond_order())
+                    })
+                };
+
+                if let Some(order) = current_order {
+                    let new_order = cycle_bond_order(order);
+                    change_bond_order(structure_designer, &bond_reference, new_order);
+                }
+                PointerUpResult::SelectionChanged
+            } else {
+                select_result_bond(structure_designer, &bond_reference, select_modifier);
+                PointerUpResult::SelectionChanged
+            }
         }
         Some(PendingClickInfo::Marquee {
             start_screen,

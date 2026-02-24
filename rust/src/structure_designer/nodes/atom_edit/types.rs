@@ -117,8 +117,35 @@ impl AddAtomToolState {
     }
 }
 
+/// Interaction state machine for the AddBond tool.
+/// Tracks the current pointer interaction from down → move → up.
+#[derive(Debug)]
+pub enum AddBondInteractionState {
+    Idle,
+    Pending {
+        hit_atom_id: u32,
+        is_diff_view: bool,
+        mouse_down_screen: DVec2,
+    },
+    Dragging {
+        source_atom_id: u32,
+        preview_target: Option<u32>,
+    },
+}
+
+impl Default for AddBondInteractionState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
 #[derive(Debug)]
 pub struct AddBondToolState {
+    /// Bond order to use when creating bonds (1-7, default: BOND_SINGLE).
+    pub bond_order: u8,
+    /// Drag interaction state machine.
+    pub interaction_state: AddBondInteractionState,
+    /// Legacy: used by the two-click workflow. Will be removed when drag-to-bond is implemented.
     pub last_atom_id: Option<u32>,
 }
 

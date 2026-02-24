@@ -201,7 +201,11 @@ impl AtomEditData {
                 AtomEditTool::AddAtom(AddAtomToolState::Idle { atomic_number: 6 })
             }
             APIAtomEditTool::AddBond => {
-                AtomEditTool::AddBond(AddBondToolState { last_atom_id: None })
+                AtomEditTool::AddBond(AddBondToolState {
+                    bond_order: crate::crystolecule::atomic_structure::BOND_SINGLE,
+                    interaction_state: AddBondInteractionState::default(),
+                    last_atom_id: None,
+                })
             }
         }
     }
@@ -712,6 +716,8 @@ impl NodeData for AtomEditData {
                     atomic_number: state.atomic_number(),
                 }),
                 AtomEditTool::AddBond(state) => AtomEditTool::AddBond(AddBondToolState {
+                    bond_order: state.bond_order,
+                    interaction_state: AddBondInteractionState::default(),
                     last_atom_id: state.last_atom_id,
                 }),
             },

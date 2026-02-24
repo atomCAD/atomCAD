@@ -106,12 +106,13 @@ pub fn draw_bond_by_ray(
         }
     };
 
-    // Get current last_atom_id (copies the value, ending the immutable borrow)
-    let last_atom_id = if let AtomEditTool::AddBond(state) = &atom_edit_data.active_tool {
-        state.last_atom_id
-    } else {
-        return;
-    };
+    // Get current last_atom_id and bond_order (copies the values, ending the immutable borrow)
+    let (last_atom_id, bond_order) =
+        if let AtomEditTool::AddBond(state) = &atom_edit_data.active_tool {
+            (state.last_atom_id, state.bond_order)
+        } else {
+            return;
+        };
 
     match last_atom_id {
         Some(last_id) => {
@@ -122,7 +123,7 @@ pub fn draw_bond_by_ray(
                 }
             } else {
                 // Create bond between last atom and current atom
-                atom_edit_data.add_bond_in_diff(last_id, diff_atom_id, 1);
+                atom_edit_data.add_bond_in_diff(last_id, diff_atom_id, bond_order);
                 // Update last_atom_id for continuous bonding
                 if let AtomEditTool::AddBond(state) = &mut atom_edit_data.active_tool {
                     state.last_atom_id = Some(diff_atom_id);
