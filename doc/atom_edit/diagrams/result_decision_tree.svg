@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" width="700" height="400">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="700" height="400" fill="#fafafa" rx="8"/>
+  <text x="350" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#333">Step 2: Building the Result (Decision Tree)</text>
+
+  <!-- Matched diff atoms -->
+  <rect x="20" y="45" width="310" height="165" fill="#e3f2fd" rx="6" stroke="#1565c0" stroke-width="1.5"/>
+  <text x="175" y="65" text-anchor="middle" font-size="12" font-weight="bold" fill="#1565c0">Matched Diff Atoms</text>
+
+  <rect x="35" y="78" width="130" height="50" fill="#ffebee" rx="4"/>
+  <text x="100" y="98" text-anchor="middle" font-size="10" fill="#c62828">is_delete_marker?</text>
+  <text x="100" y="115" text-anchor="middle" font-size="11" font-weight="bold" fill="#c62828">→ DELETE base atom</text>
+
+  <rect x="185" y="78" width="130" height="50" fill="#e8f5e9" rx="4"/>
+  <text x="250" y="98" text-anchor="middle" font-size="10" fill="#2e7d32">otherwise?</text>
+  <text x="250" y="115" text-anchor="middle" font-size="11" font-weight="bold" fill="#2e7d32">→ ADD to result</text>
+
+  <text x="175" y="150" text-anchor="middle" font-size="10" fill="#555">Uses diff atom's position + element.</text>
+  <text x="175" y="164" text-anchor="middle" font-size="10" fill="#555">Provenance: DiffMatchedBase{diff_id, base_id}</text>
+  <text x="175" y="178" text-anchor="middle" font-size="10" fill="#555">Counter: atoms_modified (or atoms_deleted)</text>
+
+  <!-- Unmatched diff atoms -->
+  <rect x="20" y="220" width="310" height="170" fill="#fff3e0" rx="6" stroke="#ff9800" stroke-width="1.5"/>
+  <text x="175" y="240" text-anchor="middle" font-size="12" font-weight="bold" fill="#e65100">Unmatched Diff Atoms</text>
+
+  <rect x="35" y="253" width="85" height="55" fill="#ffebee" rx="4"/>
+  <text x="77" y="268" text-anchor="middle" font-size="9" fill="#c62828">delete</text>
+  <text x="77" y="280" text-anchor="middle" font-size="9" fill="#c62828">marker?</text>
+  <text x="77" y="298" text-anchor="middle" font-size="10" font-weight="bold" fill="#c62828">→ NO-OP</text>
+
+  <rect x="130" y="253" width="85" height="55" fill="#fff8e1" rx="4"/>
+  <text x="172" y="268" text-anchor="middle" font-size="9" fill="#e65100">has</text>
+  <text x="172" y="280" text-anchor="middle" font-size="9" fill="#e65100">anchor?</text>
+  <text x="172" y="298" text-anchor="middle" font-size="10" font-weight="bold" fill="#e65100">→ SKIP</text>
+
+  <rect x="225" y="253" width="90" height="55" fill="#e8f5e9" rx="4"/>
+  <text x="270" y="268" text-anchor="middle" font-size="9" fill="#2e7d32">no anchor,</text>
+  <text x="270" y="280" text-anchor="middle" font-size="9" fill="#2e7d32">not delete?</text>
+  <text x="270" y="298" text-anchor="middle" font-size="10" font-weight="bold" fill="#2e7d32">→ ADD</text>
+
+  <text x="175" y="330" text-anchor="middle" font-size="10" fill="#555">SKIP = base atom was deleted upstream.</text>
+  <text x="175" y="344" text-anchor="middle" font-size="10" fill="#555">ADD provenance: DiffAdded(diff_id)</text>
+  <text x="175" y="358" text-anchor="middle" font-size="10" fill="#e65100" font-weight="bold">The SKIP is a silent operation (no error/warning).</text>
+
+  <!-- Unmatched base atoms -->
+  <rect x="370" y="45" width="310" height="100" fill="#f3e5f5" rx="6" stroke="#9c27b0" stroke-width="1.5"/>
+  <text x="525" y="65" text-anchor="middle" font-size="12" font-weight="bold" fill="#6a1b9a">Unmatched Base Atoms</text>
+
+  <rect x="385" y="78" width="280" height="50" fill="#f3e5f5" rx="4"/>
+  <text x="525" y="98" text-anchor="middle" font-size="10" fill="#6a1b9a">Not matched by any diff atom?</text>
+  <text x="525" y="115" text-anchor="middle" font-size="11" font-weight="bold" fill="#6a1b9a">→ PASS THROUGH unchanged</text>
+
+  <!-- Provenance summary box -->
+  <rect x="370" y="165" width="310" height="225" fill="white" rx="6" stroke="#ccc" stroke-width="1"/>
+  <text x="525" y="188" text-anchor="middle" font-size="12" font-weight="bold" fill="#333">Provenance Tracking</text>
+
+  <text x="385" y="215" font-size="11" fill="#555">Every result atom is tagged:</text>
+
+  <rect x="390" y="225" width="275" height="30" fill="#f3e5f5" rx="3"/>
+  <text x="527" y="245" text-anchor="middle" font-size="10" fill="#6a1b9a">BasePassthrough(base_id) — untouched base atom</text>
+
+  <rect x="390" y="260" width="275" height="30" fill="#e3f2fd" rx="3"/>
+  <text x="527" y="280" text-anchor="middle" font-size="10" fill="#1565c0">DiffMatchedBase{diff_id, base_id} — edited</text>
+
+  <rect x="390" y="295" width="275" height="30" fill="#e8f5e9" rx="3"/>
+  <text x="527" y="315" text-anchor="middle" font-size="10" fill="#2e7d32">DiffAdded(diff_id) — new atom</text>
+
+  <text x="385" y="350" font-size="10" fill="#555">Two maps for reverse lookup:</text>
+  <text x="395" y="365" font-size="10" fill="#555" font-family="monospace">base_to_result: base_id → result_id</text>
+  <text x="395" y="380" font-size="10" fill="#555" font-family="monospace">diff_to_result: diff_id → result_id</text>
+</svg>

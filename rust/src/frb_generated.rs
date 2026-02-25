@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -7366,12 +7366,18 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_atomsModified = <u32>::sse_decode(deserializer);
         let mut var_bondsAdded = <u32>::sse_decode(deserializer);
         let mut var_bondsDeleted = <u32>::sse_decode(deserializer);
+        let mut var_orphanedTrackedAtoms = <u32>::sse_decode(deserializer);
+        let mut var_unmatchedDeleteMarkers = <u32>::sse_decode(deserializer);
+        let mut var_orphanedBonds = <u32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIDiffStats {
             atoms_added: var_atomsAdded,
             atoms_deleted: var_atomsDeleted,
             atoms_modified: var_atomsModified,
             bonds_added: var_bondsAdded,
             bonds_deleted: var_bondsDeleted,
+            orphaned_tracked_atoms: var_orphanedTrackedAtoms,
+            unmatched_delete_markers: var_unmatchedDeleteMarkers,
+            orphaned_bonds: var_orphanedBonds,
         };
     }
 }
@@ -10530,6 +10536,9 @@ impl flutter_rust_bridge::IntoDart
             self.atoms_modified.into_into_dart().into_dart(),
             self.bonds_added.into_into_dart().into_dart(),
             self.bonds_deleted.into_into_dart().into_dart(),
+            self.orphaned_tracked_atoms.into_into_dart().into_dart(),
+            self.unmatched_delete_markers.into_into_dart().into_dart(),
+            self.orphaned_bonds.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12980,6 +12989,9 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <u32>::sse_encode(self.atoms_modified, serializer);
         <u32>::sse_encode(self.bonds_added, serializer);
         <u32>::sse_encode(self.bonds_deleted, serializer);
+        <u32>::sse_encode(self.orphaned_tracked_atoms, serializer);
+        <u32>::sse_encode(self.unmatched_delete_markers, serializer);
+        <u32>::sse_encode(self.orphaned_bonds, serializer);
     }
 }
 
@@ -14865,7 +14877,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -14889,7 +14901,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

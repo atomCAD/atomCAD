@@ -236,6 +236,31 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 ),
               ),
             ],
+            // Diff diagnostics (red warnings for stale/orphaned entries)
+            if (stats.orphanedTrackedAtoms > 0 ||
+                stats.unmatchedDeleteMarkers > 0 ||
+                stats.orphanedBonds > 0) ...[
+              const SizedBox(height: AppSpacing.small),
+              if (stats.orphanedTrackedAtoms > 0)
+                Text(
+                  '${stats.orphanedTrackedAtoms} orphaned tracked '
+                  'atom${stats.orphanedTrackedAtoms > 1 ? 's' : ''} '
+                  '(base changed upstream)',
+                  style: TextStyle(fontSize: 12, color: Colors.red[700]),
+                ),
+              if (stats.unmatchedDeleteMarkers > 0)
+                Text(
+                  '${stats.unmatchedDeleteMarkers} unmatched delete '
+                  'marker${stats.unmatchedDeleteMarkers > 1 ? 's' : ''}',
+                  style: TextStyle(fontSize: 12, color: Colors.red[700]),
+                ),
+              if (stats.orphanedBonds > 0)
+                Text(
+                  '${stats.orphanedBonds} orphaned '
+                  'bond${stats.orphanedBonds > 1 ? 's' : ''}',
+                  style: TextStyle(fontSize: 12, color: Colors.red[700]),
+                ),
+            ],
           ],
         ),
       ),
@@ -555,8 +580,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       child: ExpansionTile(
         title: Text('Energy Minimization',
             style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-        tilePadding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+        tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
         childrenPadding: const EdgeInsets.fromLTRB(
             AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
         initiallyExpanded: false,
@@ -577,8 +601,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       child: ExpansionTile(
         title: Text('Transform Selected Atoms',
             style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-        tilePadding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+        tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
         childrenPadding: const EdgeInsets.fromLTRB(
             AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
         initiallyExpanded: false,

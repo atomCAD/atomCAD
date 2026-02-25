@@ -52,6 +52,12 @@ pub struct DiffStats {
     pub atoms_modified: u32,
     pub bonds_added: u32,
     pub bonds_deleted: u32,
+    /// Anchored diff atoms whose base atom no longer exists (skipped).
+    pub orphaned_tracked_atoms: u32,
+    /// Delete markers that found no base atom to delete (no-op).
+    pub unmatched_delete_markers: u32,
+    /// Diff bonds where one or both endpoints were missing from the result (skipped).
+    pub orphaned_bonds: u32,
 }
 
 /// Internal: a matched pair between a diff atom and a base atom.
@@ -134,6 +140,7 @@ pub fn apply_diff(
 
         if diff_atom.is_delete_marker() {
             // Unmatched delete marker → no-op (trying to delete something that doesn't exist)
+            stats.unmatched_delete_markers += 1;
             continue;
         }
 
@@ -143,6 +150,7 @@ pub fn apply_diff(
             // If the anchor doesn't match any base atom, the base was deleted upstream
             // and this tracked atom should disappear with it.
             // Only genuinely added atoms (no anchor) survive as additions.
+            stats.orphaned_tracked_atoms += 1;
             continue;
         }
 
@@ -394,6 +402,9 @@ fn resolve_bonds(
             if let (Some(&result_a_id), Some(&result_b_id)) = (result_a, result_b) {
                 result.add_bond(result_a_id, result_b_id, bond.bond_order());
                 stats.bonds_added += 1;
+            } else {
+                // One or both endpoints missing from result (skipped/orphaned)
+                stats.orphaned_bonds += 1;
             }
         }
     }

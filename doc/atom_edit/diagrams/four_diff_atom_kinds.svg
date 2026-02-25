@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="520" fill="#fafafa" rx="8"/>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">Four Diff Atom Kinds</text>
+
+  <!-- 1. Pure Addition -->
+  <g transform="translate(100, 80)">
+    <rect x="-80" y="-20" width="160" height="130" fill="#e8f5e9" rx="6" stroke="#4caf50" stroke-width="1.5"/>
+    <text x="0" y="0" text-anchor="middle" font-size="13" font-weight="bold" fill="#2e7d32">ADDITION (+)</text>
+    <circle cx="0" cy="55" r="22" fill="#66bb6a" stroke="#2e7d32" stroke-width="2"/>
+    <text x="0" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="white">N</text>
+    <text x="0" y="100" text-anchor="middle" font-size="10" fill="#555">atomic_number &gt; 0</text>
+    <text x="0" y="112" text-anchor="middle" font-size="10" fill="#555">no anchor</text>
+  </g>
+
+  <!-- 2. Delete Marker -->
+  <g transform="translate(300, 80)">
+    <rect x="-80" y="-20" width="160" height="130" fill="#ffebee" rx="6" stroke="#ef5350" stroke-width="1.5"/>
+    <text x="0" y="0" text-anchor="middle" font-size="13" font-weight="bold" fill="#c62828">DELETE MARKER (-)</text>
+    <circle cx="0" cy="55" r="22" fill="#ef9a9a" stroke="#c62828" stroke-width="2" stroke-dasharray="5,3"/>
+    <line x1="-14" y1="43" x2="14" y2="67" stroke="#c62828" stroke-width="3"/>
+    <line x1="-14" y1="67" x2="14" y2="43" stroke="#c62828" stroke-width="3"/>
+    <text x="0" y="100" text-anchor="middle" font-size="10" fill="#555">atomic_number = 0</text>
+    <text x="0" y="112" text-anchor="middle" font-size="10" fill="#555">position = match target</text>
+  </g>
+
+  <!-- 3. Replacement -->
+  <g transform="translate(500, 80)">
+    <rect x="-80" y="-20" width="160" height="130" fill="#e3f2fd" rx="6" stroke="#42a5f5" stroke-width="1.5"/>
+    <text x="0" y="0" text-anchor="middle" font-size="13" font-weight="bold" fill="#1565c0">REPLACEMENT (~)</text>
+    <circle cx="0" cy="55" r="22" fill="#64b5f6" stroke="#1565c0" stroke-width="2"/>
+    <text x="0" y="60" text-anchor="middle" font-size="14" font-weight="bold" fill="white">Si</text>
+    <!-- Tiny anchor dot at same position -->
+    <circle cx="0" cy="55" r="5" fill="none" stroke="#ff9800" stroke-width="1.5" stroke-dasharray="2,2"/>
+    <text x="0" y="100" text-anchor="middle" font-size="10" fill="#555">atomic_number &gt; 0</text>
+    <text x="0" y="112" text-anchor="middle" font-size="10" fill="#555">anchor = position</text>
+  </g>
+
+  <!-- 4. Move -->
+  <g transform="translate(700, 80)">
+    <rect x="-80" y="-20" width="160" height="130" fill="#fff3e0" rx="6" stroke="#ff9800" stroke-width="1.5"/>
+    <text x="0" y="0" text-anchor="middle" font-size="13" font-weight="bold" fill="#e65100">MOVE (~[from])</text>
+    <!-- Anchor (dashed circle) -->
+    <circle cx="-25" cy="45" r="12" fill="none" stroke="#ff9800" stroke-width="2" stroke-dasharray="4,3"/>
+    <!-- Arrow from anchor to new position -->
+    <line x1="-13" y1="45" x2="13" y2="62" stroke="#555" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    <!-- Atom at new position -->
+    <circle cx="25" cy="65" r="22" fill="#ffb74d" stroke="#e65100" stroke-width="2"/>
+    <text x="25" y="70" text-anchor="middle" font-size="14" font-weight="bold" fill="white">C</text>
+    <text x="0" y="100" text-anchor="middle" font-size="10" fill="#555">atomic_number &gt; 0</text>
+    <text x="0" y="112" text-anchor="middle" font-size="10" fill="#555">anchor ≠ position</text>
+  </g>
+
+  <!-- Classification table -->
+  <g transform="translate(400, 260)">
+    <rect x="-370" y="-15" width="740" height="245" fill="white" rx="6" stroke="#ccc" stroke-width="1"/>
+    <text x="0" y="5" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Classification Logic (DiffAtomKind)</text>
+
+    <!-- Table header -->
+    <rect x="-350" y="15" width="700" height="28" fill="#f5f5f5" rx="3"/>
+    <text x="-320" y="34" font-size="12" font-weight="bold" fill="#333">atomic_number</text>
+    <text x="-140" y="34" font-size="12" font-weight="bold" fill="#333">has anchor?</text>
+    <text x="20" y="34" font-size="12" font-weight="bold" fill="#333">Kind</text>
+    <text x="200" y="34" font-size="12" font-weight="bold" fill="#333">Text format</text>
+
+    <!-- Row 1 -->
+    <text x="-320" y="62" font-size="11" fill="#555">= 0</text>
+    <text x="-140" y="62" font-size="11" fill="#555">any</text>
+    <text x="20" y="62" font-size="11" fill="#c62828" font-weight="bold">DeleteMarker</text>
+    <text x="200" y="62" font-size="11" fill="#555" font-family="monospace">- @ (x, y, z)</text>
+
+    <!-- Row 2 -->
+    <line x1="-350" y1="72" x2="350" y2="72" stroke="#eee"/>
+    <text x="-320" y="90" font-size="11" fill="#555">&gt; 0</text>
+    <text x="-140" y="90" font-size="11" fill="#555">yes (= pos)</text>
+    <text x="20" y="90" font-size="11" fill="#1565c0" font-weight="bold">MatchedBase</text>
+    <text x="200" y="90" font-size="11" fill="#555" font-family="monospace">~El @ (x, y, z)</text>
+
+    <!-- Row 3 -->
+    <line x1="-350" y1="100" x2="350" y2="100" stroke="#eee"/>
+    <text x="-320" y="118" font-size="11" fill="#555">&gt; 0</text>
+    <text x="-140" y="118" font-size="11" fill="#555">yes (≠ pos)</text>
+    <text x="20" y="118" font-size="11" fill="#1565c0" font-weight="bold">MatchedBase</text>
+    <text x="200" y="118" font-size="11" fill="#555" font-family="monospace">~El @ (x,y,z) [from (a,b,c)]</text>
+
+    <!-- Row 4 -->
+    <line x1="-350" y1="128" x2="350" y2="128" stroke="#eee"/>
+    <text x="-320" y="146" font-size="11" fill="#555">&gt; 0</text>
+    <text x="-140" y="146" font-size="11" fill="#555">no</text>
+    <text x="20" y="146" font-size="11" fill="#2e7d32" font-weight="bold">PureAddition</text>
+    <text x="200" y="146" font-size="11" fill="#555" font-family="monospace">+El @ (x, y, z)</text>
+
+    <!-- Key insight -->
+    <rect x="-340" y="162" width="680" height="55" fill="#fff8e1" rx="4" stroke="#ffb74d" stroke-width="1"/>
+    <text x="0" y="182" text-anchor="middle" font-size="11" fill="#e65100" font-weight="bold">Key insight: The anchor position tells apply_diff WHERE in the base to look for a match.</text>
+    <text x="0" y="198" text-anchor="middle" font-size="11" fill="#e65100">Without an anchor, the atom's own position is used as the match position.</text>
+    <text x="0" y="212" text-anchor="middle" font-size="11" fill="#e65100">Anchors distinguish "I was tracking a base atom" from "I am a brand new atom."</text>
+  </g>
+</svg>

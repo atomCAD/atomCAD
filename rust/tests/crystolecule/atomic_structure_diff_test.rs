@@ -438,6 +438,9 @@ fn test_empty_diff_is_identity() {
             atoms_modified: 0,
             bonds_added: 0,
             bonds_deleted: 0,
+            orphaned_tracked_atoms: 0,
+            unmatched_delete_markers: 0,
+            orphaned_bonds: 0,
         }
     );
 }
@@ -867,6 +870,7 @@ fn test_unmatched_anchored_atom_skipped() {
     // Only the base C at origin should survive; the tracked atom should be skipped
     assert_eq!(result.result.get_num_of_atoms(), 1);
     assert_eq!(result.stats.atoms_added, 0);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 1);
 }
 
 #[test]
@@ -901,6 +905,7 @@ fn test_anchored_atom_matched_still_works() {
     assert_eq!(result.result.get_num_of_atoms(), 1);
     assert_eq!(result.stats.atoms_modified, 1);
     assert_eq!(result.stats.atoms_added, 0);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 0);
     // Verify atom is at the new position
     let atom = result.result.atoms_values().next().unwrap();
     assert!((atom.position - DVec3::new(0.3, 0.0, 0.0)).length() < 1e-10);
@@ -927,6 +932,7 @@ fn test_mixed_tracked_and_genuine_additions() {
     assert_eq!(count_element(&result.result, 6), 1); // base C
     assert_eq!(count_element(&result.result, 7), 1); // genuine N
     assert_eq!(result.stats.atoms_added, 1);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 1);
 }
 
 #[test]
@@ -979,6 +985,8 @@ fn test_upstream_deletion_propagates_through_chained_diffs() {
     assert_eq!(downstream_result.result.get_num_of_atoms(), 4); // C + 3H
     assert_eq!(count_element(&downstream_result.result, 1), 3);
     assert_eq!(count_element(&downstream_result.result, 6), 1);
+    // Exactly 1 orphaned tracked atom (H4's tracked entry)
+    assert_eq!(downstream_result.stats.orphaned_tracked_atoms, 1);
 }
 
 #[test]
@@ -1013,6 +1021,8 @@ fn test_moved_atom_beyond_tolerance_no_stale_copy() {
     // The stale tracked H at (1,0,0) should NOT reappear
     assert_eq!(downstream_result.result.get_num_of_atoms(), 2);
     assert_eq!(count_element(&downstream_result.result, 1), 1);
+    // 1 orphaned tracked atom (stale H entry)
+    assert_eq!(downstream_result.stats.orphaned_tracked_atoms, 1);
 }
 
 #[test]
@@ -1040,6 +1050,8 @@ fn test_bonds_not_created_for_skipped_tracked_atoms() {
     assert_eq!(result.result.get_num_of_atoms(), 2); // C + base H passthrough
     // Only the base bond C-H survives
     assert_eq!(result.result.get_num_of_bonds(), 1);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 1);
+    assert_eq!(result.stats.orphaned_bonds, 1); // diff bond dc-dh was orphaned
 }
 
 #[test]
@@ -1091,4 +1103,81 @@ fn test_ch3_deletion_propagates_downstream() {
     assert_eq!(count_element(&after.result, 6), 0); // CH3 C gone
     assert_eq!(count_element(&after.result, 1), 0); // CH3 H's gone
     assert_eq!(after.result.get_num_of_bonds(), 0); // no bonds
+    // 4 orphaned tracked atoms: CH3 C + 3 H
+    assert_eq!(after.stats.orphaned_tracked_atoms, 4);
+}
+
+// ============================================================================
+// Group 19: Diagnostic counters
+// ============================================================================
+
+#[test]
+fn test_unmatched_delete_marker_counted() {
+    // A delete marker at a position where no base atom exists.
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    let mut diff = AtomicStructure::new_diff();
+    // Delete marker at (5,0,0) — no base atom there
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::new(5.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    assert_eq!(result.result.get_num_of_atoms(), 1); // base C unchanged
+    assert_eq!(result.stats.unmatched_delete_markers, 1);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 0);
+}
+
+#[test]
+fn test_multiple_unmatched_delete_markers_counted() {
+    let base = AtomicStructure::new(); // empty base
+
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::new(2.0, 0.0, 0.0));
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::new(3.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    assert_eq!(result.result.get_num_of_atoms(), 0);
+    assert_eq!(result.stats.unmatched_delete_markers, 3);
+}
+
+#[test]
+fn test_orphaned_bond_between_two_skipped_atoms() {
+    // Both endpoints of a diff bond are orphaned tracked atoms.
+    let base = AtomicStructure::new(); // empty base
+
+    let mut diff = AtomicStructure::new_diff();
+    let a = diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    diff.set_anchor_position(a, DVec3::new(0.0, 0.0, 0.0));
+    let b = diff.add_atom(7, DVec3::new(1.5, 0.0, 0.0));
+    diff.set_anchor_position(b, DVec3::new(1.5, 0.0, 0.0));
+    diff.add_bond(a, b, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    assert_eq!(result.result.get_num_of_atoms(), 0);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 2);
+    assert_eq!(result.stats.orphaned_bonds, 1);
+}
+
+#[test]
+fn test_no_diagnostics_when_everything_matches() {
+    // Normal operation: all matches succeed, no diagnostics.
+    let mut base = AtomicStructure::new();
+    let c = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let h = base.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
+    base.add_bond(c, h, 1);
+
+    let mut diff = AtomicStructure::new_diff();
+    // Add a new atom
+    diff.add_atom(7, DVec3::new(3.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    assert_eq!(result.result.get_num_of_atoms(), 3);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 0);
+    assert_eq!(result.stats.unmatched_delete_markers, 0);
+    assert_eq!(result.stats.orphaned_bonds, 0);
 }

@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 680" width="800" height="680">
+  <defs>
+    <marker id="arr5" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+    <marker id="arr6" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#c62828"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="800" height="680" fill="#fafafa" rx="8"/>
+  <text x="400" y="25" text-anchor="middle" font-size="15" font-weight="bold" fill="#333">Scenario: Add in A → Move in B → Delete in A</text>
+
+  <!-- Phase 1: Before deletion -->
+  <rect x="15" y="40" width="770" height="285" fill="#f5f5f5" rx="6" stroke="#ccc" stroke-width="1"/>
+  <text x="400" y="60" text-anchor="middle" font-size="13" font-weight="bold" fill="#333">Phase 1: Before deletion (everything works)</text>
+
+  <!-- Original base -->
+  <g transform="translate(55, 75)">
+    <text x="55" y="0" text-anchor="middle" font-size="11" font-weight="bold" fill="#6a1b9a">Original Base</text>
+    <circle cx="55" cy="35" r="18" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="55" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+  </g>
+
+  <!-- Node A diff: adds N -->
+  <g transform="translate(185, 75)">
+    <rect x="0" y="-10" width="130" height="100" fill="#e8f5e9" rx="4" stroke="#4caf50"/>
+    <text x="65" y="8" text-anchor="middle" font-size="10" font-weight="bold" fill="#2e7d32">Node A diff</text>
+    <circle cx="65" cy="50" r="16" fill="#66bb6a" stroke="#2e7d32" stroke-width="2"/>
+    <text x="65" y="55" text-anchor="middle" font-size="11" font-weight="bold" fill="white">N</text>
+    <text x="65" y="78" text-anchor="middle" font-size="8" fill="#555">+N @ (3,0,0)</text>
+  </g>
+
+  <!-- Node A result -->
+  <g transform="translate(340, 75)">
+    <text x="55" y="0" text-anchor="middle" font-size="11" font-weight="bold" fill="#283593">A's Result</text>
+    <circle cx="25" cy="35" r="18" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="25" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+    <circle cx="85" cy="35" r="16" fill="#66bb6a" stroke="#2e7d32" stroke-width="2"/>
+    <text x="85" y="40" text-anchor="middle" font-size="11" font-weight="bold" fill="white">N</text>
+    <text x="85" y="58" text-anchor="middle" font-size="8" fill="#555">(3, 0, 0)</text>
+  </g>
+
+  <!-- Node B diff: moves N -->
+  <g transform="translate(475, 75)">
+    <rect x="0" y="-10" width="155" height="100" fill="#fff3e0" rx="4" stroke="#ff9800"/>
+    <text x="77" y="8" text-anchor="middle" font-size="10" font-weight="bold" fill="#e65100">Node B diff</text>
+    <circle cx="35" cy="45" r="10" fill="none" stroke="#ff9800" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <text x="35" y="35" text-anchor="middle" font-size="7" fill="#e65100">anchor(3,0,0)</text>
+    <line x1="45" y1="45" x2="78" y2="50" stroke="#555" stroke-width="1" marker-end="url(#arr5)"/>
+    <circle cx="90" cy="50" r="16" fill="#ffb74d" stroke="#e65100" stroke-width="2"/>
+    <text x="90" y="55" text-anchor="middle" font-size="11" font-weight="bold" fill="white">N</text>
+    <text x="90" y="78" text-anchor="middle" font-size="8" fill="#555">~N@(5,0,0) [from(3,0,0)]</text>
+  </g>
+
+  <!-- Node B result -->
+  <g transform="translate(660, 75)">
+    <text x="55" y="0" text-anchor="middle" font-size="11" font-weight="bold" fill="#283593">B's Result</text>
+    <circle cx="25" cy="35" r="18" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="25" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+    <circle cx="85" cy="35" r="16" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="85" y="40" text-anchor="middle" font-size="11" font-weight="bold" fill="white">N</text>
+    <text x="85" y="58" text-anchor="middle" font-size="8" fill="#555">(5, 0, 0)</text>
+  </g>
+
+  <!-- Arrows between phases -->
+  <line x1="140" y1="110" x2="183" y2="110" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+  <line x1="320" y1="110" x2="338" y2="110" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+  <line x1="430" y1="110" x2="473" y2="110" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+  <line x1="635" y1="110" x2="658" y2="110" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+
+  <!-- Phase 2: After deletion in A -->
+  <rect x="15" y="340" width="770" height="325" fill="#fff8e1" rx="6" stroke="#ffb74d" stroke-width="1"/>
+  <text x="400" y="360" text-anchor="middle" font-size="13" font-weight="bold" fill="#e65100">Phase 2: User deletes N in Node A (what happens to Node B?)</text>
+
+  <!-- Original base (unchanged) -->
+  <g transform="translate(55, 380)">
+    <text x="55" y="0" text-anchor="middle" font-size="11" font-weight="bold" fill="#6a1b9a">Original Base</text>
+    <circle cx="55" cy="35" r="18" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="55" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+  </g>
+
+  <!-- Node A diff: N removed from diff -->
+  <g transform="translate(185, 380)">
+    <rect x="0" y="-10" width="130" height="100" fill="#f5f5f5" rx="4" stroke="#ccc"/>
+    <text x="65" y="8" text-anchor="middle" font-size="10" font-weight="bold" fill="#888">Node A diff</text>
+    <text x="65" y="50" text-anchor="middle" font-size="10" fill="#999">(empty — N was</text>
+    <text x="65" y="64" text-anchor="middle" font-size="10" fill="#999">removed from diff)</text>
+  </g>
+
+  <!-- Node A result: just C -->
+  <g transform="translate(345, 380)">
+    <text x="40" y="0" text-anchor="middle" font-size="11" font-weight="bold" fill="#283593">A's Result</text>
+    <circle cx="40" cy="35" r="18" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="40" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+    <text x="40" y="62" text-anchor="middle" font-size="9" fill="#c62828">N is gone!</text>
+  </g>
+
+  <!-- Node B diff: unchanged -->
+  <g transform="translate(460, 380)">
+    <rect x="0" y="-10" width="155" height="100" fill="#fff3e0" rx="4" stroke="#ff9800"/>
+    <text x="77" y="8" text-anchor="middle" font-size="10" font-weight="bold" fill="#e65100">Node B diff (unchanged)</text>
+    <circle cx="35" cy="45" r="10" fill="none" stroke="#ff9800" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <text x="35" y="35" text-anchor="middle" font-size="7" fill="#e65100">anchor(3,0,0)</text>
+    <line x1="45" y1="45" x2="78" y2="50" stroke="#555" stroke-width="1" marker-end="url(#arr5)"/>
+    <circle cx="90" cy="50" r="16" fill="#ffb74d" stroke="#e65100" stroke-width="2"/>
+    <text x="90" y="55" text-anchor="middle" font-size="11" font-weight="bold" fill="white">N</text>
+    <text x="90" y="78" text-anchor="middle" font-size="8" fill="#555">~N@(5,0,0) [from(3,0,0)]</text>
+  </g>
+
+  <!-- Node B result -->
+  <g transform="translate(650, 380)">
+    <text x="55" y="0" text-anchor="middle" font-size="11" font-weight="bold" fill="#283593">B's Result</text>
+    <circle cx="25" cy="35" r="18" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="25" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+    <text x="80" y="42" text-anchor="middle" font-size="10" fill="#c62828" font-weight="bold">No N!</text>
+  </g>
+
+  <!-- Arrows -->
+  <line x1="140" y1="415" x2="183" y2="415" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+  <line x1="320" y1="415" x2="343" y2="415" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+  <line x1="400" y1="415" x2="458" y2="415" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+  <line x1="620" y1="415" x2="648" y2="415" stroke="#555" stroke-width="1.5" marker-end="url(#arr5)"/>
+
+  <!-- Explanation -->
+  <rect x="40" y="500" width="730" height="148" fill="white" rx="6" stroke="#e65100" stroke-width="1.5"/>
+  <text x="55" y="522" font-size="12" font-weight="bold" fill="#e65100">What happens inside apply_diff for Node B:</text>
+  <text x="55" y="544" font-size="11" fill="#555">1. Node B's diff has ~N@(5,0,0) [from(3,0,0)] — an anchored move.</text>
+  <text x="55" y="562" font-size="11" fill="#555">2. Matching uses the anchor (3,0,0) to search A's result for a base atom.</text>
+  <text x="55" y="580" font-size="11" fill="#555">3. A's result has no atom at (3,0,0) — N was deleted from A's diff.</text>
+  <text x="55" y="598" font-size="11" fill="#555">4. The diff atom is UNMATCHED. It has an anchor → SKIP (not added to result).</text>
+  <text x="55" y="620" font-size="11" fill="#e65100" font-weight="bold">5. Result: N does not reappear. The deletion propagated correctly.</text>
+  <text x="55" y="638" font-size="11" fill="#c62828" font-weight="bold">   This is a SILENT operation — no error or warning is raised.</text>
+</svg>

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 400" width="780" height="400">
+  <defs>
+    <marker id="arr7" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="780" height="400" fill="#fafafa" rx="8"/>
+  <text x="390" y="25" text-anchor="middle" font-size="15" font-weight="bold" fill="#333">Scenario: Upstream Moves H, Downstream has Stale Tracked Entry</text>
+
+  <!-- Setup -->
+  <g transform="translate(20, 50)">
+    <rect x="0" y="0" width="360" height="150" fill="#e3f2fd" rx="6" stroke="#1565c0"/>
+    <text x="180" y="20" text-anchor="middle" font-size="12" font-weight="bold" fill="#1565c0">Node A: Moves H from (1,0,0) to (5,0,0)</text>
+
+    <text x="15" y="45" font-size="11" fill="#555">Base:</text>
+    <circle cx="70" cy="80" r="18" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="70" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+    <text x="70" y="105" text-anchor="middle" font-size="8" fill="#666">(0,0,0)</text>
+    <circle cx="140" cy="80" r="14" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="140" y="85" text-anchor="middle" font-size="11" font-weight="bold" fill="white">H</text>
+    <text x="140" y="105" text-anchor="middle" font-size="8" fill="#666">(1,0,0)</text>
+
+    <text x="195" y="45" font-size="11" fill="#555">A's Result:</text>
+    <circle cx="240" cy="80" r="18" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="240" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+    <text x="240" y="105" text-anchor="middle" font-size="8" fill="#666">(0,0,0)</text>
+    <circle cx="330" cy="80" r="14" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="330" y="85" text-anchor="middle" font-size="11" font-weight="bold" fill="white">H</text>
+    <text x="330" y="105" text-anchor="middle" font-size="8" fill="#666">(5,0,0)</text>
+    <text x="285" y="140" text-anchor="middle" font-size="9" fill="#e65100">H moved far away</text>
+  </g>
+
+  <!-- Node B diff -->
+  <g transform="translate(400, 50)">
+    <rect x="0" y="0" width="365" height="150" fill="#fff3e0" rx="6" stroke="#ff9800"/>
+    <text x="182" y="20" text-anchor="middle" font-size="12" font-weight="bold" fill="#e65100">Node B diff: Stale tracked entries from BEFORE the move</text>
+
+    <!-- Tracked C (matches) -->
+    <circle cx="50" cy="75" r="10" fill="none" stroke="#ff9800" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <circle cx="50" cy="75" r="18" fill="#ffb74d" stroke="#e65100" stroke-width="2" opacity="0.6"/>
+    <text x="50" y="80" text-anchor="middle" font-size="11" font-weight="bold" fill="white">C</text>
+    <text x="50" y="105" text-anchor="middle" font-size="8" fill="#555">~C@(0,0,0)</text>
+    <text x="50" y="118" text-anchor="middle" font-size="8" fill="#2e7d32">matches!</text>
+
+    <!-- Tracked H at old position (1,0,0) — STALE! -->
+    <circle cx="150" cy="75" r="10" fill="none" stroke="#ff9800" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <circle cx="150" cy="75" r="14" fill="#ffb74d" stroke="#e65100" stroke-width="2" opacity="0.4"/>
+    <text x="150" y="80" text-anchor="middle" font-size="11" font-weight="bold" fill="white" opacity="0.5">H</text>
+    <text x="150" y="105" text-anchor="middle" font-size="8" fill="#555">~H@(1,0,0)</text>
+    <text x="150" y="118" text-anchor="middle" font-size="8" fill="#c62828" font-weight="bold">no match!</text>
+    <text x="150" y="131" text-anchor="middle" font-size="8" fill="#c62828">→ SKIPPED</text>
+
+    <text x="280" y="75" font-size="10" fill="#555">A's result has H at (5,0,0)</text>
+    <text x="280" y="90" font-size="10" fill="#555">but anchor seeks at (1,0,0)</text>
+    <text x="280" y="105" font-size="10" fill="#555">→ 4Å apart, beyond 0.1Å tol.</text>
+  </g>
+
+  <!-- Result -->
+  <g transform="translate(20, 220)">
+    <rect x="0" y="0" width="740" height="160" fill="#e8eaf6" rx="6" stroke="#3f51b5"/>
+    <text x="370" y="25" text-anchor="middle" font-size="13" font-weight="bold" fill="#283593">Node B's Result</text>
+
+    <circle cx="80" cy="80" r="18" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="80" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+    <text x="80" y="107" text-anchor="middle" font-size="8" fill="#555">(0,0,0) — matched by tracked ~C</text>
+
+    <circle cx="220" cy="80" r="14" fill="#b0bec5" stroke="#546e7a" stroke-width="2"/>
+    <text x="220" y="85" text-anchor="middle" font-size="11" font-weight="bold" fill="white">H</text>
+    <text x="220" y="107" text-anchor="middle" font-size="8" fill="#555">(5,0,0) — pass-through from A's result</text>
+
+    <text x="450" y="70" font-size="11" fill="#333" font-weight="bold">2 atoms total. Correct!</text>
+    <text x="450" y="90" font-size="10" fill="#555">The stale tracked H at (1,0,0) was skipped</text>
+    <text x="450" y="106" font-size="10" fill="#555">(anchor present but no base atom there).</text>
+    <text x="450" y="122" font-size="10" fill="#555">The actual H at (5,0,0) passes through because</text>
+    <text x="450" y="138" font-size="10" fill="#555">no diff atom matched it.</text>
+    <text x="450" y="154" font-size="10" fill="#c62828" font-weight="bold">Silent — no error raised.</text>
+  </g>
+</svg>

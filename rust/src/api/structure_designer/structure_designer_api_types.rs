@@ -355,6 +355,12 @@ pub struct APIDiffStats {
     pub atoms_modified: u32,
     pub bonds_added: u32,
     pub bonds_deleted: u32,
+    /// Anchored diff atoms whose base atom no longer exists (skipped).
+    pub orphaned_tracked_atoms: u32,
+    /// Delete markers that found no base atom to delete (no-op).
+    pub unmatched_delete_markers: u32,
+    /// Diff bonds where one or both endpoints were missing from the result (skipped).
+    pub orphaned_bonds: u32,
 }
 
 pub struct APIAtomEditData {

@@ -7,8 +7,8 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
-    cycle_bond_order, AddBondInteractionState, AddBondMoveResult, AddBondToolState, AtomEditData,
-    AtomEditTool,
+    AddBondInteractionState, AddBondMoveResult, AddBondToolState, AtomEditData, AtomEditTool,
+    cycle_bond_order,
 };
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
@@ -255,12 +255,12 @@ fn test_overwrite_bond_order_all_types() {
     ] {
         data.add_bond_in_diff(id_a, id_b, order);
         let atom = data.diff.get_atom(id_a).unwrap();
-        assert_eq!(atom.bonds.len(), 1, "Bond duplicated on order change to {order}");
         assert_eq!(
-            atom.bonds[0].bond_order(),
-            order,
-            "Expected order {order}"
+            atom.bonds.len(),
+            1,
+            "Bond duplicated on order change to {order}"
         );
+        assert_eq!(atom.bonds[0].bond_order(), order, "Expected order {order}");
     }
 }
 
@@ -308,9 +308,10 @@ fn test_change_selected_bonds_order_diff_view_single_bond() {
     // Select the bond
     {
         let data = get_atom_edit_data_mut(&mut designer);
-        data.selection
-            .selected_bonds
-            .insert(BondReference { atom_id1: id_a, atom_id2: id_b });
+        data.selection.selected_bonds.insert(BondReference {
+            atom_id1: id_a,
+            atom_id2: id_b,
+        });
     }
 
     // Change to double
@@ -347,9 +348,10 @@ fn test_change_selected_bonds_order_diff_view_all_orders() {
         // Re-select the bond (add_bond_in_diff clears selection)
         {
             let data = get_atom_edit_data_mut(&mut designer);
-            data.selection
-                .selected_bonds
-                .insert(BondReference { atom_id1: id_a, atom_id2: id_b });
+            data.selection.selected_bonds.insert(BondReference {
+                atom_id1: id_a,
+                atom_id2: id_b,
+            });
         }
 
         change_selected_bonds_order(&mut designer, order);
@@ -380,9 +382,10 @@ fn test_change_selected_bonds_order_rejects_order_zero() {
 
     {
         let data = get_atom_edit_data_mut(&mut designer);
-        data.selection
-            .selected_bonds
-            .insert(BondReference { atom_id1: id_a, atom_id2: id_b });
+        data.selection.selected_bonds.insert(BondReference {
+            atom_id1: id_a,
+            atom_id2: id_b,
+        });
     }
 
     // Order 0 (BOND_DELETED) should be rejected — bond stays single
@@ -409,9 +412,10 @@ fn test_change_selected_bonds_order_rejects_order_above_7() {
 
     {
         let data = get_atom_edit_data_mut(&mut designer);
-        data.selection
-            .selected_bonds
-            .insert(BondReference { atom_id1: id_a, atom_id2: id_b });
+        data.selection.selected_bonds.insert(BondReference {
+            atom_id1: id_a,
+            atom_id2: id_b,
+        });
     }
 
     // Order 8 should be rejected — bond stays single
@@ -441,12 +445,14 @@ fn test_change_selected_bonds_order_multiple_bonds() {
     // Select both bonds
     {
         let data = get_atom_edit_data_mut(&mut designer);
-        data.selection
-            .selected_bonds
-            .insert(BondReference { atom_id1: id_a, atom_id2: id_b });
-        data.selection
-            .selected_bonds
-            .insert(BondReference { atom_id1: id_b, atom_id2: id_c });
+        data.selection.selected_bonds.insert(BondReference {
+            atom_id1: id_a,
+            atom_id2: id_b,
+        });
+        data.selection.selected_bonds.insert(BondReference {
+            atom_id1: id_b,
+            atom_id2: id_c,
+        });
     }
 
     change_selected_bonds_order(&mut designer, BOND_TRIPLE);
@@ -455,12 +461,20 @@ fn test_change_selected_bonds_order_multiple_bonds() {
 
     // Check bond A-B
     let atom_a = data.diff.get_atom(id_a).unwrap();
-    let bond_ab = atom_a.bonds.iter().find(|b| b.other_atom_id() == id_b).unwrap();
+    let bond_ab = atom_a
+        .bonds
+        .iter()
+        .find(|b| b.other_atom_id() == id_b)
+        .unwrap();
     assert_eq!(bond_ab.bond_order(), BOND_TRIPLE);
 
     // Check bond B-C
     let atom_b = data.diff.get_atom(id_b).unwrap();
-    let bond_bc = atom_b.bonds.iter().find(|b| b.other_atom_id() == id_c).unwrap();
+    let bond_bc = atom_b
+        .bonds
+        .iter()
+        .find(|b| b.other_atom_id() == id_c)
+        .unwrap();
     assert_eq!(bond_bc.bond_order(), BOND_TRIPLE);
 }
 
@@ -482,7 +496,10 @@ fn test_change_bond_order_diff_view() {
         (id_a, id_b)
     };
 
-    let bond_ref = BondReference { atom_id1: id_a, atom_id2: id_b };
+    let bond_ref = BondReference {
+        atom_id1: id_a,
+        atom_id2: id_b,
+    };
     change_bond_order(&mut designer, &bond_ref, BOND_TRIPLE);
 
     let data = get_atom_edit_data(&designer);
@@ -504,7 +521,10 @@ fn test_change_bond_order_rejects_zero() {
         (id_a, id_b)
     };
 
-    let bond_ref = BondReference { atom_id1: id_a, atom_id2: id_b };
+    let bond_ref = BondReference {
+        atom_id1: id_a,
+        atom_id2: id_b,
+    };
     change_bond_order(&mut designer, &bond_ref, 0);
 
     // Bond should remain unchanged
@@ -527,7 +547,10 @@ fn test_change_bond_order_rejects_above_7() {
         (id_a, id_b)
     };
 
-    let bond_ref = BondReference { atom_id1: id_a, atom_id2: id_b };
+    let bond_ref = BondReference {
+        atom_id1: id_a,
+        atom_id2: id_b,
+    };
     change_bond_order(&mut designer, &bond_ref, 8);
 
     let data = get_atom_edit_data(&designer);
@@ -723,7 +746,10 @@ fn test_bond_order_cycle_integration_diff_view() {
         (id_a, id_b)
     };
 
-    let bond_ref = BondReference { atom_id1: id_a, atom_id2: id_b };
+    let bond_ref = BondReference {
+        atom_id1: id_a,
+        atom_id2: id_b,
+    };
 
     // Simulate the Default tool cycle: read order, cycle, apply
     // Cycle 1: single → double
@@ -795,7 +821,10 @@ fn test_specialized_order_enters_cycle_at_single() {
         (id_a, id_b)
     };
 
-    let bond_ref = BondReference { atom_id1: id_a, atom_id2: id_b };
+    let bond_ref = BondReference {
+        atom_id1: id_a,
+        atom_id2: id_b,
+    };
 
     // Cycling from aromatic should go to single
     let current = get_atom_edit_data(&designer)

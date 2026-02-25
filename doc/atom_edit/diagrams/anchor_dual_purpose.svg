@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 260" width="700" height="260">
+  <defs>
+    <marker id="arr4" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#e65100"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="700" height="260" fill="#fafafa" rx="8"/>
+  <text x="350" y="25" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Anchor Dual Purpose</text>
+
+  <!-- Purpose 1: Matching -->
+  <rect x="20" y="40" width="320" height="200" fill="#e3f2fd" rx="6" stroke="#1565c0" stroke-width="1.5"/>
+  <text x="180" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#1565c0">Purpose 1: Direct Matching</text>
+
+  <!-- Base atom -->
+  <circle cx="80" cy="120" r="18" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+  <text x="80" y="125" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+  <text x="80" y="150" text-anchor="middle" font-size="9" fill="#555">(0, 0, 0)</text>
+  <text x="80" y="100" text-anchor="middle" font-size="9" fill="#6a1b9a">base</text>
+
+  <!-- Anchor at (0,0,0) -->
+  <circle cx="170" cy="120" r="10" fill="none" stroke="#ff9800" stroke-width="2" stroke-dasharray="4,3"/>
+  <text x="170" y="100" text-anchor="middle" font-size="9" fill="#e65100">anchor (0,0,0)</text>
+
+  <!-- Arrow anchor to atom -->
+  <line x1="180" y1="120" x2="228" y2="140" stroke="#e65100" stroke-width="1.5" marker-end="url(#arr4)"/>
+
+  <!-- Diff atom at new position -->
+  <circle cx="240" cy="150" r="18" fill="#ffb74d" stroke="#e65100" stroke-width="2"/>
+  <text x="240" y="155" text-anchor="middle" font-size="12" font-weight="bold" fill="white">C</text>
+  <text x="240" y="180" text-anchor="middle" font-size="9" fill="#555">(5, 0, 0)</text>
+  <text x="240" y="197" text-anchor="middle" font-size="9" fill="#e65100">diff atom</text>
+
+  <!-- Match line -->
+  <path d="M 98 120 L 158 120" stroke="#1565c0" stroke-width="2" stroke-dasharray="4,3"/>
+  <text x="128" y="112" text-anchor="middle" font-size="8" fill="#1565c0">match!</text>
+
+  <text x="180" y="225" text-anchor="middle" font-size="10" fill="#555">Anchor at (0,0,0) finds base C.</text>
+  <text x="180" y="237" text-anchor="middle" font-size="10" fill="#555">Result: C moves to (5,0,0).</text>
+
+  <!-- Purpose 2: Deletion safety -->
+  <rect x="360" y="40" width="320" height="200" fill="#fff3e0" rx="6" stroke="#ff9800" stroke-width="1.5"/>
+  <text x="520" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#e65100">Purpose 2: Upstream Deletion Safety</text>
+
+  <!-- Empty base -->
+  <rect x="390" y="95" width="80" height="50" fill="#f5f5f5" rx="4" stroke="#ccc"/>
+  <text x="430" y="120" text-anchor="middle" font-size="10" fill="#999">no base atom</text>
+  <text x="430" y="135" text-anchor="middle" font-size="10" fill="#999">at (0,0,0)</text>
+
+  <!-- Anchor searching but finding nothing -->
+  <circle cx="510" cy="120" r="10" fill="none" stroke="#ff9800" stroke-width="2" stroke-dasharray="4,3"/>
+  <text x="510" y="100" text-anchor="middle" font-size="9" fill="#e65100">anchor (0,0,0)</text>
+  <line x1="500" y1="120" x2="475" y2="120" stroke="#c62828" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <text x="487" y="112" text-anchor="middle" font-size="8" fill="#c62828">miss!</text>
+
+  <!-- Diff atom (will be skipped) -->
+  <circle cx="600" cy="150" r="18" fill="#ffb74d" stroke="#e65100" stroke-width="2" opacity="0.4"/>
+  <text x="600" y="155" text-anchor="middle" font-size="12" font-weight="bold" fill="white" opacity="0.5">C</text>
+  <text x="600" y="180" text-anchor="middle" font-size="9" fill="#999">(5, 0, 0)</text>
+  <text x="600" y="197" text-anchor="middle" font-size="9" fill="#c62828">SKIPPED</text>
+
+  <text x="520" y="225" text-anchor="middle" font-size="10" fill="#555">Anchor proves "I tracked a base atom."</text>
+  <text x="520" y="237" text-anchor="middle" font-size="10" fill="#555">Base gone → this atom is skipped.</text>
+</svg>

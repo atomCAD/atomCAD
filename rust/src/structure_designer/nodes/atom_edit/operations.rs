@@ -496,7 +496,10 @@ fn change_bond_order_result_view(
             atom_edit_data
                 .selection
                 .selected_bonds
-                .insert(BondReference { atom_id1: ra, atom_id2: rb });
+                .insert(BondReference {
+                    atom_id1: ra,
+                    atom_id2: rb,
+                });
         }
     }
 }
@@ -642,7 +645,10 @@ fn change_selected_bonds_order_result_view(
                 atom_edit_data
                     .selection
                     .selected_bonds
-                    .insert(BondReference { atom_id1: ra, atom_id2: rb });
+                    .insert(BondReference {
+                        atom_id1: ra,
+                        atom_id2: rb,
+                    });
             }
         }
     }
