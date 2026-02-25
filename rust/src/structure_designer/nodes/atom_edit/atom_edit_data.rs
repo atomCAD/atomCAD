@@ -671,7 +671,16 @@ impl NodeData for AtomEditData {
                     if s.orphaned_bonds > 0 {
                         parts.push(format!("{} orphaned bond(s)", s.orphaned_bonds));
                     }
-                    return NetworkResult::Error(format!("Stale entries: {}", parts.join(", ")));
+                    let error_msg = format!("Stale entries: {}", parts.join(", "));
+                    // Store eval cache before returning error so the panel can still show diagnostics
+                    if network_stack.len() == 1 {
+                        let eval_cache = AtomEditEvalCache {
+                            provenance: diff_result.provenance,
+                            stats: diff_result.stats,
+                        };
+                        context.selected_node_eval_cache = Some(Box::new(eval_cache));
+                    }
+                    return NetworkResult::Error(error_msg);
                 }
             }
 
