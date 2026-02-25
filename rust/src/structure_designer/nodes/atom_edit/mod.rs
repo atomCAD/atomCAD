@@ -4,6 +4,7 @@ mod atom_edit_data;
 mod default_tool;
 pub mod measurement;
 mod minimization;
+mod modify_measurement;
 mod operations;
 mod selection;
 mod types;
@@ -20,6 +21,7 @@ pub mod atom_edit {
     pub use super::default_tool::*;
     pub use super::measurement::*;
     pub use super::minimization::*;
+    pub use super::modify_measurement::*;
     pub use super::operations::*;
     pub use super::selection::*;
     pub use super::types::*;

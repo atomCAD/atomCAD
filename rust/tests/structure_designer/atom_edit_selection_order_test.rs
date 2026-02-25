@@ -27,9 +27,18 @@ fn test_track_selected_appends_in_order() {
     selection.track_selected(SelectionProvenance::Base, 30);
 
     assert_eq!(selection.selection_order.len(), 3);
-    assert_eq!(selection.selection_order[0], (SelectionProvenance::Base, 10));
-    assert_eq!(selection.selection_order[1], (SelectionProvenance::Diff, 20));
-    assert_eq!(selection.selection_order[2], (SelectionProvenance::Base, 30));
+    assert_eq!(
+        selection.selection_order[0],
+        (SelectionProvenance::Base, 10)
+    );
+    assert_eq!(
+        selection.selection_order[1],
+        (SelectionProvenance::Diff, 20)
+    );
+    assert_eq!(
+        selection.selection_order[2],
+        (SelectionProvenance::Base, 30)
+    );
 }
 
 #[test]
@@ -74,8 +83,14 @@ fn test_untrack_selected_removes_entry() {
     selection.untrack_selected(SelectionProvenance::Diff, 20);
 
     assert_eq!(selection.selection_order.len(), 2);
-    assert_eq!(selection.selection_order[0], (SelectionProvenance::Base, 10));
-    assert_eq!(selection.selection_order[1], (SelectionProvenance::Base, 30));
+    assert_eq!(
+        selection.selection_order[0],
+        (SelectionProvenance::Base, 10)
+    );
+    assert_eq!(
+        selection.selection_order[1],
+        (SelectionProvenance::Base, 30)
+    );
 }
 
 #[test]

@@ -81,3 +81,6 @@ mod atom_edit_bond_order_test;
 
 #[path = "structure_designer/atom_edit_selection_order_test.rs"]
 mod atom_edit_selection_order_test;
+
+#[path = "structure_designer/modify_measurement_test.rs"]
+mod modify_measurement_test;

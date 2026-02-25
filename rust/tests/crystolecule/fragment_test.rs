@@ -1,6 +1,6 @@
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::fragment::compute_moving_fragment;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::fragment::compute_moving_fragment;
 use std::collections::HashSet;
 
 // ============================================================================
