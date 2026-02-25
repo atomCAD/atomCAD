@@ -37,6 +37,7 @@ use std::collections::HashMap;
 pub mod atom;
 pub mod atomic_structure_decorator;
 pub mod bond_reference;
+pub mod fragment;
 pub mod inline_bond;
 
 // Re-export types for convenience
