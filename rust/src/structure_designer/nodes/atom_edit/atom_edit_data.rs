@@ -46,6 +46,8 @@ pub struct AtomEditData {
     pub include_base_bonds_in_diff: bool,
     /// Positional matching tolerance in Angstroms
     pub tolerance: f64,
+    /// When true + result view, return error if any diff diagnostics are non-zero
+    pub error_on_stale_entries: bool,
 
     // Transient (NOT serialized)
     /// Current selection state
@@ -74,6 +76,7 @@ impl AtomEditData {
             show_anchor_arrows: false,
             include_base_bonds_in_diff: true,
             tolerance: DEFAULT_TOLERANCE,
+            error_on_stale_entries: false,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6, // Default to carbon
@@ -93,6 +96,7 @@ impl AtomEditData {
         show_anchor_arrows: bool,
         include_base_bonds_in_diff: bool,
         tolerance: f64,
+        error_on_stale_entries: bool,
     ) -> Self {
         Self {
             diff,
@@ -100,6 +104,7 @@ impl AtomEditData {
             show_anchor_arrows,
             include_base_bonds_in_diff,
             tolerance,
+            error_on_stale_entries,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
@@ -643,6 +648,33 @@ impl NodeData for AtomEditData {
             // Apply the diff to the input
             let diff_result = apply_diff(&input_structure, &self.diff, self.tolerance);
 
+            // Error on stale entries: if enabled and any diagnostics are non-zero, return error
+            if self.error_on_stale_entries {
+                let s = &diff_result.stats;
+                if s.orphaned_tracked_atoms > 0
+                    || s.unmatched_delete_markers > 0
+                    || s.orphaned_bonds > 0
+                {
+                    let mut parts = Vec::new();
+                    if s.orphaned_tracked_atoms > 0 {
+                        parts.push(format!(
+                            "{} orphaned tracked atom(s)",
+                            s.orphaned_tracked_atoms
+                        ));
+                    }
+                    if s.unmatched_delete_markers > 0 {
+                        parts.push(format!(
+                            "{} unmatched delete marker(s)",
+                            s.unmatched_delete_markers
+                        ));
+                    }
+                    if s.orphaned_bonds > 0 {
+                        parts.push(format!("{} orphaned bond(s)", s.orphaned_bonds));
+                    }
+                    return NetworkResult::Error(format!("Stale entries: {}", parts.join(", ")));
+                }
+            }
+
             let mut result = diff_result.result;
 
             // Apply selection to result (mark atoms as selected for rendering)
@@ -720,6 +752,7 @@ impl NodeData for AtomEditData {
             show_anchor_arrows: self.show_anchor_arrows,
             include_base_bonds_in_diff: self.include_base_bonds_in_diff,
             tolerance: self.tolerance,
+            error_on_stale_entries: self.error_on_stale_entries,
             selection: self.selection.clone(),
             active_tool: match &self.active_tool {
                 AtomEditTool::Default(state) => AtomEditTool::Default(DefaultToolState {
@@ -788,6 +821,10 @@ impl NodeData for AtomEditData {
                 TextValue::Bool(self.include_base_bonds_in_diff),
             ),
             ("tolerance".to_string(), TextValue::Float(self.tolerance)),
+            (
+                "error_on_stale".to_string(),
+                TextValue::Bool(self.error_on_stale_entries),
+            ),
         ]
     }
 
@@ -803,6 +840,9 @@ impl NodeData for AtomEditData {
         }
         if let Some(v) = props.get("tolerance") {
             self.tolerance = v.as_float().ok_or("tolerance must be a number")?;
+        }
+        if let Some(v) = props.get("error_on_stale") {
+            self.error_on_stale_entries = v.as_bool().ok_or("error_on_stale must be a bool")?;
         }
         if let Some(v) = props.get("diff") {
             let diff_text = v.as_string().ok_or("diff must be a string")?;

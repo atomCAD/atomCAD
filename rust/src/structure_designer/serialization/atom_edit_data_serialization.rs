@@ -52,6 +52,8 @@ pub struct SerializableAtomEditData {
     pub include_base_bonds_in_diff: bool,
     #[serde(default = "default_tolerance")]
     pub tolerance: f64,
+    #[serde(default)]
+    pub error_on_stale_entries: bool,
 }
 
 fn default_include_base_bonds_in_diff() -> bool {
@@ -112,6 +114,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         show_anchor_arrows: data.show_anchor_arrows,
         include_base_bonds_in_diff: data.include_base_bonds_in_diff,
         tolerance: data.tolerance,
+        error_on_stale_entries: data.error_on_stale_entries,
     })
 }
 
@@ -169,5 +172,6 @@ pub fn serializable_to_atom_edit_data(
         serializable.show_anchor_arrows,
         serializable.include_base_bonds_in_diff,
         serializable.tolerance,
+        serializable.error_on_stale_entries,
     ))
 }

@@ -2228,6 +2228,7 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     output_diff: atom_edit_data.output_diff,
                     show_anchor_arrows: atom_edit_data.show_anchor_arrows,
                     include_base_bonds_in_diff: atom_edit_data.include_base_bonds_in_diff,
+                    error_on_stale_entries: atom_edit_data.error_on_stale_entries,
                     show_gadget: match &atom_edit_data.active_tool {
                         AtomEditTool::Default(state) => state.show_gadget,
                         _ => false,

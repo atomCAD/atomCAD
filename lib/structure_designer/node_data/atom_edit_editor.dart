@@ -140,6 +140,26 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               _buildCollapsibleTransformSection(),
             ],
           ],
+          // Error on stale entries checkbox (only in result view)
+          if (!_stagedData!.outputDiff) ...[
+            const SizedBox(height: AppSpacing.large),
+            Row(
+              children: [
+                SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: Checkbox(
+                    value: _stagedData!.errorOnStaleEntries,
+                    onChanged: (_) {
+                      widget.model.toggleAtomEditErrorOnStaleEntries();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('Error on stale entries'),
+              ],
+            ),
+          ],
         ],
       ),
     );

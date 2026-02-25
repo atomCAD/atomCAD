@@ -91,6 +91,9 @@ bool atomEditToggleShowGadget() => RustLib.instance.api
 bool atomEditToggleIncludeBaseBondsInDiff() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditToggleIncludeBaseBondsInDiff();
 
+bool atomEditToggleErrorOnStaleEntries() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditToggleErrorOnStaleEntries();
+
 APIAtomEditTool? getActiveAtomEditTool() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiGetActiveAtomEditTool();
 

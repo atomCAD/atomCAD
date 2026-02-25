@@ -317,6 +317,26 @@ pub fn atom_edit_toggle_include_base_bonds_in_diff() -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_toggle_error_on_stale_entries() -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                if let Some(atom_edit_data) =
+                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+                {
+                    atom_edit_data.error_on_stale_entries = !atom_edit_data.error_on_stale_entries;
+                    refresh_structure_designer_auto(cad_instance);
+                    true
+                } else {
+                    false
+                }
+            },
+            false,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_active_atom_edit_tool() -> Option<APIAtomEditTool> {
     unsafe {
         with_mut_cad_instance_or(
