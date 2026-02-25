@@ -158,6 +158,14 @@ pub enum AtomEditTool {
 
 // --- Selection model ---
 
+/// Provenance tag for selection order tracking.
+/// Indicates whether a selected atom comes from the base structure or the diff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionProvenance {
+    Base,
+    Diff,
+}
+
 /// Provenance-based selection state for atom_edit.
 ///
 /// Selection is stored by provenance (base/diff atom IDs) rather than result atom IDs.
@@ -173,6 +181,10 @@ pub struct AtomEditSelection {
     pub selected_bonds: HashSet<BondReference>,
     /// Cached selection transform (recalculated after selection changes)
     pub selection_transform: Option<Transform>,
+    /// Ordered list of selected atoms, in the order they were selected.
+    /// Maintained alongside the hash sets; cleared on `clear()`.
+    /// Used by the modify-measurement dialog to default to the last-selected atom.
+    pub selection_order: Vec<(SelectionProvenance, u32)>,
 }
 
 impl AtomEditSelection {
@@ -195,11 +207,58 @@ impl AtomEditSelection {
         self.selected_diff_atoms.clear();
         self.selected_bonds.clear();
         self.selection_transform = None;
+        self.selection_order.clear();
     }
 
     /// Clear bond selection (called when diff is mutated)
     pub fn clear_bonds(&mut self) {
         self.selected_bonds.clear();
+    }
+
+    /// Track a newly selected atom in the selection order.
+    /// Only appends if the atom is not already tracked.
+    pub fn track_selected(&mut self, provenance: SelectionProvenance, id: u32) {
+        if !self
+            .selection_order
+            .iter()
+            .any(|&(p, i)| p == provenance && i == id)
+        {
+            self.selection_order.push((provenance, id));
+        }
+    }
+
+    /// Remove an atom from the selection order tracking.
+    pub fn untrack_selected(&mut self, provenance: SelectionProvenance, id: u32) {
+        self.selection_order
+            .retain(|&(p, i)| !(p == provenance && i == id));
+    }
+
+    /// Replace a (provenance, id) entry in the selection order with a new one.
+    /// Used when a base atom is promoted to the diff (e.g. during drag or replace).
+    pub fn update_order_provenance(
+        &mut self,
+        old_provenance: SelectionProvenance,
+        old_id: u32,
+        new_provenance: SelectionProvenance,
+        new_id: u32,
+    ) {
+        if let Some(entry) = self
+            .selection_order
+            .iter_mut()
+            .find(|(p, i)| *p == old_provenance && *i == old_id)
+        {
+            *entry = (new_provenance, new_id);
+        }
+    }
+
+    /// Returns the last N entries from the selection order.
+    pub fn last_selected_atoms(&self, count: usize) -> Vec<(SelectionProvenance, u32)> {
+        let len = self.selection_order.len();
+        if count >= len {
+            self.selection_order.clone()
+        } else {
+            self.selection_order[len - count..].to_vec()
+        }
     }
 }
 

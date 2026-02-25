@@ -159,15 +159,44 @@ pub(super) fn select_result_atom(
                 *base_id,
                 &select_modifier,
             );
+            if atom_edit_data
+                .selection
+                .selected_base_atoms
+                .contains(base_id)
+            {
+                atom_edit_data
+                    .selection
+                    .track_selected(SelectionProvenance::Base, *base_id);
+            } else {
+                atom_edit_data
+                    .selection
+                    .untrack_selected(SelectionProvenance::Base, *base_id);
+            }
         }
         AtomSource::DiffMatchedBase { diff_id, base_id } => {
             // Clean up: remove from base selection if present (atom is now in diff)
             atom_edit_data.selection.selected_base_atoms.remove(base_id);
+            atom_edit_data
+                .selection
+                .untrack_selected(SelectionProvenance::Base, *base_id);
             apply_modifier_to_set(
                 &mut atom_edit_data.selection.selected_diff_atoms,
                 *diff_id,
                 &select_modifier,
             );
+            if atom_edit_data
+                .selection
+                .selected_diff_atoms
+                .contains(diff_id)
+            {
+                atom_edit_data
+                    .selection
+                    .track_selected(SelectionProvenance::Diff, *diff_id);
+            } else {
+                atom_edit_data
+                    .selection
+                    .untrack_selected(SelectionProvenance::Diff, *diff_id);
+            }
         }
         AtomSource::DiffAdded(diff_id) => {
             apply_modifier_to_set(
@@ -175,6 +204,19 @@ pub(super) fn select_result_atom(
                 *diff_id,
                 &select_modifier,
             );
+            if atom_edit_data
+                .selection
+                .selected_diff_atoms
+                .contains(diff_id)
+            {
+                atom_edit_data
+                    .selection
+                    .track_selected(SelectionProvenance::Diff, *diff_id);
+            } else {
+                atom_edit_data
+                    .selection
+                    .untrack_selected(SelectionProvenance::Diff, *diff_id);
+            }
         }
     }
 
@@ -252,6 +294,19 @@ pub(super) fn select_diff_atom_directly(
         diff_atom_id,
         &select_modifier,
     );
+    if atom_edit_data
+        .selection
+        .selected_diff_atoms
+        .contains(&diff_atom_id)
+    {
+        atom_edit_data
+            .selection
+            .track_selected(SelectionProvenance::Diff, diff_atom_id);
+    } else {
+        atom_edit_data
+            .selection
+            .untrack_selected(SelectionProvenance::Diff, diff_atom_id);
+    }
 
     // Recalculate selection transform from diff atom positions
     let positions: Vec<DVec3> = atom_edit_data
@@ -413,6 +468,11 @@ pub(super) fn select_atoms_in_screen_rect(
             }
         }
 
+        // Sort targets by atom ID for deterministic marquee selection order
+        targets.sort_by_key(|t| match t {
+            SelectTarget::Base(id) | SelectTarget::Diff(id) => *id,
+        });
+
         (targets, pos_map, is_diff)
     };
 
@@ -439,6 +499,19 @@ pub(super) fn select_atoms_in_screen_rect(
                     *diff_id,
                     select_modifier,
                 );
+                if atom_edit_data
+                    .selection
+                    .selected_diff_atoms
+                    .contains(diff_id)
+                {
+                    atom_edit_data
+                        .selection
+                        .track_selected(SelectionProvenance::Diff, *diff_id);
+                } else {
+                    atom_edit_data
+                        .selection
+                        .untrack_selected(SelectionProvenance::Diff, *diff_id);
+                }
             }
         }
     } else {
@@ -450,6 +523,19 @@ pub(super) fn select_atoms_in_screen_rect(
                         *base_id,
                         select_modifier,
                     );
+                    if atom_edit_data
+                        .selection
+                        .selected_base_atoms
+                        .contains(base_id)
+                    {
+                        atom_edit_data
+                            .selection
+                            .track_selected(SelectionProvenance::Base, *base_id);
+                    } else {
+                        atom_edit_data
+                            .selection
+                            .untrack_selected(SelectionProvenance::Base, *base_id);
+                    }
                 }
                 SelectTarget::Diff(diff_id) => {
                     apply_modifier_to_set(
@@ -457,6 +543,19 @@ pub(super) fn select_atoms_in_screen_rect(
                         *diff_id,
                         select_modifier,
                     );
+                    if atom_edit_data
+                        .selection
+                        .selected_diff_atoms
+                        .contains(diff_id)
+                    {
+                        atom_edit_data
+                            .selection
+                            .track_selected(SelectionProvenance::Diff, *diff_id);
+                    } else {
+                        atom_edit_data
+                            .selection
+                            .untrack_selected(SelectionProvenance::Diff, *diff_id);
+                    }
                 }
             }
         }

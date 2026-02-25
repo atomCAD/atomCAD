@@ -362,6 +362,12 @@ pub(super) fn drag_selected_by_delta(structure_designer: &mut StructureDesigner,
             .selection
             .selected_diff_atoms
             .insert(new_diff_id);
+        atom_edit_data.selection.update_order_provenance(
+            SelectionProvenance::Base,
+            *base_id,
+            SelectionProvenance::Diff,
+            new_diff_id,
+        );
     }
 
     // Update selection transform to reflect the displacement

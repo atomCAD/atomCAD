@@ -399,6 +399,8 @@ impl AtomEditData {
         for (base_id, position) in base_atoms {
             self.mark_for_deletion(*position);
             self.selection.selected_base_atoms.remove(base_id);
+            self.selection
+                .untrack_selected(SelectionProvenance::Base, *base_id);
         }
 
         // Delete diff atoms
@@ -409,6 +411,8 @@ impl AtomEditData {
                 self.convert_to_delete_marker(*diff_id);
             }
             self.selection.selected_diff_atoms.remove(diff_id);
+            self.selection
+                .untrack_selected(SelectionProvenance::Diff, *diff_id);
         }
 
         // Delete bonds (add bond delete markers)
@@ -456,6 +460,8 @@ impl AtomEditData {
                 }
             }
             self.selection.selected_diff_atoms.remove(diff_id);
+            self.selection
+                .untrack_selected(SelectionProvenance::Diff, *diff_id);
         }
 
         // Bonds in diff view: remove the bond from the diff entirely
@@ -480,6 +486,12 @@ impl AtomEditData {
             let new_diff_id = self.replace_in_diff(*position, atomic_number);
             self.selection.selected_base_atoms.remove(base_id);
             self.selection.selected_diff_atoms.insert(new_diff_id);
+            self.selection.update_order_provenance(
+                SelectionProvenance::Base,
+                *base_id,
+                SelectionProvenance::Diff,
+                new_diff_id,
+            );
         }
 
         self.selection.clear_bonds();
@@ -505,6 +517,12 @@ impl AtomEditData {
             self.diff.set_anchor_position(new_diff_id, *old_position);
             self.selection.selected_base_atoms.remove(base_id);
             self.selection.selected_diff_atoms.insert(new_diff_id);
+            self.selection.update_order_provenance(
+                SelectionProvenance::Base,
+                *base_id,
+                SelectionProvenance::Diff,
+                new_diff_id,
+            );
         }
 
         // Update selection transform algebraically (no need to re-eval)
