@@ -48,7 +48,7 @@ The dialog pre-selects the **last-selected atom** as the moving atom. This is th
 
 **The current selection system does not track selection order.** `AtomEditSelection` stores atoms in `HashSet<u32>` (both `selected_base_atoms` and `selected_diff_atoms`), which is unordered. The `compute_selection_measurement` function iterates these sets in arbitrary order.
 
-This must be addressed before the Modify feature can use "last-selected" as the default. The implementation should add an ordered sequence (e.g. a `Vec<u32>` or `IndexSet<u32>`) alongside or replacing the hash sets, maintaining insertion order. Only the last 4 entries matter for measurement purposes, so this can be a small bounded buffer rather than a full ordering of all selected atoms.
+This must be addressed before the Modify feature can use "last-selected" as the default. The implementation should add a `Vec<(SelectionProvenance, u32)>` alongside the hash sets, maintaining insertion order. Since entries are removed on toggle-off and the vec is cleared on Replace/clear, it only ever contains currently-selected atoms — its size is implicitly bounded by the selection size. No explicit capacity limit is needed.
 
 ### Dialog Structure (Common)
 
@@ -252,7 +252,7 @@ The Modify button is placed inside the existing blue measurement card, right-ali
 └──────────────────────────────────────────────────────┘
 ```
 
-For distance, the button is greyed out if the two atoms are not bonded. For angle and dihedral, always enabled.
+For all three types, the button is always enabled. (For distance between non-bonded atoms, the **Default** button inside the dialog is disabled — not the Modify button itself.)
 
 ### Dialog as Modal
 
@@ -313,8 +313,384 @@ The modify operation doesn't change the selection. After applying, the same atom
 
 ---
 
-## Open Questions
+## Implementation Plan
 
-1. **Keyboard shortcut**: Should there be a shortcut to open the modify dialog (e.g. `M` key when a measurement is displayed)? Probably yes, but can be added later.
+The implementation is split into six phases. Each phase produces a testable, self-contained increment. Phases 1–4 are pure Rust (no UI), Phase 5 bridges Rust to Flutter, and Phase 6 is pure Flutter UI.
 
-2. **Batch modification**: Should the dialog support modifying multiple bonds at once (e.g. "set all selected bonds to 1.54 Å")? Not in initial scope, but the architecture should not preclude it.
+---
+
+### Phase 1: Selection Order Tracking
+
+**Goal**: `AtomEditSelection` tracks the order in which atoms were selected, so the dialog can default to "move the last-selected atom."
+
+**Files to modify**:
+- `rust/src/structure_designer/nodes/atom_edit/types.rs` — Add ordered buffer to `AtomEditSelection`
+- `rust/src/structure_designer/nodes/atom_edit/selection.rs` — Push to ordered buffer on every selection change
+- `rust/src/structure_designer/nodes/atom_edit/default_tool.rs` — Marquee selection: append in deterministic order (e.g. by atom ID)
+
+**Design**:
+- Add `selection_order: Vec<(SelectionProvenance, u32)>` to `AtomEditSelection`, where `SelectionProvenance` is `Base` or `Diff`. Each click-select appends to this vec; `Replace` modifier clears it first; `Toggle` removing an atom also removes it from the vec; marquee appends all newly added atoms sorted by ID.
+- On `clear()`, the vec is also cleared.
+- Add `pub fn last_selected_atoms(&self, count: usize) -> Vec<(SelectionProvenance, u32)>` helper that returns the last N entries.
+- The existing `HashSet` fields remain unchanged — they continue to be the source of truth for "is this atom selected?". The vec is a supplementary ordering structure.
+
+**Tests** (`rust/tests/structure_designer/`):
+- Selection order is maintained across add/toggle/replace/clear operations.
+- Marquee selection appends in ID order.
+- Removing an atom via toggle removes it from the order vec.
+
+**Serialization**: The order vec is transient state (not serialized), same as the rest of `AtomEditSelection`.
+
+---
+
+### Phase 2: BFS Fragment Selection Algorithm
+
+**Goal**: Given a moving atom M and a reference atom F in an `AtomicStructure`, compute the set of atom IDs that should move with M.
+
+**Files to create/modify**:
+- `rust/src/crystolecule/atomic_structure/fragment.rs` (new) — The BFS fragment algorithm
+- `rust/src/crystolecule/atomic_structure/mod.rs` — Add `mod fragment;` and re-export
+
+**Design**:
+```rust
+/// Compute the fragment of atoms that are graph-theoretically closer to `moving_atom`
+/// than to `reference_atom`. Uses BFS shortest path through the bond graph.
+///
+/// Returns a HashSet of atom IDs that should move (always includes `moving_atom`).
+/// `reference_atom` is never included. Ties go to the fixed side.
+/// Atoms unreachable from both (disconnected components) stay fixed.
+pub fn compute_moving_fragment(
+    structure: &AtomicStructure,
+    moving_atom: u32,
+    reference_atom: u32,
+) -> HashSet<u32>
+```
+
+**Algorithm**:
+1. BFS from `moving_atom` → `dist_m[x]` for all reachable atoms.
+2. BFS from `reference_atom` → `dist_f[x]` for all reachable atoms.
+3. Return `{ x | dist_m[x] < dist_f[x] }`.
+
+Both BFS passes are O(V + E). For typical molecular structures (E ≈ 2V for sp3), this is effectively O(N).
+
+**Tests** (`rust/tests/crystolecule/`):
+- Linear chain: A—B—C—D, moving A ref B → fragment {A}.
+- Ring: 6-membered ring, moving atom 1 ref atom 4 → fragment {1, 2, 6} (nearest 3).
+- Branched tree: correct partitioning at branch points.
+- Disconnected component: disconnected atoms stay fixed.
+- Single bond (2 atoms): moving atom's fragment is just itself.
+- Same atom for M and F: return empty set (edge case guard).
+
+---
+
+### Phase 3: Measurement Modification Operations
+
+**Goal**: Three Rust functions that modify atom positions to achieve a target distance, angle, or dihedral. These are pure geometry operations on the diff, with optional fragment following.
+
+**Files to create/modify**:
+- `rust/src/structure_designer/nodes/atom_edit/modify_measurement.rs` (new) — The three modification functions
+- `rust/src/structure_designer/nodes/atom_edit/mod.rs` — Add `mod modify_measurement;` and re-export
+
+**Design**:
+
+Each function follows the three-phase borrow pattern established by `operations.rs`:
+
+```rust
+/// Which atom to move in a 2-atom distance modification.
+pub enum DistanceMoveChoice {
+    /// Move the first atom in the measurement (atoms[0]).
+    First,
+    /// Move the second atom in the measurement (atoms[1]).
+    Second,
+}
+
+/// Which arm to move in a 3-atom angle modification.
+pub enum AngleMoveChoice {
+    /// Move arm A (the first non-vertex atom).
+    ArmA,
+    /// Move arm B (the second non-vertex atom).
+    ArmB,
+}
+
+/// Which end to rotate in a 4-atom dihedral modification.
+pub enum DihedralMoveChoice {
+    /// Rotate the A-side (chain[0] end).
+    ASide,
+    /// Rotate the D-side (chain[3] end).
+    DSide,
+}
+
+pub fn modify_distance(
+    structure_designer: &mut StructureDesigner,
+    target_distance: f64,
+    move_choice: DistanceMoveChoice,
+    move_fragment: bool,
+) -> Result<(), String>
+
+pub fn modify_angle(
+    structure_designer: &mut StructureDesigner,
+    target_angle_degrees: f64,
+    move_choice: AngleMoveChoice,
+    move_fragment: bool,
+) -> Result<(), String>
+
+pub fn modify_dihedral(
+    structure_designer: &mut StructureDesigner,
+    target_angle_degrees: f64,
+    move_choice: DihedralMoveChoice,
+    move_fragment: bool,
+) -> Result<(), String>
+```
+
+**Prerequisite refactoring**: The code that builds a `Vec<SelectedAtomInfo>` from the current `AtomEditSelection` is currently embedded in the measurement-display path. This must be extracted into a reusable helper (e.g. `fn selected_atom_infos(&self) -> Vec<SelectedAtomInfo>` on the relevant context struct) so that both the measurement card and the modify functions can call it without duplication.
+
+**Internal flow** (same for all three):
+1. **Phase 1 (Gather)**: Build the `SelectedAtomInfo` list from the current selection (via the extracted helper). Call `compute_measurement()` from `measurement.rs` — this returns `MeasurementResult`, which already carries atom role assignments: `vertex_index` for angles and `chain: [usize; 4]` for dihedrals. These are indices into the `SelectedAtomInfo` array, giving both the role mapping and the positions. Validate that the right number of atoms are selected.
+2. **Phase 2 (Compute)**: Use the role indices from `MeasurementResult` to identify which atom is the moving atom and which is the reference atom (based on the `MoveChoice` enum). Compute the axis/rotation and delta transform. If `move_fragment` is enabled, call `compute_moving_fragment` with the moving and reference atom IDs. Map fragment result-atom-IDs back to diff/base provenance IDs.
+3. **Phase 3 (Mutate)**: For each atom to move: ensure it exists in the diff (promote base atoms to diff if needed via `ensure_diff_atom_for_base()`), then call `move_in_diff()` with the new position.
+
+**Promoting base atoms**: When a base atom needs to be moved, it must first be "promoted" to the diff. This is the same pattern used by `drag_selected_by_delta` in `operations.rs` — copy the atom into the diff at its current position, then move it.
+
+**Rotation helper**: For angle and dihedral, rotate a point around an axis through a center:
+```rust
+fn rotate_point_around_axis(point: DVec3, center: DVec3, axis: DVec3, angle_rad: f64) -> DVec3 {
+    let q = DQuat::from_axis_angle(axis, angle_rad);
+    center + q * (point - center)
+}
+```
+
+**Tests** (`rust/tests/structure_designer/`):
+- Build a small structure (e.g. H—C—C—H chain), select 2 atoms, call `modify_distance`, verify positions.
+- Three-atom angle modification: verify the arm atom rotates to the target angle.
+- Four-atom dihedral modification: verify the end atom rotates to the target dihedral.
+- Fragment following: verify that connected atoms move along.
+- Fragment disabled: verify only the single atom moves.
+- Edge case: collinear atoms for angle (arbitrary perpendicular axis).
+- Edge case: target equals current (no-op).
+
+---
+
+### Phase 4: Default Value Computation
+
+**Goal**: Compute equilibrium bond length and angle for the "Default" button. Dihedral is postponed.
+
+**Files to create/modify**:
+- `rust/src/structure_designer/nodes/atom_edit/modify_measurement.rs` — Add default-value query functions
+
+**Design**:
+
+```rust
+/// Compute the default (equilibrium) bond length for the two selected atoms.
+/// Returns None if atoms are not bonded or if UFF typing fails.
+pub fn compute_default_bond_length(
+    structure_designer: &StructureDesigner,
+    bond_length_mode: BondLengthMode,
+) -> Option<f64>
+
+/// Compute the default (equilibrium) angle for the three selected atoms.
+/// Returns None if UFF typing fails for the vertex atom.
+pub fn compute_default_angle(
+    structure_designer: &StructureDesigner,
+) -> Option<f64>
+```
+
+**Bond length default**:
+1. Resolve the two selected atoms to result-space atoms.
+2. Verify they are bonded; get the bond order.
+3. Get both atoms' atomic numbers and UFF type labels (via `assign_uff_type()`).
+4. Call `bond_distance()` from `guided_placement.rs` (for Crystal mode) or `calc_bond_rest_length()` from UFF params (with actual bond order).
+
+**Angle default**:
+1. Build the `SelectedAtomInfo` list and call `compute_measurement()` to get the `MeasurementResult::Angle { vertex_index, .. }`. This reuses the same vertex-identification logic (`find_angle_vertex`) that the measurement display uses — no duplication.
+2. Get the vertex atom's UFF type via `assign_uff_type()`.
+3. Look up `theta0` from `get_uff_params()`.
+
+**Tests**:
+- C-C single bond default ≈ 1.545 Å (crystal) or ≈ 1.514 Å (UFF).
+- C=C double bond default shorter than single.
+- sp3 carbon vertex angle default ≈ 109.47°.
+- sp2 carbon vertex angle default ≈ 120°.
+- Non-bonded pair returns None for bond length default.
+
+---
+
+### Phase 5: API Layer
+
+**Goal**: Expose the modification operations and default-value queries to Flutter via FRB.
+
+**Files to modify**:
+- `rust/src/api/structure_designer/structure_designer_api_types.rs` — Enrich `APIMeasurement`, add new API types
+- `rust/src/api/structure_designer/atom_edit_api.rs` — New API functions
+- Run `flutter_rust_bridge_codegen generate` to regenerate bindings
+
+**Enrich `APIMeasurement`**:
+
+The current `APIMeasurement` only carries the numeric value. The dialog needs atom identities and roles. Add enriched variants:
+
+```rust
+pub enum APIMeasurement {
+    Distance {
+        distance: f64,
+        /// Result-space atom IDs for the two atoms.
+        atom1_id: u32,
+        atom2_id: u32,
+        /// Element symbols for display labels.
+        atom1_symbol: String,
+        atom2_symbol: String,
+        /// Whether the two atoms are bonded (enables Default button).
+        is_bonded: bool,
+    },
+    Angle {
+        angle_degrees: f64,
+        /// Vertex atom identity.
+        vertex_id: u32,
+        vertex_symbol: String,
+        /// Arm atoms (indices 0 and 1 for move choice).
+        arm_a_id: u32,
+        arm_a_symbol: String,
+        arm_b_id: u32,
+        arm_b_symbol: String,
+    },
+    Dihedral {
+        angle_degrees: f64,
+        /// Chain A-B-C-D atom identities.
+        chain_a_id: u32,
+        chain_a_symbol: String,
+        chain_b_id: u32,
+        chain_b_symbol: String,
+        chain_c_id: u32,
+        chain_c_symbol: String,
+        chain_d_id: u32,
+        chain_d_symbol: String,
+    },
+}
+```
+
+Also add a field to carry the last-selected result atom ID so Flutter can determine the default move choice:
+```rust
+pub struct APIAtomEditData {
+    // ... existing fields ...
+    pub measurement: Option<APIMeasurement>,
+    /// Result-space ID of the most recently selected atom (for dialog defaults).
+    pub last_selected_result_atom_id: Option<u32>,
+}
+```
+
+**New API functions**:
+
+```rust
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_modify_distance(
+    target_distance: f64,
+    move_first: bool,       // true = move atom1, false = move atom2
+    move_fragment: bool,
+) -> String                  // success/error message
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_modify_angle(
+    target_angle_degrees: f64,
+    move_arm_a: bool,       // true = move arm A, false = move arm B
+    move_fragment: bool,
+) -> String
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_modify_dihedral(
+    target_angle_degrees: f64,
+    move_a_side: bool,      // true = move A-side, false = move D-side
+    move_fragment: bool,
+) -> String
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_get_default_bond_length() -> Option<f64>
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_get_default_angle() -> Option<f64>
+```
+
+All modification functions call `refresh_structure_designer_auto()` after mutation, consistent with all other atom_edit API functions.
+
+**After adding these**: Run `flutter_rust_bridge_codegen generate`.
+
+---
+
+### Phase 6: Flutter Dialog UI
+
+**Goal**: Add the "Modify" button to the measurement card and implement the modal dialog.
+
+**Files to modify**:
+- `lib/structure_designer/node_data/atom_edit_editor.dart` — Add Modify button to `_buildMeasurementDisplay`, create dialog widget
+- `lib/structure_designer/structure_designer_model.dart` — Add model methods wrapping the new API functions
+
+**Step 6a: Model methods**
+
+Add to `StructureDesignerModel`:
+```dart
+String atomEditModifyDistance(double target, bool moveFirst, bool moveFragment) {
+    final msg = atom_edit_api.atomEditModifyDistance(
+        targetDistance: target, moveFirst: moveFirst, moveFragment: moveFragment);
+    refreshFromKernel();
+    return msg;
+}
+// Similar for angle and dihedral
+
+double? atomEditGetDefaultBondLength() => atom_edit_api.atomEditGetDefaultBondLength();
+double? atomEditGetDefaultAngle() => atom_edit_api.atomEditGetDefaultAngle();
+```
+
+**Step 6b: Modify button in measurement card**
+
+Extend `_buildMeasurementDisplay` to include a right-aligned "Modify" button:
+```dart
+Row(
+  children: [
+    Icon(icon, ...),
+    Text('$label: ', ...),
+    Text(value, ...),
+    const Spacer(),
+    SizedBox(
+      height: 28,
+      child: OutlinedButton(
+        onPressed: () => _showModifyDialog(measurement),
+        child: const Text('Modify', style: TextStyle(fontSize: 12)),
+      ),
+    ),
+  ],
+)
+```
+
+**Step 6c: Modify dialog**
+
+Create `_showModifyDialog(APIMeasurement measurement)` which calls `showDialog()` with a `StatefulWidget` dialog. The dialog contains:
+
+1. **Title**: "Modify Distance" / "Modify Angle" / "Modify Dihedral"
+2. **Value field**: `TextFormField` with numeric validation, pre-filled with current value. Suffix text showing unit (Å or °).
+3. **Default button**: `OutlinedButton` labeled "Default" that queries the Rust API and fills the value field. For distance: disabled if `!measurement.is_bonded`. For dihedral: hidden.
+4. **Move atom radio**: Two `RadioListTile` widgets labeled with element symbol and atom ID. Pre-selected based on `last_selected_result_atom_id` from `APIAtomEditData`.
+5. **Move fragment checkbox**: `CheckboxListTile`, default checked.
+6. **Actions**: Cancel (pops dialog) and Apply (calls model method, pops dialog).
+
+The dialog is a single shared widget that adapts its layout based on the `APIMeasurement` variant. This avoids code duplication across the three cases — the differences (title, unit suffix, default button availability, atom labels) are driven by the measurement data.
+
+**Validation in the dialog**:
+- Distance: parse as double, reject < 0.1.
+- Angle: parse as double, reject outside 0–180.
+- Dihedral: parse as double, reject outside -180–180.
+- Apply button disabled while input is invalid.
+
+---
+
+### Phase Dependencies
+
+```
+Phase 1 (Selection Order) ──────────────────┐
+                                             │
+Phase 2 (BFS Fragment) ── Phase 3 (Modify) ─┤
+                                             ├── Phase 5 (API) ── Phase 6 (Flutter UI)
+Phase 4 (Default Values) ───────────────────┘
+```
+
+- Phases 1, 2, and 4 are independent of each other and can be developed in parallel.
+- Phase 3 depends on Phase 2 (uses the BFS fragment algorithm).
+- Phase 5 depends on Phases 1, 3, and 4 (exposes everything to Flutter).
+- Phase 6 depends on Phase 5 (consumes the API).
+
