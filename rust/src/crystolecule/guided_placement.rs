@@ -198,7 +198,7 @@ const CRYSTAL_BOND_LENGTHS: &[((i16, i16), f64)] = &[
     ((48, 52), 2.806), // CdTe
 ];
 
-fn crystal_bond_length(z_a: i16, z_b: i16) -> Option<f64> {
+pub fn crystal_bond_length(z_a: i16, z_b: i16) -> Option<f64> {
     let key = (z_a.min(z_b), z_a.max(z_b));
     CRYSTAL_BOND_LENGTHS
         .iter()

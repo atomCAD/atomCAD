@@ -1,7 +1,9 @@
 use glam::f64::{DVec2, DVec3};
+use rust_lib_flutter_cad::crystolecule::guided_placement::BondLengthMode;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AngleMoveChoice, AtomEditData, DihedralMoveChoice, DistanceMoveChoice, SelectionProvenance,
-    modify_angle, modify_dihedral, modify_distance,
+    compute_default_angle, compute_default_bond_length, modify_angle, modify_dihedral,
+    modify_distance,
 };
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
@@ -833,4 +835,303 @@ fn compute_dihedral_angle(a: DVec3, b: DVec3, c: DVec3, d: DVec3) -> f64 {
     let x = n1.dot(n2);
     let y = m1.dot(n2);
     (-y).atan2(x).to_degrees()
+}
+
+// =============================================================================
+// Default bond length tests
+// =============================================================================
+
+#[test]
+fn test_default_bond_length_cc_single_crystal() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    let (id0, id1) = {
+        let data = get_data_mut(&mut designer);
+        let id0 = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+        let id1 = data.diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+        data.diff.add_bond_checked(id0, id1, 1);
+        (id0, id1)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id0, id1]);
+
+    let result = compute_default_bond_length(&designer, BondLengthMode::Crystal);
+    assert!(result.is_some(), "Should return a default for bonded C-C");
+    let length = result.unwrap();
+    // Crystal C-C diamond = 1.545 Å
+    assert!(
+        (length - 1.545).abs() < 0.001,
+        "Crystal C-C should be 1.545 Å, got {:.4}",
+        length
+    );
+}
+
+#[test]
+fn test_default_bond_length_cc_single_uff() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    let (id0, id1) = {
+        let data = get_data_mut(&mut designer);
+        let id0 = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+        let id1 = data.diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+        data.diff.add_bond_checked(id0, id1, 1);
+        (id0, id1)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id0, id1]);
+
+    let result = compute_default_bond_length(&designer, BondLengthMode::Uff);
+    assert!(result.is_some(), "Should return a default for bonded C-C");
+    let length = result.unwrap();
+    // UFF C_3-C_3 single bond ≈ 1.514 Å
+    assert!(
+        (length - 1.514).abs() < 0.05,
+        "UFF C-C single should be ~1.514 Å, got {:.4}",
+        length
+    );
+}
+
+#[test]
+fn test_default_bond_length_cc_double_shorter_than_single() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    // First: single bond C-C
+    let (id0, id1) = {
+        let data = get_data_mut(&mut designer);
+        let id0 = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+        let id1 = data.diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+        data.diff.add_bond_checked(id0, id1, 1); // single bond
+        (id0, id1)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id0, id1]);
+
+    let single_length = compute_default_bond_length(&designer, BondLengthMode::Uff)
+        .expect("Single bond should have a default");
+
+    // Create a new designer with double bond
+    let mut designer2 = setup_atom_edit_diff_view();
+
+    let (id0b, id1b) = {
+        let data = get_data_mut(&mut designer2);
+        let id0b = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+        let id1b = data.diff.add_atom(6, DVec3::new(1.3, 0.0, 0.0));
+        data.diff.add_bond_checked(id0b, id1b, 2); // double bond
+        (id0b, id1b)
+    };
+
+    refresh(&mut designer2);
+    select_diff_atoms(&mut designer2, &[id0b, id1b]);
+
+    let double_length = compute_default_bond_length(&designer2, BondLengthMode::Uff)
+        .expect("Double bond should have a default");
+
+    assert!(
+        double_length < single_length,
+        "Double bond ({:.4}) should be shorter than single bond ({:.4})",
+        double_length,
+        single_length
+    );
+}
+
+#[test]
+fn test_default_bond_length_non_bonded_returns_none() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    let (id0, id1) = {
+        let data = get_data_mut(&mut designer);
+        let id0 = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+        let id1 = data.diff.add_atom(6, DVec3::new(3.0, 0.0, 0.0));
+        // No bond between them
+        (id0, id1)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id0, id1]);
+
+    let result = compute_default_bond_length(&designer, BondLengthMode::Crystal);
+    assert!(
+        result.is_none(),
+        "Non-bonded atoms should return None, got {:?}",
+        result
+    );
+
+    let result_uff = compute_default_bond_length(&designer, BondLengthMode::Uff);
+    assert!(
+        result_uff.is_none(),
+        "Non-bonded atoms should return None for UFF mode too, got {:?}",
+        result_uff
+    );
+}
+
+#[test]
+fn test_default_bond_length_sisi_crystal() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    let (id0, id1) = {
+        let data = get_data_mut(&mut designer);
+        let id0 = data.diff.add_atom(14, DVec3::new(0.0, 0.0, 0.0)); // Si
+        let id1 = data.diff.add_atom(14, DVec3::new(2.3, 0.0, 0.0)); // Si
+        data.diff.add_bond_checked(id0, id1, 1);
+        (id0, id1)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id0, id1]);
+
+    let result = compute_default_bond_length(&designer, BondLengthMode::Crystal);
+    assert!(result.is_some(), "Si-Si crystal should have a default");
+    let length = result.unwrap();
+    // Crystal Si-Si = 2.352 Å
+    assert!(
+        (length - 2.352).abs() < 0.001,
+        "Crystal Si-Si should be 2.352 Å, got {:.4}",
+        length
+    );
+}
+
+// =============================================================================
+// Default angle tests
+// =============================================================================
+
+#[test]
+fn test_default_angle_sp3_carbon() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    // sp3 carbon vertex: A—C(vertex)—B with single bonds
+    let (id_a, id_v, id_b) = {
+        let data = get_data_mut(&mut designer);
+        let id_a = data.diff.add_atom(1, DVec3::new(0.0, 0.0, 0.0)); // H
+        let id_v = data.diff.add_atom(6, DVec3::new(1.0, 0.0, 0.0)); // C vertex
+        let id_b = data.diff.add_atom(1, DVec3::new(1.0, 1.0, 0.0)); // H
+        data.diff.add_bond_checked(id_a, id_v, 1);
+        data.diff.add_bond_checked(id_v, id_b, 1);
+        (id_a, id_v, id_b)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id_a, id_v, id_b]);
+
+    let result = compute_default_angle(&designer);
+    assert!(result.is_some(), "Should return a default angle for sp3 C");
+    let angle = result.unwrap();
+    // sp3 carbon (C_3) theta0 = 109.471°
+    assert!(
+        (angle - 109.471).abs() < 0.01,
+        "sp3 C theta0 should be 109.471°, got {:.3}°",
+        angle
+    );
+}
+
+#[test]
+fn test_default_angle_sp2_carbon() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    // sp2 carbon vertex: A=C(vertex)—B, with one double bond
+    let (id_a, id_v, id_b) = {
+        let data = get_data_mut(&mut designer);
+        let id_a = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // C
+        let id_v = data.diff.add_atom(6, DVec3::new(1.0, 0.0, 0.0)); // C vertex
+        let id_b = data.diff.add_atom(1, DVec3::new(1.0, 1.0, 0.0)); // H
+        data.diff.add_bond_checked(id_a, id_v, 2); // double bond → sp2
+        data.diff.add_bond_checked(id_v, id_b, 1);
+        (id_a, id_v, id_b)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id_a, id_v, id_b]);
+
+    let result = compute_default_angle(&designer);
+    assert!(result.is_some(), "Should return a default angle for sp2 C");
+    let angle = result.unwrap();
+    // sp2 carbon (C_2) theta0 = 120.0°
+    assert!(
+        (angle - 120.0).abs() < 0.01,
+        "sp2 C theta0 should be 120.0°, got {:.3}°",
+        angle
+    );
+}
+
+#[test]
+fn test_default_angle_sp3_nitrogen() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    // sp3 nitrogen vertex: H—N(vertex)—H with single bonds
+    let (id_a, id_v, id_b) = {
+        let data = get_data_mut(&mut designer);
+        let id_a = data.diff.add_atom(1, DVec3::new(0.0, 0.0, 0.0)); // H
+        let id_v = data.diff.add_atom(7, DVec3::new(1.0, 0.0, 0.0)); // N vertex
+        let id_b = data.diff.add_atom(1, DVec3::new(1.0, 1.0, 0.0)); // H
+        data.diff.add_bond_checked(id_a, id_v, 1);
+        data.diff.add_bond_checked(id_v, id_b, 1);
+        (id_a, id_v, id_b)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id_a, id_v, id_b]);
+
+    let result = compute_default_angle(&designer);
+    assert!(result.is_some(), "Should return a default angle for sp3 N");
+    let angle = result.unwrap();
+    // sp3 nitrogen (N_3) theta0 = 106.7°
+    assert!(
+        (angle - 106.7).abs() < 0.1,
+        "sp3 N theta0 should be 106.7°, got {:.3}°",
+        angle
+    );
+}
+
+#[test]
+fn test_default_angle_sp3_oxygen() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    // sp3 oxygen vertex: H—O(vertex)—H with single bonds
+    let (id_a, id_v, id_b) = {
+        let data = get_data_mut(&mut designer);
+        let id_a = data.diff.add_atom(1, DVec3::new(0.0, 0.0, 0.0)); // H
+        let id_v = data.diff.add_atom(8, DVec3::new(1.0, 0.0, 0.0)); // O vertex
+        let id_b = data.diff.add_atom(1, DVec3::new(1.0, 1.0, 0.0)); // H
+        data.diff.add_bond_checked(id_a, id_v, 1);
+        data.diff.add_bond_checked(id_v, id_b, 1);
+        (id_a, id_v, id_b)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id_a, id_v, id_b]);
+
+    let result = compute_default_angle(&designer);
+    assert!(result.is_some(), "Should return a default angle for sp3 O");
+    let angle = result.unwrap();
+    // sp3 oxygen (O_3) theta0 = 104.51°
+    assert!(
+        (angle - 104.51).abs() < 0.1,
+        "sp3 O theta0 should be 104.51°, got {:.3}°",
+        angle
+    );
+}
+
+#[test]
+fn test_default_angle_wrong_selection_count() {
+    let mut designer = setup_atom_edit_diff_view();
+
+    // Only 2 atoms selected — should return None for angle default
+    let (id0, id1) = {
+        let data = get_data_mut(&mut designer);
+        let id0 = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+        let id1 = data.diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+        data.diff.add_bond_checked(id0, id1, 1);
+        (id0, id1)
+    };
+
+    refresh(&mut designer);
+    select_diff_atoms(&mut designer, &[id0, id1]);
+
+    let result = compute_default_angle(&designer);
+    assert!(
+        result.is_none(),
+        "2 atoms should not produce an angle default"
+    );
 }

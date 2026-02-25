@@ -8,6 +8,9 @@ use super::types::*;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure::fragment::compute_moving_fragment;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
+use crate::crystolecule::guided_placement::{BondLengthMode, crystal_bond_length};
+use crate::crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
+use crate::crystolecule::simulation::uff::typer::{assign_uff_type, bond_order_to_f64};
 use crate::structure_designer::structure_designer::StructureDesigner;
 
 // =============================================================================
@@ -284,6 +287,109 @@ pub fn modify_dihedral(
 
     // Phase 3: Mutate
     apply_position_updates(structure_designer, &position_updates, &atom_provenance)
+}
+
+// =============================================================================
+// Default value computation
+// =============================================================================
+
+/// Compute the default (equilibrium) bond length for the two selected atoms.
+///
+/// Returns `None` if:
+/// - There is no active atom_edit node or result structure
+/// - The selection doesn't contain exactly 2 atoms
+/// - The two atoms are not bonded (no bond → no meaningful equilibrium length)
+/// - UFF type assignment fails for either atom
+///
+/// In Crystal mode, tries the crystal bond length table first, falling back to
+/// UFF with the actual bond order. In UFF mode, uses `calc_bond_rest_length`
+/// with the actual bond order directly.
+pub fn compute_default_bond_length(
+    structure_designer: &StructureDesigner,
+    bond_length_mode: BondLengthMode,
+) -> Option<f64> {
+    let gathered = gather_measurement_data(structure_designer).ok()?;
+    let GatheredData {
+        selected_atoms,
+        result_structure,
+        measurement,
+        ..
+    } = gathered;
+
+    // Must be a distance measurement (2 atoms)
+    if !matches!(measurement, MeasurementResult::Distance { .. }) {
+        return None;
+    }
+
+    let id1 = selected_atoms[0].result_atom_id;
+    let id2 = selected_atoms[1].result_atom_id;
+
+    // Atoms must be bonded
+    let atom1 = result_structure.get_atom(id1)?;
+    let bond = atom1
+        .bonds
+        .iter()
+        .find(|b| b.other_atom_id() == id2)?;
+    let bond_order = bond_order_to_f64(bond.bond_order());
+
+    let atom2 = result_structure.get_atom(id2)?;
+
+    match bond_length_mode {
+        BondLengthMode::Crystal => {
+            if let Some(d) = crystal_bond_length(atom1.atomic_number, atom2.atomic_number) {
+                return Some(d);
+            }
+            // Fall back to UFF with actual bond order
+            uff_bond_length_for_atoms(atom1, atom2, bond_order)
+        }
+        BondLengthMode::Uff => uff_bond_length_for_atoms(atom1, atom2, bond_order),
+    }
+}
+
+/// Compute the default (equilibrium) angle for the three selected atoms.
+///
+/// Returns `None` if:
+/// - There is no active atom_edit node or result structure
+/// - The selection doesn't contain exactly 3 atoms
+/// - UFF type assignment fails for the vertex atom
+///
+/// Uses the UFF `theta0` parameter for the vertex atom's type.
+pub fn compute_default_angle(structure_designer: &StructureDesigner) -> Option<f64> {
+    let gathered = gather_measurement_data(structure_designer).ok()?;
+    let GatheredData {
+        selected_atoms,
+        result_structure,
+        measurement,
+        ..
+    } = gathered;
+
+    let vertex_index = match measurement {
+        MeasurementResult::Angle { vertex_index, .. } => vertex_index,
+        _ => return None,
+    };
+
+    let vertex_id = selected_atoms[vertex_index].result_atom_id;
+    let vertex_atom = result_structure.get_atom(vertex_id)?;
+
+    // Assign UFF type for the vertex atom
+    let bonds_slice = vertex_atom.bonds.as_slice();
+    let uff_label = assign_uff_type(vertex_atom.atomic_number, bonds_slice).ok()?;
+    let params = get_uff_params(uff_label)?;
+
+    Some(params.theta0)
+}
+
+/// Compute UFF equilibrium bond length for two specific atoms using the actual bond order.
+fn uff_bond_length_for_atoms(
+    atom1: &crate::crystolecule::atomic_structure::Atom,
+    atom2: &crate::crystolecule::atomic_structure::Atom,
+    bond_order: f64,
+) -> Option<f64> {
+    let label1 = assign_uff_type(atom1.atomic_number, atom1.bonds.as_slice()).ok()?;
+    let label2 = assign_uff_type(atom2.atomic_number, atom2.bonds.as_slice()).ok()?;
+    let params1 = get_uff_params(label1)?;
+    let params2 = get_uff_params(label2)?;
+    Some(calc_bond_rest_length(bond_order, params1, params2))
 }
 
 // =============================================================================
