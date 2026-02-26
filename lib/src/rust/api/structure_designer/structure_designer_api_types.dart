@@ -129,6 +129,9 @@ class APIAtomEditData {
   final APIDiffStats diffStats;
   final APIMeasurement? measurement;
 
+  /// Result-space ID of the most recently selected atom (for dialog defaults).
+  final int? lastSelectedResultAtomId;
+
   const APIAtomEditData({
     required this.activeTool,
     this.bondToolLastAtomId,
@@ -149,6 +152,7 @@ class APIAtomEditData {
     required this.showGadget,
     required this.diffStats,
     this.measurement,
+    this.lastSelectedResultAtomId,
   });
 
   @override
@@ -171,7 +175,8 @@ class APIAtomEditData {
       errorOnStaleEntries.hashCode ^
       showGadget.hashCode ^
       diffStats.hashCode ^
-      measurement.hashCode;
+      measurement.hashCode ^
+      lastSelectedResultAtomId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -196,7 +201,8 @@ class APIAtomEditData {
           errorOnStaleEntries == other.errorOnStaleEntries &&
           showGadget == other.showGadget &&
           diffStats == other.diffStats &&
-          measurement == other.measurement;
+          measurement == other.measurement &&
+          lastSelectedResultAtomId == other.lastSelectedResultAtomId;
 }
 
 enum APIAtomEditTool {
@@ -1051,16 +1057,47 @@ sealed class APIMeasurement with _$APIMeasurement {
   /// Distance between 2 atoms in Angstroms.
   const factory APIMeasurement.distance({
     required double distance,
+
+    /// Result-space atom IDs for the two atoms.
+    required int atom1Id,
+    required int atom2Id,
+
+    /// Element symbols for display labels.
+    required String atom1Symbol,
+    required String atom2Symbol,
+
+    /// Whether the two atoms are bonded (enables Default button in dialog).
+    required bool isBonded,
   }) = APIMeasurement_Distance;
 
   /// Angle at a vertex atom, in degrees.
   const factory APIMeasurement.angle({
     required double angleDegrees,
+
+    /// Vertex atom identity.
+    required int vertexId,
+    required String vertexSymbol,
+
+    /// Arm atoms (indices 0 and 1 for move choice).
+    required int armAId,
+    required String armASymbol,
+    required int armBId,
+    required String armBSymbol,
   }) = APIMeasurement_Angle;
 
   /// Dihedral (torsion) angle around the central bond axis, in degrees.
   const factory APIMeasurement.dihedral({
     required double angleDegrees,
+
+    /// Chain A-B-C-D atom identities.
+    required int chainAId,
+    required String chainASymbol,
+    required int chainBId,
+    required String chainBSymbol,
+    required int chainCId,
+    required String chainCSymbol,
+    required int chainDId,
+    required String chainDSymbol,
   }) = APIMeasurement_Dihedral;
 }
 

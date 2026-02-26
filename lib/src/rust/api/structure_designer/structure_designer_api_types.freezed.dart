@@ -38,9 +38,27 @@ class $APIMeasurementCopyWith<$Res> {
 /// @nodoc
 
 class APIMeasurement_Distance extends APIMeasurement {
-  const APIMeasurement_Distance({required this.distance}) : super._();
+  const APIMeasurement_Distance(
+      {required this.distance,
+      required this.atom1Id,
+      required this.atom2Id,
+      required this.atom1Symbol,
+      required this.atom2Symbol,
+      required this.isBonded})
+      : super._();
 
   final double distance;
+
+  /// Result-space atom IDs for the two atoms.
+  final int atom1Id;
+  final int atom2Id;
+
+  /// Element symbols for display labels.
+  final String atom1Symbol;
+  final String atom2Symbol;
+
+  /// Whether the two atoms are bonded (enables Default button in dialog).
+  final bool isBonded;
 
   /// Create a copy of APIMeasurement
   /// with the given fields replaced by the non-null parameter values.
@@ -56,15 +74,24 @@ class APIMeasurement_Distance extends APIMeasurement {
         (other.runtimeType == runtimeType &&
             other is APIMeasurement_Distance &&
             (identical(other.distance, distance) ||
-                other.distance == distance));
+                other.distance == distance) &&
+            (identical(other.atom1Id, atom1Id) || other.atom1Id == atom1Id) &&
+            (identical(other.atom2Id, atom2Id) || other.atom2Id == atom2Id) &&
+            (identical(other.atom1Symbol, atom1Symbol) ||
+                other.atom1Symbol == atom1Symbol) &&
+            (identical(other.atom2Symbol, atom2Symbol) ||
+                other.atom2Symbol == atom2Symbol) &&
+            (identical(other.isBonded, isBonded) ||
+                other.isBonded == isBonded));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, distance);
+  int get hashCode => Object.hash(runtimeType, distance, atom1Id, atom2Id,
+      atom1Symbol, atom2Symbol, isBonded);
 
   @override
   String toString() {
-    return 'APIMeasurement.distance(distance: $distance)';
+    return 'APIMeasurement.distance(distance: $distance, atom1Id: $atom1Id, atom2Id: $atom2Id, atom1Symbol: $atom1Symbol, atom2Symbol: $atom2Symbol, isBonded: $isBonded)';
   }
 }
 
@@ -75,7 +102,13 @@ abstract mixin class $APIMeasurement_DistanceCopyWith<$Res>
           $Res Function(APIMeasurement_Distance) _then) =
       _$APIMeasurement_DistanceCopyWithImpl;
   @useResult
-  $Res call({double distance});
+  $Res call(
+      {double distance,
+      int atom1Id,
+      int atom2Id,
+      String atom1Symbol,
+      String atom2Symbol,
+      bool isBonded});
 }
 
 /// @nodoc
@@ -91,12 +124,37 @@ class _$APIMeasurement_DistanceCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   $Res call({
     Object? distance = null,
+    Object? atom1Id = null,
+    Object? atom2Id = null,
+    Object? atom1Symbol = null,
+    Object? atom2Symbol = null,
+    Object? isBonded = null,
   }) {
     return _then(APIMeasurement_Distance(
       distance: null == distance
           ? _self.distance
           : distance // ignore: cast_nullable_to_non_nullable
               as double,
+      atom1Id: null == atom1Id
+          ? _self.atom1Id
+          : atom1Id // ignore: cast_nullable_to_non_nullable
+              as int,
+      atom2Id: null == atom2Id
+          ? _self.atom2Id
+          : atom2Id // ignore: cast_nullable_to_non_nullable
+              as int,
+      atom1Symbol: null == atom1Symbol
+          ? _self.atom1Symbol
+          : atom1Symbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      atom2Symbol: null == atom2Symbol
+          ? _self.atom2Symbol
+          : atom2Symbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      isBonded: null == isBonded
+          ? _self.isBonded
+          : isBonded // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -104,9 +162,27 @@ class _$APIMeasurement_DistanceCopyWithImpl<$Res>
 /// @nodoc
 
 class APIMeasurement_Angle extends APIMeasurement {
-  const APIMeasurement_Angle({required this.angleDegrees}) : super._();
+  const APIMeasurement_Angle(
+      {required this.angleDegrees,
+      required this.vertexId,
+      required this.vertexSymbol,
+      required this.armAId,
+      required this.armASymbol,
+      required this.armBId,
+      required this.armBSymbol})
+      : super._();
 
   final double angleDegrees;
+
+  /// Vertex atom identity.
+  final int vertexId;
+  final String vertexSymbol;
+
+  /// Arm atoms (indices 0 and 1 for move choice).
+  final int armAId;
+  final String armASymbol;
+  final int armBId;
+  final String armBSymbol;
 
   /// Create a copy of APIMeasurement
   /// with the given fields replaced by the non-null parameter values.
@@ -122,15 +198,26 @@ class APIMeasurement_Angle extends APIMeasurement {
         (other.runtimeType == runtimeType &&
             other is APIMeasurement_Angle &&
             (identical(other.angleDegrees, angleDegrees) ||
-                other.angleDegrees == angleDegrees));
+                other.angleDegrees == angleDegrees) &&
+            (identical(other.vertexId, vertexId) ||
+                other.vertexId == vertexId) &&
+            (identical(other.vertexSymbol, vertexSymbol) ||
+                other.vertexSymbol == vertexSymbol) &&
+            (identical(other.armAId, armAId) || other.armAId == armAId) &&
+            (identical(other.armASymbol, armASymbol) ||
+                other.armASymbol == armASymbol) &&
+            (identical(other.armBId, armBId) || other.armBId == armBId) &&
+            (identical(other.armBSymbol, armBSymbol) ||
+                other.armBSymbol == armBSymbol));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, angleDegrees);
+  int get hashCode => Object.hash(runtimeType, angleDegrees, vertexId,
+      vertexSymbol, armAId, armASymbol, armBId, armBSymbol);
 
   @override
   String toString() {
-    return 'APIMeasurement.angle(angleDegrees: $angleDegrees)';
+    return 'APIMeasurement.angle(angleDegrees: $angleDegrees, vertexId: $vertexId, vertexSymbol: $vertexSymbol, armAId: $armAId, armASymbol: $armASymbol, armBId: $armBId, armBSymbol: $armBSymbol)';
   }
 }
 
@@ -141,7 +228,14 @@ abstract mixin class $APIMeasurement_AngleCopyWith<$Res>
           $Res Function(APIMeasurement_Angle) _then) =
       _$APIMeasurement_AngleCopyWithImpl;
   @useResult
-  $Res call({double angleDegrees});
+  $Res call(
+      {double angleDegrees,
+      int vertexId,
+      String vertexSymbol,
+      int armAId,
+      String armASymbol,
+      int armBId,
+      String armBSymbol});
 }
 
 /// @nodoc
@@ -157,12 +251,42 @@ class _$APIMeasurement_AngleCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   $Res call({
     Object? angleDegrees = null,
+    Object? vertexId = null,
+    Object? vertexSymbol = null,
+    Object? armAId = null,
+    Object? armASymbol = null,
+    Object? armBId = null,
+    Object? armBSymbol = null,
   }) {
     return _then(APIMeasurement_Angle(
       angleDegrees: null == angleDegrees
           ? _self.angleDegrees
           : angleDegrees // ignore: cast_nullable_to_non_nullable
               as double,
+      vertexId: null == vertexId
+          ? _self.vertexId
+          : vertexId // ignore: cast_nullable_to_non_nullable
+              as int,
+      vertexSymbol: null == vertexSymbol
+          ? _self.vertexSymbol
+          : vertexSymbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      armAId: null == armAId
+          ? _self.armAId
+          : armAId // ignore: cast_nullable_to_non_nullable
+              as int,
+      armASymbol: null == armASymbol
+          ? _self.armASymbol
+          : armASymbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      armBId: null == armBId
+          ? _self.armBId
+          : armBId // ignore: cast_nullable_to_non_nullable
+              as int,
+      armBSymbol: null == armBSymbol
+          ? _self.armBSymbol
+          : armBSymbol // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -170,9 +294,29 @@ class _$APIMeasurement_AngleCopyWithImpl<$Res>
 /// @nodoc
 
 class APIMeasurement_Dihedral extends APIMeasurement {
-  const APIMeasurement_Dihedral({required this.angleDegrees}) : super._();
+  const APIMeasurement_Dihedral(
+      {required this.angleDegrees,
+      required this.chainAId,
+      required this.chainASymbol,
+      required this.chainBId,
+      required this.chainBSymbol,
+      required this.chainCId,
+      required this.chainCSymbol,
+      required this.chainDId,
+      required this.chainDSymbol})
+      : super._();
 
   final double angleDegrees;
+
+  /// Chain A-B-C-D atom identities.
+  final int chainAId;
+  final String chainASymbol;
+  final int chainBId;
+  final String chainBSymbol;
+  final int chainCId;
+  final String chainCSymbol;
+  final int chainDId;
+  final String chainDSymbol;
 
   /// Create a copy of APIMeasurement
   /// with the given fields replaced by the non-null parameter values.
@@ -188,15 +332,41 @@ class APIMeasurement_Dihedral extends APIMeasurement {
         (other.runtimeType == runtimeType &&
             other is APIMeasurement_Dihedral &&
             (identical(other.angleDegrees, angleDegrees) ||
-                other.angleDegrees == angleDegrees));
+                other.angleDegrees == angleDegrees) &&
+            (identical(other.chainAId, chainAId) ||
+                other.chainAId == chainAId) &&
+            (identical(other.chainASymbol, chainASymbol) ||
+                other.chainASymbol == chainASymbol) &&
+            (identical(other.chainBId, chainBId) ||
+                other.chainBId == chainBId) &&
+            (identical(other.chainBSymbol, chainBSymbol) ||
+                other.chainBSymbol == chainBSymbol) &&
+            (identical(other.chainCId, chainCId) ||
+                other.chainCId == chainCId) &&
+            (identical(other.chainCSymbol, chainCSymbol) ||
+                other.chainCSymbol == chainCSymbol) &&
+            (identical(other.chainDId, chainDId) ||
+                other.chainDId == chainDId) &&
+            (identical(other.chainDSymbol, chainDSymbol) ||
+                other.chainDSymbol == chainDSymbol));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, angleDegrees);
+  int get hashCode => Object.hash(
+      runtimeType,
+      angleDegrees,
+      chainAId,
+      chainASymbol,
+      chainBId,
+      chainBSymbol,
+      chainCId,
+      chainCSymbol,
+      chainDId,
+      chainDSymbol);
 
   @override
   String toString() {
-    return 'APIMeasurement.dihedral(angleDegrees: $angleDegrees)';
+    return 'APIMeasurement.dihedral(angleDegrees: $angleDegrees, chainAId: $chainAId, chainASymbol: $chainASymbol, chainBId: $chainBId, chainBSymbol: $chainBSymbol, chainCId: $chainCId, chainCSymbol: $chainCSymbol, chainDId: $chainDId, chainDSymbol: $chainDSymbol)';
   }
 }
 
@@ -207,7 +377,16 @@ abstract mixin class $APIMeasurement_DihedralCopyWith<$Res>
           $Res Function(APIMeasurement_Dihedral) _then) =
       _$APIMeasurement_DihedralCopyWithImpl;
   @useResult
-  $Res call({double angleDegrees});
+  $Res call(
+      {double angleDegrees,
+      int chainAId,
+      String chainASymbol,
+      int chainBId,
+      String chainBSymbol,
+      int chainCId,
+      String chainCSymbol,
+      int chainDId,
+      String chainDSymbol});
 }
 
 /// @nodoc
@@ -223,12 +402,52 @@ class _$APIMeasurement_DihedralCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   $Res call({
     Object? angleDegrees = null,
+    Object? chainAId = null,
+    Object? chainASymbol = null,
+    Object? chainBId = null,
+    Object? chainBSymbol = null,
+    Object? chainCId = null,
+    Object? chainCSymbol = null,
+    Object? chainDId = null,
+    Object? chainDSymbol = null,
   }) {
     return _then(APIMeasurement_Dihedral(
       angleDegrees: null == angleDegrees
           ? _self.angleDegrees
           : angleDegrees // ignore: cast_nullable_to_non_nullable
               as double,
+      chainAId: null == chainAId
+          ? _self.chainAId
+          : chainAId // ignore: cast_nullable_to_non_nullable
+              as int,
+      chainASymbol: null == chainASymbol
+          ? _self.chainASymbol
+          : chainASymbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      chainBId: null == chainBId
+          ? _self.chainBId
+          : chainBId // ignore: cast_nullable_to_non_nullable
+              as int,
+      chainBSymbol: null == chainBSymbol
+          ? _self.chainBSymbol
+          : chainBSymbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      chainCId: null == chainCId
+          ? _self.chainCId
+          : chainCId // ignore: cast_nullable_to_non_nullable
+              as int,
+      chainCSymbol: null == chainCSymbol
+          ? _self.chainCSymbol
+          : chainCSymbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      chainDId: null == chainDId
+          ? _self.chainDId
+          : chainDId // ignore: cast_nullable_to_non_nullable
+              as int,
+      chainDSymbol: null == chainDSymbol
+          ? _self.chainDSymbol
+          : chainDSymbol // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }

@@ -384,6 +384,8 @@ pub struct APIAtomEditData {
     pub show_gadget: bool,
     pub diff_stats: APIDiffStats,
     pub measurement: Option<APIMeasurement>,
+    /// Result-space ID of the most recently selected atom (for dialog defaults).
+    pub last_selected_result_atom_id: Option<u32>,
 }
 
 /// Measurement computed from selected atoms (2-4 atoms).
@@ -391,11 +393,42 @@ pub struct APIAtomEditData {
 #[derive(Debug, Clone)]
 pub enum APIMeasurement {
     /// Distance between 2 atoms in Angstroms.
-    Distance { distance: f64 },
+    Distance {
+        distance: f64,
+        /// Result-space atom IDs for the two atoms.
+        atom1_id: u32,
+        atom2_id: u32,
+        /// Element symbols for display labels.
+        atom1_symbol: String,
+        atom2_symbol: String,
+        /// Whether the two atoms are bonded (enables Default button in dialog).
+        is_bonded: bool,
+    },
     /// Angle at a vertex atom, in degrees.
-    Angle { angle_degrees: f64 },
+    Angle {
+        angle_degrees: f64,
+        /// Vertex atom identity.
+        vertex_id: u32,
+        vertex_symbol: String,
+        /// Arm atoms (indices 0 and 1 for move choice).
+        arm_a_id: u32,
+        arm_a_symbol: String,
+        arm_b_id: u32,
+        arm_b_symbol: String,
+    },
     /// Dihedral (torsion) angle around the central bond axis, in degrees.
-    Dihedral { angle_degrees: f64 },
+    Dihedral {
+        angle_degrees: f64,
+        /// Chain A-B-C-D atom identities.
+        chain_a_id: u32,
+        chain_a_symbol: String,
+        chain_b_id: u32,
+        chain_b_symbol: String,
+        chain_c_id: u32,
+        chain_c_symbol: String,
+        chain_d_id: u32,
+        chain_d_symbol: String,
+    },
 }
 
 /// Hybridization override for guided atom placement.

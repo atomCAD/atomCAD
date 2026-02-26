@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `api_data_type_to_data_type`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`
+// These functions are ignored because they are not marked as `pub`: `api_data_type_to_data_type`, `atom_symbol`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();

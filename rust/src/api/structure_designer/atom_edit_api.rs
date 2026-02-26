@@ -684,3 +684,157 @@ pub fn default_tool_pointer_up(
         )
     }
 }
+
+// --- Modify measurement API ---
+
+/// Modify the distance between two selected atoms.
+/// `move_first`: true = move atom1, false = move atom2.
+/// Returns an error message string on failure, empty string on success.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_modify_distance(
+    target_distance: f64,
+    move_first: bool,
+    move_fragment: bool,
+) -> String {
+    use crate::structure_designer::nodes::atom_edit::atom_edit::{
+        DistanceMoveChoice, modify_distance,
+    };
+
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let move_choice = if move_first {
+                    DistanceMoveChoice::First
+                } else {
+                    DistanceMoveChoice::Second
+                };
+                let result = modify_distance(
+                    &mut cad_instance.structure_designer,
+                    target_distance,
+                    move_choice,
+                    move_fragment,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(()) => String::new(),
+                    Err(e) => e,
+                }
+            },
+            "Error: no active instance".to_string(),
+        )
+    }
+}
+
+/// Modify the angle at the vertex of three selected atoms.
+/// `move_arm_a`: true = move arm A, false = move arm B.
+/// Returns an error message string on failure, empty string on success.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_modify_angle(
+    target_angle_degrees: f64,
+    move_arm_a: bool,
+    move_fragment: bool,
+) -> String {
+    use crate::structure_designer::nodes::atom_edit::atom_edit::{AngleMoveChoice, modify_angle};
+
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let move_choice = if move_arm_a {
+                    AngleMoveChoice::ArmA
+                } else {
+                    AngleMoveChoice::ArmB
+                };
+                let result = modify_angle(
+                    &mut cad_instance.structure_designer,
+                    target_angle_degrees,
+                    move_choice,
+                    move_fragment,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(()) => String::new(),
+                    Err(e) => e,
+                }
+            },
+            "Error: no active instance".to_string(),
+        )
+    }
+}
+
+/// Modify the dihedral angle of four selected atoms.
+/// `move_a_side`: true = rotate A-side, false = rotate D-side.
+/// Returns an error message string on failure, empty string on success.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_modify_dihedral(
+    target_angle_degrees: f64,
+    move_a_side: bool,
+    move_fragment: bool,
+) -> String {
+    use crate::structure_designer::nodes::atom_edit::atom_edit::{
+        DihedralMoveChoice, modify_dihedral,
+    };
+
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let move_choice = if move_a_side {
+                    DihedralMoveChoice::ASide
+                } else {
+                    DihedralMoveChoice::DSide
+                };
+                let result = modify_dihedral(
+                    &mut cad_instance.structure_designer,
+                    target_angle_degrees,
+                    move_choice,
+                    move_fragment,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(()) => String::new(),
+                    Err(e) => e,
+                }
+            },
+            "Error: no active instance".to_string(),
+        )
+    }
+}
+
+/// Get the default (equilibrium) bond length for the two selected atoms.
+/// Returns None if atoms are not bonded or if UFF typing fails.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_get_default_bond_length(
+    bond_length_mode: crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode,
+) -> Option<f64> {
+    use crate::api::api_common::with_cad_instance_or;
+    use crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode;
+    use crate::crystolecule::guided_placement::BondLengthMode;
+    use crate::structure_designer::nodes::atom_edit::atom_edit::compute_default_bond_length;
+
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let mode = match bond_length_mode {
+                    APIBondLengthMode::Crystal => BondLengthMode::Crystal,
+                    APIBondLengthMode::Uff => BondLengthMode::Uff,
+                };
+                compute_default_bond_length(&cad_instance.structure_designer, mode)
+            },
+            None,
+        )
+    }
+}
+
+/// Get the default (equilibrium) angle for the three selected atoms.
+/// Returns None if UFF typing fails for the vertex atom.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_get_default_angle() -> Option<f64> {
+    use crate::api::api_common::with_cad_instance_or;
+    use crate::structure_designer::nodes::atom_edit::atom_edit::compute_default_angle;
+
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| compute_default_angle(&cad_instance.structure_designer),
+            None,
+        )
+    }
+}

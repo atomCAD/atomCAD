@@ -194,3 +194,55 @@ PointerUpResult defaultToolPointerUp(
             selectModifier: selectModifier,
             viewportWidth: viewportWidth,
             viewportHeight: viewportHeight);
+
+/// Modify the distance between two selected atoms.
+/// `move_first`: true = move atom1, false = move atom2.
+/// Returns an error message string on failure, empty string on success.
+String atomEditModifyDistance(
+        {required double targetDistance,
+        required bool moveFirst,
+        required bool moveFragment}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditModifyDistance(
+            targetDistance: targetDistance,
+            moveFirst: moveFirst,
+            moveFragment: moveFragment);
+
+/// Modify the angle at the vertex of three selected atoms.
+/// `move_arm_a`: true = move arm A, false = move arm B.
+/// Returns an error message string on failure, empty string on success.
+String atomEditModifyAngle(
+        {required double targetAngleDegrees,
+        required bool moveArmA,
+        required bool moveFragment}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditModifyAngle(
+            targetAngleDegrees: targetAngleDegrees,
+            moveArmA: moveArmA,
+            moveFragment: moveFragment);
+
+/// Modify the dihedral angle of four selected atoms.
+/// `move_a_side`: true = rotate A-side, false = rotate D-side.
+/// Returns an error message string on failure, empty string on success.
+String atomEditModifyDihedral(
+        {required double targetAngleDegrees,
+        required bool moveASide,
+        required bool moveFragment}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditModifyDihedral(
+            targetAngleDegrees: targetAngleDegrees,
+            moveASide: moveASide,
+            moveFragment: moveFragment);
+
+/// Get the default (equilibrium) bond length for the two selected atoms.
+/// Returns None if atoms are not bonded or if UFF typing fails.
+double? atomEditGetDefaultBondLength(
+        {required APIBondLengthMode bondLengthMode}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditGetDefaultBondLength(
+            bondLengthMode: bondLengthMode);
+
+/// Get the default (equilibrium) angle for the three selected atoms.
+/// Returns None if UFF typing fails for the vertex atom.
+double? atomEditGetDefaultAngle() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditGetDefaultAngle();

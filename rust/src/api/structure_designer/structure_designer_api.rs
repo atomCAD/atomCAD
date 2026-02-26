@@ -2197,6 +2197,10 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                 let measurement =
                     compute_selection_measurement(atom_edit_data, atomic_structure, eval_cache);
 
+                // Compute last-selected result atom ID for dialog defaults
+                let last_selected_result_atom_id =
+                    compute_last_selected_result_atom_id(atom_edit_data, eval_cache);
+
                 let is_in_guided_placement = matches!(
                     &atom_edit_data.active_tool,
                     AtomEditTool::AddAtom(
@@ -2235,11 +2239,25 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     },
                     diff_stats,
                     measurement,
+                    last_selected_result_atom_id,
                 })
             },
             None,
         )
     }
+}
+
+/// Look up the element symbol for a result-space atom.
+fn atom_symbol(
+    structure: &crate::crystolecule::atomic_structure::AtomicStructure,
+    result_id: u32,
+) -> String {
+    use crate::crystolecule::atomic_constants::ATOM_INFO;
+    structure
+        .get_atom(result_id)
+        .and_then(|a| ATOM_INFO.get(&(a.atomic_number as i32)))
+        .map(|info| info.symbol.clone())
+        .unwrap_or_else(|| "?".to_string())
 }
 
 /// Resolve selected atom positions and compute measurement.
@@ -2304,12 +2322,88 @@ fn compute_selection_measurement(
 
     let measurement = compute_measurement(&selected_atoms, result_structure)?;
     Some(match measurement {
-        MeasurementResult::Distance { distance } => APIMeasurement::Distance { distance },
-        MeasurementResult::Angle { angle_degrees, .. } => APIMeasurement::Angle { angle_degrees },
-        MeasurementResult::Dihedral { angle_degrees, .. } => {
-            APIMeasurement::Dihedral { angle_degrees }
+        MeasurementResult::Distance { distance } => {
+            let id1 = selected_atoms[0].result_atom_id;
+            let id2 = selected_atoms[1].result_atom_id;
+            let is_bonded = result_structure.has_bond_between(id1, id2);
+            APIMeasurement::Distance {
+                distance,
+                atom1_id: id1,
+                atom2_id: id2,
+                atom1_symbol: atom_symbol(result_structure, id1),
+                atom2_symbol: atom_symbol(result_structure, id2),
+                is_bonded,
+            }
+        }
+        MeasurementResult::Angle {
+            angle_degrees,
+            vertex_index,
+        } => {
+            let (arm_a_idx, arm_b_idx) = match vertex_index {
+                0 => (1, 2),
+                1 => (0, 2),
+                _ => (0, 1),
+            };
+            let v_id = selected_atoms[vertex_index].result_atom_id;
+            let a_id = selected_atoms[arm_a_idx].result_atom_id;
+            let b_id = selected_atoms[arm_b_idx].result_atom_id;
+            APIMeasurement::Angle {
+                angle_degrees,
+                vertex_id: v_id,
+                vertex_symbol: atom_symbol(result_structure, v_id),
+                arm_a_id: a_id,
+                arm_a_symbol: atom_symbol(result_structure, a_id),
+                arm_b_id: b_id,
+                arm_b_symbol: atom_symbol(result_structure, b_id),
+            }
+        }
+        MeasurementResult::Dihedral {
+            angle_degrees,
+            chain,
+        } => {
+            let a_id = selected_atoms[chain[0]].result_atom_id;
+            let b_id = selected_atoms[chain[1]].result_atom_id;
+            let c_id = selected_atoms[chain[2]].result_atom_id;
+            let d_id = selected_atoms[chain[3]].result_atom_id;
+            APIMeasurement::Dihedral {
+                angle_degrees,
+                chain_a_id: a_id,
+                chain_a_symbol: atom_symbol(result_structure, a_id),
+                chain_b_id: b_id,
+                chain_b_symbol: atom_symbol(result_structure, b_id),
+                chain_c_id: c_id,
+                chain_c_symbol: atom_symbol(result_structure, c_id),
+                chain_d_id: d_id,
+                chain_d_symbol: atom_symbol(result_structure, d_id),
+            }
         }
     })
+}
+
+/// Compute the result-space atom ID of the most recently selected atom.
+fn compute_last_selected_result_atom_id(
+    atom_edit_data: &AtomEditData,
+    eval_cache: Option<&AtomEditEvalCache>,
+) -> Option<u32> {
+    use crate::structure_designer::nodes::atom_edit::atom_edit::SelectionProvenance;
+
+    let last = atom_edit_data.selection.selection_order.last()?;
+    let (prov, id) = *last;
+
+    if atom_edit_data.output_diff {
+        // In diff view, diff IDs are result IDs
+        if prov == SelectionProvenance::Diff {
+            Some(id)
+        } else {
+            None
+        }
+    } else {
+        let cache = eval_cache?;
+        match prov {
+            SelectionProvenance::Base => cache.provenance.base_to_result.get(&id).copied(),
+            SelectionProvenance::Diff => cache.provenance.diff_to_result.get(&id).copied(),
+        }
+    }
 }
 
 #[flutter_rust_bridge::frb(sync)]
