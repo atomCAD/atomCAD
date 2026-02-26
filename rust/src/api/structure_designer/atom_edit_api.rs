@@ -372,43 +372,16 @@ pub fn set_active_atom_edit_tool(tool: APIAtomEditTool) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_edit_default_data(replacement_atomic_number: i16) -> bool {
+pub fn set_atom_edit_selected_element(atomic_number: i16) {
     unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                if let Some(atom_edit_data) =
-                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-                {
-                    let result =
-                        atom_edit_data.set_default_tool_atomic_number(replacement_atomic_number);
-                    refresh_structure_designer_auto(cad_instance);
-                    result
-                } else {
-                    false
-                }
-            },
-            false,
-        )
-    }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_edit_add_atom_data(atomic_number: i16) -> bool {
-    unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                if let Some(atom_edit_data) =
-                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-                {
-                    let result = atom_edit_data.set_add_atom_tool_atomic_number(atomic_number);
-                    refresh_structure_designer_auto(cad_instance);
-                    result
-                } else {
-                    false
-                }
-            },
-            false,
-        )
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                atom_edit_data.set_selected_element(atomic_number);
+                refresh_structure_designer_auto(cad_instance);
+            }
+        });
     }
 }
 

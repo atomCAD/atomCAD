@@ -168,44 +168,15 @@ pub fn set_active_edit_atom_tool(tool: APIEditAtomTool) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_edit_atom_default_data(replacement_atomic_number: i16) -> bool {
+pub fn set_edit_atom_selected_element(atomic_number: i16) {
     unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                if let Some(edit_atom_data) =
-                    edit_atom::get_selected_edit_atom_data_mut(&mut cad_instance.structure_designer)
-                {
-                    let result =
-                        edit_atom_data.set_default_tool_atomic_number(replacement_atomic_number);
-                    // Edit atom operations modify the edit_atom node's internal state
-                    refresh_structure_designer_auto(cad_instance);
-                    result
-                } else {
-                    false
-                }
-            },
-            false,
-        )
-    }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn set_edit_atom_add_atom_data(atomic_number: i16) -> bool {
-    unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                if let Some(edit_atom_data) =
-                    edit_atom::get_selected_edit_atom_data_mut(&mut cad_instance.structure_designer)
-                {
-                    let result = edit_atom_data.set_add_atom_tool_atomic_number(atomic_number);
-                    // Edit atom operations modify the edit_atom node's internal state
-                    refresh_structure_designer_auto(cad_instance);
-                    result
-                } else {
-                    false
-                }
-            },
-            false,
-        )
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(edit_atom_data) =
+                edit_atom::get_selected_edit_atom_data_mut(&mut cad_instance.structure_designer)
+            {
+                edit_atom_data.set_selected_element(atomic_number);
+                refresh_structure_designer_auto(cad_instance);
+            }
+        });
     }
 }

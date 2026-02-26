@@ -2047,17 +2047,9 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
                     None => return None,
                 };
 
-                // Get the appropriate values based on the active tool
-                let (
-                    replacement_atomic_number,
-                    add_atom_tool_atomic_number,
-                    bond_tool_last_atom_id,
-                ) = match &edit_atom_data.active_tool {
-                    EditAtomTool::Default(state) => {
-                        (Some(state.replacement_atomic_number), None, None)
-                    }
-                    EditAtomTool::AddAtom(state) => (None, Some(state.atomic_number), None),
-                    EditAtomTool::AddBond(state) => (None, None, state.last_atom_id),
+                let bond_tool_last_atom_id = match &edit_atom_data.active_tool {
+                    EditAtomTool::AddBond(state) => state.last_atom_id,
+                    _ => None,
                 };
 
                 // Get the atomic structure from the selected node to check for selections
@@ -2076,8 +2068,7 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
                     can_undo: edit_atom_data.can_undo(),
                     can_redo: edit_atom_data.can_redo(),
                     bond_tool_last_atom_id,
-                    replacement_atomic_number,
-                    add_atom_tool_atomic_number,
+                    selected_atomic_number: edit_atom_data.selected_atomic_number,
                     has_selected_atoms,
                     has_selection,
                     selection_transform: edit_atom_data
@@ -2108,20 +2099,11 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     None => return None,
                 };
 
-                let (
-                    replacement_atomic_number,
-                    add_atom_tool_atomic_number,
-                    bond_tool_last_atom_id,
-                    bond_tool_bond_order,
-                ) = match &atom_edit_data.active_tool {
-                    AtomEditTool::Default(state) => {
-                        (Some(state.replacement_atomic_number), None, None, 0)
-                    }
-                    AtomEditTool::AddAtom(state) => (None, Some(state.atomic_number()), None, 0),
-                    AtomEditTool::AddBond(state) => {
-                        (None, None, state.last_atom_id, state.bond_order)
-                    }
-                };
+                let (bond_tool_last_atom_id, bond_tool_bond_order) =
+                    match &atom_edit_data.active_tool {
+                        AtomEditTool::AddBond(state) => (state.last_atom_id, state.bond_order),
+                        _ => (None, 0),
+                    };
 
                 // Read selection state from the evaluated result (correct for visible atoms)
                 let atomic_structure = cad_instance
@@ -2216,8 +2198,7 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     active_tool: atom_edit_data.get_active_tool(),
                     bond_tool_last_atom_id,
                     bond_tool_bond_order,
-                    replacement_atomic_number,
-                    add_atom_tool_atomic_number,
+                    selected_atomic_number: atom_edit_data.selected_atomic_number,
                     is_in_guided_placement,
                     has_selected_atoms,
                     has_selected_bonds,

@@ -110,8 +110,7 @@ class APIAtomEditData {
   final APIAtomEditTool activeTool;
   final int? bondToolLastAtomId;
   final int bondToolBondOrder;
-  final int? replacementAtomicNumber;
-  final int? addAtomToolAtomicNumber;
+  final int selectedAtomicNumber;
   final bool isInGuidedPlacement;
   final bool hasSelectedAtoms;
   final bool hasSelectedBonds;
@@ -136,8 +135,7 @@ class APIAtomEditData {
     required this.activeTool,
     this.bondToolLastAtomId,
     required this.bondToolBondOrder,
-    this.replacementAtomicNumber,
-    this.addAtomToolAtomicNumber,
+    required this.selectedAtomicNumber,
     required this.isInGuidedPlacement,
     required this.hasSelectedAtoms,
     required this.hasSelectedBonds,
@@ -160,8 +158,7 @@ class APIAtomEditData {
       activeTool.hashCode ^
       bondToolLastAtomId.hashCode ^
       bondToolBondOrder.hashCode ^
-      replacementAtomicNumber.hashCode ^
-      addAtomToolAtomicNumber.hashCode ^
+      selectedAtomicNumber.hashCode ^
       isInGuidedPlacement.hashCode ^
       hasSelectedAtoms.hashCode ^
       hasSelectedBonds.hashCode ^
@@ -186,8 +183,7 @@ class APIAtomEditData {
           activeTool == other.activeTool &&
           bondToolLastAtomId == other.bondToolLastAtomId &&
           bondToolBondOrder == other.bondToolBondOrder &&
-          replacementAtomicNumber == other.replacementAtomicNumber &&
-          addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
+          selectedAtomicNumber == other.selectedAtomicNumber &&
           isInGuidedPlacement == other.isInGuidedPlacement &&
           hasSelectedAtoms == other.hasSelectedAtoms &&
           hasSelectedBonds == other.hasSelectedBonds &&
@@ -566,8 +562,7 @@ class APIEditAtomData {
   final bool canUndo;
   final bool canRedo;
   final int? bondToolLastAtomId;
-  final int? replacementAtomicNumber;
-  final int? addAtomToolAtomicNumber;
+  final int selectedAtomicNumber;
   final bool hasSelectedAtoms;
   final bool hasSelection;
   final APITransform? selectionTransform;
@@ -577,8 +572,7 @@ class APIEditAtomData {
     required this.canUndo,
     required this.canRedo,
     this.bondToolLastAtomId,
-    this.replacementAtomicNumber,
-    this.addAtomToolAtomicNumber,
+    required this.selectedAtomicNumber,
     required this.hasSelectedAtoms,
     required this.hasSelection,
     this.selectionTransform,
@@ -590,8 +584,7 @@ class APIEditAtomData {
       canUndo.hashCode ^
       canRedo.hashCode ^
       bondToolLastAtomId.hashCode ^
-      replacementAtomicNumber.hashCode ^
-      addAtomToolAtomicNumber.hashCode ^
+      selectedAtomicNumber.hashCode ^
       hasSelectedAtoms.hashCode ^
       hasSelection.hashCode ^
       selectionTransform.hashCode;
@@ -605,8 +598,7 @@ class APIEditAtomData {
           canUndo == other.canUndo &&
           canRedo == other.canRedo &&
           bondToolLastAtomId == other.bondToolLastAtomId &&
-          replacementAtomicNumber == other.replacementAtomicNumber &&
-          addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
+          selectedAtomicNumber == other.selectedAtomicNumber &&
           hasSelectedAtoms == other.hasSelectedAtoms &&
           hasSelection == other.hasSelection &&
           selectionTransform == other.selectionTransform;

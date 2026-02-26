@@ -55,11 +55,7 @@ bool setActiveEditAtomTool({required APIEditAtomTool tool}) =>
     RustLib.instance.api
         .crateApiStructureDesignerEditAtomApiSetActiveEditAtomTool(tool: tool);
 
-bool setEditAtomDefaultData({required int replacementAtomicNumber}) =>
-    RustLib.instance.api
-        .crateApiStructureDesignerEditAtomApiSetEditAtomDefaultData(
-            replacementAtomicNumber: replacementAtomicNumber);
-
-bool setEditAtomAddAtomData({required int atomicNumber}) => RustLib.instance.api
-    .crateApiStructureDesignerEditAtomApiSetEditAtomAddAtomData(
+void setEditAtomSelectedElement({required int atomicNumber}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerEditAtomApiSetEditAtomSelectedElement(
         atomicNumber: atomicNumber);

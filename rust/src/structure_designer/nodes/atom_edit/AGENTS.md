@@ -46,7 +46,7 @@ atom_edit/
 Key methods:
 - Diff mutations: `add_atom_to_diff`, `mark_for_deletion`, `move_in_diff`, etc.
 - Batch operations: `apply_delete_result_view`, `apply_replace`, `apply_transform`
-- Tool management: `set_active_tool`, `set_default_tool_atomic_number`
+- Tool management: `set_active_tool`, `set_selected_element`
 
 Accessor helpers:
 - `get_active_atom_edit_data()` — immutable access

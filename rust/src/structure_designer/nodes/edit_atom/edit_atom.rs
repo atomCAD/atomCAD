@@ -32,14 +32,10 @@ use glam::f64::DVec3;
 use std::io;
 
 #[derive(Debug)]
-pub struct DefaultToolState {
-    pub replacement_atomic_number: i16,
-}
+pub struct DefaultToolState {}
 
 #[derive(Debug)]
-pub struct AddAtomToolState {
-    pub atomic_number: i16,
-}
+pub struct AddAtomToolState {}
 
 #[derive(Debug)]
 pub struct AddBondToolState {
@@ -59,6 +55,9 @@ pub struct EditAtomData {
     pub history: Vec<Box<dyn EditAtomCommand>>,
     pub next_history_index: usize, // Next index (the one that was last executed plus one) in the history vector.
     pub active_tool: EditAtomTool,
+    /// Shared element selection across all tools (Default, AddAtom).
+    /// Survives tool switches — set once, used everywhere.
+    pub selected_atomic_number: i16,
     pub selection_transform: Option<Transform>,
 }
 
@@ -73,9 +72,8 @@ impl EditAtomData {
         Self {
             history: Vec::new(),
             next_history_index: 0,
-            active_tool: EditAtomTool::Default(DefaultToolState {
-                replacement_atomic_number: 6, // Default to carbon
-            }),
+            active_tool: EditAtomTool::Default(DefaultToolState {}),
+            selected_atomic_number: 6, // Default to carbon
             selection_transform: None,
         }
     }
@@ -137,16 +135,8 @@ impl EditAtomData {
 
     pub fn set_active_tool(&mut self, api_tool: APIEditAtomTool) {
         self.active_tool = match api_tool {
-            APIEditAtomTool::Default => {
-                EditAtomTool::Default(DefaultToolState {
-                    replacement_atomic_number: 6, // Default to carbon
-                })
-            }
-            APIEditAtomTool::AddAtom => {
-                EditAtomTool::AddAtom(AddAtomToolState {
-                    atomic_number: 6, // Default to carbon
-                })
-            }
+            APIEditAtomTool::Default => EditAtomTool::Default(DefaultToolState {}),
+            APIEditAtomTool::AddAtom => EditAtomTool::AddAtom(AddAtomToolState {}),
             APIEditAtomTool::AddBond => {
                 EditAtomTool::AddBond(AddBondToolState { last_atom_id: None })
             }
@@ -161,24 +151,9 @@ impl EditAtomData {
         }
     }
 
-    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i16) -> bool {
-        match &mut self.active_tool {
-            EditAtomTool::Default(state) => {
-                state.replacement_atomic_number = replacement_atomic_number;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i16) -> bool {
-        match &mut self.active_tool {
-            EditAtomTool::AddAtom(state) => {
-                state.atomic_number = atomic_number;
-                true
-            }
-            _ => false,
-        }
+    /// Set the shared element selection.
+    pub fn set_selected_element(&mut self, atomic_number: i16) {
+        self.selected_atomic_number = atomic_number;
     }
 
     pub fn get_add_bond_tool_state(&self) -> Option<&AddBondToolState> {
@@ -237,16 +212,13 @@ impl NodeData for EditAtomData {
             history: cloned_history,
             next_history_index: self.next_history_index,
             active_tool: match &self.active_tool {
-                EditAtomTool::Default(state) => EditAtomTool::Default(DefaultToolState {
-                    replacement_atomic_number: state.replacement_atomic_number,
-                }),
-                EditAtomTool::AddAtom(state) => EditAtomTool::AddAtom(AddAtomToolState {
-                    atomic_number: state.atomic_number,
-                }),
+                EditAtomTool::Default(_) => EditAtomTool::Default(DefaultToolState {}),
+                EditAtomTool::AddAtom(_) => EditAtomTool::AddAtom(AddAtomToolState {}),
                 EditAtomTool::AddBond(state) => EditAtomTool::AddBond(AddBondToolState {
                     last_atom_id: state.last_atom_id,
                 }),
             },
+            selected_atomic_number: self.selected_atomic_number,
             selection_transform: self.selection_transform.clone(),
         })
     }

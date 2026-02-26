@@ -552,7 +552,7 @@ class _StructureDesignerViewportState
     if (!mounted) return;
     final tool = atom_edit_api.getActiveAtomEditTool();
     if (tool == APIAtomEditTool.default_) {
-      // If atoms are selected, replace them; otherwise arm the replacement element
+      // If atoms are selected, replace them immediately
       final selectedNode = widget.graphModel.nodeNetworkView?.nodes.entries
           .where((entry) => entry.value.selected)
           .map((entry) => entry.value)
@@ -563,13 +563,15 @@ class _StructureDesignerViewportState
         if (data != null && data.hasSelectedAtoms) {
           widget.graphModel.atomEditReplaceSelected(atomicNumber);
           renderingNeeded();
+          // Also update the shared element selection
+          widget.graphModel.setAtomEditSelectedElement(atomicNumber);
           return;
         }
       }
-      // No atoms selected: set the replacement element for future use
-      widget.graphModel.setAtomEditDefaultData(atomicNumber);
-    } else if (tool == APIAtomEditTool.addAtom) {
-      widget.graphModel.setAtomEditAddAtomData(atomicNumber);
+    }
+    // Set the shared element selection (works for any tool)
+    if (tool == APIAtomEditTool.default_ || tool == APIAtomEditTool.addAtom) {
+      widget.graphModel.setAtomEditSelectedElement(atomicNumber);
     }
   }
 
@@ -667,7 +669,7 @@ class _StructureDesignerViewportState
       );
 
       if (atomEditData != null) {
-        final atomicNumber = atomEditData.addAtomToolAtomicNumber!;
+        final atomicNumber = atomEditData.selectedAtomicNumber;
 
         if (atomEditData.isInGuidedPlacement) {
           // Already in guided placement — try placing at a guide dot
@@ -759,7 +761,7 @@ class _StructureDesignerViewportState
         final planeNormal = cameraTransform!.forward;
 
         widget.graphModel.addAtomByRay(
-          editAtomData.addAtomToolAtomicNumber!,
+          editAtomData.selectedAtomicNumber,
           planeNormal,
           ray.start,
           ray.direction,

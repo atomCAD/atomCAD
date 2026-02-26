@@ -128,9 +128,8 @@ pub fn serializable_to_edit_atom_data(
     Ok(EditAtomData {
         history: commands,
         next_history_index: serializable.next_history_index,
-        active_tool: EditAtomTool::Default(DefaultToolState {
-            replacement_atomic_number: 6,
-        }),
+        active_tool: EditAtomTool::Default(DefaultToolState {}),
+        selected_atomic_number: 6,
         selection_transform: None,
     })
 }

@@ -186,7 +186,7 @@ pub fn start_guided_placement(
     // Check saturation before promoting
     if placement_result.remaining_slots == 0 {
         if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
-            *state = AddAtomToolState::Idle { atomic_number };
+            *state = AddAtomToolState::Idle;
         }
         return GuidedPlacementStartResult::AtomSaturated {
             has_additional_capacity: placement_result.has_additional_geometric_capacity,
@@ -201,7 +201,7 @@ pub fn start_guided_placement(
     if !is_free_sphere && !is_free_ring && guide_dots_empty {
         // No guide dots computed — stay in Idle
         if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
-            *state = AddAtomToolState::Idle { atomic_number };
+            *state = AddAtomToolState::Idle;
         }
         return GuidedPlacementStartResult::NoAtomHit;
     }
@@ -227,7 +227,6 @@ pub fn start_guided_placement(
             let count = guide_dots.len();
             if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
                 *state = AddAtomToolState::GuidedPlacement {
-                    atomic_number,
                     anchor_atom_id: diff_atom_id,
                     guide_dots: guide_dots.clone(),
                     bond_distance: placement_result.bond_distance,
@@ -239,7 +238,6 @@ pub fn start_guided_placement(
         GuidedPlacementMode::FreeSphere { center, radius, .. } => {
             if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
                 *state = AddAtomToolState::GuidedFreeSphere {
-                    atomic_number,
                     anchor_atom_id: diff_atom_id,
                     center: *center,
                     radius: *radius,
@@ -260,7 +258,6 @@ pub fn start_guided_placement(
         } => {
             if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
                 *state = AddAtomToolState::GuidedFreeRing {
-                    atomic_number,
                     anchor_atom_id: diff_atom_id,
                     ring_center: *ring_center,
                     ring_normal: *ring_normal,
@@ -319,7 +316,6 @@ pub fn place_guided_atom(
 
         match &atom_edit_data.active_tool {
             AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
-                atomic_number,
                 anchor_atom_id,
                 guide_dots,
                 is_dative_bond,
@@ -330,10 +326,9 @@ pub fn place_guided_atom(
                     None => return false,
                 };
                 let position = guide_dots[dot_index].position;
-                Some((*atomic_number, *anchor_atom_id, position, *is_dative_bond))
+                Some((*anchor_atom_id, position, *is_dative_bond))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
-                atomic_number,
                 anchor_atom_id,
                 center,
                 radius,
@@ -343,10 +338,9 @@ pub fn place_guided_atom(
                 // Use ray-sphere intersection for placement
                 let dative = *is_dative_bond;
                 ray_sphere_nearest_point(ray_start, ray_dir, center, *radius)
-                    .map(|hit_pos| (*atomic_number, *anchor_atom_id, hit_pos, dative))
+                    .map(|hit_pos| (*anchor_atom_id, hit_pos, dative))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing {
-                atomic_number,
                 anchor_atom_id,
                 ring_center,
                 ring_normal,
@@ -373,14 +367,14 @@ pub fn place_guided_atom(
                             cone_half_angle,
                         );
                         // Place at the first position (the one closest to cursor click)
-                        (*atomic_number, *anchor_atom_id, positions[0], dative)
+                        (*anchor_atom_id, positions[0], dative)
                     })
             }
             _ => None,
         }
     };
 
-    let (atomic_number, anchor_atom_id, position, is_dative_bond) = match placement_info {
+    let (anchor_atom_id, position, is_dative_bond) = match placement_info {
         Some(info) => info,
         None => return false,
     };
@@ -391,6 +385,7 @@ pub fn place_guided_atom(
         None => return false,
     };
 
+    let atomic_number = atom_edit_data.selected_atomic_number;
     let bond_order = if is_dative_bond {
         crate::crystolecule::atomic_structure::inline_bond::BOND_DATIVE
     } else {
@@ -401,7 +396,7 @@ pub fn place_guided_atom(
 
     // Transition back to Idle
     if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
-        *state = AddAtomToolState::Idle { atomic_number };
+        *state = AddAtomToolState::Idle;
     }
 
     true
@@ -478,8 +473,7 @@ pub fn cancel_guided_placement(structure_designer: &mut StructureDesigner) {
     };
 
     if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
-        let atomic_number = state.atomic_number();
-        *state = AddAtomToolState::Idle { atomic_number };
+        *state = AddAtomToolState::Idle;
     }
 }
 

@@ -753,20 +753,10 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  bool setEditAtomDefaultData(int replacementAtomicNumber) {
-    if (nodeNetworkView == null) return false;
-    final result = edit_atom_api.setEditAtomDefaultData(
-        replacementAtomicNumber: replacementAtomicNumber);
+  void setEditAtomSelectedElement(int atomicNumber) {
+    if (nodeNetworkView == null) return;
+    edit_atom_api.setEditAtomSelectedElement(atomicNumber: atomicNumber);
     refreshFromKernel();
-    return result;
-  }
-
-  bool setEditAtomAddAtomData(int atomicNumber) {
-    if (nodeNetworkView == null) return false;
-    final result =
-        edit_atom_api.setEditAtomAddAtomData(atomicNumber: atomicNumber);
-    refreshFromKernel();
-    return result;
   }
 
   // ===== ATOM_EDIT (NEW DIFF-BASED NODE) METHODS =====
@@ -847,20 +837,10 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  bool setAtomEditDefaultData(int replacementAtomicNumber) {
-    if (nodeNetworkView == null) return false;
-    final result = atom_edit_api.setAtomEditDefaultData(
-        replacementAtomicNumber: replacementAtomicNumber);
+  void setAtomEditSelectedElement(int atomicNumber) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.setAtomEditSelectedElement(atomicNumber: atomicNumber);
     refreshFromKernel();
-    return result;
-  }
-
-  bool setAtomEditAddAtomData(int atomicNumber) {
-    if (nodeNetworkView == null) return false;
-    final result =
-        atom_edit_api.setAtomEditAddAtomData(atomicNumber: atomicNumber);
-    refreshFromKernel();
-    return result;
   }
 
   void atomEditMinimize(APIMinimizeFreezeMode freezeMode) {

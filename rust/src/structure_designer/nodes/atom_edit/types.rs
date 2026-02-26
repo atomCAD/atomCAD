@@ -56,7 +56,6 @@ impl Default for DefaultToolInteractionState {
 
 #[derive(Debug)]
 pub struct DefaultToolState {
-    pub replacement_atomic_number: i16,
     pub interaction_state: DefaultToolInteractionState,
     /// When true, the selection gadget (XYZ axes) is visible.
     /// Off by default to avoid occluding selected atoms.
@@ -65,11 +64,8 @@ pub struct DefaultToolState {
 
 #[derive(Debug)]
 pub enum AddAtomToolState {
-    Idle {
-        atomic_number: i16,
-    },
+    Idle,
     GuidedPlacement {
-        atomic_number: i16,
         anchor_atom_id: u32,
         guide_dots: Vec<crate::crystolecule::guided_placement::GuideDot>,
         bond_distance: f64,
@@ -78,7 +74,6 @@ pub enum AddAtomToolState {
     },
     /// Free sphere placement: bare atom with no bonds, user clicks anywhere on sphere.
     GuidedFreeSphere {
-        atomic_number: i16,
         anchor_atom_id: u32,
         center: DVec3,
         radius: f64,
@@ -90,7 +85,6 @@ pub enum AddAtomToolState {
     /// Free ring placement: ring without reference (sp3 case 1 or sp2 case 1).
     /// Guide dots rotate together on a cone ring as the user moves the cursor.
     GuidedFreeRing {
-        atomic_number: i16,
         anchor_atom_id: u32,
         ring_center: DVec3,
         ring_normal: DVec3,
@@ -104,17 +98,6 @@ pub enum AddAtomToolState {
         /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
         is_dative_bond: bool,
     },
-}
-
-impl AddAtomToolState {
-    pub fn atomic_number(&self) -> i16 {
-        match self {
-            AddAtomToolState::Idle { atomic_number }
-            | AddAtomToolState::GuidedPlacement { atomic_number, .. }
-            | AddAtomToolState::GuidedFreeSphere { atomic_number, .. }
-            | AddAtomToolState::GuidedFreeRing { atomic_number, .. } => *atomic_number,
-        }
-    }
 }
 
 /// Interaction state machine for the AddBond tool.

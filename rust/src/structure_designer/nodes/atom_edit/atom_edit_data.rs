@@ -54,6 +54,9 @@ pub struct AtomEditData {
     pub selection: AtomEditSelection,
     /// Current editing tool
     pub active_tool: AtomEditTool,
+    /// Shared element selection across all tools (Default, AddAtom).
+    /// Survives tool switches — set once, used everywhere.
+    pub selected_atomic_number: i16,
     /// Last known diff stats (updated during eval, used by get_subtitle)
     last_stats: Option<crate::crystolecule::atomic_structure_diff::DiffStats>,
     /// Cached input molecule for interactive editing performance.
@@ -82,10 +85,10 @@ impl AtomEditData {
             error_on_stale_entries: false,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
-                replacement_atomic_number: 6, // Default to carbon
                 interaction_state: DefaultToolInteractionState::default(),
                 show_gadget: false,
             }),
+            selected_atomic_number: 6, // Default to carbon
             last_stats: None,
             cached_input: Mutex::new(None),
             measurement_marked_atom_id: None,
@@ -112,10 +115,10 @@ impl AtomEditData {
             measurement_marked_atom_id: None,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
-                replacement_atomic_number: 6,
                 interaction_state: DefaultToolInteractionState::default(),
                 show_gadget: false,
             }),
+            selected_atomic_number: 6,
             last_stats: None,
             cached_input: Mutex::new(None),
         }
@@ -209,13 +212,10 @@ impl AtomEditData {
         // (no special action needed — the new tool state replaces the old one)
         self.active_tool = match api_tool {
             APIAtomEditTool::Default => AtomEditTool::Default(DefaultToolState {
-                replacement_atomic_number: 6,
                 interaction_state: DefaultToolInteractionState::default(),
                 show_gadget: false,
             }),
-            APIAtomEditTool::AddAtom => {
-                AtomEditTool::AddAtom(AddAtomToolState::Idle { atomic_number: 6 })
-            }
+            APIAtomEditTool::AddAtom => AtomEditTool::AddAtom(AddAtomToolState::Idle),
             APIAtomEditTool::AddBond => AtomEditTool::AddBond(AddBondToolState {
                 bond_order: crate::crystolecule::atomic_structure::BOND_SINGLE,
                 interaction_state: AddBondInteractionState::default(),
@@ -224,24 +224,14 @@ impl AtomEditData {
         }
     }
 
-    pub fn set_default_tool_atomic_number(&mut self, replacement_atomic_number: i16) -> bool {
-        match &mut self.active_tool {
-            AtomEditTool::Default(state) => {
-                state.replacement_atomic_number = replacement_atomic_number;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    pub fn set_add_atom_tool_atomic_number(&mut self, atomic_number: i16) -> bool {
-        match &mut self.active_tool {
-            AtomEditTool::AddAtom(state) => {
-                // Reset to Idle with new atomic number (cancel any guided placement)
-                *state = AddAtomToolState::Idle { atomic_number };
-                true
-            }
-            _ => false,
+    /// Set the shared element selection. Updates the active tool's state as well:
+    /// - Default tool: no additional action needed (reads from selected_atomic_number)
+    /// - AddAtom tool: cancels guided placement (resets to Idle)
+    pub fn set_selected_element(&mut self, atomic_number: i16) {
+        self.selected_atomic_number = atomic_number;
+        // Cancel guided placement when element changes
+        if let AtomEditTool::AddAtom(_) = &self.active_tool {
+            self.active_tool = AtomEditTool::AddAtom(AddAtomToolState::Idle);
         }
     }
 
@@ -806,19 +796,17 @@ impl NodeData for AtomEditData {
             selection: self.selection.clone(),
             active_tool: match &self.active_tool {
                 AtomEditTool::Default(state) => AtomEditTool::Default(DefaultToolState {
-                    replacement_atomic_number: state.replacement_atomic_number,
                     interaction_state: DefaultToolInteractionState::default(),
                     show_gadget: state.show_gadget,
                 }),
-                AtomEditTool::AddAtom(state) => AtomEditTool::AddAtom(AddAtomToolState::Idle {
-                    atomic_number: state.atomic_number(),
-                }),
+                AtomEditTool::AddAtom(_) => AtomEditTool::AddAtom(AddAtomToolState::Idle),
                 AtomEditTool::AddBond(state) => AtomEditTool::AddBond(AddBondToolState {
                     bond_order: state.bond_order,
                     interaction_state: AddBondInteractionState::default(),
                     last_atom_id: state.last_atom_id,
                 }),
             },
+            selected_atomic_number: self.selected_atomic_number,
             last_stats: self.last_stats.clone(),
             cached_input: Mutex::new(None),
             measurement_marked_atom_id: self.measurement_marked_atom_id,

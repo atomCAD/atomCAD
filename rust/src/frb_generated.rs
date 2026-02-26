@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1234682550;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -179796969;
 
 // Section: executor
 
@@ -5966,14 +5966,14 @@ let api_data = <crate::api::structure_designer::structure_designer_api_types::AP
                      let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_atom_cut_data(api_node_id, api_data); })?;   Ok(output_ok)
                 })()) })
 }
-fn wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_add_atom_data_impl(
+fn wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_selected_element_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_atom_edit_add_atom_data",
+            debug_name: "set_atom_edit_selected_element",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -5990,45 +5990,11 @@ fn wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_add_atom_d
             let api_atomic_number = <i16>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::atom_edit_api::set_atom_edit_add_atom_data(
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::structure_designer::atom_edit_api::set_atom_edit_selected_element(
                         api_atomic_number,
-                    ),
-                )?;
-                Ok(output_ok)
-            })())
-        },
-    )
-}
-fn wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_default_data_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_atom_edit_default_data",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_replacement_atomic_number = <i16>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::atom_edit_api::set_atom_edit_default_data(
-                        api_replacement_atomic_number,
-                    ),
-                )?;
+                    );
+                })?;
                 Ok(output_ok)
             })())
         },
@@ -6213,14 +6179,14 @@ let api_data = <crate::api::structure_designer::structure_designer_api_types::AP
                      let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_drawing_plane_data(api_node_id, api_data); })?;   Ok(output_ok)
                 })()) })
 }
-fn wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_add_atom_data_impl(
+fn wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_selected_element_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_edit_atom_add_atom_data",
+            debug_name: "set_edit_atom_selected_element",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -6237,45 +6203,11 @@ fn wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_add_atom_d
             let api_atomic_number = <i16>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::edit_atom_api::set_edit_atom_add_atom_data(
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::structure_designer::edit_atom_api::set_edit_atom_selected_element(
                         api_atomic_number,
-                    ),
-                )?;
-                Ok(output_ok)
-            })())
-        },
-    )
-}
-fn wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_default_data_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_edit_atom_default_data",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_replacement_atomic_number = <i16>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::edit_atom_api::set_edit_atom_default_data(
-                        api_replacement_atomic_number,
-                    ),
-                )?;
+                    );
+                })?;
                 Ok(output_ok)
             })())
         },
@@ -7322,8 +7254,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_activeTool = <crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool>::sse_decode(deserializer);
         let mut var_bondToolLastAtomId = <Option<u32>>::sse_decode(deserializer);
         let mut var_bondToolBondOrder = <u8>::sse_decode(deserializer);
-        let mut var_replacementAtomicNumber = <Option<i16>>::sse_decode(deserializer);
-        let mut var_addAtomToolAtomicNumber = <Option<i16>>::sse_decode(deserializer);
+        let mut var_selectedAtomicNumber = <i16>::sse_decode(deserializer);
         let mut var_isInGuidedPlacement = <bool>::sse_decode(deserializer);
         let mut var_hasSelectedAtoms = <bool>::sse_decode(deserializer);
         let mut var_hasSelectedBonds = <bool>::sse_decode(deserializer);
@@ -7346,8 +7277,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             active_tool: var_activeTool,
             bond_tool_last_atom_id: var_bondToolLastAtomId,
             bond_tool_bond_order: var_bondToolBondOrder,
-            replacement_atomic_number: var_replacementAtomicNumber,
-            add_atom_tool_atomic_number: var_addAtomToolAtomicNumber,
+            selected_atomic_number: var_selectedAtomicNumber,
             is_in_guided_placement: var_isInGuidedPlacement,
             has_selected_atoms: var_hasSelectedAtoms,
             has_selected_bonds: var_hasSelectedBonds,
@@ -7651,8 +7581,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_canUndo = <bool>::sse_decode(deserializer);
         let mut var_canRedo = <bool>::sse_decode(deserializer);
         let mut var_bondToolLastAtomId = <Option<u32>>::sse_decode(deserializer);
-        let mut var_replacementAtomicNumber = <Option<i16>>::sse_decode(deserializer);
-        let mut var_addAtomToolAtomicNumber = <Option<i16>>::sse_decode(deserializer);
+        let mut var_selectedAtomicNumber = <i16>::sse_decode(deserializer);
         let mut var_hasSelectedAtoms = <bool>::sse_decode(deserializer);
         let mut var_hasSelection = <bool>::sse_decode(deserializer);
         let mut var_selectionTransform =
@@ -7662,8 +7591,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             can_undo: var_canUndo,
             can_redo: var_canRedo,
             bond_tool_last_atom_id: var_bondToolLastAtomId,
-            replacement_atomic_number: var_replacementAtomicNumber,
-            add_atom_tool_atomic_number: var_addAtomToolAtomicNumber,
+            selected_atomic_number: var_selectedAtomicNumber,
             has_selected_atoms: var_hasSelectedAtoms,
             has_selection: var_hasSelection,
             selection_transform: var_selectionTransform,
@@ -9580,17 +9508,6 @@ impl SseDecode for Option<f64> {
     }
 }
 
-impl SseDecode for Option<i16> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<i16>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
 impl SseDecode for Option<i32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9994,8 +9911,8 @@ fn pde_ffi_dispatcher_primary_impl(
 171 => wire__crate__api__structure_designer__structure_designer_preferences__node_display_preferences_default_impl(port, ptr, rust_vec_len, data_len),
 172 => wire__crate__api__structure_designer__structure_designer_api_types__node_type_category_display_name_impl(port, ptr, rust_vec_len, data_len),
 173 => wire__crate__api__structure_designer__structure_designer_api_types__node_type_category_order_impl(port, ptr, rust_vec_len, data_len),
-247 => wire__crate__api__structure_designer__structure_designer_preferences__simulation_preferences_default_impl(port, ptr, rust_vec_len, data_len),
-250 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+245 => wire__crate__api__structure_designer__structure_designer_preferences__simulation_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+248 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_default_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -10194,65 +10111,63 @@ fn pde_ffi_dispatcher_sync_impl(
 198 => wire__crate__api__structure_designer__structure_designer_api__set_active_node_network_impl(ptr, rust_vec_len, data_len),
 199 => wire__crate__api__structure_designer__atom_edit_api__set_add_bond_order_impl(ptr, rust_vec_len, data_len),
 200 => wire__crate__api__structure_designer__structure_designer_api__set_atom_cut_data_impl(ptr, rust_vec_len, data_len),
-201 => wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_add_atom_data_impl(ptr, rust_vec_len, data_len),
-202 => wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_default_data_impl(ptr, rust_vec_len, data_len),
-203 => wire__crate__api__structure_designer__structure_designer_api__set_atom_fill_data_impl(ptr, rust_vec_len, data_len),
-204 => wire__crate__api__structure_designer__structure_designer_api__set_atom_move_data_impl(ptr, rust_vec_len, data_len),
-205 => wire__crate__api__structure_designer__structure_designer_api__set_atom_rot_data_impl(ptr, rust_vec_len, data_len),
-206 => wire__crate__api__structure_designer__structure_designer_api__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
-207 => wire__crate__api__structure_designer__structure_designer_api__set_bool_data_impl(ptr, rust_vec_len, data_len),
-208 => wire__crate__api__common_api__set_camera_canonical_view_impl(ptr, rust_vec_len, data_len),
-209 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
-210 => wire__crate__api__structure_designer__structure_designer_api__set_circle_data_impl(ptr, rust_vec_len, data_len),
-211 => wire__crate__api__structure_designer__structure_designer_api__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
-212 => wire__crate__api__structure_designer__structure_designer_api__set_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
-213 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_add_atom_data_impl(ptr, rust_vec_len, data_len),
-214 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_default_data_impl(ptr, rust_vec_len, data_len),
-215 => wire__crate__api__structure_designer__structure_designer_api__set_export_xyz_data_impl(ptr, rust_vec_len, data_len),
-216 => wire__crate__api__structure_designer__structure_designer_api__set_expr_data_impl(ptr, rust_vec_len, data_len),
-217 => wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(ptr, rust_vec_len, data_len),
-218 => wire__crate__api__structure_designer__facet_shell_api__set_facet_shell_center_impl(ptr, rust_vec_len, data_len),
-219 => wire__crate__api__structure_designer__structure_designer_api__set_float_data_impl(ptr, rust_vec_len, data_len),
-220 => wire__crate__api__structure_designer__structure_designer_api__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
-221 => wire__crate__api__structure_designer__structure_designer_api__set_half_plane_data_impl(ptr, rust_vec_len, data_len),
-222 => wire__crate__api__structure_designer__structure_designer_api__set_half_space_data_impl(ptr, rust_vec_len, data_len),
-223 => wire__crate__api__structure_designer__structure_designer_api__set_import_xyz_data_impl(ptr, rust_vec_len, data_len),
-224 => wire__crate__api__structure_designer__structure_designer_api__set_int_data_impl(ptr, rust_vec_len, data_len),
-225 => wire__crate__api__structure_designer__structure_designer_api__set_ivec2_data_impl(ptr, rust_vec_len, data_len),
-226 => wire__crate__api__structure_designer__structure_designer_api__set_ivec3_data_impl(ptr, rust_vec_len, data_len),
-227 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_move_data_impl(ptr, rust_vec_len, data_len),
-228 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_rot_data_impl(ptr, rust_vec_len, data_len),
-229 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_symop_data_impl(ptr, rust_vec_len, data_len),
-230 => wire__crate__api__structure_designer__structure_designer_api__set_map_data_impl(ptr, rust_vec_len, data_len),
-231 => wire__crate__api__structure_designer__structure_designer_api__set_motif_data_impl(ptr, rust_vec_len, data_len),
-232 => wire__crate__api__structure_designer__structure_designer_api__set_node_display_impl(ptr, rust_vec_len, data_len),
-233 => wire__crate__api__common_api__set_ortho_half_height_impl(ptr, rust_vec_len, data_len),
-234 => wire__crate__api__common_api__set_orthographic_mode_impl(ptr, rust_vec_len, data_len),
-235 => wire__crate__api__structure_designer__structure_designer_api__set_parameter_data_impl(ptr, rust_vec_len, data_len),
-236 => wire__crate__api__structure_designer__structure_designer_api__set_range_data_impl(ptr, rust_vec_len, data_len),
-237 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
-238 => wire__crate__api__structure_designer__structure_designer_api__set_reg_poly_data_impl(ptr, rust_vec_len, data_len),
-239 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
-240 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
-241 => wire__crate__api__structure_designer__structure_designer_api__set_string_data_impl(ptr, rust_vec_len, data_len),
-242 => wire__crate__api__structure_designer__structure_designer_api__set_structure_designer_preferences_impl(ptr, rust_vec_len, data_len),
-243 => wire__crate__api__structure_designer__structure_designer_api__set_unit_cell_data_impl(ptr, rust_vec_len, data_len),
-244 => wire__crate__api__structure_designer__structure_designer_api__set_vec2_data_impl(ptr, rust_vec_len, data_len),
-245 => wire__crate__api__structure_designer__structure_designer_api__set_vec3_data_impl(ptr, rust_vec_len, data_len),
-246 => wire__crate__api__common_api__set_viewport_size_impl(ptr, rust_vec_len, data_len),
-248 => wire__crate__api__structure_designer__facet_shell_api__split_symmetry_members_impl(ptr, rust_vec_len, data_len),
-249 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_clone_self_impl(ptr, rust_vec_len, data_len),
-251 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_new_impl(ptr, rust_vec_len, data_len),
-252 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
-253 => wire__crate__api__structure_designer__structure_designer_api__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
-254 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_and_wires_selection_impl(ptr, rust_vec_len, data_len),
-255 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_selection_impl(ptr, rust_vec_len, data_len),
-256 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
-257 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
-258 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
-259 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
-260 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
-261 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
+201 => wire__crate__api__structure_designer__atom_edit_api__set_atom_edit_selected_element_impl(ptr, rust_vec_len, data_len),
+202 => wire__crate__api__structure_designer__structure_designer_api__set_atom_fill_data_impl(ptr, rust_vec_len, data_len),
+203 => wire__crate__api__structure_designer__structure_designer_api__set_atom_move_data_impl(ptr, rust_vec_len, data_len),
+204 => wire__crate__api__structure_designer__structure_designer_api__set_atom_rot_data_impl(ptr, rust_vec_len, data_len),
+205 => wire__crate__api__structure_designer__structure_designer_api__set_atom_trans_data_impl(ptr, rust_vec_len, data_len),
+206 => wire__crate__api__structure_designer__structure_designer_api__set_bool_data_impl(ptr, rust_vec_len, data_len),
+207 => wire__crate__api__common_api__set_camera_canonical_view_impl(ptr, rust_vec_len, data_len),
+208 => wire__crate__api__common_api__set_camera_transform_impl(ptr, rust_vec_len, data_len),
+209 => wire__crate__api__structure_designer__structure_designer_api__set_circle_data_impl(ptr, rust_vec_len, data_len),
+210 => wire__crate__api__structure_designer__structure_designer_api__set_cuboid_data_impl(ptr, rust_vec_len, data_len),
+211 => wire__crate__api__structure_designer__structure_designer_api__set_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
+212 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_selected_element_impl(ptr, rust_vec_len, data_len),
+213 => wire__crate__api__structure_designer__structure_designer_api__set_export_xyz_data_impl(ptr, rust_vec_len, data_len),
+214 => wire__crate__api__structure_designer__structure_designer_api__set_expr_data_impl(ptr, rust_vec_len, data_len),
+215 => wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(ptr, rust_vec_len, data_len),
+216 => wire__crate__api__structure_designer__facet_shell_api__set_facet_shell_center_impl(ptr, rust_vec_len, data_len),
+217 => wire__crate__api__structure_designer__structure_designer_api__set_float_data_impl(ptr, rust_vec_len, data_len),
+218 => wire__crate__api__structure_designer__structure_designer_api__set_geo_trans_data_impl(ptr, rust_vec_len, data_len),
+219 => wire__crate__api__structure_designer__structure_designer_api__set_half_plane_data_impl(ptr, rust_vec_len, data_len),
+220 => wire__crate__api__structure_designer__structure_designer_api__set_half_space_data_impl(ptr, rust_vec_len, data_len),
+221 => wire__crate__api__structure_designer__structure_designer_api__set_import_xyz_data_impl(ptr, rust_vec_len, data_len),
+222 => wire__crate__api__structure_designer__structure_designer_api__set_int_data_impl(ptr, rust_vec_len, data_len),
+223 => wire__crate__api__structure_designer__structure_designer_api__set_ivec2_data_impl(ptr, rust_vec_len, data_len),
+224 => wire__crate__api__structure_designer__structure_designer_api__set_ivec3_data_impl(ptr, rust_vec_len, data_len),
+225 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_move_data_impl(ptr, rust_vec_len, data_len),
+226 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_rot_data_impl(ptr, rust_vec_len, data_len),
+227 => wire__crate__api__structure_designer__structure_designer_api__set_lattice_symop_data_impl(ptr, rust_vec_len, data_len),
+228 => wire__crate__api__structure_designer__structure_designer_api__set_map_data_impl(ptr, rust_vec_len, data_len),
+229 => wire__crate__api__structure_designer__structure_designer_api__set_motif_data_impl(ptr, rust_vec_len, data_len),
+230 => wire__crate__api__structure_designer__structure_designer_api__set_node_display_impl(ptr, rust_vec_len, data_len),
+231 => wire__crate__api__common_api__set_ortho_half_height_impl(ptr, rust_vec_len, data_len),
+232 => wire__crate__api__common_api__set_orthographic_mode_impl(ptr, rust_vec_len, data_len),
+233 => wire__crate__api__structure_designer__structure_designer_api__set_parameter_data_impl(ptr, rust_vec_len, data_len),
+234 => wire__crate__api__structure_designer__structure_designer_api__set_range_data_impl(ptr, rust_vec_len, data_len),
+235 => wire__crate__api__structure_designer__structure_designer_api__set_rect_data_impl(ptr, rust_vec_len, data_len),
+236 => wire__crate__api__structure_designer__structure_designer_api__set_reg_poly_data_impl(ptr, rust_vec_len, data_len),
+237 => wire__crate__api__structure_designer__structure_designer_api__set_return_node_id_impl(ptr, rust_vec_len, data_len),
+238 => wire__crate__api__structure_designer__structure_designer_api__set_sphere_data_impl(ptr, rust_vec_len, data_len),
+239 => wire__crate__api__structure_designer__structure_designer_api__set_string_data_impl(ptr, rust_vec_len, data_len),
+240 => wire__crate__api__structure_designer__structure_designer_api__set_structure_designer_preferences_impl(ptr, rust_vec_len, data_len),
+241 => wire__crate__api__structure_designer__structure_designer_api__set_unit_cell_data_impl(ptr, rust_vec_len, data_len),
+242 => wire__crate__api__structure_designer__structure_designer_api__set_vec2_data_impl(ptr, rust_vec_len, data_len),
+243 => wire__crate__api__structure_designer__structure_designer_api__set_vec3_data_impl(ptr, rust_vec_len, data_len),
+244 => wire__crate__api__common_api__set_viewport_size_impl(ptr, rust_vec_len, data_len),
+246 => wire__crate__api__structure_designer__facet_shell_api__split_symmetry_members_impl(ptr, rust_vec_len, data_len),
+247 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_clone_self_impl(ptr, rust_vec_len, data_len),
+249 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_new_impl(ptr, rust_vec_len, data_len),
+250 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+251 => wire__crate__api__structure_designer__structure_designer_api__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
+252 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_and_wires_selection_impl(ptr, rust_vec_len, data_len),
+253 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_selection_impl(ptr, rust_vec_len, data_len),
+254 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
+255 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
+256 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
+257 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
+258 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
+259 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -10331,10 +10246,7 @@ impl flutter_rust_bridge::IntoDart
             self.active_tool.into_into_dart().into_dart(),
             self.bond_tool_last_atom_id.into_into_dart().into_dart(),
             self.bond_tool_bond_order.into_into_dart().into_dart(),
-            self.replacement_atomic_number.into_into_dart().into_dart(),
-            self.add_atom_tool_atomic_number
-                .into_into_dart()
-                .into_dart(),
+            self.selected_atomic_number.into_into_dart().into_dart(),
             self.is_in_guided_placement.into_into_dart().into_dart(),
             self.has_selected_atoms.into_into_dart().into_dart(),
             self.has_selected_bonds.into_into_dart().into_dart(),
@@ -10870,10 +10782,7 @@ impl flutter_rust_bridge::IntoDart
             self.can_undo.into_into_dart().into_dart(),
             self.can_redo.into_into_dart().into_dart(),
             self.bond_tool_last_atom_id.into_into_dart().into_dart(),
-            self.replacement_atomic_number.into_into_dart().into_dart(),
-            self.add_atom_tool_atomic_number
-                .into_into_dart()
-                .into_dart(),
+            self.selected_atomic_number.into_into_dart().into_dart(),
             self.has_selected_atoms.into_into_dart().into_dart(),
             self.has_selection.into_into_dart().into_dart(),
             self.selection_transform.into_into_dart().into_dart(),
@@ -13078,8 +12987,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         );
         <Option<u32>>::sse_encode(self.bond_tool_last_atom_id, serializer);
         <u8>::sse_encode(self.bond_tool_bond_order, serializer);
-        <Option<i16>>::sse_encode(self.replacement_atomic_number, serializer);
-        <Option<i16>>::sse_encode(self.add_atom_tool_atomic_number, serializer);
+        <i16>::sse_encode(self.selected_atomic_number, serializer);
         <bool>::sse_encode(self.is_in_guided_placement, serializer);
         <bool>::sse_encode(self.has_selected_atoms, serializer);
         <bool>::sse_encode(self.has_selected_bonds, serializer);
@@ -13311,8 +13219,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.can_undo, serializer);
         <bool>::sse_encode(self.can_redo, serializer);
         <Option<u32>>::sse_encode(self.bond_tool_last_atom_id, serializer);
-        <Option<i16>>::sse_encode(self.replacement_atomic_number, serializer);
-        <Option<i16>>::sse_encode(self.add_atom_tool_atomic_number, serializer);
+        <i16>::sse_encode(self.selected_atomic_number, serializer);
         <bool>::sse_encode(self.has_selected_atoms, serializer);
         <bool>::sse_encode(self.has_selection, serializer);
         <Option<crate::api::common_api_types::APITransform>>::sse_encode(
@@ -14842,16 +14749,6 @@ impl SseEncode for Option<f64> {
     }
 }
 
-impl SseEncode for Option<i16> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <i16>::sse_encode(value, serializer);
-        }
-    }
-}
-
 impl SseEncode for Option<i32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15189,7 +15086,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -15213,7 +15110,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

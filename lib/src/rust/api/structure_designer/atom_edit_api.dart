@@ -101,13 +101,9 @@ bool setActiveAtomEditTool({required APIAtomEditTool tool}) =>
     RustLib.instance.api
         .crateApiStructureDesignerAtomEditApiSetActiveAtomEditTool(tool: tool);
 
-bool setAtomEditDefaultData({required int replacementAtomicNumber}) =>
-    RustLib.instance.api
-        .crateApiStructureDesignerAtomEditApiSetAtomEditDefaultData(
-            replacementAtomicNumber: replacementAtomicNumber);
-
-bool setAtomEditAddAtomData({required int atomicNumber}) => RustLib.instance.api
-    .crateApiStructureDesignerAtomEditApiSetAtomEditAddAtomData(
+void setAtomEditSelectedElement({required int atomicNumber}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerAtomEditApiSetAtomEditSelectedElement(
         atomicNumber: atomicNumber);
 
 String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
