@@ -870,6 +870,47 @@ class StructureDesignerModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ===== MODIFY MEASUREMENT =====
+
+  String atomEditModifyDistance(
+      double targetDistance, bool moveFirst, bool moveFragment) {
+    final msg = atom_edit_api.atomEditModifyDistance(
+        targetDistance: targetDistance,
+        moveFirst: moveFirst,
+        moveFragment: moveFragment);
+    refreshFromKernel();
+    return msg;
+  }
+
+  String atomEditModifyAngle(
+      double targetAngleDegrees, bool moveArmA, bool moveFragment) {
+    final msg = atom_edit_api.atomEditModifyAngle(
+        targetAngleDegrees: targetAngleDegrees,
+        moveArmA: moveArmA,
+        moveFragment: moveFragment);
+    refreshFromKernel();
+    return msg;
+  }
+
+  String atomEditModifyDihedral(
+      double targetAngleDegrees, bool moveASide, bool moveFragment) {
+    final msg = atom_edit_api.atomEditModifyDihedral(
+        targetAngleDegrees: targetAngleDegrees,
+        moveASide: moveASide,
+        moveFragment: moveFragment);
+    refreshFromKernel();
+    return msg;
+  }
+
+  double? atomEditGetDefaultBondLength() {
+    return atom_edit_api.atomEditGetDefaultBondLength(
+        bondLengthMode: _bondLengthMode);
+  }
+
+  double? atomEditGetDefaultAngle() {
+    return atom_edit_api.atomEditGetDefaultAngle();
+  }
+
   // ===== GUIDED ATOM PLACEMENT =====
 
   GuidedPlacementApiResult atomEditStartGuidedPlacement(

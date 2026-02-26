@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
     as atom_edit_api;
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
@@ -585,8 +586,35 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 fontSize: 14,
               ),
             ),
+            const Spacer(),
+            SizedBox(
+              height: 28,
+              child: OutlinedButton(
+                onPressed: () => _showModifyDialog(measurement),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  side: BorderSide(color: Colors.blue[300]!),
+                ),
+                child: Text(
+                  'Modify',
+                  style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showModifyDialog(APIMeasurement measurement) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _ModifyMeasurementDialog(
+        measurement: measurement,
+        model: widget.model,
+        lastSelectedResultAtomId: _stagedData?.lastSelectedResultAtomId,
       ),
     );
   }
@@ -820,6 +848,356 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         ),
       ),
     );
+  }
+}
+
+/// Dialog for modifying a measurement (distance, angle, or dihedral).
+/// Adapts layout based on the APIMeasurement variant.
+class _ModifyMeasurementDialog extends StatefulWidget {
+  final APIMeasurement measurement;
+  final StructureDesignerModel model;
+  final int? lastSelectedResultAtomId;
+
+  const _ModifyMeasurementDialog({
+    required this.measurement,
+    required this.model,
+    this.lastSelectedResultAtomId,
+  });
+
+  @override
+  State<_ModifyMeasurementDialog> createState() =>
+      _ModifyMeasurementDialogState();
+}
+
+class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
+  late TextEditingController _valueController;
+  late bool _moveFirst;
+  bool _moveFragment = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    switch (widget.measurement) {
+      case APIMeasurement_Distance(:final distance):
+        _valueController =
+            TextEditingController(text: distance.toStringAsFixed(3));
+      case APIMeasurement_Angle(:final angleDegrees):
+        _valueController =
+            TextEditingController(text: angleDegrees.toStringAsFixed(1));
+      case APIMeasurement_Dihedral(:final angleDegrees):
+        _valueController =
+            TextEditingController(text: angleDegrees.toStringAsFixed(1));
+    }
+    _moveFirst = _computeDefaultMoveFirst();
+  }
+
+  @override
+  void dispose() {
+    _valueController.dispose();
+    super.dispose();
+  }
+
+  bool _computeDefaultMoveFirst() {
+    final lastId = widget.lastSelectedResultAtomId;
+    switch (widget.measurement) {
+      case APIMeasurement_Distance(:final atom1Id):
+        // Default to moving the last-selected atom
+        return lastId == atom1Id;
+      case APIMeasurement_Angle(:final armAId, :final vertexId):
+        // Default to last-selected non-vertex arm; if vertex selected, use armB
+        if (lastId == vertexId) return false;
+        return lastId == armAId;
+      case APIMeasurement_Dihedral(:final chainAId):
+        // Default to the chain end matching last-selected
+        return lastId == chainAId;
+    }
+  }
+
+  String? _validate(String text) {
+    final value = double.tryParse(text);
+    if (value == null) return 'Enter a number';
+    switch (widget.measurement) {
+      case APIMeasurement_Distance():
+        if (value < 0.1) return 'Minimum 0.1 \u00C5';
+      case APIMeasurement_Angle():
+        if (value < 0.0 || value > 180.0) return '0\u00B0 \u2013 180\u00B0';
+      case APIMeasurement_Dihedral():
+        if (value < -180.0 || value > 180.0) {
+          return '-180\u00B0 \u2013 180\u00B0';
+        }
+    }
+    return null;
+  }
+
+  bool get _isValid => _validate(_valueController.text) == null;
+
+  void _applyModification() {
+    final value = double.tryParse(_valueController.text);
+    if (value == null) return;
+
+    String result;
+    switch (widget.measurement) {
+      case APIMeasurement_Distance():
+        result = widget.model
+            .atomEditModifyDistance(value, _moveFirst, _moveFragment);
+      case APIMeasurement_Angle():
+        result =
+            widget.model.atomEditModifyAngle(value, _moveFirst, _moveFragment);
+      case APIMeasurement_Dihedral():
+        result = widget.model
+            .atomEditModifyDihedral(value, _moveFirst, _moveFragment);
+    }
+
+    if (result.isEmpty) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() {
+        _errorMessage = result;
+      });
+    }
+  }
+
+  void _setDefault() {
+    double? defaultValue;
+    switch (widget.measurement) {
+      case APIMeasurement_Distance():
+        defaultValue = widget.model.atomEditGetDefaultBondLength();
+      case APIMeasurement_Angle():
+        defaultValue = widget.model.atomEditGetDefaultAngle();
+      case APIMeasurement_Dihedral():
+        return; // No default for dihedral
+    }
+    if (defaultValue != null) {
+      setState(() {
+        final decimals = widget.measurement is APIMeasurement_Distance ? 3 : 1;
+        _valueController.text = defaultValue!.toStringAsFixed(decimals);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String title;
+    final String unitSuffix;
+    final bool showDefaultButton;
+    final bool defaultButtonEnabled;
+
+    switch (widget.measurement) {
+      case APIMeasurement_Distance(:final isBonded):
+        title = 'Modify Distance';
+        unitSuffix = '\u00C5';
+        showDefaultButton = true;
+        defaultButtonEnabled = isBonded;
+      case APIMeasurement_Angle():
+        title = 'Modify Angle';
+        unitSuffix = '\u00B0';
+        showDefaultButton = true;
+        defaultButtonEnabled = true;
+      case APIMeasurement_Dihedral():
+        title = 'Modify Dihedral';
+        unitSuffix = '\u00B0';
+        showDefaultButton = false;
+        defaultButtonEnabled = false;
+    }
+
+    return DraggableDialog(
+      width: 380,
+      dismissible: true,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DefaultTextStyle(
+              style: Theme.of(context).textTheme.headlineSmall!,
+              child: Text(title),
+            ),
+            const SizedBox(height: 16),
+            // Value input row
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _valueController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true, signed: true),
+                    decoration: InputDecoration(
+                      labelText: 'Value',
+                      suffixText: unitSuffix,
+                      errorText: _valueController.text.isNotEmpty
+                          ? _validate(_valueController.text)
+                          : null,
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                if (showDefaultButton) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: defaultButtonEnabled ? _setDefault : null,
+                    child: const Text('Default'),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Move atom selector
+            _buildMoveAtomSelector(),
+            const SizedBox(height: 8),
+            // Move connected fragment checkbox
+            CheckboxListTile(
+              title: const Text('Move connected fragment',
+                  style: TextStyle(fontSize: 14)),
+              value: _moveFragment,
+              onChanged: (value) {
+                setState(() {
+                  _moveFragment = value ?? true;
+                });
+              },
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            // Error message
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                style: TextStyle(color: Colors.red[700], fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _isValid ? _applyModification : null,
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoveAtomSelector() {
+    switch (widget.measurement) {
+      case APIMeasurement_Distance(
+          :final atom1Id,
+          :final atom2Id,
+          :final atom1Symbol,
+          :final atom2Symbol,
+        ):
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Move atom:', style: TextStyle(fontSize: 13)),
+            RadioListTile<bool>(
+              title: Text('$atom1Symbol (id $atom1Id)',
+                  style: const TextStyle(fontSize: 13)),
+              value: true,
+              groupValue: _moveFirst,
+              onChanged: (v) => setState(() => _moveFirst = v!),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            RadioListTile<bool>(
+              title: Text('$atom2Symbol (id $atom2Id)',
+                  style: const TextStyle(fontSize: 13)),
+              value: false,
+              groupValue: _moveFirst,
+              onChanged: (v) => setState(() => _moveFirst = v!),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ],
+        );
+      case APIMeasurement_Angle(
+          :final vertexId,
+          :final vertexSymbol,
+          :final armAId,
+          :final armASymbol,
+          :final armBId,
+          :final armBSymbol,
+        ):
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Vertex: $vertexSymbol (id $vertexId)',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+            const SizedBox(height: 4),
+            Text('Move arm:', style: TextStyle(fontSize: 13)),
+            RadioListTile<bool>(
+              title: Text('$armASymbol (id $armAId)',
+                  style: const TextStyle(fontSize: 13)),
+              value: true,
+              groupValue: _moveFirst,
+              onChanged: (v) => setState(() => _moveFirst = v!),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            RadioListTile<bool>(
+              title: Text('$armBSymbol (id $armBId)',
+                  style: const TextStyle(fontSize: 13)),
+              value: false,
+              groupValue: _moveFirst,
+              onChanged: (v) => setState(() => _moveFirst = v!),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ],
+        );
+      case APIMeasurement_Dihedral(
+          :final chainAId,
+          :final chainASymbol,
+          :final chainBId,
+          :final chainBSymbol,
+          :final chainCId,
+          :final chainCSymbol,
+          :final chainDId,
+          :final chainDSymbol,
+        ):
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$chainASymbol($chainAId)\u2014$chainBSymbol($chainBId)'
+              '\u2014$chainCSymbol($chainCId)\u2014$chainDSymbol($chainDId)',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 4),
+            Text('Rotate side:', style: TextStyle(fontSize: 13)),
+            RadioListTile<bool>(
+              title: Text('A-side: $chainASymbol (id $chainAId)',
+                  style: const TextStyle(fontSize: 13)),
+              value: true,
+              groupValue: _moveFirst,
+              onChanged: (v) => setState(() => _moveFirst = v!),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            RadioListTile<bool>(
+              title: Text('D-side: $chainDSymbol (id $chainDId)',
+                  style: const TextStyle(fontSize: 13)),
+              value: false,
+              groupValue: _moveFirst,
+              onChanged: (v) => setState(() => _moveFirst = v!),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ],
+        );
+    }
   }
 }
 
