@@ -7,6 +7,7 @@ use super::measurement::{MeasurementResult, SelectedAtomInfo, compute_measuremen
 use super::types::*;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure::fragment::compute_moving_fragment;
+use crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::guided_placement::{BondLengthMode, crystal_bond_length};
 use crate::crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
@@ -333,8 +334,12 @@ pub fn compute_default_bond_length(
 
     match bond_length_mode {
         BondLengthMode::Crystal => {
-            if let Some(d) = crystal_bond_length(atom1.atomic_number, atom2.atomic_number) {
-                return Some(d);
+            // Crystal table only has single-bond lattice lengths; for non-single
+            // bonds, skip it and use UFF which accounts for bond order.
+            if bond.bond_order() == BOND_SINGLE {
+                if let Some(d) = crystal_bond_length(atom1.atomic_number, atom2.atomic_number) {
+                    return Some(d);
+                }
             }
             // Fall back to UFF with actual bond order
             uff_bond_length_for_atoms(atom1, atom2, bond_order)
