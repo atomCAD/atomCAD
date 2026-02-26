@@ -666,7 +666,7 @@ pub fn tessellate_atomic_structure_impostors(
     atomic_structure: &AtomicStructure,
     atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
 ) {
-    let _timer = Timer::new("Atomic impostor tessellation");
+    //let _timer = Timer::new("Atomic impostor tessellation");
 
     // Pre-allocate impostor mesh capacity (much smaller than triangle tessellation)
     let total_atoms = atomic_structure.get_num_of_atoms();

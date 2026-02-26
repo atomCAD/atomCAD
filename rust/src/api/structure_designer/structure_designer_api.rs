@@ -2279,38 +2279,55 @@ fn compute_selection_measurement(
         return None;
     }
 
+    // Use selection_order for deterministic ordering that matches
+    // gather_measurement_data() in modify_measurement.rs. This ensures that
+    // atom1_id/arm_a_id/chain_a_id reported here correspond to the same atoms
+    // that DistanceMoveChoice::First / AngleMoveChoice::ArmA / etc. will move.
+    use crate::structure_designer::nodes::atom_edit::atom_edit::SelectionProvenance;
+
     let mut selected_atoms: Vec<SelectedAtomInfo> = Vec::with_capacity(total_selected);
 
     if atom_edit_data.output_diff {
-        // Diff view: diff atom IDs ARE the output atom IDs
-        for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
-            if let Some(atom) = result_structure.get_atom(diff_id) {
-                selected_atoms.push(SelectedAtomInfo {
-                    result_atom_id: diff_id,
-                    position: atom.position,
-                });
-            }
-        }
-    } else {
-        // Result view: resolve through provenance
-        let cache = eval_cache?;
-        for &base_id in &atom_edit_data.selection.selected_base_atoms {
-            if let Some(&result_id) = cache.provenance.base_to_result.get(&base_id) {
-                if let Some(atom) = result_structure.get_atom(result_id) {
+        for &(prov, id) in &atom_edit_data.selection.selection_order {
+            if prov == SelectionProvenance::Diff
+                && atom_edit_data.selection.selected_diff_atoms.contains(&id)
+            {
+                if let Some(atom) = result_structure.get_atom(id) {
                     selected_atoms.push(SelectedAtomInfo {
-                        result_atom_id: result_id,
+                        result_atom_id: id,
                         position: atom.position,
                     });
                 }
             }
         }
-        for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
-            if let Some(&result_id) = cache.provenance.diff_to_result.get(&diff_id) {
-                if let Some(atom) = result_structure.get_atom(result_id) {
-                    selected_atoms.push(SelectedAtomInfo {
-                        result_atom_id: result_id,
-                        position: atom.position,
-                    });
+    } else {
+        // Result view: resolve through provenance
+        let cache = eval_cache?;
+        for &(prov, id) in &atom_edit_data.selection.selection_order {
+            match prov {
+                SelectionProvenance::Base => {
+                    if atom_edit_data.selection.selected_base_atoms.contains(&id) {
+                        if let Some(&result_id) = cache.provenance.base_to_result.get(&id) {
+                            if let Some(atom) = result_structure.get_atom(result_id) {
+                                selected_atoms.push(SelectedAtomInfo {
+                                    result_atom_id: result_id,
+                                    position: atom.position,
+                                });
+                            }
+                        }
+                    }
+                }
+                SelectionProvenance::Diff => {
+                    if atom_edit_data.selection.selected_diff_atoms.contains(&id) {
+                        if let Some(&result_id) = cache.provenance.diff_to_result.get(&id) {
+                            if let Some(atom) = result_structure.get_atom(result_id) {
+                                selected_atoms.push(SelectedAtomInfo {
+                                    result_atom_id: result_id,
+                                    position: atom.position,
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
