@@ -6,17 +6,19 @@ Non-destructive atom editing node with diff-based architecture. Edits are repres
 
 ```
 atom_edit/
-├── mod.rs              # Module declarations + backward-compat re-exports
-├── types.rs            # Shared type definitions (enums, structs, constants)
-├── atom_edit_data.rs   # AtomEditData struct, NodeData impl, accessors, utilities
-├── selection.rs        # Ray-based and marquee atom/bond selection
-├── operations.rs       # Shared mutation operations (delete, replace, transform, drag, bond order)
-├── default_tool.rs     # Default tool pointer event state machine
-├── add_atom_tool.rs    # Add Atom tool interaction
-├── add_bond_tool.rs    # Add Bond tool interaction
-├── minimization.rs     # UFF energy minimization
-├── atom_edit_gadget.rs # XYZ selection gadget (translation gizmo)
-└── text_format.rs      # Human-readable diff text format (AI integration)
+├── mod.rs                # Module declarations + backward-compat re-exports
+├── types.rs              # Shared type definitions (enums, structs, constants)
+├── atom_edit_data.rs     # AtomEditData struct, NodeData impl, accessors, utilities
+├── selection.rs          # Ray-based and marquee atom/bond selection
+├── operations.rs         # Shared mutation operations (delete, replace, transform, drag, bond order)
+├── default_tool.rs       # Default tool pointer event state machine
+├── add_atom_tool.rs      # Add Atom tool interaction
+├── add_bond_tool.rs      # Add Bond tool interaction
+├── measurement.rs        # Read-only measurement queries (distance, angle, dihedral)
+├── modify_measurement.rs # Modify distance/angle/dihedral by moving atoms
+├── minimization.rs       # UFF energy minimization
+├── atom_edit_gadget.rs   # XYZ selection gadget (translation gizmo)
+└── text_format.rs        # Human-readable diff text format (AI integration)
 ```
 
 ## Key Types (in `types.rs`)
@@ -67,6 +69,16 @@ Selection is stored by provenance (base/diff atom IDs), not result atom IDs. The
 - `provenance.sources` — result atom ID → `AtomSource` (Base/DiffMatched/DiffAdded)
 
 In **diff view** (`output_diff = true`), atom IDs from hit tests are diff-native — no provenance needed.
+
+## Anchor Invariant (CRITICAL)
+
+Diff atoms have an optional **anchor position** that tells `apply_diff` which base atom they correspond to. The anchor invariant:
+
+- **Anchors are set ONLY at promotion time** — when a base atom is first added to the diff via `add_atom()` + `set_anchor_position()`. This happens in `drag_selected_by_delta`, `apply_transform`, `apply_position_updates`, `atom_edit_gadget::sync_data`, and similar functions that promote base atoms.
+- **`move_in_diff` MUST NOT set anchors.** It only changes the atom's position.
+- **Pure addition atoms** (created by AddAtom, with no base counterpart) must NEVER have an anchor. `apply_diff` treats anchored-but-unmatched atoms as "orphaned tracked atoms" and **drops them from the result**.
+
+If you need to move an atom that is already in the diff, call `move_in_diff`. If you need to move a base atom that is not yet in the diff, first promote it (`add_atom` + `set_anchor_position`), then call `move_in_diff`.
 
 ## Tool Files
 

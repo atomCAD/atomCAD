@@ -142,16 +142,16 @@ impl AtomEditData {
         self.diff.add_atom(new_atomic_number, match_position)
     }
 
-    /// Move an atom in the diff to a new position.
-    /// Sets anchor to the current position if not already set (first move).
+    /// Move an atom that is already in the diff to a new position.
+    ///
+    /// IMPORTANT: This method MUST NOT set anchor positions. Anchors are only
+    /// set at promotion time — when a base atom is first added to the diff via
+    /// `add_atom` + `set_anchor_position`. Pure addition atoms (atoms created
+    /// by AddAtom that have no base counterpart) must never receive an anchor,
+    /// because `apply_diff` treats anchored-but-unmatched atoms as "orphaned
+    /// tracked atoms" and drops them from the result.
     pub fn move_in_diff(&mut self, atom_id: u32, new_position: DVec3) {
         self.selection.clear_bonds();
-        if let Some(atom) = self.diff.get_atom(atom_id) {
-            // Set anchor to current position if not already set
-            if !self.diff.has_anchor_position(atom_id) {
-                self.diff.set_anchor_position(atom_id, atom.position);
-            }
-        }
         self.diff.set_atom_position(atom_id, new_position);
     }
 
@@ -499,7 +499,7 @@ impl AtomEditData {
 
     /// Apply a relative transform to selected atoms.
     pub fn apply_transform(&mut self, relative: &Transform, base_atoms: &[(u32, i16, DVec3)]) {
-        // Transform existing diff atoms (update position, keep anchor)
+        // Transform existing diff atoms
         let diff_ids: Vec<u32> = self.selection.selected_diff_atoms.iter().copied().collect();
         for diff_id in diff_ids {
             let new_position = if let Some(atom) = self.diff.get_atom(diff_id) {
@@ -507,10 +507,12 @@ impl AtomEditData {
             } else {
                 continue;
             };
-            self.diff.set_atom_position(diff_id, new_position);
+            self.move_in_diff(diff_id, new_position);
         }
 
-        // Add base atoms to diff with anchors at old positions
+        // Promote base atoms to diff with anchors at old positions.
+        // Anchor is set here at promotion time so apply_diff can match them
+        // back to the base atom. See "Anchor Invariant" in AGENTS.md.
         for (base_id, atomic_number, old_position) in base_atoms {
             let new_position = relative.apply_to_position(old_position);
             let new_diff_id = self.diff.add_atom(*atomic_number, new_position);

@@ -349,8 +349,10 @@ pub(super) fn drag_selected_by_delta(structure_designer: &mut StructureDesigner,
         }
     }
 
-    // Convert base atoms to diff atoms (first move only — subsequent frames
-    // will find them in selected_diff_atoms since we move them there)
+    // Promote base atoms to diff (first move only — subsequent frames
+    // will find them in selected_diff_atoms since we move them there).
+    // Anchor is set here at promotion time so apply_diff can match them
+    // back to the base atom. See "Anchor Invariant" in AGENTS.md.
     for (base_id, atomic_number, old_position) in &base_atoms_info {
         let new_position = *old_position + delta;
         let new_diff_id = atom_edit_data.diff.add_atom(*atomic_number, new_position);

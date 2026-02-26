@@ -84,3 +84,6 @@ mod atom_edit_selection_order_test;
 
 #[path = "structure_designer/modify_measurement_test.rs"]
 mod modify_measurement_test;
+
+#[path = "structure_designer/atom_edit_move_in_diff_test.rs"]
+mod atom_edit_move_in_diff_test;

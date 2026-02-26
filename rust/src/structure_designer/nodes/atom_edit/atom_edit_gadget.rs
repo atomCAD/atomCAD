@@ -181,15 +181,11 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
         }
 
         // Apply absolute positions to pre-existing diff atoms.
+        // Do NOT set anchors here — anchors are only set at promotion time
+        // (see "Anchor Invariant" in AGENTS.md). Identity entries already
+        // have anchors; pure additions must never receive one.
         for &(diff_id, original_pos) in &self.diff_atom_positions {
             let target = original_pos + total_delta;
-            if !atom_edit_data.diff.has_anchor_position(diff_id)
-                && atom_edit_data.diff.get_atom(diff_id).is_some()
-            {
-                atom_edit_data
-                    .diff
-                    .set_anchor_position(diff_id, original_pos);
-            }
             atom_edit_data.diff.set_atom_position(diff_id, target);
         }
 

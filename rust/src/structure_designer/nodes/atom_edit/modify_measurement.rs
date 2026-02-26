@@ -586,7 +586,9 @@ fn apply_position_updates(
             // Atom already in diff — just move it
             atom_edit_data.move_in_diff(diff_id, new_position);
         } else if let Some((atomic_number, old_position)) = entry.identity {
-            // Base pass-through atom — promote to diff with anchor, then move
+            // Base pass-through atom — promote to diff with anchor, then move.
+            // Anchor is set here at promotion time so apply_diff can match it
+            // back to the base atom. See "Anchor Invariant" in AGENTS.md.
             let new_diff_id = atom_edit_data.diff.add_atom(atomic_number, old_position);
             atom_edit_data
                 .diff
