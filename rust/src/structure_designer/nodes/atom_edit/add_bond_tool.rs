@@ -1,3 +1,12 @@
+//! AddBond tool: drag-to-bond interaction with configurable bond order.
+//!
+//! State machine: Idle → Pending (pointer down on atom) → Dragging (drag
+//! threshold exceeded) → bond creation on pointer_up over target, or cancel.
+//!
+//! pointer_move performs a lightweight ray-cast only (no evaluation, no
+//! tessellation) and returns `AddBondMoveResult` for Flutter's 2D rubber-band
+//! overlay. Bond is created with the order stored in `AddBondToolState`.
+
 use super::atom_edit_data::*;
 use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;

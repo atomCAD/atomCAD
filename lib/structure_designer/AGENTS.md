@@ -74,6 +74,14 @@ Keyboard shortcuts: hold **B** for spring-loaded AddBond tool activation (deferr
 
 Design doc: `doc/atom_edit/design_bond_creation_and_order.md`.
 
+## Modify Measurement (in atom_edit panel)
+
+The measurement card (shown when 2–4 atoms selected) includes a "Modify" button that opens a draggable dialog for entering a precise distance, angle, or dihedral value. The dialog adapts per measurement type: value field with validation, "Default" button (bond length from Crystal/UFF table, or UFF theta0 for angles; hidden for dihedral), radio buttons to choose which atom/arm/side moves (pre-selected from `lastSelectedResultAtomId`), and a "Move connected fragment" checkbox.
+
+Model methods: `atomEditModifyDistance`, `atomEditModifyAngle`, `atomEditModifyDihedral`, `atomEditGetDefaultBondLength`, `atomEditGetDefaultAngle`. Rust moves atoms along bond axes (distance), rotates around vertex (angle), or rotates around central bond axis (dihedral). Fragment mode uses BFS graph distance to determine co-moving atoms.
+
+Design doc: `doc/atom_edit/design_modify_measurement.md`.
+
 ## node_networks_list/ Subdirectory
 
 Network management panel with:
