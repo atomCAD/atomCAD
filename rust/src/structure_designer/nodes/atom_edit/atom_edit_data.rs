@@ -60,6 +60,9 @@ pub struct AtomEditData {
     /// When present, reused instead of re-evaluating upstream.
     /// Cleared by `clear_input_cache()` when upstream may have changed.
     cached_input: Mutex<Option<AtomicStructure>>,
+    /// Result-space atom ID to highlight while the modify measurement dialog is open.
+    /// Set by `atom_edit_set_measurement_mark`, cleared by `atom_edit_clear_measurement_mark`.
+    pub measurement_marked_atom_id: Option<u32>,
 }
 
 impl Default for AtomEditData {
@@ -85,6 +88,7 @@ impl AtomEditData {
             }),
             last_stats: None,
             cached_input: Mutex::new(None),
+            measurement_marked_atom_id: None,
         }
     }
 
@@ -105,6 +109,7 @@ impl AtomEditData {
             include_base_bonds_in_diff,
             tolerance,
             error_on_stale_entries,
+            measurement_marked_atom_id: None,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 replacement_atomic_number: 6,
@@ -659,6 +664,14 @@ impl NodeData for AtomEditData {
                         diff_clone.decorator_mut().selection_transform = Some(transform.clone());
                     }
 
+                    // Mark measurement-dialog atom (in diff view, ID is used directly)
+                    if let Some(mark_id) = self.measurement_marked_atom_id {
+                        diff_clone.decorator_mut().set_atom_display_state(
+                            mark_id,
+                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                        );
+                    }
+
                     // Mark guided placement anchor and store guide visuals
                     self.apply_guided_placement_decoration(&mut diff_clone, None);
                 }
@@ -757,6 +770,14 @@ impl NodeData for AtomEditData {
                     }
                 }
 
+                // Mark measurement-dialog atom (result-space ID, applied directly)
+                if let Some(mark_id) = self.measurement_marked_atom_id {
+                    result.decorator_mut().set_atom_display_state(
+                        mark_id,
+                        crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                    );
+                }
+
                 // Mark guided placement anchor and store guide visuals
                 self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
             }
@@ -800,6 +821,7 @@ impl NodeData for AtomEditData {
             },
             last_stats: self.last_stats.clone(),
             cached_input: Mutex::new(None),
+            measurement_marked_atom_id: self.measurement_marked_atom_id,
         })
     }
 

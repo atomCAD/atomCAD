@@ -890,12 +890,34 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
             TextEditingController(text: angleDegrees.toStringAsFixed(1));
     }
     _moveFirst = _computeDefaultMoveFirst();
+    _updateMeasurementMark();
   }
 
   @override
   void dispose() {
+    atom_edit_api.atomEditClearMeasurementMark();
+    widget.model.refreshFromKernel();
     _valueController.dispose();
     super.dispose();
+  }
+
+  /// Returns the result-space atom ID of the atom that will move,
+  /// based on the current _moveFirst selection.
+  int _getMovingAtomId() {
+    switch (widget.measurement) {
+      case APIMeasurement_Distance(:final atom1Id, :final atom2Id):
+        return _moveFirst ? atom1Id : atom2Id;
+      case APIMeasurement_Angle(:final armAId, :final armBId):
+        return _moveFirst ? armAId : armBId;
+      case APIMeasurement_Dihedral(:final chainAId, :final chainDId):
+        return _moveFirst ? chainAId : chainDId;
+    }
+  }
+
+  /// Mark the atom that will move so it renders with a yellow crosshair.
+  void _updateMeasurementMark() {
+    atom_edit_api.atomEditSetMeasurementMark(resultAtomId: _getMovingAtomId());
+    widget.model.refreshFromKernel();
   }
 
   bool _computeDefaultMoveFirst() {
@@ -1107,7 +1129,10 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
                   style: const TextStyle(fontSize: 13)),
               value: true,
               groupValue: _moveFirst,
-              onChanged: (v) => setState(() => _moveFirst = v!),
+              onChanged: (v) {
+                setState(() => _moveFirst = v!);
+                _updateMeasurementMark();
+              },
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -1116,7 +1141,10 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
                   style: const TextStyle(fontSize: 13)),
               value: false,
               groupValue: _moveFirst,
-              onChanged: (v) => setState(() => _moveFirst = v!),
+              onChanged: (v) {
+                setState(() => _moveFirst = v!);
+                _updateMeasurementMark();
+              },
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -1142,7 +1170,10 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
                   style: const TextStyle(fontSize: 13)),
               value: true,
               groupValue: _moveFirst,
-              onChanged: (v) => setState(() => _moveFirst = v!),
+              onChanged: (v) {
+                setState(() => _moveFirst = v!);
+                _updateMeasurementMark();
+              },
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -1151,7 +1182,10 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
                   style: const TextStyle(fontSize: 13)),
               value: false,
               groupValue: _moveFirst,
-              onChanged: (v) => setState(() => _moveFirst = v!),
+              onChanged: (v) {
+                setState(() => _moveFirst = v!);
+                _updateMeasurementMark();
+              },
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -1182,7 +1216,10 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
                   style: const TextStyle(fontSize: 13)),
               value: true,
               groupValue: _moveFirst,
-              onChanged: (v) => setState(() => _moveFirst = v!),
+              onChanged: (v) {
+                setState(() => _moveFirst = v!);
+                _updateMeasurementMark();
+              },
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -1191,7 +1228,10 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
                   style: const TextStyle(fontSize: 13)),
               value: false,
               groupValue: _moveFirst,
-              onChanged: (v) => setState(() => _moveFirst = v!),
+              onChanged: (v) {
+                setState(() => _moveFirst = v!);
+                _updateMeasurementMark();
+              },
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),

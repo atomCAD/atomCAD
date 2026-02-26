@@ -234,6 +234,18 @@ String atomEditModifyDihedral(
             moveASide: moveASide,
             moveFragment: moveFragment);
 
+/// Mark a result-space atom for highlighting while the modify measurement dialog is open.
+/// Triggers a refresh to render the yellow crosshair.
+void atomEditSetMeasurementMark({required int resultAtomId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditSetMeasurementMark(
+        resultAtomId: resultAtomId);
+
+/// Clear the measurement mark (when the dialog closes).
+/// Triggers a refresh to remove the crosshair.
+void atomEditClearMeasurementMark() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditClearMeasurementMark();
+
 /// Get the default (equilibrium) bond length for the two selected atoms.
 /// Returns None if atoms are not bonded or if UFF typing fails.
 double? atomEditGetDefaultBondLength(

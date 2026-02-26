@@ -326,10 +326,7 @@ pub fn compute_default_bond_length(
 
     // Atoms must be bonded
     let atom1 = result_structure.get_atom(id1)?;
-    let bond = atom1
-        .bonds
-        .iter()
-        .find(|b| b.other_atom_id() == id2)?;
+    let bond = atom1.bonds.iter().find(|b| b.other_atom_id() == id2)?;
     let bond_order = bond_order_to_f64(bond.bond_order());
 
     let atom2 = result_structure.get_atom(id2)?;

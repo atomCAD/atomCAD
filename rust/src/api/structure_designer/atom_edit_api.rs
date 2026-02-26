@@ -799,6 +799,40 @@ pub fn atom_edit_modify_dihedral(
     }
 }
 
+// --- Measurement mark API ---
+
+/// Mark a result-space atom for highlighting while the modify measurement dialog is open.
+/// Triggers a refresh to render the yellow crosshair.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_set_measurement_mark(result_atom_id: u32) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                atom_edit_data.measurement_marked_atom_id = Some(result_atom_id);
+            }
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Clear the measurement mark (when the dialog closes).
+/// Triggers a refresh to remove the crosshair.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_clear_measurement_mark() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                atom_edit_data.measurement_marked_atom_id = None;
+            }
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
 /// Get the default (equilibrium) bond length for the two selected atoms.
 /// Returns None if atoms are not bonded or if UFF typing fails.
 #[flutter_rust_bridge::frb(sync)]

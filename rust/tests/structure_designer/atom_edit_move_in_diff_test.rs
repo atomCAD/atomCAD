@@ -8,8 +8,8 @@
 ///
 /// See "Anchor Invariant" in atom_edit/AGENTS.md.
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -158,7 +158,8 @@ fn test_promoted_base_atom_survives_move_in_diff() {
 
     // Promote: add identity entry with anchor at base position
     let diff_id = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
-    data.diff.set_anchor_position(diff_id, DVec3::new(0.0, 0.0, 0.0));
+    data.diff
+        .set_anchor_position(diff_id, DVec3::new(0.0, 0.0, 0.0));
 
     // Move it away from the base position
     data.move_in_diff(diff_id, DVec3::new(2.0, 0.0, 0.0));
