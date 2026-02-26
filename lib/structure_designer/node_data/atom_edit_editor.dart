@@ -101,7 +101,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: _buildToolButton(
                   context,
                   APIAtomEditTool.default_,
-                  'Default',
+                  'Default (D)',
                   Icons.pan_tool,
                 ),
               ),
@@ -110,7 +110,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: _buildToolButton(
                   context,
                   APIAtomEditTool.addAtom,
-                  'Add Atom',
+                  'Add Atom (Q)',
                   Icons.add_circle_outline,
                 ),
               ),
@@ -119,7 +119,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: _buildToolButton(
                   context,
                   APIAtomEditTool.addBond,
-                  'Add Bond',
+                  'Add Bond (hold J)',
                   Icons.link,
                 ),
               ),
@@ -389,6 +389,10 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 ),
               ],
             ),
+            Text(
+              'Type element symbol to select: C, N, O, Si...',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
             const SizedBox(height: AppSpacing.medium),
             SizedBox(
               width: double.infinity,
@@ -400,7 +404,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                       }
                     : null,
                 style: AppButtonStyles.primary,
-                child: const Text('Delete Selected'),
+                child: const Text('Delete Selected (Del)'),
               ),
             ),
           ],
@@ -435,6 +439,10 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               label: 'Element to add:',
               hint: 'Select an element',
               required: true,
+            ),
+            Text(
+              'Type element symbol to select: C, N, O, Si...',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: AppSpacing.medium),
             Row(
@@ -764,7 +772,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             ),
             const SizedBox(height: AppSpacing.medium),
             Text(
-              'Drag from atom to atom to bond.',
+              'Drag from atom to atom to bond. Press 1\u20137 to set bond order.',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
@@ -810,6 +818,11 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                     atom_edit_api.changeSelectedBondsOrder(newOrder: newOrder);
                     widget.model.refreshFromKernel();
                   },
+                ),
+                const SizedBox(height: AppSpacing.small),
+                Text(
+                  'Press 1\u20137 to set bond order.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
             ),

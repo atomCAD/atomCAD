@@ -424,11 +424,32 @@ class _StructureDesignerViewportState
       }
     }
 
-    // B key: spring-loaded AddBond tool activation
-    if (event.logicalKey == LogicalKeyboardKey.keyB) {
+    // D key: switch to Default tool
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyD) {
+      final currentTool = atom_edit_api.getActiveAtomEditTool();
+      if (currentTool != null && currentTool != APIAtomEditTool.default_) {
+        _elementAccumulator.reset();
+        widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.default_);
+        return KeyEventResult.handled;
+      }
+    }
+
+    // Q key: switch to AddAtom tool
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyQ) {
+      final currentTool = atom_edit_api.getActiveAtomEditTool();
+      if (currentTool != null && currentTool != APIAtomEditTool.addAtom) {
+        _elementAccumulator.reset();
+        widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.addAtom);
+        return KeyEventResult.handled;
+      }
+    }
+
+    // J key: spring-loaded AddBond tool activation
+    if (event.logicalKey == LogicalKeyboardKey.keyJ) {
       if (event is KeyDownEvent && !_springLoadedActive) {
         final currentTool = atom_edit_api.getActiveAtomEditTool();
         if (currentTool != null && currentTool != APIAtomEditTool.addBond) {
+          _elementAccumulator.reset();
           _springLoadedPreviousTool = currentTool;
           _springLoadedActive = true;
           _springLoadedDeferRelease = false;
