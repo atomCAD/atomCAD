@@ -6,6 +6,7 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/cad_viewport.dart';
 import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/common/element_symbol_input.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
     as edit_atom_api;
@@ -347,8 +348,13 @@ class _StructureDesignerViewportState
   bool _springLoadedActive = false;
   bool _springLoadedDeferRelease = false;
 
+  // Element symbol typing accumulator
+  late final ElementSymbolAccumulator _elementAccumulator =
+      ElementSymbolAccumulator(onMatch: _onElementSymbolMatch);
+
   @override
   void dispose() {
+    _elementAccumulator.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -406,6 +412,18 @@ class _StructureDesignerViewportState
       return KeyEventResult.handled;
     }
 
+    // Delete / Backspace: delete selected atoms/bonds
+    if (event is KeyDownEvent &&
+        (event.logicalKey == LogicalKeyboardKey.delete ||
+            event.logicalKey == LogicalKeyboardKey.backspace)) {
+      final tool = atom_edit_api.getActiveAtomEditTool();
+      if (tool == APIAtomEditTool.default_) {
+        widget.graphModel.atomEditDeleteSelected();
+        renderingNeeded();
+        return KeyEventResult.handled;
+      }
+    }
+
     // B key: spring-loaded AddBond tool activation
     if (event.logicalKey == LogicalKeyboardKey.keyB) {
       if (event is KeyDownEvent && !_springLoadedActive) {
@@ -432,6 +450,7 @@ class _StructureDesignerViewportState
     if (event is KeyDownEvent) {
       final int? bondOrder = _bondOrderFromKey(event.logicalKey);
       if (bondOrder != null) {
+        _elementAccumulator.reset();
         final tool = atom_edit_api.getActiveAtomEditTool();
         if (tool == APIAtomEditTool.addBond) {
           atom_edit_api.setAddBondOrder(order: bondOrder);
@@ -457,6 +476,21 @@ class _StructureDesignerViewportState
       }
     }
 
+    // Element symbol typing: letter keys -> element selection/replacement
+    if (event is KeyDownEvent &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        !HardwareKeyboard.instance.isMetaPressed) {
+      final tool = atom_edit_api.getActiveAtomEditTool();
+      if (tool == APIAtomEditTool.default_ || tool == APIAtomEditTool.addAtom) {
+        final letter = _letterFromKey(event.logicalKey);
+        if (letter != null) {
+          _elementAccumulator.handleLetter(letter);
+          return KeyEventResult.handled;
+        }
+      }
+    }
+
     return KeyEventResult.ignored;
   }
 
@@ -478,6 +512,44 @@ class _StructureDesignerViewportState
     _springLoadedActive = false;
     _springLoadedPreviousTool = null;
     _springLoadedDeferRelease = false;
+  }
+
+  /// Extract a lowercase letter from a logical key, or null for non-letter keys.
+  String? _letterFromKey(LogicalKeyboardKey key) {
+    final label = key.keyLabel;
+    if (label.length == 1) {
+      final c = label.codeUnitAt(0);
+      if (c >= 0x41 && c <= 0x5A) return label.toLowerCase(); // A-Z
+      if (c >= 0x61 && c <= 0x7A) return label; // a-z
+    }
+    return null;
+  }
+
+  /// Called when the element symbol accumulator matches an element.
+  /// Applies the element based on the current tool and selection state.
+  void _onElementSymbolMatch(int atomicNumber, String symbol) {
+    if (!mounted) return;
+    final tool = atom_edit_api.getActiveAtomEditTool();
+    if (tool == APIAtomEditTool.default_) {
+      // If atoms are selected, replace them; otherwise arm the replacement element
+      final selectedNode = widget.graphModel.nodeNetworkView?.nodes.entries
+          .where((entry) => entry.value.selected)
+          .map((entry) => entry.value)
+          .firstOrNull;
+      if (selectedNode != null) {
+        final data =
+            structure_designer_api.getAtomEditData(nodeId: selectedNode.id);
+        if (data != null && data.hasSelectedAtoms) {
+          widget.graphModel.atomEditReplaceSelected(atomicNumber);
+          renderingNeeded();
+          return;
+        }
+      }
+      // No atoms selected: set the replacement element for future use
+      widget.graphModel.setAtomEditDefaultData(atomicNumber);
+    } else if (tool == APIAtomEditTool.addAtom) {
+      widget.graphModel.setAtomEditAddAtomData(atomicNumber);
+    }
   }
 
   void _onHover(PointerHoverEvent event) {
