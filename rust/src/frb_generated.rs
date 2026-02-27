@@ -7922,6 +7922,15 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
                 let mut var_chainDSymbol = <String>::sse_decode(deserializer);
                 return crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Dihedral{angle_degrees: var_angleDegrees, chain_a_id: var_chainAId, chain_a_symbol: var_chainASymbol, chain_b_id: var_chainBId, chain_b_symbol: var_chainBSymbol, chain_c_id: var_chainCId, chain_c_symbol: var_chainCSymbol, chain_d_id: var_chainDId, chain_d_symbol: var_chainDSymbol};
             }
+            3 => {
+                let mut var_symbol = <String>::sse_decode(deserializer);
+                let mut var_elementName = <String>::sse_decode(deserializer);
+                let mut var_bondCount = <u32>::sse_decode(deserializer);
+                let mut var_x = <f64>::sse_decode(deserializer);
+                let mut var_y = <f64>::sse_decode(deserializer);
+                let mut var_z = <f64>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIMeasurement::AtomInfo{symbol: var_symbol, element_name: var_elementName, bond_count: var_bondCount, x: var_x, y: var_y, z: var_z};
+            }
             _ => {
                 unimplemented!("");
             }
@@ -11327,6 +11336,13 @@ chain_c_id.into_into_dart().into_dart(),
 chain_c_symbol.into_into_dart().into_dart(),
 chain_d_id.into_into_dart().into_dart(),
 chain_d_symbol.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIMeasurement::AtomInfo{symbol,element_name,bond_count,x,y,z} => { [3.into_dart(),
+symbol.into_into_dart().into_dart(),
+element_name.into_into_dart().into_dart(),
+bond_count.into_into_dart().into_dart(),
+x.into_into_dart().into_dart(),
+y.into_into_dart().into_dart(),
+z.into_into_dart().into_dart()].into_dart() }
  _ => { unimplemented!(""); }}
     }
 }
@@ -13436,6 +13452,13 @@ crate::api::structure_designer::structure_designer_api_types::APIMeasurement::Di
 <String>::sse_encode(chain_c_symbol, serializer);
 <u32>::sse_encode(chain_d_id, serializer);
 <String>::sse_encode(chain_d_symbol, serializer);
+ }
+crate::api::structure_designer::structure_designer_api_types::APIMeasurement::AtomInfo{symbol,element_name,bond_count,x,y,z} => { <i32>::sse_encode(3, serializer); <String>::sse_encode(symbol, serializer);
+<String>::sse_encode(element_name, serializer);
+<u32>::sse_encode(bond_count, serializer);
+<f64>::sse_encode(x, serializer);
+<f64>::sse_encode(y, serializer);
+<f64>::sse_encode(z, serializer);
  }
  _ => { unimplemented!(""); }}
     }

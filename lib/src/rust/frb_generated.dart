@@ -8620,6 +8620,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           chainDId: dco_decode_u_32(raw[8]),
           chainDSymbol: dco_decode_String(raw[9]),
         );
+      case 3:
+        return APIMeasurement_AtomInfo(
+          symbol: dco_decode_String(raw[1]),
+          elementName: dco_decode_String(raw[2]),
+          bondCount: dco_decode_u_32(raw[3]),
+          x: dco_decode_f_64(raw[4]),
+          y: dco_decode_f_64(raw[5]),
+          z: dco_decode_f_64(raw[6]),
+        );
       default:
         throw Exception("unreachable");
     }
@@ -10925,6 +10934,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             chainCSymbol: var_chainCSymbol,
             chainDId: var_chainDId,
             chainDSymbol: var_chainDSymbol);
+      case 3:
+        var var_symbol = sse_decode_String(deserializer);
+        var var_elementName = sse_decode_String(deserializer);
+        var var_bondCount = sse_decode_u_32(deserializer);
+        var var_x = sse_decode_f_64(deserializer);
+        var var_y = sse_decode_f_64(deserializer);
+        var var_z = sse_decode_f_64(deserializer);
+        return APIMeasurement_AtomInfo(
+            symbol: var_symbol,
+            elementName: var_elementName,
+            bondCount: var_bondCount,
+            x: var_x,
+            y: var_y,
+            z: var_z);
       default:
         throw UnimplementedError('');
     }
@@ -13506,6 +13529,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(chainCSymbol, serializer);
         sse_encode_u_32(chainDId, serializer);
         sse_encode_String(chainDSymbol, serializer);
+      case APIMeasurement_AtomInfo(
+          symbol: final symbol,
+          elementName: final elementName,
+          bondCount: final bondCount,
+          x: final x,
+          y: final y,
+          z: final z
+        ):
+        sse_encode_i_32(3, serializer);
+        sse_encode_String(symbol, serializer);
+        sse_encode_String(elementName, serializer);
+        sse_encode_u_32(bondCount, serializer);
+        sse_encode_f_64(x, serializer);
+        sse_encode_f_64(y, serializer);
+        sse_encode_f_64(z, serializer);
     }
   }
 

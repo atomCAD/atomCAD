@@ -453,6 +453,129 @@ class _$APIMeasurement_DihedralCopyWithImpl<$Res>
 }
 
 /// @nodoc
+
+class APIMeasurement_AtomInfo extends APIMeasurement {
+  const APIMeasurement_AtomInfo(
+      {required this.symbol,
+      required this.elementName,
+      required this.bondCount,
+      required this.x,
+      required this.y,
+      required this.z})
+      : super._();
+
+  /// Element symbol (e.g., "C").
+  final String symbol;
+
+  /// Full element name (e.g., "Carbon").
+  final String elementName;
+
+  /// Number of bonds on this atom (coordination number).
+  final int bondCount;
+
+  /// Position in Angstroms.
+  final double x;
+  final double y;
+  final double z;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIMeasurement_AtomInfoCopyWith<APIMeasurement_AtomInfo> get copyWith =>
+      _$APIMeasurement_AtomInfoCopyWithImpl<APIMeasurement_AtomInfo>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIMeasurement_AtomInfo &&
+            (identical(other.symbol, symbol) || other.symbol == symbol) &&
+            (identical(other.elementName, elementName) ||
+                other.elementName == elementName) &&
+            (identical(other.bondCount, bondCount) ||
+                other.bondCount == bondCount) &&
+            (identical(other.x, x) || other.x == x) &&
+            (identical(other.y, y) || other.y == y) &&
+            (identical(other.z, z) || other.z == z));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, symbol, elementName, bondCount, x, y, z);
+
+  @override
+  String toString() {
+    return 'APIMeasurement.atomInfo(symbol: $symbol, elementName: $elementName, bondCount: $bondCount, x: $x, y: $y, z: $z)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIMeasurement_AtomInfoCopyWith<$Res>
+    implements $APIMeasurementCopyWith<$Res> {
+  factory $APIMeasurement_AtomInfoCopyWith(APIMeasurement_AtomInfo value,
+          $Res Function(APIMeasurement_AtomInfo) _then) =
+      _$APIMeasurement_AtomInfoCopyWithImpl;
+  @useResult
+  $Res call(
+      {String symbol,
+      String elementName,
+      int bondCount,
+      double x,
+      double y,
+      double z});
+}
+
+/// @nodoc
+class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
+    implements $APIMeasurement_AtomInfoCopyWith<$Res> {
+  _$APIMeasurement_AtomInfoCopyWithImpl(this._self, this._then);
+
+  final APIMeasurement_AtomInfo _self;
+  final $Res Function(APIMeasurement_AtomInfo) _then;
+
+  /// Create a copy of APIMeasurement
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? symbol = null,
+    Object? elementName = null,
+    Object? bondCount = null,
+    Object? x = null,
+    Object? y = null,
+    Object? z = null,
+  }) {
+    return _then(APIMeasurement_AtomInfo(
+      symbol: null == symbol
+          ? _self.symbol
+          : symbol // ignore: cast_nullable_to_non_nullable
+              as String,
+      elementName: null == elementName
+          ? _self.elementName
+          : elementName // ignore: cast_nullable_to_non_nullable
+              as String,
+      bondCount: null == bondCount
+          ? _self.bondCount
+          : bondCount // ignore: cast_nullable_to_non_nullable
+              as int,
+      x: null == x
+          ? _self.x
+          : x // ignore: cast_nullable_to_non_nullable
+              as double,
+      y: null == y
+          ? _self.y
+          : y // ignore: cast_nullable_to_non_nullable
+              as double,
+      z: null == z
+          ? _self.z
+          : z // ignore: cast_nullable_to_non_nullable
+              as double,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$GuidedPlacementApiResult {
   @override
   bool operator ==(Object other) {

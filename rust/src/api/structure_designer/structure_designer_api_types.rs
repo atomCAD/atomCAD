@@ -427,6 +427,19 @@ pub enum APIMeasurement {
         chain_d_id: u32,
         chain_d_symbol: String,
     },
+    /// Single atom info (shown when exactly 1 atom is selected).
+    AtomInfo {
+        /// Element symbol (e.g., "C").
+        symbol: String,
+        /// Full element name (e.g., "Carbon").
+        element_name: String,
+        /// Number of bonds on this atom (coordination number).
+        bond_count: u32,
+        /// Position in Angstroms.
+        x: f64,
+        y: f64,
+        z: f64,
+    },
 }
 
 /// Hybridization override for guided atom placement.

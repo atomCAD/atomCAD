@@ -62,7 +62,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         _selectedAtomicNumber = widget.data?.selectedAtomicNumber;
       });
       if (widget.data?.selectedAtomicNumber != null) {
-        widget.model.atomEditSelectedElement = widget.data!.selectedAtomicNumber;
+        widget.model.atomEditSelectedElement =
+            widget.data!.selectedAtomicNumber;
       }
     }
   }
@@ -131,7 +132,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           const SizedBox(height: AppSpacing.large),
           // Tool-specific UI elements
           _buildToolSpecificUI(),
-          // Measurement display (tool-independent, shown when 2-4 atoms selected)
+          // Measurement display (tool-independent, shown when 1-4 atoms selected)
           if (_stagedData!.measurement != null) ...[
             const SizedBox(height: AppSpacing.large),
             _buildMeasurementDisplay(_stagedData!.measurement!),
@@ -555,20 +556,39 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     final String label;
     final String value;
     final IconData icon;
+    final bool canModify;
+    String? subtitle;
 
     switch (measurement) {
       case APIMeasurement_Distance(:final distance):
         label = 'Distance';
         value = '${distance.toStringAsFixed(3)} \u00C5';
         icon = Icons.straighten;
+        canModify = true;
       case APIMeasurement_Angle(:final angleDegrees):
         label = 'Angle';
         value = '${angleDegrees.toStringAsFixed(1)}\u00B0';
         icon = Icons.architecture;
+        canModify = true;
       case APIMeasurement_Dihedral(:final angleDegrees):
         label = 'Dihedral';
         value = '${angleDegrees.toStringAsFixed(1)}\u00B0';
         icon = Icons.rotate_right;
+        canModify = true;
+      case APIMeasurement_AtomInfo(
+          :final symbol,
+          :final elementName,
+          :final bondCount,
+          :final x,
+          :final y,
+          :final z,
+        ):
+        label = '$symbol ($elementName)';
+        value = '$bondCount bond${bondCount == 1 ? '' : 's'}';
+        icon = Icons.science_outlined;
+        canModify = false;
+        subtitle =
+            '${x.toStringAsFixed(3)}, ${y.toStringAsFixed(3)}, ${z.toStringAsFixed(3)} \u00C5';
     }
 
     return Card(
@@ -577,41 +597,61 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       color: Colors.blue[50],
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.medium),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 20, color: Colors.blue[700]),
-            const SizedBox(width: 8),
-            Text(
-              '$label: ',
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.blue[900],
-                fontSize: 13,
-              ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.blue[900],
-                fontSize: 14,
-              ),
-            ),
-            const Spacer(),
-            SizedBox(
-              height: 28,
-              child: OutlinedButton(
-                onPressed: () => _showModifyDialog(measurement),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  side: BorderSide(color: Colors.blue[300]!),
+            Row(
+              children: [
+                Icon(icon, size: 20, color: Colors.blue[700]),
+                const SizedBox(width: 8),
+                Text(
+                  '$label: ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.blue[900],
+                    fontSize: 13,
+                  ),
                 ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue[900],
+                    fontSize: 14,
+                  ),
+                ),
+                if (canModify) ...[
+                  const Spacer(),
+                  SizedBox(
+                    height: 28,
+                    child: OutlinedButton(
+                      onPressed: () => _showModifyDialog(measurement),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        side: BorderSide(color: Colors.blue[300]!),
+                      ),
+                      child: Text(
+                        'Modify',
+                        style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 28),
                 child: Text(
-                  'Modify',
-                  style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blue[700],
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -904,6 +944,8 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
       case APIMeasurement_Dihedral(:final angleDegrees):
         _valueController =
             TextEditingController(text: angleDegrees.toStringAsFixed(1));
+      case APIMeasurement_AtomInfo():
+        _valueController = TextEditingController();
     }
     _moveFirst = _computeDefaultMoveFirst();
     _updateMeasurementMark();
@@ -927,6 +969,8 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
         return _moveFirst ? armAId : armBId;
       case APIMeasurement_Dihedral(:final chainAId, :final chainDId):
         return _moveFirst ? chainAId : chainDId;
+      case APIMeasurement_AtomInfo():
+        return 0;
     }
   }
 
@@ -949,6 +993,8 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
       case APIMeasurement_Dihedral(:final chainAId):
         // Default to the chain end matching last-selected
         return lastId == chainAId;
+      case APIMeasurement_AtomInfo():
+        return true;
     }
   }
 
@@ -964,6 +1010,8 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
         if (value < -180.0 || value > 180.0) {
           return '-180\u00B0 \u2013 180\u00B0';
         }
+      case APIMeasurement_AtomInfo():
+        break;
     }
     return null;
   }
@@ -985,6 +1033,8 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
       case APIMeasurement_Dihedral():
         result = widget.model
             .atomEditModifyDihedral(value, _moveFirst, _moveFragment);
+      case APIMeasurement_AtomInfo():
+        return;
     }
 
     if (result.isEmpty) {
@@ -1005,6 +1055,8 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
         defaultValue = widget.model.atomEditGetDefaultAngle();
       case APIMeasurement_Dihedral():
         return; // No default for dihedral
+      case APIMeasurement_AtomInfo():
+        return;
     }
     if (defaultValue != null) {
       setState(() {
@@ -1035,6 +1087,11 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
       case APIMeasurement_Dihedral():
         title = 'Modify Dihedral';
         unitSuffix = '\u00B0';
+        showDefaultButton = false;
+        defaultButtonEnabled = false;
+      case APIMeasurement_AtomInfo():
+        title = '';
+        unitSuffix = '';
         showDefaultButton = false;
         defaultButtonEnabled = false;
     }
@@ -1253,6 +1310,8 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
             ),
           ],
         );
+      case APIMeasurement_AtomInfo():
+        return const SizedBox.shrink();
     }
   }
 }

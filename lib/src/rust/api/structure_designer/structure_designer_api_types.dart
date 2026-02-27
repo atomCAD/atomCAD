@@ -1091,6 +1091,23 @@ sealed class APIMeasurement with _$APIMeasurement {
     required int chainDId,
     required String chainDSymbol,
   }) = APIMeasurement_Dihedral;
+
+  /// Single atom info (shown when exactly 1 atom is selected).
+  const factory APIMeasurement.atomInfo({
+    /// Element symbol (e.g., "C").
+    required String symbol,
+
+    /// Full element name (e.g., "Carbon").
+    required String elementName,
+
+    /// Number of bonds on this atom (coordination number).
+    required int bondCount,
+
+    /// Position in Angstroms.
+    required double x,
+    required double y,
+    required double z,
+  }) = APIMeasurement_AtomInfo;
 }
 
 /// Freeze mode for atom_edit energy minimization.

@@ -2253,10 +2253,10 @@ fn compute_selection_measurement(
 
     let result_structure = result_structure?;
 
-    // Count selected atoms; only compute for 2-4
+    // Count selected atoms; only compute for 1-4
     let total_selected = atom_edit_data.selection.selected_base_atoms.len()
         + atom_edit_data.selection.selected_diff_atoms.len();
-    if !(2..=4).contains(&total_selected) {
+    if !(1..=4).contains(&total_selected) {
         return None;
     }
 
@@ -2314,7 +2314,31 @@ fn compute_selection_measurement(
         }
     }
 
-    if !(2..=4).contains(&selected_atoms.len()) {
+    if !(1..=4).contains(&selected_atoms.len()) {
+        return None;
+    }
+
+    // Single atom: return element info instead of a geometric measurement.
+    if selected_atoms.len() == 1 {
+        use crate::crystolecule::atomic_constants::ATOM_INFO;
+        let atom_id = selected_atoms[0].result_atom_id;
+        if let Some(atom) = result_structure.get_atom(atom_id) {
+            let info = ATOM_INFO.get(&(atom.atomic_number as i32));
+            let symbol = info
+                .map(|i| i.symbol.clone())
+                .unwrap_or_else(|| "?".to_string());
+            let element_name = info
+                .map(|i| i.element_name.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+            return Some(APIMeasurement::AtomInfo {
+                symbol,
+                element_name,
+                bond_count: atom.bonds.len() as u32,
+                x: atom.position.x,
+                y: atom.position.y,
+                z: atom.position.z,
+            });
+        }
         return None;
     }
 
