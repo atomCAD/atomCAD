@@ -139,8 +139,8 @@ pub fn tessellate_atomic_structure(
         );
     }
 
-    // Only tessellate bonds for ball-and-stick visualization
-    if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
+    // Tessellate bonds: all bonds in ball-and-stick, only overstretched bonds in space-filling
+    {
         // Iterate inline bonds - each bond only once using atom ID ordering
         for atom in atomic_structure.atoms_values() {
             // Skip bonds if this atom is culled
@@ -155,6 +155,14 @@ pub fn tessellate_atomic_structure(
                     if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
+                            continue;
+                        }
+
+                        // In space-filling mode, only render overstretched bonds
+                        if atomic_viz_prefs.visualization
+                            == AtomicStructureVisualization::SpaceFilling
+                            && !is_bond_overstretched(atom, other_atom)
+                        {
                             continue;
                         }
 
@@ -235,6 +243,22 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
         }
         AtomicStructureVisualization::SpaceFilling => atom_info.van_der_waals_radius,
     }
+}
+
+/// Returns true if the bond between two atoms is long enough that the
+/// space-filling spheres don't touch — i.e., the gap should be bridged
+/// by rendering the bond stick.
+fn is_bond_overstretched(atom1: &Atom, atom2: &Atom) -> bool {
+    let r1 = ATOM_INFO
+        .get(&(atom1.atomic_number as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .van_der_waals_radius;
+    let r2 = ATOM_INFO
+        .get(&(atom2.atomic_number as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .van_der_waals_radius;
+    let distance = atom1.position.distance(atom2.position);
+    distance > r1 + r2
 }
 
 /// Shared helper to get atom color and material properties based on selection state
@@ -702,8 +726,8 @@ pub fn tessellate_atomic_structure_impostors(
         );
     }
 
-    // Only tessellate bonds for ball-and-stick visualization
-    if atomic_viz_prefs.visualization == AtomicStructureVisualization::BallAndStick {
+    // Tessellate bonds: all bonds in ball-and-stick, only overstretched bonds in space-filling
+    {
         // Iterate inline bonds - each bond only once using atom ID ordering
         for atom in atomic_structure.atoms_values() {
             // Skip bonds if this atom is culled
@@ -718,6 +742,14 @@ pub fn tessellate_atomic_structure_impostors(
                     if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
+                            continue;
+                        }
+
+                        // In space-filling mode, only render overstretched bonds
+                        if atomic_viz_prefs.visualization
+                            == AtomicStructureVisualization::SpaceFilling
+                            && !is_bond_overstretched(atom, other_atom)
+                        {
                             continue;
                         }
 
