@@ -387,7 +387,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               ],
             ),
             Text(
-              'Type element symbol to select: C, N, O, Si...',
+              'Type element symbol in the viewport: C, N, O, Si...',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: AppSpacing.medium),
@@ -438,7 +438,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               required: true,
             ),
             Text(
-              'Type element symbol to select: C, N, O, Si...',
+              'Type element symbol in the viewport: C, N, O, Si...',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: AppSpacing.medium),
