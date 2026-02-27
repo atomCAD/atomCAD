@@ -857,7 +857,7 @@ class _StructureDesignerViewportState
                 ),
               ),
               child: Text(
-                symbol,
+                '+$symbol',
                 style: const TextStyle(
                   color: Color(0xFF4FC3F7),
                   fontSize: 13,
