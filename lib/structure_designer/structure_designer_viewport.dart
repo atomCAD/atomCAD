@@ -440,8 +440,8 @@ class _StructureDesignerViewportState
       }
     }
 
-    // D key: switch to Default tool
-    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyD) {
+    // F2: switch to Default tool
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f2) {
       final currentTool = atom_edit_api.getActiveAtomEditTool();
       if (currentTool != null && currentTool != APIAtomEditTool.default_) {
         _elementAccumulator.reset();
@@ -451,12 +451,23 @@ class _StructureDesignerViewportState
       }
     }
 
-    // Q key: switch to AddAtom tool
-    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyQ) {
+    // F3: switch to AddAtom tool
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f3) {
       final currentTool = atom_edit_api.getActiveAtomEditTool();
       if (currentTool != null && currentTool != APIAtomEditTool.addAtom) {
         _elementAccumulator.reset();
         widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.addAtom);
+        _clearHoverTooltip();
+        return KeyEventResult.handled;
+      }
+    }
+
+    // F4: switch to AddBond tool
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f4) {
+      final currentTool = atom_edit_api.getActiveAtomEditTool();
+      if (currentTool != null && currentTool != APIAtomEditTool.addBond) {
+        _elementAccumulator.reset();
+        widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.addBond);
         _clearHoverTooltip();
         return KeyEventResult.handled;
       }

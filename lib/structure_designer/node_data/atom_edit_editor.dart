@@ -105,7 +105,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: _buildToolButton(
                   context,
                   APIAtomEditTool.default_,
-                  'Default (D)',
+                  'Default (F2)',
                   Icons.pan_tool,
                 ),
               ),
@@ -114,7 +114,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: _buildToolButton(
                   context,
                   APIAtomEditTool.addAtom,
-                  'Add Atom (Q)',
+                  'Add Atom (F3)',
                   Icons.add_circle_outline,
                 ),
               ),
@@ -123,7 +123,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: _buildToolButton(
                   context,
                   APIAtomEditTool.addBond,
-                  'Add Bond (hold J)',
+                  'Add Bond (F4 / hold J)',
                   Icons.link,
                 ),
               ),
