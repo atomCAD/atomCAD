@@ -150,7 +150,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.large),
+          const SizedBox(height: AppSpacing.small),
           // Tool-specific UI elements
           _buildToolSpecificUI(),
           // Measurement display (tool-independent, shown when 1-4 atoms selected)
