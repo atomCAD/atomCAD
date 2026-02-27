@@ -442,6 +442,25 @@ pub enum APIMeasurement {
     },
 }
 
+/// Information about the atom under the cursor, returned by hover hit test.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone)]
+pub struct APIHoveredAtomInfo {
+    // Identity
+    pub symbol: String,
+    pub element_name: String,
+    pub atomic_number: i32,
+
+    // Position (world-space Angstroms — used both for display and
+    // for Flutter to project the tooltip anchor to screen space)
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+
+    // Bonding
+    pub bond_count: u32,
+}
+
 /// Hybridization override for guided atom placement.
 /// When set to Auto, hybridization is auto-detected via UFF type assignment.
 #[flutter_rust_bridge::frb]

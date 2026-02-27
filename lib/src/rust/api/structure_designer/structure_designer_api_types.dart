@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -871,6 +871,50 @@ class APIHalfSpaceData {
           center == other.center &&
           shift == other.shift &&
           subdivision == other.subdivision;
+}
+
+/// Information about the atom under the cursor, returned by hover hit test.
+class APIHoveredAtomInfo {
+  final String symbol;
+  final String elementName;
+  final int atomicNumber;
+  final double x;
+  final double y;
+  final double z;
+  final int bondCount;
+
+  const APIHoveredAtomInfo({
+    required this.symbol,
+    required this.elementName,
+    required this.atomicNumber,
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.bondCount,
+  });
+
+  @override
+  int get hashCode =>
+      symbol.hashCode ^
+      elementName.hashCode ^
+      atomicNumber.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      z.hashCode ^
+      bondCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIHoveredAtomInfo &&
+          runtimeType == other.runtimeType &&
+          symbol == other.symbol &&
+          elementName == other.elementName &&
+          atomicNumber == other.atomicNumber &&
+          x == other.x &&
+          y == other.y &&
+          z == other.z &&
+          bondCount == other.bondCount;
 }
 
 /// Hybridization override for guided atom placement.

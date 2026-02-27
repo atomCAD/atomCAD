@@ -2153,6 +2153,56 @@ impl StructureDesigner {
         min_distance
     }
 
+    /// Hit-test across ALL visible AtomicStructures in the scene.
+    /// Returns (atom_id, &AtomicStructure) for the closest atom hit,
+    /// using the user's current visualization preference for radius calculation.
+    pub fn hit_test_all_atomic_structures(
+        &self,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3,
+    ) -> Option<(u32, &AtomicStructure)> {
+        use crate::crystolecule::atomic_structure::HitTestResult;
+        use crate::display::preferences as display_prefs;
+        use crate::structure_designer::structure_designer_scene::NodeOutput;
+
+        let visualization = &self
+            .preferences
+            .atomic_structure_visualization_preferences
+            .visualization;
+        let display_visualization = match visualization {
+            AtomicStructureVisualization::BallAndStick => {
+                display_prefs::AtomicStructureVisualization::BallAndStick
+            }
+            AtomicStructureVisualization::SpaceFilling => {
+                display_prefs::AtomicStructureVisualization::SpaceFilling
+            }
+        };
+
+        let mut closest: Option<(u32, &AtomicStructure, f64)> = None;
+
+        for node_data in self
+            .last_generated_structure_designer_scene
+            .node_data
+            .values()
+        {
+            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
+                if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
+                    ray_origin,
+                    ray_direction,
+                    visualization,
+                    |atom| get_displayed_atom_radius(atom, &display_visualization),
+                    BAS_STICK_RADIUS,
+                ) {
+                    if closest.as_ref().is_none_or(|c| distance < c.2) {
+                        closest = Some((atom_id, atomic_structure, distance));
+                    }
+                }
+            }
+        }
+
+        closest.map(|(id, structure, _)| (id, structure))
+    }
+
     // -------------------------------------------------------------------------------------------------------------------------
     // --- Preferences management                                                                                         ---
     // -------------------------------------------------------------------------------------------------------------------------

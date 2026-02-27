@@ -1,4 +1,5 @@
 use super::structure_designer_api_types::APIAtomFillData;
+use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
@@ -34,6 +35,7 @@ use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::common_api_types::APIResult;
 use crate::api::common_api_types::APIVec2;
+use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomMoveData;
@@ -4155,6 +4157,43 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                 }
             },
             error_result("Could not access structure designer".to_string()),
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn query_hovered_atom_info(
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+) -> Option<APIHoveredAtomInfo> {
+    let ray_origin = from_api_vec3(&ray_origin);
+    let ray_direction = from_api_vec3(&ray_direction);
+
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let (atom_id, structure) = cad_instance
+                    .structure_designer
+                    .hit_test_all_atomic_structures(&ray_origin, &ray_direction)?;
+
+                let atom = structure.get_atom(atom_id)?;
+                let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
+                    .get(&(atom.atomic_number as i32))
+                    .unwrap_or(&crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
+
+                let bond_count = atom.bonds.len() as u32;
+
+                Some(APIHoveredAtomInfo {
+                    symbol: atom_info.symbol.clone(),
+                    element_name: atom_info.element_name.clone(),
+                    atomic_number: atom_info.atomic_number,
+                    x: atom.position.x,
+                    y: atom.position.y,
+                    z: atom.position.z,
+                    bond_count,
+                })
+            },
+            None,
         )
     }
 }

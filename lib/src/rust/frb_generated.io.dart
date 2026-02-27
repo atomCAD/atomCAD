@@ -139,6 +139,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
 
   @protected
+  APIHoveredAtomInfo dco_decode_api_hovered_atom_info(dynamic raw);
+
+  @protected
   APIHybridization dco_decode_api_hybridization(dynamic raw);
 
   @protected
@@ -336,6 +339,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
+
+  @protected
+  APIHoveredAtomInfo dco_decode_box_autoadd_api_hovered_atom_info(dynamic raw);
 
   @protected
   APIImportXYZData dco_decode_box_autoadd_api_import_xyz_data(dynamic raw);
@@ -639,6 +645,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
 
   @protected
+  APIHoveredAtomInfo? dco_decode_opt_box_autoadd_api_hovered_atom_info(
+      dynamic raw);
+
+  @protected
   APIImportXYZData? dco_decode_opt_box_autoadd_api_import_xyz_data(dynamic raw);
 
   @protected
@@ -927,6 +937,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
 
   @protected
+  APIHoveredAtomInfo sse_decode_api_hovered_atom_info(
+      SseDeserializer deserializer);
+
+  @protected
   APIHybridization sse_decode_api_hybridization(SseDeserializer deserializer);
 
   @protected
@@ -1156,6 +1170,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHalfSpaceData sse_decode_box_autoadd_api_half_space_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIHoveredAtomInfo sse_decode_box_autoadd_api_hovered_atom_info(
       SseDeserializer deserializer);
 
   @protected
@@ -1521,6 +1539,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIHoveredAtomInfo? sse_decode_opt_box_autoadd_api_hovered_atom_info(
+      SseDeserializer deserializer);
+
+  @protected
   APIImportXYZData? sse_decode_opt_box_autoadd_api_import_xyz_data(
       SseDeserializer deserializer);
 
@@ -1855,6 +1877,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_hovered_atom_info(
+      APIHoveredAtomInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_hybridization(
       APIHybridization self, SseSerializer serializer);
 
@@ -2094,6 +2120,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_half_space_data(
       APIHalfSpaceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_hovered_atom_info(
+      APIHoveredAtomInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_import_xyz_data(
@@ -2463,6 +2493,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_half_space_data(
       APIHalfSpaceData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_hovered_atom_info(
+      APIHoveredAtomInfo? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_import_xyz_data(

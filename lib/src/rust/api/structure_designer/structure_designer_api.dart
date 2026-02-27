@@ -787,3 +787,9 @@ APITextEditResult applyTextToActiveNetwork({required String code}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiApplyTextToActiveNetwork(
             code: code);
+
+APIHoveredAtomInfo? queryHoveredAtomInfo(
+        {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiQueryHoveredAtomInfo(
+            rayOrigin: rayOrigin, rayDirection: rayDirection);
