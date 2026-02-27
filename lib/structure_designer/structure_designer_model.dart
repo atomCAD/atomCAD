@@ -70,6 +70,7 @@ class StructureDesignerModel extends ChangeNotifier {
   NodeNetworkView? nodeNetworkView;
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
   APIAtomEditTool? activeAtomEditTool = APIAtomEditTool.default_;
+  int? atomEditSelectedElement;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
   WireDropCallback?
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
@@ -840,6 +841,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void setAtomEditSelectedElement(int atomicNumber) {
     if (nodeNetworkView == null) return;
     atom_edit_api.setAtomEditSelectedElement(atomicNumber: atomicNumber);
+    atomEditSelectedElement = atomicNumber;
     refreshFromKernel();
   }
 

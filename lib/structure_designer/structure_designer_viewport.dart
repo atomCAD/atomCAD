@@ -341,6 +341,7 @@ class _StructureDesignerViewportState
   _AtomEditAddBondDelegate? _atomEditAddBondDelegate;
   Rect? _marqueeRect;
   APIAddBondMoveResult? _addBondPreview;
+  Offset? _cursorPosition;
   final FocusNode _focusNode = FocusNode();
 
   // Spring-loaded B key state
@@ -572,10 +573,13 @@ class _StructureDesignerViewportState
     // Set the shared element selection (works for any tool)
     if (tool == APIAtomEditTool.default_ || tool == APIAtomEditTool.addAtom) {
       widget.graphModel.setAtomEditSelectedElement(atomicNumber);
+      setState(() {}); // Refresh cursor overlay immediately
     }
   }
 
   void _onHover(PointerHoverEvent event) {
+    setState(() => _cursorPosition = event.localPosition);
+
     // Track cursor for free sphere guided placement mode
     if (atom_edit_api.atomEditIsInGuidedPlacement()) {
       final ray = getRayFromPointerPos(event.localPosition);
@@ -829,12 +833,51 @@ class _StructureDesignerViewportState
       }
     }
 
+    // Build element symbol cursor overlay for AddAtom tool
+    Widget? elementSymbolOverlay;
+    if (_cursorPosition != null &&
+        widget.graphModel.isNodeTypeActive('atom_edit') &&
+        widget.graphModel.activeAtomEditTool == APIAtomEditTool.addAtom) {
+      final elementNumber = widget.graphModel.atomEditSelectedElement;
+      final symbol =
+          elementNumber != null ? elementNumberToSymbol[elementNumber] : null;
+      if (symbol != null) {
+        elementSymbolOverlay = Positioned(
+          left: _cursorPosition!.dx + 16,
+          top: _cursorPosition!.dy - 10,
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xDD303030),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: const Color(0xFF4FC3F7),
+                  width: 0.5,
+                ),
+              ),
+              child: Text(
+                symbol,
+                style: const TextStyle(
+                  color: Color(0xFF4FC3F7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
       child: MouseRegion(
         onEnter: (_) => _focusNode.requestFocus(),
         onHover: _onHover,
+        onExit: (_) => setState(() => _cursorPosition = null),
         child: Stack(
           children: [
             super.build(context),
@@ -847,6 +890,7 @@ class _StructureDesignerViewportState
                 ),
               ),
             if (addBondOverlay != null) addBondOverlay,
+            if (elementSymbolOverlay != null) elementSymbolOverlay,
           ],
         ),
       ),

@@ -48,6 +48,9 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       _stagedData = widget.data;
       _selectedAtomicNumber = widget.data?.selectedAtomicNumber;
     });
+    if (widget.data?.selectedAtomicNumber != null) {
+      widget.model.atomEditSelectedElement = widget.data!.selectedAtomicNumber;
+    }
   }
 
   @override
@@ -58,6 +61,9 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         _stagedData = widget.data;
         _selectedAtomicNumber = widget.data?.selectedAtomicNumber;
       });
+      if (widget.data?.selectedAtomicNumber != null) {
+        widget.model.atomEditSelectedElement = widget.data!.selectedAtomicNumber;
+      }
     }
   }
 

@@ -100,6 +100,11 @@ const Map<String, int> elementSymbolToNumber = {
   'Cm': 96,
 };
 
+/// Reverse map: atomic number -> element symbol (e.g., 6 -> "C", 14 -> "Si").
+final Map<int, String> elementNumberToSymbol = {
+  for (final entry in elementSymbolToNumber.entries) entry.value: entry.key,
+};
+
 /// Uppercase letters that begin a two-character element symbol.
 final Set<String> _twoCharPrefixes = elementSymbolToNumber.keys
     .where((s) => s.length == 2)
