@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/cad_viewport.dart';
 import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/common/atom_tooltip.dart';
 import 'package:flutter_cad/common/element_symbol_input.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/edit_atom_api.dart'
@@ -353,8 +355,21 @@ class _StructureDesignerViewportState
   late final ElementSymbolAccumulator _elementAccumulator =
       ElementSymbolAccumulator(onMatch: _onElementSymbolMatch);
 
+  // Hover tooltip state
+  Timer? _hoverDebounceTimer;
+  APIHoveredAtomInfo? _hoveredAtomInfo;
+  Offset? _lastHoverPos;
+
+  void _clearHoverTooltip() {
+    _hoverDebounceTimer?.cancel();
+    if (_hoveredAtomInfo != null) {
+      setState(() => _hoveredAtomInfo = null);
+    }
+  }
+
   @override
   void dispose() {
+    _hoverDebounceTimer?.cancel();
     _elementAccumulator.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -431,6 +446,7 @@ class _StructureDesignerViewportState
       if (currentTool != null && currentTool != APIAtomEditTool.default_) {
         _elementAccumulator.reset();
         widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.default_);
+        _clearHoverTooltip();
         return KeyEventResult.handled;
       }
     }
@@ -441,6 +457,7 @@ class _StructureDesignerViewportState
       if (currentTool != null && currentTool != APIAtomEditTool.addAtom) {
         _elementAccumulator.reset();
         widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.addAtom);
+        _clearHoverTooltip();
         return KeyEventResult.handled;
       }
     }
@@ -455,6 +472,7 @@ class _StructureDesignerViewportState
           _springLoadedActive = true;
           _springLoadedDeferRelease = false;
           widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.addBond);
+          _clearHoverTooltip();
           return KeyEventResult.handled;
         }
       } else if (event is KeyUpEvent && _springLoadedActive) {
@@ -577,10 +595,49 @@ class _StructureDesignerViewportState
     }
   }
 
-  void _onHover(PointerHoverEvent event) {
-    setState(() => _cursorPosition = event.localPosition);
+  void _scheduleHoverHitTest(Offset pos) {
+    _hoverDebounceTimer?.cancel();
 
-    // Track cursor for free sphere guided placement mode
+    // Suppress while AddAtom tool is active (it has its own cursor label)
+    if (widget.graphModel.isNodeTypeActive('atom_edit') &&
+        widget.graphModel.activeAtomEditTool == APIAtomEditTool.addAtom) {
+      return;
+    }
+
+    _lastHoverPos = pos;
+    _hoverDebounceTimer = Timer(const Duration(milliseconds: 100), () {
+      _performHoverHitTest(pos);
+    });
+  }
+
+  void _performHoverHitTest(Offset pos) {
+    final ray = getRayFromPointerPos(pos);
+    final info = structure_designer_api.queryHoveredAtomInfo(
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    if (mounted && _lastHoverPos == pos) {
+      setState(() => _hoveredAtomInfo = info);
+    }
+  }
+
+  void _onHover(PointerHoverEvent event) {
+    final pos = event.localPosition;
+    setState(() => _cursorPosition = pos);
+
+    // Movement threshold: suppress flicker from micro-movements (< 4 px).
+    final moved = _lastHoverPos != null
+        ? (pos - _lastHoverPos!).distance
+        : double.infinity;
+    if (moved >= 4.0) {
+      _clearHoverTooltip();
+    } else {
+      _hoverDebounceTimer?.cancel();
+    }
+
+    _scheduleHoverHitTest(pos);
+
+    // Existing guided placement tracking (unchanged)
     if (atom_edit_api.atomEditIsInGuidedPlacement()) {
       final ray = getRayFromPointerPos(event.localPosition);
       final changed = atom_edit_api.atomEditGuidedPlacementPointerMove(
@@ -591,6 +648,12 @@ class _StructureDesignerViewportState
         renderingNeeded();
       }
     }
+  }
+
+  @override
+  void onPointerDown(PointerDownEvent event) {
+    _clearHoverTooltip();
+    super.onPointerDown(event);
   }
 
   /// Forward to the protected startGadgetDragFromHandle for the delegate.
@@ -790,6 +853,7 @@ class _StructureDesignerViewportState
 
   @override
   void refreshFromKernel() {
+    _clearHoverTooltip();
     widget.graphModel.refreshFromKernel();
     // Complete deferred spring-loaded release after drag finishes
     if (_springLoadedDeferRelease) {
@@ -871,13 +935,46 @@ class _StructureDesignerViewportState
       }
     }
 
+    // Build atom hover tooltip overlay
+    Widget? atomTooltipOverlay;
+    if (_hoveredAtomInfo != null) {
+      final info = _hoveredAtomInfo!;
+      final screenPos = _projectWorldToScreen(
+        info.x,
+        info.y,
+        info.z,
+      );
+      if (screenPos != null) {
+        const offsetX = 20.0;
+        const offsetY = -10.0;
+        const estW = 180.0;
+        const estH = 70.0;
+
+        final viewportSize = context.size;
+        final vw = viewportSize?.width ?? 800.0;
+        final vh = viewportSize?.height ?? 600.0;
+
+        final left = (screenPos.dx + offsetX).clamp(4.0, vw - estW - 4.0);
+        final top = (screenPos.dy + offsetY).clamp(4.0, vh - estH - 4.0);
+
+        atomTooltipOverlay = Positioned(
+          left: left,
+          top: top,
+          child: IgnorePointer(child: AtomTooltip(info: info)),
+        );
+      }
+    }
+
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
       child: MouseRegion(
         onEnter: (_) => _focusNode.requestFocus(),
         onHover: _onHover,
-        onExit: (_) => setState(() => _cursorPosition = null),
+        onExit: (_) {
+          _clearHoverTooltip();
+          setState(() => _cursorPosition = null);
+        },
         child: Stack(
           children: [
             super.build(context),
@@ -891,6 +988,7 @@ class _StructureDesignerViewportState
               ),
             if (addBondOverlay != null) addBondOverlay,
             if (elementSymbolOverlay != null) elementSymbolOverlay,
+            if (atomTooltipOverlay != null) atomTooltipOverlay,
           ],
         ),
       ),
