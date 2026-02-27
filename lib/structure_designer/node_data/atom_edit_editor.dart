@@ -79,24 +79,45 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with title and info button
+          // Header with title, info button, and view selector
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  Text('Atom Edit Tools',
+                  Text('Atom Edit',
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(width: 8),
                   const NodeDescriptionButton(nodeTypeName: 'atom_edit'),
                 ],
               ),
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text('Result'),
+                  ),
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text('Diff'),
+                  ),
+                ],
+                selected: {_stagedData!.outputDiff},
+                onSelectionChanged: (Set<bool> selection) {
+                  widget.model.toggleAtomEditOutputDiff();
+                },
+                style: ButtonStyle(
+                  visualDensity: AppSpacing.compactVerticalDensity,
+                ),
+              ),
             ],
           ),
+          // Diff options and stats (only when there's content)
+          if (_hasOutputModeContent()) ...[
+            const SizedBox(height: AppSpacing.medium),
+            _buildOutputModeRow(),
+          ],
           const SizedBox(height: AppSpacing.medium),
-          // Output mode toggle and diff stats
-          _buildOutputModeRow(),
-          const SizedBox(height: AppSpacing.large),
           // Tool buttons row
           Row(
             children: [
@@ -170,6 +191,19 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     );
   }
 
+  bool _hasOutputModeContent() {
+    final stats = _stagedData!.diffStats;
+    return _stagedData!.outputDiff ||
+        stats.atomsAdded > 0 ||
+        stats.atomsDeleted > 0 ||
+        stats.atomsModified > 0 ||
+        stats.bondsAdded > 0 ||
+        stats.bondsDeleted > 0 ||
+        stats.orphanedTrackedAtoms > 0 ||
+        stats.unmatchedDeleteMarkers > 0 ||
+        stats.orphanedBonds > 0;
+  }
+
   Widget _buildOutputModeRow() {
     final stats = _stagedData!.diffStats;
     final hasChanges = stats.atomsAdded > 0 ||
@@ -187,35 +221,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Output mode toggle
-            Row(
-              children: [
-                Text('View:', style: TextStyle(fontWeight: FontWeight.w500)),
-                const SizedBox(width: 8),
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment<bool>(
-                      value: false,
-                      label: Text('Result'),
-                    ),
-                    ButtonSegment<bool>(
-                      value: true,
-                      label: Text('Diff'),
-                    ),
-                  ],
-                  selected: {_stagedData!.outputDiff},
-                  onSelectionChanged: (Set<bool> selection) {
-                    widget.model.toggleAtomEditOutputDiff();
-                  },
-                  style: ButtonStyle(
-                    visualDensity: AppSpacing.compactVerticalDensity,
-                  ),
-                ),
-              ],
-            ),
             // Diff mode options (only visible in diff mode)
             if (_stagedData!.outputDiff) ...[
-              const SizedBox(height: AppSpacing.small),
               Row(
                 children: [
                   SizedBox(
