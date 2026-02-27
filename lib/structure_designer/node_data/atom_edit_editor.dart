@@ -590,7 +590,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         icon = Icons.science_outlined;
         canModify = false;
         subtitle =
-            '${x.toStringAsFixed(3)}, ${y.toStringAsFixed(3)}, ${z.toStringAsFixed(3)} \u00C5';
+            'Pos: (${x.toStringAsFixed(3)}, ${y.toStringAsFixed(3)}, ${z.toStringAsFixed(3)}) \u00C5';
     }
 
     return Card(

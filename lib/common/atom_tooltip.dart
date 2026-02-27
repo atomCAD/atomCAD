@@ -43,9 +43,9 @@ class AtomTooltip extends StatelessWidget {
           ),
           // Line 3: position in Angstroms (3 decimal places)
           Text(
-            '${info.x.toStringAsFixed(3)}, '
+            'Pos: (${info.x.toStringAsFixed(3)}, '
             '${info.y.toStringAsFixed(3)}, '
-            '${info.z.toStringAsFixed(3)} \u00c5',
+            '${info.z.toStringAsFixed(3)}) \u00c5',
             style: const TextStyle(
               color: Color(0x99FFFFFF),
               fontSize: 11,
