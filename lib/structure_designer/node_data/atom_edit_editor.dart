@@ -338,35 +338,6 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           children: [
             Row(
               children: [
-                Text('Default Tool Settings',
-                    style: TextStyle(fontWeight: FontWeight.w500)),
-                const Spacer(),
-                Tooltip(
-                  message: 'Show axis gadget on selection',
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.open_with,
-                      color: _stagedData!.showGadget
-                          ? AppColors.primaryAccent
-                          : Colors.grey,
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      widget.model.toggleAtomEditShowGadget();
-                    },
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.medium),
-            Row(
-              children: [
                 Expanded(
                   child: SelectElementWidget(
                     value: _selectedAtomicNumber,
@@ -405,18 +376,45 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: AppSpacing.medium),
-            SizedBox(
-              width: double.infinity,
-              height: AppSpacing.buttonHeight,
-              child: ElevatedButton(
-                onPressed: _stagedData!.hasSelection
-                    ? () {
-                        widget.model.atomEditDeleteSelected();
-                      }
-                    : null,
-                style: AppButtonStyles.primary,
-                child: const Text('Delete Selected (Del)'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: AppSpacing.buttonHeight,
+                    child: ElevatedButton(
+                      onPressed: _stagedData!.hasSelection
+                          ? () {
+                              widget.model.atomEditDeleteSelected();
+                            }
+                          : null,
+                      style: AppButtonStyles.primary,
+                      child: const Text('Delete Selected (Del)'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Show axis gadget on selection',
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.open_with,
+                      color: _stagedData!.showGadget
+                          ? AppColors.primaryAccent
+                          : Colors.grey,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      widget.model.toggleAtomEditShowGadget();
+                    },
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -434,9 +432,6 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Add Atom Settings',
-                style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: AppSpacing.medium),
             SelectElementWidget(
               value: _selectedAtomicNumber,
               onChanged: (int? newValue) {
@@ -810,9 +805,9 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Add Bond Settings',
+            Text('Bond Order',
                 style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: AppSpacing.medium),
+            const SizedBox(height: AppSpacing.small),
             BondOrderSelector(
               selectedOrder: _stagedData!.bondToolBondOrder,
               onOrderChanged: (int order) {
@@ -892,23 +887,38 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
 
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: isActive ? AppColors.primaryAccent : Colors.transparent,
-        borderRadius: BorderRadius.circular(4.0),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4.0),
-          onTap: () {
-            widget.model.setActiveAtomEditTool(tool);
-          },
-          child: Container(
-            padding: const EdgeInsets.all(8.0),
-            child: Icon(
-              iconData,
-              color: isActive ? AppColors.textOnDark : AppColors.textPrimary,
-              size: 24.0,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Material(
+            color: isActive ? AppColors.primaryAccent : Colors.transparent,
+            borderRadius: BorderRadius.circular(4.0),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(4.0),
+              onTap: () {
+                widget.model.setActiveAtomEditTool(tool);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8.0),
+                child: Icon(
+                  iconData,
+                  color:
+                      isActive ? AppColors.textOnDark : AppColors.textPrimary,
+                  size: 24.0,
+                ),
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: 4.0),
+          Container(
+            height: 2.0,
+            width: 24.0,
+            decoration: BoxDecoration(
+              color: isActive ? AppColors.primaryAccent : Colors.transparent,
+              borderRadius: BorderRadius.circular(1.0),
+            ),
+          ),
+        ],
       ),
     );
   }
