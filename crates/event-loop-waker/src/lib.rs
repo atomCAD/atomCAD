@@ -4,6 +4,6 @@
 
 mod platform;
 mod platform_impl;
-pub use platform::{EventLoopWaker, EventLoopWakerPlugin, setup_ctrlc_handler};
+pub use platform::{EventLoopWaker, EventLoopWakerPlugin, force_exit_after, setup_ctrlc_handler};
 
 // End of File

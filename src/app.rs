@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, mpsc};
 
 use crate::{APP_NAME, CadViewPlugin, LoadingPlugin, SplashScreenPlugin};
 use bevy::{ecs::system::NonSendMarker, prelude::*};
+use event_loop_waker::force_exit_after;
 use menu::prelude::*;
 
 // We use States to separate logic
@@ -90,6 +91,10 @@ impl Plugin for AppPlugin {
                                         std::process::exit(-1);
                                     };
                                     info!("Quit requested by menu selection.");
+                                    // Guard against a known Bevy deadlock on macOS where the
+                                    // pipelined renderer can block the main thread, preventing
+                                    // graceful shutdown from ever completing.
+                                    force_exit_after(std::time::Duration::from_secs(2), 0);
                                 })),
                             }
                         },

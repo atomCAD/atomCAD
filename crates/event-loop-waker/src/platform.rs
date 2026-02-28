@@ -46,4 +46,19 @@ impl Plugin for EventLoopWakerPlugin {
     }
 }
 
+/// Starts a background thread that will force-exit the process after a timeout.
+///
+/// This is a workaround for a known Bevy deadlock on macOS where the pipelined
+/// renderer's `scope_with_executor` can block the main thread indefinitely during
+/// shutdown, preventing `AppExit` from ever being processed.
+///
+/// See: <https://github.com/bevyengine/bevy/issues/13208>
+pub fn force_exit_after(timeout: std::time::Duration, code: i32) {
+    std::thread::spawn(move || {
+        std::thread::sleep(timeout);
+        warn!("Graceful shutdown timed out after {timeout:?}; forcing exit.");
+        std::process::exit(code);
+    });
+}
+
 // End of File
