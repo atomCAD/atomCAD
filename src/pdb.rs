@@ -157,6 +157,98 @@ pub enum PdbAssetLoaderError {
     EmptyAtomList,
 }
 
+/// Parse PDB file content into a PdbAsset.
+///
+/// This is the core parsing logic, extracted from the asset loader so it can be
+/// tested independently of Bevy's async asset loading infrastructure.
+fn parse_pdb_content(content: &str) -> Result<PdbAsset, PdbAssetLoaderError> {
+    let mut atoms = Vec::new();
+    let mut serial_to_index = HashMap::new();
+
+    // 1st pass: Parse the PDB file and extract all atom records
+    for (line_idx, line) in content.lines().enumerate() {
+        if line.starts_with("ATOM") || line.starts_with("HETATM") {
+            match parse_atom_record(line) {
+                Ok((_, (serial, atom))) => {
+                    // Map serial number to index in our atoms array
+                    serial_to_index.insert(serial, atoms.len() as u32);
+
+                    // Add the atom to our atoms array
+                    atoms.push(atom);
+                }
+                Err(e) => {
+                    return Err(PdbAssetLoaderError::Io(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Error parsing PDB file on line {line_idx}, '{line}': {e:?}"),
+                    )));
+                }
+            }
+        }
+    }
+
+    // 2nd pass: Parse the CONECT records and create bonds
+    let mut bonds = Vec::new();
+
+    for (line_idx, line) in content.lines().enumerate() {
+        if line.starts_with("CONECT") {
+            match parse_conect_record(line, &serial_to_index) {
+                Ok((_, new_bonds)) => {
+                    bonds.extend(new_bonds);
+                }
+                Err(e) => {
+                    return Err(PdbAssetLoaderError::Io(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Error parsing PDB file on line {line_idx}, '{line}': {e:?}"),
+                    )));
+                }
+            }
+        }
+    }
+
+    if atoms.is_empty() {
+        return Err(PdbAssetLoaderError::EmptyAtomList);
+    }
+
+    // Average the positions of the atoms
+    let mut avg_position = Vec3::ZERO;
+    for atom in atoms.iter() {
+        avg_position += atom.position;
+    }
+    avg_position /= atoms.len() as f32;
+
+    // Re-center the atoms
+    for atom in atoms.iter_mut() {
+        atom.position -= avg_position;
+    }
+
+    // Calculate AABB from atom positions including van der Waals radii
+    let mut min = Vec3::splat(f32::MAX);
+    let mut max = Vec3::splat(f32::MIN);
+    let periodic_table = PeriodicTable::new();
+    for atom in &atoms {
+        // Get the van der Waals radius for this atom
+        let radius = periodic_table.element_reprs[atom.kind as usize].radius;
+
+        // Expand the bounds by the atom's radius
+        min = min.min(atom.position - Vec3::splat(radius));
+        max = max.max(atom.position + Vec3::splat(radius));
+    }
+    let center = (min + max) * 0.5;
+    let half_extents = (max - min) * 0.5;
+
+    // Create the molecule from atoms & bonds
+    let molecule = Molecule { atoms, bonds };
+
+    // Return the asset with the molecule and its AABB
+    Ok(PdbAsset {
+        molecule,
+        aabb: Aabb {
+            center: center.into(),
+            half_extents: half_extents.into(),
+        },
+    })
+}
+
 impl AssetLoader for PdbAssetLoader {
     type Asset = PdbAsset;
     type Settings = ();
@@ -173,91 +265,7 @@ impl AssetLoader for PdbAssetLoader {
         reader.read_to_end(&mut buf).await?;
         let content = std::str::from_utf8(&buf)?;
 
-        let mut atoms = Vec::new();
-        let mut serial_to_index = HashMap::new();
-
-        // 1st pass: Parse the PDB file and extract all atom records
-        for (line_idx, line) in content.lines().enumerate() {
-            if line.starts_with("ATOM") || line.starts_with("HETATM") {
-                match parse_atom_record(line) {
-                    Ok((_, (serial, atom))) => {
-                        // Map serial number to index in our atoms array
-                        serial_to_index.insert(serial, atoms.len() as u32);
-
-                        // Add the atom to our atoms array
-                        atoms.push(atom);
-                    }
-                    Err(e) => {
-                        return Err(PdbAssetLoaderError::Io(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!("Error parsing PDB file on line {line_idx}, '{line}': {e:?}"),
-                        )));
-                    }
-                }
-            }
-        }
-
-        // 2nd pass: Parse the CONECT records and create bonds
-        let mut bonds = Vec::new();
-
-        for (line_idx, line) in content.lines().enumerate() {
-            if line.starts_with("CONECT") {
-                match parse_conect_record(line, &serial_to_index) {
-                    Ok((_, new_bonds)) => {
-                        bonds.extend(new_bonds);
-                    }
-                    Err(e) => {
-                        return Err(PdbAssetLoaderError::Io(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!("Error parsing PDB file on line {line_idx}, '{line}': {e:?}"),
-                        )));
-                    }
-                }
-            }
-        }
-
-        if atoms.is_empty() {
-            return Err(PdbAssetLoaderError::EmptyAtomList);
-        }
-
-        // Average the positions of the atoms
-        let mut avg_position = Vec3::ZERO;
-        for atom in atoms.iter() {
-            avg_position += atom.position;
-        }
-        avg_position /= atoms.len() as f32;
-
-        // Re-center the atoms
-        for atom in atoms.iter_mut() {
-            atom.position -= avg_position;
-        }
-
-        // Calculate AABB from atom positions including van der Waals radii
-        let mut min = Vec3::splat(f32::MAX);
-        let mut max = Vec3::splat(f32::MIN);
-        let periodic_table = PeriodicTable::new();
-        for atom in &atoms {
-            // Get the van der Waals radius for this atom
-            let radius = periodic_table.element_reprs[atom.kind as usize].radius;
-
-            // Expand the bounds by the atom's radius
-            min = min.min(atom.position - Vec3::splat(radius));
-            max = max.max(atom.position + Vec3::splat(radius));
-        }
-        let center = (min + max) * 0.5;
-        let half_extents = (max - min) * 0.5;
-
-        // Create the molecule from atoms & bonds
-        let molecule = Molecule { atoms, bonds };
-
-        // Return the asset with the molecule and its AABB
-        Ok(PdbAsset {
-            molecule,
-            aabb: Aabb {
-                center: center.into(),
-                half_extents: half_extents.into(),
-            },
-        })
+        parse_pdb_content(content)
     }
 
     fn extensions(&self) -> &[&str] {
@@ -273,6 +281,284 @@ impl Plugin for PdbLoaderPlugin {
         app.register_type::<PdbAsset>()
             .init_asset::<PdbAsset>()
             .init_asset_loader::<PdbAssetLoader>();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- parse_atom_record tests --
+
+    #[test]
+    fn parse_atom_record_standard_atom() {
+        let line = "ATOM      1  H   FINA   1     -39.522  10.295  -0.431  1.00  0.00";
+        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        assert_eq!(serial, "1");
+        assert_eq!(atom.kind, Element::Hydrogen as u32);
+        assert!((atom.position.x - (-39.522)).abs() < 1e-3);
+        assert!((atom.position.y - 10.295).abs() < 1e-3);
+        assert!((atom.position.z - (-0.431)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn parse_atom_record_carbon() {
+        let line = "ATOM      2  C   FINA   1      -0.961  37.711 -18.586  1.00  0.00";
+        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        assert_eq!(serial, "2");
+        assert_eq!(atom.kind, Element::Carbon as u32);
+        assert!((atom.position.x - (-0.961)).abs() < 1e-3);
+        assert!((atom.position.y - 37.711).abs() < 1e-3);
+        assert!((atom.position.z - (-18.586)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn parse_atom_record_two_letter_element() {
+        // SI is a two-letter element symbol
+        let line = "ATOM      9 SI   FINA   1       6.630  17.582 -10.256  1.00  0.00";
+        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        assert_eq!(serial, "9");
+        assert_eq!(atom.kind, Element::Silicon as u32);
+        assert!((atom.position.x - 6.630).abs() < 1e-3);
+    }
+
+    #[test]
+    fn parse_atom_record_hetatm() {
+        // Format matches the actual PDB files used by atomCAD (no separate chain ID token)
+        let line = "HETATM    1  NE  NEO     1      10.000  20.000  30.000  1.00  0.00";
+        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        assert_eq!(serial, "1");
+        assert_eq!(atom.kind, Element::Neon as u32);
+        assert!((atom.position.x - 10.0).abs() < 1e-3);
+        assert!((atom.position.y - 20.0).abs() < 1e-3);
+        assert!((atom.position.z - 30.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn parse_atom_record_unknown_element_returns_zero() {
+        let line = "ATOM      1  XX  FINA   1       1.000   2.000   3.000  1.00  0.00";
+        let (_, (_, atom)) = parse_atom_record(line).unwrap();
+        assert_eq!(atom.kind, 0); // Unknown element maps to 0
+    }
+
+    #[test]
+    fn parse_atom_record_rejects_non_atom_line() {
+        let line = "CONECT    1  344";
+        assert!(parse_atom_record(line).is_err());
+    }
+
+    #[test]
+    fn parse_atom_record_rejects_too_few_fields() {
+        let line = "ATOM      1  H   FINA   1";
+        assert!(parse_atom_record(line).is_err());
+    }
+
+    // -- parse_conect_record tests --
+
+    #[test]
+    fn parse_conect_single_bond() {
+        let mut serial_to_index = HashMap::new();
+        serial_to_index.insert("1", 0u32);
+        serial_to_index.insert("344", 1u32);
+        let line = "CONECT    1  344";
+        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        assert_eq!(bonds.len(), 1);
+        assert_eq!(bonds[0].atoms, [0, 1]);
+    }
+
+    #[test]
+    fn parse_conect_multiple_bonds() {
+        let mut serial_to_index = HashMap::new();
+        serial_to_index.insert("2", 0u32);
+        serial_to_index.insert("605", 1u32);
+        serial_to_index.insert("492", 2u32);
+        serial_to_index.insert("816", 3u32);
+        serial_to_index.insert("4726", 4u32);
+        let line = "CONECT    2  605  492  816 4726";
+        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        assert_eq!(bonds.len(), 4);
+        // All bonds should have central atom index 0, with targets 1..4
+        for (i, bond) in bonds.iter().enumerate() {
+            assert_eq!(bond.atoms[0], 0);
+            assert_eq!(bond.atoms[1], (i + 1) as u32);
+        }
+    }
+
+    #[test]
+    fn parse_conect_deduplicates_bidirectional_bonds() {
+        // When central_idx > target_idx, the bond should be skipped
+        // (it was already recorded from the other direction)
+        let mut serial_to_index = HashMap::new();
+        serial_to_index.insert("5", 5u32);
+        serial_to_index.insert("3", 3u32);
+        let line = "CONECT    5    3";
+        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        assert_eq!(bonds.len(), 0); // Skipped because 5 > 3
+    }
+
+    #[test]
+    fn parse_conect_rejects_non_conect_line() {
+        let serial_to_index = HashMap::new();
+        let line = "ATOM      1  H   FINA   1     -39.522  10.295  -0.431  1.00  0.00";
+        assert!(parse_conect_record(line, &serial_to_index).is_err());
+    }
+
+    #[test]
+    fn parse_conect_rejects_too_few_fields() {
+        let serial_to_index = HashMap::new();
+        let line = "CONECT    1";
+        assert!(parse_conect_record(line, &serial_to_index).is_err());
+    }
+
+    #[test]
+    fn parse_conect_skips_unknown_serial() {
+        // If a bonded atom serial isn't in the map, it's silently skipped
+        let mut serial_to_index = HashMap::new();
+        serial_to_index.insert("1", 0u32);
+        // serial "999" is not in the map
+        let line = "CONECT    1  999";
+        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        assert_eq!(bonds.len(), 0);
+    }
+
+    // -- get_element_id tests --
+
+    #[test]
+    fn get_element_id_known_elements() {
+        assert_eq!(get_element_id("H"), Element::Hydrogen as u32);
+        assert_eq!(get_element_id("C"), Element::Carbon as u32);
+        assert_eq!(get_element_id("N"), Element::Nitrogen as u32);
+        assert_eq!(get_element_id("O"), Element::Oxygen as u32);
+        assert_eq!(get_element_id("SI"), Element::Silicon as u32);
+        assert_eq!(get_element_id("S"), Element::Sulfur as u32);
+        assert_eq!(get_element_id("NE"), Element::Neon as u32);
+    }
+
+    #[test]
+    fn get_element_id_unknown_returns_zero() {
+        assert_eq!(get_element_id("XX"), 0);
+        assert_eq!(get_element_id(""), 0);
+    }
+
+    // -- parse_pdb_content (full pipeline) tests --
+
+    #[test]
+    fn parse_pdb_content_empty_returns_error() {
+        let result = parse_pdb_content("");
+        assert!(matches!(result, Err(PdbAssetLoaderError::EmptyAtomList)));
+    }
+
+    #[test]
+    fn parse_pdb_content_no_atoms_returns_error() {
+        let content = "REMARK  This file has no atoms\nEND\n";
+        let result = parse_pdb_content(content);
+        assert!(matches!(result, Err(PdbAssetLoaderError::EmptyAtomList)));
+    }
+
+    #[test]
+    fn parse_pdb_content_single_atom() {
+        let content = "ATOM      1  C   ALA     1       1.000   2.000   3.000  1.00  0.00\n";
+        let asset = parse_pdb_content(content).unwrap();
+
+        assert_eq!(asset.molecule.atoms.len(), 1);
+        assert_eq!(asset.molecule.bonds.len(), 0);
+        assert_eq!(asset.molecule.atoms[0].kind, Element::Carbon as u32);
+        // Single atom is re-centered to origin
+        assert!(asset.molecule.atoms[0].position.length() < 1e-5);
+    }
+
+    #[test]
+    fn parse_pdb_content_atoms_are_recentered() {
+        let content = "\
+ATOM      1  H   ALA     1      10.000  10.000  10.000  1.00  0.00
+ATOM      2  H   ALA     1      20.000  10.000  10.000  1.00  0.00
+";
+        let asset = parse_pdb_content(content).unwrap();
+
+        // Average position is (15, 10, 10), so atoms should be re-centered
+        let a0 = asset.molecule.atoms[0].position;
+        let a1 = asset.molecule.atoms[1].position;
+        assert!((a0.x - (-5.0)).abs() < 1e-5);
+        assert!((a0.y - 0.0).abs() < 1e-5);
+        assert!((a1.x - 5.0).abs() < 1e-5);
+        assert!((a1.y - 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn parse_pdb_content_with_bonds() {
+        let content = "\
+ATOM      1  C   ALA     1       0.000   0.000   0.000  1.00  0.00
+ATOM      2  C   ALA     1       1.540   0.000   0.000  1.00  0.00
+ATOM      3  H   ALA     1      -0.500   0.900   0.000  1.00  0.00
+CONECT    1    2    3
+CONECT    2    1
+CONECT    3    1
+";
+        let asset = parse_pdb_content(content).unwrap();
+
+        assert_eq!(asset.molecule.atoms.len(), 3);
+        // Bond 1-2 (indices 0-1) is recorded from CONECT 1 since 0 < 1
+        // Bond 1-3 (indices 0-2) is recorded from CONECT 1 since 0 < 2
+        // CONECT 2 has bond 2-1 which is skipped (1 > 0)
+        // CONECT 3 has bond 3-1 which is skipped (2 > 0)
+        assert_eq!(asset.molecule.bonds.len(), 2);
+        assert_eq!(asset.molecule.bonds[0].atoms, [0, 1]);
+        assert_eq!(asset.molecule.bonds[1].atoms, [0, 2]);
+    }
+
+    #[test]
+    fn parse_pdb_content_aabb_includes_radii() {
+        // Single hydrogen atom at origin after re-centering
+        let content = "ATOM      1  H   ALA     1       5.000   5.000   5.000  1.00  0.00\n";
+        let asset = parse_pdb_content(content).unwrap();
+
+        // Hydrogen van der Waals radius is 1.10
+        let he: Vec3 = asset.aabb.half_extents.into();
+        assert!((he.x - 1.10).abs() < 1e-3);
+        assert!((he.y - 1.10).abs() < 1e-3);
+        assert!((he.z - 1.10).abs() < 1e-3);
+    }
+
+    #[test]
+    fn parse_pdb_content_ignores_non_atom_lines() {
+        let content = "\
+HEADER    TEST FILE
+REMARK  This is a comment
+ATOM      1  C   ALA     1       0.000   0.000   0.000  1.00  0.00
+REMARK  Another comment
+END
+";
+        let asset = parse_pdb_content(content).unwrap();
+        assert_eq!(asset.molecule.atoms.len(), 1);
+    }
+
+    #[test]
+    fn parse_pdb_content_hetatm_and_atom_mixed() {
+        let content = "\
+ATOM      1  C   ALA     1       0.000   0.000   0.000  1.00  0.00
+HETATM    2  NE  NEO     1       3.000   0.000   0.000  1.00  0.00
+CONECT    1    2
+";
+        let asset = parse_pdb_content(content).unwrap();
+        assert_eq!(asset.molecule.atoms.len(), 2);
+        assert_eq!(asset.molecule.atoms[0].kind, Element::Carbon as u32);
+        assert_eq!(asset.molecule.atoms[1].kind, Element::Neon as u32);
+        assert_eq!(asset.molecule.bonds.len(), 1);
+    }
+
+    #[test]
+    fn parse_pdb_content_sulfur_element() {
+        let content = "ATOM     19  S   FINA   1     -32.286  26.687  -3.583  1.00  0.00\n";
+        let asset = parse_pdb_content(content).unwrap();
+        assert_eq!(asset.molecule.atoms[0].kind, Element::Sulfur as u32);
+    }
+
+    #[test]
+    fn parse_pdb_content_invalid_atom_line_returns_error() {
+        // Has ATOM prefix but not enough fields for coordinates
+        let content = "ATOM      1  C   ALA\n";
+        let result = parse_pdb_content(content);
+        assert!(result.is_err());
     }
 }
 
