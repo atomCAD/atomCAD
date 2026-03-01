@@ -53,6 +53,7 @@ pub enum Shortcut {
 #[derive(Clone, Copy)]
 pub enum SystemShortcut {
     Preferences,
+    OpenFile,
     HideApp,
     HideOthers,
     QuitApp,

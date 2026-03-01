@@ -100,6 +100,7 @@ fn build_menu(
                     menu::Shortcut::None => NSString::from_str(""),
                     menu::Shortcut::System(shortcut) => match shortcut {
                         SystemShortcut::Preferences => NSString::from_str(","),
+                        SystemShortcut::OpenFile => NSString::from_str("o"),
                         SystemShortcut::HideApp => NSString::from_str("h"),
                         SystemShortcut::HideOthers => NSString::from_str("h"),
                         SystemShortcut::QuitApp => NSString::from_str("q"),
@@ -116,6 +117,7 @@ fn build_menu(
                     menu::Shortcut::None => ModifierKeys::empty(),
                     menu::Shortcut::System(shortcut) => match shortcut {
                         SystemShortcut::Preferences => ModifierKeys::COMMAND,
+                        SystemShortcut::OpenFile => ModifierKeys::COMMAND,
                         SystemShortcut::HideApp => ModifierKeys::COMMAND,
                         SystemShortcut::HideOthers => ModifierKeys::COMMAND | ModifierKeys::OPTION,
                         SystemShortcut::QuitApp => ModifierKeys::COMMAND,

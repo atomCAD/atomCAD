@@ -4,8 +4,8 @@
 
 use std::sync::{Arc, Mutex, mpsc};
 
-use crate::{APP_NAME, CadViewPlugin, LoadingPlugin, SplashScreenPlugin};
-use bevy::{ecs::system::NonSendMarker, prelude::*};
+use crate::{APP_NAME, CadViewPlugin, LoadMolecule, LoadingPlugin, SplashScreenPlugin};
+use bevy::{ecs::system::NonSendMarker, prelude::*, tasks::IoTaskPool};
 use event_loop_waker::force_exit_after;
 use menu::prelude::*;
 
@@ -24,8 +24,9 @@ pub enum AppState {
     CadView,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum MenuAction {
+    Open { name: String, content: String },
     Quit,
 }
 
@@ -102,7 +103,36 @@ impl Plugin for AppPlugin {
                 }),
                 menu::Item::SubMenu(menu::Blueprint {
                     title: "File".into(),
-                    items: vec![],
+                    items: vec![{
+                        let menu_tx = menu_tx.clone();
+                        menu::Item::Entry {
+                            title: "Open...".into(),
+                            shortcut: menu::Shortcut::System(menu::SystemShortcut::OpenFile),
+                            action: menu::Action::User(Arc::new(move || {
+                                let menu_tx = menu_tx.clone();
+                                IoTaskPool::get()
+                                    .spawn(async move {
+                                        let file = rfd::AsyncFileDialog::new()
+                                            .add_filter("PDB", &["pdb"])
+                                            .pick_file()
+                                            .await;
+                                        if let Some(handle) = file {
+                                            let name = handle.file_name();
+                                            let bytes = handle.read().await;
+                                            let content =
+                                                String::from_utf8_lossy(&bytes).into_owned();
+                                            if menu_tx
+                                                .send(MenuAction::Open { name, content })
+                                                .is_err()
+                                            {
+                                                error!("Failed to send open file message.");
+                                            }
+                                        }
+                                    })
+                                    .detach();
+                            })),
+                        }
+                    }],
                 }),
                 menu::Item::SubMenu(menu::Blueprint {
                     title: "Edit".into(),
@@ -179,17 +209,24 @@ impl Plugin for AppPlugin {
         };
 
         app.init_state::<AppState>()
-            .add_systems(First, move |mut ev_app_exit: MessageWriter<AppExit>| {
-                if let Ok(receiver) = menu_rx.try_lock()
-                    && let Ok(action) = receiver.try_recv()
-                {
-                    match action {
-                        MenuAction::Quit => {
-                            ev_app_exit.write(AppExit::Success);
+            .add_systems(
+                First,
+                move |mut ev_app_exit: MessageWriter<AppExit>,
+                      mut ev_load: MessageWriter<LoadMolecule>| {
+                    if let Ok(receiver) = menu_rx.try_lock()
+                        && let Ok(action) = receiver.try_recv()
+                    {
+                        match action {
+                            MenuAction::Open { name, content } => {
+                                ev_load.write(LoadMolecule { name, content });
+                            }
+                            MenuAction::Quit => {
+                                ev_app_exit.write(AppExit::Success);
+                            }
                         }
                     }
-                }
-            })
+                },
+            )
             .add_plugins((
                 MenubarPlugin::new(menubar),
                 LoadingPlugin,

@@ -2,8 +2,6 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
-use std::path::PathBuf;
-
 use crate::pdb::parse_pdb_content;
 use crate::{
     AppState, CadCamera, CadCameraPlugin, FontAssetHandles, PdbAsset, PdbAssetHandles,
@@ -12,13 +10,16 @@ use crate::{
 use bevy::camera::primitives::Aabb;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
-use bevy::tasks::{IoTaskPool, Task, block_on, poll_once};
+use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, poll_once};
 use molecule::{Molecule, MoleculeRenderPlugin};
 
-/// Event to load a molecule from a PDB file at the given path,
+/// Message to load a molecule from PDB file content,
 /// replacing the currently displayed molecule.
 #[derive(Message)]
-pub struct LoadMoleculeFromFile(pub PathBuf);
+pub struct LoadMolecule {
+    pub name: String,
+    pub content: String,
+}
 
 pub struct CadViewPlugin;
 
@@ -33,7 +34,7 @@ impl Plugin for CadViewPlugin {
                 smoothing_factor: 0.2,
             },
         ))
-        .add_message::<LoadMoleculeFromFile>()
+        .add_message::<LoadMolecule>()
         .add_systems(OnEnter(AppState::CadView), setup_cad_view)
         .add_systems(OnExit(AppState::CadView), cleanup_cad_view)
         .add_systems(
@@ -137,14 +138,12 @@ fn setup_cad_view(
         });
 }
 
-fn start_loading_molecule(mut commands: Commands, mut events: MessageReader<LoadMoleculeFromFile>) {
-    if let Some(LoadMoleculeFromFile(path)) = events.read().last() {
-        let path = path.clone();
-        let task = IoTaskPool::get().spawn(async move {
-            let content = std::fs::read_to_string(&path)
-                .map_err(|e| format!("Failed to read file {}: {e}", path.display()))?;
-            parse_pdb_content(&content)
-                .map_err(|e| format!("Failed to parse PDB file {}: {e}", path.display()))
+fn start_loading_molecule(mut commands: Commands, mut events: MessageReader<LoadMolecule>) {
+    if let Some(event) = events.read().last() {
+        let name = event.name.clone();
+        let content = event.content.clone();
+        let task = AsyncComputeTaskPool::get().spawn(async move {
+            parse_pdb_content(&content).map_err(|e| format!("Failed to parse {}: {e}", name))
         });
         commands.insert_resource(PendingMolecule(task));
     }

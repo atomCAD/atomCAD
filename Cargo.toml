@@ -27,6 +27,8 @@ periodic-table = { package = "atomcad-periodic-table", path = "crates/periodic-t
 keyboard = { package = "atomcad-keyboard", path = "crates/keyboard" }
 # Serialization
 serde = "1"
+# UI
+rfd = "0.17"
 # Utilities
 bitflags = "2"
 bytemuck = "1"
@@ -65,6 +67,8 @@ periodic-table = { workspace = true }
 image.workspace = true
 # Rendering
 wgpu-types.workspace = true
+# UI
+rfd.workspace = true
 # Utilities
 bytemuck = { workspace = true }
 thiserror = { workspace = true }
