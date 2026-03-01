@@ -112,6 +112,7 @@ fn build_menu(
                         SystemShortcut::SelectAll => NSString::from_str("a"),
                         SystemShortcut::Delete => NSString::from_str("\u{8}"),
                     },
+                    menu::Shortcut::Custom(_, key) => NSString::from_str(&String::from(*key)),
                 };
                 let shotcutmodifiers = match shortcut {
                     menu::Shortcut::None => ModifierKeys::empty(),
@@ -129,6 +130,7 @@ fn build_menu(
                         SystemShortcut::SelectAll => ModifierKeys::COMMAND,
                         SystemShortcut::Delete => ModifierKeys::COMMAND,
                     },
+                    menu::Shortcut::Custom(modifiers, _) => *modifiers,
                 };
                 let is_custom_action = callback.is_some();
                 let item = mtm.alloc::<AtomCadMenuItem>();
@@ -146,7 +148,9 @@ fn build_menu(
                         item.setTarget(Some(&item));
                     }
                 }
-                if shotcutmodifiers != ModifierKeys::empty() {
+                if shotcutmodifiers != ModifierKeys::empty()
+                    || matches!(shortcut, menu::Shortcut::Custom(..))
+                {
                     let mut key_equivalent_modifier_mask = NSEventModifierFlags::empty();
                     if shotcutmodifiers.contains(ModifierKeys::CAPSLOCK) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::CapsLock);

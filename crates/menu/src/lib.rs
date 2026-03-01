@@ -6,6 +6,7 @@ mod platform_impl;
 
 mod blueprint;
 pub use blueprint::{Action, Blueprint, Item, Shortcut, SystemAction, SystemShortcut};
+pub use keyboard::ModifierKeys;
 
 mod plugin;
 pub use plugin::MenubarPlugin;
@@ -14,6 +15,7 @@ pub use plugin::MenubarPlugin;
 pub mod prelude {
     pub use crate::blueprint::{Action, Blueprint, Item, Shortcut, SystemAction, SystemShortcut};
     pub use crate::plugin::MenubarPlugin;
+    pub use keyboard::ModifierKeys;
 }
 
 use bevy::{prelude::*, winit::WinitWindows};

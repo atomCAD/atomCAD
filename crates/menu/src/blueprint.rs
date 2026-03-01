@@ -3,6 +3,7 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use bevy::prelude::*;
+use keyboard::ModifierKeys;
 use std::sync::Arc;
 
 /// A menubar is a hierarchical list of actions with attached titles and/or keyboard shortcuts.  It
@@ -45,6 +46,7 @@ pub enum Item {
 pub enum Shortcut {
     None,
     System(SystemShortcut),
+    Custom(ModifierKeys, char),
 }
 
 /// Common actions like copy-paste, file-open, and quit are usually bound to shortcuts that vary
