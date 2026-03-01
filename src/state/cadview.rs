@@ -6,9 +6,10 @@ use crate::{
     AppState, CadCamera, CadCameraPlugin, FontAssetHandles, PdbAsset, PdbAssetHandles,
     PdbLoaderPlugin,
 };
+use bevy::camera::primitives::Aabb;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
-use molecule::MoleculeRenderPlugin;
+use molecule::{Molecule, MoleculeRenderPlugin};
 
 pub struct CadViewPlugin;
 
@@ -40,45 +41,56 @@ struct OnCadView;
 #[derive(Component)]
 struct FpsText;
 
+fn spawn_molecule(commands: &mut Commands, molecule: Molecule, aabb: Aabb) -> Entity {
+    commands
+        .spawn((
+            molecule,
+            Transform::default(),
+            Visibility::default(),
+            aabb,
+            OnCadView,
+        ))
+        .id()
+}
+
+fn spawn_camera(commands: &mut Commands, aabb: &Aabb) -> Entity {
+    let center: Vec3 = aabb.center.into();
+    let half_extents: Vec3 = aabb.half_extents.into();
+
+    let camera_position = center + Vec3::new(0.0, half_extents.y * 2.0, half_extents.z * 4.0);
+    let focus_point = center;
+    let distance = camera_position.distance(focus_point);
+
+    commands
+        .spawn((
+            Camera3d::default(),
+            Transform::from_translation(camera_position).looking_at(focus_point, Vec3::Y),
+            CadCamera {
+                focus_point,
+                distance,
+                ..default()
+            },
+            OnCadView,
+        ))
+        .id()
+}
+
 fn setup_cad_view(
     mut commands: Commands,
     font_asset_handles: Res<FontAssetHandles>,
     pdb_asset_handles: Res<PdbAssetHandles>,
     pdb_assets: Res<Assets<PdbAsset>>,
 ) {
-    // Add an example molecule
     let neon_pump_imm = pdb_assets
         .get(&pdb_asset_handles.neon_pump_imm)
         .expect("Neon pump asset not loaded.");
 
-    // Get the molecule's AABB
-    let aabb = neon_pump_imm.aabb;
-    let center: Vec3 = aabb.center.into();
-    let half_extents: Vec3 = aabb.half_extents.into();
-
-    // Spawn a 3D camera
-    let camera_position = center + Vec3::new(0.0, half_extents.y * 2.0, half_extents.z * 4.0);
-    let focus_point = center;
-    let distance = camera_position.distance(focus_point);
-
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_translation(camera_position).looking_at(focus_point, Vec3::Y),
-        CadCamera {
-            focus_point,
-            distance,
-            ..default()
-        },
-        OnCadView,
-    ));
-
-    commands.spawn((
+    spawn_molecule(
+        &mut commands,
         neon_pump_imm.molecule.clone(),
-        Transform::default(),
-        Visibility::default(),
-        aabb,
-        OnCadView,
-    ));
+        neon_pump_imm.aabb,
+    );
+    spawn_camera(&mut commands, &neon_pump_imm.aabb);
 
     // Add FPS counter in the top-left corner
     commands
