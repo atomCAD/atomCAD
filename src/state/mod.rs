@@ -3,7 +3,7 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 mod cadview;
-pub use cadview::CadViewPlugin;
+pub use cadview::{CadViewPlugin, LoadMoleculeFromFile};
 
 mod loading;
 pub use loading::LoadingPlugin;

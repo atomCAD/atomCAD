@@ -2,6 +2,9 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
+use std::path::PathBuf;
+
+use crate::pdb::parse_pdb_content;
 use crate::{
     AppState, CadCamera, CadCameraPlugin, FontAssetHandles, PdbAsset, PdbAssetHandles,
     PdbLoaderPlugin,
@@ -9,7 +12,13 @@ use crate::{
 use bevy::camera::primitives::Aabb;
 use bevy::diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin};
 use bevy::prelude::*;
+use bevy::tasks::{IoTaskPool, Task, block_on, poll_once};
 use molecule::{Molecule, MoleculeRenderPlugin};
+
+/// Event to load a molecule from a PDB file at the given path,
+/// replacing the currently displayed molecule.
+#[derive(Message)]
+pub struct LoadMoleculeFromFile(pub PathBuf);
 
 pub struct CadViewPlugin;
 
@@ -24,11 +33,16 @@ impl Plugin for CadViewPlugin {
                 smoothing_factor: 0.2,
             },
         ))
+        .add_message::<LoadMoleculeFromFile>()
         .add_systems(OnEnter(AppState::CadView), setup_cad_view)
         .add_systems(OnExit(AppState::CadView), cleanup_cad_view)
         .add_systems(
             Update,
             update_fps_display.run_if(in_state(AppState::CadView)),
+        )
+        .add_systems(
+            Update,
+            (start_loading_molecule, finish_loading_molecule).run_if(in_state(AppState::CadView)),
         );
     }
 }
@@ -40,6 +54,10 @@ struct OnCadView;
 // Component to mark the FPS text entity
 #[derive(Component)]
 struct FpsText;
+
+/// Resource that holds an in-flight background task for loading a PDB file.
+#[derive(Resource)]
+struct PendingMolecule(Task<Result<PdbAsset, String>>);
 
 fn spawn_molecule(commands: &mut Commands, molecule: Molecule, aabb: Aabb) -> Entity {
     commands
@@ -119,6 +137,54 @@ fn setup_cad_view(
         });
 }
 
+fn start_loading_molecule(mut commands: Commands, mut events: MessageReader<LoadMoleculeFromFile>) {
+    if let Some(LoadMoleculeFromFile(path)) = events.read().last() {
+        let path = path.clone();
+        let task = IoTaskPool::get().spawn(async move {
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read file {}: {e}", path.display()))?;
+            parse_pdb_content(&content)
+                .map_err(|e| format!("Failed to parse PDB file {}: {e}", path.display()))
+        });
+        commands.insert_resource(PendingMolecule(task));
+    }
+}
+
+fn finish_loading_molecule(
+    mut commands: Commands,
+    pending: Option<ResMut<PendingMolecule>>,
+    molecule_query: Query<Entity, (With<Molecule>, With<OnCadView>)>,
+    camera_query: Query<Entity, (With<CadCamera>, With<OnCadView>)>,
+) {
+    let Some(mut pending) = pending else { return };
+
+    let result = match block_on(poll_once(&mut pending.0)) {
+        Some(result) => result,
+        None => return, // Still loading
+    };
+
+    commands.remove_resource::<PendingMolecule>();
+
+    let pdb_asset = match result {
+        Ok(asset) => asset,
+        Err(e) => {
+            error!("{e}");
+            return;
+        }
+    };
+
+    // Despawn existing molecule and camera
+    for entity in molecule_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in camera_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    spawn_molecule(&mut commands, pdb_asset.molecule, pdb_asset.aabb);
+    spawn_camera(&mut commands, &pdb_asset.aabb);
+}
+
 fn update_fps_display(
     diagnostics: Res<DiagnosticsStore>,
     mut query: Query<&mut Text, With<FpsText>>,
@@ -135,6 +201,8 @@ fn cleanup_cad_view(mut commands: Commands, entities: Query<Entity, With<OnCadVi
     for entity in entities.iter() {
         commands.entity(entity).despawn();
     }
+    // Cancel any in-flight background load so it doesn't complete after re-entering CadView.
+    commands.remove_resource::<PendingMolecule>();
 }
 
 // End of File

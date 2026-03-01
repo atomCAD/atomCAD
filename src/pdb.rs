@@ -155,7 +155,7 @@ pub enum PdbAssetLoaderError {
 ///
 /// This is the core parsing logic, extracted from the asset loader so it can be
 /// tested independently of Bevy's async asset loading infrastructure.
-fn parse_pdb_content(content: &str) -> Result<PdbAsset, PdbAssetLoaderError> {
+pub(crate) fn parse_pdb_content(content: &str) -> Result<PdbAsset, PdbAssetLoaderError> {
     let mut atoms = Vec::new();
     let mut serial_to_index = HashMap::new();
 

@@ -26,7 +26,7 @@ mod start;
 pub use start::start;
 
 mod state;
-pub use state::{CadViewPlugin, LoadingPlugin, SplashScreenPlugin};
+pub use state::{CadViewPlugin, LoadMoleculeFromFile, LoadingPlugin, SplashScreenPlugin};
 
 pub const APP_NAME: &str = "atomCAD";
 
