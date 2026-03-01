@@ -3,6 +3,7 @@
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
 use std::collections::HashMap;
+use std::fmt;
 
 use bevy::{
     asset::{AssetLoader, LoadContext},
@@ -10,7 +11,6 @@ use bevy::{
     prelude::*,
 };
 use molecule::{AtomInstance, BondInstance, Molecule};
-use nom::IResult;
 use periodic_table::{Element, PeriodicTable};
 use thiserror::Error as ThisError;
 
@@ -29,111 +29,105 @@ fn get_element_id(symbol: &str) -> u32 {
     Element::from_symbol(symbol).map_or(0, |e| e as u32)
 }
 
-/// Parse a float from a string
-fn parse_float(s: &str) -> Result<f32, std::num::ParseFloatError> {
-    s.trim().parse::<f32>()
+/// Error from parsing a single PDB record.
+#[derive(Debug)]
+struct RecordParseError(&'static str);
+
+impl fmt::Display for RecordParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
 }
 
-/// Parse an ATOM or HETATM record using whitespace separation
-fn parse_atom_record(line: &str) -> IResult<&str, (&str, AtomInstance)> {
-    // First, check if the line starts with ATOM or HETATM
+/// Extract and trim a column range from a PDB line.
+///
+/// Column indices are 0-based (PDB spec columns are 1-based, so subtract 1).
+/// Returns an error if the line is too short to contain the requested range.
+fn column(line: &str, start: usize, end: usize) -> Result<&str, RecordParseError> {
+    line.get(start..end)
+        .map(str::trim)
+        .ok_or(RecordParseError("line too short"))
+}
+
+/// Parse an ATOM or HETATM record using the PDB fixed-column format.
+///
+/// PDB column layout (1-indexed → 0-indexed):
+///    7-11 →  6..11  Atom serial number
+///   13-16 → 12..16  Atom name (used as element fallback)
+///   31-38 → 30..38  X coordinate (8.3 format)
+///   39-46 → 38..46  Y coordinate (8.3 format)
+///   47-54 → 46..54  Z coordinate (8.3 format)
+///   77-78 → 76..78  Element symbol (if present, preferred)
+fn parse_atom_record(line: &str) -> Result<(&str, AtomInstance), RecordParseError> {
     if !line.starts_with("ATOM") && !line.starts_with("HETATM") {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            line,
-            nom::error::ErrorKind::Tag,
-        )));
+        return Err(RecordParseError("not an ATOM or HETATM record"));
     }
 
-    // Split the line by whitespace
-    let tokens: Vec<&str> = line.split_whitespace().collect();
+    let serial = column(line, 6, 11)?;
 
-    // A valid PDB ATOM record should have at least 7 fields (for the coordinates)
-    if tokens.len() < 7 {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            line,
-            nom::error::ErrorKind::Verify,
-        )));
-    }
+    // Prefer the element symbol at columns 77-78 if present; fall back to atom name at 13-16.
+    let element = line
+        .get(76..78)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| line.get(12..16).map(str::trim))
+        .unwrap_or("");
 
-    // Serial number is the first field
-    if tokens.len() < 2 {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            line,
-            nom::error::ErrorKind::Verify,
-        )));
-    }
-    let serial = tokens[1].trim();
-
-    // Element symbol is the second field according to user
-    if tokens.len() < 3 {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            line,
-            nom::error::ErrorKind::Verify,
-        )));
-    }
-    let element = tokens[2].trim();
-
-    // Parse X, Y, Z coordinates (should be at positions 5, 6, 7 in tokens)
-    let x = parse_float(tokens[5])
-        .map_err(|_| nom::Err::Error(nom::error::Error::new(line, nom::error::ErrorKind::Float)))?;
-
-    let y = parse_float(tokens[6])
-        .map_err(|_| nom::Err::Error(nom::error::Error::new(line, nom::error::ErrorKind::Float)))?;
-
-    let z = parse_float(tokens[7])
-        .map_err(|_| nom::Err::Error(nom::error::Error::new(line, nom::error::ErrorKind::Float)))?;
+    let x: f32 = column(line, 30, 38)?
+        .parse()
+        .map_err(|_| RecordParseError("invalid X coordinate"))?;
+    let y: f32 = column(line, 38, 46)?
+        .parse()
+        .map_err(|_| RecordParseError("invalid Y coordinate"))?;
+    let z: f32 = column(line, 46, 54)?
+        .parse()
+        .map_err(|_| RecordParseError("invalid Z coordinate"))?;
 
     let element_id = get_element_id(element);
 
     Ok((
         serial,
-        (
-            serial,
-            AtomInstance {
-                position: Vec3::new(x, y, z),
-                kind: element_id,
-            },
-        ),
+        AtomInstance {
+            position: Vec3::new(x, y, z),
+            kind: element_id,
+        },
     ))
 }
 
-// Parse CONECT record
-fn parse_conect_record<'line>(
-    line: &'line str,
-    serial_to_index: &HashMap<&'line str, u32>,
-) -> IResult<&'line str, Vec<BondInstance>> {
-    // First, check if the line starts with CONECT
+/// Parse a CONECT record using the PDB fixed-column format.
+///
+/// PDB column layout (1-indexed → 0-indexed):
+///    7-11 →  6..11  Central atom serial number
+///   12-16 → 11..16  Bonded atom 1
+///   17-21 → 16..21  Bonded atom 2
+///   22-26 → 21..26  Bonded atom 3
+///   27-31 → 26..31  Bonded atom 4
+fn parse_conect_record(
+    line: &str,
+    serial_to_index: &HashMap<&str, u32>,
+) -> Result<Vec<BondInstance>, RecordParseError> {
     if !line.starts_with("CONECT") {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            line,
-            nom::error::ErrorKind::Tag,
-        )));
+        return Err(RecordParseError("not a CONECT record"));
     }
 
-    let tokens: Vec<&str> = line.split_whitespace().collect();
-    if tokens.len() < 3 {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            line,
-            nom::error::ErrorKind::Verify,
-        )));
-    }
+    let central_serial = column(line, 6, 11)?;
 
-    let central_serial = tokens[1].trim();
-
-    // Get the index for the central atom
-    let Some(&central_idx) = serial_to_index.get(&central_serial) else {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            line,
-            nom::error::ErrorKind::Verify,
-        )));
+    let Some(&central_idx) = serial_to_index.get(central_serial) else {
+        return Err(RecordParseError("unknown central atom serial"));
     };
 
     let mut bonds = Vec::new();
 
-    // Process all bonded atoms (from position 2 onwards)
-    for token in tokens.iter().skip(2) {
-        let target_serial = token.trim();
-        if let Some(&target_idx) = serial_to_index.get(&target_serial) {
+    // Bond serials occupy 5-character columns starting at position 11 (0-indexed).
+    for col_start in (11..line.len()).step_by(5) {
+        let col_end = (col_start + 5).min(line.len());
+        let Some(field) = line.get(col_start..col_end).map(str::trim) else {
+            break;
+        };
+        if field.is_empty() {
+            continue;
+        }
+        if let Some(&target_idx) = serial_to_index.get(field) {
             // Only add the bond if this direction hasn't been seen yet
             // (CONECT records sometimes list bonds in both directions)
             if central_idx < target_idx {
@@ -144,7 +138,7 @@ fn parse_conect_record<'line>(
         }
     }
 
-    Ok((line, bonds))
+    Ok(bonds)
 }
 
 #[derive(Debug, ThisError)]
@@ -169,7 +163,7 @@ fn parse_pdb_content(content: &str) -> Result<PdbAsset, PdbAssetLoaderError> {
     for (line_idx, line) in content.lines().enumerate() {
         if line.starts_with("ATOM") || line.starts_with("HETATM") {
             match parse_atom_record(line) {
-                Ok((_, (serial, atom))) => {
+                Ok((serial, atom)) => {
                     // Map serial number to index in our atoms array
                     serial_to_index.insert(serial, atoms.len() as u32);
 
@@ -192,7 +186,7 @@ fn parse_pdb_content(content: &str) -> Result<PdbAsset, PdbAssetLoaderError> {
     for (line_idx, line) in content.lines().enumerate() {
         if line.starts_with("CONECT") {
             match parse_conect_record(line, &serial_to_index) {
-                Ok((_, new_bonds)) => {
+                Ok(new_bonds) => {
                     bonds.extend(new_bonds);
                 }
                 Err(e) => {
@@ -293,7 +287,7 @@ mod tests {
     #[test]
     fn parse_atom_record_standard_atom() {
         let line = "ATOM      1  H   FINA   1     -39.522  10.295  -0.431  1.00  0.00";
-        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        let (serial, atom) = parse_atom_record(line).unwrap();
         assert_eq!(serial, "1");
         assert_eq!(atom.kind, Element::Hydrogen as u32);
         assert!((atom.position.x - (-39.522)).abs() < 1e-3);
@@ -304,7 +298,7 @@ mod tests {
     #[test]
     fn parse_atom_record_carbon() {
         let line = "ATOM      2  C   FINA   1      -0.961  37.711 -18.586  1.00  0.00";
-        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        let (serial, atom) = parse_atom_record(line).unwrap();
         assert_eq!(serial, "2");
         assert_eq!(atom.kind, Element::Carbon as u32);
         assert!((atom.position.x - (-0.961)).abs() < 1e-3);
@@ -316,7 +310,7 @@ mod tests {
     fn parse_atom_record_two_letter_element() {
         // SI is a two-letter element symbol
         let line = "ATOM      9 SI   FINA   1       6.630  17.582 -10.256  1.00  0.00";
-        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        let (serial, atom) = parse_atom_record(line).unwrap();
         assert_eq!(serial, "9");
         assert_eq!(atom.kind, Element::Silicon as u32);
         assert!((atom.position.x - 6.630).abs() < 1e-3);
@@ -324,9 +318,8 @@ mod tests {
 
     #[test]
     fn parse_atom_record_hetatm() {
-        // Format matches the actual PDB files used by atomCAD (no separate chain ID token)
         let line = "HETATM    1  NE  NEO     1      10.000  20.000  30.000  1.00  0.00";
-        let (_, (serial, atom)) = parse_atom_record(line).unwrap();
+        let (serial, atom) = parse_atom_record(line).unwrap();
         assert_eq!(serial, "1");
         assert_eq!(atom.kind, Element::Neon as u32);
         assert!((atom.position.x - 10.0).abs() < 1e-3);
@@ -335,9 +328,31 @@ mod tests {
     }
 
     #[test]
+    fn parse_atom_record_with_chain_id() {
+        // Standard PDB format with chain ID "A" — previously broke the whitespace parser
+        let line = "ATOM      1  N   ALA A   1       1.000   2.000   3.000  1.00  0.00";
+        let (serial, atom) = parse_atom_record(line).unwrap();
+        assert_eq!(serial, "1");
+        assert_eq!(atom.kind, Element::Nitrogen as u32);
+        assert!((atom.position.x - 1.0).abs() < 1e-3);
+        assert!((atom.position.y - 2.0).abs() < 1e-3);
+        assert!((atom.position.z - 3.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn parse_atom_record_with_element_columns_77_78() {
+        // When columns 77-78 contain the element symbol, prefer it over atom name.
+        // Atom name "CA" could be C-alpha, but element column says "C".
+        let line =
+            "ATOM      1  CA  ALA A   1       1.000   2.000   3.000  1.00  0.00           C  ";
+        let (_, atom) = parse_atom_record(line).unwrap();
+        assert_eq!(atom.kind, Element::Carbon as u32);
+    }
+
+    #[test]
     fn parse_atom_record_unknown_element_returns_zero() {
         let line = "ATOM      1  XX  FINA   1       1.000   2.000   3.000  1.00  0.00";
-        let (_, (_, atom)) = parse_atom_record(line).unwrap();
+        let (_, atom) = parse_atom_record(line).unwrap();
         assert_eq!(atom.kind, 0); // Unknown element maps to 0
     }
 
@@ -348,7 +363,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_atom_record_rejects_too_few_fields() {
+    fn parse_atom_record_rejects_too_short_line() {
+        // Line too short to contain coordinates
         let line = "ATOM      1  H   FINA   1";
         assert!(parse_atom_record(line).is_err());
     }
@@ -361,7 +377,7 @@ mod tests {
         serial_to_index.insert("1", 0u32);
         serial_to_index.insert("344", 1u32);
         let line = "CONECT    1  344";
-        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        let bonds = parse_conect_record(line, &serial_to_index).unwrap();
         assert_eq!(bonds.len(), 1);
         assert_eq!(bonds[0].atoms, [0, 1]);
     }
@@ -375,7 +391,7 @@ mod tests {
         serial_to_index.insert("816", 3u32);
         serial_to_index.insert("4726", 4u32);
         let line = "CONECT    2  605  492  816 4726";
-        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        let bonds = parse_conect_record(line, &serial_to_index).unwrap();
         assert_eq!(bonds.len(), 4);
         // All bonds should have central atom index 0, with targets 1..4
         for (i, bond) in bonds.iter().enumerate() {
@@ -392,7 +408,7 @@ mod tests {
         serial_to_index.insert("5", 5u32);
         serial_to_index.insert("3", 3u32);
         let line = "CONECT    5    3";
-        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        let bonds = parse_conect_record(line, &serial_to_index).unwrap();
         assert_eq!(bonds.len(), 0); // Skipped because 5 > 3
     }
 
@@ -404,9 +420,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_conect_rejects_too_few_fields() {
+    fn parse_conect_rejects_too_short_line() {
         let serial_to_index = HashMap::new();
-        let line = "CONECT    1";
+        let line = "CONECT";
         assert!(parse_conect_record(line, &serial_to_index).is_err());
     }
 
@@ -417,8 +433,25 @@ mod tests {
         serial_to_index.insert("1", 0u32);
         // serial "999" is not in the map
         let line = "CONECT    1  999";
-        let (_, bonds) = parse_conect_record(line, &serial_to_index).unwrap();
+        let bonds = parse_conect_record(line, &serial_to_index).unwrap();
         assert_eq!(bonds.len(), 0);
+    }
+
+    #[test]
+    fn parse_does_not_panic_on_non_ascii() {
+        // Multi-byte UTF-8 in a text field (residue name) shifts all subsequent column
+        // boundaries. U+1F4A3 is 4 bytes, so columns after it are misaligned.
+        // The parser should return an error rather than panic on the shifted coordinates.
+        let atom_line =
+            "ATOM      1  H   \u{1F4A3}       1       1.000   2.000   3.000  1.00  0.00";
+        assert!(parse_atom_record(atom_line).is_err());
+
+        // Multi-byte UTF-8 in a bond serial column should not panic.
+        let conect_line = "CONECT    1  \u{1F4A3}  ";
+        let mut serial_to_index = HashMap::new();
+        serial_to_index.insert("1", 0u32);
+        let bonds = parse_conect_record(conect_line, &serial_to_index).unwrap();
+        assert!(bonds.is_empty());
     }
 
     // -- get_element_id tests --
@@ -543,6 +576,21 @@ CONECT    1    2
         assert_eq!(asset.molecule.atoms.len(), 2);
         assert_eq!(asset.molecule.atoms[0].kind, Element::Carbon as u32);
         assert_eq!(asset.molecule.atoms[1].kind, Element::Neon as u32);
+        assert_eq!(asset.molecule.bonds.len(), 1);
+    }
+
+    #[test]
+    fn parse_pdb_content_with_chain_ids() {
+        // Standard PDB format with chain ID "A" — this broke the old whitespace parser
+        let content = "\
+ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00
+ATOM      2  C   ALA A   1       1.540   0.000   0.000  1.00  0.00
+CONECT    1    2
+";
+        let asset = parse_pdb_content(content).unwrap();
+        assert_eq!(asset.molecule.atoms.len(), 2);
+        assert_eq!(asset.molecule.atoms[0].kind, Element::Nitrogen as u32);
+        assert_eq!(asset.molecule.atoms[1].kind, Element::Carbon as u32);
         assert_eq!(asset.molecule.bonds.len(), 1);
     }
 
