@@ -114,7 +114,7 @@ fn build_menu(
                     },
                     menu::Shortcut::Custom(_, key) => NSString::from_str(&String::from(*key)),
                 };
-                let shotcutmodifiers = match shortcut {
+                let shortcutmodifiers = match shortcut {
                     menu::Shortcut::None => ModifierKeys::empty(),
                     menu::Shortcut::System(shortcut) => match shortcut {
                         SystemShortcut::Preferences => ModifierKeys::COMMAND,
@@ -148,32 +148,32 @@ fn build_menu(
                         item.setTarget(Some(&item));
                     }
                 }
-                if shotcutmodifiers != ModifierKeys::empty()
+                if shortcutmodifiers != ModifierKeys::empty()
                     || matches!(shortcut, menu::Shortcut::Custom(..))
                 {
                     let mut key_equivalent_modifier_mask = NSEventModifierFlags::empty();
-                    if shotcutmodifiers.contains(ModifierKeys::CAPSLOCK) {
+                    if shortcutmodifiers.contains(ModifierKeys::CAPSLOCK) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::CapsLock);
                     }
-                    if shotcutmodifiers.contains(ModifierKeys::SHIFT) {
+                    if shortcutmodifiers.contains(ModifierKeys::SHIFT) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::Shift);
                     }
-                    if shotcutmodifiers.contains(ModifierKeys::CONTROL) {
+                    if shortcutmodifiers.contains(ModifierKeys::CONTROL) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::Control);
                     }
-                    if shotcutmodifiers.contains(ModifierKeys::OPTION) {
+                    if shortcutmodifiers.contains(ModifierKeys::OPTION) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::Option);
                     }
-                    if shotcutmodifiers.contains(ModifierKeys::COMMAND) {
+                    if shortcutmodifiers.contains(ModifierKeys::COMMAND) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::Command);
                     }
-                    if shotcutmodifiers.contains(ModifierKeys::NUMPAD) {
+                    if shortcutmodifiers.contains(ModifierKeys::NUMPAD) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::NumericPad);
                     }
-                    if shotcutmodifiers.contains(ModifierKeys::HELP) {
+                    if shortcutmodifiers.contains(ModifierKeys::HELP) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::Help);
                     }
-                    if shotcutmodifiers.contains(ModifierKeys::FUNCTION) {
+                    if shortcutmodifiers.contains(ModifierKeys::FUNCTION) {
                         key_equivalent_modifier_mask.insert(NSEventModifierFlags::Function);
                     }
                     item.setKeyEquivalentModifierMask(key_equivalent_modifier_mask);
