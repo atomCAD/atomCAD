@@ -1,6 +1,7 @@
-use glam::f64::DVec3;
+use glam::f64::{DQuat, DVec3};
 use rust_lib_flutter_cad::api::common_api_types::SelectModifier;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use std::f64::consts::PI;
 
 // ============================================================================
 // Helper Functions
@@ -468,7 +469,6 @@ fn test_decorator_selection_transform() {
 
     assert!(structure.decorator().selection_transform.is_none());
 
-    use glam::f64::DQuat;
     use rust_lib_flutter_cad::util::transform::Transform;
 
     let transform = Transform::new(DVec3::new(1.0, 2.0, 3.0), DQuat::IDENTITY);
@@ -581,9 +581,6 @@ fn test_transform_selected_atoms() {
     let id2 = structure.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
 
     structure.select(&vec![id1, id2], &vec![], SelectModifier::Replace);
-
-    use glam::f64::DQuat;
-    use rust_lib_flutter_cad::util::transform::Transform;
 
     let translation = DVec3::new(5.0, 0.0, 0.0);
     structure.transform_atom(id1, &DQuat::IDENTITY, &translation);
@@ -708,4 +705,107 @@ fn test_deleted_ids_not_reused() {
         1,
         "Should have 1 atom after delete and add"
     );
+}
+
+// ============================================================================
+// Group 8: Diff Structure Transform Tests (Phase 1)
+// ============================================================================
+
+#[test]
+fn transform_moves_anchor_positions() {
+    let mut structure = AtomicStructure::new_diff();
+    let atom_id = structure.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    structure.set_anchor_position(atom_id, DVec3::new(0.0, 0.0, 0.0));
+
+    structure.transform(&DQuat::IDENTITY, &DVec3::new(5.0, 0.0, 0.0));
+
+    let atom = structure.get_atom(atom_id).unwrap();
+    assert!(
+        atom.position.distance(DVec3::new(6.0, 0.0, 0.0)) < 1e-10,
+        "Atom should be at (6, 0, 0), got {:?}",
+        atom.position
+    );
+    let anchor = structure.anchor_position(atom_id).unwrap();
+    assert!(
+        anchor.distance(DVec3::new(5.0, 0.0, 0.0)) < 1e-10,
+        "Anchor should be at (5, 0, 0), got {:?}",
+        anchor
+    );
+}
+
+#[test]
+fn transform_rotates_anchor_positions() {
+    let mut structure = AtomicStructure::new_diff();
+    let atom_id = structure.add_atom(6, DVec3::new(2.0, 0.0, 0.0));
+    structure.set_anchor_position(atom_id, DVec3::new(1.0, 0.0, 0.0));
+
+    let rotation = DQuat::from_rotation_z(PI / 2.0);
+    structure.transform(&rotation, &DVec3::ZERO);
+
+    let atom = structure.get_atom(atom_id).unwrap();
+    assert!(
+        atom.position.distance(DVec3::new(0.0, 2.0, 0.0)) < 1e-10,
+        "Atom should be at (0, 2, 0), got {:?}",
+        atom.position
+    );
+    let anchor = structure.anchor_position(atom_id).unwrap();
+    assert!(
+        anchor.distance(DVec3::new(0.0, 1.0, 0.0)) < 1e-10,
+        "Anchor should be at (0, 1, 0), got {:?}",
+        anchor
+    );
+}
+
+#[test]
+fn transform_atom_does_not_move_anchors() {
+    let mut structure = AtomicStructure::new_diff();
+    let atom_id = structure.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    structure.set_anchor_position(atom_id, DVec3::new(0.0, 0.0, 0.0));
+
+    structure.transform_atom(atom_id, &DQuat::IDENTITY, &DVec3::new(5.0, 0.0, 0.0));
+
+    let atom = structure.get_atom(atom_id).unwrap();
+    assert!(
+        atom.position.distance(DVec3::new(6.0, 0.0, 0.0)) < 1e-10,
+        "Atom should be at (6, 0, 0), got {:?}",
+        atom.position
+    );
+    let anchor = structure.anchor_position(atom_id).unwrap();
+    assert!(
+        anchor.distance(DVec3::ZERO) < 1e-10,
+        "Anchor should remain at (0, 0, 0), got {:?}",
+        anchor
+    );
+}
+
+#[test]
+fn transform_with_no_anchors_is_noop() {
+    let mut structure = AtomicStructure::new();
+    let id1 = structure.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    let id2 = structure.add_atom(8, DVec3::new(0.0, 2.0, 0.0));
+    structure.add_bond(id1, id2, 1);
+
+    let rotation = DQuat::from_rotation_z(PI / 2.0);
+    let translation = DVec3::new(1.0, 1.0, 0.0);
+    structure.transform(&rotation, &translation);
+
+    // Atom 1: rotate (1,0,0) by 90° around Z -> (0,1,0), then translate -> (1,2,0)
+    let atom1 = structure.get_atom(id1).unwrap();
+    assert!(
+        atom1.position.distance(DVec3::new(1.0, 2.0, 0.0)) < 1e-10,
+        "Atom 1 should be at (1, 2, 0), got {:?}",
+        atom1.position
+    );
+
+    // Atom 2: rotate (0,2,0) by 90° around Z -> (-2,0,0), then translate -> (-1,1,0)
+    let atom2 = structure.get_atom(id2).unwrap();
+    assert!(
+        atom2.position.distance(DVec3::new(-1.0, 1.0, 0.0)) < 1e-10,
+        "Atom 2 should be at (-1, 1, 0), got {:?}",
+        atom2.position
+    );
+
+    // Bonds should still exist
+    assert!(structure.has_bond_between(id1, id2));
+    assert_eq!(structure.get_num_of_bonds(), 1);
 }

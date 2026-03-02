@@ -677,6 +677,12 @@ impl AtomicStructure {
         for atom_id in atom_ids {
             self.transform_atom(atom_id, rotation, translation);
         }
+
+        // Also transform anchor positions (for diff structures).
+        // When anchor_positions is empty (non-diff structures) this is a no-op.
+        for pos in self.anchor_positions.values_mut() {
+            *pos = rotation.mul_vec3(*pos) + *translation;
+        }
     }
 
     /// Replaces the atomic number of an atom with a new value
