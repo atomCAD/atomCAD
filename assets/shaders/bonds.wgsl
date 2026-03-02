@@ -181,8 +181,4 @@ fn sdCapsule(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
     return length(pa - ba * h) - r;
 }
 
-fn map(value: f32, low1: f32, high1: f32, low2: f32, high2: f32) -> f32 {
-    return low2 + (value - low1) * (high2 - low2) / (high1 - low1);
-}
-
 // End of File
