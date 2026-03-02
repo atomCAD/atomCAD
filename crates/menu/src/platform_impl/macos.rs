@@ -198,7 +198,6 @@ fn build_menu(
 }
 
 pub fn configure_event_loop(windows: NonSend<WinitWindows>) {
-    //event_loop_builder.with_default_menu(false);
     let _ = windows;
 }
 
