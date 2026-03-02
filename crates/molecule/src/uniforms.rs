@@ -57,6 +57,10 @@ pub(crate) fn prepare_atom_uniforms_bind_group(
     render_device: Res<RenderDevice>,
     atom_buffers: Query<(Entity, &AtomGpuBuffers)>,
 ) {
+    let Some(view_binding) = view_uniforms.uniforms.binding() else {
+        return;
+    };
+
     for (entity, gpu_buffers) in atom_buffers.iter() {
         let bind_group = render_device.create_bind_group(
             Some("atom_uniforms_bind_group"),
@@ -65,7 +69,7 @@ pub(crate) fn prepare_atom_uniforms_bind_group(
                 // Binding 0: View uniforms
                 BindGroupEntry {
                     binding: 0,
-                    resource: view_uniforms.uniforms.binding().unwrap(),
+                    resource: view_binding.clone(),
                 },
                 // Binding 1: Entity global transform
                 BindGroupEntry {
@@ -112,6 +116,10 @@ pub(crate) fn prepare_bond_uniforms_bind_group(
     render_device: Res<RenderDevice>,
     bond_buffers: Query<(Entity, &BondGpuBuffers)>,
 ) {
+    let Some(view_binding) = view_uniforms.uniforms.binding() else {
+        return;
+    };
+
     for (entity, gpu_buffers) in bond_buffers.iter() {
         let bind_group = render_device.create_bind_group(
             Some("bond_uniforms_bind_group"),
@@ -120,7 +128,7 @@ pub(crate) fn prepare_bond_uniforms_bind_group(
                 // Binding 0: View uniforms
                 BindGroupEntry {
                     binding: 0,
-                    resource: view_uniforms.uniforms.binding().unwrap(),
+                    resource: view_binding.clone(),
                 },
                 // Binding 1: Entity global transform
                 BindGroupEntry {
