@@ -101,7 +101,8 @@
       "Bash(tee:*)",
       "Bash(select-string:*)",
       "Bash(wc:*)",
-      "Bash(dart pub add:*)"
+      "Bash(dart pub add:*)",
+      "Bash(do echo:*)"
     ]
   }
 }
