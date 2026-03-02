@@ -20,7 +20,7 @@ pub fn start() -> AppExit {
         primary_window: Some(Window {
             title: APP_NAME.into(),
             present_mode: PresentMode::AutoNoVsync,
-            canvas: Some("#bevy".to_owned()), // For web; no effect elewhere.
+            canvas: Some("#bevy".to_owned()), // For web; no effect elsewhere.
             prevent_default_event_handling: true, // Capture browser hotkeys.
             ..default()
         }),
