@@ -72,7 +72,7 @@ fn spawn_molecule(commands: &mut Commands, molecule: Molecule, aabb: Aabb) -> En
         .id()
 }
 
-fn spawn_camera(commands: &mut Commands, aabb: &Aabb) -> Entity {
+fn spawn_camera(commands: &mut Commands, aabb: Aabb) -> Entity {
     let center: Vec3 = aabb.center.into();
     let half_extents: Vec3 = aabb.half_extents.into();
 
@@ -109,7 +109,7 @@ fn setup_cad_view(
         neon_pump_imm.molecule.clone(),
         neon_pump_imm.aabb,
     );
-    spawn_camera(&mut commands, &neon_pump_imm.aabb);
+    spawn_camera(&mut commands, neon_pump_imm.aabb);
 
     // Add FPS counter in the top-left corner
     commands
@@ -181,7 +181,7 @@ fn finish_loading_molecule(
     }
 
     spawn_molecule(&mut commands, pdb_asset.molecule, pdb_asset.aabb);
-    spawn_camera(&mut commands, &pdb_asset.aabb);
+    spawn_camera(&mut commands, pdb_asset.aabb);
 }
 
 fn update_fps_display(
