@@ -18,7 +18,7 @@ struct ElementProperties {
 
 struct PeriodicTable {
     // Elemental identity is low 7 bits of kind, so max 128 elements
-    elements: array<ElementProperties, 118>,
+    elements: array<ElementProperties, 119>,
 }
 
 struct VdwScaleUniform {
