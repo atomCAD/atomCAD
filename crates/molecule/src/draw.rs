@@ -144,7 +144,6 @@ pub(crate) fn queue_molecule_draw_commands(
                         None => bond_entity.into(),
                     },
                 ),
-                // (bond_entity, bonds.main_entity)
                 InputUniformIndex::default(),
                 BinnedRenderPhaseType::NonMesh,
                 bond_tick,
