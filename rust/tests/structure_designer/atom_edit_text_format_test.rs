@@ -418,7 +418,7 @@ fn test_get_text_properties_empty_diff() {
     let prop_map: HashMap<String, &TextValue> = props.iter().map(|(k, v)| (k.clone(), v)).collect();
     assert_eq!(*prop_map["diff"], TextValue::String("".to_string()));
     assert_eq!(*prop_map["output_diff"], TextValue::Bool(false));
-    assert_eq!(*prop_map["show_anchor_arrows"], TextValue::Bool(false));
+    assert_eq!(*prop_map["show_anchor_arrows"], TextValue::Bool(true));
     assert_eq!(*prop_map["tolerance"], TextValue::Float(0.1));
 }
 

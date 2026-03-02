@@ -123,10 +123,10 @@ No changes needed in `atom_move`, `atom_rot`, or `atom_trans` — they already c
 5. Assert anchor position is (5, 0, 0)
 
 **Test: `transform_rotates_anchor_positions`**
-1. Create a diff structure with atom at (1, 0, 0) and anchor at (0, 0, 0)
+1. Create a diff structure with atom at (2, 0, 0) and anchor at (1, 0, 0)
 2. Call `transform(&DQuat::from_rotation_z(PI/2), &DVec3::ZERO)`
-3. Assert atom position is approximately (0, 1, 0)
-4. Assert anchor position is approximately (0, 0, 0) (origin unchanged by rotation)
+3. Assert atom position is approximately (0, 2, 0)
+4. Assert anchor position is approximately (0, 1, 0)
 
 **Test: `transform_atom_does_not_move_anchors`**
 1. Create a diff structure with atom at (1, 0, 0) and anchor at (0, 0, 0)

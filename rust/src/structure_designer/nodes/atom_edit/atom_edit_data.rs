@@ -79,7 +79,7 @@ impl AtomEditData {
         Self {
             diff: AtomicStructure::new_diff(),
             output_diff: false,
-            show_anchor_arrows: false,
+            show_anchor_arrows: true,
             include_base_bonds_in_diff: true,
             tolerance: DEFAULT_TOLERANCE,
             error_on_stale_entries: false,
