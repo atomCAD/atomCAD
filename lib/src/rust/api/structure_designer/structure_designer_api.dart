@@ -347,6 +347,11 @@ APIAtomCutData? getAtomCutData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetAtomCutData(
         nodeId: nodeId);
 
+APIApplyDiffData? getApplyDiffData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetApplyDiffData(
+        nodeId: nodeId);
+
 APIImportXYZData? getImportXyzData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetImportXyzData(
@@ -563,6 +568,12 @@ void setAtomTransData(
 void setAtomCutData({required BigInt nodeId, required APIAtomCutData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetAtomCutData(
+            nodeId: nodeId, data: data);
+
+void setApplyDiffData(
+        {required BigInt nodeId, required APIApplyDiffData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetApplyDiffData(
             nodeId: nodeId, data: data);
 
 void setImportXyzData(

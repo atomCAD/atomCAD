@@ -36,6 +36,7 @@ use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::common_api_types::APIResult;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
+use crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomMoveData;
@@ -73,6 +74,7 @@ use crate::crystolecule::unit_cell_symmetries::{
 use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::layout;
+use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
@@ -1625,6 +1627,33 @@ pub fn get_atom_cut_data(node_id: u64) -> Option<APIAtomCutData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_apply_diff_data(node_id: u64) -> Option<APIApplyDiffData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let apply_diff_data =
+                    match node_data.as_any_ref().downcast_ref::<ApplyDiffData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
+                Some(APIApplyDiffData {
+                    tolerance: apply_diff_data.tolerance,
+                    error_on_stale: apply_diff_data.error_on_stale,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_import_xyz_data(node_id: u64) -> Option<APIImportXYZData> {
     unsafe {
         with_cad_instance_or(
@@ -2978,6 +3007,22 @@ pub fn set_atom_cut_data(node_id: u64, data: APIAtomCutData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, atom_cut_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_apply_diff_data(node_id: u64, data: APIApplyDiffData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let apply_diff_data = Box::new(ApplyDiffData {
+                tolerance: data.tolerance,
+                error_on_stale: data.error_on_stale,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, apply_diff_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

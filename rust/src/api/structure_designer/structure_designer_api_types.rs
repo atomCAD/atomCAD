@@ -615,6 +615,11 @@ pub struct APICommentData {
     pub height: f64,
 }
 
+pub struct APIApplyDiffData {
+    pub tolerance: f64,
+    pub error_on_stale: bool,
+}
+
 pub struct APIAtomCutData {
     pub cut_sdf_value: f64,
     pub unit_cell_size: f64,

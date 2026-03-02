@@ -85,6 +85,27 @@ class APIAddBondMoveResult {
           bondOrder == other.bondOrder;
 }
 
+class APIApplyDiffData {
+  final double tolerance;
+  final bool errorOnStale;
+
+  const APIApplyDiffData({
+    required this.tolerance,
+    required this.errorOnStale,
+  });
+
+  @override
+  int get hashCode => tolerance.hashCode ^ errorOnStale.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIApplyDiffData &&
+          runtimeType == other.runtimeType &&
+          tolerance == other.tolerance &&
+          errorOnStale == other.errorOnStale;
+}
+
 class APIAtomCutData {
   final double cutSdfValue;
   final double unitCellSize;
