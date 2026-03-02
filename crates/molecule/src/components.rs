@@ -66,7 +66,8 @@ pub struct DenormalizedBondInstance {
 ///                 BondInstance { atoms: [0, 1] }, // Bond between H and O
 ///             ],
 ///         },
-///         TransformBundle::default(),
+///         Transform::default(),
+///         Visibility::default(),
 ///     ));
 /// }
 /// # }
