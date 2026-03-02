@@ -47,11 +47,9 @@ struct BondVertexOutput {
     @location(0) world_position: vec3<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) @interpolate(flat) atom1_center: vec3<f32>,
-    @location(3) @interpolate(flat) atom1_radius: f32,
-    @location(4) @interpolate(flat) atom2_center: vec3<f32>,
-    @location(5) @interpolate(flat) atom2_radius: f32,
-    @location(6) @interpolate(flat) bond_radius: f32,
-    @location(7) @interpolate(flat) bond_color: vec3<f32>,
+    @location(3) @interpolate(flat) atom2_center: vec3<f32>,
+    @location(4) @interpolate(flat) bond_radius: f32,
+    @location(5) @interpolate(flat) bond_color: vec3<f32>,
 }
 
 @vertex
@@ -111,9 +109,6 @@ fn vertex(vertex: BondVertexInput) -> BondVertexOutput {
     out.atom1_center = atom1_center;
     out.atom2_center = atom2_center;
     out.bond_radius = bond_radius;
-    out.atom1_radius = atom1_radius;
-    out.atom2_radius = atom2_radius;
-
     return out;
 }
 
