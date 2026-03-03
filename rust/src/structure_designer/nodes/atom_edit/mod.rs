@@ -2,6 +2,7 @@ mod add_atom_tool;
 mod add_bond_tool;
 mod atom_edit_data;
 mod default_tool;
+mod hydrogen_passivation;
 pub mod measurement;
 mod minimization;
 mod modify_measurement;
@@ -19,6 +20,7 @@ pub mod atom_edit {
     pub use super::add_bond_tool::*;
     pub use super::atom_edit_data::*;
     pub use super::default_tool::*;
+    pub use super::hydrogen_passivation::*;
     pub use super::measurement::*;
     pub use super::minimization::*;
     pub use super::modify_measurement::*;
