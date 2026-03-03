@@ -11,12 +11,16 @@ class LatticeMoveEditor extends StatefulWidget {
   final BigInt nodeId;
   final APILatticeMoveData? data;
   final StructureDesignerModel model;
+  final String title;
+  final String nodeTypeName;
 
   const LatticeMoveEditor({
     super.key,
     required this.nodeId,
     required this.data,
     required this.model,
+    this.title = 'Lattice Move Properties',
+    this.nodeTypeName = 'lattice_move',
   });
 
   @override
@@ -35,9 +39,9 @@ class _LatticeMoveEditorState extends State<LatticeMoveEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const NodeEditorHeader(
-            title: 'Lattice Move Properties',
-            nodeTypeName: 'lattice_move',
+          NodeEditorHeader(
+            title: widget.title,
+            nodeTypeName: widget.nodeTypeName,
           ),
           const SizedBox(height: 16),
 

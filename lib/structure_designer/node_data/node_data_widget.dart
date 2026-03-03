@@ -222,6 +222,16 @@ class NodeDataWidget extends StatelessWidget {
           data: latticeMoveData,
           model: model,
         );
+      case 'atom_lmove':
+        final atomLmoveData = model.getLatticeMoveData(selectedNode.id);
+
+        return LatticeMoveEditor(
+          nodeId: selectedNode.id,
+          data: atomLmoveData,
+          model: model,
+          title: 'Atom Lattice Move Properties',
+          nodeTypeName: 'atom_lmove',
+        );
       case 'lattice_rot':
         // Fetch the lattice rotation data here in the parent widget
         final latticeRotData = model.getLatticeRotData(selectedNode.id);
@@ -230,6 +240,16 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: latticeRotData,
           model: model,
+        );
+      case 'atom_lrot':
+        final atomLrotData = model.getLatticeRotData(selectedNode.id);
+
+        return LatticeRotEditor(
+          nodeId: selectedNode.id,
+          data: atomLrotData,
+          model: model,
+          title: 'Atom Lattice Rotation Properties',
+          nodeTypeName: 'atom_lrot',
         );
       case 'atom_move':
         // Fetch the atom move data here in the parent widget
