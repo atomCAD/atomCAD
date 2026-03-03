@@ -41,6 +41,8 @@ pub struct LatticeMoveData {
     pub translation: IVec3,
     #[serde(default = "default_lattice_subdivision")]
     pub lattice_subdivision: i32,
+    #[serde(default)] // false for backward compat with existing lattice_move nodes
+    pub is_atomic_mode: bool,
 }
 
 fn default_lattice_subdivision() -> i32 {
@@ -75,45 +77,79 @@ impl NodeData for LatticeMoveData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-        let shape_val =
+        let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
-        if let NetworkResult::Error(_) = shape_val {
-            shape_val
-        } else if let NetworkResult::Geometry(shape) = shape_val {
-            let translation = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.translation,
-                NetworkResult::extract_ivec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return error,
-            };
+        if let NetworkResult::Error(_) = input_val {
+            return input_val;
+        }
 
-            let lattice_subdivision = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.lattice_subdivision,
-                NetworkResult::extract_int,
-            ) {
-                Ok(value) => value.max(1), // Ensure minimum value of 1
-                Err(error) => return error,
-            };
+        // Shared: read translation (pin 1) and subdivision (pin 2)
+        let translation = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.translation,
+            NetworkResult::extract_ivec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
 
-            let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
+        let lattice_subdivision = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            self.lattice_subdivision,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value.max(1), // Ensure minimum value of 1
+            Err(error) => return error,
+        };
+
+        let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
+
+        if self.is_atomic_mode {
+            if let NetworkResult::Atomic(structure) = input_val {
+                // Get unit_cell from pin 3 (required in atomic mode)
+                let unit_cell = match network_evaluator.evaluate_required(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    3,
+                    NetworkResult::extract_unit_cell,
+                ) {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+
+                let real_translation = unit_cell.dvec3_lattice_to_real(&subdivided_translation);
+
+                // Store evaluation cache for root-level evaluations
+                if network_stack.len() == 1 {
+                    let eval_cache = LatticeMoveEvalCache {
+                        unit_cell: unit_cell.clone(),
+                    };
+                    context.selected_node_eval_cache = Some(Box::new(eval_cache));
+                }
+
+                let mut result = structure.clone();
+                result.transform(&DQuat::IDENTITY, &real_translation);
+                NetworkResult::Atomic(result)
+            } else {
+                runtime_type_error_in_input(0)
+            }
+        } else if let NetworkResult::Geometry(shape) = input_val {
             let real_translation = shape
                 .unit_cell
                 .dvec3_lattice_to_real(&subdivided_translation);
 
-            // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-            // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+            // Store evaluation cache for root-level evaluations
             if network_stack.len() == 1 {
                 let eval_cache = LatticeMoveEvalCache {
                     unit_cell: shape.unit_cell.clone(),
@@ -121,16 +157,16 @@ impl NodeData for LatticeMoveData {
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            return NetworkResult::Geometry(GeometrySummary {
+            NetworkResult::Geometry(GeometrySummary {
                 unit_cell: shape.unit_cell.clone(),
                 frame_transform: Transform::default(),
                 geo_tree_root: GeoNode::transform(
                     Transform::new(real_translation, DQuat::IDENTITY),
                     Box::new(shape.geo_tree_root),
                 ),
-            });
+            })
         } else {
-            return runtime_type_error_in_input(0);
+            runtime_type_error_in_input(0)
         }
     }
 
@@ -192,7 +228,12 @@ impl NodeData for LatticeMoveData {
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("shape".to_string(), (true, None)); // required
+        if self.is_atomic_mode {
+            m.insert("molecule".to_string(), (true, None)); // required
+            m.insert("unit_cell".to_string(), (true, None)); // required
+        } else {
+            m.insert("shape".to_string(), (true, None)); // required
+        }
         m
     }
 }
@@ -319,7 +360,7 @@ impl LatticeMoveGadget {
     }
 }
 
-pub fn get_node_type() -> NodeType {
+pub fn get_node_type_lattice_move() -> NodeType {
     NodeType {
       name: "lattice_move".to_string(),
       description: "Moves the geometry in the discrete lattice space with a relative vector.
@@ -349,6 +390,49 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
       node_data_creator: || Box::new(LatticeMoveData {
         translation: IVec3::new(0, 0, 0),
         lattice_subdivision: 1,
+        is_atomic_mode: false,
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeMoveData>,
+      node_data_loader: generic_node_data_loader::<LatticeMoveData>,
+    }
+}
+
+pub fn get_node_type_atom_lattice_move() -> NodeType {
+    NodeType {
+      name: "atom_lattice_move".to_string(),
+      description: "Moves an atomic structure in discrete lattice space with a relative vector.
+Uses integer lattice coordinates and an explicit unit cell to compute the real-space translation.
+You can directly enter the translation vector or drag the axes of the gadget.".to_string(),
+      summary: None,
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              id: None,
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+          },
+          Parameter {
+            id: None,
+            name: "translation".to_string(),
+            data_type: DataType::IVec3,
+          },
+          Parameter {
+            id: None,
+            name: "subdivision".to_string(),
+            data_type: DataType::Int,
+          },
+          Parameter {
+            id: None,
+            name: "unit_cell".to_string(),
+            data_type: DataType::UnitCell,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(LatticeMoveData {
+        translation: IVec3::new(0, 0, 0),
+        lattice_subdivision: 1,
+        is_atomic_mode: true,
       }),
       node_data_saver: generic_node_data_saver::<LatticeMoveData>,
       node_data_loader: generic_node_data_loader::<LatticeMoveData>,

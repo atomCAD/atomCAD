@@ -862,10 +862,12 @@ fn test_lattice_move_roundtrip() {
     test_roundtrip(&LatticeMoveData {
         translation: IVec3::new(5, 10, 15),
         lattice_subdivision: 1,
+        is_atomic_mode: false,
     });
     test_roundtrip(&LatticeMoveData {
         translation: IVec3::new(-1, 2, 3),
         lattice_subdivision: 4,
+        is_atomic_mode: false,
     });
 }
 
@@ -878,6 +880,7 @@ fn test_lattice_rot_roundtrip() {
         axis_index: Some(0),
         step: 2,
         pivot_point: IVec3::new(1, 2, 3),
+        is_atomic_mode: false,
     });
 }
 

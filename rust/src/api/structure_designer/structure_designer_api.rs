@@ -2919,9 +2919,17 @@ pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
 pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            // Preserve is_atomic_mode from the existing node data
+            let is_atomic_mode = cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|n| n.get_node_network_data(node_id))
+                .and_then(|d| d.as_any_ref().downcast_ref::<LatticeMoveData>())
+                .map_or(false, |d| d.is_atomic_mode);
             let lattice_move_data = Box::new(LatticeMoveData {
                 translation: from_api_ivec3(&data.translation),
                 lattice_subdivision: data.lattice_subdivision,
+                is_atomic_mode,
             });
             cad_instance
                 .structure_designer
@@ -2935,10 +2943,18 @@ pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
 pub fn set_lattice_rot_data(node_id: u64, data: APILatticeRotData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            // Preserve is_atomic_mode from the existing node data
+            let is_atomic_mode = cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|n| n.get_node_network_data(node_id))
+                .and_then(|d| d.as_any_ref().downcast_ref::<LatticeRotData>())
+                .map_or(false, |d| d.is_atomic_mode);
             let lattice_rot_data = Box::new(LatticeRotData {
                 axis_index: data.axis_index,
                 step: data.step,
                 pivot_point: from_api_ivec3(&data.pivot_point),
+                is_atomic_mode,
             });
             cad_instance
                 .structure_designer

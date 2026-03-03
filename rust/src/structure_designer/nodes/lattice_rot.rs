@@ -1,6 +1,8 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
+use crate::crystolecule::unit_cell_symmetries::{
+    RotationalSymmetry, analyze_unit_cell_symmetries,
+};
 use crate::display::gadget::Gadget;
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
@@ -41,6 +43,8 @@ pub struct LatticeRotData {
     pub step: i32, // Integer multiple of the smallest rotation angle for the selected axis
     #[serde(with = "ivec3_serializer")]
     pub pivot_point: IVec3, // Pivot point around which rotation occurs
+    #[serde(default)] // false for backward compat with existing lattice_rot nodes
+    pub is_atomic_mode: bool,
 }
 
 impl NodeData for LatticeRotData {
@@ -73,112 +77,125 @@ impl NodeData for LatticeRotData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-        let shape_val =
+        let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
-        if let NetworkResult::Error(_) = shape_val {
-            shape_val
-        } else if let NetworkResult::Geometry(shape) = shape_val {
-            let axis_index = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.axis_index,
-                NetworkResult::extract_optional_int,
-            ) {
-                Ok(value) => value,
-                Err(error) => return error,
-            };
+        if let NetworkResult::Error(_) = input_val {
+            return input_val;
+        }
 
-            let step = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.step,
-                NetworkResult::extract_int,
-            ) {
-                Ok(value) => value,
-                Err(error) => return error,
-            };
+        // Shared: read axis_index (pin 1), step (pin 2), pivot_point (pin 3)
+        let axis_index = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.axis_index,
+            NetworkResult::extract_optional_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
 
-            let pivot_point = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                3,
-                self.pivot_point,
-                NetworkResult::extract_ivec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return error,
-            };
+        let step = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            self.step,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
 
+        let pivot_point = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            3,
+            self.pivot_point,
+            NetworkResult::extract_ivec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+
+        if self.is_atomic_mode {
+            if let NetworkResult::Atomic(structure) = input_val {
+                // Get unit_cell from pin 4 (required in atomic mode)
+                let unit_cell = match network_evaluator.evaluate_required(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    4,
+                    NetworkResult::extract_unit_cell,
+                ) {
+                    Ok(value) => value,
+                    Err(error) => return error,
+                };
+
+                // Get all available symmetry axes for this unit cell
+                let symmetry_axes = analyze_unit_cell_symmetries(&unit_cell);
+
+                // Calculate rotation quaternion using discrete symmetry approach
+                let real_rotation_quat =
+                    compute_rotation_quat(axis_index, step, &symmetry_axes);
+
+                // Store evaluation cache for root-level evaluations
+                if network_stack.len() == 1 {
+                    let eval_cache = LatticeRotEvalCache {
+                        unit_cell: unit_cell.clone(),
+                        pivot_point,
+                    };
+                    context.selected_node_eval_cache = Some(Box::new(eval_cache));
+                }
+
+                // Convert pivot point from lattice coordinates to real space coordinates
+                let pivot_real = unit_cell.ivec3_lattice_to_real(&pivot_point);
+
+                // Apply three-step pivot rotation: translate to origin, rotate, translate back
+                let mut result = structure.clone();
+                let neg_pivot = DVec3::new(-pivot_real.x, -pivot_real.y, -pivot_real.z);
+                result.transform(&DQuat::IDENTITY, &neg_pivot);
+                result.transform(&real_rotation_quat, &DVec3::ZERO);
+                result.transform(&DQuat::IDENTITY, &pivot_real);
+
+                NetworkResult::Atomic(result)
+            } else {
+                runtime_type_error_in_input(0)
+            }
+        } else if let NetworkResult::Geometry(shape) = input_val {
             // Get all available symmetry axes for this unit cell
             let symmetry_axes = analyze_unit_cell_symmetries(&shape.unit_cell);
 
             // Calculate rotation quaternion using discrete symmetry approach
-            let real_rotation_quat = if axis_index.is_none() || step == 0 {
-                // No rotation case
-                DQuat::IDENTITY
-            } else if symmetry_axes.is_empty() {
-                // No symmetries available (triclinic system) - only allow identity rotation
-                DQuat::IDENTITY
-            } else {
-                let axis_idx = axis_index.unwrap();
+            let real_rotation_quat = compute_rotation_quat(axis_index, step, &symmetry_axes);
 
-                // Apply modulo to axis_index to wrap around available axes
-                let safe_axis_index = ((axis_idx % symmetry_axes.len() as i32)
-                    + symmetry_axes.len() as i32)
-                    % symmetry_axes.len() as i32;
-                let selected_symmetry = &symmetry_axes[safe_axis_index as usize];
-
-                // Apply modulo to step to wrap around n_fold rotations
-                let safe_step = ((step % selected_symmetry.n_fold as i32)
-                    + selected_symmetry.n_fold as i32)
-                    % selected_symmetry.n_fold as i32;
-
-                if safe_step == 0 {
-                    DQuat::IDENTITY
-                } else {
-                    // Calculate rotation angle
-                    let angle_per_step = selected_symmetry.smallest_angle_radians();
-                    let total_angle = angle_per_step * safe_step as f64;
-
-                    // Create rotation quaternion
-                    DQuat::from_axis_angle(selected_symmetry.axis, total_angle)
-                }
-            };
-
-            // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-            // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+            // Store evaluation cache for root-level evaluations
             if network_stack.len() == 1 {
                 let eval_cache = LatticeRotEvalCache {
                     unit_cell: shape.unit_cell.clone(),
-                    pivot_point, // Store the actual evaluated pivot point
+                    pivot_point,
                 };
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
             // Transform geometry - rotation around pivot point
-            // Convert pivot point from lattice coordinates to real space coordinates
             let pivot_real = shape.unit_cell.ivec3_lattice_to_real(&pivot_point);
-
-            // Create transformation that rotates around the pivot point
-            // This is equivalent to: translate to origin, rotate, translate back
             let tr = Transform::new_rotation_around_point(pivot_real, real_rotation_quat);
 
-            return NetworkResult::Geometry(GeometrySummary {
+            NetworkResult::Geometry(GeometrySummary {
                 unit_cell: shape.unit_cell.clone(),
                 frame_transform: Transform::default(),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
-            });
+            })
         } else {
-            return runtime_type_error_in_input(0);
+            runtime_type_error_in_input(0)
         }
     }
 
@@ -251,7 +268,12 @@ impl NodeData for LatticeRotData {
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("shape".to_string(), (true, None)); // required
+        if self.is_atomic_mode {
+            m.insert("molecule".to_string(), (true, None)); // required
+            m.insert("unit_cell".to_string(), (true, None)); // required
+        } else {
+            m.insert("shape".to_string(), (true, None)); // required
+        }
         m
     }
 }
@@ -378,7 +400,38 @@ impl LatticeRotGadget {
     }
 }
 
-pub fn get_node_type() -> NodeType {
+/// Computes the rotation quaternion from symmetry axes, axis_index, and step.
+/// Shared between geometry and atomic modes.
+fn compute_rotation_quat(
+    axis_index: Option<i32>,
+    step: i32,
+    symmetry_axes: &[RotationalSymmetry],
+) -> DQuat {
+    if axis_index.is_none() || step == 0 || symmetry_axes.is_empty() {
+        DQuat::IDENTITY
+    } else {
+        let axis_idx = axis_index.unwrap();
+
+        let safe_axis_index = ((axis_idx % symmetry_axes.len() as i32)
+            + symmetry_axes.len() as i32)
+            % symmetry_axes.len() as i32;
+        let selected_symmetry = &symmetry_axes[safe_axis_index as usize];
+
+        let safe_step = ((step % selected_symmetry.n_fold as i32)
+            + selected_symmetry.n_fold as i32)
+            % selected_symmetry.n_fold as i32;
+
+        if safe_step == 0 {
+            DQuat::IDENTITY
+        } else {
+            let angle_per_step = selected_symmetry.smallest_angle_radians();
+            let total_angle = angle_per_step * safe_step as f64;
+            DQuat::from_axis_angle(selected_symmetry.axis, total_angle)
+        }
+    }
+}
+
+pub fn get_node_type_lattice_rot() -> NodeType {
     NodeType {
       name: "lattice_rot".to_string(),
       description: "Rotates geometry in lattice space.
@@ -414,6 +467,55 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
         axis_index: None,
         step: 0,
         pivot_point: IVec3::new(0, 0, 0),
+        is_atomic_mode: false,
+      }),
+      node_data_saver: generic_node_data_saver::<LatticeRotData>,
+      node_data_loader: generic_node_data_loader::<LatticeRotData>,
+  }
+}
+
+pub fn get_node_type_atom_lattice_rot() -> NodeType {
+    NodeType {
+      name: "atom_lattice_rot".to_string(),
+      description: "Rotates an atomic structure in lattice space.
+Only rotations that are symmetries of the provided unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
+You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.".to_string(),
+      summary: None,
+      category: NodeTypeCategory::AtomicStructure,
+      parameters: vec![
+          Parameter {
+              id: None,
+              name: "molecule".to_string(),
+              data_type: DataType::Atomic,
+          },
+          Parameter {
+            id: None,
+            name: "axis_index".to_string(),
+            data_type: DataType::Int,
+          },
+          Parameter {
+            id: None,
+            name: "step".to_string(),
+            data_type: DataType::Int,
+          },
+          Parameter {
+            id: None,
+            name: "pivot_point".to_string(),
+            data_type: DataType::IVec3,
+          },
+          Parameter {
+            id: None,
+            name: "unit_cell".to_string(),
+            data_type: DataType::UnitCell,
+          },
+      ],
+      output_type: DataType::Atomic,
+      public: true,
+      node_data_creator: || Box::new(LatticeRotData {
+        axis_index: None,
+        step: 0,
+        pivot_point: IVec3::new(0, 0, 0),
+        is_atomic_mode: true,
       }),
       node_data_saver: generic_node_data_saver::<LatticeRotData>,
       node_data_loader: generic_node_data_loader::<LatticeRotData>,
