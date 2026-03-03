@@ -19,6 +19,7 @@ crystolecule/
 ├── motif.rs                        # Motif struct (sites, bonds, parameters)
 ├── motif_parser.rs                 # Text format parser for motifs
 ├── guided_placement.rs             # Guided atom placement geometry (bond directions, saturation)
+├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
 ├── unit_cell_symmetries.rs         # Crystal system classification (7 systems)
 ├── atomic_structure/
@@ -106,6 +107,7 @@ motif_parser  →  Motif, atomic_constants
 atomic_structure_utils → AtomicStructure, atomic_constants
 io/*          →  AtomicStructure, atomic_constants
 guided_placement → AtomicStructure, simulation/uff (typer, params)
+hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
 ```
 
 `GeoNode` (from `geo_tree`) is the only external module dependency — used as the SDF geometry input to `fill_lattice()`.
@@ -124,6 +126,7 @@ tests/crystolecule/
 ├── lattice_fill_test.rs           # Tracker, statistics, integration with sphere geometry
 ├── unit_cell_test.rs              # Round-trip conversions, multiple cell types
 ├── unit_cell_symmetries_test.rs   # All 7 crystal systems, symmetry preservation
+├── hydrogen_passivation_test.rs   # General-purpose H passivation tests
 ├── motif_parser_test.rs           # Tokenization, all commands, error cases
 ├── io/
 │   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types

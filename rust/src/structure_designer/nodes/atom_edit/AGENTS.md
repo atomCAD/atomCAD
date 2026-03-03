@@ -17,6 +17,7 @@ atom_edit/
 ├── measurement.rs        # Read-only measurement queries (distance, angle, dihedral)
 ├── modify_measurement.rs # Modify distance/angle/dihedral by moving atoms
 ├── minimization.rs       # UFF energy minimization
+├── hydrogen_passivation.rs # General-purpose hydrogen passivation
 ├── atom_edit_gadget.rs   # XYZ selection gadget (translation gizmo)
 └── text_format.rs        # Human-readable diff text format (AI integration)
 ```
