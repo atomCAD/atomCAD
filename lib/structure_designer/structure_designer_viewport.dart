@@ -946,36 +946,6 @@ class _StructureDesignerViewportState
       }
     }
 
-    // Build atom hover tooltip overlay
-    Widget? atomTooltipOverlay;
-    if (_hoveredAtomInfo != null) {
-      final info = _hoveredAtomInfo!;
-      final screenPos = _projectWorldToScreen(
-        info.x,
-        info.y,
-        info.z,
-      );
-      if (screenPos != null) {
-        const offsetX = 20.0;
-        const offsetY = -10.0;
-        const estW = 180.0;
-        const estH = 70.0;
-
-        final viewportSize = context.size;
-        final vw = viewportSize?.width ?? 800.0;
-        final vh = viewportSize?.height ?? 600.0;
-
-        final left = (screenPos.dx + offsetX).clamp(4.0, vw - estW - 4.0);
-        final top = (screenPos.dy + offsetY).clamp(4.0, vh - estH - 4.0);
-
-        atomTooltipOverlay = Positioned(
-          left: left,
-          top: top,
-          child: IgnorePointer(child: AtomTooltip(info: info)),
-        );
-      }
-    }
-
     return Focus(
       focusNode: _focusNode,
       onKeyEvent: _onKeyEvent,
@@ -986,21 +956,57 @@ class _StructureDesignerViewportState
           _clearHoverTooltip();
           setState(() => _cursorPosition = null);
         },
-        child: Stack(
-          children: [
-            super.build(context),
-            if (_marqueeRect != null)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: MarqueePainter(rect: _marqueeRect!),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Build atom hover tooltip overlay using layout constraints
+            // (context.size is not available during build).
+            Widget? atomTooltipOverlay;
+            if (_hoveredAtomInfo != null) {
+              final info = _hoveredAtomInfo!;
+              final screenPos = _projectWorldToScreen(
+                info.x,
+                info.y,
+                info.z,
+              );
+              if (screenPos != null) {
+                const offsetX = 20.0;
+                const offsetY = -10.0;
+                const estW = 180.0;
+                const estH = 70.0;
+
+                final vw = constraints.maxWidth;
+                final vh = constraints.maxHeight;
+
+                final left =
+                    (screenPos.dx + offsetX).clamp(4.0, vw - estW - 4.0);
+                final top =
+                    (screenPos.dy + offsetY).clamp(4.0, vh - estH - 4.0);
+
+                atomTooltipOverlay = Positioned(
+                  left: left,
+                  top: top,
+                  child: IgnorePointer(child: AtomTooltip(info: info)),
+                );
+              }
+            }
+
+            return Stack(
+              children: [
+                super.build(context),
+                if (_marqueeRect != null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: MarqueePainter(rect: _marqueeRect!),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            if (addBondOverlay != null) addBondOverlay,
-            if (elementSymbolOverlay != null) elementSymbolOverlay,
-            if (atomTooltipOverlay != null) atomTooltipOverlay,
-          ],
+                if (addBondOverlay != null) addBondOverlay,
+                if (elementSymbolOverlay != null) elementSymbolOverlay,
+                if (atomTooltipOverlay != null) atomTooltipOverlay,
+              ],
+            );
+          },
         ),
       ),
     );
