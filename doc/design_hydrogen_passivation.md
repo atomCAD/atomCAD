@@ -73,7 +73,7 @@ Reuses the guided placement geometry from `guided_placement.rs` in a determinist
 | Existing bonds | Open slots | Method |
 |---|---|---|
 | 0 | 4 | Standard tetrahedral orientation: `[1,1,1], [-1,-1,1], [-1,1,-1], [1,-1,-1]` normalized |
-| 1 | 3 | Cone at 70.53 deg from -bond_dir. Pick arbitrary dihedral via `arbitrary_perpendicular()`. Place 3 positions at 0 deg, 120 deg, 240 deg around the cone (staggered). |
+| 1 | 3 | Try `find_dihedral_reference()` first. If found: call `compute_sp3_case1_with_dihedral()`, take only the 3 Primary (staggered) positions. If not found: fall back to cone at 70.53 deg from -bond_dir with `arbitrary_perpendicular()` as dihedral reference, place 3 positions at 0 deg, 120 deg, 240 deg around the cone. |
 | 2 | 2 | Reuse `sp3_case2` logic: two directions symmetric about the b1-b2 plane, each at 109.47 deg from both existing bonds |
 | 3 | 1 | Reuse `sp3_case3` logic: `d4 = -normalize(b1 + b2 + b3)` |
 
@@ -81,7 +81,7 @@ Reuses the guided placement geometry from `guided_placement.rs` in a determinist
 
 | Existing bonds | Open slots | Method |
 |---|---|---|
-| 0 | 3 | Equilateral triangle in an arbitrary plane |
+| 0 | 3 | Equilateral triangle in the XY plane: directions at 0 deg, 120 deg, 240 deg from `+X` |
 | 1 | 2 | Pick arbitrary plane normal perpendicular to bond. Two directions at +/-120 deg from existing bond in that plane |
 | 2 | 1 | Reuse `sp2_case2` logic: `d3 = -normalize(b1 + b2)` |
 
@@ -92,9 +92,15 @@ Reuses the guided placement geometry from `guided_placement.rs` in a determinist
 | 0 | 2 | Arbitrary axis: `+X, -X` |
 | 1 | 1 | `d2 = -bond_dir` (directly opposite) |
 
-#### Arbitrary reference for deterministic placement
+#### Dihedral-aware placement (sp3 case 1→3)
 
-For cases that guided placement handles interactively (FreeSphere, FreeRing), we pick a deterministic reference:
+When a dihedral reference is available (the bonded neighbor has other neighbors), passivation reuses the same `find_dihedral_reference()` + `compute_sp3_case1_with_dihedral()` path as guided placement. This produces H positions that are staggered relative to the neighboring structure — the same result as if the user had manually placed atoms using guided placement and clicked on staggered (Primary) dots.
+
+When no dihedral reference is available (the bonded neighbor has no other neighbors), we fall back to a deterministic arbitrary reference.
+
+#### Arbitrary reference for deterministic fallback
+
+For cases where guided placement would use interactive modes (FreeSphere, FreeRing), or where no dihedral reference exists, we pick a deterministic reference:
 
 ```rust
 fn arbitrary_perpendicular(v: DVec3) -> DVec3 {
@@ -227,24 +233,33 @@ New function in `rust/src/api/structure_designer/atom_edit_api.rs`:
 ```rust
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_add_hydrogen(selected_only: bool) -> String {
-    with_mut_cad_instance(|cad_instance| {
-        let sd = &mut cad_instance.structure_designer;
-        match add_hydrogen_atom_edit(sd, selected_only) {
-            Ok(msg) => msg,
-            Err(e) => format!("Error: {}", e),
-        }
-    })
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = atom_edit::add_hydrogen_atom_edit(
+                    &mut cad_instance.structure_designer,
+                    selected_only,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(msg) => msg,
+                    Err(e) => format!("Error: {}", e),
+                }
+            },
+            "Error: no active instance".to_string(),
+        )
+    }
 }
 ```
 
 ### Module Registration
 
-In `atom_edit/mod.rs`:
+In `atom_edit/mod.rs`, add the module declaration alongside the others:
 ```rust
 mod hydrogen_passivation;
 ```
 
-In the re-export block:
+Inside the existing `pub mod atom_edit { ... }` re-export block, add:
 ```rust
 pub use super::hydrogen_passivation::*;
 ```
@@ -429,6 +444,7 @@ The following functions need to be accessible from the new `hydrogen_passivation
 | `detect_hybridization()` | `pub` | No change |
 | `covalent_max_neighbors()` | `pub` | No change |
 | `count_active_neighbors()` | `fn` (private) | Make `pub(crate)` |
+| `gather_bond_directions()` | N/A (inline in `compute_guided_placement()`) | Extract as new `pub(crate)` function |
 | `sp3_case3()` | `fn` (private) | Make `pub(crate)` |
 | `sp3_case2()` | `fn` (private) | Make `pub(crate)` |
 | `sp2_case2()` | `fn` (private) | Make `pub(crate)` |
@@ -437,6 +453,32 @@ The following functions need to be accessible from the new `hydrogen_passivation
 | `find_dihedral_reference()` | `pub` | No change |
 | `TETRAHEDRAL_ANGLE` | `const` (private) | Make `pub(crate)` |
 | `TRIGONAL_ANGLE` | `const` (private) | Make `pub(crate)` |
+
+### `gather_bond_directions()`
+
+Extracted from the inline code in `compute_guided_placement()` (lines 1214–1229). Returns normalized direction vectors from the anchor atom to each bonded neighbor.
+
+```rust
+pub(crate) fn gather_bond_directions(structure: &AtomicStructure, atom: &Atom) -> Vec<DVec3> {
+    let anchor_pos = atom.position;
+    atom.bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .filter_map(|b| {
+            structure.get_atom(b.other_atom_id()).map(|neighbor| {
+                let dir = neighbor.position - anchor_pos;
+                if dir.length_squared() < 1e-12 {
+                    DVec3::X // degenerate: atoms at same position
+                } else {
+                    dir.normalize()
+                }
+            })
+        })
+        .collect()
+}
+```
+
+After extraction, `compute_guided_placement()` should call this function instead of the inline block.
 
 ## Testing
 
