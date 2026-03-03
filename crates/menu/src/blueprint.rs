@@ -2,6 +2,7 @@
 // If a copy of the MPL was not distributed with this file,
 // You can obtain one at <https://mozilla.org/MPL/2.0/>.
 
+use ecs::resource::Resource;
 use std::sync::Arc;
 
 /// A menubar is a hierarchical list of actions with attached titles and/or keyboard shortcuts.  It
@@ -10,6 +11,7 @@ use std::sync::Arc;
 /// switch the global menubar based on the active window.
 ///
 /// Menus can also be contextual (e.g. a popup right-click menu) or accessed from the system tray.
+#[derive(Resource)]
 pub struct Blueprint {
     pub title: String,
     pub items: Vec<Item>,
@@ -67,7 +69,7 @@ pub enum SystemShortcut {
 /// internal, application-defined action, or a system response implemented by the operating system.
 pub enum Action {
     System(SystemAction),
-    User(Arc<dyn Fn() + 'static>),
+    User(Arc<dyn Fn() + Send + Sync>),
 }
 
 /// System actions are predefined actions that are implemented by the operating system.  They are

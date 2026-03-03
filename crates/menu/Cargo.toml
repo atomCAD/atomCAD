@@ -10,6 +10,7 @@ edition = { workspace = true }
 # atomCAD
 app = { workspace = true }
 # Entity Component System
+bevy_ecs = { workspace = true }
 ecs = { workspace = true }
 # Input
 keyboard = { workspace = true }
