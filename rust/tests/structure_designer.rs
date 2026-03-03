@@ -93,3 +93,6 @@ mod apply_diff_node_test;
 
 #[path = "structure_designer/atom_lattice_transform_test.rs"]
 mod atom_lattice_transform_test;
+
+#[path = "structure_designer/add_hydrogen_node_test.rs"]
+mod add_hydrogen_node_test;
