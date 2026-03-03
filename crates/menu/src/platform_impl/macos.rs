@@ -18,7 +18,7 @@ use winit::{
 };
 
 struct AtomCadMenuItemIvars {
-    callback: Option<Arc<dyn Fn() + 'static>>,
+    callback: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 define_class!(
@@ -46,7 +46,7 @@ impl AtomCadMenuItem {
         string: &NSString,
         selector: Option<Sel>,
         char_code: &NSString,
-        callback: Option<Arc<dyn Fn() + 'static>>,
+        callback: Option<Arc<dyn Fn() + Send + Sync>>,
     ) -> Retained<Self> {
         let this = this.set_ivars(AtomCadMenuItemIvars { callback });
         unsafe {
