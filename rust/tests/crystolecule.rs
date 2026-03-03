@@ -63,3 +63,6 @@ mod fragment_test;
 
 #[path = "crystolecule/guided_placement_test.rs"]
 mod guided_placement_test;
+
+#[path = "crystolecule/hydrogen_passivation_test.rs"]
+mod hydrogen_passivation_test;

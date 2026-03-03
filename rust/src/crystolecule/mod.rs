@@ -5,6 +5,7 @@ pub mod atomic_structure_utils;
 pub mod crystolecule_constants;
 pub mod drawing_plane;
 pub mod guided_placement;
+pub mod hydrogen_passivation;
 pub mod io;
 pub mod lattice_fill;
 pub mod motif;

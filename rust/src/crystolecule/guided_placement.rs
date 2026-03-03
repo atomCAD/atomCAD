@@ -1,3 +1,4 @@
+use crate::crystolecule::atomic_structure::atom::Atom;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
 use crate::crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
@@ -455,7 +456,7 @@ fn default_hybridization(atomic_number: i16) -> Hybridization {
 }
 
 /// Count active (non-deleted) bonds on an atom.
-fn count_active_neighbors(structure: &AtomicStructure, atom_id: u32) -> usize {
+pub(crate) fn count_active_neighbors(structure: &AtomicStructure, atom_id: u32) -> usize {
     match structure.get_atom(atom_id) {
         Some(atom) => atom.bonds.iter().filter(|b| !b.is_delete_marker()).count(),
         None => 0,
@@ -525,7 +526,7 @@ fn compute_uff_bond_distance(anchor_uff_label: &str, new_atomic_number: i16) -> 
 // ============================================================================
 
 /// Tetrahedral angle in radians: arccos(-1/3) ≈ 109.47°
-const TETRAHEDRAL_ANGLE: f64 = 1.9106332362490186;
+pub(crate) const TETRAHEDRAL_ANGLE: f64 = 1.9106332362490186;
 
 /// Result of sp3 candidate computation, accounting for case 1 which may need
 /// either fixed dots (with dihedral reference) or a free ring (without).
@@ -592,7 +593,7 @@ pub fn compute_sp3_candidates(
 }
 
 /// sp3 case 3: one remaining direction, opposite the centroid of existing bonds.
-fn sp3_case3(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot> {
+pub(crate) fn sp3_case3(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot> {
     let sum = dirs[0] + dirs[1] + dirs[2];
     let d4 = if sum.length_squared() < 1e-12 {
         // Degenerate: all three bonds cancel out. Pick any perpendicular direction.
@@ -612,7 +613,7 @@ fn sp3_case3(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot>
 }
 
 /// sp3 case 2: two remaining directions, symmetric about the plane of existing bonds.
-fn sp3_case2(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot> {
+pub(crate) fn sp3_case2(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot> {
     let b1 = dirs[0];
     let b2 = dirs[1];
 
@@ -889,7 +890,7 @@ pub fn ray_ring_nearest_point(
 // ============================================================================
 
 /// Trigonal planar angle in radians: 120° = 2π/3
-const TRIGONAL_ANGLE: f64 = 2.0 * std::f64::consts::PI / 3.0;
+pub(crate) const TRIGONAL_ANGLE: f64 = 2.0 * std::f64::consts::PI / 3.0;
 
 /// Compute sp2 candidate positions for guided placement.
 ///
@@ -960,7 +961,7 @@ pub enum Sp2CandidateResult {
 
 /// sp2 case 2: one remaining direction, opposite the midpoint of existing bonds.
 /// The result naturally lies in the b1-b2 plane.
-fn sp2_case2(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot> {
+pub(crate) fn sp2_case2(anchor_pos: DVec3, dirs: &[DVec3], bond_dist: f64) -> Vec<GuideDot> {
     let sum = dirs[0] + dirs[1];
     let d3 = if sum.length_squared() < 1e-12 {
         // Degenerate: bonds cancel out (180° apart). Pick perpendicular.
@@ -1153,6 +1154,31 @@ pub fn compute_sp1_candidates(
 }
 
 // ============================================================================
+// Bond direction gathering
+// ============================================================================
+
+/// Gather normalized bond direction vectors from an atom to each of its bonded neighbors.
+///
+/// Extracted from `compute_guided_placement()` for reuse in hydrogen passivation.
+pub(crate) fn gather_bond_directions(structure: &AtomicStructure, atom: &Atom) -> Vec<DVec3> {
+    let anchor_pos = atom.position;
+    atom.bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .filter_map(|b| {
+            structure.get_atom(b.other_atom_id()).map(|neighbor| {
+                let dir = neighbor.position - anchor_pos;
+                if dir.length_squared() < 1e-12 {
+                    DVec3::X // degenerate: atoms at same position
+                } else {
+                    dir.normalize()
+                }
+            })
+        })
+        .collect()
+}
+
+// ============================================================================
 // Top-level entry point
 // ============================================================================
 
@@ -1212,21 +1238,7 @@ pub fn compute_guided_placement(
     );
 
     // Compute existing bond directions (normalized)
-    let existing_bond_dirs: Vec<DVec3> = anchor_atom
-        .bonds
-        .iter()
-        .filter(|b| !b.is_delete_marker())
-        .filter_map(|b| {
-            structure.get_atom(b.other_atom_id()).map(|neighbor| {
-                let dir = neighbor.position - anchor_pos;
-                if dir.length_squared() < 1e-12 {
-                    DVec3::X // degenerate
-                } else {
-                    dir.normalize()
-                }
-            })
-        })
-        .collect();
+    let existing_bond_dirs = gather_bond_directions(structure, anchor_atom);
 
     // Dispatch to geometry computation based on hybridization
     // Only compute if there are remaining slots
