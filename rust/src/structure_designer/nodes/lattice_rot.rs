@@ -126,13 +126,14 @@ impl NodeData for LatticeRotData {
 
         if self.is_atomic_mode {
             if let NetworkResult::Atomic(structure) = input_val {
-                // Get unit_cell from pin 4 (required in atomic mode)
-                let unit_cell = match network_evaluator.evaluate_required(
+                // Get unit_cell from pin 4 (optional, defaults to cubic diamond)
+                let unit_cell = match network_evaluator.evaluate_or_default(
                     network_stack,
                     node_id,
                     registry,
                     context,
                     4,
+                    UnitCellStruct::cubic_diamond(),
                     NetworkResult::extract_unit_cell,
                 ) {
                     Ok(value) => value,
@@ -270,7 +271,7 @@ impl NodeData for LatticeRotData {
         let mut m = HashMap::new();
         if self.is_atomic_mode {
             m.insert("molecule".to_string(), (true, None)); // required
-            m.insert("unit_cell".to_string(), (true, None)); // required
+            m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
         } else {
             m.insert("shape".to_string(), (true, None)); // required
         }
