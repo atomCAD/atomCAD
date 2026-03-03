@@ -161,6 +161,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           if (_stagedData!.activeTool == APIAtomEditTool.default_) ...[
             const SizedBox(height: AppSpacing.large),
             _buildCollapsibleMinimizeSection(),
+            const SizedBox(height: AppSpacing.small),
+            _buildCollapsibleAddHydrogenSection(),
             if (_stagedData!.hasSelection) ...[
               const SizedBox(height: AppSpacing.small),
               _buildCollapsibleTransformSection(),
@@ -690,6 +692,81 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           _buildMinimizeSectionContent(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCollapsibleAddHydrogenSection() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        title: Text('Hydrogen Passivation',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+        tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+        childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
+        initiallyExpanded: false,
+        dense: true,
+        children: [
+          _buildAddHydrogenSectionContent(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddHydrogenSectionContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    widget.model.atomEditAddHydrogen(selectedOnly: false);
+                  },
+                  icon: const Icon(Icons.blur_on, size: 18),
+                  label: const Text('Add H\nall'),
+                  style: AppButtonStyles.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: (_stagedData?.hasSelectedAtoms ?? false)
+                      ? () {
+                          widget.model
+                              .atomEditAddHydrogen(selectedOnly: true);
+                        }
+                      : null,
+                  icon: const Icon(Icons.filter_center_focus, size: 18),
+                  label: const Text('Add H\nselected'),
+                  style: AppButtonStyles.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (widget.model.lastAddHydrogenMessage.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.small),
+          Text(
+            widget.model.lastAddHydrogenMessage,
+            style: TextStyle(
+              fontSize: 12,
+              color: widget.model.lastAddHydrogenMessage.startsWith('Error')
+                  ? Colors.red[700]
+                  : Colors.grey[600],
+            ),
+          ),
+        ],
+      ],
     );
   }
 

@@ -110,6 +110,10 @@ String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
     RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditMinimize(
         freezeMode: freezeMode);
 
+String atomEditAddHydrogen({required bool selectedOnly}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditAddHydrogen(
+        selectedOnly: selectedOnly);
+
 GuidedPlacementApiResult atomEditStartGuidedPlacement(
         {required APIVec3 rayStart,
         required APIVec3 rayDir,

@@ -75,11 +75,13 @@ class StructureDesignerModel extends ChangeNotifier {
   WireDropCallback?
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
   String _lastMinimizeMessage = '';
+  String _lastAddHydrogenMessage = '';
   APIBondLengthMode _bondLengthMode = APIBondLengthMode.crystal;
   APIHybridization _hybridizationOverride = APIHybridization.auto;
   APIBondMode _bondMode = APIBondMode.covalent;
 
   String get lastMinimizeMessage => _lastMinimizeMessage;
+  String get lastAddHydrogenMessage => _lastAddHydrogenMessage;
   APIBondLengthMode get bondLengthMode => _bondLengthMode;
   set bondLengthMode(APIBondLengthMode value) {
     _bondLengthMode = value;
@@ -848,6 +850,13 @@ class StructureDesignerModel extends ChangeNotifier {
   void atomEditMinimize(APIMinimizeFreezeMode freezeMode) {
     _lastMinimizeMessage =
         atom_edit_api.atomEditMinimize(freezeMode: freezeMode);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
+  void atomEditAddHydrogen({required bool selectedOnly}) {
+    _lastAddHydrogenMessage =
+        atom_edit_api.atomEditAddHydrogen(selectedOnly: selectedOnly);
     refreshFromKernel();
     notifyListeners();
   }
