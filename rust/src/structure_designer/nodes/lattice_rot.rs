@@ -474,9 +474,9 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
   }
 }
 
-pub fn get_node_type_atom_lattice_rot() -> NodeType {
+pub fn get_node_type_atom_lrot() -> NodeType {
     NodeType {
-      name: "atom_lattice_rot".to_string(),
+      name: "atom_lrot".to_string(),
       description: "Rotates an atomic structure in lattice space.
 Only rotations that are symmetries of the provided unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
 You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.".to_string(),

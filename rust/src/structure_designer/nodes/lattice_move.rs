@@ -397,9 +397,9 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
     }
 }
 
-pub fn get_node_type_atom_lattice_move() -> NodeType {
+pub fn get_node_type_atom_lmove() -> NodeType {
     NodeType {
-      name: "atom_lattice_move".to_string(),
+      name: "atom_lmove".to_string(),
       description: "Moves an atomic structure in discrete lattice space with a relative vector.
 Uses integer lattice coordinates and an explicit unit cell to compute the real-space translation.
 You can directly enter the translation vector or drag the axes of the gadget.".to_string(),

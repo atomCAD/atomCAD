@@ -107,12 +107,12 @@ fn set_text_property(
 }
 
 // ============================================================================
-// Test: atom_lattice_move_basic
+// Test: atom_lmove_basic
 // ============================================================================
 
 #[test]
-fn atom_lattice_move_basic() {
-    let network_name = "test_atom_lattice_move_basic";
+fn atom_lmove_basic() {
+    let network_name = "test_atom_lmove_basic";
     let mut designer = setup_designer_with_network(network_name);
 
     let a = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
@@ -129,8 +129,8 @@ fn atom_lattice_move_basic() {
     let unit_cell_node_id =
         add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
 
-    // Add atom_lattice_move node
-    let lattice_move_id = designer.add_node("atom_lattice_move", DVec2::new(200.0, 0.0));
+    // Add atom_lmove node
+    let lattice_move_id = designer.add_node("atom_lmove", DVec2::new(200.0, 0.0));
 
     // Connect: structure -> pin 0 (molecule), unit_cell -> pin 3 (unit_cell)
     designer.connect_nodes(structure_node_id, 0, lattice_move_id, 0);
@@ -163,12 +163,12 @@ fn atom_lattice_move_basic() {
 }
 
 // ============================================================================
-// Test: atom_lattice_move_subdivision
+// Test: atom_lmove_subdivision
 // ============================================================================
 
 #[test]
-fn atom_lattice_move_subdivision() {
-    let network_name = "test_atom_lattice_move_subdivision";
+fn atom_lmove_subdivision() {
+    let network_name = "test_atom_lmove_subdivision";
     let mut designer = setup_designer_with_network(network_name);
 
     let a = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
@@ -183,7 +183,7 @@ fn atom_lattice_move_subdivision() {
     let unit_cell_node_id =
         add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
 
-    let lattice_move_id = designer.add_node("atom_lattice_move", DVec2::new(200.0, 0.0));
+    let lattice_move_id = designer.add_node("atom_lmove", DVec2::new(200.0, 0.0));
 
     designer.connect_nodes(structure_node_id, 0, lattice_move_id, 0);
     designer.connect_nodes(unit_cell_node_id, 0, lattice_move_id, 3);
@@ -222,12 +222,12 @@ fn atom_lattice_move_subdivision() {
 }
 
 // ============================================================================
-// Test: atom_lattice_move_diff_preserves_anchors
+// Test: atom_lmove_diff_preserves_anchors
 // ============================================================================
 
 #[test]
-fn atom_lattice_move_diff_preserves_anchors() {
-    let network_name = "test_atom_lattice_move_anchors";
+fn atom_lmove_diff_preserves_anchors() {
+    let network_name = "test_atom_lmove_anchors";
     let mut designer = setup_designer_with_network(network_name);
 
     let a = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
@@ -243,7 +243,7 @@ fn atom_lattice_move_diff_preserves_anchors() {
     let unit_cell_node_id =
         add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
 
-    let lattice_move_id = designer.add_node("atom_lattice_move", DVec2::new(200.0, 0.0));
+    let lattice_move_id = designer.add_node("atom_lmove", DVec2::new(200.0, 0.0));
 
     designer.connect_nodes(diff_node_id, 0, lattice_move_id, 0);
     designer.connect_nodes(unit_cell_node_id, 0, lattice_move_id, 3);
@@ -288,12 +288,12 @@ fn atom_lattice_move_diff_preserves_anchors() {
 }
 
 // ============================================================================
-// Test: atom_lattice_rot_basic
+// Test: atom_lrot_basic
 // ============================================================================
 
 #[test]
-fn atom_lattice_rot_basic() {
-    let network_name = "test_atom_lattice_rot_basic";
+fn atom_lrot_basic() {
+    let network_name = "test_atom_lrot_basic";
     let mut designer = setup_designer_with_network(network_name);
 
     let a = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
@@ -309,8 +309,8 @@ fn atom_lattice_rot_basic() {
     let unit_cell_node_id =
         add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
 
-    // Add atom_lattice_rot node
-    let lattice_rot_id = designer.add_node("atom_lattice_rot", DVec2::new(200.0, 0.0));
+    // Add atom_lrot node
+    let lattice_rot_id = designer.add_node("atom_lrot", DVec2::new(200.0, 0.0));
 
     // Connect: structure -> pin 0 (molecule), unit_cell -> pin 4 (unit_cell)
     designer.connect_nodes(structure_node_id, 0, lattice_rot_id, 0);
@@ -360,12 +360,12 @@ fn atom_lattice_rot_basic() {
 }
 
 // ============================================================================
-// Test: atom_lattice_move_then_apply_diff (full integration)
+// Test: atom_lmove_then_apply_diff (full integration)
 // ============================================================================
 
 #[test]
-fn atom_lattice_move_then_apply_diff() {
-    let network_name = "test_atom_lattice_move_apply_diff";
+fn atom_lmove_then_apply_diff() {
+    let network_name = "test_atom_lmove_apply_diff";
     let mut designer = setup_designer_with_network(network_name);
 
     let a = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
@@ -391,11 +391,11 @@ fn atom_lattice_move_then_apply_diff() {
         unit_cell,
     );
 
-    // Add atom_lattice_move and apply_diff nodes
-    let lattice_move_id = designer.add_node("atom_lattice_move", DVec2::new(100.0, 100.0));
+    // Add atom_lmove and apply_diff nodes
+    let lattice_move_id = designer.add_node("atom_lmove", DVec2::new(100.0, 100.0));
     let apply_diff_id = designer.add_node("apply_diff", DVec2::new(300.0, 50.0));
 
-    // Wire: diff -> atom_lattice_move -> apply_diff pin 1
+    // Wire: diff -> atom_lmove -> apply_diff pin 1
     designer.connect_nodes(diff_node_id, 0, lattice_move_id, 0);
     designer.connect_nodes(unit_cell_node_id, 0, lattice_move_id, 3);
     designer.connect_nodes(lattice_move_id, 0, apply_diff_id, 1);
@@ -465,15 +465,15 @@ fn lattice_move_geometry_mode_unchanged() {
 }
 
 // ============================================================================
-// Test: node snapshot tests for atom_lattice_move and atom_lattice_rot
+// Test: node snapshot tests for atom_lmove and atom_lrot
 // ============================================================================
 
 #[test]
-fn atom_lattice_move_node_snapshot() {
+fn atom_lmove_node_snapshot() {
     let registry = NodeTypeRegistry::new();
-    let node_type = registry.get_node_type("atom_lattice_move").unwrap();
+    let node_type = registry.get_node_type("atom_lmove").unwrap();
 
-    assert_eq!(node_type.name, "atom_lattice_move");
+    assert_eq!(node_type.name, "atom_lmove");
     assert!(node_type.public);
     assert_eq!(node_type.parameters.len(), 4);
     assert_eq!(node_type.parameters[0].name, "molecule");
@@ -492,11 +492,11 @@ fn atom_lattice_move_node_snapshot() {
 }
 
 #[test]
-fn atom_lattice_rot_node_snapshot() {
+fn atom_lrot_node_snapshot() {
     let registry = NodeTypeRegistry::new();
-    let node_type = registry.get_node_type("atom_lattice_rot").unwrap();
+    let node_type = registry.get_node_type("atom_lrot").unwrap();
 
-    assert_eq!(node_type.name, "atom_lattice_rot");
+    assert_eq!(node_type.name, "atom_lrot");
     assert!(node_type.public);
     assert_eq!(node_type.parameters.len(), 5);
     assert_eq!(node_type.parameters[0].name, "molecule");
