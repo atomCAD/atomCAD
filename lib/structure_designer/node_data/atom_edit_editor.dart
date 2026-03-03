@@ -747,7 +747,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                         }
                       : null,
                   icon: const Icon(Icons.filter_center_focus, size: 18),
-                  label: const Text('Add H\nselected'),
+                  label: const Text('Add H\nselected (Ctrl+H)'),
                   style: AppButtonStyles.primary,
                 ),
               ),
@@ -849,7 +849,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                         }
                       : null,
                   icon: const Icon(Icons.filter_center_focus, size: 18),
-                  label: const Text('Minimize\nselected'),
+                  label: const Text('Minimize\nselected (Ctrl+M)'),
                   style: AppButtonStyles.primary,
                 ),
               ),

@@ -527,6 +527,32 @@ class _StructureDesignerViewportState
       }
     }
 
+    // Ctrl+H: Add hydrogen to selected atoms (Default tool only)
+    if (event is KeyDownEvent &&
+        HardwareKeyboard.instance.isControlPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyH) {
+      final tool = atom_edit_api.getActiveAtomEditTool();
+      if (tool == APIAtomEditTool.default_) {
+        widget.graphModel.atomEditAddHydrogen(selectedOnly: true);
+        renderingNeeded();
+        return KeyEventResult.handled;
+      }
+    }
+
+    // Ctrl+M: Minimize selected atoms (Default tool only)
+    if (event is KeyDownEvent &&
+        HardwareKeyboard.instance.isControlPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyM) {
+      final tool = atom_edit_api.getActiveAtomEditTool();
+      if (tool == APIAtomEditTool.default_) {
+        widget.graphModel.atomEditMinimize(
+          APIMinimizeFreezeMode.freeSelected,
+        );
+        renderingNeeded();
+        return KeyEventResult.handled;
+      }
+    }
+
     // Element symbol typing: letter keys -> element selection/replacement
     if (event is KeyDownEvent &&
         !HardwareKeyboard.instance.isControlPressed &&
