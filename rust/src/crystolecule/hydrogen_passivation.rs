@@ -12,6 +12,68 @@ use glam::f64::DVec3;
 // Options and result types
 // ============================================================================
 
+pub struct RemoveHydrogensOptions {
+    /// Only remove H atoms that are themselves selected or bonded to a selected atom.
+    pub selected_only: bool,
+}
+
+pub struct RemoveHydrogensResult {
+    /// Number of hydrogen atoms removed.
+    pub hydrogens_removed: usize,
+}
+
+/// Remove hydrogen atoms from the structure.
+///
+/// Two-phase approach: analyze immutably (collect IDs to remove), then mutate (delete atoms).
+/// When `selected_only` is true, only hydrogen atoms that are themselves selected or bonded
+/// to a selected atom are removed.
+pub fn remove_hydrogens(
+    structure: &mut AtomicStructure,
+    options: &RemoveHydrogensOptions,
+) -> RemoveHydrogensResult {
+    // Phase 1: Analysis (immutable scan)
+    let atom_ids: Vec<u32> = structure.atom_ids().copied().collect();
+    let mut ids_to_remove: Vec<u32> = Vec::new();
+
+    for &atom_id in &atom_ids {
+        let atom = match structure.get_atom(atom_id) {
+            Some(a) => a,
+            None => continue,
+        };
+
+        if atom.atomic_number != 1 {
+            continue;
+        }
+
+        if options.selected_only {
+            let is_self_selected = atom.is_selected();
+            let has_selected_neighbor = atom
+                .bonds
+                .iter()
+                .filter(|b| !b.is_delete_marker())
+                .any(|b| {
+                    structure
+                        .get_atom(b.other_atom_id())
+                        .is_some_and(|n| n.is_selected())
+                });
+            if !is_self_selected && !has_selected_neighbor {
+                continue;
+            }
+        }
+
+        ids_to_remove.push(atom_id);
+    }
+
+    // Phase 2: Mutation (remove atoms)
+    for &atom_id in &ids_to_remove {
+        structure.delete_atom(atom_id);
+    }
+
+    RemoveHydrogensResult {
+        hydrogens_removed: ids_to_remove.len(),
+    }
+}
+
 pub struct AddHydrogensOptions {
     /// Only passivate atoms that are currently selected.
     pub selected_only: bool,

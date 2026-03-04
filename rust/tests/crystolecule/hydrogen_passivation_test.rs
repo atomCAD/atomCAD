@@ -1,7 +1,7 @@
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::hydrogen_passivation::{
-    AddHydrogensOptions, add_hydrogens,
+    AddHydrogensOptions, RemoveHydrogensOptions, add_hydrogens, remove_hydrogens,
 };
 
 // ============================================================================
@@ -732,4 +732,318 @@ fn negative_atomic_number_skipped() {
     s.add_atom(-1, DVec3::ZERO);
     let result = add_hydrogens(&mut s, &default_options());
     assert_eq!(result.hydrogens_added, 0);
+}
+
+// ============================================================================
+// Hydrogen depassivation: basic removal
+// ============================================================================
+
+fn remove_all_options() -> RemoveHydrogensOptions {
+    RemoveHydrogensOptions {
+        selected_only: false,
+    }
+}
+
+#[test]
+fn remove_h_methane_leaves_bare_carbon() {
+    // Bare C → passivate → 1C+4H → remove all H → 1C, 0 bonds
+    let (mut s, anchor) = make_structure(6, &[]);
+    add_hydrogens(&mut s, &default_options());
+    assert_eq!(count_hydrogens(&s), 4);
+
+    let result = remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(result.hydrogens_removed, 4);
+    assert_eq!(count_hydrogens(&s), 0);
+
+    let total: usize = s.atoms_values().count();
+    assert_eq!(total, 1, "Only the carbon remains");
+    assert_eq!(count_bonds(&s), 0, "No bonds left");
+    assert_eq!(
+        count_h_bonded_to(&s, anchor),
+        0,
+        "Carbon has no H neighbors"
+    );
+}
+
+#[test]
+fn remove_h_ethane_leaves_two_carbons_with_bond() {
+    // C-C + 6H → remove all H → 2C, 1 C-C bond
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::ZERO);
+    let c2 = s.add_atom(6, DVec3::new(1.545, 0.0, 0.0));
+    s.add_bond(c1, c2, 1);
+    add_hydrogens(&mut s, &default_options());
+    assert_eq!(count_hydrogens(&s), 6);
+
+    let result = remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(result.hydrogens_removed, 6);
+    assert_eq!(count_hydrogens(&s), 0);
+
+    let total: usize = s.atoms_values().count();
+    assert_eq!(total, 2, "Only the two carbons remain");
+    assert_eq!(count_bonds(&s), 1, "C-C bond remains");
+}
+
+#[test]
+fn remove_h_only_hydrogens_leaves_empty() {
+    let mut s = AtomicStructure::new();
+    s.add_atom(1, DVec3::ZERO);
+    s.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
+
+    let result = remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(result.hydrogens_removed, 2);
+
+    let total: usize = s.atoms_values().count();
+    assert_eq!(total, 0, "All atoms removed");
+}
+
+#[test]
+fn remove_h_no_hydrogens_removes_nothing() {
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::ZERO);
+    let c2 = s.add_atom(6, DVec3::new(1.545, 0.0, 0.0));
+    s.add_bond(c1, c2, 1);
+
+    let result = remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(result.hydrogens_removed, 0);
+
+    let total: usize = s.atoms_values().count();
+    assert_eq!(total, 2);
+    assert_eq!(count_bonds(&s), 1);
+}
+
+#[test]
+fn remove_h_empty_structure() {
+    let mut s = AtomicStructure::new();
+    let result = remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(result.hydrogens_removed, 0);
+}
+
+// ============================================================================
+// Hydrogen depassivation: selection filter
+// ============================================================================
+
+#[test]
+fn remove_h_selected_only_by_neighbor() {
+    // Ethane: select c1 → only c1's 3 H's removed, c2's 3 H's remain
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::ZERO);
+    let c2 = s.add_atom(6, DVec3::new(1.545, 0.0, 0.0));
+    s.add_bond(c1, c2, 1);
+    add_hydrogens(&mut s, &default_options());
+    assert_eq!(count_hydrogens(&s), 6);
+
+    s.set_atom_selected(c1, true);
+
+    let options = RemoveHydrogensOptions {
+        selected_only: true,
+    };
+    let result = remove_hydrogens(&mut s, &options);
+    assert_eq!(result.hydrogens_removed, 3);
+    assert_eq!(count_hydrogens(&s), 3);
+    assert_eq!(count_h_bonded_to(&s, c2), 3, "c2's H's untouched");
+}
+
+#[test]
+fn remove_h_selected_only_h_itself_selected() {
+    // Methane: select one H directly → only that H removed
+    let (mut s, anchor) = make_structure(6, &[]);
+    add_hydrogens(&mut s, &default_options());
+
+    // Find one H and select it
+    let h_id = s
+        .atoms_values()
+        .find(|a| a.atomic_number == 1)
+        .unwrap()
+        .id;
+    s.set_atom_selected(h_id, true);
+
+    let options = RemoveHydrogensOptions {
+        selected_only: true,
+    };
+    let result = remove_hydrogens(&mut s, &options);
+    assert_eq!(result.hydrogens_removed, 1);
+    assert_eq!(count_hydrogens(&s), 3);
+    assert_eq!(count_h_bonded_to(&s, anchor), 3);
+}
+
+#[test]
+fn remove_h_selected_only_nothing_selected() {
+    let (mut s, _) = make_structure(6, &[]);
+    add_hydrogens(&mut s, &default_options());
+    assert_eq!(count_hydrogens(&s), 4);
+
+    let options = RemoveHydrogensOptions {
+        selected_only: true,
+    };
+    let result = remove_hydrogens(&mut s, &options);
+    assert_eq!(result.hydrogens_removed, 0);
+    assert_eq!(count_hydrogens(&s), 4);
+}
+
+#[test]
+fn remove_h_selected_only_all_selected_same_as_all() {
+    let (mut s, _) = make_structure(6, &[]);
+    add_hydrogens(&mut s, &default_options());
+
+    // Select all atoms
+    let ids: Vec<u32> = s.atom_ids().copied().collect();
+    for id in ids {
+        s.set_atom_selected(id, true);
+    }
+
+    let options = RemoveHydrogensOptions {
+        selected_only: true,
+    };
+    let result = remove_hydrogens(&mut s, &options);
+    assert_eq!(result.hydrogens_removed, 4);
+    assert_eq!(count_hydrogens(&s), 0);
+}
+
+// ============================================================================
+// Hydrogen depassivation: bond cleanup
+// ============================================================================
+
+#[test]
+fn remove_h_carbon_has_zero_bonds_after() {
+    let (mut s, anchor) = make_structure(6, &[]);
+    add_hydrogens(&mut s, &default_options());
+    remove_hydrogens(&mut s, &remove_all_options());
+
+    let c = s.get_atom(anchor).unwrap();
+    let active_bonds = c.bonds.iter().filter(|b| !b.is_delete_marker()).count();
+    assert_eq!(active_bonds, 0, "Carbon should have 0 bonds after H removal");
+}
+
+#[test]
+fn remove_h_ethane_cc_bond_intact() {
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::ZERO);
+    let c2 = s.add_atom(6, DVec3::new(1.545, 0.0, 0.0));
+    s.add_bond(c1, c2, 1);
+    add_hydrogens(&mut s, &default_options());
+    remove_hydrogens(&mut s, &remove_all_options());
+
+    // C-C bond should remain
+    let c1_atom = s.get_atom(c1).unwrap();
+    let c1_neighbors: Vec<u32> = c1_atom
+        .bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .map(|b| b.other_atom_id())
+        .collect();
+    assert_eq!(c1_neighbors, vec![c2]);
+}
+
+// ============================================================================
+// Hydrogen depassivation: mixed structures
+// ============================================================================
+
+#[test]
+fn remove_h_mixed_elements_only_h_removed() {
+    // C, N, O each with H's → remove H → all heavy atoms remain
+    let mut s = AtomicStructure::new();
+    let c = s.add_atom(6, DVec3::ZERO);
+    let n = s.add_atom(7, DVec3::new(3.0, 0.0, 0.0));
+    let o = s.add_atom(8, DVec3::new(6.0, 0.0, 0.0));
+    add_hydrogens(&mut s, &default_options());
+
+    let h_before = count_hydrogens(&s);
+    assert!(h_before > 0);
+
+    remove_hydrogens(&mut s, &remove_all_options());
+
+    assert_eq!(count_hydrogens(&s), 0);
+    assert!(s.get_atom(c).is_some(), "Carbon still exists");
+    assert!(s.get_atom(n).is_some(), "Nitrogen still exists");
+    assert!(s.get_atom(o).is_some(), "Oxygen still exists");
+}
+
+#[test]
+fn remove_h_delete_markers_not_removed() {
+    let mut s = AtomicStructure::new();
+    let dm = s.add_atom(0, DVec3::ZERO); // delete marker
+    s.add_atom(1, DVec3::new(1.0, 0.0, 0.0)); // hydrogen
+
+    let result = remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(result.hydrogens_removed, 1);
+    assert!(s.get_atom(dm).is_some(), "Delete marker still exists");
+}
+
+// ============================================================================
+// Hydrogen depassivation: round-trip with passivation
+// ============================================================================
+
+#[test]
+fn round_trip_bare_carbon_passivate_then_strip() {
+    let (mut s, anchor) = make_structure(6, &[]);
+
+    // Passivate → 4 H
+    add_hydrogens(&mut s, &default_options());
+    assert_eq!(count_hydrogens(&s), 4);
+
+    // Strip → back to 1 C, 0 bonds
+    remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(count_hydrogens(&s), 0);
+
+    let total: usize = s.atoms_values().count();
+    assert_eq!(total, 1);
+    assert_eq!(count_bonds(&s), 0);
+    assert!(s.get_atom(anchor).is_some());
+}
+
+#[test]
+fn round_trip_ethane_strip_then_repassivate() {
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::ZERO);
+    let c2 = s.add_atom(6, DVec3::new(1.545, 0.0, 0.0));
+    s.add_bond(c1, c2, 1);
+    add_hydrogens(&mut s, &default_options());
+
+    let h_before = count_hydrogens(&s);
+    assert_eq!(h_before, 6);
+
+    // Strip H
+    remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(count_hydrogens(&s), 0);
+    assert_eq!(count_bonds(&s), 1); // Only C-C
+
+    // Re-passivate
+    let opts = AddHydrogensOptions {
+        selected_only: false,
+        skip_already_passivated: false,
+    };
+    add_hydrogens(&mut s, &opts);
+    assert_eq!(count_hydrogens(&s), 6);
+    assert_eq!(count_h_bonded_to(&s, c1), 3);
+    assert_eq!(count_h_bonded_to(&s, c2), 3);
+}
+
+#[test]
+fn round_trip_ethylene_strip_and_repassivate() {
+    // C=C double bond, sp2: each C gets 2 H → strip → 2C with double bond → re-passivate
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::ZERO);
+    let c2 = s.add_atom(6, DVec3::new(1.34, 0.0, 0.0));
+    s.add_bond(c1, c2, 2);
+
+    let opts_no_skip = AddHydrogensOptions {
+        selected_only: false,
+        skip_already_passivated: false,
+    };
+    add_hydrogens(&mut s, &opts_no_skip);
+    let h_count_original = count_hydrogens(&s);
+    assert_eq!(h_count_original, 4, "Each sp2 C gets 2 H");
+
+    // Strip
+    remove_hydrogens(&mut s, &remove_all_options());
+    assert_eq!(count_hydrogens(&s), 0);
+
+    let total: usize = s.atoms_values().count();
+    assert_eq!(total, 2, "Only the two carbons remain");
+    assert_eq!(count_bonds(&s), 1, "Only C=C bond remains");
+
+    // Re-passivate
+    add_hydrogens(&mut s, &opts_no_skip);
+    assert_eq!(count_hydrogens(&s), 4, "Should get 4 H back");
 }
