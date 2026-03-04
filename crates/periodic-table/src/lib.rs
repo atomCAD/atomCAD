@@ -282,7 +282,9 @@ pub struct ElementProperties {
 const_assert_eq!(mem::size_of::<ElementProperties>(), 16);
 unsafe impl AsBytes for ElementProperties {}
 
+#[repr(C)]
 pub struct PeriodicTable {
+    // +1 to include Element::Empty (element 0), an empty/available binding site.
     pub element_reprs: [ElementProperties; Element::MAX as usize + 1],
 }
 
