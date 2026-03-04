@@ -2251,6 +2251,8 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     diff_stats,
                     measurement,
                     last_selected_result_atom_id,
+                    has_frozen_atoms: !atom_edit_data.frozen_base_atoms.is_empty()
+                        || !atom_edit_data.frozen_diff_atoms.is_empty(),
                 })
             },
             None,
@@ -4251,6 +4253,7 @@ pub fn query_hovered_atom_info(
                     y: atom.position.y,
                     z: atom.position.z,
                     bond_count,
+                    is_frozen: atom.is_frozen(),
                 })
             },
             None,

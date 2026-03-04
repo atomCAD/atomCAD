@@ -192,6 +192,12 @@ impl AtomicStructure {
         }
     }
 
+    pub fn set_atom_frozen(&mut self, atom_id: u32, frozen: bool) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.set_frozen(frozen);
+        }
+    }
+
     pub fn has_selected_atoms(&self) -> bool {
         self.atoms
             .iter()

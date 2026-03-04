@@ -54,6 +54,10 @@ pub struct SerializableAtomEditData {
     pub tolerance: f64,
     #[serde(default)]
     pub error_on_stale_entries: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frozen_base_atoms: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frozen_diff_atoms: Vec<u32>,
 }
 
 fn default_include_base_bonds_in_diff() -> bool {
@@ -104,6 +108,11 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         .collect();
     anchor_positions.sort_by_key(|a| a.atom_id);
 
+    let mut frozen_base: Vec<u32> = data.frozen_base_atoms.iter().copied().collect();
+    frozen_base.sort();
+    let mut frozen_diff: Vec<u32> = data.frozen_diff_atoms.iter().copied().collect();
+    frozen_diff.sort();
+
     Ok(SerializableAtomEditData {
         diff: SerializableDiff {
             atoms,
@@ -115,6 +124,8 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         include_base_bonds_in_diff: data.include_base_bonds_in_diff,
         tolerance: data.tolerance,
         error_on_stale_entries: data.error_on_stale_entries,
+        frozen_base_atoms: frozen_base,
+        frozen_diff_atoms: frozen_diff,
     })
 }
 
@@ -173,5 +184,7 @@ pub fn serializable_to_atom_edit_data(
         serializable.include_base_bonds_in_diff,
         serializable.tolerance,
         serializable.error_on_stale_entries,
+        serializable.frozen_base_atoms.iter().copied().collect(),
+        serializable.frozen_diff_atoms.iter().copied().collect(),
     ))
 }

@@ -8,8 +8,8 @@
 /// The bug only manifested when both operations happened in the same atom_edit
 /// node because separate nodes produce fresh structures with contiguous IDs.
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     add_hydrogen_atom_edit, remove_hydrogen_atom_edit,
@@ -113,10 +113,7 @@ fn build_base_with_gaps() -> AtomicStructure {
     }
 
     // Add H atoms for C2 (2 H, since it has 2 C-C bonds → needs 2 more)
-    let h_positions_c2 = [
-        DVec3::new(1.54, 0.89, 0.51),
-        DVec3::new(1.54, -0.89, 0.51),
-    ];
+    let h_positions_c2 = [DVec3::new(1.54, 0.89, 0.51), DVec3::new(1.54, -0.89, 0.51)];
     for pos in &h_positions_c2 {
         let h = s.add_atom(1, *pos);
         s.add_bond(c2, h, BOND_SINGLE);
@@ -154,7 +151,10 @@ fn test_depassivation_then_passivation_same_atom_edit_bonds_correct_parents() {
     let base = build_base_with_gaps();
 
     // Verify the base has the expected gaps
-    assert!(base.get_atom(2).is_none(), "Atom id=2 should be deleted (gap)");
+    assert!(
+        base.get_atom(2).is_none(),
+        "Atom id=2 should be deleted (gap)"
+    );
     assert!(base.get_atom(1).is_some(), "C1 at id=1");
     assert!(base.get_atom(3).is_some(), "C2 at id=3");
     assert!(base.get_atom(4).is_some(), "C3 at id=4");
@@ -177,12 +177,16 @@ fn test_depassivation_then_passivation_same_atom_edit_bonds_correct_parents() {
     {
         let result = get_selected_atomic_structure(&designer);
         let total = result.atom_ids().count();
-        assert_eq!(total, 11, "Initial: expected 11 atoms (3C + 8H), got {}", total);
+        assert_eq!(
+            total, 11,
+            "Initial: expected 11 atoms (3C + 8H), got {}",
+            total
+        );
     }
 
     // Step 1: Remove all hydrogen atoms
-    let remove_msg = remove_hydrogen_atom_edit(&mut designer, false)
-        .expect("remove_hydrogen_atom_edit failed");
+    let remove_msg =
+        remove_hydrogen_atom_edit(&mut designer, false).expect("remove_hydrogen_atom_edit failed");
     assert!(
         remove_msg.contains("8"),
         "Expected to remove 8 hydrogens, got: {}",
@@ -196,7 +200,11 @@ fn test_depassivation_then_passivation_same_atom_edit_bonds_correct_parents() {
     {
         let result = get_selected_atomic_structure(&designer);
         let total = result.atom_ids().count();
-        assert_eq!(total, 3, "After removal: expected 3 atoms (3C), got {}", total);
+        assert_eq!(
+            total, 3,
+            "After removal: expected 3 atoms (3C), got {}",
+            total
+        );
     }
 
     // Step 2: Re-add hydrogen atoms

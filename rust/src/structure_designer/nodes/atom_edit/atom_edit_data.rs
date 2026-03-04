@@ -48,6 +48,10 @@ pub struct AtomEditData {
     pub tolerance: f64,
     /// When true + result view, return error if any diff diagnostics are non-zero
     pub error_on_stale_entries: bool,
+    /// Base atom IDs that are frozen (tracked by provenance)
+    pub frozen_base_atoms: HashSet<u32>,
+    /// Diff atom IDs that are frozen (tracked by provenance)
+    pub frozen_diff_atoms: HashSet<u32>,
 
     // Transient (NOT serialized)
     /// Current selection state
@@ -83,6 +87,8 @@ impl AtomEditData {
             include_base_bonds_in_diff: true,
             tolerance: DEFAULT_TOLERANCE,
             error_on_stale_entries: false,
+            frozen_base_atoms: HashSet::new(),
+            frozen_diff_atoms: HashSet::new(),
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 interaction_state: DefaultToolInteractionState::default(),
@@ -104,6 +110,8 @@ impl AtomEditData {
         include_base_bonds_in_diff: bool,
         tolerance: f64,
         error_on_stale_entries: bool,
+        frozen_base_atoms: HashSet<u32>,
+        frozen_diff_atoms: HashSet<u32>,
     ) -> Self {
         Self {
             diff,
@@ -112,6 +120,8 @@ impl AtomEditData {
             include_base_bonds_in_diff,
             tolerance,
             error_on_stale_entries,
+            frozen_base_atoms,
+            frozen_diff_atoms,
             measurement_marked_atom_id: None,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
@@ -709,6 +719,18 @@ impl NodeData for AtomEditData {
 
             let mut result = diff_result.result;
 
+            // Apply frozen flags to result atoms via provenance
+            for &base_id in &self.frozen_base_atoms {
+                if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
+                    result.set_atom_frozen(result_id, true);
+                }
+            }
+            for &diff_id in &self.frozen_diff_atoms {
+                if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+                    result.set_atom_frozen(result_id, true);
+                }
+            }
+
             // Apply selection to result (mark atoms as selected for rendering)
             if decorate {
                 result.decorator_mut().from_selected_node = true;
@@ -810,6 +832,8 @@ impl NodeData for AtomEditData {
             last_stats: self.last_stats.clone(),
             cached_input: Mutex::new(None),
             measurement_marked_atom_id: self.measurement_marked_atom_id,
+            frozen_base_atoms: self.frozen_base_atoms.clone(),
+            frozen_diff_atoms: self.frozen_diff_atoms.clone(),
         })
     }
 

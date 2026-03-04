@@ -27,7 +27,7 @@ pub struct MinimizationResult {
 /// Performs energy minimization on an atomic structure using the UFF force field.
 ///
 /// Updates atom positions in-place to lower-energy configurations.
-/// All atoms are free to move (no frozen atoms).
+/// Atoms with the frozen flag (`atom.is_frozen()`) are held fixed.
 ///
 /// # Arguments
 ///
@@ -55,12 +55,28 @@ pub fn minimize_energy(
         });
     }
 
-    let ff = UffForceField::from_topology_with_vdw_mode(&topology, vdw_mode)?;
+    // Collect frozen indices from atom flags
+    let frozen: Vec<usize> = topology
+        .atom_ids
+        .iter()
+        .enumerate()
+        .filter(|(_, atom_id)| {
+            structure
+                .get_atom(**atom_id)
+                .is_some_and(|atom| atom.is_frozen())
+        })
+        .map(|(i, _)| i)
+        .collect();
+
+    let ff = if frozen.is_empty() {
+        UffForceField::from_topology_with_vdw_mode(&topology, vdw_mode)?
+    } else {
+        UffForceField::from_topology_with_frozen(&topology, vdw_mode, &frozen)?
+    };
     let mut positions = topology.positions.clone();
     let config = MinimizationConfig::default();
-    let frozen: &[usize] = &[];
 
-    let result = minimize_with_force_field(&ff, &mut positions, &config, frozen);
+    let result = minimize_with_force_field(&ff, &mut positions, &config, &frozen);
 
     // Write optimized positions back into the AtomicStructure.
     for (i, &atom_id) in topology.atom_ids.iter().enumerate() {

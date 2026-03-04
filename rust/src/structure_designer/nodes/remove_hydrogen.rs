@@ -58,10 +58,9 @@ impl NodeData for HydrogenDepassivateData {
             let result = remove_hydrogens(&mut structure, &options);
 
             if network_stack.len() == 1 {
-                context.selected_node_eval_cache =
-                    Some(Box::new(HydrogenDepassivateEvalCache {
-                        message: format!("Removed {} hydrogens", result.hydrogens_removed),
-                    }));
+                context.selected_node_eval_cache = Some(Box::new(HydrogenDepassivateEvalCache {
+                    message: format!("Removed {} hydrogens", result.hydrogens_removed),
+                }));
             }
 
             NetworkResult::Atomic(structure)

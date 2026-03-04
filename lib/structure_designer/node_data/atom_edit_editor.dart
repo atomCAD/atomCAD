@@ -845,9 +845,94 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   }
 
   Widget _buildMinimizeSectionContent() {
+    final hasFrozen = _stagedData?.hasFrozenAtoms ?? false;
+    final hasSelected = _stagedData?.hasSelectedAtoms ?? false;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Freeze control buttons (2x2 grid)
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 32,
+                child: OutlinedButton(
+                  onPressed: hasSelected
+                      ? () {
+                          atom_edit_api.atomEditSelectionToFrozen();
+                          widget.model.refreshFromKernel();
+                        }
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  child: const Text('Freeze selected',
+                      style: TextStyle(fontSize: 11)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SizedBox(
+                height: 32,
+                child: OutlinedButton(
+                  onPressed: hasSelected
+                      ? () {
+                          atom_edit_api.atomEditSelectionToUnfrozen();
+                          widget.model.refreshFromKernel();
+                        }
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  child: const Text('Unfreeze selected',
+                      style: TextStyle(fontSize: 11)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 32,
+                child: OutlinedButton(
+                  onPressed: hasFrozen
+                      ? () {
+                          atom_edit_api.atomEditFrozenToSelection();
+                          widget.model.refreshFromKernel();
+                        }
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  child: const Text('Select frozen',
+                      style: TextStyle(fontSize: 11)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SizedBox(
+                height: 32,
+                child: OutlinedButton(
+                  onPressed: hasFrozen
+                      ? () {
+                          atom_edit_api.atomEditClearFrozen();
+                          widget.model.refreshFromKernel();
+                        }
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  child: const Text('Clear frozen',
+                      style: TextStyle(fontSize: 11)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Minimize buttons
         Row(
           children: [
             Expanded(
@@ -878,7 +963,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                     );
                   },
                   icon: const Icon(Icons.lock_open, size: 18),
-                  label: const Text('Minimize\nall'),
+                  label: const Text('Minimize\nunfrozen'),
                   style: AppButtonStyles.primary,
                 ),
               ),
@@ -888,7 +973,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               child: SizedBox(
                 height: 48,
                 child: ElevatedButton.icon(
-                  onPressed: (_stagedData?.hasSelectedAtoms ?? false)
+                  onPressed: hasSelected
                       ? () {
                           widget.model.atomEditMinimize(
                             APIMinimizeFreezeMode.freeSelected,

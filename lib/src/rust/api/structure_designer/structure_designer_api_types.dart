@@ -152,6 +152,9 @@ class APIAtomEditData {
   /// Result-space ID of the most recently selected atom (for dialog defaults).
   final int? lastSelectedResultAtomId;
 
+  /// True if any atom has the frozen flag set.
+  final bool hasFrozenAtoms;
+
   const APIAtomEditData({
     required this.activeTool,
     this.bondToolLastAtomId,
@@ -172,6 +175,7 @@ class APIAtomEditData {
     required this.diffStats,
     this.measurement,
     this.lastSelectedResultAtomId,
+    required this.hasFrozenAtoms,
   });
 
   @override
@@ -194,7 +198,8 @@ class APIAtomEditData {
       showGadget.hashCode ^
       diffStats.hashCode ^
       measurement.hashCode ^
-      lastSelectedResultAtomId.hashCode;
+      lastSelectedResultAtomId.hashCode ^
+      hasFrozenAtoms.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -219,7 +224,8 @@ class APIAtomEditData {
           showGadget == other.showGadget &&
           diffStats == other.diffStats &&
           measurement == other.measurement &&
-          lastSelectedResultAtomId == other.lastSelectedResultAtomId;
+          lastSelectedResultAtomId == other.lastSelectedResultAtomId &&
+          hasFrozenAtoms == other.hasFrozenAtoms;
 }
 
 enum APIAtomEditTool {
@@ -903,6 +909,7 @@ class APIHoveredAtomInfo {
   final double y;
   final double z;
   final int bondCount;
+  final bool isFrozen;
 
   const APIHoveredAtomInfo({
     required this.symbol,
@@ -912,6 +919,7 @@ class APIHoveredAtomInfo {
     required this.y,
     required this.z,
     required this.bondCount,
+    required this.isFrozen,
   });
 
   @override
@@ -922,7 +930,8 @@ class APIHoveredAtomInfo {
       x.hashCode ^
       y.hashCode ^
       z.hashCode ^
-      bondCount.hashCode;
+      bondCount.hashCode ^
+      isFrozen.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -935,7 +944,8 @@ class APIHoveredAtomInfo {
           x == other.x &&
           y == other.y &&
           z == other.z &&
-          bondCount == other.bondCount;
+          bondCount == other.bondCount &&
+          isFrozen == other.isFrozen;
 }
 
 /// Hybridization override for guided atom placement.

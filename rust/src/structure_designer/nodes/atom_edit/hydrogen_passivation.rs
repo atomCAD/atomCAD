@@ -230,9 +230,7 @@ pub fn add_hydrogen_atom_edit(
             // looks up by base_id from AtomSource::BasePassthrough(base_id).
             // These IDs differ when the base structure has gaps from deleted atoms.
             if let AtomSource::BasePassthrough(base_id) = &parent_source {
-                if let std::collections::hash_map::Entry::Vacant(e) =
-                    base_parents.entry(*base_id)
-                {
+                if let std::collections::hash_map::Entry::Vacant(e) = base_parents.entry(*base_id) {
                     if let Some(parent_atom) = result_structure.get_atom(parent_result_id) {
                         e.insert(BaseParentInfo {
                             atomic_number: parent_atom.atomic_number,

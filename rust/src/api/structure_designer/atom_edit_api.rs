@@ -885,3 +885,100 @@ pub fn atom_edit_get_default_angle() -> Option<f64> {
         )
     }
 }
+
+// --- Frozen atom API ---
+
+/// Sets the frozen flag on all currently selected atoms (additive).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_selection_to_frozen() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                for &base_id in &atom_edit_data.selection.selected_base_atoms.clone() {
+                    atom_edit_data.frozen_base_atoms.insert(base_id);
+                }
+                for &diff_id in &atom_edit_data.selection.selected_diff_atoms.clone() {
+                    atom_edit_data.frozen_diff_atoms.insert(diff_id);
+                }
+                refresh_structure_designer_auto(cad_instance);
+            }
+        });
+    }
+}
+
+/// Clears the frozen flag on all currently selected atoms.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_selection_to_unfrozen() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                for &base_id in &atom_edit_data.selection.selected_base_atoms.clone() {
+                    atom_edit_data.frozen_base_atoms.remove(&base_id);
+                }
+                for &diff_id in &atom_edit_data.selection.selected_diff_atoms.clone() {
+                    atom_edit_data.frozen_diff_atoms.remove(&diff_id);
+                }
+                refresh_structure_designer_auto(cad_instance);
+            }
+        });
+    }
+}
+
+/// Replaces the current selection with the set of frozen atoms.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_frozen_to_selection() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                atom_edit_data.selection.selected_base_atoms =
+                    atom_edit_data.frozen_base_atoms.clone();
+                atom_edit_data.selection.selected_diff_atoms =
+                    atom_edit_data.frozen_diff_atoms.clone();
+                atom_edit_data.selection.selected_bonds.clear();
+                atom_edit_data.selection.selection_transform = None;
+                refresh_structure_designer_auto(cad_instance);
+            }
+        });
+    }
+}
+
+/// Clears the frozen flag from all atoms.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_clear_frozen() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                atom_edit_data.frozen_base_atoms.clear();
+                atom_edit_data.frozen_diff_atoms.clear();
+                refresh_structure_designer_auto(cad_instance);
+            }
+        });
+    }
+}
+
+/// Returns true if any atom has the frozen flag set.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_has_frozen_atoms() -> bool {
+    use crate::api::api_common::with_cad_instance_or;
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| match atom_edit::get_active_atom_edit_data(
+                &cad_instance.structure_designer,
+            ) {
+                Some(data) => {
+                    !data.frozen_base_atoms.is_empty() || !data.frozen_diff_atoms.is_empty()
+                }
+                None => false,
+            },
+            false,
+        )
+    }
+}

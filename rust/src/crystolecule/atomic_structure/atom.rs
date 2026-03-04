@@ -9,11 +9,12 @@ pub struct Atom {
     pub id: u32,
     pub in_crystal_depth: f32,
     pub atomic_number: i16,
-    pub flags: u16, // Bit 0: selected, Bit 1: hydrogen passivation
+    pub flags: u16, // Bit 0: selected, Bit 1: hydrogen passivation, Bit 2: frozen
 }
 
 const ATOM_FLAG_SELECTED: u16 = 1 << 0;
 const ATOM_FLAG_HYDROGEN_PASSIVATION: u16 = 1 << 1;
+const ATOM_FLAG_FROZEN: u16 = 1 << 2;
 
 impl Atom {
     /// Returns true if this atom is a delete marker in a diff structure.
@@ -48,6 +49,20 @@ impl Atom {
             self.flags |= ATOM_FLAG_HYDROGEN_PASSIVATION;
         } else {
             self.flags &= !ATOM_FLAG_HYDROGEN_PASSIVATION;
+        }
+    }
+
+    #[inline]
+    pub fn is_frozen(&self) -> bool {
+        (self.flags & ATOM_FLAG_FROZEN) != 0
+    }
+
+    #[inline]
+    pub fn set_frozen(&mut self, frozen: bool) {
+        if frozen {
+            self.flags |= ATOM_FLAG_FROZEN;
+        } else {
+            self.flags &= !ATOM_FLAG_FROZEN;
         }
     }
 }

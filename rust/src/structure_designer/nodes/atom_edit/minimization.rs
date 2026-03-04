@@ -84,14 +84,28 @@ pub fn minimize_atom_edit(
                 .iter()
                 .enumerate()
                 .filter(|(_, result_id)| {
-                    matches!(
+                    let is_base = matches!(
                         eval_cache.provenance.sources.get(result_id),
                         Some(AtomSource::BasePassthrough(_))
-                    )
+                    );
+                    let is_frozen = result_structure
+                        .get_atom(**result_id)
+                        .is_some_and(|atom| atom.is_frozen());
+                    is_base || is_frozen
                 })
                 .map(|(i, _)| i)
                 .collect(),
-            MinimizeFreezeMode::FreeAll => Vec::new(),
+            MinimizeFreezeMode::FreeAll => topology
+                .atom_ids
+                .iter()
+                .enumerate()
+                .filter(|(_, result_id)| {
+                    result_structure
+                        .get_atom(**result_id)
+                        .is_some_and(|atom| atom.is_frozen())
+                })
+                .map(|(i, _)| i)
+                .collect(),
             MinimizeFreezeMode::FreeSelected => {
                 // Build set of selected result atom IDs from selection + provenance
                 let mut selected_result_ids: HashSet<u32> = HashSet::new();

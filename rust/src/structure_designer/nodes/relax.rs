@@ -108,7 +108,7 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Atomic,
         }],
         output_type: DataType::Atomic,
-        public: false,
+        public: true,
         node_data_creator: || Box::new(RelaxData {}),
         node_data_saver: generic_node_data_saver::<RelaxData>,
         node_data_loader: generic_node_data_loader::<RelaxData>,

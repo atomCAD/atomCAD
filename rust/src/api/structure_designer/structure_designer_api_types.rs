@@ -384,6 +384,8 @@ pub struct APIAtomEditData {
     pub measurement: Option<APIMeasurement>,
     /// Result-space ID of the most recently selected atom (for dialog defaults).
     pub last_selected_result_atom_id: Option<u32>,
+    /// True if any atom has the frozen flag set.
+    pub has_frozen_atoms: bool,
 }
 
 /// Measurement computed from selected atoms (2-4 atoms).
@@ -459,6 +461,9 @@ pub struct APIHoveredAtomInfo {
 
     // Bonding
     pub bond_count: u32,
+
+    // Frozen state
+    pub is_frozen: bool,
 }
 
 /// Hybridization override for guided atom placement.

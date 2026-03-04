@@ -263,3 +263,23 @@ double? atomEditGetDefaultBondLength(
 /// Returns None if UFF typing fails for the vertex atom.
 double? atomEditGetDefaultAngle() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditGetDefaultAngle();
+
+/// Sets the frozen flag on all currently selected atoms (additive).
+void atomEditSelectionToFrozen() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditSelectionToFrozen();
+
+/// Clears the frozen flag on all currently selected atoms.
+void atomEditSelectionToUnfrozen() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditSelectionToUnfrozen();
+
+/// Replaces the current selection with the set of frozen atoms.
+void atomEditFrozenToSelection() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditFrozenToSelection();
+
+/// Clears the frozen flag from all atoms.
+void atomEditClearFrozen() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditClearFrozen();
+
+/// Returns true if any atom has the frozen flag set.
+bool atomEditHasFrozenAtoms() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditHasFrozenAtoms();

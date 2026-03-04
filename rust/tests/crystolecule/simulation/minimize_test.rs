@@ -2879,3 +2879,72 @@ fn diamond_cuboid_3x3x3_diagnose_initial_contacts() {
     // The initial structure should have reasonable energy (not astronomical)
     assert!(energy.is_finite(), "Initial energy is not finite: {energy}");
 }
+
+// ============================================================================
+// Frozen atom flag tests (minimize_energy reads atom.is_frozen())
+// ============================================================================
+
+#[test]
+fn minimize_energy_respects_frozen_atom_flag() {
+    use rust_lib_flutter_cad::crystolecule::simulation::minimize_energy;
+
+    // Build a simple H2 molecule with a stretched bond.
+    let mut structure = AtomicStructure::new();
+    let h1 = structure.add_atom(1, DVec3::new(0.0, 0.0, 0.0));
+    let h2 = structure.add_atom(1, DVec3::new(2.0, 0.0, 0.0));
+    structure.add_bond(h1, h2, 1);
+
+    // Freeze the first atom
+    structure.set_atom_frozen(h1, true);
+
+    let pos_before_h1 = structure.get_atom(h1).unwrap().position;
+    let pos_before_h2 = structure.get_atom(h2).unwrap().position;
+
+    let result = minimize_energy(&mut structure, VdwMode::AllPairs).unwrap();
+    assert!(result.converged, "Minimization did not converge");
+
+    let pos_after_h1 = structure.get_atom(h1).unwrap().position;
+    let pos_after_h2 = structure.get_atom(h2).unwrap().position;
+
+    // Frozen atom must not move
+    assert!(
+        (pos_after_h1 - pos_before_h1).length() < 1e-10,
+        "Frozen atom moved: before={pos_before_h1}, after={pos_after_h1}"
+    );
+
+    // Unfrozen atom should move (bond was stretched)
+    assert!(
+        (pos_after_h2 - pos_before_h2).length() > 0.01,
+        "Unfrozen atom did not move: before={pos_before_h2}, after={pos_after_h2}"
+    );
+}
+
+#[test]
+fn minimize_energy_no_frozen_flag_all_atoms_move() {
+    use rust_lib_flutter_cad::crystolecule::simulation::minimize_energy;
+
+    // Same stretched H2, but no frozen flags
+    let mut structure = AtomicStructure::new();
+    let h1 = structure.add_atom(1, DVec3::new(0.0, 0.0, 0.0));
+    let h2 = structure.add_atom(1, DVec3::new(2.0, 0.0, 0.0));
+    structure.add_bond(h1, h2, 1);
+
+    let pos_before_h1 = structure.get_atom(h1).unwrap().position;
+    let pos_before_h2 = structure.get_atom(h2).unwrap().position;
+
+    let result = minimize_energy(&mut structure, VdwMode::AllPairs).unwrap();
+    assert!(result.converged);
+
+    let pos_after_h1 = structure.get_atom(h1).unwrap().position;
+    let pos_after_h2 = structure.get_atom(h2).unwrap().position;
+
+    // Both atoms should move toward equilibrium
+    assert!(
+        (pos_after_h1 - pos_before_h1).length() > 0.01,
+        "H1 did not move"
+    );
+    assert!(
+        (pos_after_h2 - pos_before_h2).length() > 0.01,
+        "H2 did not move"
+    );
+}

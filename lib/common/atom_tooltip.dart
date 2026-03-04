@@ -41,7 +41,18 @@ class AtomTooltip extends StatelessWidget {
               decoration: TextDecoration.none,
             ),
           ),
-          // Line 3: position in Angstroms (3 decimal places)
+          // Line 3: frozen status (only shown when frozen)
+          if (info.isFrozen)
+            const Text(
+              'Frozen',
+              style: TextStyle(
+                color: Color(0xFFFFB74D),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          // Line 4: position in Angstroms (3 decimal places)
           Text(
             'Pos: (${info.x.toStringAsFixed(3)}, '
             '${info.y.toStringAsFixed(3)}, '

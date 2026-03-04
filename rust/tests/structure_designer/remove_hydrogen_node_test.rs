@@ -106,7 +106,11 @@ fn test_remove_hydrogen_node_methane() {
 
     // Should have 1 carbon, 0 hydrogens
     let atom_count = result.atom_ids().count();
-    assert_eq!(atom_count, 1, "Expected 1 atom (C only), got {}", atom_count);
+    assert_eq!(
+        atom_count, 1,
+        "Expected 1 atom (C only), got {}",
+        atom_count
+    );
 
     let carbon = result
         .atom_ids()
@@ -118,7 +122,11 @@ fn test_remove_hydrogen_node_methane() {
         .iter()
         .filter(|b| !b.is_delete_marker())
         .count();
-    assert_eq!(bond_count, 0, "Carbon should have 0 bonds, got {}", bond_count);
+    assert_eq!(
+        bond_count, 0,
+        "Carbon should have 0 bonds, got {}",
+        bond_count
+    );
 }
 
 /// Empty structure -> empty output
@@ -203,9 +211,16 @@ fn test_remove_hydrogen_node_ethane() {
     // C-C bond intact
     for &id in result.atom_ids() {
         let atom = result.get_atom(id).unwrap();
-        assert_eq!(atom.atomic_number, 6, "All remaining atoms should be carbon");
+        assert_eq!(
+            atom.atomic_number, 6,
+            "All remaining atoms should be carbon"
+        );
         let bond_count = atom.bonds.iter().filter(|b| !b.is_delete_marker()).count();
-        assert_eq!(bond_count, 1, "Each carbon should have 1 bond (C-C), got {}", bond_count);
+        assert_eq!(
+            bond_count, 1,
+            "Each carbon should have 1 bond (C-C), got {}",
+            bond_count
+        );
     }
 }
 
@@ -228,7 +243,11 @@ fn test_remove_hydrogen_node_no_hydrogens() {
     let result = evaluate_to_atomic(&designer, network_name, remove_h_id);
 
     let atom_count = result.atom_ids().count();
-    assert_eq!(atom_count, 2, "Expected 2 atoms unchanged, got {}", atom_count);
+    assert_eq!(
+        atom_count, 2,
+        "Expected 2 atoms unchanged, got {}",
+        atom_count
+    );
 }
 
 /// Round-trip: bare C -> add_hydrogen -> remove_hydrogen -> 1 C, 0 bonds
@@ -251,7 +270,11 @@ fn test_remove_hydrogen_node_roundtrip() {
 
     // Should be back to just 1 carbon
     let atom_count = result.atom_ids().count();
-    assert_eq!(atom_count, 1, "Round-trip should yield 1 atom, got {}", atom_count);
+    assert_eq!(
+        atom_count, 1,
+        "Round-trip should yield 1 atom, got {}",
+        atom_count
+    );
 
     let carbon = result
         .atom_ids()
@@ -264,5 +287,9 @@ fn test_remove_hydrogen_node_roundtrip() {
         .iter()
         .filter(|b| !b.is_delete_marker())
         .count();
-    assert_eq!(bond_count, 0, "Carbon should have 0 bonds after round-trip, got {}", bond_count);
+    assert_eq!(
+        bond_count, 0,
+        "Carbon should have 0 bonds after round-trip, got {}",
+        bond_count
+    );
 }
