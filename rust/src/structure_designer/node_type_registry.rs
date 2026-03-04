@@ -43,6 +43,7 @@ use super::nodes::range::get_node_type as range_get_node_type;
 use super::nodes::rect::get_node_type as rect_get_node_type;
 use super::nodes::reg_poly::get_node_type as reg_poly_get_node_type;
 use super::nodes::relax::get_node_type as relax_get_node_type;
+use super::nodes::remove_hydrogen::get_node_type as remove_hydrogen_get_node_type;
 use super::nodes::sphere::get_node_type as sphere_get_node_type;
 use super::nodes::string::get_node_type as string_get_node_type;
 use super::nodes::union::get_node_type as union_get_node_type;
@@ -139,6 +140,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(atom_cut_get_node_type());
         ret.add_node_type(relax_get_node_type());
         ret.add_node_type(add_hydrogen_get_node_type());
+        ret.add_node_type(remove_hydrogen_get_node_type());
 
         ret
     }

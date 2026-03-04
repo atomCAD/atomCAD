@@ -40,6 +40,7 @@ pub mod range;
 pub mod rect;
 pub mod reg_poly;
 pub mod relax;
+pub mod remove_hydrogen;
 pub mod sphere;
 pub mod string;
 pub mod union;
