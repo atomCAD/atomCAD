@@ -99,3 +99,6 @@ mod add_hydrogen_node_test;
 
 #[path = "structure_designer/remove_hydrogen_node_test.rs"]
 mod remove_hydrogen_node_test;
+
+#[path = "structure_designer/atom_edit_hydrogen_roundtrip_test.rs"]
+mod atom_edit_hydrogen_roundtrip_test;

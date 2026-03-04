@@ -225,10 +225,13 @@ pub fn add_hydrogen_atom_edit(
                 None => continue, // no provenance info, skip
             };
 
-            // For base passthrough parents, collect their atom info for promotion
-            if let AtomSource::BasePassthrough(_) = &parent_source {
+            // For base passthrough parents, collect their atom info for promotion.
+            // Key by base_id (not parent_result_id) because the mutation phase
+            // looks up by base_id from AtomSource::BasePassthrough(base_id).
+            // These IDs differ when the base structure has gaps from deleted atoms.
+            if let AtomSource::BasePassthrough(base_id) = &parent_source {
                 if let std::collections::hash_map::Entry::Vacant(e) =
-                    base_parents.entry(parent_result_id)
+                    base_parents.entry(*base_id)
                 {
                     if let Some(parent_atom) = result_structure.get_atom(parent_result_id) {
                         e.insert(BaseParentInfo {
