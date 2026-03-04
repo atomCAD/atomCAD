@@ -1,8 +1,6 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::crystolecule::unit_cell_symmetries::{
-    RotationalSymmetry, analyze_unit_cell_symmetries,
-};
+use crate::crystolecule::unit_cell_symmetries::{RotationalSymmetry, analyze_unit_cell_symmetries};
 use crate::display::gadget::Gadget;
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
@@ -144,8 +142,7 @@ impl NodeData for LatticeRotData {
                 let symmetry_axes = analyze_unit_cell_symmetries(&unit_cell);
 
                 // Calculate rotation quaternion using discrete symmetry approach
-                let real_rotation_quat =
-                    compute_rotation_quat(axis_index, step, &symmetry_axes);
+                let real_rotation_quat = compute_rotation_quat(axis_index, step, &symmetry_axes);
 
                 // Store evaluation cache for root-level evaluations
                 if network_stack.len() == 1 {
@@ -271,7 +268,10 @@ impl NodeData for LatticeRotData {
         let mut m = HashMap::new();
         if self.is_atomic_mode {
             m.insert("molecule".to_string(), (true, None)); // required
-            m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+            m.insert(
+                "unit_cell".to_string(),
+                (false, Some("cubic diamond".to_string())),
+            );
         } else {
             m.insert("shape".to_string(), (true, None)); // required
         }

@@ -57,14 +57,7 @@ fn evaluate_to_atomic(
         node_id: 0,
     }];
 
-    let result = evaluator.evaluate(
-        &network_stack,
-        node_id,
-        0,
-        registry,
-        false,
-        &mut context,
-    );
+    let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
 
     match result {
         NetworkResult::Atomic(s) => s,
@@ -74,11 +67,7 @@ fn evaluate_to_atomic(
 }
 
 /// Evaluates a node and returns the raw NetworkResult.
-fn evaluate_raw(
-    designer: &StructureDesigner,
-    network_name: &str,
-    node_id: u64,
-) -> NetworkResult {
+fn evaluate_raw(designer: &StructureDesigner, network_name: &str, node_id: u64) -> NetworkResult {
     let registry = &designer.node_type_registry;
     let network = registry.node_networks.get(network_name).unwrap();
     let evaluator = NetworkEvaluator::new();
@@ -88,14 +77,7 @@ fn evaluate_raw(
         node_id: 0,
     }];
 
-    evaluator.evaluate(
-        &network_stack,
-        node_id,
-        0,
-        registry,
-        false,
-        &mut context,
-    )
+    evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context)
 }
 
 /// Creates a base structure with 4 carbon atoms in a line along X.
@@ -377,9 +359,9 @@ fn apply_diff_node_modification() {
     assert_eq!(result.get_num_of_atoms(), 2, "Should still have 2 atoms");
 
     // Should have silicon at (0,0,2)
-    let has_si = result.atoms_values().any(|a| {
-        a.atomic_number == 14 && a.position.distance(DVec3::new(0.0, 0.0, 2.0)) < 0.01
-    });
+    let has_si = result
+        .atoms_values()
+        .any(|a| a.atomic_number == 14 && a.position.distance(DVec3::new(0.0, 0.0, 2.0)) < 0.01);
     assert!(has_si, "Modified atom should be silicon at (0, 0, 2)");
 
     // Should have carbon at (3,0,0) unchanged

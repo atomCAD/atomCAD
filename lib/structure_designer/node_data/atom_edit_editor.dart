@@ -742,8 +742,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 child: ElevatedButton.icon(
                   onPressed: (_stagedData?.hasSelectedAtoms ?? false)
                       ? () {
-                          widget.model
-                              .atomEditAddHydrogen(selectedOnly: true);
+                          widget.model.atomEditAddHydrogen(selectedOnly: true);
                         }
                       : null,
                   icon: const Icon(Icons.filter_center_focus, size: 18),
@@ -761,6 +760,54 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             style: TextStyle(
               fontSize: 12,
               color: widget.model.lastAddHydrogenMessage.startsWith('Error')
+                  ? Colors.red[700]
+                  : Colors.grey[600],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.small),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    widget.model.atomEditRemoveHydrogen(selectedOnly: false);
+                  },
+                  icon: const Icon(Icons.blur_off, size: 18),
+                  label: const Text('Remove H\nall'),
+                  style: AppButtonStyles.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: (_stagedData?.hasSelectedAtoms ?? false)
+                      ? () {
+                          widget.model
+                              .atomEditRemoveHydrogen(selectedOnly: true);
+                        }
+                      : null,
+                  icon:
+                      const Icon(Icons.filter_center_focus_outlined, size: 18),
+                  label: const Text('Remove H\nselected (Ctrl+Shift+H)'),
+                  style: AppButtonStyles.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (widget.model.lastRemoveHydrogenMessage.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.small),
+          Text(
+            widget.model.lastRemoveHydrogenMessage,
+            style: TextStyle(
+              fontSize: 12,
+              color: widget.model.lastRemoveHydrogenMessage.startsWith('Error')
                   ? Colors.red[700]
                   : Colors.grey[600],
             ),
@@ -882,8 +929,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Bond Order',
-                style: TextStyle(fontWeight: FontWeight.w500)),
+            Text('Bond Order', style: TextStyle(fontWeight: FontWeight.w500)),
             const SizedBox(height: AppSpacing.small),
             BondOrderSelector(
               selectedOrder: _stagedData!.bondToolBondOrder,

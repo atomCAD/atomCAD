@@ -7,6 +7,132 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::f64::DVec3;
 use std::collections::HashMap;
 
+// ============================================================================
+// Hydrogen depassivation (removal)
+// ============================================================================
+
+/// Info gathered in Phase 1 for each hydrogen atom to remove.
+struct HRemovalInfo {
+    /// Provenance of this hydrogen atom in the result structure.
+    source: AtomSource,
+    /// Position of the hydrogen atom (needed for delete markers).
+    position: DVec3,
+}
+
+/// Removes hydrogen atoms from the active atom_edit node.
+///
+/// Scans the result structure for hydrogen atoms matching the selection filter,
+/// then removes them from the diff using provenance-based deletion:
+/// - DiffAdded: remove from diff entirely
+/// - DiffMatchedBase: convert to delete marker
+/// - BasePassthrough: add a delete marker at the atom's position
+///
+/// Returns a human-readable result message, or an error string.
+pub fn remove_hydrogen_atom_edit(
+    structure_designer: &mut StructureDesigner,
+    selected_only: bool,
+) -> Result<String, String> {
+    // Phase 1: Gather (immutable borrows, all owned data returned)
+    let removals = {
+        let atom_edit_data =
+            get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
+
+        if atom_edit_data.output_diff {
+            return Err("Switch to result view before removing hydrogens".to_string());
+        }
+
+        let eval_cache = structure_designer
+            .get_selected_node_eval_cache()
+            .ok_or("No eval cache")?;
+        let eval_cache = eval_cache
+            .downcast_ref::<AtomEditEvalCache>()
+            .ok_or("Wrong eval cache type")?;
+
+        let result_structure = structure_designer
+            .get_atomic_structure_from_selected_node()
+            .ok_or("No result structure")?;
+
+        let mut h_atoms_to_remove: Vec<HRemovalInfo> = Vec::new();
+
+        for &atom_id in result_structure
+            .atom_ids()
+            .copied()
+            .collect::<Vec<_>>()
+            .iter()
+        {
+            let atom = match result_structure.get_atom(atom_id) {
+                Some(a) => a,
+                None => continue,
+            };
+            if atom.atomic_number != 1 {
+                continue;
+            }
+
+            if selected_only {
+                let self_selected = atom.is_selected();
+                let neighbor_selected =
+                    atom.bonds
+                        .iter()
+                        .filter(|b| !b.is_delete_marker())
+                        .any(|b| {
+                            result_structure
+                                .get_atom(b.other_atom_id())
+                                .is_some_and(|n| n.is_selected())
+                        });
+                if !self_selected && !neighbor_selected {
+                    continue;
+                }
+            }
+
+            let source = match eval_cache.provenance.sources.get(&atom_id) {
+                Some(s) => s.clone(),
+                None => continue,
+            };
+
+            h_atoms_to_remove.push(HRemovalInfo {
+                source,
+                position: atom.position,
+            });
+        }
+
+        h_atoms_to_remove
+    };
+
+    if removals.is_empty() {
+        return Ok("No hydrogen atoms to remove".to_string());
+    }
+
+    // Phase 2: No additional computation needed
+
+    // Phase 3: Mutate (mutable borrow on atom_edit_data)
+    let atom_edit_data =
+        get_selected_atom_edit_data_mut(structure_designer).ok_or("No active atom_edit node")?;
+
+    let mut h_count = 0;
+    for removal in &removals {
+        match &removal.source {
+            AtomSource::DiffAdded(diff_id) => {
+                // Pure addition — remove from diff entirely
+                atom_edit_data.remove_from_diff(*diff_id);
+            }
+            AtomSource::DiffMatchedBase { diff_id, .. } => {
+                // Matched base atom — convert to delete marker
+                atom_edit_data.convert_to_delete_marker(*diff_id);
+            }
+            AtomSource::BasePassthrough(_) => {
+                // Base passthrough — add a delete marker at its position
+                atom_edit_data.mark_for_deletion(removal.position);
+            }
+        }
+        h_count += 1;
+    }
+
+    // Clear selection (hydrogen atoms may have been selected)
+    atom_edit_data.selection.clear();
+
+    Ok(format!("Removed {} hydrogen atoms", h_count))
+}
+
 /// Info gathered in Phase 1 for each hydrogen atom to be placed.
 struct HPlacement {
     /// World position for the new hydrogen atom.
@@ -147,10 +273,9 @@ pub fn add_hydrogen_atom_edit(
                 if let Some(&already_promoted_id) = promoted_base_atoms.get(base_id) {
                     already_promoted_id
                 } else if let Some(parent_info) = base_parent_info.get(base_id) {
-                    let new_diff_id =
-                        atom_edit_data
-                            .diff
-                            .add_atom(parent_info.atomic_number, parent_info.position);
+                    let new_diff_id = atom_edit_data
+                        .diff
+                        .add_atom(parent_info.atomic_number, parent_info.position);
                     atom_edit_data
                         .diff
                         .set_anchor_position(new_diff_id, parent_info.position);
@@ -164,7 +289,9 @@ pub fn add_hydrogen_atom_edit(
 
         // Add H atom to the diff
         let h_id = atom_edit_data.diff.add_atom(1, placement.h_position);
-        atom_edit_data.diff.set_atom_hydrogen_passivation(h_id, true);
+        atom_edit_data
+            .diff
+            .set_atom_hydrogen_passivation(h_id, true);
         atom_edit_data
             .diff
             .add_bond_checked(parent_diff_id, h_id, BOND_SINGLE);

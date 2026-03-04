@@ -861,6 +861,16 @@ class StructureDesignerModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  String _lastRemoveHydrogenMessage = '';
+  String get lastRemoveHydrogenMessage => _lastRemoveHydrogenMessage;
+
+  void atomEditRemoveHydrogen({required bool selectedOnly}) {
+    _lastRemoveHydrogenMessage =
+        atom_edit_api.atomEditRemoveHydrogen(selectedOnly: selectedOnly);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
   // ===== MODIFY MEASUREMENT =====
 
   String atomEditModifyDistance(

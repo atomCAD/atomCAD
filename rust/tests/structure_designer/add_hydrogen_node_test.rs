@@ -1,6 +1,6 @@
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -50,14 +50,7 @@ fn evaluate_to_atomic(
         node_id: 0,
     }];
 
-    let result = evaluator.evaluate(
-        &network_stack,
-        node_id,
-        0,
-        registry,
-        false,
-        &mut context,
-    );
+    let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
 
     match result {
         NetworkResult::Atomic(s) => s,
@@ -88,7 +81,11 @@ fn test_add_hydrogen_node_bare_carbon() {
 
     // 1 Carbon + 4 Hydrogens = 5 atoms
     let atom_count = result.atom_ids().count();
-    assert_eq!(atom_count, 5, "Expected 5 atoms (1 C + 4 H), got {}", atom_count);
+    assert_eq!(
+        atom_count, 5,
+        "Expected 5 atoms (1 C + 4 H), got {}",
+        atom_count
+    );
 
     // Count hydrogens
     let h_count = result
@@ -103,8 +100,17 @@ fn test_add_hydrogen_node_bare_carbon() {
         .find(|&&id| result.get_atom(id).unwrap().atomic_number == 6)
         .unwrap();
     let carbon = result.get_atom(carbon_id).unwrap();
-    let carbon_bonds: Vec<_> = carbon.bonds.iter().filter(|b| !b.is_delete_marker()).collect();
-    assert_eq!(carbon_bonds.len(), 4, "Carbon should have 4 bonds, got {}", carbon_bonds.len());
+    let carbon_bonds: Vec<_> = carbon
+        .bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .collect();
+    assert_eq!(
+        carbon_bonds.len(),
+        4,
+        "Carbon should have 4 bonds, got {}",
+        carbon_bonds.len()
+    );
 
     // Verify C-H bond lengths are ~1.09 A
     let carbon_pos = carbon.position;
@@ -144,7 +150,11 @@ fn test_add_hydrogen_node_saturated_structure() {
     // Water is already saturated: O has 2 bonds = max for sp3 oxygen
     // Should still have exactly 3 atoms
     let atom_count = result.atom_ids().count();
-    assert_eq!(atom_count, 3, "Saturated water should remain 3 atoms, got {}", atom_count);
+    assert_eq!(
+        atom_count, 3,
+        "Saturated water should remain 3 atoms, got {}",
+        atom_count
+    );
 }
 
 /// Empty structure should produce empty output
@@ -161,7 +171,11 @@ fn test_add_hydrogen_node_empty_structure() {
     let result = evaluate_to_atomic(&designer, network_name, add_h_id);
 
     let atom_count = result.atom_ids().count();
-    assert_eq!(atom_count, 0, "Empty structure should remain empty, got {} atoms", atom_count);
+    assert_eq!(
+        atom_count, 0,
+        "Empty structure should remain empty, got {} atoms",
+        atom_count
+    );
 }
 
 /// Disconnected add_hydrogen node should return an error
@@ -181,14 +195,7 @@ fn test_add_hydrogen_node_no_input() {
         node_id: 0,
     }];
 
-    let result = evaluator.evaluate(
-        &network_stack,
-        add_h_id,
-        0,
-        registry,
-        false,
-        &mut context,
-    );
+    let result = evaluator.evaluate(&network_stack, add_h_id, 0, registry, false, &mut context);
 
     assert!(
         matches!(result, NetworkResult::Error(_)),
@@ -216,7 +223,11 @@ fn test_add_hydrogen_node_nitrogen() {
     // N has 1 bond, max 3 -> needs 2 H. C has 1 bond, max 4 -> needs 3 H.
     // Total: 2 (original) + 2 (N-H) + 3 (C-H) = 7
     let atom_count = result.atom_ids().count();
-    assert_eq!(atom_count, 7, "Expected 7 atoms (N + C + 5H), got {}", atom_count);
+    assert_eq!(
+        atom_count, 7,
+        "Expected 7 atoms (N + C + 5H), got {}",
+        atom_count
+    );
 
     let h_count = result
         .atom_ids()

@@ -231,7 +231,10 @@ impl NodeData for LatticeMoveData {
         let mut m = HashMap::new();
         if self.is_atomic_mode {
             m.insert("molecule".to_string(), (true, None)); // required
-            m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+            m.insert(
+                "unit_cell".to_string(),
+                (false, Some("cubic diamond".to_string())),
+            );
         } else {
             m.insert("shape".to_string(), (true, None)); // required
         }
@@ -400,42 +403,45 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
 
 pub fn get_node_type_atom_lmove() -> NodeType {
     NodeType {
-      name: "atom_lmove".to_string(),
-      description: "Moves an atomic structure in discrete lattice space with a relative vector.
+        name: "atom_lmove".to_string(),
+        description: "Moves an atomic structure in discrete lattice space with a relative vector.
 Uses integer lattice coordinates and an explicit unit cell to compute the real-space translation.
-You can directly enter the translation vector or drag the axes of the gadget.".to_string(),
-      summary: None,
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-          Parameter {
-              id: None,
-              name: "molecule".to_string(),
-              data_type: DataType::Atomic,
-          },
-          Parameter {
-            id: None,
-            name: "translation".to_string(),
-            data_type: DataType::IVec3,
-          },
-          Parameter {
-            id: None,
-            name: "subdivision".to_string(),
-            data_type: DataType::Int,
-          },
-          Parameter {
-            id: None,
-            name: "unit_cell".to_string(),
-            data_type: DataType::UnitCell,
-          },
-      ],
-      output_type: DataType::Atomic,
-      public: true,
-      node_data_creator: || Box::new(LatticeMoveData {
-        translation: IVec3::new(0, 0, 0),
-        lattice_subdivision: 1,
-        is_atomic_mode: true,
-      }),
-      node_data_saver: generic_node_data_saver::<LatticeMoveData>,
-      node_data_loader: generic_node_data_loader::<LatticeMoveData>,
+You can directly enter the translation vector or drag the axes of the gadget."
+            .to_string(),
+        summary: None,
+        category: NodeTypeCategory::AtomicStructure,
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "molecule".to_string(),
+                data_type: DataType::Atomic,
+            },
+            Parameter {
+                id: None,
+                name: "translation".to_string(),
+                data_type: DataType::IVec3,
+            },
+            Parameter {
+                id: None,
+                name: "subdivision".to_string(),
+                data_type: DataType::Int,
+            },
+            Parameter {
+                id: None,
+                name: "unit_cell".to_string(),
+                data_type: DataType::UnitCell,
+            },
+        ],
+        output_type: DataType::Atomic,
+        public: true,
+        node_data_creator: || {
+            Box::new(LatticeMoveData {
+                translation: IVec3::new(0, 0, 0),
+                lattice_subdivision: 1,
+                is_atomic_mode: true,
+            })
+        },
+        node_data_saver: generic_node_data_saver::<LatticeMoveData>,
+        node_data_loader: generic_node_data_loader::<LatticeMoveData>,
     }
 }

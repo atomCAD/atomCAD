@@ -114,6 +114,11 @@ String atomEditAddHydrogen({required bool selectedOnly}) => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditAddHydrogen(
         selectedOnly: selectedOnly);
 
+String atomEditRemoveHydrogen({required bool selectedOnly}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditRemoveHydrogen(
+            selectedOnly: selectedOnly);
+
 GuidedPlacementApiResult atomEditStartGuidedPlacement(
         {required APIVec3 rayStart,
         required APIVec3 rayDir,

@@ -147,7 +147,8 @@ fn hydrogen_atom_not_passivated() {
 fn saturated_carbon_gets_no_hydrogens() {
     let d = 1.545;
     let dirs = tetrahedral_dirs(d);
-    let (mut s, anchor) = make_structure(6, &[(6, dirs[0]), (6, dirs[1]), (6, dirs[2]), (6, dirs[3])]);
+    let (mut s, anchor) =
+        make_structure(6, &[(6, dirs[0]), (6, dirs[1]), (6, dirs[2]), (6, dirs[3])]);
     add_hydrogens(&mut s, &default_options());
     assert_eq!(count_h_bonded_to(&s, anchor), 0);
 }
@@ -216,7 +217,11 @@ fn sp3_carbon_2_bonds_h_at_tetrahedral_angles() {
         .filter(|b| !b.is_delete_marker())
         .filter_map(|b| {
             let a = s.get_atom(b.other_atom_id())?;
-            if a.atomic_number == 1 { Some(a.position) } else { None }
+            if a.atomic_number == 1 {
+                Some(a.position)
+            } else {
+                None
+            }
         })
         .collect();
 
@@ -268,11 +273,7 @@ fn sp2_carbon_2_bonds_h_at_120_degrees() {
         .filter(|b| !b.is_delete_marker())
         .filter_map(|b| {
             let a = s.get_atom(b.other_atom_id())?;
-            if a.atomic_number == 1 {
-                Some(a)
-            } else {
-                None
-            }
+            if a.atomic_number == 1 { Some(a) } else { None }
         })
         .collect();
 
@@ -305,11 +306,7 @@ fn sp1_carbon_1_bond_h_at_180_degrees() {
         .filter(|b| !b.is_delete_marker())
         .filter_map(|b| {
             let a = s.get_atom(b.other_atom_id())?;
-            if a.atomic_number == 1 {
-                Some(a)
-            } else {
-                None
-            }
+            if a.atomic_number == 1 { Some(a) } else { None }
         })
         .collect();
     assert_eq!(c1_h.len(), 1);
@@ -409,7 +406,11 @@ fn unknown_element_uses_covalent_radii_sum() {
     for atom in s.atoms_values() {
         if atom.atomic_number == 1 {
             let dist = (atom.position - s.get_atom(anchor).unwrap().position).length();
-            assert!(dist > 0.5 && dist < 3.0, "Bond length {:.3} out of range", dist);
+            assert!(
+                dist > 0.5 && dist < 3.0,
+                "Bond length {:.3} out of range",
+                dist
+            );
         }
     }
 }
@@ -428,7 +429,11 @@ fn distorted_bonds_at_100_degrees_still_places_h() {
 
     let (mut s, anchor) = make_structure(6, &[(6, dir1), (6, dir2)]);
     add_hydrogens(&mut s, &default_options());
-    assert_eq!(count_h_bonded_to(&s, anchor), 2, "Should still place 2 H's on anchor");
+    assert_eq!(
+        count_h_bonded_to(&s, anchor),
+        2,
+        "Should still place 2 H's on anchor"
+    );
 }
 
 #[test]
@@ -440,7 +445,11 @@ fn distorted_bonds_at_120_degrees_still_places_h() {
 
     let (mut s, anchor) = make_structure(6, &[(6, dir1), (6, dir2)]);
     add_hydrogens(&mut s, &default_options());
-    assert_eq!(count_h_bonded_to(&s, anchor), 2, "Should still place 2 H's on anchor");
+    assert_eq!(
+        count_h_bonded_to(&s, anchor),
+        2,
+        "Should still place 2 H's on anchor"
+    );
 }
 
 // ============================================================================
@@ -464,7 +473,11 @@ fn selected_only_passivates_selected_atoms() {
 
     // c2 should have no H's bonded
     let c2_atom = s.get_atom(c2).unwrap();
-    let c2_bonds = c2_atom.bonds.iter().filter(|b| !b.is_delete_marker()).count();
+    let c2_bonds = c2_atom
+        .bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .count();
     assert_eq!(c2_bonds, 0, "c2 should have no bonds (not selected)");
 }
 
@@ -579,7 +592,10 @@ fn bare_carbon_becomes_methane() {
     }
 
     // All H-C-H angles should be ~109.47°
-    let h_dirs: Vec<DVec3> = h_positions.iter().map(|p| (*p - anchor_pos).normalize()).collect();
+    let h_dirs: Vec<DVec3> = h_positions
+        .iter()
+        .map(|p| (*p - anchor_pos).normalize())
+        .collect();
     for i in 0..h_dirs.len() {
         for j in (i + 1)..h_dirs.len() {
             let angle = h_dirs[i].angle_between(h_dirs[j]).to_degrees();
@@ -667,11 +683,19 @@ fn ethane_like_two_carbons_bonded() {
 
     // Verify each carbon has 4 total bonds (1 C-C + 3 C-H)
     let c1_atom = s.get_atom(c1).unwrap();
-    let c1_bonds = c1_atom.bonds.iter().filter(|b| !b.is_delete_marker()).count();
+    let c1_bonds = c1_atom
+        .bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .count();
     assert_eq!(c1_bonds, 4);
 
     let c2_atom = s.get_atom(c2).unwrap();
-    let c2_bonds = c2_atom.bonds.iter().filter(|b| !b.is_delete_marker()).count();
+    let c2_bonds = c2_atom
+        .bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .count();
     assert_eq!(c2_bonds, 4);
 }
 
@@ -851,11 +875,7 @@ fn remove_h_selected_only_h_itself_selected() {
     add_hydrogens(&mut s, &default_options());
 
     // Find one H and select it
-    let h_id = s
-        .atoms_values()
-        .find(|a| a.atomic_number == 1)
-        .unwrap()
-        .id;
+    let h_id = s.atoms_values().find(|a| a.atomic_number == 1).unwrap().id;
     s.set_atom_selected(h_id, true);
 
     let options = RemoveHydrogensOptions {
@@ -912,7 +932,10 @@ fn remove_h_carbon_has_zero_bonds_after() {
 
     let c = s.get_atom(anchor).unwrap();
     let active_bonds = c.bonds.iter().filter(|b| !b.is_delete_marker()).count();
-    assert_eq!(active_bonds, 0, "Carbon should have 0 bonds after H removal");
+    assert_eq!(
+        active_bonds, 0,
+        "Carbon should have 0 bonds after H removal"
+    );
 }
 
 #[test]

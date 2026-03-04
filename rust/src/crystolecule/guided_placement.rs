@@ -1,5 +1,5 @@
-use crate::crystolecule::atomic_structure::atom::Atom;
 use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::atom::Atom;
 use crate::crystolecule::atomic_structure::inline_bond::BOND_DATIVE;
 use crate::crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
 use crate::crystolecule::simulation::uff::typer::{assign_uff_type, hybridization_from_label};

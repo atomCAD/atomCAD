@@ -527,6 +527,19 @@ class _StructureDesignerViewportState
       }
     }
 
+    // Ctrl+Shift+H: Remove hydrogen from selected atoms (Default tool only)
+    if (event is KeyDownEvent &&
+        HardwareKeyboard.instance.isControlPressed &&
+        HardwareKeyboard.instance.isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyH) {
+      final tool = atom_edit_api.getActiveAtomEditTool();
+      if (tool == APIAtomEditTool.default_) {
+        widget.graphModel.atomEditRemoveHydrogen(selectedOnly: true);
+        renderingNeeded();
+        return KeyEventResult.handled;
+      }
+    }
+
     // Ctrl+H: Add hydrogen to selected atoms (Default tool only)
     if (event is KeyDownEvent &&
         HardwareKeyboard.instance.isControlPressed &&

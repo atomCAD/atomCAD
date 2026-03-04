@@ -72,14 +72,7 @@ fn evaluate_to_atomic(
         node_id: 0,
     }];
 
-    let result = evaluator.evaluate(
-        &network_stack,
-        node_id,
-        0,
-        registry,
-        false,
-        &mut context,
-    );
+    let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
 
     match result {
         NetworkResult::Atomic(s) => s,
@@ -126,8 +119,12 @@ fn atom_lmove_basic() {
 
     let structure_node_id =
         add_atomic_value_node(&mut designer, network_name, DVec2::ZERO, structure);
-    let unit_cell_node_id =
-        add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
+    let unit_cell_node_id = add_unit_cell_value_node(
+        &mut designer,
+        network_name,
+        DVec2::new(0.0, 200.0),
+        unit_cell,
+    );
 
     // Add atom_lmove node
     let lattice_move_id = designer.add_node("atom_lmove", DVec2::new(200.0, 0.0));
@@ -180,8 +177,12 @@ fn atom_lmove_subdivision() {
 
     let structure_node_id =
         add_atomic_value_node(&mut designer, network_name, DVec2::ZERO, structure);
-    let unit_cell_node_id =
-        add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
+    let unit_cell_node_id = add_unit_cell_value_node(
+        &mut designer,
+        network_name,
+        DVec2::new(0.0, 200.0),
+        unit_cell,
+    );
 
     let lattice_move_id = designer.add_node("atom_lmove", DVec2::new(200.0, 0.0));
 
@@ -240,8 +241,12 @@ fn atom_lmove_diff_preserves_anchors() {
     let unit_cell = UnitCellStruct::cubic_diamond();
 
     let diff_node_id = add_atomic_value_node(&mut designer, network_name, DVec2::ZERO, diff);
-    let unit_cell_node_id =
-        add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
+    let unit_cell_node_id = add_unit_cell_value_node(
+        &mut designer,
+        network_name,
+        DVec2::new(0.0, 200.0),
+        unit_cell,
+    );
 
     let lattice_move_id = designer.add_node("atom_lmove", DVec2::new(200.0, 0.0));
 
@@ -306,8 +311,12 @@ fn atom_lrot_basic() {
 
     let structure_node_id =
         add_atomic_value_node(&mut designer, network_name, DVec2::ZERO, structure);
-    let unit_cell_node_id =
-        add_unit_cell_value_node(&mut designer, network_name, DVec2::new(0.0, 200.0), unit_cell);
+    let unit_cell_node_id = add_unit_cell_value_node(
+        &mut designer,
+        network_name,
+        DVec2::new(0.0, 200.0),
+        unit_cell,
+    );
 
     // Add atom_lrot node
     let lattice_rot_id = designer.add_node("atom_lrot", DVec2::new(200.0, 0.0));
@@ -427,15 +436,14 @@ fn atom_lmove_then_apply_diff() {
     let has_origin = result
         .atoms_values()
         .any(|a| a.position.distance(DVec3::ZERO) < 0.01);
-    assert!(
-        has_origin,
-        "Atom at origin should still exist"
-    );
+    assert!(has_origin, "Atom at origin should still exist");
 
     // Atom at (2a,0,0) should be deleted
-    let has_2a = result
-        .atoms_values()
-        .any(|a| a.position.distance(DVec3::new(2.0 * DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 0.0, 0.0)) < 0.01);
+    let has_2a = result.atoms_values().any(|a| {
+        a.position
+            .distance(DVec3::new(2.0 * DIAMOND_UNIT_CELL_SIZE_ANGSTROM, 0.0, 0.0))
+            < 0.01
+    });
     assert!(
         !has_2a,
         "Atom at (2a,0,0) should be deleted by the moved delete marker"

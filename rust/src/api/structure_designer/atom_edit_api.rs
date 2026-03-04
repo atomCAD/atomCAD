@@ -430,6 +430,26 @@ pub fn atom_edit_add_hydrogen(selected_only: bool) -> String {
     }
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_remove_hydrogen(selected_only: bool) -> String {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let result = atom_edit::remove_hydrogen_atom_edit(
+                    &mut cad_instance.structure_designer,
+                    selected_only,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(message) => message,
+                    Err(error) => format!("Error: {}", error),
+                }
+            },
+            "Error: no active instance".to_string(),
+        )
+    }
+}
+
 // --- Guided atom placement API ---
 
 #[flutter_rust_bridge::frb(sync)]

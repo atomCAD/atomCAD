@@ -1,5 +1,4 @@
 use super::structure_designer_api_types::APIAtomFillData;
-use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
@@ -8,6 +7,7 @@ use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
+use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMeasurement;
@@ -1638,11 +1638,10 @@ pub fn get_apply_diff_data(node_id: u64) -> Option<APIApplyDiffData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let apply_diff_data =
-                    match node_data.as_any_ref().downcast_ref::<ApplyDiffData>() {
-                        Some(data) => data,
-                        None => return None,
-                    };
+                let apply_diff_data = match node_data.as_any_ref().downcast_ref::<ApplyDiffData>() {
+                    Some(data) => data,
+                    None => return None,
+                };
                 Some(APIApplyDiffData {
                     tolerance: apply_diff_data.tolerance,
                     error_on_stale: apply_diff_data.error_on_stale,

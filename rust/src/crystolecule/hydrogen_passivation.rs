@@ -1,10 +1,10 @@
 use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
-use crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use crate::crystolecule::guided_placement::{
-    TETRAHEDRAL_ANGLE, TRIGONAL_ANGLE, compute_sp3_case1_with_dihedral, count_active_neighbors,
-    covalent_max_neighbors, detect_hybridization, find_dihedral_reference, gather_bond_directions,
-    sp2_case2, sp3_case2, sp3_case3, Hybridization,
+    Hybridization, TETRAHEDRAL_ANGLE, TRIGONAL_ANGLE, compute_sp3_case1_with_dihedral,
+    count_active_neighbors, covalent_max_neighbors, detect_hybridization, find_dihedral_reference,
+    gather_bond_directions, sp2_case2, sp3_case2, sp3_case3,
 };
 use glam::f64::DVec3;
 
@@ -47,15 +47,15 @@ pub fn remove_hydrogens(
 
         if options.selected_only {
             let is_self_selected = atom.is_selected();
-            let has_selected_neighbor = atom
-                .bonds
-                .iter()
-                .filter(|b| !b.is_delete_marker())
-                .any(|b| {
-                    structure
-                        .get_atom(b.other_atom_id())
-                        .is_some_and(|n| n.is_selected())
-                });
+            let has_selected_neighbor =
+                atom.bonds
+                    .iter()
+                    .filter(|b| !b.is_delete_marker())
+                    .any(|b| {
+                        structure
+                            .get_atom(b.other_atom_id())
+                            .is_some_and(|n| n.is_selected())
+                    });
             if !is_self_selected && !has_selected_neighbor {
                 continue;
             }
@@ -127,7 +127,10 @@ fn lookup_xh_bond_length(atomic_number: i16) -> f64 {
         .get(&(atomic_number as i32))
         .unwrap_or(&DEFAULT_ATOM_INFO)
         .covalent_radius;
-    let r_h = ATOM_INFO.get(&1).unwrap_or(&DEFAULT_ATOM_INFO).covalent_radius;
+    let r_h = ATOM_INFO
+        .get(&1)
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .covalent_radius;
     r_x + r_h
 }
 
@@ -137,11 +140,7 @@ fn lookup_xh_bond_length(atomic_number: i16) -> f64 {
 
 /// Pick a deterministic perpendicular vector to `v`.
 fn arbitrary_perpendicular(v: DVec3) -> DVec3 {
-    let ref_axis = if v.x.abs() < 0.9 {
-        DVec3::X
-    } else {
-        DVec3::Y
-    };
+    let ref_axis = if v.x.abs() < 0.9 { DVec3::X } else { DVec3::Y };
     v.cross(ref_axis).normalize()
 }
 
@@ -158,7 +157,9 @@ fn compute_open_directions(
     needed: usize,
 ) -> Vec<DVec3> {
     match hybridization {
-        Hybridization::Sp3 => compute_open_directions_sp3(structure, atom_id, existing_dirs, needed),
+        Hybridization::Sp3 => {
+            compute_open_directions_sp3(structure, atom_id, existing_dirs, needed)
+        }
         Hybridization::Sp2 => compute_open_directions_sp2(existing_dirs, needed),
         Hybridization::Sp1 => compute_open_directions_sp1(existing_dirs, needed),
     }
@@ -199,7 +200,10 @@ fn compute_open_directions_sp3(
                         compute_sp3_case1_with_dihedral(DVec3::ZERO, bond_dir, ref_perp, 1.0);
                     return dots
                         .iter()
-                        .filter(|d| d.dot_type == crate::crystolecule::guided_placement::GuideDotType::Primary)
+                        .filter(|d| {
+                            d.dot_type
+                                == crate::crystolecule::guided_placement::GuideDotType::Primary
+                        })
                         .take(needed)
                         .map(|d| d.position.normalize())
                         .collect();
@@ -347,8 +351,12 @@ pub fn add_hydrogens(
 
         let existing_dirs = gather_bond_directions(structure, atom);
         let h_bond_len = lookup_xh_bond_length(atomic_number);
-        let open_dirs = compute_open_directions(structure, atom_id, hybridization, &existing_dirs, needed);
-        let positions: Vec<DVec3> = open_dirs.iter().map(|d| position + *d * h_bond_len).collect();
+        let open_dirs =
+            compute_open_directions(structure, atom_id, hybridization, &existing_dirs, needed);
+        let positions: Vec<DVec3> = open_dirs
+            .iter()
+            .map(|d| position + *d * h_bond_len)
+            .collect();
 
         if !positions.is_empty() {
             placements.push((atom_id, positions));
