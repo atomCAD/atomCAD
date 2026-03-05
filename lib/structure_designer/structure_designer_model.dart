@@ -74,6 +74,9 @@ class StructureDesignerModel extends ChangeNotifier {
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
   WireDropCallback?
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
+  /// Callback to scroll the node network panel to a specific node.
+  /// Registered by NodeNetworkState during init.
+  void Function(BigInt nodeId)? onScrollToNode;
   String _lastMinimizeMessage = '';
   String _lastAddHydrogenMessage = '';
   APIBondLengthMode _bondLengthMode = APIBondLengthMode.crystal;
@@ -575,6 +578,11 @@ class StructureDesignerModel extends ChangeNotifier {
       }
       refreshFromKernel();
     }
+  }
+
+  /// Scrolls the node network panel to center the given node.
+  void scrollToNode(BigInt nodeId) {
+    onScrollToNode?.call(nodeId);
   }
 
   BigInt? getSelectedNodeId() {

@@ -82,6 +82,16 @@ Model methods: `atomEditModifyDistance`, `atomEditModifyAngle`, `atomEditModifyD
 
 Design doc: `doc/atom_edit/design_modify_measurement.md`.
 
+## Click-to-Activate (in viewport)
+
+When multiple nodes are visible, clicking on a non-active node's rendered output in the 3D viewport activates that node (two-step interaction: first click activates, second click performs the normal action). The interception happens in `onPointerDown` before delegate dispatch, calling `viewport_pick()` (Rust API) which returns `ActivateNode`, `Disambiguation`, `ActiveNodeHit`, or `NoHit`. A performance guard skips the pick when only 0–1 nodes are displayed.
+
+When overlapping outputs are detected (within 0.1 Å), a disambiguation overlay popup (`_DisambiguationOverlay`) appears near the click with two actions per candidate node: name click (activate + scroll) and solo eye icon (activate + scroll + hide other overlapping nodes). If the active node is among the overlapping hits, the click passes through as normal.
+
+**Scroll-to-node callback pattern:** The viewport calls `model.scrollToNode(nodeId)` after activation. `StructureDesignerModel.onScrollToNode` is a callback registered by `NodeNetworkState` during `initState` (and cleared in `dispose`). This bridges the viewport→model→node-network-widget communication without requiring the viewport to hold a `GlobalKey` to the node network. SnackBar feedback (`"Activated: {nodeName}"`) confirms the activation.
+
+Design doc: `doc/design_click_to_activate_node.md`.
+
 ## node_networks_list/ Subdirectory
 
 Network management panel with:

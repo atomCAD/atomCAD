@@ -294,14 +294,43 @@ class NodeNetworkState extends State<NodeNetwork> {
     });
     // Set up wire drop callback
     widget.graphModel.onWireDroppedInEmptySpace = _handleWireDropInEmptySpace;
+    // Register scroll-to-node callback for click-to-activate
+    widget.graphModel.onScrollToNode = _scrollToNode;
   }
 
   @override
   void dispose() {
-    // Clear the callback when disposing
+    // Clear the callbacks when disposing
     widget.graphModel.onWireDroppedInEmptySpace = null;
+    widget.graphModel.onScrollToNode = null;
     focusNode.dispose();
     super.dispose();
+  }
+
+  /// Scrolls the node network view to center the given node.
+  void _scrollToNode(BigInt nodeId) {
+    final node = widget.graphModel.nodeNetworkView?.nodes[nodeId];
+    if (node == null) return;
+
+    // Get the widget's render box size for centering
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final viewportSize = renderBox.size;
+
+    final scale = getZoomScale(_zoomLevel);
+    final nodeSize = getNodeSize(node, _zoomLevel);
+    // Node center in logical space
+    final nodeCenterLogical = Offset(
+      node.position.x + nodeSize.width / scale / 2,
+      node.position.y + nodeSize.height / scale / 2,
+    );
+    // Pan offset so node center maps to viewport center:
+    // screenCenter = (nodeCenterLogical + panOffset) * scale
+    // panOffset = (screenCenter / scale) - nodeCenterLogical
+    final viewportCenter = Offset(viewportSize.width / 2, viewportSize.height / 2);
+    setState(() {
+      _panOffset = (viewportCenter / scale) - nodeCenterLogical;
+    });
   }
 
   /// Handles wire dropped in empty space - shows filtered Add Node popup

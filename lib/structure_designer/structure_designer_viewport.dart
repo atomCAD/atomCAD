@@ -738,6 +738,7 @@ class _StructureDesignerViewportState
 
     if (result is APIViewportPickResult_ActivateNode) {
       widget.graphModel.setSelectedNode(result.nodeId);
+      widget.graphModel.scrollToNode(result.nodeId);
       renderingNeeded();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -771,6 +772,7 @@ class _StructureDesignerViewportState
         onActivate: (candidate) {
           entry.remove();
           widget.graphModel.setSelectedNode(candidate.nodeId);
+          widget.graphModel.scrollToNode(candidate.nodeId);
           renderingNeeded();
           ScaffoldMessenger.of(this.context).showSnackBar(
             SnackBar(
@@ -791,6 +793,7 @@ class _StructureDesignerViewportState
             }
           }
           widget.graphModel.setSelectedNode(candidate.nodeId);
+          widget.graphModel.scrollToNode(candidate.nodeId);
           renderingNeeded();
           ScaffoldMessenger.of(this.context).showSnackBar(
             SnackBar(
@@ -1229,13 +1232,16 @@ class _DisambiguationRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Expanded(
-          child: InkWell(
-            onTap: onActivate,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Text(
-                candidate.nodeName,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+          child: Tooltip(
+            message: 'Activate',
+            child: InkWell(
+              onTap: onActivate,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  candidate.nodeName,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
               ),
             ),
           ),
