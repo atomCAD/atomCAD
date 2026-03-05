@@ -25,7 +25,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::implicit_eval::ray_tracing::raytrace_geometries;
+use crate::structure_designer::implicit_eval::ray_tracing::{raytrace_geometries, raytrace_geometry};
 use crate::structure_designer::node_data::CustomNodeData;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
@@ -37,6 +37,16 @@ use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use std::collections::{HashMap, HashSet};
+
+/// A ray hit result associated with a specific node.
+///
+/// Returned by `StructureDesigner::raytrace_per_node()` to identify which
+/// node's output was intersected and at what distance along the ray.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PerNodeRayHit {
+    pub node_id: u64,
+    pub distance: f64,
+}
 
 pub struct StructureDesigner {
     pub node_type_registry: NodeTypeRegistry,
@@ -2201,6 +2211,104 @@ impl StructureDesigner {
         }
 
         closest.map(|(id, structure, _)| (id, structure))
+    }
+
+    /// Per-node raycast: returns a list of ray hits with associated node IDs.
+    ///
+    /// Unlike `raytrace()` which returns only the closest overall distance,
+    /// this method preserves which node each hit belongs to. It iterates
+    /// `node_data.iter()` (not `.values()`) to capture node ID keys.
+    ///
+    /// Used by click-to-activate: when the user clicks in the viewport,
+    /// this determines which node(s) the click intersects so the correct
+    /// node can be activated.
+    pub fn raytrace_per_node(
+        &self,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3,
+        visualization: &AtomicStructureVisualization,
+    ) -> Vec<PerNodeRayHit> {
+        let display_visualization = match visualization {
+            AtomicStructureVisualization::BallAndStick => {
+                crate::display::preferences::AtomicStructureVisualization::BallAndStick
+            }
+            AtomicStructureVisualization::SpaceFilling => {
+                crate::display::preferences::AtomicStructureVisualization::SpaceFilling
+            }
+        };
+
+        use crate::structure_designer::structure_designer_scene::NodeOutput;
+
+        let mut hits = Vec::new();
+
+        for (&node_id, node_data) in self
+            .last_generated_structure_designer_scene
+            .node_data
+            .iter()
+        {
+            let mut min_distance: Option<f64> = None;
+
+            // Hit-test atomic structures
+            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
+                match atomic_structure.hit_test(
+                    ray_origin,
+                    ray_direction,
+                    visualization,
+                    |atom| get_displayed_atom_radius(atom, &display_visualization),
+                    BAS_STICK_RADIUS,
+                ) {
+                    crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
+                    | crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) => {
+                        min_distance = Some(distance);
+                    }
+                    crate::crystolecule::atomic_structure::HitTestResult::None => {}
+                }
+            }
+
+            // Hit-test geometry (SDF)
+            if let Some(geo_tree) = &node_data.geo_tree {
+                if let Some(geo_distance) =
+                    raytrace_geometry(geo_tree, ray_origin, ray_direction, 1.0)
+                {
+                    min_distance = match min_distance {
+                        None => Some(geo_distance),
+                        Some(current_min) if geo_distance < current_min => Some(geo_distance),
+                        _ => min_distance,
+                    };
+                }
+            }
+
+            if let Some(distance) = min_distance {
+                hits.push(PerNodeRayHit { node_id, distance });
+            }
+        }
+
+        // Sort by distance (closest first)
+        hits.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
+
+        hits
+    }
+
+    /// Returns a human-readable display name for a node.
+    ///
+    /// Uses the node's `custom_name` if set, otherwise falls back to
+    /// `"{node_type_name} #{node_id}"`.
+    pub fn get_node_display_name(&self, node_id: u64) -> String {
+        let network = self
+            .active_node_network_name
+            .as_ref()
+            .and_then(|name| self.node_type_registry.node_networks.get(name));
+
+        if let Some(network) = network {
+            if let Some(node) = network.nodes.get(&node_id) {
+                if let Some(ref custom_name) = node.custom_name {
+                    return custom_name.clone();
+                }
+                return format!("{} #{}", node.node_type_name, node_id);
+            }
+        }
+
+        format!("node #{}", node_id)
     }
 
     // -------------------------------------------------------------------------------------------------------------------------
