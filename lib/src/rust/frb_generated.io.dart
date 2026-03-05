@@ -85,6 +85,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICameraCanonicalView dco_decode_api_camera_canonical_view(dynamic raw);
 
   @protected
+  APICandidateNode dco_decode_api_candidate_node(dynamic raw);
+
+  @protected
   APICircleData dco_decode_api_circle_data(dynamic raw);
 
   @protected
@@ -234,6 +237,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data dco_decode_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIViewportPickResult dco_decode_api_viewport_pick_result(dynamic raw);
 
   @protected
   APIIVec2 dco_decode_apii_vec_2(dynamic raw);
@@ -503,6 +509,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
 
   @protected
   List<APIExprParameter> dco_decode_list_api_expr_parameter(dynamic raw);
@@ -890,6 +899,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICandidateNode sse_decode_api_candidate_node(SseDeserializer deserializer);
+
+  @protected
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
 
   @protected
@@ -1050,6 +1062,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data sse_decode_api_vec_3_data(SseDeserializer deserializer);
+
+  @protected
+  APIViewportPickResult sse_decode_api_viewport_pick_result(
+      SseDeserializer deserializer);
 
   @protected
   APIIVec2 sse_decode_apii_vec_2(SseDeserializer deserializer);
@@ -1373,6 +1389,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<APICandidateNode> sse_decode_list_api_candidate_node(
+      SseDeserializer deserializer);
 
   @protected
   List<APIExprParameter> sse_decode_list_api_expr_parameter(
@@ -1832,6 +1852,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICameraCanonicalView self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_candidate_node(
+      APICandidateNode self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
 
   @protected
@@ -2009,6 +2033,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_vec_3_data(APIVec3Data self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_viewport_pick_result(
+      APIViewportPickResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_apii_vec_2(APIIVec2 self, SseSerializer serializer);
@@ -2338,6 +2366,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_candidate_node(
+      List<APICandidateNode> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_expr_parameter(

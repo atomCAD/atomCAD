@@ -25,7 +25,9 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::implicit_eval::ray_tracing::{raytrace_geometries, raytrace_geometry};
+use crate::structure_designer::implicit_eval::ray_tracing::{
+    raytrace_geometries, raytrace_geometry,
+};
 use crate::structure_designer::node_data::CustomNodeData;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;

@@ -1,4 +1,5 @@
 use super::structure_designer_api_types::APIAtomFillData;
+use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
@@ -18,6 +19,7 @@ use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
+use super::structure_designer_api_types::APIViewportPickResult;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
 use crate::api::api_common::from_api_ivec2;
@@ -4240,10 +4242,7 @@ pub fn query_hovered_atom_info(
             |cad_instance| {
                 let (atom_id, structure, closest_node_id, closest_distance) = cad_instance
                     .structure_designer
-                    .hit_test_all_atomic_structures_with_node_id(
-                        &ray_origin,
-                        &ray_direction,
-                    )?;
+                    .hit_test_all_atomic_structures_with_node_id(&ray_origin, &ray_direction)?;
 
                 let atom = structure.get_atom(atom_id)?;
                 let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
@@ -4294,6 +4293,98 @@ pub fn query_hovered_atom_info(
                 })
             },
             None,
+        )
+    }
+}
+
+/// Performs a viewport pick for click-to-activate.
+///
+/// Casts a ray through the scene and determines whether the click should:
+/// - Pass through to normal handling (active node hit or no hit)
+/// - Activate a different node (unambiguous non-active node hit)
+/// - Show a disambiguation popup (overlapping non-active node hits)
+#[flutter_rust_bridge::frb(sync)]
+pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewportPickResult {
+    let ray_origin = from_api_vec3(&ray_origin);
+    let ray_direction = from_api_vec3(&ray_direction);
+
+    /// Overlap threshold in Angstroms — hits from different nodes within
+    /// this distance along the ray are considered overlapping.
+    const OVERLAP_EPSILON: f64 = 0.1;
+
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let visualization = &cad_instance
+                    .structure_designer
+                    .preferences
+                    .atomic_structure_visualization_preferences
+                    .visualization;
+
+                let hits = cad_instance.structure_designer.raytrace_per_node(
+                    &ray_origin,
+                    &ray_direction,
+                    visualization,
+                );
+
+                if hits.is_empty() {
+                    return APIViewportPickResult::NoHit;
+                }
+
+                // Get the active node ID from the current network.
+                let active_node_id = cad_instance
+                    .structure_designer
+                    .get_active_node_network()
+                    .and_then(|network| network.active_node_id);
+
+                let closest = &hits[0];
+
+                // If the closest hit belongs to the active node, pass through.
+                if active_node_id == Some(closest.node_id) {
+                    return APIViewportPickResult::ActiveNodeHit;
+                }
+
+                // Collect all hits within OVERLAP_EPSILON of the closest hit.
+                let overlapping: Vec<
+                    &crate::structure_designer::structure_designer::PerNodeRayHit,
+                > = hits
+                    .iter()
+                    .filter(|hit| (hit.distance - closest.distance).abs() < OVERLAP_EPSILON)
+                    .collect();
+
+                // If the active node is among the overlapping hits, treat as active node hit.
+                if overlapping
+                    .iter()
+                    .any(|hit| active_node_id == Some(hit.node_id))
+                {
+                    return APIViewportPickResult::ActiveNodeHit;
+                }
+
+                // If only one node in the overlap set, unambiguous activation.
+                if overlapping.len() == 1 {
+                    let node_name = cad_instance
+                        .structure_designer
+                        .get_node_display_name(closest.node_id);
+                    return APIViewportPickResult::ActivateNode {
+                        node_id: closest.node_id,
+                        node_name,
+                    };
+                }
+
+                // Multiple overlapping non-active nodes — disambiguation needed.
+                let candidates = overlapping
+                    .iter()
+                    .map(|hit| APICandidateNode {
+                        node_id: hit.node_id,
+                        node_name: cad_instance
+                            .structure_designer
+                            .get_node_display_name(hit.node_id),
+                    })
+                    .collect();
+
+                APIViewportPickResult::Disambiguation { candidates }
+            },
+            APIViewportPickResult::NoHit,
         )
     }
 }

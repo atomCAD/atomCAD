@@ -804,3 +804,15 @@ APIHoveredAtomInfo? queryHoveredAtomInfo(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiQueryHoveredAtomInfo(
             rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+/// Performs a viewport pick for click-to-activate.
+///
+/// Casts a ray through the scene and determines whether the click should:
+/// - Pass through to normal handling (active node hit or no hit)
+/// - Activate a different node (unambiguous non-active node hit)
+/// - Show a disambiguation popup (overlapping non-active node hits)
+APIViewportPickResult viewportPick(
+        {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiViewportPick(
+            rayOrigin: rayOrigin, rayDirection: rayDirection);

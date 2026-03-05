@@ -751,3 +751,21 @@ pub struct APITextError {
     pub line: i32,
     pub column: i32,
 }
+
+/// A candidate node in a viewport pick disambiguation.
+pub struct APICandidateNode {
+    pub node_id: u64,
+    pub node_name: String,
+}
+
+/// Result of a viewport pick operation (click-to-activate).
+pub enum APIViewportPickResult {
+    /// The closest hit belongs to the already-active node — proceed with normal click handling.
+    ActiveNodeHit,
+    /// Unambiguous hit on a non-active node — activate it.
+    ActivateNode { node_id: u64, node_name: String },
+    /// Multiple non-active nodes overlap at the click point — show disambiguation popup.
+    Disambiguation { candidates: Vec<APICandidateNode> },
+    /// Ray missed everything — proceed with normal click handling.
+    NoHit,
+}

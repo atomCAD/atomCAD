@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => 1030539589;
+  int get rustContentHash => 248926503;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -930,6 +930,10 @@ abstract class RustLibApi extends BaseApi {
       {required BigInt nodeId, required BigInt index, required APIFacet facet});
 
   void crateApiStructureDesignerStructureDesignerApiValidateActiveNetwork();
+
+  APIViewportPickResult
+      crateApiStructureDesignerStructureDesignerApiViewportPick(
+          {required APIVec3 rayOrigin, required APIVec3 rayDirection});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -8352,6 +8356,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             argNames: [],
           );
 
+  @override
+  APIViewportPickResult
+      crateApiStructureDesignerStructureDesignerApiViewportPick(
+          {required APIVec3 rayOrigin, required APIVec3 rayDirection}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_box_autoadd_api_vec_3(rayOrigin, serializer);
+        sse_encode_box_autoadd_api_vec_3(rayDirection, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 270)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_api_viewport_pick_result,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerStructureDesignerApiViewportPickConstMeta,
+      argValues: [rayOrigin, rayDirection],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerStructureDesignerApiViewportPickConstMeta =>
+          const TaskConstMeta(
+            debugName: "viewport_pick",
+            argNames: ["rayOrigin", "rayDirection"],
+          );
+
   @protected
   int dco_decode_CastedPrimitive_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8560,6 +8593,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICameraCanonicalView dco_decode_api_camera_canonical_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return APICameraCanonicalView.values[raw as int];
+  }
+
+  @protected
+  APICandidateNode dco_decode_api_candidate_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APICandidateNode(
+      nodeId: dco_decode_u_64(arr[0]),
+      nodeName: dco_decode_String(arr[1]),
+    );
   }
 
   @protected
@@ -9240,6 +9285,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIViewportPickResult dco_decode_api_viewport_pick_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return APIViewportPickResult_ActiveNodeHit();
+      case 1:
+        return APIViewportPickResult_ActivateNode(
+          nodeId: dco_decode_u_64(raw[1]),
+          nodeName: dco_decode_String(raw[2]),
+        );
+      case 2:
+        return APIViewportPickResult_Disambiguation(
+          candidates: dco_decode_list_api_candidate_node(raw[1]),
+        );
+      case 3:
+        return APIViewportPickResult_NoHit();
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
   APIIVec2 dco_decode_apii_vec_2(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -9894,6 +9961,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_api_candidate_node).toList();
   }
 
   @protected
@@ -10931,6 +11004,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APICandidateNode sse_decode_api_candidate_node(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_u_64(deserializer);
+    var var_nodeName = sse_decode_String(deserializer);
+    return APICandidateNode(nodeId: var_nodeId, nodeName: var_nodeName);
+  }
+
+  @protected
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_center = sse_decode_apii_vec_2(deserializer);
@@ -11579,6 +11660,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_value = sse_decode_api_vec_3(deserializer);
     return APIVec3Data(value: var_value);
+  }
+
+  @protected
+  APIViewportPickResult sse_decode_api_viewport_pick_result(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return APIViewportPickResult_ActiveNodeHit();
+      case 1:
+        var var_nodeId = sse_decode_u_64(deserializer);
+        var var_nodeName = sse_decode_String(deserializer);
+        return APIViewportPickResult_ActivateNode(
+            nodeId: var_nodeId, nodeName: var_nodeName);
+      case 2:
+        var var_candidates = sse_decode_list_api_candidate_node(deserializer);
+        return APIViewportPickResult_Disambiguation(candidates: var_candidates);
+      case 3:
+        return APIViewportPickResult_NoHit();
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -12282,6 +12387,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <String>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<APICandidateNode> sse_decode_list_api_candidate_node(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APICandidateNode>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_candidate_node(deserializer));
     }
     return ans_;
   }
@@ -13676,6 +13794,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_candidate_node(
+      APICandidateNode self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.nodeId, serializer);
+    sse_encode_String(self.nodeName, serializer);
+  }
+
+  @protected
   void sse_encode_api_circle_data(
       APICircleData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -14186,6 +14312,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_vec_3_data(APIVec3Data self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_vec_3(self.value, serializer);
+  }
+
+  @protected
+  void sse_encode_api_viewport_pick_result(
+      APIViewportPickResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case APIViewportPickResult_ActiveNodeHit():
+        sse_encode_i_32(0, serializer);
+      case APIViewportPickResult_ActivateNode(
+          nodeId: final nodeId,
+          nodeName: final nodeName
+        ):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_String(nodeName, serializer);
+      case APIViewportPickResult_Disambiguation(candidates: final candidates):
+        sse_encode_i_32(2, serializer);
+        sse_encode_list_api_candidate_node(candidates, serializer);
+      case APIViewportPickResult_NoHit():
+        sse_encode_i_32(3, serializer);
+    }
   }
 
   @protected
@@ -14833,6 +14981,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_candidate_node(
+      List<APICandidateNode> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_candidate_node(item, serializer);
     }
   }
 

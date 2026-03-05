@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
@@ -703,7 +704,107 @@ class _StructureDesignerViewportState
   @override
   void onPointerDown(PointerDownEvent event) {
     _clearHoverTooltip();
+
+    // Click-to-activate: intercept primary clicks when multiple nodes are
+    // visible to check if the click hits a non-active node's output.
+    if (event.kind == PointerDeviceKind.mouse &&
+        event.buttons == kPrimaryMouseButton) {
+      final pickResult = _tryViewportPick(event.localPosition);
+      if (pickResult != null) {
+        // Click was consumed by click-to-activate — do not pass to delegate.
+        return;
+      }
+    }
+
     super.onPointerDown(event);
+  }
+
+  /// Attempts a viewport pick for click-to-activate. Returns true if the
+  /// click was consumed (node activated or disambiguation shown), null if
+  /// the click should pass through to normal handling.
+  bool? _tryViewportPick(Offset pointerPos) {
+    final nodes = widget.graphModel.nodeNetworkView?.nodes;
+    if (nodes == null) return null;
+
+    // Performance guard: only needed when multiple nodes are visible.
+    final displayedCount = nodes.values.where((n) => n.displayed).length;
+    if (displayedCount <= 1) return null;
+
+    final ray = getRayFromPointerPos(pointerPos);
+    final result = structure_designer_api.viewportPick(
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+
+    if (result is APIViewportPickResult_ActivateNode) {
+      widget.graphModel.setSelectedNode(result.nodeId);
+      renderingNeeded();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Activated: ${result.nodeName}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return true;
+    }
+
+    if (result is APIViewportPickResult_Disambiguation) {
+      _showDisambiguationMenu(pointerPos, result.candidates);
+      return true;
+    }
+
+    // ActiveNodeHit or NoHit — pass through to normal handling.
+    return null;
+  }
+
+  void _showDisambiguationMenu(
+      Offset pointerPos, List<APICandidateNode> candidates) {
+    final overlay = Overlay.of(context);
+    final renderBox = context.findRenderObject() as RenderBox;
+    final globalPos = renderBox.localToGlobal(pointerPos);
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _DisambiguationOverlay(
+        position: globalPos,
+        candidates: candidates,
+        onActivate: (candidate) {
+          entry.remove();
+          widget.graphModel.setSelectedNode(candidate.nodeId);
+          renderingNeeded();
+          ScaffoldMessenger.of(this.context).showSnackBar(
+            SnackBar(
+              content: Text('Activated: ${candidate.nodeName}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        },
+        onSolo: (candidate) {
+          entry.remove();
+          // Hide other overlapping nodes, then activate the chosen one.
+          for (final other in candidates) {
+            if (other.nodeId != candidate.nodeId) {
+              structure_designer_api.setNodeDisplay(
+                nodeId: other.nodeId,
+                isDisplayed: false,
+              );
+            }
+          }
+          widget.graphModel.setSelectedNode(candidate.nodeId);
+          renderingNeeded();
+          ScaffoldMessenger.of(this.context).showSnackBar(
+            SnackBar(
+              content: Text('Activated: ${candidate.nodeName}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        },
+        onDismiss: () {
+          entry.remove();
+        },
+      ),
+    );
+    overlay.insert(entry);
   }
 
   /// Forward to the protected startGadgetDragFromHandle for the delegate.
@@ -1048,6 +1149,106 @@ class _StructureDesignerViewportState
           },
         ),
       ),
+    );
+  }
+}
+
+/// Overlay widget for click-to-activate disambiguation.
+///
+/// Shows a popup near the click position with candidate nodes. Each row has
+/// a clickable name (activate) and a solo eye icon (activate + hide others).
+class _DisambiguationOverlay extends StatelessWidget {
+  final Offset position;
+  final List<APICandidateNode> candidates;
+  final void Function(APICandidateNode) onActivate;
+  final void Function(APICandidateNode) onSolo;
+  final VoidCallback onDismiss;
+
+  const _DisambiguationOverlay({
+    required this.position,
+    required this.candidates,
+    required this.onActivate,
+    required this.onSolo,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Barrier: clicking away dismisses the popup.
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: onDismiss,
+            behavior: HitTestBehavior.opaque,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        Positioned(
+          left: position.dx,
+          top: position.dy,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(6),
+            color: const Color(0xFF2D2D30),
+            child: IntrinsicWidth(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final candidate in candidates)
+                    _DisambiguationRow(
+                      candidate: candidate,
+                      onActivate: () => onActivate(candidate),
+                      onSolo: () => onSolo(candidate),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DisambiguationRow extends StatelessWidget {
+  final APICandidateNode candidate;
+  final VoidCallback onActivate;
+  final VoidCallback onSolo;
+
+  const _DisambiguationRow({
+    required this.candidate,
+    required this.onActivate,
+    required this.onSolo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: onActivate,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Text(
+                candidate.nodeName,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.visibility, size: 18),
+          color: Colors.white70,
+          tooltip: 'Activate and hide other overlapping nodes',
+          onPressed: onSolo,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          padding: const EdgeInsets.all(6),
+        ),
+      ],
     );
   }
 }

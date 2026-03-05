@@ -576,6 +576,225 @@ class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
 }
 
 /// @nodoc
+mixin _$APIViewportPickResult {
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APIViewportPickResult);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIViewportPickResult()';
+  }
+}
+
+/// @nodoc
+class $APIViewportPickResultCopyWith<$Res> {
+  $APIViewportPickResultCopyWith(
+      APIViewportPickResult _, $Res Function(APIViewportPickResult) __);
+}
+
+/// @nodoc
+
+class APIViewportPickResult_ActiveNodeHit extends APIViewportPickResult {
+  const APIViewportPickResult_ActiveNodeHit() : super._();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIViewportPickResult_ActiveNodeHit);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIViewportPickResult.activeNodeHit()';
+  }
+}
+
+/// @nodoc
+
+class APIViewportPickResult_ActivateNode extends APIViewportPickResult {
+  const APIViewportPickResult_ActivateNode(
+      {required this.nodeId, required this.nodeName})
+      : super._();
+
+  final BigInt nodeId;
+  final String nodeName;
+
+  /// Create a copy of APIViewportPickResult
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIViewportPickResult_ActivateNodeCopyWith<
+          APIViewportPickResult_ActivateNode>
+      get copyWith => _$APIViewportPickResult_ActivateNodeCopyWithImpl<
+          APIViewportPickResult_ActivateNode>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIViewportPickResult_ActivateNode &&
+            (identical(other.nodeId, nodeId) || other.nodeId == nodeId) &&
+            (identical(other.nodeName, nodeName) ||
+                other.nodeName == nodeName));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, nodeId, nodeName);
+
+  @override
+  String toString() {
+    return 'APIViewportPickResult.activateNode(nodeId: $nodeId, nodeName: $nodeName)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIViewportPickResult_ActivateNodeCopyWith<$Res>
+    implements $APIViewportPickResultCopyWith<$Res> {
+  factory $APIViewportPickResult_ActivateNodeCopyWith(
+          APIViewportPickResult_ActivateNode value,
+          $Res Function(APIViewportPickResult_ActivateNode) _then) =
+      _$APIViewportPickResult_ActivateNodeCopyWithImpl;
+  @useResult
+  $Res call({BigInt nodeId, String nodeName});
+}
+
+/// @nodoc
+class _$APIViewportPickResult_ActivateNodeCopyWithImpl<$Res>
+    implements $APIViewportPickResult_ActivateNodeCopyWith<$Res> {
+  _$APIViewportPickResult_ActivateNodeCopyWithImpl(this._self, this._then);
+
+  final APIViewportPickResult_ActivateNode _self;
+  final $Res Function(APIViewportPickResult_ActivateNode) _then;
+
+  /// Create a copy of APIViewportPickResult
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? nodeId = null,
+    Object? nodeName = null,
+  }) {
+    return _then(APIViewportPickResult_ActivateNode(
+      nodeId: null == nodeId
+          ? _self.nodeId
+          : nodeId // ignore: cast_nullable_to_non_nullable
+              as BigInt,
+      nodeName: null == nodeName
+          ? _self.nodeName
+          : nodeName // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APIViewportPickResult_Disambiguation extends APIViewportPickResult {
+  const APIViewportPickResult_Disambiguation(
+      {required final List<APICandidateNode> candidates})
+      : _candidates = candidates,
+        super._();
+
+  final List<APICandidateNode> _candidates;
+  List<APICandidateNode> get candidates {
+    if (_candidates is EqualUnmodifiableListView) return _candidates;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_candidates);
+  }
+
+  /// Create a copy of APIViewportPickResult
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIViewportPickResult_DisambiguationCopyWith<
+          APIViewportPickResult_Disambiguation>
+      get copyWith => _$APIViewportPickResult_DisambiguationCopyWithImpl<
+          APIViewportPickResult_Disambiguation>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIViewportPickResult_Disambiguation &&
+            const DeepCollectionEquality()
+                .equals(other._candidates, _candidates));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      runtimeType, const DeepCollectionEquality().hash(_candidates));
+
+  @override
+  String toString() {
+    return 'APIViewportPickResult.disambiguation(candidates: $candidates)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIViewportPickResult_DisambiguationCopyWith<$Res>
+    implements $APIViewportPickResultCopyWith<$Res> {
+  factory $APIViewportPickResult_DisambiguationCopyWith(
+          APIViewportPickResult_Disambiguation value,
+          $Res Function(APIViewportPickResult_Disambiguation) _then) =
+      _$APIViewportPickResult_DisambiguationCopyWithImpl;
+  @useResult
+  $Res call({List<APICandidateNode> candidates});
+}
+
+/// @nodoc
+class _$APIViewportPickResult_DisambiguationCopyWithImpl<$Res>
+    implements $APIViewportPickResult_DisambiguationCopyWith<$Res> {
+  _$APIViewportPickResult_DisambiguationCopyWithImpl(this._self, this._then);
+
+  final APIViewportPickResult_Disambiguation _self;
+  final $Res Function(APIViewportPickResult_Disambiguation) _then;
+
+  /// Create a copy of APIViewportPickResult
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? candidates = null,
+  }) {
+    return _then(APIViewportPickResult_Disambiguation(
+      candidates: null == candidates
+          ? _self._candidates
+          : candidates // ignore: cast_nullable_to_non_nullable
+              as List<APICandidateNode>,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APIViewportPickResult_NoHit extends APIViewportPickResult {
+  const APIViewportPickResult_NoHit() : super._();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIViewportPickResult_NoHit);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIViewportPickResult.noHit()';
+  }
+}
+
+/// @nodoc
 mixin _$GuidedPlacementApiResult {
   @override
   bool operator ==(Object other) {

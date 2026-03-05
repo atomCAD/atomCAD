@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1030539589;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 248926503;
 
 // Section: executor
 
@@ -7491,6 +7491,44 @@ fn wire__crate__api__structure_designer__structure_designer_api__validate_active
         },
     )
 }
+fn wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "viewport_pick",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ray_origin =
+                <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
+            let api_ray_direction =
+                <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::structure_designer::structure_designer_api::viewport_pick(
+                        api_ray_origin,
+                        api_ray_direction,
+                    ),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -7769,6 +7807,18 @@ impl SseDecode for crate::api::common_api_types::APICameraCanonicalView {
             5 => crate::api::common_api_types::APICameraCanonicalView::Left,
             6 => crate::api::common_api_types::APICameraCanonicalView::Right,
             _ => unreachable!("Invalid variant for APICameraCanonicalView: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APICandidateNode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_nodeId = <u64>::sse_decode(deserializer);
+        let mut var_nodeName = <String>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APICandidateNode {
+            node_id: var_nodeId,
+            node_name: var_nodeName,
         };
     }
 }
@@ -8600,6 +8650,37 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                return crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::ActiveNodeHit;
+            }
+            1 => {
+                let mut var_nodeId = <u64>::sse_decode(deserializer);
+                let mut var_nodeName = <String>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::ActivateNode{node_id: var_nodeId, node_name: var_nodeName};
+            }
+            2 => {
+                let mut var_candidates = <Vec<
+                    crate::api::structure_designer::structure_designer_api_types::APICandidateNode,
+                >>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::Disambiguation{candidates: var_candidates};
+            }
+            3 => {
+                return crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::NoHit;
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for crate::api::common_api_types::APIIVec2 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8918,6 +8999,20 @@ impl SseDecode for Vec<String> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APICandidateNode>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APICandidateNode>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -10567,6 +10662,7 @@ fn pde_ffi_dispatcher_sync_impl(
 267 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
 268 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
 269 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
+270 => wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -10981,6 +11077,33 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::common_api_types::APICameraCa
     for crate::api::common_api_types::APICameraCanonicalView
 {
     fn into_into_dart(self) -> crate::api::common_api_types::APICameraCanonicalView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APICandidateNode
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.node_id.into_into_dart().into_dart(),
+            self.node_name.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APICandidateNode
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APICandidateNode,
+    > for crate::api::structure_designer::structure_designer_api_types::APICandidateNode
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APICandidateNode {
         self
     }
 }
@@ -12393,6 +12516,36 @@ impl
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::ActiveNodeHit => { [0.into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::ActivateNode{node_id,node_name} => { [1.into_dart(),
+node_id.into_into_dart().into_dart(),
+node_name.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::Disambiguation{candidates} => { [2.into_dart(),
+candidates.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::NoHit => { [3.into_dart()].into_dart() }
+ _ => { unimplemented!(""); }}
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult,
+    > for crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::APIIVec2 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -13599,6 +13752,14 @@ impl SseEncode for crate::api::common_api_types::APICameraCanonicalView {
     }
 }
 
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APICandidateNode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.node_id, serializer);
+        <String>::sse_encode(self.node_name, serializer);
+    }
+}
+
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APICircleData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14157,6 +14318,22 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::ActiveNodeHit => { <i32>::sse_encode(0, serializer);  }
+crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::ActivateNode{node_id,node_name} => { <i32>::sse_encode(1, serializer); <u64>::sse_encode(node_id, serializer);
+<String>::sse_encode(node_name, serializer);
+ }
+crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::Disambiguation{candidates} => { <i32>::sse_encode(2, serializer); <Vec<crate::api::structure_designer::structure_designer_api_types::APICandidateNode>>::sse_encode(candidates, serializer);
+ }
+crate::api::structure_designer::structure_designer_api_types::APIViewportPickResult::NoHit => { <i32>::sse_encode(3, serializer);  }
+ _ => { unimplemented!(""); }}
+    }
+}
+
 impl SseEncode for crate::api::common_api_types::APIIVec2 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -14407,6 +14584,18 @@ impl SseEncode for Vec<String> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <String>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APICandidateNode>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APICandidateNode>::sse_encode(item, serializer);
         }
     }
 }
@@ -15613,7 +15802,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -15637,7 +15826,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

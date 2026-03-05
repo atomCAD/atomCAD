@@ -381,6 +381,28 @@ class APIBoolData {
           value == other.value;
 }
 
+/// A candidate node in a viewport pick disambiguation.
+class APICandidateNode {
+  final BigInt nodeId;
+  final String nodeName;
+
+  const APICandidateNode({
+    required this.nodeId,
+    required this.nodeName,
+  });
+
+  @override
+  int get hashCode => nodeId.hashCode ^ nodeName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICandidateNode &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          nodeName == other.nodeName;
+}
+
 class APICircleData {
   final APIIVec2 center;
   final int radius;
@@ -1673,6 +1695,29 @@ class APIVec3Data {
       other is APIVec3Data &&
           runtimeType == other.runtimeType &&
           value == other.value;
+}
+
+@freezed
+sealed class APIViewportPickResult with _$APIViewportPickResult {
+  const APIViewportPickResult._();
+
+  /// The closest hit belongs to the already-active node — proceed with normal click handling.
+  const factory APIViewportPickResult.activeNodeHit() =
+      APIViewportPickResult_ActiveNodeHit;
+
+  /// Unambiguous hit on a non-active node — activate it.
+  const factory APIViewportPickResult.activateNode({
+    required BigInt nodeId,
+    required String nodeName,
+  }) = APIViewportPickResult_ActivateNode;
+
+  /// Multiple non-active nodes overlap at the click point — show disambiguation popup.
+  const factory APIViewportPickResult.disambiguation({
+    required List<APICandidateNode> candidates,
+  }) = APIViewportPickResult_Disambiguation;
+
+  /// Ray missed everything — proceed with normal click handling.
+  const factory APIViewportPickResult.noHit() = APIViewportPickResult_NoHit;
 }
 
 class APIIVec2Data {
