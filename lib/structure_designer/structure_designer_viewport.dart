@@ -726,9 +726,12 @@ class _StructureDesignerViewportState
     final nodes = widget.graphModel.nodeNetworkView?.nodes;
     if (nodes == null) return null;
 
-    // Performance guard: only needed when multiple nodes are visible.
-    final displayedCount = nodes.values.where((n) => n.displayed).length;
-    if (displayedCount <= 1) return null;
+    // Performance guard: only needed when there is at least one displayed
+    // non-active node. If every displayed node is the active node (or none
+    // are displayed), there is nothing to activate via viewport click.
+    final hasDisplayedNonActive =
+        nodes.values.any((n) => n.displayed && !n.active);
+    if (!hasDisplayedNonActive) return null;
 
     final ray = getRayFromPointerPos(pointerPos);
     final result = structure_designer_api.viewportPick(
@@ -1247,7 +1250,7 @@ class _DisambiguationRow extends StatelessWidget {
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.visibility, size: 18),
+          icon: const Icon(Icons.center_focus_strong, size: 18),
           color: Colors.white70,
           tooltip: 'Activate and hide other overlapping nodes',
           onPressed: onSolo,
