@@ -6,7 +6,7 @@ When multiple nodes are set to visible, it is hard to tell which rendered output
 
 ## Design Overview
 
-**Two-phase interaction:**
+**Two-step interaction:**
 1. **First click** on output belonging to a non-active node: activates that node and scrolls the node network panel to reveal it.
 2. **Second click** (now on the active node's output): performs the normal action (e.g., atom selection in atom_edit).
 
@@ -14,7 +14,7 @@ When multiple nodes are set to visible, it is hard to tell which rendered output
 
 ## Detailed Behavior
 
-### Phase 1: Click-to-Activate
+### Step 1: Click-to-Activate
 
 When the user clicks in the 3D viewport:
 
@@ -22,10 +22,10 @@ When the user clicks in the 3D viewport:
 2. The ray is tested against **all visible node outputs** in the scene (`last_generated_structure_designer_scene.node_data`), collecting hits with their node IDs and distances.
 3. **If all hits belong to the currently active node** — proceed with normal click handling (existing behavior, no change).
 4. **If the closest hit belongs to a non-active node (unambiguous)** — activate that node, scroll the node network panel to show it, and show a SnackBar confirmation (see below). Do NOT pass the click action through.
-5. **If multiple nodes have hits within an overlap threshold** — show a disambiguation popup (see below). Do NOT pass the click action through.
+5. **If multiple non-active nodes have hits within an overlap threshold** — show a disambiguation popup (see below). Do NOT pass the click action through. If the active node is among the overlapping hits, treat as step 3 (normal action) — the user already chose this node.
 6. **If no hits** — existing behavior (camera operations, etc.).
 
-### Phase 2: Normal Action
+### Step 2: Normal Action
 
 Once a node is active, all subsequent clicks on that node's output follow the existing interaction flow (atom selection, facet selection, gadget interaction, etc.). No changes needed here.
 
@@ -164,6 +164,8 @@ if (pickResult is Disambiguation) {
 ```
 
 This interception should happen **before** the existing `primaryPointerDelegate?.onPrimaryDown()` and `onDefaultClick()` calls.
+
+**Performance guard:** The `viewport_pick()` call (and the underlying `raytrace_per_node`) is only needed when multiple nodes are visible. If only zero or one nodes are visible, skip the interception entirely and fall through to normal click handling. This avoids adding per-node raycast latency to every click in the common single-node case. The visible node count is already available from `node_data` in the scene.
 
 ### Flutter: Scroll-to-Node
 
@@ -306,7 +308,7 @@ However, this feature requires changes to the rendering pipeline. The current re
 | Click on output of non-active node (unambiguous) | Activate node, scroll panel to it |
 | Click on output of active node | Normal action (atom select, etc.) |
 | Click where outputs from multiple non-active nodes overlap | Show disambiguation menu |
-| Click where active node overlaps with non-active node(s) | If active node is closest: normal action. If non-active is closest: activate it. If overlapping: disambiguation menu |
+| Click where active node overlaps with non-active node(s) | Normal action (pass to active node). The user already chose this node; no re-disambiguation. |
 | User clicks node name in disambiguation menu | Activate chosen node, scroll panel, keep all nodes visible |
 | User clicks solo icon in disambiguation menu | Activate chosen node, scroll panel, hide the other overlapping nodes from the popup (other visible nodes in the network are unaffected) |
 | User dismisses disambiguation menu | No change |
@@ -324,6 +326,92 @@ However, this feature requires changes to the rendering pipeline. The current re
 | `lib/structure_designer/node_network/node_network.dart` | Add `scrollToNode()` method |
 | `lib/structure_designer/structure_designer_model.dart` | Add `scrollNodeNetworkToNode()` method |
 | `lib/common/atom_tooltip.dart` | Add node origin line and overlap warning line |
+
+## Phased Implementation Plan
+
+### Phase 1: Per-Node Raycast Infrastructure (Rust)
+
+**Goal:** Build the core `raytrace_per_node` function that all subsequent features depend on.
+
+**Tasks:**
+- [ ] Add `PerNodeRayHit { node_id: u64, distance: f64 }` struct to `structure_designer.rs`.
+- [ ] Implement `StructureDesigner::raytrace_per_node()` — iterates `node_data.iter()` (instead of `.values()`), calls `AtomicStructure::hit_test()` per atomic node and `raytrace_geometry()` per geometry node, collects `Vec<PerNodeRayHit>`.
+- [ ] Add a helper `fn get_node_display_name(&self, node_id: u64) -> String` that returns the custom name or `"type #id"` fallback. This is needed by hover tooltip, disambiguation popup, and SnackBar.
+- [ ] Write tests for `raytrace_per_node` — single node hit, multiple nodes at different distances, overlapping nodes within epsilon.
+
+**Depends on:** Nothing (no existing code changes, purely additive).
+
+### Phase 2: Hover Tooltip — Node Origin and Overlap Warning
+
+**Goal:** Show which node produced the hovered atom, and warn about overlaps. This gives immediate value even before click-to-activate is wired up.
+
+**Tasks:**
+- [ ] Extend `hit_test_all_atomic_structures()` (or create a new variant) to return the node ID alongside the `(atom_id, &AtomicStructure)` pair. This requires iterating `node_data.iter()` instead of `.values()`.
+- [ ] After finding the closest hit, run a second pass to detect other nodes with hits within 0.1 Å of the closest distance (reusing the per-node raycast from Phase 1).
+- [ ] Add `node_name: String` and `overlapping_node_names: Vec<String>` fields to `APIHoveredAtomInfo`.
+- [ ] Update `query_hovered_atom_info()` to populate the new fields.
+- [ ] Update `AtomTooltip` widget: add node origin line (muted style), add overlap warning line (red `Color(0xFFEF5350)`, only shown when `overlapping_node_names` is non-empty).
+- [ ] Run FRB codegen.
+
+**Depends on:** Phase 1 (uses `raytrace_per_node` for overlap detection).
+
+### Phase 3: Viewport Pick API and Click Interception
+
+**Goal:** Clicking on a non-active node's output activates that node. No disambiguation yet — just unambiguous activation.
+
+**Tasks:**
+- [ ] Add `ViewportPickResult` enum to API types:
+  - `ActiveNodeHit` — closest hit belongs to active node
+  - `ActivateNode { node_id, node_name }` — unambiguous non-active node hit
+  - `Disambiguation { candidates: Vec<CandidateNode> }` — overlapping hits (handled in Phase 5)
+  - `NoHit` — ray missed everything
+- [ ] Implement `viewport_pick()` API function: calls `raytrace_per_node`, compares closest hit's node ID to active node, applies overlap epsilon, returns appropriate variant.
+- [ ] In `structure_designer_viewport.dart`, add click interception before `primaryPointerDelegate?.onPrimaryDown()` and `onDefaultClick()`: call `viewport_pick()`, if `ActivateNode` → call `selectNode()` + `renderingNeeded()`, consume the click.
+- [ ] Run FRB codegen.
+
+**Depends on:** Phase 1. Can be done in parallel with Phase 2.
+
+### Phase 4: Scroll-to-Node and SnackBar Feedback
+
+**Goal:** When a node is activated via viewport click, scroll the node network panel to center on it and show a SnackBar confirmation.
+
+**Tasks:**
+- [ ] Add `scrollToNode(nodeId)` method to `_NodeNetworkWidgetState` in `node_network.dart` — calculates `_panOffset` to center the node, calls `setState()`.
+- [ ] Expose the method to `StructureDesignerModel` via a `GlobalKey<_NodeNetworkWidgetState>` or a callback registered during widget init.
+- [ ] Add `scrollNodeNetworkToNode(nodeId)` to `StructureDesignerModel`.
+- [ ] Wire the scroll call into the click interception from Phase 3: after `selectNode()`, call `scrollNodeNetworkToNode()`.
+- [ ] Add SnackBar feedback after activation: `"Activated: {node_name}"`, reusing the existing `_showSaturationFeedback` pattern.
+- [ ] Text editor mode: scroll to the activated node's line (requires mapping node IDs to line ranges in the serialized text — may be deferred if non-trivial).
+
+**Depends on:** Phase 3 (needs click interception to be in place).
+
+### Phase 5: Disambiguation Popup with Solo Icons
+
+**Goal:** When overlapping outputs are clicked, show a disambiguation popup with per-node activate and solo (isolate) actions.
+
+**Tasks:**
+- [ ] Ensure `viewport_pick()` returns `Disambiguation { candidates }` when multiple nodes hit within 0.1 Å epsilon. Each `CandidateNode` includes `node_id` and `node_name`.
+- [ ] Implement `_showDisambiguationMenu()` in `structure_designer_viewport.dart`:
+  - Popup positioned near click location.
+  - Each row: clickable node name label + solo eye icon button.
+  - Name click → `selectNode(nodeId)` + `scrollNodeNetworkToNode(nodeId)` + SnackBar + dismiss popup.
+  - Solo icon click → same as name click, plus `setNodeDisplay(otherId, false)` for each other candidate in the popup. Only the overlapping nodes are hidden, not all visible nodes.
+  - Click-away → dismiss, no change.
+- [ ] When the active node is among the overlapping candidates, skip disambiguation and treat as `ActiveNodeHit` (pass through to normal action). Disambiguation only triggers when all overlapping hits belong to non-active nodes.
+
+**Depends on:** Phase 3 and Phase 4 (needs click interception, scroll-to-node, and SnackBar).
+
+### Phase Summary
+
+| Phase | Deliverable | Depends on |
+|-------|-------------|------------|
+| 1 | `raytrace_per_node` Rust function | — |
+| 2 | Hover tooltip with node origin + overlap warning | Phase 1 |
+| 3 | `viewport_pick` API + click interception (unambiguous only) | Phase 1 |
+| 4 | Scroll-to-node + SnackBar feedback | Phase 3 |
+| 5 | Disambiguation popup with solo icons | Phase 3, 4 |
+
+Phases 2 and 3 can be implemented in parallel after Phase 1.
 
 ## Existing Code Reuse Summary
 
