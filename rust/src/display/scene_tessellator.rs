@@ -115,8 +115,29 @@ fn tessellate_non_lightweight_content(
         cylinder_divisions: 12,
     };
 
+    // Active geometry color: green (the original default)
+    let active_outside_material = Material::new(&Vec3::new(0.0, 1.0, 0.0), 1.0, 0.0);
+    let active_inside_material = Material::new(&Vec3::new(1.0, 0.0, 0.0), 1.0, 0.0);
+    // Non-active geometry color: desaturated blue-gray
+    let default_outside_material = Material::new(&Vec3::new(0.36, 0.38, 0.65), 1.0, 0.0);
+    let default_inside_material = Material::new(&Vec3::new(0.5, 0.3, 0.3), 1.0, 0.0);
+    // Highlighted face color: blue (shared for both active and non-active)
+    let highlighted_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), 1.0, 0.0);
+
     // Iterate over all node data and tessellate based on output type
-    for node_data in scene.node_data.values() {
+    for (&node_id, node_data) in &scene.node_data {
+        let is_active = scene.active_node_id == Some(node_id);
+        let outside_material = if is_active {
+            &active_outside_material
+        } else {
+            &default_outside_material
+        };
+        let inside_material = if is_active {
+            &active_inside_material
+        } else {
+            &default_inside_material
+        };
+
         match &node_data.output {
             NodeOutput::Atomic(atomic_structure) => {
                 // Tessellate atomic structures based on rendering method
@@ -178,6 +199,8 @@ fn tessellate_non_lightweight_content(
                 surface_point_tessellator::tessellate_surface_point_cloud(
                     &mut main_mesh,
                     point_cloud,
+                    outside_material,
+                    inside_material,
                 );
             }
 
@@ -185,26 +208,33 @@ fn tessellate_non_lightweight_content(
                 surface_point_tessellator::tessellate_surface_point_cloud_2d(
                     &mut main_mesh,
                     point_cloud_2d,
+                    outside_material,
+                    inside_material,
                 );
             }
 
             NodeOutput::PolyMesh(poly_mesh) => {
                 if preferences.geometry_visualization.wireframe_geometry {
+                    let wireframe_color = if is_active {
+                        [1.0, 1.0, 1.0]
+                    } else {
+                        [0.5, 0.55, 0.6]
+                    };
                     tessellate_poly_mesh_to_line_mesh(
                         poly_mesh,
                         &mut wireframe_mesh,
                         preferences.geometry_visualization.mesh_smoothing.clone(),
-                        Vec3::new(1.0, 1.0, 1.0).to_array(),
-                        Vec3::new(1.0, 1.0, 1.0).to_array(),
+                        wireframe_color,
+                        wireframe_color,
                     );
                 } else {
                     tessellate_poly_mesh(
                         poly_mesh,
                         &mut main_mesh,
                         preferences.geometry_visualization.mesh_smoothing.clone(),
-                        &Material::new(&Vec3::new(0.0, 1.0, 0.0), 1.0, 0.0),
-                        Some(&Material::new(&Vec3::new(1.0, 0.0, 0.0), 1.0, 0.0)),
-                        Some(&Material::new(&Vec3::new(0.0, 0.0, 1.0), 1.0, 0.0)),
+                        outside_material,
+                        Some(inside_material),
+                        Some(&highlighted_material),
                     );
                 }
             }

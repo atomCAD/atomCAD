@@ -279,6 +279,7 @@ impl StructureDesigner {
 
         // Create new scene with empty node_data HashMap and invisibility cache.
         self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+        self.last_generated_structure_designer_scene.active_node_id = network.active_node_id;
 
         // Track selected node's unit cell
         let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
@@ -344,6 +345,7 @@ impl StructureDesigner {
 
         // Clone necessary data before mutable borrows to avoid borrow checker issues
         let active_node_id = network.active_node_id;
+        self.last_generated_structure_designer_scene.active_node_id = active_node_id;
 
         // Step 1: Cache nodes that became invisible
         for &node_id in &changes.visibility_changed {

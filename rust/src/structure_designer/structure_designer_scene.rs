@@ -91,6 +91,10 @@ pub struct StructureDesignerScene {
     /// Unit cell from the selected node (used for background rendering)
     /// Overrides individual node unit cells for global scene context
     pub unit_cell: Option<UnitCellStruct>,
+
+    /// The active node ID - used by the tessellator to render active geometry
+    /// with a distinct color
+    pub active_node_id: Option<u64>,
 }
 
 impl Default for StructureDesignerScene {
@@ -112,6 +116,7 @@ impl StructureDesignerScene {
             ),
             tessellatable: None,
             unit_cell: None,
+            active_node_id: None,
         }
     }
 
