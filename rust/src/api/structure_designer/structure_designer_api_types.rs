@@ -464,6 +464,12 @@ pub struct APIHoveredAtomInfo {
 
     // Frozen state
     pub is_frozen: bool,
+
+    // Node origin — name of the node that produced this atom
+    pub node_name: String,
+
+    // Overlap — names of other nodes with atoms at nearly the same position
+    pub overlapping_node_names: Vec<String>,
 }
 
 /// Hybridization override for guided atom placement.

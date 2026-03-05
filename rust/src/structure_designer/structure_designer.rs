@@ -2213,6 +2213,56 @@ impl StructureDesigner {
         closest.map(|(id, structure, _)| (id, structure))
     }
 
+    /// Like `hit_test_all_atomic_structures`, but also returns the node ID
+    /// and distance of the closest hit. Used by hover tooltip to show which
+    /// node produced the hovered atom.
+    pub fn hit_test_all_atomic_structures_with_node_id(
+        &self,
+        ray_origin: &DVec3,
+        ray_direction: &DVec3,
+    ) -> Option<(u32, &AtomicStructure, u64, f64)> {
+        use crate::crystolecule::atomic_structure::HitTestResult;
+        use crate::display::preferences as display_prefs;
+        use crate::structure_designer::structure_designer_scene::NodeOutput;
+
+        let visualization = &self
+            .preferences
+            .atomic_structure_visualization_preferences
+            .visualization;
+        let display_visualization = match visualization {
+            AtomicStructureVisualization::BallAndStick => {
+                display_prefs::AtomicStructureVisualization::BallAndStick
+            }
+            AtomicStructureVisualization::SpaceFilling => {
+                display_prefs::AtomicStructureVisualization::SpaceFilling
+            }
+        };
+
+        let mut closest: Option<(u32, &AtomicStructure, u64, f64)> = None;
+
+        for (&node_id, node_data) in self
+            .last_generated_structure_designer_scene
+            .node_data
+            .iter()
+        {
+            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
+                if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
+                    ray_origin,
+                    ray_direction,
+                    visualization,
+                    |atom| get_displayed_atom_radius(atom, &display_visualization),
+                    BAS_STICK_RADIUS,
+                ) {
+                    if closest.as_ref().is_none_or(|c| distance < c.3) {
+                        closest = Some((atom_id, atomic_structure, node_id, distance));
+                    }
+                }
+            }
+        }
+
+        closest
+    }
+
     /// Per-node raycast: returns a list of ray hits with associated node IDs.
     ///
     /// Unlike `raytrace()` which returns only the closest overall distance,

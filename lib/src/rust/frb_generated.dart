@@ -8810,8 +8810,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIHoveredAtomInfo dco_decode_api_hovered_atom_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return APIHoveredAtomInfo(
       symbol: dco_decode_String(arr[0]),
       elementName: dco_decode_String(arr[1]),
@@ -8821,6 +8821,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       z: dco_decode_f_64(arr[5]),
       bondCount: dco_decode_u_32(arr[6]),
       isFrozen: dco_decode_bool(arr[7]),
+      nodeName: dco_decode_String(arr[8]),
+      overlappingNodeNames: dco_decode_list_String(arr[9]),
     );
   }
 
@@ -11173,6 +11175,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_z = sse_decode_f_64(deserializer);
     var var_bondCount = sse_decode_u_32(deserializer);
     var var_isFrozen = sse_decode_bool(deserializer);
+    var var_nodeName = sse_decode_String(deserializer);
+    var var_overlappingNodeNames = sse_decode_list_String(deserializer);
     return APIHoveredAtomInfo(
         symbol: var_symbol,
         elementName: var_elementName,
@@ -11181,7 +11185,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         y: var_y,
         z: var_z,
         bondCount: var_bondCount,
-        isFrozen: var_isFrozen);
+        isFrozen: var_isFrozen,
+        nodeName: var_nodeName,
+        overlappingNodeNames: var_overlappingNodeNames);
   }
 
   @protected
@@ -13855,6 +13861,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.z, serializer);
     sse_encode_u_32(self.bondCount, serializer);
     sse_encode_bool(self.isFrozen, serializer);
+    sse_encode_String(self.nodeName, serializer);
+    sse_encode_list_String(self.overlappingNodeNames, serializer);
   }
 
   @protected

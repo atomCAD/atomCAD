@@ -910,6 +910,8 @@ class APIHoveredAtomInfo {
   final double z;
   final int bondCount;
   final bool isFrozen;
+  final String nodeName;
+  final List<String> overlappingNodeNames;
 
   const APIHoveredAtomInfo({
     required this.symbol,
@@ -920,6 +922,8 @@ class APIHoveredAtomInfo {
     required this.z,
     required this.bondCount,
     required this.isFrozen,
+    required this.nodeName,
+    required this.overlappingNodeNames,
   });
 
   @override
@@ -931,7 +935,9 @@ class APIHoveredAtomInfo {
       y.hashCode ^
       z.hashCode ^
       bondCount.hashCode ^
-      isFrozen.hashCode;
+      isFrozen.hashCode ^
+      nodeName.hashCode ^
+      overlappingNodeNames.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -945,7 +951,9 @@ class APIHoveredAtomInfo {
           y == other.y &&
           z == other.z &&
           bondCount == other.bondCount &&
-          isFrozen == other.isFrozen;
+          isFrozen == other.isFrozen &&
+          nodeName == other.nodeName &&
+          overlappingNodeNames == other.overlappingNodeNames;
 }
 
 /// Hybridization override for guided atom placement.

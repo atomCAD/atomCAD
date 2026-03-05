@@ -4231,12 +4231,19 @@ pub fn query_hovered_atom_info(
     let ray_origin = from_api_vec3(&ray_origin);
     let ray_direction = from_api_vec3(&ray_direction);
 
+    /// Overlap threshold in Angstroms — atoms from different nodes within
+    /// this distance along the ray are considered overlapping.
+    const OVERLAP_EPSILON: f64 = 0.1;
+
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                let (atom_id, structure) = cad_instance
+                let (atom_id, structure, closest_node_id, closest_distance) = cad_instance
                     .structure_designer
-                    .hit_test_all_atomic_structures(&ray_origin, &ray_direction)?;
+                    .hit_test_all_atomic_structures_with_node_id(
+                        &ray_origin,
+                        &ray_direction,
+                    )?;
 
                 let atom = structure.get_atom(atom_id)?;
                 let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
@@ -4244,6 +4251,34 @@ pub fn query_hovered_atom_info(
                     .unwrap_or(&crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
 
                 let bond_count = atom.bonds.len() as u32;
+
+                let node_name = cad_instance
+                    .structure_designer
+                    .get_node_display_name(closest_node_id);
+
+                // Detect overlapping nodes within OVERLAP_EPSILON of the closest hit.
+                let visualization = &cad_instance
+                    .structure_designer
+                    .preferences
+                    .atomic_structure_visualization_preferences
+                    .visualization;
+                let per_node_hits = cad_instance.structure_designer.raytrace_per_node(
+                    &ray_origin,
+                    &ray_direction,
+                    visualization,
+                );
+                let overlapping_node_names: Vec<String> = per_node_hits
+                    .iter()
+                    .filter(|hit| {
+                        hit.node_id != closest_node_id
+                            && (hit.distance - closest_distance).abs() < OVERLAP_EPSILON
+                    })
+                    .map(|hit| {
+                        cad_instance
+                            .structure_designer
+                            .get_node_display_name(hit.node_id)
+                    })
+                    .collect();
 
                 Some(APIHoveredAtomInfo {
                     symbol: atom_info.symbol.clone(),
@@ -4254,6 +4289,8 @@ pub fn query_hovered_atom_info(
                     z: atom.position.z,
                     bond_count,
                     is_frozen: atom.is_frozen(),
+                    node_name,
+                    overlapping_node_names,
                 })
             },
             None,

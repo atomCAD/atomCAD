@@ -52,7 +52,28 @@ class AtomTooltip extends StatelessWidget {
                 decoration: TextDecoration.none,
               ),
             ),
-          // Line 4: position in Angstroms (3 decimal places)
+          // Node origin — which node produced this atom
+          Text(
+            info.nodeName,
+            style: const TextStyle(
+              color: Color(0x99FFFFFF),
+              fontSize: 11,
+              fontWeight: FontWeight.normal,
+              decoration: TextDecoration.none,
+            ),
+          ),
+          // Overlap warning (only shown when atoms from other nodes overlap)
+          if (info.overlappingNodeNames.isNotEmpty)
+            Text(
+              '\u26a0 OVERLAP: ${info.overlappingNodeNames.join(', ')}',
+              style: const TextStyle(
+                color: Color(0xFFEF5350),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          // Position in Angstroms (3 decimal places)
           Text(
             'Pos: (${info.x.toStringAsFixed(3)}, '
             '${info.y.toStringAsFixed(3)}, '
