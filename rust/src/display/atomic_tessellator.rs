@@ -29,7 +29,7 @@ const BAS_ATOM_RADIUS_FACTOR: f64 = 0.5;
 pub const BAS_STICK_RADIUS: f64 = 0.1;
 
 // bond cylinder radius scale for overstretched bonds in space-filling mode
-const SPACE_FILLING_BOND_RADIUS_SCALE: f64 = 2.0;
+const SPACE_FILLING_BOND_RADIUS_SCALE: f64 = 4.0;
 
 // radius of each cylinder in a multi-bond (double/triple/quadruple)
 const MULTI_BOND_CYLINDER_RADIUS: f64 = 0.06;
