@@ -5,6 +5,7 @@
 //! - `~El @ (x, y, z)` — atom replacement
 //! - `~El @ (x, y, z) [from (ox, oy, oz)]` — atom move
 //! - `- @ (x, y, z)` — atom delete marker
+//! - `unchanged @ (x, y, z)` — unchanged marker (bond endpoint reference)
 //! - `bond A-B order_name` — bond
 //! - `unbond A-B` — bond delete marker
 
@@ -13,7 +14,9 @@ use crate::crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
     BOND_SINGLE, BOND_TRIPLE,
 };
-use crate::crystolecule::atomic_structure::{AtomicStructure, DELETED_SITE_ATOMIC_NUMBER};
+use crate::crystolecule::atomic_structure::{
+    AtomicStructure, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
+};
 use crate::structure_designer::text_format::format_float;
 use glam::f64::DVec3;
 use std::collections::HashMap;
@@ -85,6 +88,7 @@ fn parse_bond_order_name(name: &str) -> Option<u8> {
 /// - `~El @ (x, y, z)` — atom replacement (matches base atom at same position, changes element)
 /// - `~El @ (x, y, z) [from (ox, oy, oz)]` — atom move (matches base atom at anchor, placed at new position)
 /// - `- @ (x, y, z)` — atom delete marker
+/// - `unchanged @ (x, y, z)` — unchanged marker (bond endpoint reference only)
 /// - `bond A-B order_name` — bond between atom lines A and B
 /// - `unbond A-B` — bond delete marker between atom lines A and B
 ///
@@ -111,6 +115,8 @@ pub fn serialize_diff(diff: &AtomicStructure) -> String {
 
         if atom.atomic_number == DELETED_SITE_ATOMIC_NUMBER {
             lines.push(format!("- @ {}", pos));
+        } else if atom.atomic_number == UNCHANGED_ATOMIC_NUMBER {
+            lines.push(format!("unchanged @ {}", pos));
         } else if let Some(anchor) = diff.anchor_position(atom_id) {
             let el = element_symbol(atom.atomic_number);
             // Self-anchor (anchor == position): replacement, no [from ...] needed
@@ -201,6 +207,19 @@ pub fn parse_diff_text(text: &str) -> Result<AtomicStructure, String> {
             // Set anchor: explicit [from ...] or self-anchor (marks as modification)
             let anchor_pos = anchor.unwrap_or(position);
             diff.set_anchor_position(atom_id, anchor_pos);
+            line_to_atom_id.push(atom_id);
+        } else if let Some(rest) = line.strip_prefix("unchanged") {
+            // Unchanged marker: unchanged @ (x, y, z)
+            let rest = rest.trim();
+            let rest = rest
+                .strip_prefix('@')
+                .ok_or_else(|| {
+                    format!("Line {}: Expected '@' after 'unchanged'", line_number)
+                })?
+                .trim();
+            let position =
+                parse_position(rest).map_err(|e| format!("Line {}: {}", line_number, e))?;
+            let atom_id = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, position);
             line_to_atom_id.push(atom_id);
         } else if let Some(rest) = line.strip_prefix("bond ") {
             // Bond: bond A-B order_name

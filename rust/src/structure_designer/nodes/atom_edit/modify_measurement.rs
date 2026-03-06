@@ -532,13 +532,15 @@ fn gather_measurement_data(structure_designer: &StructureDesigner) -> Result<Gat
         let cache = eval_cache.as_ref().unwrap();
         for (&atom_id, atom) in result_structure.iter_atoms() {
             let source = cache.provenance.sources.get(&atom_id);
-            let (diff_id, identity) = match source {
-                Some(AtomSource::BasePassthrough(_)) => {
-                    (None, Some((atom.atomic_number, atom.position)))
-                }
-                Some(AtomSource::DiffMatchedBase { diff_id, .. }) => (Some(*diff_id), None),
-                Some(AtomSource::DiffAdded(diff_id)) => (Some(*diff_id), None),
-                None => (None, Some((atom.atomic_number, atom.position))),
+            // Always store identity (atomic_number, position) from the result atom.
+            // Needed for UNCHANGED marker promotion: the diff has atomic_number=-1
+            // but the result has the real element from the base structure.
+            let identity = Some((atom.atomic_number, atom.position));
+            let diff_id = match source {
+                Some(AtomSource::BasePassthrough(_)) => None,
+                Some(AtomSource::DiffMatchedBase { diff_id, .. }) => Some(*diff_id),
+                Some(AtomSource::DiffAdded(diff_id)) => Some(*diff_id),
+                None => None,
             };
             atom_provenance.push(AtomProvenanceEntry {
                 result_id: atom_id,
@@ -585,7 +587,18 @@ fn apply_position_updates(
         };
 
         if let Some(diff_id) = entry.diff_id {
-            // Atom already in diff — just move it
+            // Atom already in diff. If it's an UNCHANGED marker, promote it
+            // to a real atom first (set atomic_number and anchor).
+            if let Some(atom) = atom_edit_data.diff.get_atom(diff_id) {
+                if atom.is_unchanged_marker() {
+                    if let Some((atomic_number, old_position)) = entry.identity {
+                        atom_edit_data.diff.set_atomic_number(diff_id, atomic_number);
+                        atom_edit_data
+                            .diff
+                            .set_anchor_position(diff_id, old_position);
+                    }
+                }
+            }
             atom_edit_data.move_in_diff(diff_id, new_position);
         } else if let Some((atomic_number, old_position)) = entry.identity {
             // Base pass-through atom — promote to diff with anchor, then move.

@@ -425,14 +425,20 @@ impl AtomEditData {
             let actual_a = match info.diff_id_a {
                 Some(id) => id,
                 None => match info.identity_a {
-                    Some((an, pos)) => self.diff.add_atom(an, pos),
+                    Some((_an, pos)) => self.diff.add_atom(
+                        crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
+                        pos,
+                    ),
                     None => continue,
                 },
             };
             let actual_b = match info.diff_id_b {
                 Some(id) => id,
                 None => match info.identity_b {
-                    Some((an, pos)) => self.diff.add_atom(an, pos),
+                    Some((_an, pos)) => self.diff.add_atom(
+                        crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
+                        pos,
+                    ),
                     None => continue,
                 },
             };
@@ -479,23 +485,36 @@ impl AtomEditData {
     }
 
     /// Apply element replacement to selected atoms.
-    pub fn apply_replace(&mut self, atomic_number: i16, base_atoms: &[(u32, DVec3)]) {
+    pub fn apply_replace(
+        &mut self,
+        atomic_number: i16,
+        base_atoms: &[super::operations::BaseAtomPromotionInfo],
+    ) {
         // Replace diff atoms (update atomic_number in place)
         let diff_ids: Vec<u32> = self.selection.selected_diff_atoms.iter().copied().collect();
         for diff_id in &diff_ids {
             self.diff.set_atomic_number(*diff_id, atomic_number);
         }
 
-        // Replace base atoms (add to diff with new element)
-        for (base_id, position) in base_atoms {
-            let new_diff_id = self.replace_in_diff(*position, atomic_number);
-            self.selection.selected_base_atoms.remove(base_id);
-            self.selection.selected_diff_atoms.insert(new_diff_id);
+        // Replace base atoms (add to diff with new element, or promote existing entry)
+        for info in base_atoms {
+            let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                // Reuse existing diff entry (e.g., UNCHANGED marker).
+                // Set real atomic_number; anchor = position for replacement.
+                self.diff.set_atomic_number(existing_id, atomic_number);
+                self.diff
+                    .set_anchor_position(existing_id, info.position);
+                existing_id
+            } else {
+                self.replace_in_diff(info.position, atomic_number)
+            };
+            self.selection.selected_base_atoms.remove(&info.base_id);
+            self.selection.selected_diff_atoms.insert(diff_id);
             self.selection.update_order_provenance(
                 SelectionProvenance::Base,
-                *base_id,
+                info.base_id,
                 SelectionProvenance::Diff,
-                new_diff_id,
+                diff_id,
             );
         }
 
@@ -503,7 +522,11 @@ impl AtomEditData {
     }
 
     /// Apply a relative transform to selected atoms.
-    pub fn apply_transform(&mut self, relative: &Transform, base_atoms: &[(u32, i16, DVec3)]) {
+    pub fn apply_transform(
+        &mut self,
+        relative: &Transform,
+        base_atoms: &[super::operations::BaseAtomPromotionInfo],
+    ) {
         // Transform existing diff atoms
         let diff_ids: Vec<u32> = self.selection.selected_diff_atoms.iter().copied().collect();
         for diff_id in diff_ids {
@@ -518,17 +541,27 @@ impl AtomEditData {
         // Promote base atoms to diff with anchors at old positions.
         // Anchor is set here at promotion time so apply_diff can match them
         // back to the base atom. See "Anchor Invariant" in AGENTS.md.
-        for (base_id, atomic_number, old_position) in base_atoms {
-            let new_position = relative.apply_to_position(old_position);
-            let new_diff_id = self.diff.add_atom(*atomic_number, new_position);
-            self.diff.set_anchor_position(new_diff_id, *old_position);
-            self.selection.selected_base_atoms.remove(base_id);
-            self.selection.selected_diff_atoms.insert(new_diff_id);
+        for info in base_atoms {
+            let new_position = relative.apply_to_position(&info.position);
+            let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                // Reuse existing diff entry (e.g., UNCHANGED marker).
+                // Promote: set real atomic_number and anchor, then move.
+                self.diff.set_atomic_number(existing_id, info.atomic_number);
+                self.diff.set_anchor_position(existing_id, info.position);
+                self.move_in_diff(existing_id, new_position);
+                existing_id
+            } else {
+                let new_diff_id = self.diff.add_atom(info.atomic_number, new_position);
+                self.diff.set_anchor_position(new_diff_id, info.position);
+                new_diff_id
+            };
+            self.selection.selected_base_atoms.remove(&info.base_id);
+            self.selection.selected_diff_atoms.insert(diff_id);
             self.selection.update_order_provenance(
                 SelectionProvenance::Base,
-                *base_id,
+                info.base_id,
                 SelectionProvenance::Diff,
-                new_diff_id,
+                diff_id,
             );
         }
 
@@ -568,7 +601,7 @@ impl NodeData for AtomEditData {
         }
 
         // Gather base atom info (needs eval cache for provenance → result positions).
-        let mut base_atoms_info: Vec<(u32, i16, DVec3)> = Vec::new();
+        let mut base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>)> = Vec::new();
         if !self.selection.selected_base_atoms.is_empty() && !self.output_diff {
             if let Some(eval_cache) = structure_designer.get_selected_node_eval_cache() {
                 if let Some(cache) = eval_cache.downcast_ref::<AtomEditEvalCache>() {
@@ -579,10 +612,25 @@ impl NodeData for AtomEditData {
                             if let Some(&result_id) = cache.provenance.base_to_result.get(&base_id)
                             {
                                 if let Some(atom) = result.get_atom(result_id) {
+                                    // Check if this base atom already has a diff entry
+                                    let existing_diff_id = match cache
+                                        .provenance
+                                        .sources
+                                        .get(&result_id)
+                                    {
+                                        Some(
+                                            crate::crystolecule::atomic_structure_diff::AtomSource::DiffMatchedBase {
+                                                diff_id,
+                                                ..
+                                            },
+                                        ) => Some(*diff_id),
+                                        _ => None,
+                                    };
                                     base_atoms_info.push((
                                         base_id,
                                         atom.atomic_number,
                                         atom.position,
+                                        existing_diff_id,
                                     ));
                                 }
                             }

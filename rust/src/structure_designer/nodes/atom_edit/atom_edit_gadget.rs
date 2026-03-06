@@ -33,8 +33,8 @@ pub struct AtomEditSelectionGadget {
     pub start_drag_center: DVec3,
     /// Snapshot of selected diff atom positions at gadget creation: (diff_id, position).
     diff_atom_positions: Vec<(u32, DVec3)>,
-    /// Base atoms to convert on first sync: (base_id, atomic_number, position).
-    base_atoms_info: Vec<(u32, i16, DVec3)>,
+    /// Base atoms to convert on first sync: (base_id, atomic_number, position, existing_diff_id).
+    base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>)>,
     /// Whether base atoms have been converted to diff atoms.
     base_converted: Cell<bool>,
     /// Diff atom positions added after base conversion: (new_diff_id, original_position).
@@ -45,7 +45,7 @@ impl AtomEditSelectionGadget {
     pub fn new(
         center: DVec3,
         diff_atom_positions: Vec<(u32, DVec3)>,
-        base_atoms_info: Vec<(u32, i16, DVec3)>,
+        base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>)>,
     ) -> Self {
         Self {
             center,
@@ -161,12 +161,22 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
             && total_delta.length_squared() > 1e-15
         {
             let mut converted = self.converted_positions.borrow_mut();
-            for &(base_id, atomic_number, position) in &self.base_atoms_info {
+            for &(base_id, atomic_number, position, existing_diff_id) in &self.base_atoms_info {
                 let target = position + total_delta;
-                let new_diff_id = atom_edit_data.diff.add_atom(atomic_number, target);
-                atom_edit_data
-                    .diff
-                    .set_anchor_position(new_diff_id, position);
+                let diff_id = if let Some(existing_id) = existing_diff_id {
+                    // Reuse existing diff entry (e.g., UNCHANGED marker from bond tool).
+                    // Promote: set real atomic_number and anchor.
+                    atom_edit_data.diff.set_atomic_number(existing_id, atomic_number);
+                    atom_edit_data.diff.set_anchor_position(existing_id, position);
+                    atom_edit_data.diff.set_atom_position(existing_id, target);
+                    existing_id
+                } else {
+                    let new_diff_id = atom_edit_data.diff.add_atom(atomic_number, target);
+                    atom_edit_data
+                        .diff
+                        .set_anchor_position(new_diff_id, position);
+                    new_diff_id
+                };
                 atom_edit_data
                     .selection
                     .selected_base_atoms
@@ -174,8 +184,8 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
                 atom_edit_data
                     .selection
                     .selected_diff_atoms
-                    .insert(new_diff_id);
-                converted.push((new_diff_id, position));
+                    .insert(diff_id);
+                converted.push((diff_id, position));
             }
             self.base_converted.set(true);
         }

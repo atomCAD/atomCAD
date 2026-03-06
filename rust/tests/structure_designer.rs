@@ -105,3 +105,6 @@ mod atom_edit_hydrogen_roundtrip_test;
 
 #[path = "structure_designer/raytrace_per_node_test.rs"]
 mod raytrace_per_node_test;
+
+#[path = "structure_designer/atom_edit_unchanged_test.rs"]
+mod atom_edit_unchanged_test;

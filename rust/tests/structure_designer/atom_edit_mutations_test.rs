@@ -6,7 +6,7 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
-    AtomEditData, BondDeletionInfo, DiffAtomKind, classify_diff_atom,
+    AtomEditData, BaseAtomPromotionInfo, BondDeletionInfo, DiffAtomKind, classify_diff_atom,
 };
 use rust_lib_flutter_cad::util::transform::Transform;
 
@@ -359,7 +359,12 @@ fn test_replace_base_atoms() {
     data.selection.selected_base_atoms.insert(42);
 
     let pos = DVec3::new(1.0, 2.0, 3.0);
-    data.apply_replace(14, &[(42, pos)]);
+    data.apply_replace(14, &[BaseAtomPromotionInfo {
+        base_id: 42,
+        atomic_number: 6,
+        position: pos,
+        existing_diff_id: None,
+    }]);
 
     // Base atom removed from selection, new diff atom created
     assert!(!data.selection.selected_base_atoms.contains(&42));
@@ -412,7 +417,12 @@ fn test_transform_base_atoms_creates_anchors() {
     data.selection.selection_transform = Some(Transform::default());
 
     let relative = Transform::new(DVec3::new(1.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
-    data.apply_transform(&relative, &[(42, 6, DVec3::new(1.0, 0.0, 0.0))]);
+    data.apply_transform(&relative, &[BaseAtomPromotionInfo {
+        base_id: 42,
+        atomic_number: 6,
+        position: DVec3::new(1.0, 0.0, 0.0),
+        existing_diff_id: None,
+    }]);
 
     // Base atom removed from selection
     assert!(!data.selection.selected_base_atoms.contains(&42));
