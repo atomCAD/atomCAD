@@ -28,6 +28,9 @@ const BAS_ATOM_RADIUS_FACTOR: f64 = 0.5;
 // radius of a bond cylinder (stick) in the 'balls and sticks' view
 pub const BAS_STICK_RADIUS: f64 = 0.1;
 
+// bond cylinder radius scale for overstretched bonds in space-filling mode
+const SPACE_FILLING_BOND_RADIUS_SCALE: f64 = 2.0;
+
 // radius of each cylinder in a multi-bond (double/triple/quadruple)
 const MULTI_BOND_CYLINDER_RADIUS: f64 = 0.06;
 // offset distance from bond axis center to each parallel cylinder center
@@ -176,6 +179,13 @@ pub fn tessellate_atomic_structure(
                                 params,
                             );
                         } else {
+                            let radius_scale = if atomic_viz_prefs.visualization
+                                == AtomicStructureVisualization::SpaceFilling
+                            {
+                                SPACE_FILLING_BOND_RADIUS_SCALE
+                            } else {
+                                1.0
+                            };
                             tessellate_bond_inline(
                                 output_mesh,
                                 atomic_structure,
@@ -183,6 +193,7 @@ pub fn tessellate_atomic_structure(
                                 other_atom,
                                 bond.bond_order(),
                                 params,
+                                radius_scale,
                             );
                         }
                     }
@@ -608,6 +619,7 @@ fn tessellate_bond_inline(
     atom2: &Atom,
     bond_order: u8,
     params: &AtomicTessellatorParams,
+    radius_scale: f64,
 ) {
     let bond_ref = BondReference {
         atom_id1: atom1.id,
@@ -631,7 +643,7 @@ fn tessellate_bond_inline(
             output_mesh,
             &(atom2.position + offset),
             &(atom1.position + offset),
-            radius,
+            radius * radius_scale,
             params.cylinder_divisions,
             &material,
             false,
@@ -762,12 +774,20 @@ pub fn tessellate_atomic_structure_impostors(
                                 other_atom,
                             );
                         } else {
+                            let radius_scale = if atomic_viz_prefs.visualization
+                                == AtomicStructureVisualization::SpaceFilling
+                            {
+                                SPACE_FILLING_BOND_RADIUS_SCALE
+                            } else {
+                                1.0
+                            };
                             tessellate_bond_impostor_inline(
                                 bond_impostor_mesh,
                                 atomic_structure,
                                 atom,
                                 other_atom,
                                 bond.bond_order(),
+                                radius_scale,
                             );
                         }
                     }
@@ -835,6 +855,7 @@ fn tessellate_bond_impostor_inline(
     atom1: &Atom,
     atom2: &Atom,
     bond_order: u8,
+    radius_scale: f64,
 ) {
     let color = get_bond_color_inline(atom1.id, atom2.id, bond_order, atomic_structure);
 
@@ -853,7 +874,7 @@ fn tessellate_bond_impostor_inline(
         bond_impostor_mesh.add_bond_quad(
             &start.as_vec3(),
             &end.as_vec3(),
-            radius as f32,
+            (radius * radius_scale) as f32,
             &color.to_array(),
         );
     }
