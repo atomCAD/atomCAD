@@ -534,6 +534,9 @@ class APIDiffStats {
   /// Diff bonds where one or both endpoints were missing from the result (skipped).
   final int orphanedBonds;
 
+  /// UNCHANGED markers that matched a base atom (bond endpoint references).
+  final int unchangedReferences;
+
   const APIDiffStats({
     required this.atomsAdded,
     required this.atomsDeleted,
@@ -543,6 +546,7 @@ class APIDiffStats {
     required this.orphanedTrackedAtoms,
     required this.unmatchedDeleteMarkers,
     required this.orphanedBonds,
+    required this.unchangedReferences,
   });
 
   @override
@@ -554,7 +558,8 @@ class APIDiffStats {
       bondsDeleted.hashCode ^
       orphanedTrackedAtoms.hashCode ^
       unmatchedDeleteMarkers.hashCode ^
-      orphanedBonds.hashCode;
+      orphanedBonds.hashCode ^
+      unchangedReferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -568,7 +573,8 @@ class APIDiffStats {
           bondsDeleted == other.bondsDeleted &&
           orphanedTrackedAtoms == other.orphanedTrackedAtoms &&
           unmatchedDeleteMarkers == other.unmatchedDeleteMarkers &&
-          orphanedBonds == other.orphanedBonds;
+          orphanedBonds == other.orphanedBonds &&
+          unchangedReferences == other.unchangedReferences;
 }
 
 class APIDrawingPlaneData {

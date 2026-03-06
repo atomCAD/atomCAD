@@ -8668,8 +8668,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIDiffStats dco_decode_api_diff_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return APIDiffStats(
       atomsAdded: dco_decode_u_32(arr[0]),
       atomsDeleted: dco_decode_u_32(arr[1]),
@@ -8679,6 +8679,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       orphanedTrackedAtoms: dco_decode_u_32(arr[5]),
       unmatchedDeleteMarkers: dco_decode_u_32(arr[6]),
       orphanedBonds: dco_decode_u_32(arr[7]),
+      unchangedReferences: dco_decode_u_32(arr[8]),
     );
   }
 
@@ -11068,6 +11069,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_orphanedTrackedAtoms = sse_decode_u_32(deserializer);
     var var_unmatchedDeleteMarkers = sse_decode_u_32(deserializer);
     var var_orphanedBonds = sse_decode_u_32(deserializer);
+    var var_unchangedReferences = sse_decode_u_32(deserializer);
     return APIDiffStats(
         atomsAdded: var_atomsAdded,
         atomsDeleted: var_atomsDeleted,
@@ -11076,7 +11078,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         bondsDeleted: var_bondsDeleted,
         orphanedTrackedAtoms: var_orphanedTrackedAtoms,
         unmatchedDeleteMarkers: var_unmatchedDeleteMarkers,
-        orphanedBonds: var_orphanedBonds);
+        orphanedBonds: var_orphanedBonds,
+        unchangedReferences: var_unchangedReferences);
   }
 
   @protected
@@ -13853,6 +13856,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.orphanedTrackedAtoms, serializer);
     sse_encode_u_32(self.unmatchedDeleteMarkers, serializer);
     sse_encode_u_32(self.orphanedBonds, serializer);
+    sse_encode_u_32(self.unchangedReferences, serializer);
   }
 
   @protected

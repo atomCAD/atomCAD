@@ -1,5 +1,6 @@
 use super::atom_edit_data::*;
 use super::types::*;
+use crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER;
 use crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
@@ -143,7 +144,6 @@ struct HPlacement {
 
 /// Info about a base passthrough parent atom that needs promotion to the diff.
 struct BaseParentInfo {
-    atomic_number: i16,
     position: DVec3,
 }
 
@@ -233,7 +233,6 @@ pub fn add_hydrogen_atom_edit(
                 if let std::collections::hash_map::Entry::Vacant(e) = base_parents.entry(*base_id) {
                     if let Some(parent_atom) = result_structure.get_atom(parent_result_id) {
                         e.insert(BaseParentInfo {
-                            atomic_number: parent_atom.atomic_number,
                             position: parent_atom.position,
                         });
                     }
@@ -276,10 +275,7 @@ pub fn add_hydrogen_atom_edit(
                 } else if let Some(parent_info) = base_parent_info.get(base_id) {
                     let new_diff_id = atom_edit_data
                         .diff
-                        .add_atom(parent_info.atomic_number, parent_info.position);
-                    atom_edit_data
-                        .diff
-                        .set_anchor_position(new_diff_id, parent_info.position);
+                        .add_atom(UNCHANGED_ATOMIC_NUMBER, parent_info.position);
                     promoted_base_atoms.insert(*base_id, new_diff_id);
                     new_diff_id
                 } else {
