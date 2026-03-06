@@ -24,6 +24,20 @@ impl Atom {
         self.atomic_number == super::DELETED_SITE_ATOMIC_NUMBER
     }
 
+    /// Returns true if this atom is an unchanged marker in a diff structure.
+    /// Unchanged markers have atomic_number == -1 and represent bond endpoint
+    /// references to base atoms that are not being modified.
+    #[inline]
+    pub fn is_unchanged_marker(&self) -> bool {
+        self.atomic_number == super::UNCHANGED_ATOMIC_NUMBER
+    }
+
+    /// Returns true if this atom is any special marker (delete or unchanged).
+    #[inline]
+    pub fn is_special_marker(&self) -> bool {
+        self.is_delete_marker() || self.is_unchanged_marker()
+    }
+
     #[inline]
     pub fn is_selected(&self) -> bool {
         (self.flags & ATOM_FLAG_SELECTED) != 0

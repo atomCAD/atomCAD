@@ -276,6 +276,8 @@ pub struct BondDeletionInfo {
 pub enum DiffAtomKind {
     /// Atom with atomic_number == 0 (marks a base atom for deletion)
     DeleteMarker,
+    /// Atom with atomic_number == -1 (bond endpoint reference, base atom unchanged)
+    Unchanged,
     /// Atom with an anchor position (moved or replaced base atom)
     MatchedBase,
     /// Normal atom without anchor (pure addition to the structure)
@@ -287,6 +289,8 @@ pub fn classify_diff_atom(diff: &AtomicStructure, diff_id: u32) -> DiffAtomKind 
     if let Some(atom) = diff.get_atom(diff_id) {
         if atom.is_delete_marker() {
             DiffAtomKind::DeleteMarker
+        } else if atom.is_unchanged_marker() {
+            DiffAtomKind::Unchanged
         } else if diff.has_anchor_position(diff_id) {
             DiffAtomKind::MatchedBase
         } else {

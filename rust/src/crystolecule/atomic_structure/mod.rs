@@ -53,6 +53,11 @@ pub use inline_bond::{
 /// An atom with this atomic number in a diff means "delete the matched base atom."
 pub const DELETED_SITE_ATOMIC_NUMBER: i16 = 0;
 
+/// Atomic number used as an "unchanged" marker in diff structures.
+/// An atom with this atomic number means "match the base atom at this position
+/// but do not modify it." Used when only bonds between existing atoms change.
+pub const UNCHANGED_ATOMIC_NUMBER: i16 = -1;
+
 // Cell size for spatial grid - larger than typical bond length for efficient neighbor lookup
 const ATOM_GRID_CELL_SIZE: f64 = 4.0;
 

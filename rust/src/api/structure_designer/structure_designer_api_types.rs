@@ -360,6 +360,8 @@ pub struct APIDiffStats {
     pub unmatched_delete_markers: u32,
     /// Diff bonds where one or both endpoints were missing from the result (skipped).
     pub orphaned_bonds: u32,
+    /// UNCHANGED markers that matched a base atom (bond endpoint references).
+    pub unchanged_references: u32,
 }
 
 pub struct APIAtomEditData {

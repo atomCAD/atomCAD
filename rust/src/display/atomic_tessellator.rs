@@ -47,6 +47,12 @@ const DELETE_MARKER_COLOR: Vec3 = Vec3::new(0.9, 0.1, 0.1);
 const DELETE_MARKER_RADIUS: f64 = 0.5;
 // roughness for atom delete markers
 const DELETE_MARKER_ROUGHNESS: f32 = 0.5;
+// color for unchanged atom markers in diff structures (light blue)
+const UNCHANGED_MARKER_COLOR: Vec3 = Vec3::new(0.4, 0.6, 0.9);
+// fixed radius for unchanged atom markers (Angstroms)
+const UNCHANGED_MARKER_RADIUS: f64 = 0.4;
+// roughness for unchanged atom markers (matte/ghostly)
+const UNCHANGED_MARKER_ROUGHNESS: f32 = 0.7;
 // color for anchor arrows in diff structures (orange)
 const ANCHOR_ARROW_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0);
 // radius for anchor point spheres (Angstroms)
@@ -244,6 +250,11 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
         return DELETE_MARKER_RADIUS;
     }
 
+    // Unchanged markers use a fixed radius
+    if atom.is_unchanged_marker() {
+        return UNCHANGED_MARKER_RADIUS;
+    }
+
     let atom_info = ATOM_INFO
         .get(&(atom.atomic_number as i32))
         .unwrap_or(&DEFAULT_ATOM_INFO);
@@ -285,6 +296,21 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
             0.15
         } else {
             DELETE_MARKER_ROUGHNESS
+        };
+        return (color, roughness, 0.0);
+    }
+
+    // Unchanged markers render as light blue spheres
+    if atom.is_unchanged_marker() {
+        let color = if atom.is_selected() {
+            to_selected_color(&UNCHANGED_MARKER_COLOR)
+        } else {
+            UNCHANGED_MARKER_COLOR
+        };
+        let roughness = if atom.is_selected() {
+            0.15
+        } else {
+            UNCHANGED_MARKER_ROUGHNESS
         };
         return (color, roughness, 0.0);
     }

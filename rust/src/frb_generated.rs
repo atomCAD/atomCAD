@@ -7914,6 +7914,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_orphanedTrackedAtoms = <u32>::sse_decode(deserializer);
         let mut var_unmatchedDeleteMarkers = <u32>::sse_decode(deserializer);
         let mut var_orphanedBonds = <u32>::sse_decode(deserializer);
+        let mut var_unchangedReferences = <u32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIDiffStats {
             atoms_added: var_atomsAdded,
             atoms_deleted: var_atomsDeleted,
@@ -7923,6 +7924,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             orphaned_tracked_atoms: var_orphanedTrackedAtoms,
             unmatched_delete_markers: var_unmatchedDeleteMarkers,
             orphaned_bonds: var_orphanedBonds,
+            unchanged_references: var_unchangedReferences,
         };
     }
 }
@@ -11273,6 +11275,7 @@ impl flutter_rust_bridge::IntoDart
             self.orphaned_tracked_atoms.into_into_dart().into_dart(),
             self.unmatched_delete_markers.into_into_dart().into_dart(),
             self.orphaned_bonds.into_into_dart().into_dart(),
+            self.unchanged_references.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -13832,6 +13835,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <u32>::sse_encode(self.orphaned_tracked_atoms, serializer);
         <u32>::sse_encode(self.unmatched_delete_markers, serializer);
         <u32>::sse_encode(self.orphaned_bonds, serializer);
+        <u32>::sse_encode(self.unchanged_references, serializer);
     }
 }
 

@@ -58,6 +58,8 @@ pub struct DiffStats {
     pub unmatched_delete_markers: u32,
     /// Diff bonds where one or both endpoints were missing from the result (skipped).
     pub orphaned_bonds: u32,
+    /// UNCHANGED markers that matched a base atom (bond endpoint references).
+    pub unchanged_references: u32,
 }
 
 /// Internal: a matched pair between a diff atom and a base atom.
@@ -112,11 +114,26 @@ pub fn apply_diff(
     // Process matched diff atoms first
     for m in &matches {
         let diff_atom = diff.get_atom(m.diff_id).unwrap();
+        let base_atom = base.get_atom(m.base_id).unwrap();
 
         if diff_atom.is_delete_marker() {
             // Matched delete marker → base atom is removed
             deleted_base_ids.insert(m.base_id);
             stats.atoms_deleted += 1;
+        } else if diff_atom.is_unchanged_marker() {
+            // Matched UNCHANGED marker → base atom passes through unchanged
+            // but we still record the mapping so bond resolution works
+            let result_id = result.add_atom(base_atom.atomic_number, base_atom.position);
+            provenance.sources.insert(
+                result_id,
+                AtomSource::DiffMatchedBase {
+                    diff_id: m.diff_id,
+                    base_id: m.base_id,
+                },
+            );
+            provenance.base_to_result.insert(m.base_id, result_id);
+            provenance.diff_to_result.insert(m.diff_id, result_id);
+            stats.unchanged_references += 1;
         } else {
             // Matched normal atom → replacement/move
             // Use the diff atom's position (which may differ from base for moves)
@@ -141,6 +158,13 @@ pub fn apply_diff(
         if diff_atom.is_delete_marker() {
             // Unmatched delete marker → no-op (trying to delete something that doesn't exist)
             stats.unmatched_delete_markers += 1;
+            continue;
+        }
+
+        if diff_atom.is_unchanged_marker() {
+            // Unmatched UNCHANGED marker → base atom no longer exists.
+            // Drop this reference (and any bonds attached to it).
+            stats.orphaned_tracked_atoms += 1;
             continue;
         }
 

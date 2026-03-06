@@ -1,7 +1,7 @@
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
+    AtomicStructure, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::{
     AtomSource, DiffStats, apply_diff, enrich_diff_with_base_bonds,
@@ -441,6 +441,7 @@ fn test_empty_diff_is_identity() {
             orphaned_tracked_atoms: 0,
             unmatched_delete_markers: 0,
             orphaned_bonds: 0,
+            unchanged_references: 0,
         }
     );
 }
@@ -1180,4 +1181,287 @@ fn test_no_diagnostics_when_everything_matches() {
     assert_eq!(result.stats.orphaned_tracked_atoms, 0);
     assert_eq!(result.stats.unmatched_delete_markers, 0);
     assert_eq!(result.stats.orphaned_bonds, 0);
+}
+
+// ============================================================================
+// UNCHANGED marker — data model
+// ============================================================================
+
+#[test]
+fn test_is_unchanged_marker() {
+    let mut s = AtomicStructure::new();
+    let unchanged_id = s.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::ZERO);
+    let delete_id = s.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::ZERO);
+    let carbon_id = s.add_atom(6, DVec3::ZERO);
+    let hydrogen_id = s.add_atom(1, DVec3::ZERO);
+
+    let unchanged = s.get_atom(unchanged_id).unwrap();
+    assert!(unchanged.is_unchanged_marker());
+    assert!(!unchanged.is_delete_marker());
+    assert!(unchanged.is_special_marker());
+
+    let delete = s.get_atom(delete_id).unwrap();
+    assert!(!delete.is_unchanged_marker());
+    assert!(delete.is_delete_marker());
+    assert!(delete.is_special_marker());
+
+    let carbon = s.get_atom(carbon_id).unwrap();
+    assert!(!carbon.is_unchanged_marker());
+    assert!(!carbon.is_delete_marker());
+    assert!(!carbon.is_special_marker());
+
+    let hydrogen = s.get_atom(hydrogen_id).unwrap();
+    assert!(!hydrogen.is_unchanged_marker());
+    assert!(!hydrogen.is_delete_marker());
+    assert!(!hydrogen.is_special_marker());
+}
+
+// ============================================================================
+// UNCHANGED marker — matched (bond addition)
+// ============================================================================
+
+#[test]
+fn test_unchanged_bond_addition() {
+    // Base: A(C) at (0,0,0), B(N) at (1,0,0), no bond between them
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // id=1
+    base.add_atom(7, DVec3::new(1.0, 0.0, 0.0)); // id=2
+
+    // Diff: two UNCHANGED atoms at same positions, bonded
+    let mut diff = AtomicStructure::new_diff();
+    let da = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let db = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_bond(da, db, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Result should have both atoms with original element types
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+    assert_eq!(result.result.get_num_of_bonds(), 1);
+
+    // Verify atoms have base atomic numbers (not -1)
+    for atom in result.result.atoms_values() {
+        assert!(atom.atomic_number == 6 || atom.atomic_number == 7);
+    }
+
+    // Stats: no atoms modified, 2 unchanged references, 1 bond added
+    assert_eq!(result.stats.atoms_modified, 0);
+    assert_eq!(result.stats.unchanged_references, 2);
+    assert_eq!(result.stats.bonds_added, 1);
+    assert_eq!(result.stats.atoms_added, 0);
+    assert_eq!(result.stats.atoms_deleted, 0);
+}
+
+#[test]
+fn test_unchanged_bond_deletion() {
+    // Base: A(C) - B(N) single bond
+    let mut base = AtomicStructure::new();
+    let a = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let b = base.add_atom(7, DVec3::new(1.0, 0.0, 0.0));
+    base.add_bond(a, b, 1);
+
+    // Diff: two UNCHANGED atoms with BOND_DELETED
+    let mut diff = AtomicStructure::new_diff();
+    let da = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let db = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_bond(da, db, BOND_DELETED);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Result: atoms present, no bond
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+    assert_eq!(result.result.get_num_of_bonds(), 0);
+    assert_eq!(result.stats.atoms_modified, 0);
+    assert_eq!(result.stats.unchanged_references, 2);
+    assert_eq!(result.stats.bonds_deleted, 1);
+}
+
+#[test]
+fn test_unchanged_bond_order_change() {
+    // Base: A(C) - B(N) single bond
+    let mut base = AtomicStructure::new();
+    let a = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let b = base.add_atom(7, DVec3::new(1.0, 0.0, 0.0));
+    base.add_bond(a, b, 1);
+
+    // Diff: two UNCHANGED atoms with double bond
+    let mut diff = AtomicStructure::new_diff();
+    let da = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let db = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_bond(da, db, 2);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Result: atoms present, bond order upgraded to double
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+    assert_eq!(result.result.get_num_of_bonds(), 1);
+    // Find the bond and check its order
+    let r_atom = result.result.atoms_values().next().unwrap();
+    assert_eq!(r_atom.bonds[0].bond_order(), 2);
+    assert_eq!(result.stats.unchanged_references, 2);
+    assert_eq!(result.stats.atoms_modified, 0);
+}
+
+#[test]
+fn test_unchanged_provenance_mappings() {
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // base_id=1
+    base.add_atom(7, DVec3::new(1.0, 0.0, 0.0)); // base_id=2
+
+    let mut diff = AtomicStructure::new_diff();
+    let da = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0)); // diff_id=1
+    let db = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0)); // diff_id=2
+    diff.add_bond(da, db, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Both UNCHANGED atoms should have DiffMatchedBase provenance
+    let ra = *result.provenance.base_to_result.get(&1).unwrap();
+    let rb = *result.provenance.base_to_result.get(&2).unwrap();
+    assert!(matches!(
+        result.provenance.sources.get(&ra),
+        Some(AtomSource::DiffMatchedBase { .. })
+    ));
+    assert!(matches!(
+        result.provenance.sources.get(&rb),
+        Some(AtomSource::DiffMatchedBase { .. })
+    ));
+
+    // diff_to_result should also be populated
+    assert!(result.provenance.diff_to_result.contains_key(&da));
+    assert!(result.provenance.diff_to_result.contains_key(&db));
+}
+
+// ============================================================================
+// UNCHANGED marker — unmatched (orphan detection)
+// ============================================================================
+
+#[test]
+fn test_unchanged_full_orphan() {
+    // Base is empty. Diff has one UNCHANGED + one added atom with a bond.
+    let base = AtomicStructure::new();
+
+    let mut diff = AtomicStructure::new_diff();
+    let du = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let da = diff.add_atom(7, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_bond(du, da, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // UNCHANGED is orphaned, added atom survives, bond is dropped
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+    assert_eq!(result.result.get_num_of_bonds(), 0);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 1);
+    assert_eq!(result.stats.atoms_added, 1);
+    assert_eq!(result.stats.orphaned_bonds, 1);
+}
+
+#[test]
+fn test_unchanged_partial_orphan() {
+    // Base has atom A but not B
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // id=1
+
+    // Diff: UNCHANGED at A's position and UNCHANGED at nonexistent B position, with bond
+    let mut diff = AtomicStructure::new_diff();
+    let da = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let db = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(5.0, 5.0, 5.0));
+    diff.add_bond(da, db, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // A matches (passes through), B is orphaned, bond is dropped
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+    assert_eq!(result.result.get_num_of_bonds(), 0);
+    assert_eq!(result.stats.unchanged_references, 1);
+    assert_eq!(result.stats.orphaned_tracked_atoms, 1);
+    assert_eq!(result.stats.orphaned_bonds, 1);
+}
+
+// ============================================================================
+// UNCHANGED marker — mixed diffs
+// ============================================================================
+
+#[test]
+fn test_unchanged_alongside_real_edits() {
+    // Base: A(C), B(N), C(O), D(Si)
+    let mut base = AtomicStructure::new();
+    let _a = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));  // id=1
+    let _b = base.add_atom(7, DVec3::new(1.0, 0.0, 0.0));  // id=2
+    let _c = base.add_atom(8, DVec3::new(2.0, 0.0, 0.0));  // id=3
+    let _d = base.add_atom(14, DVec3::new(3.0, 0.0, 0.0)); // id=4
+
+    // Diff: delete A, move B (anchor + new pos), add E, UNCHANGED C and D with bond
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0)); // delete A
+    let db = diff.add_atom(7, DVec3::new(1.5, 0.0, 0.0)); // move B
+    diff.set_anchor_position(db, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_atom(15, DVec3::new(4.0, 0.0, 0.0)); // add E (Phosphorus)
+    let dc = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(2.0, 0.0, 0.0)); // UNCHANGED C
+    let dd = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(3.0, 0.0, 0.0)); // UNCHANGED D
+    diff.add_bond(dc, dd, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Result: B(moved), C, D (with bond), E(added). A gone.
+    assert_eq!(result.result.get_num_of_atoms(), 4);
+    assert_eq!(result.result.get_num_of_bonds(), 1);
+    assert_eq!(result.stats.atoms_deleted, 1);
+    assert_eq!(result.stats.atoms_modified, 1);
+    assert_eq!(result.stats.atoms_added, 1);
+    assert_eq!(result.stats.unchanged_references, 2);
+    assert_eq!(result.stats.bonds_added, 1);
+}
+
+#[test]
+fn test_unchanged_bond_to_added_atom() {
+    // Base: A(C)
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // id=1
+
+    // Diff: UNCHANGED at A + added atom E + bond between them
+    let mut diff = AtomicStructure::new_diff();
+    let da = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let de = diff.add_atom(7, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_bond(da, de, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Result: A(C) and E(N) bonded
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+    assert_eq!(result.result.get_num_of_bonds(), 1);
+    assert_eq!(result.stats.unchanged_references, 1);
+    assert_eq!(result.stats.atoms_added, 1);
+    assert_eq!(result.stats.bonds_added, 1);
+}
+
+#[test]
+fn test_unchanged_bond_to_moved_atom() {
+    // Base: A(C) at (0,0,0), B(N) at (1,0,0)
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // id=1
+    base.add_atom(7, DVec3::new(1.0, 0.0, 0.0)); // id=2
+
+    // Diff: UNCHANGED at A + move B (anchor at old pos, new pos at 2,0,0) + bond
+    let mut diff = AtomicStructure::new_diff();
+    let da = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let db = diff.add_atom(7, DVec3::new(2.0, 0.0, 0.0));
+    diff.set_anchor_position(db, DVec3::new(1.0, 0.0, 0.0));
+    diff.add_bond(da, db, 1);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Result: A at original, B at new pos, bonded
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+    assert_eq!(result.result.get_num_of_bonds(), 1);
+    assert_eq!(result.stats.unchanged_references, 1);
+    assert_eq!(result.stats.atoms_modified, 1);
+    assert_eq!(result.stats.bonds_added, 1);
+
+    // Verify positions
+    let atoms: Vec<_> = result.result.atoms_values().collect();
+    let a = atoms.iter().find(|a| a.atomic_number == 6).unwrap();
+    let b = atoms.iter().find(|a| a.atomic_number == 7).unwrap();
+    assert!((a.position - DVec3::new(0.0, 0.0, 0.0)).length() < 1e-6);
+    assert!((b.position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-6);
 }

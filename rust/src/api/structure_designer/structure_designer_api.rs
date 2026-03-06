@@ -2195,6 +2195,7 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         orphaned_tracked_atoms: cache.stats.orphaned_tracked_atoms,
                         unmatched_delete_markers: cache.stats.unmatched_delete_markers,
                         orphaned_bonds: cache.stats.orphaned_bonds,
+                        unchanged_references: cache.stats.unchanged_references,
                     })
                     .unwrap_or(APIDiffStats {
                         atoms_added: 0,
@@ -2205,6 +2206,7 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         orphaned_tracked_atoms: 0,
                         unmatched_delete_markers: 0,
                         orphaned_bonds: 0,
+                        unchanged_references: 0,
                     });
 
                 // Compute measurement from selected atoms (2-4 atoms)

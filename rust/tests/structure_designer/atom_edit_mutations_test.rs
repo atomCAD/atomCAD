@@ -3,7 +3,7 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
     BOND_DELETED, BOND_SINGLE,
 };
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER,
+    AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AtomEditData, BondDeletionInfo, DiffAtomKind, classify_diff_atom,
@@ -40,6 +40,22 @@ fn test_classify_pure_addition() {
 fn test_classify_nonexistent_atom() {
     let diff = AtomicStructure::new_diff();
     assert_eq!(classify_diff_atom(&diff, 999), DiffAtomKind::PureAddition);
+}
+
+#[test]
+fn test_classify_unchanged() {
+    let mut diff = AtomicStructure::new_diff();
+    let id = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 2.0, 3.0));
+    assert_eq!(classify_diff_atom(&diff, id), DiffAtomKind::Unchanged);
+}
+
+#[test]
+fn test_classify_promoted_unchanged_becomes_matched_base() {
+    // An UNCHANGED atom that gets promoted (real atomic_number + anchor) → MatchedBase
+    let mut diff = AtomicStructure::new_diff();
+    let id = diff.add_atom(6, DVec3::new(1.0, 2.0, 3.0));
+    diff.set_anchor_position(id, DVec3::new(1.0, 2.0, 3.0));
+    assert_eq!(classify_diff_atom(&diff, id), DiffAtomKind::MatchedBase);
 }
 
 // =============================================================================

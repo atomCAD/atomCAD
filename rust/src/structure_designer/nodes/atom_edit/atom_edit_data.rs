@@ -459,8 +459,8 @@ impl AtomEditData {
                 DiffAtomKind::MatchedBase => {
                     self.convert_to_delete_marker(*diff_id);
                 }
-                // Pure addition → remove entirely
-                DiffAtomKind::PureAddition => {
+                // Pure addition or unchanged marker → remove entirely
+                DiffAtomKind::PureAddition | DiffAtomKind::Unchanged => {
                     self.remove_from_diff(*diff_id);
                 }
             }
