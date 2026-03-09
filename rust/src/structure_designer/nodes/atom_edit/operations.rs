@@ -369,7 +369,9 @@ pub(super) fn drag_selected_by_delta(structure_designer: &mut StructureDesigner,
             existing_id
         } else {
             // No existing diff entry — create new one
-            let new_diff_id = atom_edit_data.diff.add_atom(info.atomic_number, new_position);
+            let new_diff_id = atom_edit_data
+                .diff
+                .add_atom(info.atomic_number, new_position);
             atom_edit_data
                 .diff
                 .set_anchor_position(new_diff_id, info.position);
@@ -638,9 +640,7 @@ fn change_selected_bonds_order_result_view(
             None => match info.identity_a {
                 Some((_an, pos)) => *promoted
                     .entry((pos.x.to_bits(), pos.y.to_bits(), pos.z.to_bits()))
-                    .or_insert_with(|| {
-                        atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos)
-                    }),
+                    .or_insert_with(|| atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos)),
                 None => continue,
             },
         };
@@ -649,9 +649,7 @@ fn change_selected_bonds_order_result_view(
             None => match info.identity_b {
                 Some((_an, pos)) => *promoted
                     .entry((pos.x.to_bits(), pos.y.to_bits(), pos.z.to_bits()))
-                    .or_insert_with(|| {
-                        atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos)
-                    }),
+                    .or_insert_with(|| atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos)),
                 None => continue,
             },
         };

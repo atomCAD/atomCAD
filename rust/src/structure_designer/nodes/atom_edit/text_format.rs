@@ -213,9 +213,7 @@ pub fn parse_diff_text(text: &str) -> Result<AtomicStructure, String> {
             let rest = rest.trim();
             let rest = rest
                 .strip_prefix('@')
-                .ok_or_else(|| {
-                    format!("Line {}: Expected '@' after 'unchanged'", line_number)
-                })?
+                .ok_or_else(|| format!("Line {}: Expected '@' after 'unchanged'", line_number))?
                 .trim();
             let position =
                 parse_position(rest).map_err(|e| format!("Line {}: {}", line_number, e))?;

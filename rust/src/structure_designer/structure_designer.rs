@@ -299,6 +299,9 @@ impl StructureDesigner {
             }
             UndoRefreshMode::Full => {
                 self.mark_full_refresh();
+                // Reapply display policy so the display state matches what
+                // the original mutation methods would have produced.
+                self.apply_node_display_policy(None);
             }
         }
         self.set_dirty(true);
@@ -306,7 +309,11 @@ impl StructureDesigner {
 
     /// Serialize a node's data to JSON using the registered node_data_saver.
     /// Returns None if the node or network doesn't exist.
-    pub fn snapshot_node_data(&mut self, network_name: &str, node_id: u64) -> Option<serde_json::Value> {
+    pub fn snapshot_node_data(
+        &mut self,
+        network_name: &str,
+        node_id: u64,
+    ) -> Option<serde_json::Value> {
         // First, look up the saver function (needs immutable access).
         // node_data_saver is a fn pointer (Copy), so we can extract it before mutable borrow.
         let saver = {
@@ -319,9 +326,15 @@ impl StructureDesigner {
                 .node_type_name
                 .clone();
 
-            if let Some(node_type) = self.node_type_registry.built_in_node_types.get(&node_type_name) {
+            if let Some(node_type) = self
+                .node_type_registry
+                .built_in_node_types
+                .get(&node_type_name)
+            {
                 node_type.node_data_saver
-            } else if let Some(other_network) = self.node_type_registry.node_networks.get(&node_type_name) {
+            } else if let Some(other_network) =
+                self.node_type_registry.node_networks.get(&node_type_name)
+            {
                 other_network.node_type.node_data_saver
             } else {
                 return None;
@@ -329,7 +342,10 @@ impl StructureDesigner {
         };
 
         // Now get mutable access to the node's data to call the saver
-        let network = self.node_type_registry.node_networks.get_mut(network_name)?;
+        let network = self
+            .node_type_registry
+            .node_networks
+            .get_mut(network_name)?;
         let node = network.nodes.get_mut(&node_id)?;
         saver(node.data.as_mut(), None).ok()
     }
@@ -820,7 +836,7 @@ impl StructureDesigner {
     pub fn add_node(&mut self, node_type_name: &str, position: DVec2) -> u64 {
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
-            Some(name) => name,
+            Some(name) => name.clone(),
             None => return 0,
         };
         // First get the node type info
@@ -833,18 +849,28 @@ impl StructureDesigner {
                 None => return 0,
             };
 
+        // Capture counters before node creation (for undo)
+        let (next_node_id_before, next_param_id_before) = self
+            .node_type_registry
+            .node_networks
+            .get(&node_network_name)
+            .map(|n| (n.next_node_id, n.next_param_id))
+            .unwrap_or((0, 0));
+
         // Special handling for parameter nodes
+        let mut assigned_param_id: Option<u64> = None;
         if node_type_name == "parameter" {
             if let Some(node_network) = self
                 .node_type_registry
                 .node_networks
-                .get_mut(node_network_name)
+                .get_mut(&node_network_name)
             {
                 let current_param_count = node_network.node_type.parameters.len();
 
                 // Assign a unique param_id from the network's counter
                 let param_id = node_network.next_param_id;
                 node_network.next_param_id += 1;
+                assigned_param_id = Some(param_id);
 
                 // Downcast to ParameterData and set properties
                 if let Some(param_data) = node_data
@@ -862,7 +888,7 @@ impl StructureDesigner {
         let node_id = self
             .node_type_registry
             .node_networks
-            .get_mut(node_network_name)
+            .get_mut(&node_network_name)
             .map(|node_network| {
                 node_network.add_node(node_type_name, position, num_parameters, node_data)
             })
@@ -875,7 +901,7 @@ impl StructureDesigner {
                 &self.node_type_registry.built_in_node_types,
                 &mut self.node_type_registry.node_networks,
             );
-            if let Some(network) = node_networks.get_mut(node_network_name) {
+            if let Some(network) = node_networks.get_mut(&node_network_name) {
                 if let Some(node) = network.nodes.get_mut(&node_id) {
                     // Call the populate function with the split borrows
                     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
@@ -917,6 +943,30 @@ impl StructureDesigner {
             if should_validate {
                 self.validate_active_network();
             }
+
+            // Push undo command: snapshot the node after creation
+            if let Some(node_data_json) = self.snapshot_node_data(&node_network_name, node_id) {
+                let custom_name = self
+                    .node_type_registry
+                    .node_networks
+                    .get(&node_network_name)
+                    .and_then(|n| n.nodes.get(&node_id))
+                    .and_then(|n| n.custom_name.clone());
+
+                self.push_command(super::undo::commands::add_node::AddNodeCommand {
+                    description: format!("Add {}", node_type_name),
+                    network_name: node_network_name.clone(),
+                    node_id,
+                    node_type_name: node_type_name.to_string(),
+                    position,
+                    node_data_json,
+                    custom_name,
+                    num_parameters,
+                    param_id: assigned_param_id,
+                    next_param_id_before,
+                    next_node_id_before,
+                });
+            }
         }
 
         node_id
@@ -925,15 +975,23 @@ impl StructureDesigner {
     pub fn duplicate_node(&mut self, node_id: u64) -> u64 {
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
-            Some(name) => name,
+            Some(name) => name.clone(),
             None => return 0,
         };
+
+        // Capture next_node_id before duplication (for undo)
+        let next_node_id_before = self
+            .node_type_registry
+            .node_networks
+            .get(&node_network_name)
+            .map(|n| n.next_node_id)
+            .unwrap_or(0);
 
         // Early return if the node network doesn't exist
         let new_node_id = self
             .node_type_registry
             .node_networks
-            .get_mut(node_network_name)
+            .get_mut(&node_network_name)
             .and_then(|node_network| node_network.duplicate_node(node_id))
             .unwrap_or(0);
 
@@ -948,6 +1006,18 @@ impl StructureDesigner {
 
             // Apply display policy considering only this node as dirty
             self.apply_node_display_policy(Some(&dirty_nodes));
+
+            // Push undo command
+            if let Some(node_snapshot) = self.snapshot_node(&node_network_name, new_node_id) {
+                self.push_command(
+                    super::undo::commands::duplicate_node::DuplicateNodeCommand {
+                        network_name: node_network_name.clone(),
+                        new_node_id,
+                        node_snapshot,
+                        next_node_id_before,
+                    },
+                );
+            }
         }
 
         self.mark_node_data_changed(node_id);
@@ -1386,15 +1456,13 @@ impl StructureDesigner {
         if let Some(old_json) = old_data_json {
             if let Some(new_json) = self.snapshot_node_data(&network_name, node_id) {
                 if old_json != new_json {
-                    self.push_command(
-                        super::undo::commands::set_node_data::SetNodeDataCommand {
-                            network_name: network_name.clone(),
-                            node_id,
-                            node_type_name,
-                            old_data_json: old_json,
-                            new_data_json: new_json,
-                        },
-                    );
+                    self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
+                        network_name: network_name.clone(),
+                        node_id,
+                        node_type_name,
+                        old_data_json: old_json,
+                        new_data_json: new_json,
+                    });
                 }
             }
         }
@@ -2171,7 +2239,7 @@ impl StructureDesigner {
     pub fn delete_selected(&mut self) {
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
-            Some(name) => name,
+            Some(name) => name.clone(),
             None => return,
         };
 
@@ -2179,7 +2247,11 @@ impl StructureDesigner {
         let mut dirty_nodes = HashSet::new();
         let mut should_validate = false;
 
-        if let Some(node_network) = self.node_type_registry.node_networks.get(node_network_name) {
+        if let Some(node_network) = self
+            .node_type_registry
+            .node_networks
+            .get(&node_network_name)
+        {
             // If nodes are selected, all connected nodes will be dirty
             if !node_network.selected_node_ids.is_empty() {
                 for &selected_node_id in &node_network.selected_node_ids {
@@ -2210,11 +2282,30 @@ impl StructureDesigner {
             }
         }
 
+        // Capture deletion info and node snapshots before deletion (for undo)
+        let deletion_info = self
+            .node_type_registry
+            .node_networks
+            .get(&node_network_name)
+            .map(|n| n.collect_deletion_info());
+
+        // Snapshot deleted nodes before deletion
+        let mut deleted_node_snapshots = Vec::new();
+        if let Some(ref info) = deletion_info {
+            if info.is_node_deletion {
+                for &node_id in &info.deleted_node_ids {
+                    if let Some(snap) = self.snapshot_node(&node_network_name, node_id) {
+                        deleted_node_snapshots.push(snap);
+                    }
+                }
+            }
+        }
+
         // Perform the deletion
         if let Some(node_network) = self
             .node_type_registry
             .node_networks
-            .get_mut(node_network_name)
+            .get_mut(&node_network_name)
         {
             node_network.delete_selected();
             // Mark design as dirty since we deleted something
@@ -2223,6 +2314,48 @@ impl StructureDesigner {
             // but this can be a partial refresh with marking data changes
             // in all nodes wired to the output node of the deleted node.
             self.mark_full_refresh();
+        }
+
+        // Push undo command
+        if let Some(info) = deletion_info {
+            use super::undo::snapshot::WireSnapshot;
+
+            if info.is_node_deletion && !deleted_node_snapshots.is_empty() {
+                let deleted_wires: Vec<WireSnapshot> = info
+                    .deleted_wires
+                    .iter()
+                    .map(|w| WireSnapshot {
+                        source_node_id: w.source_node_id,
+                        source_output_pin_index: w.source_output_pin_index,
+                        dest_node_id: w.destination_node_id,
+                        dest_param_index: w.destination_argument_index,
+                    })
+                    .collect();
+
+                self.push_command(super::undo::commands::delete_nodes::DeleteNodesCommand {
+                    network_name: node_network_name.clone(),
+                    deleted_nodes: deleted_node_snapshots,
+                    deleted_wires,
+                    was_return_node: info.was_return_node,
+                    display_states: info.display_states,
+                });
+            } else if !info.is_node_deletion && !info.selected_wires.is_empty() {
+                let deleted_wires: Vec<WireSnapshot> = info
+                    .selected_wires
+                    .iter()
+                    .map(|w| WireSnapshot {
+                        source_node_id: w.source_node_id,
+                        source_output_pin_index: w.source_output_pin_index,
+                        dest_node_id: w.destination_node_id,
+                        dest_param_index: w.destination_argument_index,
+                    })
+                    .collect();
+
+                self.push_command(super::undo::commands::delete_wires::DeleteWiresCommand {
+                    network_name: node_network_name.clone(),
+                    deleted_wires,
+                });
+            }
         }
 
         // Only apply display policy if there were dirty nodes

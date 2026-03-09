@@ -166,8 +166,12 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
                 let diff_id = if let Some(existing_id) = existing_diff_id {
                     // Reuse existing diff entry (e.g., UNCHANGED marker from bond tool).
                     // Promote: set real atomic_number and anchor.
-                    atom_edit_data.diff.set_atomic_number(existing_id, atomic_number);
-                    atom_edit_data.diff.set_anchor_position(existing_id, position);
+                    atom_edit_data
+                        .diff
+                        .set_atomic_number(existing_id, atomic_number);
+                    atom_edit_data
+                        .diff
+                        .set_anchor_position(existing_id, position);
                     atom_edit_data.diff.set_atom_position(existing_id, target);
                     existing_id
                 } else {
@@ -181,10 +185,7 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
                     .selection
                     .selected_base_atoms
                     .remove(&base_id);
-                atom_edit_data
-                    .selection
-                    .selected_diff_atoms
-                    .insert(diff_id);
+                atom_edit_data.selection.selected_diff_atoms.insert(diff_id);
                 converted.push((diff_id, position));
             }
             self.base_converted.set(true);

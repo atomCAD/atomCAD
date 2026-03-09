@@ -592,7 +592,9 @@ fn apply_position_updates(
             if let Some(atom) = atom_edit_data.diff.get_atom(diff_id) {
                 if atom.is_unchanged_marker() {
                     if let Some((atomic_number, old_position)) = entry.identity {
-                        atom_edit_data.diff.set_atomic_number(diff_id, atomic_number);
+                        atom_edit_data
+                            .diff
+                            .set_atomic_number(diff_id, atomic_number);
                         atom_edit_data
                             .diff
                             .set_anchor_position(diff_id, old_position);

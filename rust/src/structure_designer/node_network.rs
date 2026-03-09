@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use super::data_type::DataType;
 use super::node_layout;
 
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeDisplayType {
     Normal,
     Ghost,

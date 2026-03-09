@@ -18,7 +18,13 @@ pub fn tessellate_surface_point_cloud(
     let side_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), 0.5, 0.0);
     // Iterate through all surface points and add them to the tessellator
     for point in &surface_point_cloud.points {
-        tessellate_surface_point(output_mesh, point, outside_material, inside_material, &side_material);
+        tessellate_surface_point(
+            output_mesh,
+            point,
+            outside_material,
+            inside_material,
+            &side_material,
+        );
     }
 }
 
@@ -54,7 +60,13 @@ pub fn tessellate_surface_point_cloud_2d(
     let side_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), 0.5, 0.0);
     // Iterate through all surface points and add them to the tessellator
     for point in &surface_point_cloud.points {
-        tessellate_surface_point_2d(output_mesh, point, outside_material, inside_material, &side_material);
+        tessellate_surface_point_2d(
+            output_mesh,
+            point,
+            outside_material,
+            inside_material,
+            &side_material,
+        );
     }
 }
 

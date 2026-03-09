@@ -3,7 +3,7 @@ use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegist
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
 use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
-    node_network_to_serializable, SerializableNodeTypeRegistryNetworks,
+    SerializableNodeTypeRegistryNetworks, node_network_to_serializable,
 };
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::undo::{
@@ -24,6 +24,7 @@ fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
 /// Serialize all networks to a comparable JSON Value.
 /// Uses the same codepath as CNND file saving, but returns the Value
 /// instead of writing to disk.
+/// Normalizes HashMap-derived arrays for deterministic comparison.
 fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
     let mut serializable_networks = Vec::new();
 
@@ -32,14 +33,11 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
 
     for name in names {
         // Split borrow: built_in_node_types and node_networks
-        let (built_in_types, node_networks) = (
-            &registry.built_in_node_types,
-            &mut registry.node_networks,
-        );
+        let (built_in_types, node_networks) =
+            (&registry.built_in_node_types, &mut registry.node_networks);
 
         let network = node_networks.get_mut(&name).unwrap();
-        let serializable =
-            node_network_to_serializable(network, built_in_types, None).unwrap();
+        let serializable = node_network_to_serializable(network, built_in_types, None).unwrap();
         serializable_networks.push((name, serializable));
     }
 
@@ -51,7 +49,47 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
         version: 2,
     };
 
-    serde_json::to_value(&container).unwrap()
+    let mut value = serde_json::to_value(&container).unwrap();
+    // Normalize HashMap-derived arrays for deterministic comparison
+    normalize_json(&mut value);
+    value
+}
+
+/// Sort arrays that come from HashMap iteration (displayed_node_ids)
+/// so that comparison is deterministic regardless of insertion order.
+fn normalize_json(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (key, val) in map.iter_mut() {
+                if key == "displayed_node_ids" {
+                    // Sort by node_id (first element of each inner array)
+                    if let Value::Array(arr) = val {
+                        arr.sort_by(|a, b| {
+                            let id_a = a
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let id_b = b
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            id_a.cmp(&id_b)
+                        });
+                    }
+                } else {
+                    normalize_json(val);
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for val in arr.iter_mut() {
+                normalize_json(val);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Captures state, runs an action, then verifies undo/redo invariants.
@@ -380,4 +418,165 @@ fn undo_set_node_data_no_change_produces_no_command() {
         !designer.undo_stack.can_undo(),
         "No command should be pushed when data doesn't change"
     );
+}
+
+// ===== AddNode command tests =====
+
+#[test]
+fn undo_add_node() {
+    let mut designer = setup_designer_with_network("test");
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.add_node("sphere", glam::DVec2::new(100.0, 50.0));
+    });
+}
+
+#[test]
+fn undo_add_node_verifies_empty_after_undo() {
+    let mut designer = setup_designer_with_network("test");
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    designer.add_node("sphere", glam::DVec2::ZERO);
+    assert!(designer.undo());
+
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(
+        initial, after_undo,
+        "Network should be empty after undoing add_node"
+    );
+    assert!(!designer.undo()); // nothing left
+}
+
+// ===== DeleteNodes command tests =====
+
+#[test]
+fn undo_delete_single_node() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("sphere", glam::DVec2::ZERO);
+    // Select the node for deletion
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(node_id);
+    }
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected();
+    });
+}
+
+#[test]
+fn undo_delete_connected_nodes() {
+    let mut designer = setup_designer_with_network("test");
+    let float_id = designer.add_node("float", glam::DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", glam::DVec2::new(200.0, 0.0));
+    let cuboid_id = designer.add_node("cuboid", glam::DVec2::new(200.0, 200.0));
+    // Connect float -> sphere (param 0) and float -> cuboid (param 0)
+    designer.connect_nodes(float_id, 0, sphere_id, 0);
+    designer.connect_nodes(float_id, 0, cuboid_id, 0);
+
+    // Select the float node (which has wires to other nodes)
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(float_id);
+    }
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected();
+    });
+}
+
+#[test]
+fn undo_delete_wires_only() {
+    let mut designer = setup_designer_with_network("test");
+    let float_id = designer.add_node("float", glam::DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", glam::DVec2::new(200.0, 0.0));
+    designer.connect_nodes(float_id, 0, sphere_id, 0);
+
+    // Select the wire (not the node)
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_wire(float_id, 0, sphere_id, 0);
+    }
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected();
+    });
+}
+
+#[test]
+fn undo_delete_return_node() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", glam::DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+
+    // Select the return node for deletion
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(sphere_id);
+    }
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected();
+    });
+}
+
+// ===== DuplicateNode command tests =====
+
+#[test]
+fn undo_duplicate_node() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("sphere", glam::DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.duplicate_node(node_id);
+    });
+}
+
+#[test]
+fn undo_duplicate_node_only_original_remains() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("sphere", glam::DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    let before = snapshot_all_networks(&mut designer.node_type_registry);
+
+    let new_id = designer.duplicate_node(node_id);
+    assert!(new_id != 0);
+
+    // Undo should remove the duplicate
+    assert!(designer.undo());
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(
+        before, after_undo,
+        "Only original node should remain after undoing duplicate"
+    );
+}
+
+// ===== Sequence tests (add + delete) =====
+
+#[test]
+fn undo_sequence_add_delete() {
+    let mut designer = setup_designer_with_network("test");
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Add 3 nodes
+    let id1 = designer.add_node("sphere", glam::DVec2::ZERO);
+    let id2 = designer.add_node("cuboid", glam::DVec2::new(200.0, 0.0));
+    let _id3 = designer.add_node("float", glam::DVec2::new(0.0, 200.0));
+
+    // Delete 2 of them
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(id1);
+        network.toggle_node_selection(id2);
+    }
+    designer.delete_selected();
+
+    // Undo all 4 operations (delete, add, add, add)
+    for _ in 0..4 {
+        assert!(designer.undo());
+    }
+    assert!(!designer.undo()); // nothing left
+
+    let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_all);
 }

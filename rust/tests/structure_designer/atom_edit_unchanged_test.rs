@@ -53,7 +53,9 @@ fn test_replace_promotes_unchanged_marker() {
     let mut data = AtomEditData::new();
 
     // Simulate: bond tool created an UNCHANGED atom at (1,0,0)
-    let unchanged_id = data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    let unchanged_id = data
+        .diff
+        .add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
 
     // Now replace base atom 42 (which has existing diff entry = unchanged_id)
     data.selection.selected_base_atoms.insert(42);
@@ -86,8 +88,12 @@ fn test_transform_promotes_unchanged_marker() {
     let mut data = AtomEditData::new();
 
     // Simulate: bond tool created an UNCHANGED atom with a bond
-    let unch_a = data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
-    let unch_b = data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.5, 0.0, 0.0));
+    let unch_a = data
+        .diff
+        .add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let unch_b = data
+        .diff
+        .add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.5, 0.0, 0.0));
     data.diff.add_bond(unch_a, unch_b, BOND_SINGLE);
 
     // Select base atom 42 (has existing diff entry = unch_a)
@@ -369,8 +375,12 @@ fn test_replace_preserves_bonds_on_unchanged_promotion() {
     let mut data = AtomEditData::new();
 
     // Simulate: bond tool created two UNCHANGED atoms with a bond
-    let unch_a = data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
-    let unch_b = data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.5, 0.0, 0.0));
+    let unch_a = data
+        .diff
+        .add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    let unch_b = data
+        .diff
+        .add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.5, 0.0, 0.0));
     data.diff.add_bond(unch_a, unch_b, BOND_SINGLE);
 
     // Replace base atom A (which has existing UNCHANGED entry)

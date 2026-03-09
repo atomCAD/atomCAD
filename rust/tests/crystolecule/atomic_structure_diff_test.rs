@@ -1386,9 +1386,9 @@ fn test_unchanged_partial_orphan() {
 fn test_unchanged_alongside_real_edits() {
     // Base: A(C), B(N), C(O), D(Si)
     let mut base = AtomicStructure::new();
-    let _a = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));  // id=1
-    let _b = base.add_atom(7, DVec3::new(1.0, 0.0, 0.0));  // id=2
-    let _c = base.add_atom(8, DVec3::new(2.0, 0.0, 0.0));  // id=3
+    let _a = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // id=1
+    let _b = base.add_atom(7, DVec3::new(1.0, 0.0, 0.0)); // id=2
+    let _c = base.add_atom(8, DVec3::new(2.0, 0.0, 0.0)); // id=3
     let _d = base.add_atom(14, DVec3::new(3.0, 0.0, 0.0)); // id=4
 
     // Diff: delete A, move B (anchor + new pos), add E, UNCHANGED C and D with bond

@@ -502,8 +502,7 @@ impl AtomEditData {
                 // Reuse existing diff entry (e.g., UNCHANGED marker).
                 // Set real atomic_number; anchor = position for replacement.
                 self.diff.set_atomic_number(existing_id, atomic_number);
-                self.diff
-                    .set_anchor_position(existing_id, info.position);
+                self.diff.set_anchor_position(existing_id, info.position);
                 existing_id
             } else {
                 self.replace_in_diff(info.position, atomic_number)
