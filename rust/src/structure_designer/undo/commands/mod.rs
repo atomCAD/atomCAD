@@ -1,10 +1,13 @@
+pub mod add_network;
 pub mod add_node;
 pub mod connect_wire;
+pub mod delete_network;
 pub mod delete_nodes;
 pub mod delete_wires;
 pub mod duplicate_node;
 pub mod move_nodes;
 pub mod paste_nodes;
+pub mod rename_network;
 pub mod set_node_data;
 pub mod set_node_display;
 pub mod set_return_node;

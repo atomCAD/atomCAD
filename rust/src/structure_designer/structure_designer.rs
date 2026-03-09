@@ -380,6 +380,24 @@ impl StructureDesigner {
         })
     }
 
+    /// Snapshot an entire network to a serializable form for undo purposes.
+    pub fn snapshot_network(
+        &mut self,
+        network_name: &str,
+    ) -> Option<
+        super::serialization::node_networks_serialization::SerializableNodeNetwork,
+    > {
+        use super::serialization::node_networks_serialization::node_network_to_serializable;
+
+        let (built_in_types, node_networks) = (
+            &self.node_type_registry.built_in_node_types,
+            &mut self.node_type_registry.node_networks,
+        );
+
+        let network = node_networks.get_mut(network_name)?;
+        node_network_to_serializable(network, built_in_types, None).ok()
+    }
+
     // Generates the scene to be rendered according to the displayed nodes of the active node network
     pub fn refresh(&mut self, changes: &StructureDesignerChanges) {
         // Clear pending changes at the start of refresh
@@ -646,11 +664,34 @@ impl StructureDesigner {
             name = format!("UNTITLED{}", i);
             i += 1;
         }
+
+        // Capture previous active network for undo
+        let previous_active_network = self.active_node_network_name.clone();
+
         self.add_node_network(&name);
         // Mark design as dirty since we added a new network
         self.set_dirty(true);
         // Adding a network is a structural change requiring full refresh
         self.mark_full_refresh();
+
+        // Push undo command
+        self.push_command(super::undo::commands::add_network::AddNetworkCommand {
+            network_name: name,
+            previous_active_network,
+        });
+    }
+
+    /// Add a named node network and push an undo command.
+    /// Used by the API layer for user-initiated "add network with name" actions.
+    pub fn add_node_network_with_undo(&mut self, node_network_name: &str) {
+        let previous_active_network = self.active_node_network_name.clone();
+        self.add_node_network(node_network_name);
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        self.push_command(super::undo::commands::add_network::AddNetworkCommand {
+            network_name: node_network_name.to_string(),
+            previous_active_network,
+        });
     }
 
     pub fn add_node_network(&mut self, node_network_name: &str) {
@@ -770,6 +811,13 @@ impl StructureDesigner {
         self.set_dirty(true);
         // Renaming a network is a structural change requiring full refresh
         self.mark_full_refresh();
+
+        // Push undo command
+        self.push_command(super::undo::commands::rename_network::RenameNetworkCommand {
+            old_name: old_name.to_string(),
+            new_name: new_name.to_string(),
+        });
+
         true
     }
 
@@ -804,6 +852,12 @@ impl StructureDesigner {
             ));
         }
 
+        // Snapshot the network before deletion (for undo)
+        let network_snapshot = self.snapshot_network(network_name);
+
+        // Capture active network before deletion
+        let active_network_before = self.active_node_network_name.clone();
+
         // Remove the network from the registry
         self.node_type_registry.node_networks.remove(network_name);
 
@@ -828,10 +882,26 @@ impl StructureDesigner {
             }
         }
 
+        // Capture active network after deletion
+        let active_network_after = self.active_node_network_name.clone();
+
         // Mark design as dirty since we deleted a network
         self.set_dirty(true);
         // Deleting a network requires full refresh (complex change)
         self.mark_full_refresh();
+
+        // Push undo command if we successfully snapshotted
+        if let Some(snapshot) = network_snapshot {
+            self.push_command(
+                super::undo::commands::delete_network::DeleteNetworkCommand {
+                    network_name: network_name.to_string(),
+                    network_snapshot: snapshot,
+                    active_network_before,
+                    active_network_after,
+                },
+            );
+        }
+
         Ok(())
     }
 

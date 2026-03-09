@@ -703,13 +703,14 @@ pub fn add_node_network_with_name(name: String) -> APIResult {
                         error_message: format!("Network '{}' already exists", name),
                     };
                 }
-                instance.structure_designer.add_node_network(&name);
+                instance
+                    .structure_designer
+                    .add_node_network_with_undo(&name);
                 // New networks don't have camera settings, but we still call the method
                 let camera_settings = instance
                     .structure_designer
                     .set_active_node_network_name(Some(name));
                 apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
-                instance.structure_designer.set_dirty(true);
                 refresh_structure_designer_auto(instance);
                 APIResult {
                     success: true,

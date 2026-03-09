@@ -55,7 +55,7 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
     value
 }
 
-/// Sort arrays that come from HashMap iteration (displayed_node_ids)
+/// Sort arrays that come from HashMap iteration (displayed_node_ids, nodes)
 /// so that comparison is deterministic regardless of insertion order.
 fn normalize_json(value: &mut Value) {
     match value {
@@ -78,6 +78,17 @@ fn normalize_json(value: &mut Value) {
                             id_a.cmp(&id_b)
                         });
                     }
+                } else if key == "nodes" {
+                    // Sort nodes by id for deterministic comparison
+                    // (HashMap iteration order differs after deserialize+reserialize)
+                    if let Value::Array(arr) = val {
+                        arr.sort_by(|a, b| {
+                            let id_a = a.as_object().and_then(|o| o.get("id")).and_then(|v| v.as_u64()).unwrap_or(0);
+                            let id_b = b.as_object().and_then(|o| o.get("id")).and_then(|v| v.as_u64()).unwrap_or(0);
+                            id_a.cmp(&id_b)
+                        });
+                    }
+                    normalize_json(val);
                 } else {
                     normalize_json(val);
                 }
@@ -834,4 +845,152 @@ fn undo_paste_multiple_times() {
 
     let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
     assert_eq!(initial, after_undo);
+}
+
+// ===== Phase 6: Network-Level Command Tests =====
+
+#[test]
+fn undo_add_network() {
+    let mut designer = setup_designer_with_network("main");
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.add_new_node_network();
+    });
+}
+
+#[test]
+fn undo_add_network_restores_active() {
+    let mut designer = setup_designer_with_network("main");
+    designer.undo_stack.clear();
+
+    assert_eq!(
+        designer.active_node_network_name,
+        Some("main".to_string())
+    );
+
+    // add_new_node_network does NOT change active_node_network_name on its own
+    // (only the API layer calls set_active_node_network_name)
+    designer.add_new_node_network();
+    assert!(designer
+        .node_type_registry
+        .node_networks
+        .contains_key("UNTITLED"));
+
+    // Undo: network removed, active unchanged
+    designer.undo();
+    assert!(!designer
+        .node_type_registry
+        .node_networks
+        .contains_key("UNTITLED"));
+    assert_eq!(
+        designer.active_node_network_name,
+        Some("main".to_string())
+    );
+}
+
+#[test]
+fn undo_delete_network_restores_contents() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Build a network with content
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+    designer.undo_stack.clear();
+
+    let before_delete = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Switch to main and delete helper
+    designer.set_active_node_network_name(Some("main".to_string()));
+    designer.delete_node_network("helper").unwrap();
+
+    assert!(!designer
+        .node_type_registry
+        .node_networks
+        .contains_key("helper"));
+
+    // Undo: network and all contents should be restored
+    designer.undo();
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(before_delete, after_undo);
+}
+
+#[test]
+fn undo_delete_network_roundtrip() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Create and populate a network
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    designer.add_node("sphere", DVec2::ZERO);
+    designer.add_node("float", DVec2::new(200.0, 0.0));
+    designer.undo_stack.clear();
+
+    // Switch to main to delete
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_node_network("helper").unwrap();
+    });
+}
+
+#[test]
+fn undo_rename_network() {
+    let mut designer = setup_designer_with_network("alpha");
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.rename_node_network("alpha", "beta");
+    });
+}
+
+#[test]
+fn undo_rename_then_undo_earlier_commands() {
+    let mut designer = setup_designer_with_network("alpha");
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    designer.add_node("sphere", DVec2::ZERO); // targets "alpha"
+    designer.rename_node_network("alpha", "beta"); // rename
+
+    // Undo rename — network is "alpha" again
+    assert!(designer.undo());
+    assert!(designer
+        .node_type_registry
+        .node_networks
+        .contains_key("alpha"));
+    assert!(!designer
+        .node_type_registry
+        .node_networks
+        .contains_key("beta"));
+
+    // Undo add_node — targets "alpha", which exists
+    assert!(designer.undo());
+
+    let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_all);
+}
+
+#[test]
+fn undo_across_network_switch() {
+    let mut designer = setup_designer_with_network("net_a");
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Work in net_a
+    designer.add_node("sphere", DVec2::ZERO);
+
+    // Add net_b and work in it
+    designer.add_new_node_network(); // creates "UNTITLED"
+    designer.set_active_node_network_name(Some("UNTITLED".to_string()));
+    designer.add_node("cuboid", DVec2::ZERO);
+
+    // Undo all (while active network is UNTITLED)
+    // add_node(cuboid), add_network(UNTITLED), add_node(sphere)
+    assert!(designer.undo()); // undo cuboid
+    assert!(designer.undo()); // undo add network
+    assert!(designer.undo()); // undo sphere
+
+    let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_all);
 }
