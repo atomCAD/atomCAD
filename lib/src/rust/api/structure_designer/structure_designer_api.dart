@@ -227,6 +227,30 @@ void moveSelectedNodes({required double deltaX, required double deltaY}) =>
         .crateApiStructureDesignerStructureDesignerApiMoveSelectedNodes(
             deltaX: deltaX, deltaY: deltaY);
 
+/// Called by Flutter when a node drag begins. Captures current positions for undo coalescing.
+void beginMoveNodes() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiBeginMoveNodes();
+
+/// Called by Flutter when a node drag ends. Creates a single MoveNodesCommand.
+void endMoveNodes() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiEndMoveNodes();
+
+/// Undo the last command. Returns true if an undo was performed.
+bool undo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiUndo();
+
+/// Redo the last undone command. Returns true if a redo was performed.
+bool redo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiRedo();
+
+/// Returns true if there is a command that can be undone.
+bool canUndo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiCanUndo();
+
+/// Returns true if there is a command that can be redone.
+bool canRedo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiCanRedo();
+
 bool toggleWireSelection(
         {required BigInt sourceNodeId,
         required int sourceOutputPinIndex,

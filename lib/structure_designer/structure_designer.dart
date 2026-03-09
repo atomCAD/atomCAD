@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../common/draggable_dialog.dart';
@@ -45,7 +46,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: graphModel,
-      child: Column(
+      child: Focus(
+        onKeyEvent: _handleGlobalKeyEvent,
+        child: Column(
         children: [
           // Menu bar
           Container(
@@ -124,10 +127,33 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 ),
 
                 // Edit Menu
-                MenuWidget(
+                Consumer<StructureDesignerModel>(
+                  builder: (context, model, child) {
+                    return MenuWidget(
                   key: const Key('edit_menu'),
                   label: 'Edit',
                   menuItems: [
+                    MenuItemButton(
+                      key: const Key('undo_item'),
+                      onPressed: model.canUndo
+                          ? () { graphModel.undo(); }
+                          : null,
+                      shortcut:
+                          const SingleActivator(LogicalKeyboardKey.keyZ,
+                              control: true),
+                      child: const Text('Undo'),
+                    ),
+                    MenuItemButton(
+                      key: const Key('redo_item'),
+                      onPressed: model.canRedo
+                          ? () { graphModel.redo(); }
+                          : null,
+                      shortcut:
+                          const SingleActivator(LogicalKeyboardKey.keyZ,
+                              control: true, shift: true),
+                      child: const Text('Redo'),
+                    ),
+                    const Divider(),
                     MenuItemButton(
                       key: const Key('validate_network_item'),
                       onPressed: () {
@@ -153,6 +179,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
                       child: const Text('Preferences'),
                     ),
                   ],
+                );
+                  },
                 ),
               ],
             ),
@@ -244,7 +272,30 @@ class _StructureDesignerState extends State<StructureDesigner> {
           ),
         ],
       ),
+      ),
     );
+  }
+
+  /// Global keyboard handler for undo/redo.
+  /// Catches Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y regardless of which panel has focus.
+  KeyEventResult _handleGlobalKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    if (HardwareKeyboard.instance.isControlPressed) {
+      // Ctrl+Shift+Z or Ctrl+Y: Redo
+      if ((HardwareKeyboard.instance.isShiftPressed &&
+              event.logicalKey == LogicalKeyboardKey.keyZ) ||
+          event.logicalKey == LogicalKeyboardKey.keyY) {
+        graphModel.redo();
+        return KeyEventResult.handled;
+      }
+      // Ctrl+Z: Undo
+      if (event.logicalKey == LogicalKeyboardKey.keyZ) {
+        graphModel.undo();
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   Future<bool> _confirmDiscardChanges() async {

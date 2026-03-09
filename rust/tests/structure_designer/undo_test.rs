@@ -1176,6 +1176,170 @@ fn undo_factor_selection() {
     );
 }
 
+// ===== Phase 8: Integration / Sequence Tests =====
+
+#[test]
+fn undo_full_workflow() {
+    // Add nodes, connect, edit data, move, delete, undo all → initial state
+    let mut designer = setup_designer_with_network("test");
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // 1. Add a sphere node
+    let sphere_id = designer.add_node("sphere", DVec2::new(100.0, 50.0));
+    // 2. Add a float node
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    // 3. Connect float → sphere
+    designer.connect_nodes(float_id, 0, sphere_id, 0);
+    // 4. Edit float data
+    designer.set_node_network_data(float_id, Box::new(FloatData { value: 42.0 }));
+    // 5. Move nodes
+    if let Some(network) = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("test")
+    {
+        network.select_node(sphere_id);
+    }
+    designer.begin_move_nodes();
+    designer.move_selected_nodes(DVec2::new(50.0, 0.0));
+    designer.end_move_nodes();
+    // 6. Set return node
+    designer.set_return_node_id(Some(sphere_id));
+
+    // Undo all 6 operations
+    for i in 0..6 {
+        assert!(designer.undo(), "undo #{} should succeed", i + 1);
+    }
+    assert!(!designer.undo(), "Nothing left to undo");
+
+    let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_all, "Undoing all should restore initial state");
+
+    // Redo all 6
+    for i in 0..6 {
+        assert!(designer.redo(), "redo #{} should succeed", i + 1);
+    }
+    assert!(!designer.redo(), "Nothing left to redo");
+
+    // Undo all again to verify full cycle
+    for _ in 0..6 {
+        assert!(designer.undo());
+    }
+    let after_second_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_second_undo, "Second undo-all should also restore initial state");
+}
+
+#[test]
+fn undo_redo_interleaved() {
+    // Do 5 ops, undo 3, do 2 new ops, undo all → initial state
+    let mut designer = setup_designer_with_network("test");
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // 5 operations
+    let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));   // cmd 1
+    let float_id = designer.add_node("float", DVec2::new(100.0, 0.0));   // cmd 2
+    designer.add_node("cuboid", DVec2::new(200.0, 0.0));                  // cmd 3
+    designer.connect_nodes(float_id, 0, sphere_id, 0);                    // cmd 4
+    designer.set_return_node_id(Some(sphere_id));                          // cmd 5
+
+    // Undo 3 (undo cmd 5, 4, 3)
+    assert!(designer.undo());
+    assert!(designer.undo());
+    assert!(designer.undo());
+
+    // Do 2 new ops (truncates redo tail)
+    let f1 = designer.add_node("float", DVec2::new(300.0, 0.0));         // cmd 6
+    designer.set_node_network_data(f1, Box::new(FloatData { value: 7.0 })); // cmd 7
+
+    assert!(!designer.redo(), "Redo should be empty after new commands");
+
+    // Undo all remaining: cmd 7, 6, 2, 1
+    for i in 0..4 {
+        assert!(designer.undo(), "undo #{} should succeed", i + 1);
+    }
+    assert!(!designer.undo(), "Nothing left to undo");
+
+    let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_all, "Undoing all should restore initial state");
+}
+
+#[test]
+fn undo_max_history_eviction_with_real_commands() {
+    let mut designer = setup_designer_with_network("test");
+    designer.undo_stack.max_history = 3;
+
+    designer.add_node("sphere", DVec2::ZERO);     // cmd 1
+    designer.add_node("cuboid", DVec2::ZERO);      // cmd 2
+    designer.add_node("extrude", DVec2::ZERO);    // cmd 3
+    designer.add_node("float", DVec2::ZERO);       // cmd 4 — drops cmd 1
+
+    // Can only undo 3 times, not 4
+    assert!(designer.undo()); // undo cmd 4
+    assert!(designer.undo()); // undo cmd 3
+    assert!(designer.undo()); // undo cmd 2
+    assert!(!designer.undo()); // cmd 1 was evicted
+
+    // The network should still have the sphere from cmd 1 (which was evicted and can't be undone)
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    assert_eq!(network.nodes.len(), 1, "Only the evicted sphere node should remain");
+}
+
+#[test]
+fn redo_tail_truncation_after_new_command() {
+    let mut designer = setup_designer_with_network("test");
+
+    designer.add_node("sphere", DVec2::ZERO);    // cmd 1
+    designer.add_node("cuboid", DVec2::ZERO);     // cmd 2
+
+    designer.undo(); // undo cmd 2, now cmd 2 is in redo tail
+    assert!(designer.undo_stack.can_redo(), "cmd 2 should be in redo tail");
+
+    designer.add_node("extrude", DVec2::ZERO);   // cmd 3 — truncates cmd 2
+
+    assert!(!designer.undo_stack.can_redo(), "Redo tail should be truncated after new command");
+    assert!(designer.undo());  // undo cmd 3
+    assert!(designer.undo());  // undo cmd 1
+    assert!(!designer.undo()); // nothing left
+}
+
+#[test]
+fn undo_sequence_restores_initial_state() {
+    let mut designer = setup_designer_with_network("test");
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Perform a sequence of varied operations
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);         // cmd 1
+    let float_id = designer.add_node("float", DVec2::new(200.0, 0.0)); // cmd 2
+    designer.connect_nodes(float_id, 0, sphere_id, 0);                 // cmd 3
+    designer.set_return_node_id(Some(sphere_id));                       // cmd 4
+
+    // Undo all 4
+    for _ in 0..4 {
+        assert!(designer.undo());
+    }
+    assert!(!designer.undo()); // Nothing left to undo
+
+    let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_all);
+
+    // Redo all 4
+    for _ in 0..4 {
+        assert!(designer.redo());
+    }
+    assert!(!designer.redo()); // Nothing left to redo
+
+    // Undo all again to verify full cycle
+    for _ in 0..4 {
+        assert!(designer.undo());
+    }
+    let after_second_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_second_undo_all);
+}
+
 #[test]
 fn undo_factor_then_edit_then_undo_all() {
     let mut designer = setup_designer_with_network("test");

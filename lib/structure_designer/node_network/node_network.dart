@@ -981,6 +981,8 @@ class NodeNetworkState extends State<NodeNetwork> {
               //    event.logicalKey.toString() +
               //    " event.physicalKey: " +
               //    event.physicalKey.toString());
+              // Ctrl+Z (undo) and Ctrl+Shift+Z / Ctrl+Y (redo) are handled
+              // by the top-level StructureDesigner keyboard handler.
               if (HardwareKeyboard.instance.isControlPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyD) {
                 if (model.nodeNetworkView == null) {

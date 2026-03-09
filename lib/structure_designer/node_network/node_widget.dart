@@ -237,7 +237,10 @@ class NodeWidget extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque, // Make entire node area interactive
       onTapDown: (details) => _handleNodeTap(context),
-      onPanStart: (details) => _handleNodeTap(context),
+      onPanStart: (details) {
+        _handleNodeTap(context);
+        _handleNodeDragStart(context);
+      },
       onPanUpdate: (details) => _handleNodeDrag(context, details),
       onPanEnd: (details) => _handleNodeDragEnd(context),
       onSecondaryTapDown: (details) => _handleContextMenu(context, details),
@@ -268,7 +271,10 @@ class NodeWidget extends StatelessWidget {
         // Title Bar
         GestureDetector(
           onTapDown: (details) => _handleNodeTap(context),
-          onPanStart: (details) => _handleNodeTap(context),
+          onPanStart: (details) {
+            _handleNodeTap(context);
+            _handleNodeDragStart(context);
+          },
           onPanUpdate: (details) => _handleNodeDrag(context, details),
           onPanEnd: (details) => _handleNodeDragEnd(context),
           onSecondaryTapDown: (details) => _handleContextMenu(context, details),
@@ -507,6 +513,12 @@ class NodeWidget extends StatelessWidget {
     }
   }
 
+  /// Handles the start of a node drag - captures positions for undo coalescing
+  void _handleNodeDragStart(BuildContext context) {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    model.beginMoveNodes();
+  }
+
   /// Handles node drag for positioning - moves all selected nodes if this node is selected
   void _handleNodeDrag(BuildContext context, DragUpdateDetails details) {
     // Convert screen-space delta to logical-space delta
@@ -534,6 +546,8 @@ class NodeWidget extends StatelessWidget {
       // Only commit position of this single node
       model.updateNodePosition(node.id);
     }
+    // End the move group for undo coalescing
+    model.endMoveNodes();
   }
 
   /// Handles context menu for node

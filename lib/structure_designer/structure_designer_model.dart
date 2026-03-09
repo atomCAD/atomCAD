@@ -459,6 +459,44 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  // ===== UNDO/REDO =====
+
+  /// Whether there are commands that can be undone.
+  bool get canUndo => structure_designer_api.canUndo();
+
+  /// Whether there are commands that can be redone.
+  bool get canRedo => structure_designer_api.canRedo();
+
+  /// Undo the last command. Returns true if something was undone.
+  bool undo() {
+    final result = structure_designer_api.undo();
+    if (result) {
+      refreshFromKernel();
+    }
+    return result;
+  }
+
+  /// Redo the last undone command. Returns true if something was redone.
+  bool redo() {
+    final result = structure_designer_api.redo();
+    if (result) {
+      refreshFromKernel();
+    }
+    return result;
+  }
+
+  // ===== MOVE COALESCING =====
+
+  /// Called when a node drag begins. Captures positions for undo coalescing.
+  void beginMoveNodes() {
+    structure_designer_api.beginMoveNodes();
+  }
+
+  /// Called when a node drag ends. Creates a single MoveNodes undo command.
+  void endMoveNodes() {
+    structure_designer_api.endMoveNodes();
+  }
+
   // Called on each small update when dragging a node
   // Works only on the UI: do not update the position in the kernel
   void dragNodePosition(BigInt nodeId, Offset delta) {
