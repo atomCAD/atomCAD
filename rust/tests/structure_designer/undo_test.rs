@@ -6,6 +6,7 @@ use rust_lib_flutter_cad::structure_designer::serialization::node_networks_seria
     SerializableNodeTypeRegistryNetworks, node_network_to_serializable,
 };
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use rust_lib_flutter_cad::structure_designer::text_format::edit_network as text_edit_network;
 use rust_lib_flutter_cad::structure_designer::undo::{
     UndoCommand, UndoContext, UndoRefreshMode, UndoStack,
 };
@@ -993,4 +994,217 @@ fn undo_across_network_switch() {
 
     let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
     assert_eq!(initial, after_undo_all);
+}
+
+// ===== Phase 7: TextEditNetwork + FactorSelection =====
+
+/// Helper to apply a text edit to a network (mirrors the API layer pattern).
+/// Removes the network from the registry, applies the edit, puts it back,
+/// and pushes an undo command.
+fn apply_text_edit(designer: &mut StructureDesigner, network_name: &str, code: &str) {
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
+    use rust_lib_flutter_cad::structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
+
+    // Temporarily remove network from registry
+    let mut network = designer
+        .node_type_registry
+        .node_networks
+        .remove(network_name)
+        .expect("Network not found");
+
+    // Snapshot before
+    let before_snapshot = node_network_to_serializable(
+        &mut network,
+        &designer.node_type_registry.built_in_node_types,
+        None,
+    )
+    .ok();
+
+    // Apply text edit in replace mode
+    let result = text_edit_network(&mut network, &designer.node_type_registry, code, true);
+
+    // Snapshot after
+    let after_snapshot = node_network_to_serializable(
+        &mut network,
+        &designer.node_type_registry.built_in_node_types,
+        None,
+    )
+    .ok();
+
+    // Put network back
+    designer
+        .node_type_registry
+        .node_networks
+        .insert(network_name.to_string(), network);
+
+    // Validate network
+    designer.validate_active_network();
+
+    // Push undo command if changes were made
+    let made_changes = result.success
+        && (!result.nodes_created.is_empty()
+            || !result.nodes_updated.is_empty()
+            || !result.nodes_deleted.is_empty()
+            || !result.connections_made.is_empty());
+    if made_changes {
+        if let (Some(before), Some(after)) = (before_snapshot, after_snapshot) {
+            designer.push_command(TextEditNetworkCommand {
+                network_name: network_name.to_string(),
+                before_snapshot: before,
+                after_snapshot: after,
+            });
+        }
+    }
+
+    designer.mark_full_refresh();
+    designer.set_dirty(true);
+}
+
+#[test]
+fn undo_text_edit_network() {
+    let mut designer = setup_designer_with_network("test");
+
+    // Start with a sphere node
+    designer.add_node("sphere", DVec2::new(100.0, 50.0));
+    designer.undo_stack.clear();
+
+    let before = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Apply text edit that replaces the network content
+    apply_text_edit(
+        &mut designer,
+        "test",
+        "my_cuboid = cuboid { size: (10, 10, 10) }\noutput my_cuboid",
+    );
+
+    let after = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_ne!(before, after, "Text edit should have changed the network");
+
+    // Undo should restore the original state
+    assert!(designer.undo());
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(before, after_undo, "State after undo should match state before text edit");
+
+    // Redo should restore the text-edited state
+    assert!(designer.redo());
+    let after_redo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(after, after_redo, "State after redo should match state after text edit");
+}
+
+#[test]
+fn undo_text_edit_network_multiple_edits() {
+    let mut designer = setup_designer_with_network("test");
+    designer.undo_stack.clear();
+
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // First text edit: add a sphere
+    apply_text_edit(&mut designer, "test", "s = sphere { radius: 5.0 }\noutput s");
+    let after_first = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Second text edit: replace with cuboid
+    apply_text_edit(
+        &mut designer,
+        "test",
+        "c = cuboid { size: (10, 10, 10) }\noutput c",
+    );
+
+    // Undo second edit
+    assert!(designer.undo());
+    let after_undo_second = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(after_first, after_undo_second);
+
+    // Undo first edit
+    assert!(designer.undo());
+    let after_undo_first = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_first);
+}
+
+#[test]
+fn undo_factor_selection() {
+    let mut designer = setup_designer_with_network("test");
+
+    // Build a simple graph: just a sphere node (no external inputs when only it is selected)
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+
+    // Select the sphere for factoring
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(sphere_id);
+    }
+    designer.undo_stack.clear();
+
+    let before = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Factor selection into a subnetwork (no external inputs for a standalone node)
+    let result = designer.factor_selection_into_subnetwork("my_sub", vec![]);
+    assert!(result.is_ok(), "Factor should succeed: {:?}", result);
+
+    // Verify subnetwork was created
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("my_sub"),
+        "Subnetwork should exist after factoring"
+    );
+
+    let after = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_ne!(before, after, "Factoring should have changed the state");
+
+    // Undo should remove the subnetwork and restore the source network
+    assert!(designer.undo());
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(before, after_undo, "State after undo should match state before factoring");
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("my_sub"),
+        "Subnetwork should be removed after undo"
+    );
+
+    // Redo should recreate the subnetwork
+    assert!(designer.redo());
+    let after_redo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(after, after_redo, "State after redo should match state after factoring");
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("my_sub"),
+        "Subnetwork should exist again after redo"
+    );
+}
+
+#[test]
+fn undo_factor_then_edit_then_undo_all() {
+    let mut designer = setup_designer_with_network("test");
+
+    // Build a graph: just a sphere node
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+
+    // Select the sphere and factor it
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(sphere_id);
+    }
+    designer.undo_stack.clear();
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    designer
+        .factor_selection_into_subnetwork("my_sub", vec![])
+        .unwrap();
+
+    // Switch to the subnetwork and add a node
+    designer.set_active_node_network_name(Some("my_sub".to_string()));
+    designer.add_node("cuboid", DVec2::new(100.0, 100.0));
+
+    // Undo all: undo add_node, undo factor
+    assert!(designer.undo()); // undo add cuboid in subnetwork
+    assert!(designer.undo()); // undo factor
+
+    // Need to switch back since undo of factor doesn't change active network
+    designer.set_active_node_network_name(Some("test".to_string()));
+
+    let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo_all, "Undoing all should restore to pre-factor state");
 }

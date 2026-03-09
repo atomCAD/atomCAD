@@ -4208,6 +4208,14 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     };
                 }
 
+                // Snapshot network BEFORE text edit (for undo)
+                use crate::structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
+                let before_snapshot = node_network_to_serializable(
+                    &mut network,
+                    &structure_designer.node_type_registry.built_in_node_types,
+                    None,
+                ).ok();
+
                 // Apply edits in replace mode
                 let result = text_edit_network(
                     &mut network,
@@ -4237,6 +4245,13 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     }
                 }
 
+                // Snapshot network AFTER text edit (for undo), before putting it back
+                let after_snapshot = node_network_to_serializable(
+                    &mut network,
+                    &structure_designer.node_type_registry.built_in_node_types,
+                    None,
+                ).ok();
+
                 // Put network back
                 structure_designer
                     .node_type_registry
@@ -4252,17 +4267,29 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     }
                 }
 
-                // Mark full refresh and dirty
-                cad_instance.structure_designer.mark_full_refresh();
-                if result.success
+                // Push undo command if the text edit made changes
+                let made_changes = result.success
                     && (!result.nodes_created.is_empty()
                         || !result.nodes_updated.is_empty()
                         || !result.nodes_deleted.is_empty()
                         || !result.connections_made.is_empty()
                         || result.description_set.is_some()
                         || result.summary_set.is_some()
-                        || result.output_set.is_some())
-                {
+                        || result.output_set.is_some());
+                if made_changes {
+                    if let (Some(before), Some(after)) = (before_snapshot, after_snapshot) {
+                        use crate::structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
+                        cad_instance.structure_designer.push_command(TextEditNetworkCommand {
+                            network_name: network_name.clone(),
+                            before_snapshot: before,
+                            after_snapshot: after,
+                        });
+                    }
+                }
+
+                // Mark full refresh and dirty
+                cad_instance.structure_designer.mark_full_refresh();
+                if made_changes {
                     cad_instance.structure_designer.set_dirty(true);
                 }
 

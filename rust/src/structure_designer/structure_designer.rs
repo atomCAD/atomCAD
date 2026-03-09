@@ -3581,7 +3581,10 @@ impl StructureDesigner {
             ));
         }
 
-        // 5. Create subnetwork (using module function)
+        // 5. Snapshot source network BEFORE factoring (for undo)
+        let source_network_before = self.snapshot_network(&network_name);
+
+        // 6. Create subnetwork (using module function)
         let source_network = self
             .node_type_registry
             .node_networks
@@ -3595,11 +3598,11 @@ impl StructureDesigner {
             &self.node_type_registry,
         );
 
-        // 6. Register subnetwork
+        // 7. Register subnetwork
         let num_params = new_network.node_type.parameters.len();
         self.node_type_registry.add_node_network(new_network);
 
-        // 7. Replace selection with custom node (using module function)
+        // 8. Replace selection with custom node (using module function)
         let network = self
             .node_type_registry
             .node_networks
@@ -3612,10 +3615,27 @@ impl StructureDesigner {
             num_params,
         );
 
-        // 8. Validate networks
+        // 9. Validate networks
         self.validate_active_network();
 
-        // 9. Mark dirty and schedule refresh
+        // 10. Push undo command
+        if let Some(source_before) = source_network_before {
+            if let (Some(source_after), Some(subnetwork_snap)) = (
+                self.snapshot_network(&network_name),
+                self.snapshot_network(subnetwork_name),
+            ) {
+                use super::undo::commands::factor_selection::FactorSelectionCommand;
+                self.push_command(FactorSelectionCommand {
+                    source_network_name: network_name.clone(),
+                    subnetwork_name: subnetwork_name.to_string(),
+                    source_network_before: source_before,
+                    source_network_after: source_after,
+                    subnetwork_snapshot: subnetwork_snap,
+                });
+            }
+        }
+
+        // 11. Mark dirty and schedule refresh
         self.is_dirty = true;
         self.mark_full_refresh();
 
