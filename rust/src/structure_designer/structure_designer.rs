@@ -13,6 +13,8 @@ use super::node_type::NodeType;
 use super::node_type_registry::NodeTypeRegistry;
 use super::preferences::load_preferences;
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
+use super::undo::snapshot::PendingMove;
+use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
 use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluationResult;
 use crate::api::structure_designer::structure_designer_preferences::{
     AtomicStructureVisualization, StructureDesignerPreferences,
@@ -69,6 +71,10 @@ pub struct StructureDesigner {
     navigation_history: NavigationHistory,
     // Clipboard for copy/paste operations (stores copied nodes as an isolated NodeNetwork)
     pub clipboard: Option<NodeNetwork>,
+    // Undo/redo stack for all network mutations
+    pub undo_stack: UndoStack,
+    // Temporary state during a node drag operation (for move coalescing)
+    pub pending_move: Option<PendingMove>,
 }
 
 impl Default for StructureDesigner {
@@ -100,6 +106,8 @@ impl StructureDesigner {
             cli_top_level_parameters: None,
             navigation_history: NavigationHistory::new(),
             clipboard: None,
+            undo_stack: UndoStack::default(),
+            pending_move: None,
         }
     }
 }
@@ -234,6 +242,124 @@ impl StructureDesigner {
     ) {
         self.pending_changes
             .mark_selection_changed(previous_selection, current_selection);
+    }
+
+    // --- Undo/Redo ---
+
+    /// Undo the last command. Returns true if an undo was performed.
+    pub fn undo(&mut self) -> bool {
+        // Temporarily take the undo stack to avoid borrow conflict
+        let mut stack = std::mem::take(&mut self.undo_stack);
+        let result = stack.undo(&mut UndoContext {
+            node_type_registry: &mut self.node_type_registry,
+            active_network_name: &mut self.active_node_network_name,
+        });
+        self.undo_stack = stack;
+
+        if let Some(refresh_mode) = result {
+            self.apply_undo_refresh_mode(refresh_mode);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Redo the last undone command. Returns true if a redo was performed.
+    pub fn redo(&mut self) -> bool {
+        let mut stack = std::mem::take(&mut self.undo_stack);
+        let result = stack.redo(&mut UndoContext {
+            node_type_registry: &mut self.node_type_registry,
+            active_network_name: &mut self.active_node_network_name,
+        });
+        self.undo_stack = stack;
+
+        if let Some(refresh_mode) = result {
+            self.apply_undo_refresh_mode(refresh_mode);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Push a new undo command onto the stack.
+    pub fn push_command(&mut self, command: impl UndoCommand + 'static) {
+        self.undo_stack.push(Box::new(command));
+    }
+
+    /// Apply the appropriate refresh after an undo/redo operation.
+    fn apply_undo_refresh_mode(&mut self, mode: UndoRefreshMode) {
+        match mode {
+            UndoRefreshMode::Lightweight => {
+                self.mark_lightweight_refresh();
+            }
+            UndoRefreshMode::NodeDataChanged(node_ids) => {
+                for node_id in node_ids {
+                    self.mark_node_data_changed(node_id);
+                }
+            }
+            UndoRefreshMode::Full => {
+                self.mark_full_refresh();
+            }
+        }
+        self.set_dirty(true);
+    }
+
+    /// Serialize a node's data to JSON using the registered node_data_saver.
+    /// Returns None if the node or network doesn't exist.
+    pub fn snapshot_node_data(&mut self, network_name: &str, node_id: u64) -> Option<serde_json::Value> {
+        // First, look up the saver function (needs immutable access).
+        // node_data_saver is a fn pointer (Copy), so we can extract it before mutable borrow.
+        let saver = {
+            let node_type_name = self
+                .node_type_registry
+                .node_networks
+                .get(network_name)?
+                .nodes
+                .get(&node_id)?
+                .node_type_name
+                .clone();
+
+            if let Some(node_type) = self.node_type_registry.built_in_node_types.get(&node_type_name) {
+                node_type.node_data_saver
+            } else if let Some(other_network) = self.node_type_registry.node_networks.get(&node_type_name) {
+                other_network.node_type.node_data_saver
+            } else {
+                return None;
+            }
+        };
+
+        // Now get mutable access to the node's data to call the saver
+        let network = self.node_type_registry.node_networks.get_mut(network_name)?;
+        let node = network.nodes.get_mut(&node_id)?;
+        saver(node.data.as_mut(), None).ok()
+    }
+
+    /// Snapshot a node's full state for undo purposes.
+    pub fn snapshot_node(
+        &mut self,
+        network_name: &str,
+        node_id: u64,
+    ) -> Option<super::undo::snapshot::NodeSnapshot> {
+        use super::undo::snapshot::{ArgumentSnapshot, NodeSnapshot};
+
+        let data_json = self.snapshot_node_data(network_name, node_id)?;
+        let network = self.node_type_registry.node_networks.get(network_name)?;
+        let node = network.nodes.get(&node_id)?;
+
+        Some(NodeSnapshot {
+            node_id: node.id,
+            node_type_name: node.node_type_name.clone(),
+            position: node.position,
+            custom_name: node.custom_name.clone(),
+            node_data_json: data_json,
+            arguments: node
+                .arguments
+                .iter()
+                .map(|arg| ArgumentSnapshot {
+                    argument_output_pins: arg.argument_output_pins.clone(),
+                })
+                .collect(),
+        })
     }
 
     // Generates the scene to be rendered according to the displayed nodes of the active node network
@@ -1467,6 +1593,10 @@ impl StructureDesigner {
         // Clear navigation history
         self.navigation_history.clear();
 
+        // Clear undo stack — new project has no history
+        self.undo_stack.clear();
+        self.pending_move = None;
+
         // Clear evaluation cache
         self.network_evaluator.clear_csg_cache();
 
@@ -2596,6 +2726,10 @@ impl StructureDesigner {
 
         // Clear navigation history since we're loading a new design file
         self.navigation_history.clear();
+
+        // Clear undo stack — loaded file starts with fresh history
+        self.undo_stack.clear();
+        self.pending_move = None;
 
         // Set active node network to the first network if available, otherwise None
         // Capture camera settings from the newly active network

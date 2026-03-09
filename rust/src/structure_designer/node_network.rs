@@ -98,6 +98,24 @@ impl PartialEq for Wire {
 
 impl Eq for Wire {}
 
+/// Information about what `delete_selected()` would delete.
+/// Returned by `collect_deletion_info()` for the undo system.
+#[derive(Default)]
+pub struct DeletionInfo {
+    /// IDs of nodes that would be deleted
+    pub deleted_node_ids: Vec<u64>,
+    /// All wires connected to deleted nodes (both incoming and outgoing)
+    pub deleted_wires: Vec<Wire>,
+    /// If the return node would be deleted, its ID
+    pub was_return_node: Option<u64>,
+    /// Display states of deleted nodes: (node_id, display_type)
+    pub display_states: Vec<(u64, NodeDisplayType)>,
+    /// Selected wires that would be deleted (when no nodes are selected)
+    pub selected_wires: Vec<Wire>,
+    /// True if this is a node deletion, false if wire-only deletion
+    pub is_node_deletion: bool,
+}
+
 pub struct Node {
     pub id: u64,
     pub node_type_name: String,
@@ -436,6 +454,41 @@ impl NodeNetwork {
         self.nodes.insert(node_id, node);
         self.set_node_display(node_id, true);
         node_id
+    }
+
+    /// Add a node with a specific ID (used by undo/redo system).
+    /// Updates `next_node_id` if the provided ID is >= current next_node_id.
+    pub fn add_node_with_id(
+        &mut self,
+        node_id: u64,
+        node_type_name: &str,
+        position: DVec2,
+        num_of_parameters: usize,
+        node_data: Box<dyn NodeData>,
+    ) {
+        let mut arguments: Vec<Argument> = Vec::new();
+        for _i in 0..num_of_parameters {
+            arguments.push(Argument::new());
+        }
+
+        let display_name = self.generate_unique_display_name(node_type_name);
+        let node = Node {
+            id: node_id,
+            node_type_name: node_type_name.to_string(),
+            custom_name: Some(display_name),
+            position,
+            arguments,
+            data: node_data,
+            custom_node_type: None,
+        };
+
+        // Ensure next_node_id stays ahead of any manually assigned ID
+        if node_id >= self.next_node_id {
+            self.next_node_id = node_id + 1;
+        }
+
+        self.nodes.insert(node_id, node);
+        self.set_node_display(node_id, true);
     }
 
     pub fn move_node(&mut self, node_id: u64, position: DVec2) {
@@ -937,6 +990,56 @@ impl NodeNetwork {
             return node.data.provide_gadget(structure_designer);
         }
         None
+    }
+
+    /// Returns information about what `delete_selected()` would delete, without mutating anything.
+    /// Used by the undo system to capture state before deletion.
+    pub fn collect_deletion_info(&self) -> DeletionInfo {
+        let mut info = DeletionInfo::default();
+
+        if !self.selected_node_ids.is_empty() {
+            info.deleted_node_ids = self.selected_node_ids.iter().copied().collect();
+
+            // Collect all wires connected to selected nodes
+            for (&node_id, node) in &self.nodes {
+                for (param_index, arg) in node.arguments.iter().enumerate() {
+                    for (&source_node_id, &output_pin_index) in &arg.argument_output_pins {
+                        // Wire is affected if source or dest is being deleted
+                        if self.selected_node_ids.contains(&source_node_id)
+                            || self.selected_node_ids.contains(&node_id)
+                        {
+                            info.deleted_wires.push(Wire {
+                                source_node_id,
+                                source_output_pin_index: output_pin_index,
+                                destination_node_id: node_id,
+                                destination_argument_index: param_index,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Check if return node is among deleted
+            if let Some(return_id) = self.return_node_id {
+                if self.selected_node_ids.contains(&return_id) {
+                    info.was_return_node = Some(return_id);
+                }
+            }
+
+            // Collect display states of deleted nodes
+            for &node_id in &self.selected_node_ids {
+                if let Some(&display_type) = self.displayed_node_ids.get(&node_id) {
+                    info.display_states.push((node_id, display_type));
+                }
+            }
+
+            info.is_node_deletion = true;
+        } else if !self.selected_wires.is_empty() {
+            info.selected_wires = self.selected_wires.clone();
+            info.is_node_deletion = false;
+        }
+
+        info
     }
 
     /// Delete all selected nodes and wires

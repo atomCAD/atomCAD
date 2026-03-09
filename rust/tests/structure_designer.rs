@@ -108,3 +108,6 @@ mod raytrace_per_node_test;
 
 #[path = "structure_designer/atom_edit_unchanged_test.rs"]
 mod atom_edit_unchanged_test;
+
+#[path = "structure_designer/undo_test.rs"]
+mod undo_test;
