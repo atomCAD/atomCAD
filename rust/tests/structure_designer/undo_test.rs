@@ -1,4 +1,7 @@
+use glam::DVec3;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
+use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
     node_network_to_serializable, SerializableNodeTypeRegistryNetworks,
 };
@@ -299,4 +302,82 @@ fn snapshot_all_networks_deterministic() {
     let snap1 = snapshot_all_networks(&mut designer.node_type_registry);
     let snap2 = snapshot_all_networks(&mut designer.node_type_registry);
     assert_eq!(snap1, snap2, "Consecutive snapshots should be identical");
+}
+
+// ===== SetNodeData command tests =====
+
+#[test]
+fn undo_set_node_data_float() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("float", glam::DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        let new_data = Box::new(FloatData { value: 42.0 });
+        d.set_node_network_data(node_id, new_data);
+    });
+}
+
+#[test]
+fn undo_set_node_data_vec3() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("vec3", glam::DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        let new_data = Box::new(Vec3Data {
+            value: DVec3::new(1.0, 2.0, 3.0),
+        });
+        d.set_node_network_data(node_id, new_data);
+    });
+}
+
+#[test]
+fn undo_set_node_data_multiple_edits() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("float", glam::DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Edit 1
+    designer.set_node_network_data(node_id, Box::new(FloatData { value: 10.0 }));
+    let after_edit1 = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Edit 2
+    designer.set_node_network_data(node_id, Box::new(FloatData { value: 20.0 }));
+    let after_edit2 = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Edit 3
+    designer.set_node_network_data(node_id, Box::new(FloatData { value: 30.0 }));
+
+    // Undo all 3 edits
+    assert!(designer.undo()); // undo edit 3
+    let state = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(after_edit2, state);
+
+    assert!(designer.undo()); // undo edit 2
+    let state = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(after_edit1, state);
+
+    assert!(designer.undo()); // undo edit 1
+    let state = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, state);
+
+    assert!(!designer.undo()); // nothing left
+}
+
+#[test]
+fn undo_set_node_data_no_change_produces_no_command() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("float", glam::DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    // Set the same default value — should produce no command since old == new
+    designer.set_node_network_data(node_id, Box::new(FloatData { value: 0.0 }));
+
+    assert!(
+        !designer.undo_stack.can_undo(),
+        "No command should be pushed when data doesn't change"
+    );
 }

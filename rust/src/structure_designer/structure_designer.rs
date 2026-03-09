@@ -1345,16 +1345,23 @@ impl StructureDesigner {
         };
 
         // Check node type before modification
-        let is_expr_node =
+        let (is_expr_node, node_type_name) =
             if let Some(network) = self.node_type_registry.node_networks.get(&network_name) {
                 if let Some(node) = network.nodes.get(&node_id) {
-                    node.node_type_name == "expr"
+                    (node.node_type_name == "expr", node.node_type_name.clone())
                 } else {
-                    false
+                    (false, String::new())
                 }
             } else {
-                false
+                (false, String::new())
             };
+
+        // Capture before-state for undo (skip for deprecated edit_atom node)
+        let old_data_json = if node_type_name != "edit_atom" {
+            self.snapshot_node_data(&network_name, node_id)
+        } else {
+            None
+        };
 
         // For expr nodes, validate the expression before setting the data
         let mut expr_validation_errors = Vec::new();
@@ -1373,6 +1380,23 @@ impl StructureDesigner {
             self.set_dirty(true);
             // Track that this node's data changed
             self.mark_node_data_changed(node_id);
+        }
+
+        // Capture after-state and push undo command
+        if let Some(old_json) = old_data_json {
+            if let Some(new_json) = self.snapshot_node_data(&network_name, node_id) {
+                if old_json != new_json {
+                    self.push_command(
+                        super::undo::commands::set_node_data::SetNodeDataCommand {
+                            network_name: network_name.clone(),
+                            node_id,
+                            node_type_name,
+                            old_data_json: old_json,
+                            new_data_json: new_json,
+                        },
+                    );
+                }
+            }
         }
 
         // Cache custom NodeType if needed after data is set
