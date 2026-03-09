@@ -744,3 +744,94 @@ fn undo_set_node_display_toggle_twice() {
     let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
     assert_eq!(initial, after_undo);
 }
+
+// ===== Phase 5: PasteNodes Tests =====
+
+#[test]
+fn undo_paste_nodes() {
+    let mut designer = setup_designer_with_network("test");
+
+    // Add a node and select it for copy
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(sphere_id);
+    }
+
+    // Copy selection
+    designer.copy_selection();
+    designer.undo_stack.clear();
+
+    // Paste and verify undo/redo roundtrip
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.paste_at_position(DVec2::new(200.0, 100.0));
+    });
+}
+
+#[test]
+fn undo_paste_connected_nodes() {
+    let mut designer = setup_designer_with_network("test");
+
+    // Build a small graph: float -> sphere
+    let float_id = designer.add_node("float", DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(float_id, 0, sphere_id, 0);
+
+    // Select both nodes
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(float_id);
+        network.select_node(sphere_id);
+    }
+
+    // Copy selection
+    designer.copy_selection();
+    designer.undo_stack.clear();
+
+    // Paste and verify undo/redo roundtrip (wires between pasted nodes should be preserved)
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.paste_at_position(DVec2::new(0.0, 200.0));
+    });
+}
+
+#[test]
+fn undo_cut_is_single_step() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(sphere_id);
+    }
+    designer.undo_stack.clear();
+
+    // Cut = copy + delete → single undo step (only delete pushes a command)
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.cut_selection();
+    });
+}
+
+#[test]
+fn undo_paste_multiple_times() {
+    let mut designer = setup_designer_with_network("test");
+
+    // Add a node and copy it
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(sphere_id);
+    }
+    designer.copy_selection();
+    designer.undo_stack.clear();
+
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Paste 3 times
+    designer.paste_at_position(DVec2::new(100.0, 0.0));
+    designer.paste_at_position(DVec2::new(200.0, 0.0));
+    designer.paste_at_position(DVec2::new(300.0, 0.0));
+
+    // Undo all 3 pastes
+    assert!(designer.undo());
+    assert!(designer.undo());
+    assert!(designer.undo());
+    assert!(!designer.undo()); // Nothing left
+
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo);
+}

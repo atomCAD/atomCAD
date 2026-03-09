@@ -1093,6 +1093,14 @@ impl StructureDesigner {
         clipboard_snapshot.copy_nodes_from(clipboard, &all_clipboard_ids, DVec2::ZERO);
         let snapshot_ids: HashSet<u64> = clipboard_snapshot.nodes.keys().copied().collect();
 
+        // Capture next_node_id before paste for undo
+        let next_node_id_before = self
+            .node_type_registry
+            .node_networks
+            .get(&node_network_name)
+            .map(|n| n.next_node_id)
+            .unwrap_or(0);
+
         let active_network = match self
             .node_type_registry
             .node_networks
@@ -1110,6 +1118,54 @@ impl StructureDesigner {
         // Mark design as dirty and trigger full refresh
         self.set_dirty(true);
         self.mark_full_refresh();
+
+        // Push undo command: snapshot all pasted nodes and their internal wires
+        if !new_ids.is_empty() {
+            let new_id_set: HashSet<u64> = new_ids.iter().copied().collect();
+            let mut pasted_nodes = Vec::new();
+            let mut pasted_wires = Vec::new();
+            let mut display_states = Vec::new();
+
+            for &node_id in &new_ids {
+                if let Some(snap) = self.snapshot_node(&node_network_name, node_id) {
+                    pasted_nodes.push(snap);
+                }
+            }
+
+            // Collect wires between pasted nodes and display states
+            if let Some(network) = self.node_type_registry.node_networks.get(&node_network_name) {
+                for &node_id in &new_ids {
+                    if let Some(node) = network.nodes.get(&node_id) {
+                        for (param_idx, arg) in node.arguments.iter().enumerate() {
+                            for (&src_id, &src_pin) in &arg.argument_output_pins {
+                                if new_id_set.contains(&src_id) {
+                                    pasted_wires.push(
+                                        super::undo::snapshot::WireSnapshot {
+                                            source_node_id: src_id,
+                                            source_output_pin_index: src_pin,
+                                            dest_node_id: node_id,
+                                            dest_param_index: param_idx,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(&display_type) = network.displayed_node_ids.get(&node_id) {
+                        display_states.push((node_id, display_type));
+                    }
+                }
+            }
+
+            self.push_command(super::undo::commands::paste_nodes::PasteNodesCommand {
+                network_name: node_network_name.clone(),
+                pasted_nodes,
+                pasted_wires,
+                display_states,
+                next_node_id_before,
+            });
+        }
 
         new_ids
     }

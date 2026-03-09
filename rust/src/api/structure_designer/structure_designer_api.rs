@@ -993,6 +993,52 @@ pub fn end_move_nodes() {
     }
 }
 
+/// Undo the last command. Returns true if an undo was performed.
+#[flutter_rust_bridge::frb(sync)]
+pub fn undo() -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let result = instance.structure_designer.undo();
+                if result {
+                    refresh_structure_designer_auto(instance);
+                }
+                result
+            },
+            false,
+        )
+    }
+}
+
+/// Redo the last undone command. Returns true if a redo was performed.
+#[flutter_rust_bridge::frb(sync)]
+pub fn redo() -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let result = instance.structure_designer.redo();
+                if result {
+                    refresh_structure_designer_auto(instance);
+                }
+                result
+            },
+            false,
+        )
+    }
+}
+
+/// Returns true if there is a command that can be undone.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_undo() -> bool {
+    unsafe { with_cad_instance_or(|instance| instance.structure_designer.undo_stack.can_undo(), false) }
+}
+
+/// Returns true if there is a command that can be redone.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_redo() -> bool {
+    unsafe { with_cad_instance_or(|instance| instance.structure_designer.undo_stack.can_redo(), false) }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn toggle_wire_selection(
     source_node_id: u64,

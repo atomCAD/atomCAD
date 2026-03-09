@@ -4,6 +4,7 @@ pub mod delete_nodes;
 pub mod delete_wires;
 pub mod duplicate_node;
 pub mod move_nodes;
+pub mod paste_nodes;
 pub mod set_node_data;
 pub mod set_node_display;
 pub mod set_return_node;
