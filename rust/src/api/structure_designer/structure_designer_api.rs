@@ -973,6 +973,26 @@ pub fn move_selected_nodes(delta_x: f64, delta_y: f64) {
     }
 }
 
+/// Called by Flutter when a node drag begins. Captures current positions for undo coalescing.
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_move_nodes() {
+    unsafe {
+        with_mut_cad_instance(|instance| {
+            instance.structure_designer.begin_move_nodes();
+        });
+    }
+}
+
+/// Called by Flutter when a node drag ends. Creates a single MoveNodesCommand.
+#[flutter_rust_bridge::frb(sync)]
+pub fn end_move_nodes() {
+    unsafe {
+        with_mut_cad_instance(|instance| {
+            instance.structure_designer.end_move_nodes();
+        });
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn toggle_wire_selection(
     source_node_id: u64,

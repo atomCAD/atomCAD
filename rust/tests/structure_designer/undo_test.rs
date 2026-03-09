@@ -1,4 +1,4 @@
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
 use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
@@ -579,4 +579,168 @@ fn undo_sequence_add_delete() {
 
     let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
     assert_eq!(initial, after_undo_all);
+}
+
+// ===== Phase 4: ConnectWire Tests =====
+
+#[test]
+fn undo_connect_wire() {
+    let mut designer = setup_designer_with_network("test");
+    let float_id = designer.add_node("float", DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.connect_nodes(float_id, 0, sphere_id, 0);
+    });
+}
+
+#[test]
+fn undo_connect_wire_that_replaced_existing() {
+    let mut designer = setup_designer_with_network("test");
+    let float1 = designer.add_node("float", DVec2::ZERO);
+    let float2 = designer.add_node("float", DVec2::new(0.0, 100.0));
+    let sphere = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+
+    // Connect float1 → sphere pin 0
+    designer.connect_nodes(float1, 0, sphere, 0);
+    designer.undo_stack.clear();
+
+    // Connect float2 → sphere pin 0 (replaces float1's wire)
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.connect_nodes(float2, 0, sphere, 0);
+    });
+    // After undo: float1's wire should be restored
+}
+
+// ===== Phase 4: MoveNodes Tests =====
+
+#[test]
+fn undo_move_nodes() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("sphere", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(id);
+    }
+    designer.undo_stack.clear();
+
+    // Move uses begin/end grouping
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.begin_move_nodes();
+        d.move_selected_nodes(DVec2::new(10.0, 0.0));
+        d.move_selected_nodes(DVec2::new(10.0, 0.0));
+        d.move_selected_nodes(DVec2::new(10.0, 0.0));
+        d.end_move_nodes();
+    });
+}
+
+#[test]
+fn move_without_actual_movement_creates_no_command() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("sphere", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(id);
+    }
+    designer.undo_stack.clear();
+
+    designer.begin_move_nodes();
+    // No move_selected_nodes calls — click without drag
+    designer.end_move_nodes();
+
+    assert!(!designer.undo()); // No command was created
+}
+
+#[test]
+fn undo_move_multiple_drags_are_separate_commands() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("sphere", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(id);
+    }
+    designer.undo_stack.clear();
+
+    // First drag
+    designer.begin_move_nodes();
+    designer.move_selected_nodes(DVec2::new(50.0, 0.0));
+    designer.end_move_nodes();
+
+    // Second drag
+    designer.begin_move_nodes();
+    designer.move_selected_nodes(DVec2::new(0.0, 50.0));
+    designer.end_move_nodes();
+
+    // Should be 2 separate undo steps
+    assert!(designer.undo()); // undo second drag
+    assert!(designer.undo()); // undo first drag
+    assert!(!designer.undo()); // nothing left
+}
+
+// ===== Phase 4: SetReturnNode Tests =====
+
+#[test]
+fn undo_set_return_node() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_return_node_id(Some(sphere_id));
+    });
+}
+
+#[test]
+fn undo_clear_return_node() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_return_node_id(None);
+    });
+}
+
+// ===== Phase 4: SetNodeDisplay Tests =====
+
+#[test]
+fn undo_set_node_display() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    // Clear stack (add_node may have set display)
+    designer.undo_stack.clear();
+
+    // Check current display state and toggle it
+    let is_displayed = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .map(|net| net.is_node_displayed(sphere_id))
+        .unwrap_or(false);
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_node_display(sphere_id, !is_displayed);
+    });
+}
+
+#[test]
+fn undo_set_node_display_toggle_twice() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+
+    // Ensure node starts displayed, then turn it off so we have a known starting state
+    designer.set_node_display(sphere_id, false);
+    designer.undo_stack.clear();
+
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Display on, then off — two state changes
+    designer.set_node_display(sphere_id, true);
+    designer.set_node_display(sphere_id, false);
+
+    // Undo both
+    assert!(designer.undo());
+    assert!(designer.undo());
+
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo);
 }

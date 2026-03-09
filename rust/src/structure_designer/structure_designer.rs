@@ -302,6 +302,8 @@ impl StructureDesigner {
                 // Reapply display policy so the display state matches what
                 // the original mutation methods would have produced.
                 self.apply_node_display_policy(None);
+                // Re-validate network (updates derived state like output_type)
+                self.validate_active_network();
             }
         }
         self.set_dirty(true);
@@ -1210,11 +1212,46 @@ impl StructureDesigner {
             }
         };
 
+        // Capture the existing wire on this pin before connecting (for undo)
+        let replaced_wire = if !dest_param_is_multi {
+            if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
+                if let Some(dest_node) = network.nodes.get(&dest_node_id) {
+                    if let Some(arg) = dest_node.arguments.get(dest_param_index) {
+                        if !arg.is_empty() {
+                            // There's an existing wire that will be replaced
+                            arg.argument_output_pins.iter().next().map(
+                                |(&src_id, &src_pin)| {
+                                    super::undo::snapshot::WireSnapshot {
+                                        source_node_id: src_id,
+                                        source_output_pin_index: src_pin,
+                                        dest_node_id,
+                                        dest_param_index,
+                                    }
+                                },
+                            )
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let network_name_owned = node_network_name.clone();
+
         // Then make the connection
         if let Some(node_network) = self
             .node_type_registry
             .node_networks
-            .get_mut(node_network_name)
+            .get_mut(&network_name_owned)
         {
             node_network.connect_nodes(
                 source_node_id,
@@ -1237,6 +1274,20 @@ impl StructureDesigner {
             // Apply display policy considering only these nodes as dirty
             self.apply_node_display_policy(Some(&dirty_nodes));
         }
+
+        // Push undo command
+        self.push_command(
+            super::undo::commands::connect_wire::ConnectWireCommand {
+                network_name: network_name_owned,
+                wire: super::undo::snapshot::WireSnapshot {
+                    source_node_id,
+                    source_output_pin_index,
+                    dest_node_id,
+                    dest_param_index,
+                },
+                replaced_wire,
+            },
+        );
     }
 
     /// Auto-connects a source pin to the first compatible pin on a target node.
@@ -1746,13 +1797,40 @@ impl StructureDesigner {
     pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
         // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {
-            Some(name) => name,
+            Some(name) => name.clone(),
             None => return,
         };
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+
+        // Capture old display state before mutation
+        let old_display_type = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .and_then(|net| net.displayed_node_ids.get(&node_id).copied());
+
+        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
             network.set_node_display(node_id, is_displayed);
             // Track that this node's visibility changed
             self.pending_changes.visibility_changed.insert(node_id);
+        }
+
+        // Capture new display state after mutation
+        let new_display_type = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .and_then(|net| net.displayed_node_ids.get(&node_id).copied());
+
+        // Only push command if display state actually changed
+        if old_display_type != new_display_type {
+            self.push_command(
+                super::undo::commands::set_node_display::SetNodeDisplayCommand {
+                    network_name,
+                    node_id,
+                    old_display_type,
+                    new_display_type,
+                },
+            );
         }
     }
 
@@ -2023,6 +2101,67 @@ impl StructureDesigner {
         };
         if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
             network.move_selected_nodes(delta);
+        }
+    }
+
+    /// Called when a node drag begins. Captures start positions for undo coalescing.
+    pub fn begin_move_nodes(&mut self) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name,
+            None => return,
+        };
+        if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+            let start_positions: Vec<(u64, glam::f64::DVec2)> = network
+                .get_selected_node_ids()
+                .iter()
+                .filter_map(|&node_id| {
+                    network
+                        .nodes
+                        .get(&node_id)
+                        .map(|node| (node_id, node.position))
+                })
+                .collect();
+            self.pending_move = Some(super::undo::snapshot::PendingMove { start_positions });
+        }
+    }
+
+    /// Called when a node drag ends. Creates a single MoveNodesCommand from start to final positions.
+    pub fn end_move_nodes(&mut self) {
+        let pending = match self.pending_move.take() {
+            Some(p) => p,
+            None => return,
+        };
+
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+
+        let network = match self.node_type_registry.node_networks.get(&network_name) {
+            Some(n) => n,
+            None => return,
+        };
+
+        // Build moves: (node_id, old_pos, new_pos), filtering out nodes that didn't move
+        let moves: Vec<(u64, glam::f64::DVec2, glam::f64::DVec2)> = pending
+            .start_positions
+            .iter()
+            .filter_map(|&(node_id, old_pos)| {
+                network.nodes.get(&node_id).and_then(|node| {
+                    if node.position != old_pos {
+                        Some((node_id, old_pos, node.position))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        if !moves.is_empty() {
+            self.push_command(super::undo::commands::move_nodes::MoveNodesCommand {
+                network_name,
+                moves,
+            });
         }
     }
 
@@ -2316,6 +2455,11 @@ impl StructureDesigner {
             self.mark_full_refresh();
         }
 
+        // Check if we're deleting the return node (needed for validation below)
+        let deleted_return_node = deletion_info
+            .as_ref()
+            .is_some_and(|info| info.was_return_node.is_some());
+
         // Push undo command
         if let Some(info) = deletion_info {
             use super::undo::snapshot::WireSnapshot;
@@ -2363,8 +2507,8 @@ impl StructureDesigner {
             self.apply_node_display_policy(Some(&dirty_nodes));
         }
 
-        // Validate if we deleted a parameter node or invalid network node
-        if should_validate {
+        // Validate if we deleted a parameter node, invalid network node, or the return node
+        if should_validate || deleted_return_node {
             self.validate_active_network();
         }
     }
@@ -2761,27 +2905,54 @@ impl StructureDesigner {
     pub fn set_return_node_id(&mut self, node_id: Option<u64>) -> bool {
         // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {
-            Some(name) => name,
+            Some(name) => name.clone(),
             None => return false,
         };
 
+        // Capture old return node before mutation
+        let old_return_node_id = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .and_then(|net| net.return_node_id);
+
         // If node_id is None, clear the return node
         if node_id.is_none() {
-            if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+            if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
                 network.return_node_id = None;
                 // Mark design as dirty since we changed the return node
                 self.set_dirty(true);
                 self.validate_active_network();
+
+                // Push undo command if return node actually changed
+                if old_return_node_id.is_some() {
+                    self.push_command(
+                        super::undo::commands::set_return_node::SetReturnNodeCommand {
+                            network_name,
+                            old_return_node_id,
+                            new_return_node_id: None,
+                        },
+                    );
+                }
                 return true;
             }
             return false;
         }
 
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
             let ret = network.set_return_node(node_id.unwrap());
             if ret {
                 // Mark design as dirty since we set the return node
                 self.set_dirty(true);
+
+                // Push undo command
+                self.push_command(
+                    super::undo::commands::set_return_node::SetReturnNodeCommand {
+                        network_name,
+                        old_return_node_id,
+                        new_return_node_id: node_id,
+                    },
+                );
             }
             self.validate_active_network();
             ret
