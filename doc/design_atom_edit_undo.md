@@ -206,7 +206,11 @@ impl AtomEditData {
     }
 
     pub fn end_recording(&mut self) -> Option<DiffRecorder> {
-        self.recorder.take()
+        let mut recorder = self.recorder.take();
+        if let Some(ref mut rec) = recorder {
+            rec.coalesce();
+        }
+        recorder
     }
 }
 ```
@@ -446,7 +450,7 @@ Coalescing rules:
 - `Added` followed by `Modified` for same atom → single `Added` with the final state
 - `Modified` followed by `Removed` for same atom → single `Removed` with the original before-state
 
-This is optional (correctness doesn't depend on it) but reduces memory usage.
+Coalescing is **mandatory** — `end_recording()` always calls `coalesce()` before returning the recorder. Correctness doesn't depend on it, but without coalescing a 60-frame drag of 20 atoms would store 1,200 deltas instead of 20, making undo/redo replay 60x slower. Since coalescing is cheap (single linear pass) and the cost of skipping it is high for drags, there's no reason to make it optional.
 
 ## Undo/Redo Execution
 
@@ -470,30 +474,30 @@ fn get_atom_edit_data_mut<'a>(
 
 ### Undo Execution
 
-Process deltas in **reverse order**. For each delta, restore the `before` state:
+Undo uses three passes to maintain the invariant that **bonds are only added/removed while both endpoint atoms exist**:
+
+1. **Remove added bonds** (reverse) — undo bond additions and order changes while the atoms they reference still exist.
+2. **Restore atoms** (reverse) — delete added atoms, re-add removed atoms, restore modified atoms.
+3. **Re-add removed bonds** (reverse) — undo bond removals now that the atoms they reference have been restored.
 
 ```rust
 fn apply_undo(data: &mut AtomEditData, atom_deltas: &[AtomDelta], bond_deltas: &[BondDelta]) {
-    // Reverse bond deltas first (bonds reference atoms that must still exist)
+    // Pass 1: Undo bond additions and order changes (atoms still exist).
     for delta in bond_deltas.iter().rev() {
         match (delta.old_order, delta.new_order) {
             (None, Some(_)) => {
                 // Bond was added → remove it
                 data.diff.delete_bond(&BondReference { atom_id1: delta.atom_id1, atom_id2: delta.atom_id2 });
             }
-            (Some(order), None) => {
-                // Bond was removed → re-add it
-                data.diff.add_bond(delta.atom_id1, delta.atom_id2, order);
-            }
             (Some(old), Some(_)) => {
                 // Bond order changed → restore old order
                 data.diff.add_bond_checked(delta.atom_id1, delta.atom_id2, old);
             }
-            (None, None) => {} // no-op
+            _ => {} // Removals handled in pass 3
         }
     }
 
-    // Reverse atom deltas
+    // Pass 2: Restore atoms.
     for delta in atom_deltas.iter().rev() {
         match (&delta.before, &delta.after) {
             (None, Some(_)) => {
@@ -517,21 +521,52 @@ fn apply_undo(data: &mut AtomEditData, atom_deltas: &[AtomDelta], bond_deltas: &
                     None => data.diff.remove_anchor_position(delta.atom_id),
                 }
             }
-            (None, None) => {} // no-op
+            (None, None) => {}
         }
     }
 
+    // Pass 3: Re-add removed bonds (atoms they reference now exist).
+    for delta in bond_deltas.iter().rev() {
+        match (delta.old_order, delta.new_order) {
+            (Some(order), None) => {
+                // Bond was removed → re-add it
+                data.diff.add_bond(delta.atom_id1, delta.atom_id2, order);
+            }
+            _ => {} // Additions and order changes handled in pass 1
+        }
+    }
+
+    data.selection.clear();
     data.clear_input_cache();
 }
 ```
 
 ### Redo Execution
 
-Process deltas in **forward order**. For each delta, restore the `after` state. Same logic as undo but using `after` instead of `before`:
+Redo uses the same three-pass structure, mirrored for forward application:
+
+1. **Remove bonds being removed** (forward) — remove bonds and apply order changes while the atoms they reference still exist.
+2. **Apply atom deltas** (forward) — add new atoms, delete removed atoms, apply modifications.
+3. **Add new bonds** (forward) — add bonds now that the atoms they reference exist.
 
 ```rust
 fn apply_redo(data: &mut AtomEditData, atom_deltas: &[AtomDelta], bond_deltas: &[BondDelta]) {
-    // Forward atom deltas first (atoms must exist before bonds reference them)
+    // Pass 1: Remove bonds and apply order changes (atoms still exist).
+    for delta in bond_deltas.iter() {
+        match (delta.old_order, delta.new_order) {
+            (Some(_), None) => {
+                // Bond was removed → remove it
+                data.diff.delete_bond(&BondReference { atom_id1: delta.atom_id1, atom_id2: delta.atom_id2 });
+            }
+            (Some(_), Some(new)) => {
+                // Bond order changed → apply new order
+                data.diff.add_bond_checked(delta.atom_id1, delta.atom_id2, new);
+            }
+            _ => {} // Additions handled in pass 3
+        }
+    }
+
+    // Pass 2: Apply atom deltas.
     for delta in atom_deltas.iter() {
         match (&delta.before, &delta.after) {
             (None, Some(state)) => {
@@ -559,27 +594,23 @@ fn apply_redo(data: &mut AtomEditData, atom_deltas: &[AtomDelta], bond_deltas: &
         }
     }
 
-    // Forward bond deltas
+    // Pass 3: Add new bonds (atoms they reference now exist).
     for delta in bond_deltas.iter() {
         match (delta.old_order, delta.new_order) {
             (None, Some(order)) => {
+                // Bond was added → add it
                 data.diff.add_bond(delta.atom_id1, delta.atom_id2, order);
             }
-            (Some(_), None) => {
-                data.diff.delete_bond(&BondReference { atom_id1: delta.atom_id1, atom_id2: delta.atom_id2 });
-            }
-            (Some(_), Some(new)) => {
-                data.diff.add_bond_checked(delta.atom_id1, delta.atom_id2, new);
-            }
-            (None, None) => {}
+            _ => {} // Removals and order changes handled in pass 1
         }
     }
 
+    data.selection.clear();
     data.clear_input_cache();
 }
 ```
 
-**Note on ordering:** Undo processes bonds first (in reverse), then atoms (in reverse) — this ensures bonds are removed before the atoms they reference. Redo processes atoms first (forward), then bonds (forward) — atoms must exist before bonds are added.
+**Note on ordering:** Both undo and redo use the same three-pass structure: (1) remove/change bonds while atoms exist, (2) add/remove/modify atoms, (3) add bonds after atoms exist. This ensures bonds are never added to or removed from non-existent atoms. The key insight is that bond operations must be split into two groups — those that need atoms *before* the atom pass, and those that need atoms *after* it.
 
 ## User Action to Command Mapping
 
@@ -665,8 +696,7 @@ fn with_atom_edit_undo<F>(
 
     // End recording and push command
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
-        if let Some(mut recorder) = data.end_recording() {
-            recorder.coalesce();
+        if let Some(recorder) = data.end_recording() {
             if !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty() {
                 structure_designer.push_command(AtomEditMutationCommand {
                     description: description.to_string(),
@@ -752,9 +782,11 @@ let old_data_json = if node_type_name != "edit_atom" && node_type_name != "atom_
 };
 ```
 
-## Clearing the Input Cache
+## Clearing Selection and Input Cache
 
-After undo/redo, the `cached_input` may be stale. The undo/redo execution calls `data.clear_input_cache()` after applying deltas (shown in the apply_undo/apply_redo pseudocode above).
+After undo/redo, selection may reference atoms that no longer exist (or miss atoms that were restored). Rather than trying to intersect the selection with the new state, both `apply_undo` and `apply_redo` call `data.selection.clear()`. This is consistent with principle #4 (selection is not undoable) and avoids stale references in `selected_diff_atoms`, `selected_base_atoms`, `selected_bonds`, `selection_transform`, and `selection_order`.
+
+The `cached_input` may also be stale, so both functions also call `data.clear_input_cache()`.
 
 ## Memory Analysis
 
@@ -812,10 +844,32 @@ fn assert_atom_edit_undo_redo_roundtrip(
 }
 
 /// Test-only: serialize the full diff + flags + frozen state for comparison.
+/// Includes: atoms (positions, atomic_numbers), bonds, anchor positions,
+/// frozen_base_atoms, frozen_diff_atoms, and boolean flags.
+/// Excludes: selection (transient), cached_input (derived), active_tool (transient).
 fn snapshot_diff_state(designer: &StructureDesigner) -> SerializableAtomEditData { ... }
 ```
 
 ### Test Categories
+
+#### Prerequisite: `add_atom_with_id`
+```rust
+#[test] fn add_atom_with_id_basic()                      // Add atom at specific ID, verify it exists
+#[test] fn add_atom_with_id_with_gap()                   // Add atom at ID 5 when Vec has 2 entries, verify padding
+#[test] fn add_atom_with_id_updates_grid()               // Verify atom appears in spatial grid queries
+#[test] fn add_atom_with_id_increments_num_atoms()       // num_atoms bookkeeping
+#[test] fn add_atom_with_id_panics_on_occupied_slot()    // #[should_panic]
+```
+
+#### DiffRecorder Coalescing
+```rust
+#[test] fn coalesce_modified_modified()                  // Two Modified for same atom → single Modified (first.before, second.after)
+#[test] fn coalesce_added_modified()                     // Added + Modified for same atom → single Added with final state
+#[test] fn coalesce_modified_removed()                   // Modified + Removed for same atom → single Removed with original before
+#[test] fn coalesce_different_atoms_not_merged()         // Modified(id=1) + Modified(id=2) → both preserved
+#[test] fn coalesce_non_consecutive_not_merged()         // Modified(id=1) + Modified(id=2) + Modified(id=1) → all three preserved
+#[test] fn coalesce_bond_deltas_unchanged()              // Bond deltas are not coalesced (already minimal)
+```
 
 #### Single-Command Tests
 ```rust
@@ -835,17 +889,34 @@ fn snapshot_diff_state(designer: &StructureDesigner) -> SerializableAtomEditData
 #[test] fn undo_atom_edit_frozen_change()
 ```
 
+#### Three-Pass Ordering Tests
+```rust
+#[test] fn undo_delete_atom_with_bonds_restores_both()   // Delete bonded atom, undo → atom and bonds restored (exercises pass 2→3 ordering)
+#[test] fn redo_delete_atom_with_bonds_removes_both()    // Add bonded atom, undo, redo → atom and bonds removed (exercises pass 1→2 ordering)
+#[test] fn undo_add_bonded_atoms_removes_cleanly()       // Add two atoms + bond, undo → all removed, num_bonds correct
+#[test] fn redo_add_bonded_atoms_restores_cleanly()      // Same as above but redo after undo
+```
+
+#### Selection Clearing Tests
+```rust
+#[test] fn undo_clears_selection()                       // Add atom, select it, undo → selection is empty
+#[test] fn redo_clears_selection()                       // Add atom, undo, select something else, redo → selection is empty
+#[test] fn undo_delete_clears_selection()                // Select atoms, delete, undo → atoms restored but selection is empty
+```
+
 #### Drag Coalescing Tests
 ```rust
 #[test] fn undo_atom_edit_drag_is_single_step()
 #[test] fn drag_without_movement_creates_no_command()
 #[test] fn undo_atom_edit_drag_with_base_promotion()
+#[test] fn undo_atom_edit_drag_cancelled()               // Drag started + cancelled → command still created, undo restores positions
 ```
 
 #### Sequence Tests
 ```rust
 #[test] fn undo_atom_edit_sequence_restores_initial_state()
 #[test] fn undo_atom_edit_interleaved_with_global()
+#[test] fn undo_atom_edit_after_node_deletion_roundtrip() // atom_edit ops → delete node → undo node deletion → undo atom_edit op
 ```
 
 #### Edge Cases
