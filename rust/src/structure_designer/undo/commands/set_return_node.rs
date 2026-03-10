@@ -6,11 +6,12 @@ pub struct SetReturnNodeCommand {
     pub network_name: String,
     pub old_return_node_id: Option<u64>,
     pub new_return_node_id: Option<u64>,
+    pub description: String,
 }
 
 impl UndoCommand for SetReturnNodeCommand {
     fn description(&self) -> &str {
-        "Set return node"
+        &self.description
     }
 
     fn undo(&self, ctx: &mut UndoContext) {

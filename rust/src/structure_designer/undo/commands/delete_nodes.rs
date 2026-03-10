@@ -15,6 +15,7 @@ pub struct DeleteNodesCommand {
     pub was_return_node: Option<u64>,
     /// Display state of deleted nodes
     pub display_states: Vec<(u64, NodeDisplayType)>,
+    pub description: String,
 }
 
 impl DeleteNodesCommand {
@@ -128,7 +129,7 @@ impl DeleteNodesCommand {
 
 impl UndoCommand for DeleteNodesCommand {
     fn description(&self) -> &str {
-        "Delete nodes"
+        &self.description
     }
 
     fn undo(&self, ctx: &mut UndoContext) {

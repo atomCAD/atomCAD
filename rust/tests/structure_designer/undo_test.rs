@@ -1526,3 +1526,172 @@ fn undo_redo_gadget_drag_roundtrip() {
     // No more redo
     assert!(!designer.undo_stack.can_redo());
 }
+
+// ===== Undo Description Tests =====
+
+#[test]
+fn undo_description_add_node() {
+    let mut designer = setup_designer_with_network("test");
+    designer.add_node("sphere", DVec2::ZERO);
+    assert_eq!(designer.undo_stack.undo_description(), Some("Add sphere"));
+}
+
+#[test]
+fn undo_description_add_node_cuboid() {
+    let mut designer = setup_designer_with_network("test");
+    designer.add_node("cuboid", DVec2::ZERO);
+    assert_eq!(designer.undo_stack.undo_description(), Some("Add cuboid"));
+}
+
+#[test]
+fn undo_description_edit_node() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("float", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    designer.set_node_network_data(node_id, Box::new(FloatData { value: 42.0 }));
+    assert_eq!(designer.undo_stack.undo_description(), Some("Edit float"));
+}
+
+#[test]
+fn undo_description_edit_node_vec3() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("vec3", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    designer.set_node_network_data(
+        node_id,
+        Box::new(Vec3Data {
+            value: DVec3::new(1.0, 2.0, 3.0),
+        }),
+    );
+    assert_eq!(designer.undo_stack.undo_description(), Some("Edit vec3"));
+}
+
+#[test]
+fn undo_description_duplicate_node() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    designer.duplicate_node(node_id);
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Duplicate sphere")
+    );
+}
+
+#[test]
+fn undo_description_delete_single_node() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("cuboid", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(node_id);
+    }
+    designer.undo_stack.clear();
+
+    designer.delete_selected();
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Delete cuboid")
+    );
+}
+
+#[test]
+fn undo_description_delete_multiple_nodes() {
+    let mut designer = setup_designer_with_network("test");
+    let id1 = designer.add_node("sphere", DVec2::ZERO);
+    let id2 = designer.add_node("cuboid", DVec2::new(200.0, 0.0));
+    let id3 = designer.add_node("float", DVec2::new(0.0, 200.0));
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(id1);
+        network.toggle_node_selection(id2);
+        network.toggle_node_selection(id3);
+    }
+    designer.undo_stack.clear();
+
+    designer.delete_selected();
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Delete 3 nodes")
+    );
+}
+
+#[test]
+fn undo_description_move_single_node() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("sphere", DVec2::ZERO);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(id);
+    }
+    designer.undo_stack.clear();
+
+    designer.begin_move_nodes();
+    designer.move_selected_nodes(DVec2::new(10.0, 0.0));
+    designer.end_move_nodes();
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Move sphere")
+    );
+}
+
+#[test]
+fn undo_description_move_multiple_nodes() {
+    let mut designer = setup_designer_with_network("test");
+    let id1 = designer.add_node("sphere", DVec2::ZERO);
+    let id2 = designer.add_node("cuboid", DVec2::new(200.0, 0.0));
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(id1);
+        network.toggle_node_selection(id2);
+    }
+    designer.undo_stack.clear();
+
+    designer.begin_move_nodes();
+    designer.move_selected_nodes(DVec2::new(10.0, 0.0));
+    designer.end_move_nodes();
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Move 2 nodes")
+    );
+}
+
+#[test]
+fn undo_description_set_return_node() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    designer.set_return_node_id(Some(sphere_id));
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Set sphere as return node")
+    );
+}
+
+#[test]
+fn undo_description_clear_return_node() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+    designer.undo_stack.clear();
+
+    designer.set_return_node_id(None);
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Clear sphere return node")
+    );
+}
+
+#[test]
+fn undo_description_toggle_node_display() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_node_display(sphere_id, false);
+    designer.undo_stack.clear();
+
+    designer.set_node_display(sphere_id, true);
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Toggle sphere display")
+    );
+}

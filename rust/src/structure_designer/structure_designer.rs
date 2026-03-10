@@ -1090,6 +1090,7 @@ impl StructureDesigner {
             if let Some(node_snapshot) = self.snapshot_node(&node_network_name, new_node_id) {
                 self.push_command(
                     super::undo::commands::duplicate_node::DuplicateNodeCommand {
+                        description: format!("Duplicate {}", node_snapshot.node_type_name),
                         network_name: node_network_name.clone(),
                         new_node_id,
                         node_snapshot,
@@ -1641,6 +1642,7 @@ impl StructureDesigner {
             if let Some(new_json) = self.snapshot_node_data(&network_name, node_id) {
                 if old_json != new_json {
                     self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
+                        description: format!("Edit {}", node_type_name),
                         network_name: network_name.clone(),
                         node_id,
                         node_type_name,
@@ -1957,12 +1959,21 @@ impl StructureDesigner {
 
         // Only push command if display state actually changed
         if old_display_type != new_display_type {
+            let node_type_name = self
+                .node_type_registry
+                .node_networks
+                .get(&network_name)
+                .and_then(|net| net.nodes.get(&node_id))
+                .map(|n| n.node_type_name.as_str())
+                .unwrap_or("node");
+            let description = format!("Toggle {} display", node_type_name);
             self.push_command(
                 super::undo::commands::set_node_display::SetNodeDisplayCommand {
                     network_name,
                     node_id,
                     old_display_type,
                     new_display_type,
+                    description,
                 },
             );
         }
@@ -2292,9 +2303,20 @@ impl StructureDesigner {
             .collect();
 
         if !moves.is_empty() {
+            let description = if moves.len() == 1 {
+                let node_type_name = network
+                    .nodes
+                    .get(&moves[0].0)
+                    .map(|n| n.node_type_name.as_str())
+                    .unwrap_or("node");
+                format!("Move {}", node_type_name)
+            } else {
+                format!("Move {} nodes", moves.len())
+            };
             self.push_command(super::undo::commands::move_nodes::MoveNodesCommand {
                 network_name,
                 moves,
+                description,
             });
         }
     }
@@ -2610,12 +2632,18 @@ impl StructureDesigner {
                     })
                     .collect();
 
+                let description = if deleted_node_snapshots.len() == 1 {
+                    format!("Delete {}", deleted_node_snapshots[0].node_type_name)
+                } else {
+                    format!("Delete {} nodes", deleted_node_snapshots.len())
+                };
                 self.push_command(super::undo::commands::delete_nodes::DeleteNodesCommand {
                     network_name: node_network_name.clone(),
                     deleted_nodes: deleted_node_snapshots,
                     deleted_wires,
                     was_return_node: info.was_return_node,
                     display_states: info.display_states,
+                    description,
                 });
             } else if !info.is_node_deletion && !info.selected_wires.is_empty() {
                 let deleted_wires: Vec<WireSnapshot> = info
@@ -3089,6 +3117,7 @@ impl StructureDesigner {
             if pending.old_data_json != new_data_json {
                 self.push_command(
                     super::undo::commands::set_node_data::SetNodeDataCommand {
+                        description: format!("Edit {}", pending.node_type_name),
                         network_name: pending.network_name,
                         node_id: pending.node_id,
                         node_type_name: pending.node_type_name,
@@ -3123,6 +3152,14 @@ impl StructureDesigner {
 
         // If node_id is None, clear the return node
         if node_id.is_none() {
+            // Look up old return node type name before mutation
+            let old_type_name = old_return_node_id.and_then(|id| {
+                self.node_type_registry
+                    .node_networks
+                    .get(&network_name)
+                    .and_then(|net| net.nodes.get(&id))
+                    .map(|n| n.node_type_name.clone())
+            });
             if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
                 network.return_node_id = None;
                 // Mark design as dirty since we changed the return node
@@ -3131,11 +3168,16 @@ impl StructureDesigner {
 
                 // Push undo command if return node actually changed
                 if old_return_node_id.is_some() {
+                    let description = match &old_type_name {
+                        Some(name) => format!("Clear {} return node", name),
+                        None => "Clear return node".to_string(),
+                    };
                     self.push_command(
                         super::undo::commands::set_return_node::SetReturnNodeCommand {
                             network_name,
                             old_return_node_id,
                             new_return_node_id: None,
+                            description,
                         },
                     );
                 }
@@ -3144,6 +3186,14 @@ impl StructureDesigner {
             return false;
         }
 
+        // Look up new node type name before mutation
+        let new_type_name = node_id.and_then(|id| {
+            self.node_type_registry
+                .node_networks
+                .get(&network_name)
+                .and_then(|net| net.nodes.get(&id))
+                .map(|n| n.node_type_name.clone())
+        });
         if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
             let ret = network.set_return_node(node_id.unwrap());
             if ret {
@@ -3151,11 +3201,16 @@ impl StructureDesigner {
                 self.set_dirty(true);
 
                 // Push undo command
+                let description = match &new_type_name {
+                    Some(name) => format!("Set {} as return node", name),
+                    None => "Set return node".to_string(),
+                };
                 self.push_command(
                     super::undo::commands::set_return_node::SetReturnNodeCommand {
                         network_name,
                         old_return_node_id,
                         new_return_node_id: node_id,
+                        description,
                     },
                 );
             }

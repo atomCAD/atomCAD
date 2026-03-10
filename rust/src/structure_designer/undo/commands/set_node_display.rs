@@ -8,11 +8,12 @@ pub struct SetNodeDisplayCommand {
     pub node_id: u64,
     pub old_display_type: Option<NodeDisplayType>,
     pub new_display_type: Option<NodeDisplayType>,
+    pub description: String,
 }
 
 impl UndoCommand for SetNodeDisplayCommand {
     fn description(&self) -> &str {
-        "Toggle node display"
+        &self.description
     }
 
     fn undo(&self, ctx: &mut UndoContext) {

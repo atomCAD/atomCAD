@@ -10,11 +10,12 @@ pub struct MoveNodesCommand {
     pub network_name: String,
     /// (node_id, old_position, new_position)
     pub moves: Vec<(u64, DVec2, DVec2)>,
+    pub description: String,
 }
 
 impl UndoCommand for MoveNodesCommand {
     fn description(&self) -> &str {
-        "Move nodes"
+        &self.description
     }
 
     fn undo(&self, ctx: &mut UndoContext) {

@@ -12,6 +12,7 @@ pub struct SetNodeDataCommand {
     pub node_type_name: String,
     pub old_data_json: Value,
     pub new_data_json: Value,
+    pub description: String,
 }
 
 impl SetNodeDataCommand {
@@ -50,7 +51,7 @@ impl SetNodeDataCommand {
 
 impl UndoCommand for SetNodeDataCommand {
     fn description(&self) -> &str {
-        "Edit node"
+        &self.description
     }
 
     fn undo(&self, ctx: &mut UndoContext) {

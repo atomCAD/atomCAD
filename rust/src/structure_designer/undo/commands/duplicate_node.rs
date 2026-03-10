@@ -11,11 +11,12 @@ pub struct DuplicateNodeCommand {
     pub node_snapshot: NodeSnapshot,
     /// To restore network.next_node_id on undo
     pub next_node_id_before: u64,
+    pub description: String,
 }
 
 impl UndoCommand for DuplicateNodeCommand {
     fn description(&self) -> &str {
-        "Duplicate node"
+        &self.description
     }
 
     fn undo(&self, ctx: &mut UndoContext) {
