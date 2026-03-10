@@ -1,5 +1,5 @@
 use crate::structure_designer::serialization::node_networks_serialization::{
-    serializable_to_node_network, SerializableNodeNetwork,
+    SerializableNodeNetwork, serializable_to_node_network,
 };
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 

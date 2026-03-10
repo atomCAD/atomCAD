@@ -2,6 +2,7 @@ mod add_atom_tool;
 mod add_bond_tool;
 mod atom_edit_data;
 mod default_tool;
+pub mod diff_recorder;
 mod hydrogen_passivation;
 pub mod measurement;
 mod minimization;

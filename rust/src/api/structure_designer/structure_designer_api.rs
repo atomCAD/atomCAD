@@ -1031,13 +1031,23 @@ pub fn redo() -> bool {
 /// Returns true if there is a command that can be undone.
 #[flutter_rust_bridge::frb(sync)]
 pub fn can_undo() -> bool {
-    unsafe { with_cad_instance_or(|instance| instance.structure_designer.undo_stack.can_undo(), false) }
+    unsafe {
+        with_cad_instance_or(
+            |instance| instance.structure_designer.undo_stack.can_undo(),
+            false,
+        )
+    }
 }
 
 /// Returns true if there is a command that can be redone.
 #[flutter_rust_bridge::frb(sync)]
 pub fn can_redo() -> bool {
-    unsafe { with_cad_instance_or(|instance| instance.structure_designer.undo_stack.can_redo(), false) }
+    unsafe {
+        with_cad_instance_or(
+            |instance| instance.structure_designer.undo_stack.can_redo(),
+            false,
+        )
+    }
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -4214,7 +4224,8 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     &mut network,
                     &structure_designer.node_type_registry.built_in_node_types,
                     None,
-                ).ok();
+                )
+                .ok();
 
                 // Apply edits in replace mode
                 let result = text_edit_network(
@@ -4250,7 +4261,8 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                     &mut network,
                     &structure_designer.node_type_registry.built_in_node_types,
                     None,
-                ).ok();
+                )
+                .ok();
 
                 // Put network back
                 structure_designer
@@ -4279,11 +4291,13 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                 if made_changes {
                     if let (Some(before), Some(after)) = (before_snapshot, after_snapshot) {
                         use crate::structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
-                        cad_instance.structure_designer.push_command(TextEditNetworkCommand {
-                            network_name: network_name.clone(),
-                            before_snapshot: before,
-                            after_snapshot: after,
-                        });
+                        cad_instance
+                            .structure_designer
+                            .push_command(TextEditNetworkCommand {
+                                network_name: network_name.clone(),
+                                before_snapshot: before,
+                                after_snapshot: after,
+                            });
                     }
                 }
 

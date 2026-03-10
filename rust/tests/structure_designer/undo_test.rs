@@ -84,8 +84,16 @@ fn normalize_json(value: &mut Value) {
                     // (HashMap iteration order differs after deserialize+reserialize)
                     if let Value::Array(arr) = val {
                         arr.sort_by(|a, b| {
-                            let id_a = a.as_object().and_then(|o| o.get("id")).and_then(|v| v.as_u64()).unwrap_or(0);
-                            let id_b = b.as_object().and_then(|o| o.get("id")).and_then(|v| v.as_u64()).unwrap_or(0);
+                            let id_a = a
+                                .as_object()
+                                .and_then(|o| o.get("id"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let id_b = b
+                                .as_object()
+                                .and_then(|o| o.get("id"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
                             id_a.cmp(&id_b)
                         });
                     }
@@ -865,29 +873,27 @@ fn undo_add_network_restores_active() {
     let mut designer = setup_designer_with_network("main");
     designer.undo_stack.clear();
 
-    assert_eq!(
-        designer.active_node_network_name,
-        Some("main".to_string())
-    );
+    assert_eq!(designer.active_node_network_name, Some("main".to_string()));
 
     // add_new_node_network does NOT change active_node_network_name on its own
     // (only the API layer calls set_active_node_network_name)
     designer.add_new_node_network();
-    assert!(designer
-        .node_type_registry
-        .node_networks
-        .contains_key("UNTITLED"));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("UNTITLED")
+    );
 
     // Undo: network removed, active unchanged
     designer.undo();
-    assert!(!designer
-        .node_type_registry
-        .node_networks
-        .contains_key("UNTITLED"));
-    assert_eq!(
-        designer.active_node_network_name,
-        Some("main".to_string())
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("UNTITLED")
     );
+    assert_eq!(designer.active_node_network_name, Some("main".to_string()));
 }
 
 #[test]
@@ -907,10 +913,12 @@ fn undo_delete_network_restores_contents() {
     designer.set_active_node_network_name(Some("main".to_string()));
     designer.delete_node_network("helper").unwrap();
 
-    assert!(!designer
-        .node_type_registry
-        .node_networks
-        .contains_key("helper"));
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("helper")
+    );
 
     // Undo: network and all contents should be restored
     designer.undo();
@@ -957,14 +965,18 @@ fn undo_rename_then_undo_earlier_commands() {
 
     // Undo rename — network is "alpha" again
     assert!(designer.undo());
-    assert!(designer
-        .node_type_registry
-        .node_networks
-        .contains_key("alpha"));
-    assert!(!designer
-        .node_type_registry
-        .node_networks
-        .contains_key("beta"));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("alpha")
+    );
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("beta")
+    );
 
     // Undo add_node — targets "alpha", which exists
     assert!(designer.undo());
@@ -1083,12 +1095,18 @@ fn undo_text_edit_network() {
     // Undo should restore the original state
     assert!(designer.undo());
     let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(before, after_undo, "State after undo should match state before text edit");
+    assert_eq!(
+        before, after_undo,
+        "State after undo should match state before text edit"
+    );
 
     // Redo should restore the text-edited state
     assert!(designer.redo());
     let after_redo = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(after, after_redo, "State after redo should match state after text edit");
+    assert_eq!(
+        after, after_redo,
+        "State after redo should match state after text edit"
+    );
 }
 
 #[test]
@@ -1099,7 +1117,11 @@ fn undo_text_edit_network_multiple_edits() {
     let initial = snapshot_all_networks(&mut designer.node_type_registry);
 
     // First text edit: add a sphere
-    apply_text_edit(&mut designer, "test", "s = sphere { radius: 5.0 }\noutput s");
+    apply_text_edit(
+        &mut designer,
+        "test",
+        "s = sphere { radius: 5.0 }\noutput s",
+    );
     let after_first = snapshot_all_networks(&mut designer.node_type_registry);
 
     // Second text edit: replace with cuboid
@@ -1154,7 +1176,10 @@ fn undo_factor_selection() {
     // Undo should remove the subnetwork and restore the source network
     assert!(designer.undo());
     let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(before, after_undo, "State after undo should match state before factoring");
+    assert_eq!(
+        before, after_undo,
+        "State after undo should match state before factoring"
+    );
     assert!(
         !designer
             .node_type_registry
@@ -1166,7 +1191,10 @@ fn undo_factor_selection() {
     // Redo should recreate the subnetwork
     assert!(designer.redo());
     let after_redo = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(after, after_redo, "State after redo should match state after factoring");
+    assert_eq!(
+        after, after_redo,
+        "State after redo should match state after factoring"
+    );
     assert!(
         designer
             .node_type_registry
@@ -1193,11 +1221,7 @@ fn undo_full_workflow() {
     // 4. Edit float data
     designer.set_node_network_data(float_id, Box::new(FloatData { value: 42.0 }));
     // 5. Move nodes
-    if let Some(network) = designer
-        .node_type_registry
-        .node_networks
-        .get_mut("test")
-    {
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
         network.select_node(sphere_id);
     }
     designer.begin_move_nodes();
@@ -1213,7 +1237,10 @@ fn undo_full_workflow() {
     assert!(!designer.undo(), "Nothing left to undo");
 
     let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(initial, after_undo_all, "Undoing all should restore initial state");
+    assert_eq!(
+        initial, after_undo_all,
+        "Undoing all should restore initial state"
+    );
 
     // Redo all 6
     for i in 0..6 {
@@ -1226,7 +1253,10 @@ fn undo_full_workflow() {
         assert!(designer.undo());
     }
     let after_second_undo = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(initial, after_second_undo, "Second undo-all should also restore initial state");
+    assert_eq!(
+        initial, after_second_undo,
+        "Second undo-all should also restore initial state"
+    );
 }
 
 #[test]
@@ -1236,11 +1266,11 @@ fn undo_redo_interleaved() {
     let initial = snapshot_all_networks(&mut designer.node_type_registry);
 
     // 5 operations
-    let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));   // cmd 1
-    let float_id = designer.add_node("float", DVec2::new(100.0, 0.0));   // cmd 2
-    designer.add_node("cuboid", DVec2::new(200.0, 0.0));                  // cmd 3
-    designer.connect_nodes(float_id, 0, sphere_id, 0);                    // cmd 4
-    designer.set_return_node_id(Some(sphere_id));                          // cmd 5
+    let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0)); // cmd 1
+    let float_id = designer.add_node("float", DVec2::new(100.0, 0.0)); // cmd 2
+    designer.add_node("cuboid", DVec2::new(200.0, 0.0)); // cmd 3
+    designer.connect_nodes(float_id, 0, sphere_id, 0); // cmd 4
+    designer.set_return_node_id(Some(sphere_id)); // cmd 5
 
     // Undo 3 (undo cmd 5, 4, 3)
     assert!(designer.undo());
@@ -1248,7 +1278,7 @@ fn undo_redo_interleaved() {
     assert!(designer.undo());
 
     // Do 2 new ops (truncates redo tail)
-    let f1 = designer.add_node("float", DVec2::new(300.0, 0.0));         // cmd 6
+    let f1 = designer.add_node("float", DVec2::new(300.0, 0.0)); // cmd 6
     designer.set_node_network_data(f1, Box::new(FloatData { value: 7.0 })); // cmd 7
 
     assert!(!designer.redo(), "Redo should be empty after new commands");
@@ -1260,7 +1290,10 @@ fn undo_redo_interleaved() {
     assert!(!designer.undo(), "Nothing left to undo");
 
     let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(initial, after_undo_all, "Undoing all should restore initial state");
+    assert_eq!(
+        initial, after_undo_all,
+        "Undoing all should restore initial state"
+    );
 }
 
 #[test]
@@ -1268,10 +1301,10 @@ fn undo_max_history_eviction_with_real_commands() {
     let mut designer = setup_designer_with_network("test");
     designer.undo_stack.max_history = 3;
 
-    designer.add_node("sphere", DVec2::ZERO);     // cmd 1
-    designer.add_node("cuboid", DVec2::ZERO);      // cmd 2
-    designer.add_node("extrude", DVec2::ZERO);    // cmd 3
-    designer.add_node("float", DVec2::ZERO);       // cmd 4 — drops cmd 1
+    designer.add_node("sphere", DVec2::ZERO); // cmd 1
+    designer.add_node("cuboid", DVec2::ZERO); // cmd 2
+    designer.add_node("extrude", DVec2::ZERO); // cmd 3
+    designer.add_node("float", DVec2::ZERO); // cmd 4 — drops cmd 1
 
     // Can only undo 3 times, not 4
     assert!(designer.undo()); // undo cmd 4
@@ -1285,24 +1318,34 @@ fn undo_max_history_eviction_with_real_commands() {
         .node_networks
         .get("test")
         .unwrap();
-    assert_eq!(network.nodes.len(), 1, "Only the evicted sphere node should remain");
+    assert_eq!(
+        network.nodes.len(),
+        1,
+        "Only the evicted sphere node should remain"
+    );
 }
 
 #[test]
 fn redo_tail_truncation_after_new_command() {
     let mut designer = setup_designer_with_network("test");
 
-    designer.add_node("sphere", DVec2::ZERO);    // cmd 1
-    designer.add_node("cuboid", DVec2::ZERO);     // cmd 2
+    designer.add_node("sphere", DVec2::ZERO); // cmd 1
+    designer.add_node("cuboid", DVec2::ZERO); // cmd 2
 
     designer.undo(); // undo cmd 2, now cmd 2 is in redo tail
-    assert!(designer.undo_stack.can_redo(), "cmd 2 should be in redo tail");
+    assert!(
+        designer.undo_stack.can_redo(),
+        "cmd 2 should be in redo tail"
+    );
 
-    designer.add_node("extrude", DVec2::ZERO);   // cmd 3 — truncates cmd 2
+    designer.add_node("extrude", DVec2::ZERO); // cmd 3 — truncates cmd 2
 
-    assert!(!designer.undo_stack.can_redo(), "Redo tail should be truncated after new command");
-    assert!(designer.undo());  // undo cmd 3
-    assert!(designer.undo());  // undo cmd 1
+    assert!(
+        !designer.undo_stack.can_redo(),
+        "Redo tail should be truncated after new command"
+    );
+    assert!(designer.undo()); // undo cmd 3
+    assert!(designer.undo()); // undo cmd 1
     assert!(!designer.undo()); // nothing left
 }
 
@@ -1312,10 +1355,10 @@ fn undo_sequence_restores_initial_state() {
     let initial = snapshot_all_networks(&mut designer.node_type_registry);
 
     // Perform a sequence of varied operations
-    let sphere_id = designer.add_node("sphere", DVec2::ZERO);         // cmd 1
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO); // cmd 1
     let float_id = designer.add_node("float", DVec2::new(200.0, 0.0)); // cmd 2
-    designer.connect_nodes(float_id, 0, sphere_id, 0);                 // cmd 3
-    designer.set_return_node_id(Some(sphere_id));                       // cmd 4
+    designer.connect_nodes(float_id, 0, sphere_id, 0); // cmd 3
+    designer.set_return_node_id(Some(sphere_id)); // cmd 4
 
     // Undo all 4
     for _ in 0..4 {
@@ -1370,5 +1413,8 @@ fn undo_factor_then_edit_then_undo_all() {
     designer.set_active_node_network_name(Some("test".to_string()));
 
     let after_undo_all = snapshot_all_networks(&mut designer.node_type_registry);
-    assert_eq!(initial, after_undo_all, "Undoing all should restore to pre-factor state");
+    assert_eq!(
+        initial, after_undo_all,
+        "Undoing all should restore to pre-factor state"
+    );
 }

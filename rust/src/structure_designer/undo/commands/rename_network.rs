@@ -54,10 +54,11 @@ impl RenameNetworkCommand {
 
             for node in network.nodes.values_mut() {
                 if node.node_type_name == "Comment" {
-                    if let Some(comment_data) = node
-                        .data
-                        .as_any_mut()
-                        .downcast_mut::<crate::structure_designer::nodes::comment::CommentData>()
+                    if let Some(comment_data) =
+                        node.data
+                            .as_any_mut()
+                            .downcast_mut::<crate::structure_designer::nodes::comment::CommentData>(
+                            )
                     {
                         if comment_data.label.contains(&old_pattern) {
                             comment_data.label =

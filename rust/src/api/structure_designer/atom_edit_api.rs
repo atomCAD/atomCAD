@@ -55,12 +55,18 @@ pub fn atom_edit_add_atom_by_ray(
             let plane_normal_vec3 = from_api_vec3(&plane_normal);
             let ray_start_vec3 = from_api_vec3(&ray_start);
             let ray_dir_vec3 = from_api_vec3(&ray_dir);
-            atom_edit::add_atom_by_ray(
+            atom_edit::with_atom_edit_undo(
                 &mut cad_instance.structure_designer,
-                atomic_number,
-                &plane_normal_vec3,
-                &ray_start_vec3,
-                &ray_dir_vec3,
+                "Add atom",
+                |sd| {
+                    atom_edit::add_atom_by_ray(
+                        sd,
+                        atomic_number,
+                        &plane_normal_vec3,
+                        &ray_start_vec3,
+                        &ray_dir_vec3,
+                    );
+                },
             );
             refresh_structure_designer_auto(cad_instance);
         });

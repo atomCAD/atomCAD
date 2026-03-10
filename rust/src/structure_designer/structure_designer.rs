@@ -384,9 +384,7 @@ impl StructureDesigner {
     pub fn snapshot_network(
         &mut self,
         network_name: &str,
-    ) -> Option<
-        super::serialization::node_networks_serialization::SerializableNodeNetwork,
-    > {
+    ) -> Option<super::serialization::node_networks_serialization::SerializableNodeNetwork> {
         use super::serialization::node_networks_serialization::node_network_to_serializable;
 
         let (built_in_types, node_networks) = (
@@ -813,10 +811,12 @@ impl StructureDesigner {
         self.mark_full_refresh();
 
         // Push undo command
-        self.push_command(super::undo::commands::rename_network::RenameNetworkCommand {
-            old_name: old_name.to_string(),
-            new_name: new_name.to_string(),
-        });
+        self.push_command(
+            super::undo::commands::rename_network::RenameNetworkCommand {
+                old_name: old_name.to_string(),
+                new_name: new_name.to_string(),
+            },
+        );
 
         true
     }
@@ -1203,20 +1203,22 @@ impl StructureDesigner {
             }
 
             // Collect wires between pasted nodes and display states
-            if let Some(network) = self.node_type_registry.node_networks.get(&node_network_name) {
+            if let Some(network) = self
+                .node_type_registry
+                .node_networks
+                .get(&node_network_name)
+            {
                 for &node_id in &new_ids {
                     if let Some(node) = network.nodes.get(&node_id) {
                         for (param_idx, arg) in node.arguments.iter().enumerate() {
                             for (&src_id, &src_pin) in &arg.argument_output_pins {
                                 if new_id_set.contains(&src_id) {
-                                    pasted_wires.push(
-                                        super::undo::snapshot::WireSnapshot {
-                                            source_node_id: src_id,
-                                            source_output_pin_index: src_pin,
-                                            dest_node_id: node_id,
-                                            dest_param_index: param_idx,
-                                        },
-                                    );
+                                    pasted_wires.push(super::undo::snapshot::WireSnapshot {
+                                        source_node_id: src_id,
+                                        source_output_pin_index: src_pin,
+                                        dest_node_id: node_id,
+                                        dest_param_index: param_idx,
+                                    });
                                 }
                             }
                         }
@@ -1345,16 +1347,15 @@ impl StructureDesigner {
                     if let Some(arg) = dest_node.arguments.get(dest_param_index) {
                         if !arg.is_empty() {
                             // There's an existing wire that will be replaced
-                            arg.argument_output_pins.iter().next().map(
-                                |(&src_id, &src_pin)| {
-                                    super::undo::snapshot::WireSnapshot {
-                                        source_node_id: src_id,
-                                        source_output_pin_index: src_pin,
-                                        dest_node_id,
-                                        dest_param_index,
-                                    }
-                                },
-                            )
+                            arg.argument_output_pins
+                                .iter()
+                                .next()
+                                .map(|(&src_id, &src_pin)| super::undo::snapshot::WireSnapshot {
+                                    source_node_id: src_id,
+                                    source_output_pin_index: src_pin,
+                                    dest_node_id,
+                                    dest_param_index,
+                                })
                         } else {
                             None
                         }
@@ -1402,18 +1403,16 @@ impl StructureDesigner {
         }
 
         // Push undo command
-        self.push_command(
-            super::undo::commands::connect_wire::ConnectWireCommand {
-                network_name: network_name_owned,
-                wire: super::undo::snapshot::WireSnapshot {
-                    source_node_id,
-                    source_output_pin_index,
-                    dest_node_id,
-                    dest_param_index,
-                },
-                replaced_wire,
+        self.push_command(super::undo::commands::connect_wire::ConnectWireCommand {
+            network_name: network_name_owned,
+            wire: super::undo::snapshot::WireSnapshot {
+                source_node_id,
+                source_output_pin_index,
+                dest_node_id,
+                dest_param_index,
             },
-        );
+            replaced_wire,
+        });
     }
 
     /// Auto-connects a source pin to the first compatible pin on a target node.
@@ -1603,8 +1602,9 @@ impl StructureDesigner {
                 (false, String::new())
             };
 
-        // Capture before-state for undo (skip for deprecated edit_atom node)
-        let old_data_json = if node_type_name != "edit_atom" {
+        // Capture before-state for undo (skip for deprecated edit_atom and atom_edit nodes;
+        // atom_edit has its own incremental undo commands)
+        let old_data_json = if node_type_name != "edit_atom" && node_type_name != "atom_edit" {
             self.snapshot_node_data(&network_name, node_id)
         } else {
             None

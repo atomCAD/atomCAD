@@ -275,6 +275,30 @@ impl AtomicStructure {
         self.atoms.push(None);
     }
 
+    /// Add an atom with a specific ID. Used by undo/redo to restore atoms
+    /// at their original IDs. Panics if the slot is already occupied.
+    /// Extends the atoms Vec with None padding if needed.
+    pub fn add_atom_with_id(&mut self, id: u32, atomic_number: i16, position: DVec3) -> u32 {
+        let index = (id - 1) as usize;
+        // Extend with None padding if needed
+        while self.atoms.len() <= index {
+            self.atoms.push(None);
+        }
+        assert!(self.atoms[index].is_none(), "Slot {} already occupied", id);
+        let atom = Atom {
+            id,
+            atomic_number,
+            position,
+            bonds: SmallVec::new(),
+            flags: 0,
+            in_crystal_depth: 0.0,
+        };
+        self.atoms[index] = Some(atom);
+        self.num_atoms += 1;
+        self.add_atom_to_grid(id, &position);
+        id
+    }
+
     /// Adds an atom to the structure and returns its ID
     pub fn add_atom(&mut self, atomic_number: i16, position: DVec3) -> u32 {
         // Next ID is always: Vec length + 1 (since IDs are 1-indexed)
