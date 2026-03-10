@@ -136,22 +136,36 @@ class _StructureDesignerState extends State<StructureDesigner> {
                     MenuItemButton(
                       key: const Key('undo_item'),
                       onPressed: model.canUndo
-                          ? () { graphModel.undo(); }
+                          ? () {
+                              final desc = graphModel.undo();
+                              if (desc != null) {
+                                _showUndoRedoSnackBar(context, 'Undo: $desc');
+                              }
+                            }
                           : null,
                       shortcut:
                           const SingleActivator(LogicalKeyboardKey.keyZ,
                               control: true),
-                      child: const Text('Undo'),
+                      child: Text(model.undoDescription != null
+                          ? 'Undo ${model.undoDescription}'
+                          : 'Undo'),
                     ),
                     MenuItemButton(
                       key: const Key('redo_item'),
                       onPressed: model.canRedo
-                          ? () { graphModel.redo(); }
+                          ? () {
+                              final desc = graphModel.redo();
+                              if (desc != null) {
+                                _showUndoRedoSnackBar(context, 'Redo: $desc');
+                              }
+                            }
                           : null,
                       shortcut:
                           const SingleActivator(LogicalKeyboardKey.keyZ,
                               control: true, shift: true),
-                      child: const Text('Redo'),
+                      child: Text(model.redoDescription != null
+                          ? 'Redo ${model.redoDescription}'
+                          : 'Redo'),
                     ),
                     const Divider(),
                     MenuItemButton(
@@ -286,16 +300,35 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if ((HardwareKeyboard.instance.isShiftPressed &&
               event.logicalKey == LogicalKeyboardKey.keyZ) ||
           event.logicalKey == LogicalKeyboardKey.keyY) {
-        graphModel.redo();
+        final desc = graphModel.redo();
+        if (desc != null) {
+          _showUndoRedoSnackBar(context, 'Redo: $desc');
+        }
         return KeyEventResult.handled;
       }
       // Ctrl+Z: Undo
       if (event.logicalKey == LogicalKeyboardKey.keyZ) {
-        graphModel.undo();
+        final desc = graphModel.undo();
+        if (desc != null) {
+          _showUndoRedoSnackBar(context, 'Undo: $desc');
+        }
         return KeyEventResult.handled;
       }
     }
     return KeyEventResult.ignored;
+  }
+
+  void _showUndoRedoSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          width: 300,
+        ),
+      );
   }
 
   Future<bool> _confirmDiscardChanges() async {

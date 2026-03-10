@@ -1,6 +1,7 @@
-use glam::{DVec2, DVec3};
+use glam::{DVec2, DVec3, IVec3};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
+use rust_lib_flutter_cad::structure_designer::nodes::lattice_move::LatticeMoveData;
 use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
     SerializableNodeTypeRegistryNetworks, node_network_to_serializable,
@@ -1417,4 +1418,111 @@ fn undo_factor_then_edit_then_undo_all() {
         initial, after_undo_all,
         "Undoing all should restore to pre-factor state"
     );
+}
+
+// --- Gadget drag undo tests ---
+
+#[test]
+fn undo_gadget_drag_lattice_move() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("lattice_move", DVec2::ZERO);
+    // Select the node so it becomes the active node
+    designer.select_node(node_id);
+    designer.undo_stack.clear();
+
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Simulate gadget drag: begin snapshot, modify data, end snapshot
+    designer.begin_gadget_drag_snapshot();
+
+    // Modify the node data as a gadget's sync_data() would
+    let new_data = Box::new(LatticeMoveData {
+        translation: IVec3::new(3, 0, 0),
+        lattice_subdivision: 1,
+        is_atomic_mode: false,
+    });
+    designer.set_node_network_data(node_id, new_data);
+
+    designer.end_gadget_drag_snapshot();
+
+    let after_drag = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_ne!(initial, after_drag, "Drag should change node data");
+
+    // The undo stack should have 2 commands: 1 from set_node_network_data + 1 from gadget drag
+    // But we want to test that the gadget drag command works.
+    // Actually, set_node_network_data also pushes a SetNodeDataCommand (since it's not atom_edit).
+    // So we have 2 commands. The gadget drag command is the last one.
+    // Undo the gadget drag command
+    assert!(designer.undo());
+    // Undo the set_node_network_data command
+    assert!(designer.undo());
+
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo, "Undo should restore initial state");
+}
+
+#[test]
+fn undo_gadget_drag_simulated_no_change() {
+    // If gadget drag doesn't actually change data, no command should be pushed
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("lattice_move", DVec2::ZERO);
+    designer.select_node(node_id);
+    designer.undo_stack.clear();
+
+    // Begin and end without modifying data
+    designer.begin_gadget_drag_snapshot();
+    designer.end_gadget_drag_snapshot();
+
+    // No command should be pushed
+    assert!(
+        !designer.undo_stack.can_undo(),
+        "No undo command should exist when gadget drag didn't change data"
+    );
+}
+
+#[test]
+fn undo_redo_gadget_drag_roundtrip() {
+    let mut designer = setup_designer_with_network("test");
+    let node_id = designer.add_node("vec3", DVec2::ZERO);
+    designer.select_node(node_id);
+    designer.undo_stack.clear();
+
+    // Simulate a gadget drag that changes vec3 data (as if a viewport gadget moved it)
+    // Use begin/end_gadget_drag_snapshot directly to isolate the gadget undo mechanism
+    // without the double-push from set_node_network_data.
+    let before = snapshot_all_networks(&mut designer.node_type_registry);
+
+    designer.begin_gadget_drag_snapshot();
+
+    // Directly set node data on the network (bypassing set_node_network_data to avoid
+    // its own undo push — simulating what sync_gadget_data does internally)
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.set_node_network_data(
+            node_id,
+            Box::new(Vec3Data {
+                value: DVec3::new(5.0, 10.0, 15.0),
+            }),
+        );
+    }
+
+    designer.end_gadget_drag_snapshot();
+
+    let after = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_ne!(before, after, "Drag should change data");
+
+    // Exactly one undo command from the gadget drag
+    assert!(designer.undo_stack.can_undo());
+
+    // Undo
+    assert!(designer.undo());
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(before, after_undo, "Undo should restore initial state");
+
+    // Redo
+    assert!(designer.redo());
+    let after_redo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(after, after_redo, "Redo should restore post-drag state");
+
+    // No more redo
+    assert!(!designer.undo_stack.can_redo());
 }

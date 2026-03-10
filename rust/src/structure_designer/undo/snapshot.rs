@@ -36,3 +36,14 @@ pub struct PendingMove {
     /// (node_id, position_at_drag_start)
     pub start_positions: Vec<(u64, DVec2)>,
 }
+
+/// Temporary state held during a gadget drag operation (for undo coalescing).
+/// Captures the node data snapshot before the drag so a single `SetNodeDataCommand`
+/// can be pushed when the drag ends.
+#[derive(Debug, Clone)]
+pub struct PendingGadgetDrag {
+    pub network_name: String,
+    pub node_id: u64,
+    pub node_type_name: String,
+    pub old_data_json: Value,
+}

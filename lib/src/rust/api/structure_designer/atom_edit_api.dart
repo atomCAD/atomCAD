@@ -8,6 +8,8 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
+// These functions are ignored because they are not marked as `pub`: `toggle_atom_edit_flag`
+
 bool atomEditSelectByRay(
         {required APIVec3 rayStart,
         required APIVec3 rayDir,

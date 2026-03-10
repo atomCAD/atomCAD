@@ -78,6 +78,8 @@ pub struct StructureDesigner {
     // Temporary state during an atom edit drag operation (for drag coalescing)
     pub pending_atom_edit_drag:
         Option<super::nodes::atom_edit::atom_edit::PendingAtomEditDrag>,
+    // Temporary state during a gadget drag operation (for undo coalescing of non-atom_edit nodes)
+    pub pending_gadget_drag: Option<super::undo::snapshot::PendingGadgetDrag>,
 }
 
 impl Default for StructureDesigner {
@@ -112,6 +114,7 @@ impl StructureDesigner {
             undo_stack: UndoStack::default(),
             pending_move: None,
             pending_atom_edit_drag: None,
+            pending_gadget_drag: None,
         }
     }
 }
@@ -1869,6 +1872,7 @@ impl StructureDesigner {
         // Clear undo stack — new project has no history
         self.undo_stack.clear();
         self.pending_move = None;
+        self.pending_gadget_drag = None;
 
         // Clear evaluation cache
         self.network_evaluator.clear_csg_cache();
@@ -2998,6 +3002,11 @@ impl StructureDesigner {
     ) {
         // Begin atom_edit drag recording before the gadget starts dragging
         super::nodes::atom_edit::atom_edit::begin_atom_edit_drag(self);
+
+        // For non-atom_edit nodes, snapshot the node data before the drag starts
+        // so we can push a SetNodeDataCommand when the drag ends.
+        self.begin_gadget_drag_snapshot();
+
         if let Some(gadget) = &mut self.gadget {
             gadget.start_drag(handle_index, ray_origin, ray_direction);
         }
@@ -3018,6 +3027,8 @@ impl StructureDesigner {
             self.sync_gadget_data();
             // End atom_edit drag recording and push the coalesced undo command
             super::nodes::atom_edit::atom_edit::end_atom_edit_drag(self);
+            // For non-atom_edit nodes, snapshot after and push undo command
+            self.end_gadget_drag_snapshot();
             // Ending drag syncs data back to the node
             if let Some(network_name) = &self.active_node_network_name.clone() {
                 if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
@@ -3025,6 +3036,66 @@ impl StructureDesigner {
                         self.mark_node_data_changed(node_id);
                     }
                 }
+            }
+        }
+    }
+
+    /// Snapshot the active node's data before a gadget drag starts.
+    /// Skips atom_edit nodes (they have their own incremental undo mechanism).
+    pub fn begin_gadget_drag_snapshot(&mut self) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+        let (node_id, node_type_name) =
+            match self.node_type_registry.node_networks.get(&network_name) {
+                Some(network) => match network.active_node_id {
+                    Some(id) => match network.nodes.get(&id) {
+                        Some(node) => (id, node.node_type_name.clone()),
+                        None => return,
+                    },
+                    None => return,
+                },
+                None => return,
+            };
+
+        // atom_edit has its own undo mechanism via begin/end_atom_edit_drag
+        if node_type_name == "atom_edit" {
+            return;
+        }
+
+        if let Some(old_data_json) = self.snapshot_node_data(&network_name, node_id) {
+            self.pending_gadget_drag =
+                Some(super::undo::snapshot::PendingGadgetDrag {
+                    network_name,
+                    node_id,
+                    node_type_name,
+                    old_data_json,
+                });
+        }
+    }
+
+    /// After a gadget drag ends and sync_gadget_data() has written back the new values,
+    /// compare the before/after snapshots and push a SetNodeDataCommand if they differ.
+    pub fn end_gadget_drag_snapshot(&mut self) {
+        let pending = match self.pending_gadget_drag.take() {
+            Some(p) => p,
+            None => return,
+        };
+
+        if let Some(new_data_json) =
+            self.snapshot_node_data(&pending.network_name, pending.node_id)
+        {
+            if pending.old_data_json != new_data_json {
+                self.push_command(
+                    super::undo::commands::set_node_data::SetNodeDataCommand {
+                        network_name: pending.network_name,
+                        node_id: pending.node_id,
+                        node_type_name: pending.node_type_name,
+                        old_data_json: pending.old_data_json,
+                        new_data_json: new_data_json,
+                    },
+                );
             }
         }
     }
@@ -3192,6 +3263,7 @@ impl StructureDesigner {
         // Clear undo stack — loaded file starts with fresh history
         self.undo_stack.clear();
         self.pending_move = None;
+        self.pending_gadget_drag = None;
 
         // Set active node network to the first network if available, otherwise None
         // Capture camera settings from the newly active network

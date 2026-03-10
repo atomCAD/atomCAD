@@ -467,22 +467,32 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Whether there are commands that can be redone.
   bool get canRedo => structure_designer_api.canRedo();
 
-  /// Undo the last command. Returns true if something was undone.
-  bool undo() {
+  /// Description of the command that would be undone, or null.
+  String? get undoDescription => structure_designer_api.undoDescription();
+
+  /// Description of the command that would be redone, or null.
+  String? get redoDescription => structure_designer_api.redoDescription();
+
+  /// Undo the last command. Returns the description of the undone command, or null.
+  String? undo() {
+    final description = structure_designer_api.undoDescription();
     final result = structure_designer_api.undo();
     if (result) {
       refreshFromKernel();
+      return description;
     }
-    return result;
+    return null;
   }
 
-  /// Redo the last undone command. Returns true if something was redone.
-  bool redo() {
+  /// Redo the last undone command. Returns the description of the redone command, or null.
+  String? redo() {
+    final description = structure_designer_api.redoDescription();
     final result = structure_designer_api.redo();
     if (result) {
       refreshFromKernel();
+      return description;
     }
-    return result;
+    return null;
   }
 
   // ===== MOVE COALESCING =====

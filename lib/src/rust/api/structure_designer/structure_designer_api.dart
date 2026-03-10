@@ -251,6 +251,14 @@ bool canUndo() =>
 bool canRedo() =>
     RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiCanRedo();
 
+/// Returns the description of the command that would be undone, or null if nothing to undo.
+String? undoDescription() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiUndoDescription();
+
+/// Returns the description of the command that would be redone, or null if nothing to redo.
+String? redoDescription() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiRedoDescription();
+
 bool toggleWireSelection(
         {required BigInt sourceNodeId,
         required int sourceOutputPinIndex,

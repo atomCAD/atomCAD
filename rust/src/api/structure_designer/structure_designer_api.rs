@@ -1050,6 +1050,40 @@ pub fn can_redo() -> bool {
     }
 }
 
+/// Returns the description of the command that would be undone, or null if nothing to undo.
+#[flutter_rust_bridge::frb(sync)]
+pub fn undo_description() -> Option<String> {
+    unsafe {
+        with_cad_instance_or(
+            |instance| {
+                instance
+                    .structure_designer
+                    .undo_stack
+                    .undo_description()
+                    .map(|s| s.to_string())
+            },
+            None,
+        )
+    }
+}
+
+/// Returns the description of the command that would be redone, or null if nothing to redo.
+#[flutter_rust_bridge::frb(sync)]
+pub fn redo_description() -> Option<String> {
+    unsafe {
+        with_cad_instance_or(
+            |instance| {
+                instance
+                    .structure_designer
+                    .undo_stack
+                    .redo_description()
+                    .map(|s| s.to_string())
+            },
+            None,
+        )
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn toggle_wire_selection(
     source_node_id: u64,
