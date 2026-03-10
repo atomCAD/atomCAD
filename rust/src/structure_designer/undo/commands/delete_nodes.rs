@@ -119,6 +119,9 @@ impl DeleteNodesCommand {
                 // Remove the node
                 network.nodes.remove(&node_id);
             }
+
+            // Clean up selection/active state
+            network.cleanup_selection_for_removed_nodes(&node_ids);
         }
     }
 }

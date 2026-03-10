@@ -103,6 +103,9 @@ impl PasteNodesCommand {
                 network.nodes.remove(&node_id);
             }
 
+            // Clean up selection/active state
+            network.cleanup_selection_for_removed_nodes(&node_ids);
+
             // Restore next_node_id
             network.next_node_id = self.next_node_id_before;
         }

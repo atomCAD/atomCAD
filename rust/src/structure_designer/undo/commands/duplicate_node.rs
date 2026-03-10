@@ -37,6 +37,9 @@ impl UndoCommand for DuplicateNodeCommand {
             // Remove the node
             network.nodes.remove(&self.new_node_id);
 
+            // Clean up selection/active state
+            network.cleanup_selection_for_removed_nodes(&[self.new_node_id]);
+
             // Restore next_node_id
             network.next_node_id = self.next_node_id_before;
         }

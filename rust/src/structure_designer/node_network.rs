@@ -980,14 +980,29 @@ impl NodeNetwork {
         self.selected_wires.clear();
     }
 
+    /// Cleans up selection and active node state after nodes have been removed.
+    /// Call this after removing nodes to ensure no dangling references remain.
+    pub fn cleanup_selection_for_removed_nodes(&mut self, removed_ids: &[u64]) {
+        for &id in removed_ids {
+            self.selected_node_ids.remove(&id);
+            if self.active_node_id == Some(id) {
+                self.active_node_id = None;
+            }
+        }
+        // Remove any selected wires that reference removed nodes
+        self.selected_wires
+            .retain(|w| !removed_ids.contains(&w.source_node_id) && !removed_ids.contains(&w.destination_node_id));
+    }
+
     /// Provides gadget for the active node (used for property panels)
     pub fn provide_gadget(
         &self,
         structure_designer: &StructureDesigner,
     ) -> Option<Box<dyn NodeNetworkGadget>> {
         if let Some(node_id) = self.active_node_id {
-            let node = self.nodes.get(&node_id).unwrap();
-            return node.data.provide_gadget(structure_designer);
+            if let Some(node) = self.nodes.get(&node_id) {
+                return node.data.provide_gadget(structure_designer);
+            }
         }
         None
     }
