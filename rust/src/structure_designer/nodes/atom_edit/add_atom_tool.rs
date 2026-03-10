@@ -212,8 +212,7 @@ pub fn start_guided_placement(
     } else {
         match &atom_source {
             Some(AtomSource::BasePassthrough(_)) => atom_edit_data
-                .diff
-                .add_atom(hit_atom_info.1.0, hit_atom_info.1.1),
+                .add_atom_recorded(hit_atom_info.1.0, hit_atom_info.1.1),
             Some(AtomSource::DiffMatchedBase { diff_id, .. })
             | Some(AtomSource::DiffAdded(diff_id)) => *diff_id,
             None => return GuidedPlacementStartResult::NoAtomHit,

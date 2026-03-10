@@ -1,8 +1,8 @@
-/// Tests for the atom_edit undo/redo system (Phases A-C).
+/// Tests for the atom_edit undo/redo system (Phases A-D).
 ///
 /// Verifies that the DiffRecorder captures deltas correctly and that
 /// AtomEditMutationCommand can undo/redo atom and bond operations,
-/// including drag coalescing (Phase C).
+/// including drag coalescing (Phase C) and complex operations (Phase D).
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{BOND_DOUBLE, BOND_SINGLE};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
@@ -1361,4 +1361,525 @@ fn undo_atom_edit_drag_then_other_ops() {
         let data = get_data_mut(&mut designer);
         assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 7);
     }
+}
+
+// =============================================================================
+// Phase D: Complex Operations — Minimization
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_minimize_position_changes() {
+    // Simulate what minimization does: move existing diff atoms via set_position_recorded.
+    let mut designer = setup_atom_edit();
+
+    // Add two atoms
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::new(0.0, 0.0, 0.0));
+        data.add_atom_to_diff(6, DVec3::new(2.0, 0.0, 0.0));
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Simulate minimize: move atoms to new positions via recorded methods
+    with_atom_edit_undo(&mut designer, "Minimize structure", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.set_position_recorded(1, DVec3::new(0.1, 0.0, 0.0));
+        data.set_position_recorded(2, DVec3::new(1.9, 0.0, 0.0));
+    });
+
+    // Verify atoms moved
+    {
+        let data = get_data_mut(&mut designer);
+        let pos1 = data.diff.get_atom(1).unwrap().position;
+        let pos2 = data.diff.get_atom(2).unwrap().position;
+        assert!((pos1.x - 0.1).abs() < 1e-10);
+        assert!((pos2.x - 1.9).abs() < 1e-10);
+    }
+
+    // Undo → positions restored
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), before);
+
+    // Redo → positions moved again
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(1).unwrap().position.x - 0.1).abs() < 1e-10);
+    }
+}
+
+#[test]
+fn undo_atom_edit_minimize_with_base_promotion() {
+    // Simulate FreeAll mode: base atoms are promoted to diff with anchor.
+    let mut designer = setup_atom_edit();
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Simulate minimize promoting a base atom via add_atom_recorded + set_anchor_recorded
+    with_atom_edit_undo(&mut designer, "Minimize structure", |sd| {
+        let data = get_data_mut_inner(sd);
+        let new_id = data.add_atom_recorded(6, DVec3::new(0.5, 0.0, 0.0));
+        data.set_anchor_recorded(new_id, DVec3::ZERO);
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    {
+        let data = get_data_mut(&mut designer);
+        assert!(data.diff.anchor_position(1).is_some());
+    }
+
+    // Undo → atom removed
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo → atom re-added with anchor
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    {
+        let data = get_data_mut(&mut designer);
+        assert!(data.diff.anchor_position(1).is_some());
+    }
+}
+
+// =============================================================================
+// Phase D: Complex Operations — Hydrogen Passivation
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_add_hydrogen() {
+    // Simulate add_hydrogen: adds H atoms + bonds to diff.
+    let mut designer = setup_atom_edit();
+
+    // Add a carbon atom as the parent
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Simulate adding hydrogen: add H atom + bond
+    with_atom_edit_undo(&mut designer, "Add hydrogen", |sd| {
+        let data = get_data_mut_inner(sd);
+        let h_id = data.add_atom_recorded(1, DVec3::new(1.09, 0.0, 0.0));
+        data.add_bond_recorded(1, h_id, BOND_SINGLE);
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Undo → H atom and bond removed
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Redo → H atom and bond restored
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+}
+
+#[test]
+fn undo_atom_edit_add_hydrogen_with_base_promotion() {
+    // Simulate add_hydrogen when the parent is a base passthrough atom:
+    // Adds UNCHANGED marker for parent + H atom + bond.
+    let mut designer = setup_atom_edit();
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    with_atom_edit_undo(&mut designer, "Add hydrogen", |sd| {
+        let data = get_data_mut_inner(sd);
+        // Promote base atom (UNCHANGED marker)
+        let parent_id = data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, DVec3::ZERO);
+        // Add H atom
+        let h_id = data.add_atom_recorded(1, DVec3::new(1.09, 0.0, 0.0));
+        // Bond them
+        data.add_bond_recorded(parent_id, h_id, BOND_SINGLE);
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Undo → both atoms and bond removed
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Redo → restored
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+}
+
+#[test]
+fn undo_atom_edit_remove_hydrogen() {
+    // Simulate remove_hydrogen: removes H atoms from diff.
+    let mut designer = setup_atom_edit();
+
+    // Setup: C atom + H atom + bond
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        let h_id = data.add_atom_to_diff(1, DVec3::new(1.09, 0.0, 0.0));
+        data.add_bond_in_diff(1, h_id, BOND_SINGLE);
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.0, 2);
+
+    // Remove the hydrogen via remove_from_diff (which is already recorded)
+    with_atom_edit_undo(&mut designer, "Remove hydrogen", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.remove_from_diff(2); // H atom
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Undo → H atom and bond restored
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Redo → H atom removed again
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    assert_eq!(diff_bond_count(&mut designer), 0);
+}
+
+// =============================================================================
+// Phase D: Complex Operations — Modify Measurement
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_modify_distance_move_diff_atom() {
+    // Simulate modify_distance: moves an existing diff atom.
+    let mut designer = setup_atom_edit();
+
+    // Add two bonded atoms
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::new(0.0, 0.0, 0.0));
+        data.add_atom_to_diff(6, DVec3::new(1.54, 0.0, 0.0));
+        data.add_bond_in_diff(1, 2, BOND_SINGLE);
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Simulate modify distance: move atom 2 to new position
+    with_atom_edit_undo(&mut designer, "Modify distance", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.move_in_diff(2, DVec3::new(2.0, 0.0, 0.0));
+    });
+
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(2).unwrap().position.x - 2.0).abs() < 1e-10);
+    }
+
+    // Undo → position restored
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), before);
+
+    // Redo → moved again
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(2).unwrap().position.x - 2.0).abs() < 1e-10);
+    }
+}
+
+#[test]
+fn undo_atom_edit_modify_distance_base_promotion() {
+    // Simulate modify_distance when atom is base passthrough:
+    // adds atom to diff with anchor, then moves it.
+    let mut designer = setup_atom_edit();
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    with_atom_edit_undo(&mut designer, "Modify distance", |sd| {
+        let data = get_data_mut_inner(sd);
+        let id = data.add_atom_recorded(6, DVec3::new(1.0, 0.0, 0.0));
+        data.set_anchor_recorded(id, DVec3::new(1.0, 0.0, 0.0));
+        data.move_in_diff(id, DVec3::new(1.5, 0.0, 0.0));
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(1).unwrap();
+        assert!((atom.position.x - 1.5).abs() < 1e-10);
+        assert!(data.diff.anchor_position(1).is_some());
+    }
+
+    // Undo → atom removed
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo → atom re-added in moved position
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(1).unwrap().position.x - 1.5).abs() < 1e-10);
+    }
+}
+
+#[test]
+fn undo_atom_edit_modify_unchanged_marker_promotion() {
+    // Simulate modify_measurement when an UNCHANGED marker needs promotion:
+    // set_atomic_number_recorded + set_anchor_recorded + move_in_diff
+    let mut designer = setup_atom_edit();
+
+    // Add an UNCHANGED marker
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.2[0].1, UNCHANGED_ATOMIC_NUMBER);
+
+    // Promote UNCHANGED marker and move
+    with_atom_edit_undo(&mut designer, "Modify distance", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.set_atomic_number_recorded(1, 6);
+        data.set_anchor_recorded(1, DVec3::new(1.0, 0.0, 0.0));
+        data.move_in_diff(1, DVec3::new(1.5, 0.0, 0.0));
+    });
+
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(1).unwrap();
+        assert_eq!(atom.atomic_number, 6);
+        assert!((atom.position.x - 1.5).abs() < 1e-10);
+        assert!(data.diff.anchor_position(1).is_some());
+    }
+
+    // Undo → UNCHANGED marker restored
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(1).unwrap();
+        assert_eq!(atom.atomic_number, UNCHANGED_ATOMIC_NUMBER);
+        assert!(data.diff.anchor_position(1).is_none());
+    }
+
+    // Redo → promoted and moved
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 6);
+    }
+}
+
+// =============================================================================
+// Phase D: Complex Operations — Guided Placement
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_guided_placement() {
+    // Simulate guided placement: adds an atom + bond at a guide dot position.
+    let mut designer = setup_atom_edit();
+
+    // Add an anchor atom (the atom the user clicked on to start guided placement)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Simulate place_guided_atom: add new atom + bond
+    with_atom_edit_undo(&mut designer, "Place atom", |sd| {
+        let data = get_data_mut_inner(sd);
+        let new_id = data.add_atom_to_diff(6, DVec3::new(1.54, 0.0, 0.0));
+        data.add_bond_in_diff(1, new_id, BOND_SINGLE);
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Undo → new atom and bond removed
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Redo → atom and bond re-added
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+}
+
+#[test]
+fn undo_atom_edit_guided_placement_with_base_promotion() {
+    // Simulate guided placement where the anchor atom was a base passthrough
+    // that was promoted in start_guided_placement.
+    let mut designer = setup_atom_edit();
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Promotion happens in start_guided_placement (outside the undo wrapper).
+    // The add_atom_recorded is used but no undo command wraps it here.
+    // We simulate the full flow as if both steps are inside one undo wrapper.
+    with_atom_edit_undo(&mut designer, "Place atom", |sd| {
+        let data = get_data_mut_inner(sd);
+        // Simulate start_guided_placement promoting base atom
+        let anchor_id = data.add_atom_recorded(6, DVec3::ZERO);
+        // Simulate place_guided_atom
+        let new_id = data.add_atom_to_diff(14, DVec3::new(1.54, 0.0, 0.0));
+        data.add_bond_in_diff(anchor_id, new_id, BOND_SINGLE);
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Undo → both atoms and bond removed
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+}
+
+// =============================================================================
+// Phase D: Complex Operations — Multiple Recorded Methods Coalescing
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_minimize_many_atoms_coalesces() {
+    // When minimization moves many atoms, the coalescing should not affect
+    // correctness since each atom only gets one set_position_recorded call.
+    let mut designer = setup_atom_edit();
+
+    // Add 10 atoms
+    {
+        let data = get_data_mut(&mut designer);
+        for i in 0..10 {
+            data.add_atom_to_diff(6, DVec3::new(i as f64, 0.0, 0.0));
+        }
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.0, 10);
+
+    // Simulate minimize: move all atoms slightly
+    with_atom_edit_undo(&mut designer, "Minimize structure", |sd| {
+        let data = get_data_mut_inner(sd);
+        for i in 1..=10u32 {
+            let new_pos = DVec3::new(i as f64 * 0.9, 0.1, 0.0);
+            data.set_position_recorded(i, new_pos);
+        }
+    });
+
+    // All atoms should have moved
+    {
+        let data = get_data_mut(&mut designer);
+        for i in 1..=10u32 {
+            let pos = data.diff.get_atom(i).unwrap().position;
+            assert!((pos.y - 0.1).abs() < 1e-10);
+        }
+    }
+
+    // Undo → all positions restored
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), before);
+
+    // Redo → all moved again
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(1).unwrap().position.y - 0.1).abs() < 1e-10);
+    }
+}
+
+#[test]
+fn undo_atom_edit_add_multiple_hydrogens() {
+    // Simulate adding multiple H atoms to a single parent atom.
+    let mut designer = setup_atom_edit();
+
+    // Add parent carbon
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Add 4 hydrogens (sp3 carbon)
+    with_atom_edit_undo(&mut designer, "Add hydrogen", |sd| {
+        let data = get_data_mut_inner(sd);
+        let positions = [
+            DVec3::new(1.09, 0.0, 0.0),
+            DVec3::new(-0.36, 1.03, 0.0),
+            DVec3::new(-0.36, -0.51, 0.89),
+            DVec3::new(-0.36, -0.51, -0.89),
+        ];
+        for pos in &positions {
+            let h_id = data.add_atom_recorded(1, *pos);
+            data.add_bond_recorded(1, h_id, BOND_SINGLE);
+        }
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 5); // C + 4H
+    assert_eq!(diff_bond_count(&mut designer), 4);
+
+    // Undo → all H atoms removed
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), before);
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Redo → all H atoms restored
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 5);
+    assert_eq!(diff_bond_count(&mut designer), 4);
+}
+
+// =============================================================================
+// Phase D: Sequence Tests — Complex Interleaved Operations
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_minimize_then_add_hydrogen_sequence() {
+    // Tests that minimize and add_hydrogen commands work correctly in sequence.
+    let mut designer = setup_atom_edit();
+
+    // Add two atoms
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.add_atom_to_diff(6, DVec3::new(1.54, 0.0, 0.0));
+        data.add_bond_in_diff(1, 2, BOND_SINGLE);
+    }
+    let initial = snapshot_diff(&mut designer);
+
+    // Step 1: Minimize — move both atoms
+    with_atom_edit_undo(&mut designer, "Minimize structure", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.set_position_recorded(1, DVec3::new(0.05, 0.0, 0.0));
+        data.set_position_recorded(2, DVec3::new(1.49, 0.0, 0.0));
+    });
+    let after_minimize = snapshot_diff(&mut designer);
+
+    // Step 2: Add hydrogen to atom 1
+    with_atom_edit_undo(&mut designer, "Add hydrogen", |sd| {
+        let data = get_data_mut_inner(sd);
+        let h_id = data.add_atom_recorded(1, DVec3::new(-1.0, 0.0, 0.0));
+        data.add_bond_recorded(1, h_id, BOND_SINGLE);
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 3);
+    assert_eq!(diff_bond_count(&mut designer), 2);
+
+    // Undo add hydrogen
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), after_minimize);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Undo minimize
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), initial);
+
+    // Redo both
+    assert!(designer.redo()); // minimize
+    assert_eq!(snapshot_diff(&mut designer), after_minimize);
+    assert!(designer.redo()); // add hydrogen
+    assert_eq!(diff_atom_count(&mut designer), 3);
+    assert_eq!(diff_bond_count(&mut designer), 2);
 }

@@ -593,11 +593,9 @@ fn apply_position_updates(
                 if atom.is_unchanged_marker() {
                     if let Some((atomic_number, old_position)) = entry.identity {
                         atom_edit_data
-                            .diff
-                            .set_atomic_number(diff_id, atomic_number);
+                            .set_atomic_number_recorded(diff_id, atomic_number);
                         atom_edit_data
-                            .diff
-                            .set_anchor_position(diff_id, old_position);
+                            .set_anchor_recorded(diff_id, old_position);
                     }
                 }
             }
@@ -606,10 +604,8 @@ fn apply_position_updates(
             // Base pass-through atom — promote to diff with anchor, then move.
             // Anchor is set here at promotion time so apply_diff can match it
             // back to the base atom. See "Anchor Invariant" in AGENTS.md.
-            let new_diff_id = atom_edit_data.diff.add_atom(atomic_number, old_position);
-            atom_edit_data
-                .diff
-                .set_anchor_position(new_diff_id, old_position);
+            let new_diff_id = atom_edit_data.add_atom_recorded(atomic_number, old_position);
+            atom_edit_data.set_anchor_recorded(new_diff_id, old_position);
             atom_edit_data.move_in_diff(new_diff_id, new_position);
         }
     }

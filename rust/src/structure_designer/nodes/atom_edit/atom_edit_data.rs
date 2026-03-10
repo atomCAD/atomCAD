@@ -509,15 +509,21 @@ impl AtomEditData {
                     after: None,
                 });
                 for (other_id, order) in bonds {
-                    // Only record bond removal once (for the smaller atom ID)
-                    if diff_atom_id < other_id {
-                        rec.bond_deltas.push(BondDelta {
-                            atom_id1: diff_atom_id,
-                            atom_id2: other_id,
-                            old_order: Some(order),
-                            new_order: None,
-                        });
-                    }
+                    // Record bond removal with canonical ordering.
+                    // No risk of double-recording: delete_atom removes bonds
+                    // from both endpoints, so subsequent remove_from_diff calls
+                    // on the other atom won't see this bond anymore.
+                    let (a, b) = if diff_atom_id < other_id {
+                        (diff_atom_id, other_id)
+                    } else {
+                        (other_id, diff_atom_id)
+                    };
+                    rec.bond_deltas.push(BondDelta {
+                        atom_id1: a,
+                        atom_id2: b,
+                        old_order: Some(order),
+                        new_order: None,
+                    });
                 }
             }
         }

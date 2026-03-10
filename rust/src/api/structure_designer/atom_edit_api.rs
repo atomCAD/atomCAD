@@ -434,9 +434,13 @@ pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
                     APIMinimizeFreezeMode::FreeAll => MinimizeFreezeMode::FreeAll,
                     APIMinimizeFreezeMode::FreeSelected => MinimizeFreezeMode::FreeSelected,
                 };
-                let result = atom_edit::minimize_atom_edit(
+                let mut result = Err("No active instance".to_string());
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    internal_mode,
+                    "Minimize structure",
+                    |sd| {
+                        result = atom_edit::minimize_atom_edit(sd, internal_mode);
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 match result {
@@ -454,9 +458,13 @@ pub fn atom_edit_add_hydrogen(selected_only: bool) -> String {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let result = atom_edit::add_hydrogen_atom_edit(
+                let mut result = Err("No active instance".to_string());
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    selected_only,
+                    "Add hydrogen",
+                    |sd| {
+                        result = atom_edit::add_hydrogen_atom_edit(sd, selected_only);
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 match result {
@@ -474,9 +482,13 @@ pub fn atom_edit_remove_hydrogen(selected_only: bool) -> String {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let result = atom_edit::remove_hydrogen_atom_edit(
+                let mut result = Err("No active instance".to_string());
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    selected_only,
+                    "Remove hydrogen",
+                    |sd| {
+                        result = atom_edit::remove_hydrogen_atom_edit(sd, selected_only);
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 match result {
@@ -566,10 +578,13 @@ pub fn atom_edit_place_guided_atom(ray_start: APIVec3, ray_dir: APIVec3) -> bool
             |cad_instance| {
                 let ray_start_vec3 = from_api_vec3(&ray_start);
                 let ray_dir_vec3 = from_api_vec3(&ray_dir);
-                let result = atom_edit::place_guided_atom(
+                let mut result = false;
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    &ray_start_vec3,
-                    &ray_dir_vec3,
+                    "Place atom",
+                    |sd| {
+                        result = atom_edit::place_guided_atom(sd, &ray_start_vec3, &ray_dir_vec3);
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 result
@@ -760,11 +775,13 @@ pub fn atom_edit_modify_distance(
                 } else {
                     DistanceMoveChoice::Second
                 };
-                let result = modify_distance(
+                let mut result = Err("No active instance".to_string());
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    target_distance,
-                    move_choice,
-                    move_fragment,
+                    "Modify distance",
+                    |sd| {
+                        result = modify_distance(sd, target_distance, move_choice, move_fragment);
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 match result {
@@ -796,11 +813,18 @@ pub fn atom_edit_modify_angle(
                 } else {
                     AngleMoveChoice::ArmB
                 };
-                let result = modify_angle(
+                let mut result = Err("No active instance".to_string());
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    target_angle_degrees,
-                    move_choice,
-                    move_fragment,
+                    "Modify angle",
+                    |sd| {
+                        result = modify_angle(
+                            sd,
+                            target_angle_degrees,
+                            move_choice,
+                            move_fragment,
+                        );
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 match result {
@@ -834,11 +858,18 @@ pub fn atom_edit_modify_dihedral(
                 } else {
                     DihedralMoveChoice::DSide
                 };
-                let result = modify_dihedral(
+                let mut result = Err("No active instance".to_string());
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    target_angle_degrees,
-                    move_choice,
-                    move_fragment,
+                    "Modify dihedral",
+                    |sd| {
+                        result = modify_dihedral(
+                            sd,
+                            target_angle_degrees,
+                            move_choice,
+                            move_fragment,
+                        );
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 match result {

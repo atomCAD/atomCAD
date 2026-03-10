@@ -274,8 +274,7 @@ pub fn add_hydrogen_atom_edit(
                     already_promoted_id
                 } else if let Some(parent_info) = base_parent_info.get(base_id) {
                     let new_diff_id = atom_edit_data
-                        .diff
-                        .add_atom(UNCHANGED_ATOMIC_NUMBER, parent_info.position);
+                        .add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, parent_info.position);
                     promoted_base_atoms.insert(*base_id, new_diff_id);
                     new_diff_id
                 } else {
@@ -285,13 +284,11 @@ pub fn add_hydrogen_atom_edit(
         };
 
         // Add H atom to the diff
-        let h_id = atom_edit_data.diff.add_atom(1, placement.h_position);
+        let h_id = atom_edit_data.add_atom_recorded(1, placement.h_position);
         atom_edit_data
             .diff
             .set_atom_hydrogen_passivation(h_id, true);
-        atom_edit_data
-            .diff
-            .add_bond_checked(parent_diff_id, h_id, BOND_SINGLE);
+        atom_edit_data.add_bond_recorded(parent_diff_id, h_id, BOND_SINGLE);
         h_count += 1;
     }
 

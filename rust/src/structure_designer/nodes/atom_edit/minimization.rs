@@ -169,15 +169,13 @@ pub fn minimize_atom_edit(
         match source {
             Some(AtomSource::DiffAdded(diff_id))
             | Some(AtomSource::DiffMatchedBase { diff_id, .. }) => {
-                atom_edit_data.diff.set_atom_position(*diff_id, new_pos);
+                atom_edit_data.set_position_recorded(*diff_id, new_pos);
             }
             Some(AtomSource::BasePassthrough(_)) => {
                 // FreeAll mode only — base atom moved, add to diff with anchor
                 let atomic_number = topology.atomic_numbers[topo_idx];
-                let new_diff_id = atom_edit_data.diff.add_atom(atomic_number, new_pos);
-                atom_edit_data
-                    .diff
-                    .set_anchor_position(new_diff_id, old_pos);
+                let new_diff_id = atom_edit_data.add_atom_recorded(atomic_number, new_pos);
+                atom_edit_data.set_anchor_recorded(new_diff_id, old_pos);
             }
             None => {
                 // No provenance info — skip
