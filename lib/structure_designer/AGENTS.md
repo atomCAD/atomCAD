@@ -92,6 +92,19 @@ When overlapping outputs are detected (within 0.1 Å), a disambiguation overlay 
 
 Design doc: `doc/design_click_to_activate_node.md`.
 
+## Undo/Redo Integration
+
+Keyboard shortcuts in `node_network/node_network.dart`:
+- `Ctrl+Z` → `sd_api.undo()` + refresh
+- `Ctrl+Shift+Z` / `Ctrl+Y` → `sd_api.redo()` + refresh
+
+Drag coalescing in `node_network/node_widget.dart`:
+- `sd_api.beginMoveNodes()` on drag start
+- `sd_api.endMoveNodes()` on drag end
+- Intermediate `moveSelectedNodes()` calls don't create undo commands
+
+Model methods: `StructureDesignerModel.beginMoveNodes()` / `endMoveNodes()`.
+
 ## node_networks_list/ Subdirectory
 
 Network management panel with:

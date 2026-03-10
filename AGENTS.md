@@ -10,6 +10,7 @@
 - Working in `rust/src/crystolecule/simulation/uff/` → Also read `rust/src/crystolecule/simulation/uff/AGENTS.md`
 - Working in `rust/src/geo_tree/` or any descendant → Also read `rust/src/geo_tree/AGENTS.md`
 - Working in `rust/src/structure_designer/` or any descendant → Also read `rust/src/structure_designer/AGENTS.md`
+- Working in `rust/src/structure_designer/undo/` or any descendant → Also read `rust/src/structure_designer/undo/AGENTS.md`
 - Working in `lib/` or any descendant (e.g., `lib/common/`, `lib/structure_designer/`, etc.) → Read `lib/AGENTS.md`
 - Working in `lib/structure_designer/` or any descendant → Also read `lib/structure_designer/AGENTS.md`
 

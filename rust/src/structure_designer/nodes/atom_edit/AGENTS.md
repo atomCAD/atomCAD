@@ -9,6 +9,7 @@ atom_edit/
 ├── mod.rs                # Module declarations + backward-compat re-exports
 ├── types.rs              # Shared type definitions (enums, structs, constants)
 ├── atom_edit_data.rs     # AtomEditData struct, NodeData impl, accessors, utilities
+├── diff_recorder.rs      # DiffRecorder, AtomDelta, BondDelta, AtomState (undo support)
 ├── selection.rs          # Ray-based and marquee atom/bond selection
 ├── operations.rs         # Shared mutation operations (delete, replace, transform, drag, bond order)
 ├── default_tool.rs       # Default tool pointer event state machine
@@ -92,8 +93,40 @@ If you need to move an atom that is already in the diff, call `move_in_diff`. If
 
 The `mod.rs` uses an inline `pub mod atom_edit { ... }` with re-exports so that existing import paths like `atom_edit::atom_edit::AtomEditData` continue to work. Do not remove or rename this re-export module.
 
+## Undo/Redo Integration
+
+atom_edit bypasses the generic `SetNodeData` command and uses incremental delta-based undo. Design doc: `doc/design_atom_edit_undo.md`.
+
+### DiffRecorder (`diff_recorder.rs`)
+
+`AtomEditData` has an optional `recorder: Option<DiffRecorder>` that captures `AtomDelta` and `BondDelta` entries as mutations happen. Call `begin_recording()` before a mutation and `end_recording()` after — the recorder automatically coalesces redundant deltas (e.g., multiple moves of the same atom during a drag).
+
+### Recorded Mutation Methods
+
+Two layers of mutation methods exist:
+- **Recording methods** (on `AtomEditData`): `add_atom_to_diff`, `remove_from_diff`, `move_in_diff`, `add_bond_in_diff`, `set_atomic_number_recorded`, `set_anchor_recorded`, `add_atom_recorded`, `add_bond_recorded`, `set_position_recorded`, `delete_bond_recorded`. Called during user actions.
+- **Non-recording methods** (on `AtomicStructure`/diff directly): `diff.add_atom_with_id`, `diff.delete_atom`, `diff.set_atom_position`, etc. Called by undo/redo execution only.
+
+When adding new diff mutations, use the recording variants. If mutating `self.diff` directly, add a `*_recorded` wrapper.
+
+### API Integration Pattern
+
+The `with_atom_edit_undo` helper wraps API mutations:
+```
+begin_recording → execute mutation → end_recording → push AtomEditMutationCommand
+```
+
+Drag operations use `begin_atom_edit_drag()`/`end_atom_edit_drag()` for coalescing across multiple pointer-move frames.
+
+### Commands
+
+- `AtomEditMutationCommand` — incremental atom/bond deltas (all diff mutations)
+- `AtomEditToggleFlagCommand` — boolean flag toggles (output_diff, show_anchor_arrows, etc.)
+- `AtomEditFrozenChangeCommand` — freeze/unfreeze operations
+
 ## Adding Features
 
 - **New tool**: Create `my_tool.rs`, add `mod my_tool;` in `mod.rs`, add `pub use super::my_tool::*;` to the re-export block.
 - **New operation**: Add to `operations.rs` if tool-agnostic, or to the specific tool file.
 - **New type**: Add to `types.rs` if shared across files, or keep local if single-file.
+- **New diff mutation**: Use recording variants (`*_recorded` methods). Wrap the API entry point with `with_atom_edit_undo`.

@@ -11,6 +11,7 @@ The bulk of atomCAD's Rust backend. Contains the node network system, built-in n
 - Working in `serialization/` → Read `serialization/AGENTS.md`
 - Working in `layout/` → Read `layout/AGENTS.md`
 - Working in `implicit_eval/` → Read `implicit_eval/AGENTS.md`
+- Working in `undo/` → Read `undo/AGENTS.md`
 
 ## Directory Structure
 
@@ -35,6 +36,7 @@ structure_designer/
 ├── preferences.rs             # User preferences persistence
 ├── cli_runner.rs              # CLI batch execution mode
 ├── node_networks_import_manager.rs # Import networks from .cnnd libraries
+├── undo/                      # Undo/redo system (command pattern)
 ├── nodes/                     # Built-in node implementations (47+)
 ├── evaluator/                 # Network evaluation engine
 ├── text_format/               # Human-readable text format (AI integration)
@@ -61,7 +63,7 @@ structure_designer/
 
 ```
 User Action → StructureDesigner method
-  → Modify NodeNetwork (add/connect/delete nodes)
+  → Capture before-state, perform mutation, push UndoCommand
   → Track changes in StructureDesignerChanges
   → NetworkEvaluator generates StructureDesignerScene
   → Scene sent to renderer/Flutter UI
@@ -95,5 +97,7 @@ Tests go in `rust/tests/structure_designer/`. Key test files:
 - `text_format_test.rs` - Text format parsing/serialization
 - `cnnd_roundtrip_test.rs` - File format roundtrips
 - `node_snapshot_test.rs` - Node type snapshots (insta)
+- `undo_test.rs` - Global undo/redo tests
+- `atom_edit_undo_test.rs` - atom_edit undo/redo tests
 
 Run: `cd rust && cargo test --test structure_designer`
