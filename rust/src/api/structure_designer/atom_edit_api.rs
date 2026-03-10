@@ -160,10 +160,19 @@ pub fn add_bond_pointer_up(ray_origin: APIVec3, ray_direction: APIVec3) -> bool 
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let result = atom_edit::add_bond_pointer_up(
+                let ray_origin_vec3 = from_api_vec3(&ray_origin);
+                let ray_dir_vec3 = from_api_vec3(&ray_direction);
+                let mut result = false;
+                atom_edit::with_atom_edit_undo(
                     &mut cad_instance.structure_designer,
-                    &from_api_vec3(&ray_origin),
-                    &from_api_vec3(&ray_direction),
+                    "Add bond",
+                    |sd| {
+                        result = atom_edit::add_bond_pointer_up(
+                            sd,
+                            &ray_origin_vec3,
+                            &ray_dir_vec3,
+                        );
+                    },
                 );
                 refresh_structure_designer_auto(cad_instance);
                 result
@@ -199,7 +208,13 @@ pub fn set_add_bond_order(order: u8) {
 pub fn change_selected_bonds_order(new_order: u8) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            atom_edit::change_selected_bonds_order(&mut cad_instance.structure_designer, new_order);
+            atom_edit::with_atom_edit_undo(
+                &mut cad_instance.structure_designer,
+                "Change bond order",
+                |sd| {
+                    atom_edit::change_selected_bonds_order(sd, new_order);
+                },
+            );
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -209,7 +224,13 @@ pub fn change_selected_bonds_order(new_order: u8) {
 pub fn atom_edit_delete_selected() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            atom_edit::delete_selected_atoms_and_bonds(&mut cad_instance.structure_designer);
+            atom_edit::with_atom_edit_undo(
+                &mut cad_instance.structure_designer,
+                "Delete atoms",
+                |sd| {
+                    atom_edit::delete_selected_atoms_and_bonds(sd);
+                },
+            );
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -219,7 +240,13 @@ pub fn atom_edit_delete_selected() {
 pub fn atom_edit_replace_selected(atomic_number: i16) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            atom_edit::replace_selected_atoms(&mut cad_instance.structure_designer, atomic_number);
+            atom_edit::with_atom_edit_undo(
+                &mut cad_instance.structure_designer,
+                "Replace atoms",
+                |sd| {
+                    atom_edit::replace_selected_atoms(sd, atomic_number);
+                },
+            );
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -230,7 +257,13 @@ pub fn atom_edit_transform_selected(abs_transform: APITransform) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let transform = from_api_transform(&abs_transform);
-            atom_edit::transform_selected(&mut cad_instance.structure_designer, &transform);
+            atom_edit::with_atom_edit_undo(
+                &mut cad_instance.structure_designer,
+                "Move atoms",
+                |sd| {
+                    atom_edit::transform_selected(sd, &transform);
+                },
+            );
             refresh_structure_designer_auto(cad_instance);
         });
     }

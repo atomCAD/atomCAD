@@ -254,6 +254,32 @@ impl AtomEditData {
         }
     }
 
+    /// Delete a bond with recording. For use by apply_delete_diff_view.
+    pub fn delete_bond_recorded(&mut self, bond_ref: &BondReference) {
+        let old_order = self.diff.get_atom(bond_ref.atom_id1).and_then(|a| {
+            a.bonds
+                .iter()
+                .find(|b| b.other_atom_id() == bond_ref.atom_id2)
+                .map(|b| b.bond_order())
+        });
+        self.diff.delete_bond(bond_ref);
+        if let Some(ref mut rec) = self.recorder {
+            if let Some(order) = old_order {
+                let (a, b) = if bond_ref.atom_id1 < bond_ref.atom_id2 {
+                    (bond_ref.atom_id1, bond_ref.atom_id2)
+                } else {
+                    (bond_ref.atom_id2, bond_ref.atom_id1)
+                };
+                rec.bond_deltas.push(BondDelta {
+                    atom_id1: a,
+                    atom_id2: b,
+                    old_order: Some(order),
+                    new_order: None,
+                });
+            }
+        }
+    }
+
     /// Set atom position with recording. For use by minimization etc.
     pub fn set_position_recorded(&mut self, atom_id: u32, new_position: DVec3) {
         if let Some(ref mut rec) = self.recorder {
@@ -719,7 +745,7 @@ impl AtomEditData {
             let actual_a = match info.diff_id_a {
                 Some(id) => id,
                 None => match info.identity_a {
-                    Some((_an, pos)) => self.diff.add_atom(
+                    Some((_an, pos)) => self.add_atom_recorded(
                         crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
                         pos,
                     ),
@@ -729,7 +755,7 @@ impl AtomEditData {
             let actual_b = match info.diff_id_b {
                 Some(id) => id,
                 None => match info.identity_b {
-                    Some((_an, pos)) => self.diff.add_atom(
+                    Some((_an, pos)) => self.add_atom_recorded(
                         crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
                         pos,
                     ),
@@ -771,7 +797,7 @@ impl AtomEditData {
 
         // Bonds in diff view: remove the bond from the diff entirely
         for bond_ref in bonds {
-            self.diff.delete_bond(bond_ref);
+            self.delete_bond_recorded(bond_ref);
         }
 
         self.selection.selected_bonds.clear();
@@ -787,7 +813,7 @@ impl AtomEditData {
         // Replace diff atoms (update atomic_number in place)
         let diff_ids: Vec<u32> = self.selection.selected_diff_atoms.iter().copied().collect();
         for diff_id in &diff_ids {
-            self.diff.set_atomic_number(*diff_id, atomic_number);
+            self.set_atomic_number_recorded(*diff_id, atomic_number);
         }
 
         // Replace base atoms (add to diff with new element, or promote existing entry)
@@ -795,8 +821,8 @@ impl AtomEditData {
             let diff_id = if let Some(existing_id) = info.existing_diff_id {
                 // Reuse existing diff entry (e.g., UNCHANGED marker).
                 // Set real atomic_number; anchor = position for replacement.
-                self.diff.set_atomic_number(existing_id, atomic_number);
-                self.diff.set_anchor_position(existing_id, info.position);
+                self.set_atomic_number_recorded(existing_id, atomic_number);
+                self.set_anchor_recorded(existing_id, info.position);
                 existing_id
             } else {
                 self.replace_in_diff(info.position, atomic_number)
@@ -839,13 +865,13 @@ impl AtomEditData {
             let diff_id = if let Some(existing_id) = info.existing_diff_id {
                 // Reuse existing diff entry (e.g., UNCHANGED marker).
                 // Promote: set real atomic_number and anchor, then move.
-                self.diff.set_atomic_number(existing_id, info.atomic_number);
-                self.diff.set_anchor_position(existing_id, info.position);
+                self.set_atomic_number_recorded(existing_id, info.atomic_number);
+                self.set_anchor_recorded(existing_id, info.position);
                 self.move_in_diff(existing_id, new_position);
                 existing_id
             } else {
-                let new_diff_id = self.diff.add_atom(info.atomic_number, new_position);
-                self.diff.set_anchor_position(new_diff_id, info.position);
+                let new_diff_id = self.add_atom_recorded(info.atomic_number, new_position);
+                self.set_anchor_recorded(new_diff_id, info.position);
                 new_diff_id
             };
             self.selection.selected_base_atoms.remove(&info.base_id);

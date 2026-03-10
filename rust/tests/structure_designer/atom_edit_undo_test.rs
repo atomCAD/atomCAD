@@ -1,10 +1,12 @@
-/// Tests for the atom_edit undo/redo system (Phase A).
+/// Tests for the atom_edit undo/redo system (Phases A-B).
 ///
 /// Verifies that the DiffRecorder captures deltas correctly and that
 /// AtomEditMutationCommand can undo/redo atom and bond operations.
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{BOND_DOUBLE, BOND_SINGLE};
+use rust_lib_flutter_cad::crystolecule::atomic_structure::{
+    AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
+};
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AtomEditData, with_atom_edit_undo,
 };
@@ -591,4 +593,508 @@ fn get_data_mut_inner(designer: &mut StructureDesigner) -> &mut AtomEditData {
     let node_id = network.active_node_id.unwrap();
     let data = network.get_node_network_data_mut(node_id).unwrap();
     data.as_any_mut().downcast_mut::<AtomEditData>().unwrap()
+}
+
+/// Snapshot helper: returns (atom_count, bond_count, Vec<(id, atomic_number, position)>)
+fn snapshot_diff(designer: &mut StructureDesigner) -> (usize, usize, Vec<(u32, i16, DVec3)>) {
+    let data = get_data_mut(designer);
+    let atom_count = data.diff.get_num_of_atoms();
+    let bond_count = data.diff.get_num_of_bonds();
+    let mut atoms: Vec<(u32, i16, DVec3)> = data
+        .diff
+        .iter_atoms()
+        .map(|(&id, atom)| (id, atom.atomic_number, atom.position))
+        .collect();
+    atoms.sort_by_key(|(id, _, _)| *id);
+    (atom_count, bond_count, atoms)
+}
+
+// =============================================================================
+// Phase B: Simple Operations — Delete
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_delete_diff_atoms() {
+    let mut designer = setup_atom_edit();
+
+    // Add 3 atoms (not undoable in this scope)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.add_atom_to_diff(7, DVec3::X);
+        data.add_atom_to_diff(8, DVec3::Y);
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.0, 3);
+
+    // Delete atoms 1 and 2 via remove_from_diff (simulates diff-view delete)
+    with_atom_edit_undo(&mut designer, "Delete atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.remove_from_diff(1);
+        data.remove_from_diff(2);
+    });
+    assert_eq!(diff_atom_count(&mut designer), 1);
+
+    // Undo
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+}
+
+#[test]
+fn undo_atom_edit_delete_with_convert_to_delete_marker() {
+    let mut designer = setup_atom_edit();
+
+    // Add a diff atom with an anchor (simulates a matched base atom)
+    {
+        let data = get_data_mut(&mut designer);
+        let id = data.add_atom_to_diff(6, DVec3::new(1.0, 0.0, 0.0));
+        data.diff.set_anchor_position(id, DVec3::ZERO);
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.0, 1);
+    assert_eq!(before.2[0].1, 6); // atomic_number = 6
+
+    // Convert to delete marker
+    with_atom_edit_undo(&mut designer, "Delete atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.convert_to_delete_marker(1);
+    });
+
+    // Should still have 1 atom (the delete marker replaced the original)
+    // convert_to_delete_marker removes old + adds new marker
+    {
+        let data = get_data_mut(&mut designer);
+        // The delete marker has atomic_number = 0 (DELETED_SITE_ATOMIC_NUMBER)
+        let atom_count = data.diff.get_num_of_atoms();
+        assert_eq!(atom_count, 1);
+    }
+
+    // Undo — should restore original atom
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+
+    // Redo — should have delete marker again
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_num_of_atoms(), 1);
+    }
+}
+
+#[test]
+fn undo_atom_edit_mark_for_deletion() {
+    let mut designer = setup_atom_edit();
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Mark a position for deletion (adds a delete marker atom)
+    with_atom_edit_undo(&mut designer, "Delete atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.mark_for_deletion(DVec3::new(1.0, 2.0, 3.0));
+    });
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(1).unwrap();
+        assert_eq!(atom.atomic_number, DELETED_SITE_ATOMIC_NUMBER);
+    }
+
+    // Undo
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+}
+
+// =============================================================================
+// Phase B: Simple Operations — Replace
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_replace_diff_atoms() {
+    let mut designer = setup_atom_edit();
+
+    // Add a carbon atom
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Replace with nitrogen (atomic_number = 7)
+    with_atom_edit_undo(&mut designer, "Replace atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.set_atomic_number_recorded(1, 7);
+    });
+
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 7);
+    }
+
+    // Undo — should restore carbon
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+
+    // Redo — should be nitrogen again
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 7);
+    }
+}
+
+#[test]
+fn undo_atom_edit_replace_with_anchor() {
+    let mut designer = setup_atom_edit();
+
+    // Add an UNCHANGED marker (simulates an existing base atom reference)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Replace: set atomic_number + anchor (simulates apply_replace promoting an entry)
+    with_atom_edit_undo(&mut designer, "Replace atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.set_atomic_number_recorded(1, 8); // Oxygen
+        data.set_anchor_recorded(1, DVec3::new(1.0, 0.0, 0.0));
+    });
+
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 8);
+        assert!(data.diff.anchor_position(1).is_some());
+    }
+
+    // Undo — should restore UNCHANGED marker without anchor
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(
+            data.diff.get_atom(1).unwrap().atomic_number,
+            UNCHANGED_ATOMIC_NUMBER
+        );
+        assert!(data.diff.anchor_position(1).is_none());
+    }
+
+    // Redo
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 8);
+    }
+}
+
+// =============================================================================
+// Phase B: Simple Operations — Add Bond
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_add_bond() {
+    let mut designer = setup_atom_edit();
+
+    // Add two atoms (not undoable)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.add_atom_to_diff(6, DVec3::X);
+    }
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Add a bond
+    with_atom_edit_undo(&mut designer, "Add bond", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.add_bond_in_diff(1, 2, BOND_SINGLE);
+    });
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Undo
+    assert!(designer.undo());
+    assert_eq!(diff_bond_count(&mut designer), 0);
+    assert_eq!(diff_atom_count(&mut designer), 2); // atoms should still exist
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_bond_count(&mut designer), 1);
+}
+
+#[test]
+fn undo_atom_edit_add_bond_with_unchanged_promotion() {
+    let mut designer = setup_atom_edit();
+
+    // Add one real atom and simulate a bond that requires UNCHANGED promotion
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+    assert_eq!(diff_atom_count(&mut designer), 1);
+
+    // Add an UNCHANGED atom (base-passthrough promotion) + bond
+    with_atom_edit_undo(&mut designer, "Add bond", |sd| {
+        let data = get_data_mut_inner(sd);
+        let unchanged_id = data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, DVec3::X);
+        data.add_bond_in_diff(1, unchanged_id, BOND_SINGLE);
+    });
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Undo — UNCHANGED atom and bond should be removed
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(diff_bond_count(&mut designer), 1);
+}
+
+// =============================================================================
+// Phase B: Simple Operations — Change Bond Order
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_change_bond_order() {
+    let mut designer = setup_atom_edit();
+
+    // Add two bonded atoms (not undoable)
+    {
+        let data = get_data_mut(&mut designer);
+        let id1 = data.add_atom_to_diff(6, DVec3::ZERO);
+        let id2 = data.add_atom_to_diff(6, DVec3::X);
+        data.add_bond_in_diff(id1, id2, BOND_SINGLE);
+    }
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Change bond order to double
+    with_atom_edit_undo(&mut designer, "Change bond order", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.add_bond_in_diff(1, 2, BOND_DOUBLE);
+    });
+
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(1).unwrap();
+        let bond = atom.bonds.iter().find(|b| b.other_atom_id() == 2).unwrap();
+        assert_eq!(bond.bond_order(), BOND_DOUBLE);
+    }
+
+    // Undo — should restore single bond
+    assert!(designer.undo());
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(1).unwrap();
+        let bond = atom.bonds.iter().find(|b| b.other_atom_id() == 2).unwrap();
+        assert_eq!(bond.bond_order(), BOND_SINGLE);
+    }
+
+    // Redo
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(1).unwrap();
+        let bond = atom.bonds.iter().find(|b| b.other_atom_id() == 2).unwrap();
+        assert_eq!(bond.bond_order(), BOND_DOUBLE);
+    }
+}
+
+#[test]
+fn undo_atom_edit_delete_bond_in_diff() {
+    let mut designer = setup_atom_edit();
+
+    // Add two bonded atoms (not undoable)
+    {
+        let data = get_data_mut(&mut designer);
+        let id1 = data.add_atom_to_diff(6, DVec3::ZERO);
+        let id2 = data.add_atom_to_diff(6, DVec3::X);
+        data.add_bond_in_diff(id1, id2, BOND_SINGLE);
+    }
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Delete the bond (simulates diff-view bond deletion)
+    with_atom_edit_undo(&mut designer, "Delete bond", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.delete_bond_recorded(&BondReference {
+            atom_id1: 1,
+            atom_id2: 2,
+        });
+    });
+    assert_eq!(diff_bond_count(&mut designer), 0);
+    assert_eq!(diff_atom_count(&mut designer), 2); // atoms remain
+
+    // Undo — bond should be restored
+    assert!(designer.undo());
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_bond_count(&mut designer), 0);
+}
+
+// =============================================================================
+// Phase B: Simple Operations — Transform
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_transform_diff_atoms() {
+    let mut designer = setup_atom_edit();
+
+    // Add atoms (not undoable)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.add_atom_to_diff(7, DVec3::X);
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Move atoms using recorded methods (simulates apply_transform for diff atoms)
+    with_atom_edit_undo(&mut designer, "Move atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.move_in_diff(1, DVec3::new(0.0, 5.0, 0.0));
+        data.move_in_diff(2, DVec3::new(1.0, 5.0, 0.0));
+    });
+
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(0.0, 5.0, 0.0)).length() < 1e-10);
+    }
+
+    // Undo
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+
+    // Redo
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(0.0, 5.0, 0.0)).length() < 1e-10);
+    }
+}
+
+#[test]
+fn undo_atom_edit_transform_with_promotion() {
+    let mut designer = setup_atom_edit();
+
+    // Simulate promotion: add a new atom with anchor (base atom promotion)
+    with_atom_edit_undo(&mut designer, "Move atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        let id = data.add_atom_recorded(6, DVec3::new(1.0, 0.0, 0.0));
+        data.set_anchor_recorded(id, DVec3::ZERO);
+    });
+
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    {
+        let data = get_data_mut(&mut designer);
+        assert!(data.diff.anchor_position(1).is_some());
+    }
+
+    // Undo — atom and anchor should be removed
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    {
+        let data = get_data_mut(&mut designer);
+        assert!(data.diff.anchor_position(1).is_some());
+    }
+}
+
+// =============================================================================
+// Phase B: Sequence Tests
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_multi_step_sequence() {
+    let mut designer = setup_atom_edit();
+
+    // Step 1: Add atom
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    let after_add = snapshot_diff(&mut designer);
+
+    // Step 2: Add second atom + bond
+    with_atom_edit_undo(&mut designer, "Add atom + bond", |sd| {
+        let data = get_data_mut_inner(sd);
+        let id2 = data.add_atom_to_diff(7, DVec3::X);
+        data.add_bond_in_diff(1, id2, BOND_SINGLE);
+    });
+    let after_bond = snapshot_diff(&mut designer);
+
+    // Step 3: Replace atom 1
+    with_atom_edit_undo(&mut designer, "Replace atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.set_atomic_number_recorded(1, 8);
+    });
+
+    // Undo step 3
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), after_bond);
+
+    // Undo step 2
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), after_add);
+
+    // Undo step 1
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo all
+    assert!(designer.redo());
+    assert_eq!(snapshot_diff(&mut designer), after_add);
+    assert!(designer.redo());
+    assert_eq!(snapshot_diff(&mut designer), after_bond);
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 8);
+    }
+}
+
+#[test]
+fn undo_atom_edit_delete_bond_marker_in_diff_view() {
+    let mut designer = setup_atom_edit();
+
+    // Add two atoms + a bond "delete marker" (bond_order = BOND_DELETED)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.add_atom_to_diff(6, DVec3::X);
+        data.delete_bond_in_diff(1, 2); // adds a BOND_DELETED marker
+    }
+    assert_eq!(diff_bond_count(&mut designer), 1); // the delete marker bond
+
+    // Remove the bond delete marker (simulates diff-view deletion of a bond entry)
+    with_atom_edit_undo(&mut designer, "Delete bond", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.delete_bond_recorded(&BondReference {
+            atom_id1: 1,
+            atom_id2: 2,
+        });
+    });
+    assert_eq!(diff_bond_count(&mut designer), 0);
+
+    // Undo — bond delete marker should be restored
+    assert!(designer.undo());
+    assert_eq!(diff_bond_count(&mut designer), 1);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(diff_bond_count(&mut designer), 0);
 }

@@ -496,14 +496,14 @@ fn change_bond_order_result_view(
     let actual_a = match endpoint_info.diff_id_a {
         Some(id) => id,
         None => match endpoint_info.identity_a {
-            Some((_an, pos)) => atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos),
+            Some((_an, pos)) => atom_edit_data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, pos),
             None => return,
         },
     };
     let actual_b = match endpoint_info.diff_id_b {
         Some(id) => id,
         None => match endpoint_info.identity_b {
-            Some((_an, pos)) => atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos),
+            Some((_an, pos)) => atom_edit_data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, pos),
             None => return,
         },
     };
@@ -640,7 +640,9 @@ fn change_selected_bonds_order_result_view(
             None => match info.identity_a {
                 Some((_an, pos)) => *promoted
                     .entry((pos.x.to_bits(), pos.y.to_bits(), pos.z.to_bits()))
-                    .or_insert_with(|| atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos)),
+                    .or_insert_with(|| {
+                        atom_edit_data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, pos)
+                    }),
                 None => continue,
             },
         };
@@ -649,7 +651,9 @@ fn change_selected_bonds_order_result_view(
             None => match info.identity_b {
                 Some((_an, pos)) => *promoted
                     .entry((pos.x.to_bits(), pos.y.to_bits(), pos.z.to_bits()))
-                    .or_insert_with(|| atom_edit_data.diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos)),
+                    .or_insert_with(|| {
+                        atom_edit_data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, pos)
+                    }),
                 None => continue,
             },
         };

@@ -125,9 +125,7 @@ fn resolve_to_diff_id(
     let atom_edit_data = get_selected_atom_edit_data_mut(structure_designer)?;
     match &atom_source {
         AtomSource::BasePassthrough(_) => Some(
-            atom_edit_data
-                .diff
-                .add_atom(UNCHANGED_ATOMIC_NUMBER, atom_info.1),
+            atom_edit_data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, atom_info.1),
         ),
         AtomSource::DiffMatchedBase { diff_id, .. } | AtomSource::DiffAdded(diff_id) => {
             Some(*diff_id)

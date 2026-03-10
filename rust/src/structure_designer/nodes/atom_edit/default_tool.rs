@@ -587,7 +587,14 @@ pub fn default_tool_pointer_up(
 
                 if let Some(order) = current_order {
                     let new_order = cycle_bond_order(order);
-                    change_bond_order(structure_designer, &bond_reference, new_order);
+                    let bond_ref = bond_reference.clone();
+                    with_atom_edit_undo(
+                        structure_designer,
+                        "Change bond order",
+                        |sd| {
+                            change_bond_order(sd, &bond_ref, new_order);
+                        },
+                    );
                 }
                 PointerUpResult::SelectionChanged
             } else {
