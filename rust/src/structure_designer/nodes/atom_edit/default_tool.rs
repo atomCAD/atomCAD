@@ -86,8 +86,10 @@ pub fn default_tool_reset_interaction(structure_designer: &mut StructureDesigner
 
     set_interaction_state(structure_designer, DefaultToolInteractionState::Idle);
 
-    // If we were mid-drag, mark node data changed so the next refresh commits the positions
+    // If we were mid-drag, end undo recording and push the coalesced command,
+    // then mark node data changed so the next refresh commits the positions.
     if was_dragging {
+        end_atom_edit_drag(structure_designer);
         if let Some(node_id) = structure_designer.get_selected_node_id_with_type("atom_edit") {
             structure_designer.mark_node_data_changed(node_id);
         }
@@ -370,6 +372,9 @@ pub fn default_tool_pointer_move(
                 }
             }
 
+            // Begin undo recording for the drag
+            begin_atom_edit_drag(structure_designer);
+
             // Compute the constraint plane: camera-parallel, through selection centroid
             let plane_normal = *camera_forward;
             let plane_point = match get_active_atom_edit_data(structure_designer) {
@@ -639,9 +644,8 @@ pub fn default_tool_pointer_up(
         Some(PendingClickInfo::DragCompleted) => {
             // Screen-plane drag finished. Atoms are already at their new positions
             // (updated incrementally during drag). The state has been reset to Idle.
-            // mark_node_data_changed was already called by drag_selected_by_delta,
-            // and refresh_structure_designer_auto will be called by the API layer.
-            // The full refresh on commit re-evaluates downstream nodes.
+            // End undo recording and push the coalesced command.
+            end_atom_edit_drag(structure_designer);
             PointerUpResult::DragCommitted
         }
         Some(PendingClickInfo::Empty) => {

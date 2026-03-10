@@ -166,19 +166,13 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
                 let diff_id = if let Some(existing_id) = existing_diff_id {
                     // Reuse existing diff entry (e.g., UNCHANGED marker from bond tool).
                     // Promote: set real atomic_number and anchor.
-                    atom_edit_data
-                        .diff
-                        .set_atomic_number(existing_id, atomic_number);
-                    atom_edit_data
-                        .diff
-                        .set_anchor_position(existing_id, position);
-                    atom_edit_data.diff.set_atom_position(existing_id, target);
+                    atom_edit_data.set_atomic_number_recorded(existing_id, atomic_number);
+                    atom_edit_data.set_anchor_recorded(existing_id, position);
+                    atom_edit_data.set_position_recorded(existing_id, target);
                     existing_id
                 } else {
-                    let new_diff_id = atom_edit_data.diff.add_atom(atomic_number, target);
-                    atom_edit_data
-                        .diff
-                        .set_anchor_position(new_diff_id, position);
+                    let new_diff_id = atom_edit_data.add_atom_recorded(atomic_number, target);
+                    atom_edit_data.set_anchor_recorded(new_diff_id, position);
                     new_diff_id
                 };
                 atom_edit_data
@@ -197,7 +191,7 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
         // have anchors; pure additions must never receive one.
         for &(diff_id, original_pos) in &self.diff_atom_positions {
             let target = original_pos + total_delta;
-            atom_edit_data.diff.set_atom_position(diff_id, target);
+            atom_edit_data.set_position_recorded(diff_id, target);
         }
 
         // Apply absolute positions to converted (formerly base) atoms.
@@ -205,7 +199,7 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
             let converted = self.converted_positions.borrow();
             for &(diff_id, original_pos) in converted.iter() {
                 let target = original_pos + total_delta;
-                atom_edit_data.diff.set_atom_position(diff_id, target);
+                atom_edit_data.set_position_recorded(diff_id, target);
             }
         }
 

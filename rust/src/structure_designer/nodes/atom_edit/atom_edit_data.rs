@@ -1517,6 +1517,63 @@ fn get_atom_edit_data_for_recording(
     node_data.as_any_mut().downcast_mut::<AtomEditData>()
 }
 
+/// Temporary state held during an atom edit drag (screen-plane or gadget).
+/// Recording is active on AtomEditData.recorder throughout the drag.
+pub struct PendingAtomEditDrag {
+    pub network_name: String,
+    pub node_id: u64,
+}
+
+/// Begin recording for a drag operation on the atom_edit node.
+///
+/// Starts recording on AtomEditData and stores a `PendingAtomEditDrag` on
+/// StructureDesigner. All subsequent mutations (drag_selected_by_delta, gadget
+/// sync_data) accumulate deltas in the recorder. Call `end_atom_edit_drag()`
+/// when the drag completes to push a single undo command.
+pub fn begin_atom_edit_drag(structure_designer: &mut StructureDesigner) {
+    let (network_name, node_id) = match get_atom_edit_node_info(structure_designer) {
+        Some(info) => info,
+        None => return,
+    };
+
+    if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
+        data.begin_recording();
+    }
+
+    structure_designer.pending_atom_edit_drag = Some(PendingAtomEditDrag {
+        network_name,
+        node_id,
+    });
+}
+
+/// End recording for a drag operation and push the undo command.
+///
+/// Takes the accumulated deltas from the recorder, coalesces them, and pushes
+/// a single `AtomEditMutationCommand`. If no deltas were produced (e.g., drag
+/// without movement), no command is pushed.
+pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
+    let pending = match structure_designer.pending_atom_edit_drag.take() {
+        Some(p) => p,
+        None => return,
+    };
+
+    if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
+        if let Some(recorder) = data.end_recording() {
+            if !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty() {
+                structure_designer.push_command(
+                    crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
+                        description: "Move atoms".to_string(),
+                        network_name: pending.network_name,
+                        node_id: pending.node_id,
+                        atom_deltas: recorder.atom_deltas,
+                        bond_deltas: recorder.bond_deltas,
+                    },
+                );
+            }
+        }
+    }
+}
+
 /// Wrap a mutation on `StructureDesigner` with atom_edit undo recording.
 ///
 /// 1. Begins recording on the atom_edit data.

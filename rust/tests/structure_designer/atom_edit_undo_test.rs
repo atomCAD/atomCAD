@@ -1,14 +1,15 @@
-/// Tests for the atom_edit undo/redo system (Phases A-B).
+/// Tests for the atom_edit undo/redo system (Phases A-C).
 ///
 /// Verifies that the DiffRecorder captures deltas correctly and that
-/// AtomEditMutationCommand can undo/redo atom and bond operations.
+/// AtomEditMutationCommand can undo/redo atom and bond operations,
+/// including drag coalescing (Phase C).
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{BOND_DOUBLE, BOND_SINGLE};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
-    AtomEditData, with_atom_edit_undo,
+    AtomEditData, begin_atom_edit_drag, end_atom_edit_drag, with_atom_edit_undo,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::diff_recorder::DiffRecorder;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -1097,4 +1098,267 @@ fn undo_atom_edit_delete_bond_marker_in_diff_view() {
     // Redo
     assert!(designer.redo());
     assert_eq!(diff_bond_count(&mut designer), 0);
+}
+
+// =============================================================================
+// Phase C: Drag Coalescing
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_drag_is_single_step() {
+    let mut designer = setup_atom_edit();
+
+    // Add two atoms (not undoable)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.add_atom_to_diff(6, DVec3::X);
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.0, 2);
+
+    // Simulate a multi-frame drag: begin_recording, multiple move calls, end_recording
+    begin_atom_edit_drag(&mut designer);
+
+    // Frame 1: move both atoms by (0.1, 0, 0)
+    {
+        let data = get_data_mut_inner(&mut designer);
+        data.move_in_diff(1, DVec3::new(0.1, 0.0, 0.0));
+        data.move_in_diff(2, DVec3::new(1.1, 0.0, 0.0));
+    }
+    // Frame 2: move both atoms by another (0.1, 0, 0)
+    {
+        let data = get_data_mut_inner(&mut designer);
+        data.move_in_diff(1, DVec3::new(0.2, 0.0, 0.0));
+        data.move_in_diff(2, DVec3::new(1.2, 0.0, 0.0));
+    }
+    // Frame 3: move to final positions
+    {
+        let data = get_data_mut_inner(&mut designer);
+        data.move_in_diff(1, DVec3::new(1.0, 0.0, 0.0));
+        data.move_in_diff(2, DVec3::new(2.0, 0.0, 0.0));
+    }
+
+    end_atom_edit_drag(&mut designer);
+
+    // Should have exactly one undo step
+    assert!(designer.undo_stack.can_undo());
+    assert_eq!(designer.undo_stack.undo_description(), Some("Move atoms"));
+
+    // Verify final positions
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-10);
+        assert!((data.diff.get_atom(2).unwrap().position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-10);
+    }
+
+    // Undo — should restore original positions in one step
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+
+    // Redo — should restore final positions
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-10);
+        assert!((data.diff.get_atom(2).unwrap().position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-10);
+    }
+
+    // Should not be able to undo further (only one command was pushed)
+    assert!(designer.undo());
+    assert!(!designer.undo_stack.can_undo());
+}
+
+#[test]
+fn drag_without_movement_creates_no_command() {
+    let mut designer = setup_atom_edit();
+
+    // Add an atom
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+
+    // Begin and immediately end drag without any movement
+    begin_atom_edit_drag(&mut designer);
+    end_atom_edit_drag(&mut designer);
+
+    // No command should be pushed
+    assert!(!designer.undo_stack.can_undo());
+}
+
+#[test]
+fn undo_atom_edit_drag_with_promotion() {
+    let mut designer = setup_atom_edit();
+
+    // Add one diff atom (not undoable)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.0, 1);
+
+    // Simulate a drag that includes a base atom promotion:
+    // begin_recording, add atom (promotion), move it, end_recording
+    begin_atom_edit_drag(&mut designer);
+
+    {
+        let data = get_data_mut_inner(&mut designer);
+        // Move existing diff atom
+        data.move_in_diff(1, DVec3::new(0.5, 0.0, 0.0));
+        // Promote a base atom: add + anchor (as drag_selected_by_delta does)
+        let new_id = data.add_atom_recorded(7, DVec3::new(1.5, 0.0, 0.0));
+        data.set_anchor_recorded(new_id, DVec3::X);
+    }
+
+    end_atom_edit_drag(&mut designer);
+
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert!(designer.undo_stack.can_undo());
+
+    // Undo — should restore to just the original atom
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+
+    // Redo — promoted atom should be back
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    {
+        let data = get_data_mut(&mut designer);
+        let atom2 = data.diff.get_atom(2).unwrap();
+        assert_eq!(atom2.atomic_number, 7);
+        assert!(data.diff.anchor_position(2).is_some());
+    }
+}
+
+#[test]
+fn undo_atom_edit_drag_cancelled() {
+    let mut designer = setup_atom_edit();
+
+    // Add an atom
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    }
+    let before = snapshot_diff(&mut designer);
+
+    // Simulate a drag that gets cancelled after movement
+    begin_atom_edit_drag(&mut designer);
+
+    {
+        let data = get_data_mut_inner(&mut designer);
+        data.move_in_diff(1, DVec3::new(5.0, 0.0, 0.0));
+    }
+
+    // End drag (even if it was "cancelled", the positions have been mutated
+    // and the undo command records the changes so they can be undone)
+    end_atom_edit_drag(&mut designer);
+
+    // A command should have been pushed
+    assert!(designer.undo_stack.can_undo());
+
+    // Undo restores original position
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+}
+
+#[test]
+fn undo_atom_edit_drag_coalesces_many_frames() {
+    let mut designer = setup_atom_edit();
+
+    // Add 5 atoms
+    {
+        let data = get_data_mut(&mut designer);
+        for i in 0..5 {
+            data.add_atom_to_diff(6, DVec3::new(i as f64, 0.0, 0.0));
+        }
+    }
+    let before = snapshot_diff(&mut designer);
+    assert_eq!(before.0, 5);
+
+    // Simulate a 60-frame drag moving all atoms by (0, 1, 0) total
+    begin_atom_edit_drag(&mut designer);
+    for frame in 1..=60 {
+        let frac = frame as f64 / 60.0;
+        let data = get_data_mut_inner(&mut designer);
+        for i in 0..5u32 {
+            let id = i + 1;
+            let new_pos = DVec3::new(i as f64, frac, 0.0);
+            data.move_in_diff(id, new_pos);
+        }
+    }
+    end_atom_edit_drag(&mut designer);
+
+    // Should be a single undo step
+    assert!(designer.undo_stack.can_undo());
+
+    // Undo — all atoms back to original positions
+    assert!(designer.undo());
+    let restored = snapshot_diff(&mut designer);
+    assert_eq!(restored, before);
+
+    // Redo
+    assert!(designer.redo());
+    {
+        let data = get_data_mut(&mut designer);
+        for i in 0..5u32 {
+            let id = i + 1;
+            let atom = data.diff.get_atom(id).unwrap();
+            assert!((atom.position - DVec3::new(i as f64, 1.0, 0.0)).length() < 1e-10);
+        }
+    }
+}
+
+#[test]
+fn undo_atom_edit_drag_then_other_ops() {
+    let mut designer = setup_atom_edit();
+
+    // Add an atom (undoable)
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    let after_add = snapshot_diff(&mut designer);
+
+    // Drag the atom
+    begin_atom_edit_drag(&mut designer);
+    {
+        let data = get_data_mut_inner(&mut designer);
+        data.move_in_diff(1, DVec3::new(5.0, 0.0, 0.0));
+    }
+    end_atom_edit_drag(&mut designer);
+    let after_drag = snapshot_diff(&mut designer);
+
+    // Replace atom's element
+    with_atom_edit_undo(&mut designer, "Replace atoms", |sd| {
+        let data = get_data_mut_inner(sd);
+        data.set_atomic_number_recorded(1, 7);
+    });
+
+    // Undo replace
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), after_drag);
+
+    // Undo drag
+    assert!(designer.undo());
+    assert_eq!(snapshot_diff(&mut designer), after_add);
+
+    // Undo add
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo all three
+    assert!(designer.redo()); // add
+    assert_eq!(snapshot_diff(&mut designer), after_add);
+    assert!(designer.redo()); // drag
+    assert_eq!(snapshot_diff(&mut designer), after_drag);
+    assert!(designer.redo()); // replace
+    {
+        let data = get_data_mut(&mut designer);
+        assert_eq!(data.diff.get_atom(1).unwrap().atomic_number, 7);
+    }
 }

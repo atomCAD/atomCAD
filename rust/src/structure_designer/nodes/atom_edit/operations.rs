@@ -359,22 +359,14 @@ pub(super) fn drag_selected_by_delta(structure_designer: &mut StructureDesigner,
         let diff_id = if let Some(existing_id) = info.existing_diff_id {
             // Reuse existing diff entry (e.g., UNCHANGED marker from bond tool).
             // Promote: set real atomic_number and anchor, then move to new position.
-            atom_edit_data
-                .diff
-                .set_atomic_number(existing_id, info.atomic_number);
-            atom_edit_data
-                .diff
-                .set_anchor_position(existing_id, info.position);
+            atom_edit_data.set_atomic_number_recorded(existing_id, info.atomic_number);
+            atom_edit_data.set_anchor_recorded(existing_id, info.position);
             atom_edit_data.move_in_diff(existing_id, new_position);
             existing_id
         } else {
             // No existing diff entry — create new one
-            let new_diff_id = atom_edit_data
-                .diff
-                .add_atom(info.atomic_number, new_position);
-            atom_edit_data
-                .diff
-                .set_anchor_position(new_diff_id, info.position);
+            let new_diff_id = atom_edit_data.add_atom_recorded(info.atomic_number, new_position);
+            atom_edit_data.set_anchor_recorded(new_diff_id, info.position);
             new_diff_id
         };
         atom_edit_data

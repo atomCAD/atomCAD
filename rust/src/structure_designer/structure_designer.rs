@@ -75,6 +75,9 @@ pub struct StructureDesigner {
     pub undo_stack: UndoStack,
     // Temporary state during a node drag operation (for move coalescing)
     pub pending_move: Option<PendingMove>,
+    // Temporary state during an atom edit drag operation (for drag coalescing)
+    pub pending_atom_edit_drag:
+        Option<super::nodes::atom_edit::atom_edit::PendingAtomEditDrag>,
 }
 
 impl Default for StructureDesigner {
@@ -108,6 +111,7 @@ impl StructureDesigner {
             clipboard: None,
             undo_stack: UndoStack::default(),
             pending_move: None,
+            pending_atom_edit_drag: None,
         }
     }
 }
@@ -2992,6 +2996,8 @@ impl StructureDesigner {
         ray_origin: DVec3,
         ray_direction: DVec3,
     ) {
+        // Begin atom_edit drag recording before the gadget starts dragging
+        super::nodes::atom_edit::atom_edit::begin_atom_edit_drag(self);
         if let Some(gadget) = &mut self.gadget {
             gadget.start_drag(handle_index, ray_origin, ray_direction);
         }
@@ -3010,6 +3016,8 @@ impl StructureDesigner {
         if let Some(gadget) = &mut self.gadget {
             gadget.end_drag();
             self.sync_gadget_data();
+            // End atom_edit drag recording and push the coalesced undo command
+            super::nodes::atom_edit::atom_edit::end_atom_edit_drag(self);
             // Ending drag syncs data back to the node
             if let Some(network_name) = &self.active_node_network_name.clone() {
                 if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
