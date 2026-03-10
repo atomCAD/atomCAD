@@ -16,7 +16,14 @@ use crate::api::structure_designer::structure_designer_api_types::PointerMoveRes
 use crate::api::structure_designer::structure_designer_api_types::PointerMoveResultKind;
 use crate::api::structure_designer::structure_designer_api_types::PointerUpResult;
 use crate::structure_designer::nodes::atom_edit::atom_edit;
-use crate::structure_designer::nodes::atom_edit::atom_edit::MinimizeFreezeMode;
+use crate::structure_designer::nodes::atom_edit::atom_edit::{AtomEditData, MinimizeFreezeMode};
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::undo::commands::atom_edit_frozen_change::{
+    AtomEditFrozenChangeCommand, FrozenDelta, FrozenProvenance,
+};
+use crate::structure_designer::undo::commands::atom_edit_toggle_flag::{
+    AtomEditFlag, AtomEditToggleFlagCommand,
+};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_select_by_ray(
@@ -269,20 +276,46 @@ pub fn atom_edit_transform_selected(abs_transform: APITransform) {
     }
 }
 
+/// Helper: toggle a boolean flag on AtomEditData and push an undo command.
+fn toggle_atom_edit_flag(
+    sd: &mut StructureDesigner,
+    flag: AtomEditFlag,
+    description: &str,
+    accessor: fn(&mut AtomEditData) -> &mut bool,
+) {
+    let (network_name, node_id) = match atom_edit::get_atom_edit_node_info_pub(sd) {
+        Some(info) => info,
+        None => return,
+    };
+    if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+        let field = accessor(data);
+        let old_value = *field;
+        let new_value = !old_value;
+        *field = new_value;
+        sd.push_command(AtomEditToggleFlagCommand {
+            description: description.to_string(),
+            network_name,
+            node_id,
+            flag,
+            old_value,
+            new_value,
+        });
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_toggle_output_diff() -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                if let Some(atom_edit_data) =
-                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-                {
-                    atom_edit_data.output_diff = !atom_edit_data.output_diff;
-                    refresh_structure_designer_auto(cad_instance);
-                    true
-                } else {
-                    false
-                }
+                toggle_atom_edit_flag(
+                    &mut cad_instance.structure_designer,
+                    AtomEditFlag::OutputDiff,
+                    "Toggle output diff",
+                    |d| &mut d.output_diff,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                true
             },
             false,
         )
@@ -294,15 +327,14 @@ pub fn atom_edit_toggle_show_anchor_arrows() -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                if let Some(atom_edit_data) =
-                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-                {
-                    atom_edit_data.show_anchor_arrows = !atom_edit_data.show_anchor_arrows;
-                    refresh_structure_designer_auto(cad_instance);
-                    true
-                } else {
-                    false
-                }
+                toggle_atom_edit_flag(
+                    &mut cad_instance.structure_designer,
+                    AtomEditFlag::ShowAnchorArrows,
+                    "Toggle anchor arrows",
+                    |d| &mut d.show_anchor_arrows,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                true
             },
             false,
         )
@@ -339,16 +371,14 @@ pub fn atom_edit_toggle_include_base_bonds_in_diff() -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                if let Some(atom_edit_data) =
-                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-                {
-                    atom_edit_data.include_base_bonds_in_diff =
-                        !atom_edit_data.include_base_bonds_in_diff;
-                    refresh_structure_designer_auto(cad_instance);
-                    true
-                } else {
-                    false
-                }
+                toggle_atom_edit_flag(
+                    &mut cad_instance.structure_designer,
+                    AtomEditFlag::IncludeBaseBondsInDiff,
+                    "Toggle base bonds in diff",
+                    |d| &mut d.include_base_bonds_in_diff,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                true
             },
             false,
         )
@@ -360,15 +390,14 @@ pub fn atom_edit_toggle_error_on_stale_entries() -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                if let Some(atom_edit_data) =
-                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-                {
-                    atom_edit_data.error_on_stale_entries = !atom_edit_data.error_on_stale_entries;
-                    refresh_structure_designer_auto(cad_instance);
-                    true
-                } else {
-                    false
-                }
+                toggle_atom_edit_flag(
+                    &mut cad_instance.structure_designer,
+                    AtomEditFlag::ErrorOnStaleEntries,
+                    "Toggle error on stale entries",
+                    |d| &mut d.error_on_stale_entries,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                true
             },
             false,
         )
@@ -963,17 +992,35 @@ pub fn atom_edit_get_default_angle() -> Option<f64> {
 pub fn atom_edit_selection_to_frozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(atom_edit_data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
-                for &base_id in &atom_edit_data.selection.selected_base_atoms.clone() {
-                    atom_edit_data.frozen_base_atoms.insert(base_id);
+            let sd = &mut cad_instance.structure_designer;
+            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
+                // Gather the delta: which atoms are actually newly added to frozen
+                let mut delta = FrozenDelta {
+                    added: Vec::new(),
+                    removed: Vec::new(),
+                };
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    for &base_id in &data.selection.selected_base_atoms.clone() {
+                        if data.frozen_base_atoms.insert(base_id) {
+                            delta.added.push((FrozenProvenance::Base, base_id));
+                        }
+                    }
+                    for &diff_id in &data.selection.selected_diff_atoms.clone() {
+                        if data.frozen_diff_atoms.insert(diff_id) {
+                            delta.added.push((FrozenProvenance::Diff, diff_id));
+                        }
+                    }
                 }
-                for &diff_id in &atom_edit_data.selection.selected_diff_atoms.clone() {
-                    atom_edit_data.frozen_diff_atoms.insert(diff_id);
+                if !delta.added.is_empty() || !delta.removed.is_empty() {
+                    sd.push_command(AtomEditFrozenChangeCommand {
+                        description: "Freeze selection".to_string(),
+                        network_name,
+                        node_id,
+                        delta,
+                    });
                 }
-                refresh_structure_designer_auto(cad_instance);
             }
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }
@@ -983,17 +1030,34 @@ pub fn atom_edit_selection_to_frozen() {
 pub fn atom_edit_selection_to_unfrozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(atom_edit_data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
-                for &base_id in &atom_edit_data.selection.selected_base_atoms.clone() {
-                    atom_edit_data.frozen_base_atoms.remove(&base_id);
+            let sd = &mut cad_instance.structure_designer;
+            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
+                let mut delta = FrozenDelta {
+                    added: Vec::new(),
+                    removed: Vec::new(),
+                };
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    for &base_id in &data.selection.selected_base_atoms.clone() {
+                        if data.frozen_base_atoms.remove(&base_id) {
+                            delta.removed.push((FrozenProvenance::Base, base_id));
+                        }
+                    }
+                    for &diff_id in &data.selection.selected_diff_atoms.clone() {
+                        if data.frozen_diff_atoms.remove(&diff_id) {
+                            delta.removed.push((FrozenProvenance::Diff, diff_id));
+                        }
+                    }
                 }
-                for &diff_id in &atom_edit_data.selection.selected_diff_atoms.clone() {
-                    atom_edit_data.frozen_diff_atoms.remove(&diff_id);
+                if !delta.added.is_empty() || !delta.removed.is_empty() {
+                    sd.push_command(AtomEditFrozenChangeCommand {
+                        description: "Unfreeze selection".to_string(),
+                        network_name,
+                        node_id,
+                        delta,
+                    });
                 }
-                refresh_structure_designer_auto(cad_instance);
             }
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }
@@ -1023,13 +1087,32 @@ pub fn atom_edit_frozen_to_selection() {
 pub fn atom_edit_clear_frozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(atom_edit_data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
-                atom_edit_data.frozen_base_atoms.clear();
-                atom_edit_data.frozen_diff_atoms.clear();
-                refresh_structure_designer_auto(cad_instance);
+            let sd = &mut cad_instance.structure_designer;
+            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
+                let mut delta = FrozenDelta {
+                    added: Vec::new(),
+                    removed: Vec::new(),
+                };
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    for &base_id in &data.frozen_base_atoms {
+                        delta.removed.push((FrozenProvenance::Base, base_id));
+                    }
+                    for &diff_id in &data.frozen_diff_atoms {
+                        delta.removed.push((FrozenProvenance::Diff, diff_id));
+                    }
+                    data.frozen_base_atoms.clear();
+                    data.frozen_diff_atoms.clear();
+                }
+                if !delta.removed.is_empty() {
+                    sd.push_command(AtomEditFrozenChangeCommand {
+                        description: "Clear frozen atoms".to_string(),
+                        network_name,
+                        node_id,
+                        delta,
+                    });
+                }
             }
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }

@@ -1,4 +1,4 @@
-/// Tests for the atom_edit undo/redo system (Phases A-D).
+/// Tests for the atom_edit undo/redo system (Phases A-E).
 ///
 /// Verifies that the DiffRecorder captures deltas correctly and that
 /// AtomEditMutationCommand can undo/redo atom and bond operations,
@@ -9,10 +9,17 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
-    AtomEditData, begin_atom_edit_drag, end_atom_edit_drag, with_atom_edit_undo,
+    AtomEditData, begin_atom_edit_drag, end_atom_edit_drag, get_atom_edit_node_info_pub,
+    with_atom_edit_undo,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::diff_recorder::DiffRecorder;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_frozen_change::{
+    AtomEditFrozenChangeCommand, FrozenDelta, FrozenProvenance,
+};
+use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_toggle_flag::{
+    AtomEditFlag, AtomEditToggleFlagCommand,
+};
 
 // =============================================================================
 // Helpers
@@ -1882,4 +1889,489 @@ fn undo_atom_edit_minimize_then_add_hydrogen_sequence() {
     assert!(designer.redo()); // add hydrogen
     assert_eq!(diff_atom_count(&mut designer), 3);
     assert_eq!(diff_bond_count(&mut designer), 2);
+}
+
+// =============================================================================
+// Phase E: Toggle Flag Undo/Redo
+// =============================================================================
+
+/// Helper to push an AtomEditToggleFlagCommand directly on a StructureDesigner.
+fn push_toggle_flag_command(
+    designer: &mut StructureDesigner,
+    flag: AtomEditFlag,
+    description: &str,
+    accessor: fn(&mut AtomEditData) -> &mut bool,
+) {
+    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
+    let data = get_data_mut(designer);
+    let field = accessor(data);
+    let old_value = *field;
+    let new_value = !old_value;
+    *field = new_value;
+    designer.push_command(AtomEditToggleFlagCommand {
+        description: description.to_string(),
+        network_name,
+        node_id,
+        flag,
+        old_value,
+        new_value,
+    });
+}
+
+#[test]
+fn undo_atom_edit_toggle_output_diff() {
+    let mut designer = setup_atom_edit();
+    assert!(!get_data_mut(&mut designer).output_diff);
+
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::OutputDiff,
+        "Toggle output diff",
+        |d| &mut d.output_diff,
+    );
+    assert!(get_data_mut(&mut designer).output_diff);
+
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).output_diff);
+
+    assert!(designer.redo());
+    assert!(get_data_mut(&mut designer).output_diff);
+}
+
+#[test]
+fn undo_atom_edit_toggle_show_anchor_arrows() {
+    let mut designer = setup_atom_edit();
+    let initial = get_data_mut(&mut designer).show_anchor_arrows;
+
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::ShowAnchorArrows,
+        "Toggle anchor arrows",
+        |d| &mut d.show_anchor_arrows,
+    );
+    assert_eq!(get_data_mut(&mut designer).show_anchor_arrows, !initial);
+
+    assert!(designer.undo());
+    assert_eq!(get_data_mut(&mut designer).show_anchor_arrows, initial);
+
+    assert!(designer.redo());
+    assert_eq!(get_data_mut(&mut designer).show_anchor_arrows, !initial);
+}
+
+#[test]
+fn undo_atom_edit_toggle_include_base_bonds_in_diff() {
+    let mut designer = setup_atom_edit();
+    let initial = get_data_mut(&mut designer).include_base_bonds_in_diff;
+
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::IncludeBaseBondsInDiff,
+        "Toggle base bonds in diff",
+        |d| &mut d.include_base_bonds_in_diff,
+    );
+    assert_eq!(get_data_mut(&mut designer).include_base_bonds_in_diff, !initial);
+
+    assert!(designer.undo());
+    assert_eq!(get_data_mut(&mut designer).include_base_bonds_in_diff, initial);
+
+    assert!(designer.redo());
+    assert_eq!(get_data_mut(&mut designer).include_base_bonds_in_diff, !initial);
+}
+
+#[test]
+fn undo_atom_edit_toggle_error_on_stale_entries() {
+    let mut designer = setup_atom_edit();
+    assert!(!get_data_mut(&mut designer).error_on_stale_entries);
+
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::ErrorOnStaleEntries,
+        "Toggle error on stale entries",
+        |d| &mut d.error_on_stale_entries,
+    );
+    assert!(get_data_mut(&mut designer).error_on_stale_entries);
+
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).error_on_stale_entries);
+
+    assert!(designer.redo());
+    assert!(get_data_mut(&mut designer).error_on_stale_entries);
+}
+
+#[test]
+fn undo_atom_edit_toggle_flag_double_toggle() {
+    // Toggle twice, undo both, redo both
+    let mut designer = setup_atom_edit();
+    assert!(!get_data_mut(&mut designer).output_diff);
+
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::OutputDiff,
+        "Toggle 1",
+        |d| &mut d.output_diff,
+    );
+    assert!(get_data_mut(&mut designer).output_diff);
+
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::OutputDiff,
+        "Toggle 2",
+        |d| &mut d.output_diff,
+    );
+    assert!(!get_data_mut(&mut designer).output_diff);
+
+    // Undo second toggle
+    assert!(designer.undo());
+    assert!(get_data_mut(&mut designer).output_diff);
+
+    // Undo first toggle
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).output_diff);
+
+    // Redo both
+    assert!(designer.redo());
+    assert!(get_data_mut(&mut designer).output_diff);
+    assert!(designer.redo());
+    assert!(!get_data_mut(&mut designer).output_diff);
+}
+
+// =============================================================================
+// Phase E: Frozen Change Undo/Redo
+// =============================================================================
+
+/// Helper to push an AtomEditFrozenChangeCommand that freezes specific atoms.
+fn push_freeze_command(
+    designer: &mut StructureDesigner,
+    base_ids: &[u32],
+    diff_ids: &[u32],
+) {
+    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
+    let mut delta = FrozenDelta {
+        added: Vec::new(),
+        removed: Vec::new(),
+    };
+    let data = get_data_mut(designer);
+    for &id in base_ids {
+        if data.frozen_base_atoms.insert(id) {
+            delta.added.push((FrozenProvenance::Base, id));
+        }
+    }
+    for &id in diff_ids {
+        if data.frozen_diff_atoms.insert(id) {
+            delta.added.push((FrozenProvenance::Diff, id));
+        }
+    }
+    if !delta.added.is_empty() || !delta.removed.is_empty() {
+        designer.push_command(AtomEditFrozenChangeCommand {
+            description: "Freeze selection".to_string(),
+            network_name,
+            node_id,
+            delta,
+        });
+    }
+}
+
+/// Helper to push an AtomEditFrozenChangeCommand that unfreezes specific atoms.
+fn push_unfreeze_command(
+    designer: &mut StructureDesigner,
+    base_ids: &[u32],
+    diff_ids: &[u32],
+) {
+    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
+    let mut delta = FrozenDelta {
+        added: Vec::new(),
+        removed: Vec::new(),
+    };
+    let data = get_data_mut(designer);
+    for &id in base_ids {
+        if data.frozen_base_atoms.remove(&id) {
+            delta.removed.push((FrozenProvenance::Base, id));
+        }
+    }
+    for &id in diff_ids {
+        if data.frozen_diff_atoms.remove(&id) {
+            delta.removed.push((FrozenProvenance::Diff, id));
+        }
+    }
+    if !delta.added.is_empty() || !delta.removed.is_empty() {
+        designer.push_command(AtomEditFrozenChangeCommand {
+            description: "Unfreeze selection".to_string(),
+            network_name,
+            node_id,
+            delta,
+        });
+    }
+}
+
+/// Helper to push an AtomEditFrozenChangeCommand that clears all frozen atoms.
+fn push_clear_frozen_command(designer: &mut StructureDesigner) {
+    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
+    let mut delta = FrozenDelta {
+        added: Vec::new(),
+        removed: Vec::new(),
+    };
+    let data = get_data_mut(designer);
+    for &id in &data.frozen_base_atoms {
+        delta.removed.push((FrozenProvenance::Base, id));
+    }
+    for &id in &data.frozen_diff_atoms {
+        delta.removed.push((FrozenProvenance::Diff, id));
+    }
+    data.frozen_base_atoms.clear();
+    data.frozen_diff_atoms.clear();
+    if !delta.removed.is_empty() {
+        designer.push_command(AtomEditFrozenChangeCommand {
+            description: "Clear frozen atoms".to_string(),
+            network_name,
+            node_id,
+            delta,
+        });
+    }
+}
+
+#[test]
+fn undo_atom_edit_freeze_diff_atoms() {
+    let mut designer = setup_atom_edit();
+
+    // Add two diff atoms
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::X);
+    });
+
+    // Freeze diff atom 1
+    push_freeze_command(&mut designer, &[], &[1]);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&2));
+
+    // Undo freeze
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+
+    // Redo freeze
+    assert!(designer.redo());
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+}
+
+#[test]
+fn undo_atom_edit_unfreeze_atoms() {
+    let mut designer = setup_atom_edit();
+
+    // Add a diff atom and freeze it
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    push_freeze_command(&mut designer, &[], &[1]);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+
+    // Unfreeze it
+    push_unfreeze_command(&mut designer, &[], &[1]);
+    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+
+    // Undo unfreeze → frozen again
+    assert!(designer.undo());
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+
+    // Redo unfreeze → unfrozen again
+    assert!(designer.redo());
+    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+}
+
+#[test]
+fn undo_atom_edit_clear_frozen() {
+    let mut designer = setup_atom_edit();
+
+    // Add diff atoms and freeze both
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::X);
+    });
+    push_freeze_command(&mut designer, &[], &[1, 2]);
+    assert_eq!(get_data_mut(&mut designer).frozen_diff_atoms.len(), 2);
+
+    // Clear all frozen
+    push_clear_frozen_command(&mut designer);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.is_empty());
+
+    // Undo clear → both restored
+    assert!(designer.undo());
+    assert_eq!(get_data_mut(&mut designer).frozen_diff_atoms.len(), 2);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&2));
+
+    // Redo clear
+    assert!(designer.redo());
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.is_empty());
+}
+
+#[test]
+fn undo_atom_edit_freeze_already_frozen_is_noop() {
+    let mut designer = setup_atom_edit();
+
+    // Add diff atom and freeze it
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    push_freeze_command(&mut designer, &[], &[1]);
+
+    // Try to freeze again — delta is empty so no command is pushed.
+    // Undo the freeze, then verify no extra undo step was added.
+    push_freeze_command(&mut designer, &[], &[1]);
+    // Undo: we should undo the first freeze (not a second one)
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    // Next undo should be the add atom, not another freeze
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+}
+
+// =============================================================================
+// Phase E: Sequence / Integration Tests
+// =============================================================================
+
+#[test]
+fn undo_atom_edit_flag_interleaved_with_mutations() {
+    // Toggle flag, add atom, undo both in order
+    let mut designer = setup_atom_edit();
+
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::OutputDiff,
+        "Toggle output diff",
+        |d| &mut d.output_diff,
+    );
+    assert!(get_data_mut(&mut designer).output_diff);
+
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    assert_eq!(diff_atom_count(&mut designer), 1);
+
+    // Undo add atom
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+    // Flag should still be toggled
+    assert!(get_data_mut(&mut designer).output_diff);
+
+    // Undo toggle flag
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).output_diff);
+
+    // Redo both
+    assert!(designer.redo()); // toggle
+    assert!(get_data_mut(&mut designer).output_diff);
+    assert!(designer.redo()); // add atom
+    assert_eq!(diff_atom_count(&mut designer), 1);
+}
+
+#[test]
+fn undo_atom_edit_frozen_interleaved_with_mutations() {
+    // Add atom → freeze it → delete it → undo all three
+    let mut designer = setup_atom_edit();
+
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    assert_eq!(diff_atom_count(&mut designer), 1);
+
+    push_freeze_command(&mut designer, &[], &[1]);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+
+    with_atom_edit_undo(&mut designer, "Delete atom", |sd| {
+        let data = get_data_mut(sd);
+        data.remove_from_diff(1);
+    });
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Undo delete → atom restored
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+
+    // Undo freeze → atom still there but not frozen
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    assert_eq!(diff_atom_count(&mut designer), 1);
+
+    // Undo add → atom gone
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+}
+
+#[test]
+fn undo_atom_edit_sequence_restores_initial_state() {
+    // Comprehensive: add atom, toggle flag, freeze, add another, toggle back, undo all
+    let mut designer = setup_atom_edit();
+
+    let initial_output_diff = get_data_mut(&mut designer).output_diff;
+
+    // 1. Add atom
+    with_atom_edit_undo(&mut designer, "Add atom 1", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+
+    // 2. Toggle output_diff
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::OutputDiff,
+        "Toggle",
+        |d| &mut d.output_diff,
+    );
+
+    // 3. Freeze atom 1
+    push_freeze_command(&mut designer, &[], &[1]);
+
+    // 4. Add another atom
+    with_atom_edit_undo(&mut designer, "Add atom 2", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::X);
+    });
+
+    // 5. Toggle output_diff back
+    push_toggle_flag_command(
+        &mut designer,
+        AtomEditFlag::OutputDiff,
+        "Toggle back",
+        |d| &mut d.output_diff,
+    );
+
+    // Verify current state
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(get_data_mut(&mut designer).output_diff, initial_output_diff);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+
+    // Undo all 5 operations
+    for _ in 0..5 {
+        assert!(designer.undo());
+    }
+
+    // Should be back to initial state
+    assert_eq!(diff_atom_count(&mut designer), 0);
+    assert_eq!(get_data_mut(&mut designer).output_diff, initial_output_diff);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.is_empty());
+
+    // Cannot undo further
+    assert!(!designer.undo());
+
+    // Redo all 5
+    for _ in 0..5 {
+        assert!(designer.redo());
+    }
+
+    // Back to post-all-operations state
+    assert_eq!(diff_atom_count(&mut designer), 2);
+    assert_eq!(get_data_mut(&mut designer).output_diff, initial_output_diff);
+    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
 }

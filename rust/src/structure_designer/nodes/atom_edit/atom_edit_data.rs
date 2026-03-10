@@ -1499,6 +1499,14 @@ pub(super) fn get_diff_id_from_source(source: &AtomSource) -> Option<u32> {
 // =============================================================================
 
 /// Get the network_name and node_id for the currently selected atom_edit node.
+/// Public variant for use by API layer (toggle flag / frozen change commands).
+pub fn get_atom_edit_node_info_pub(
+    structure_designer: &StructureDesigner,
+) -> Option<(String, u64)> {
+    get_atom_edit_node_info(structure_designer)
+}
+
+/// Get the network_name and node_id for the currently selected atom_edit node.
 fn get_atom_edit_node_info(structure_designer: &StructureDesigner) -> Option<(String, u64)> {
     let network_name = structure_designer
         .active_node_network_name

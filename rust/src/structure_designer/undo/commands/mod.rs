@@ -1,6 +1,8 @@
 pub mod add_network;
 pub mod add_node;
+pub mod atom_edit_frozen_change;
 pub mod atom_edit_mutation;
+pub mod atom_edit_toggle_flag;
 pub mod connect_wire;
 pub mod delete_network;
 pub mod delete_nodes;
