@@ -1,0 +1,624 @@
+# Continuous Minimization Design
+
+Real-time energy minimization that runs frame-by-frame while the user drags selected atoms, giving immediate visual feedback of neighboring atoms relaxing around the drag.
+
+## Motivation
+
+Today, energy minimization is a discrete action: the user clicks "Minimize" and waits for the result. When building complex structures, a tighter feedback loop is desirable — the user drags an atom and sees the surrounding structure relax in real time. This is a well-established paradigm in molecular editors (Avogadro's Auto-Optimize, PyMOL's Sculpting, VMD's Interactive Molecular Dynamics).
+
+## When Minimization Runs
+
+Continuous minimization has two phases:
+
+1. **During drag**: A small number of steepest descent steps (default 4) run each pointer-move frame, giving real-time visual feedback of neighbors relaxing.
+
+2. **Settle burst on drag end**: When the user releases the mouse, an additional burst of steepest descent steps (default 50) runs before the drag operation finalizes. This lets the structure "settle" into a cleaner geometry, since the per-frame steps during fast dragging may not be enough for full relaxation.
+
+The settle burst uses the same algorithm (steepest descent) and the same constraints as the per-frame steps. Because it's steepest descent rather than a full L-BFGS batch minimize, the settling is gradual and produces no jarring "snap" to a distant minimum.
+
+Both phases run inside the `begin_atom_edit_drag` / `end_atom_edit_drag` recording session, so the entire drag + relaxation + settling reverts as a single undo operation.
+
+### Why not a full batch minimize on drag end?
+
+A full L-BFGS minimize could move atoms far from where the user placed them, producing a disorienting visual jump. Steepest descent with a limited step count makes incremental progress — atoms move a bit further toward a minimum but don't teleport. The user can always run a manual "Minimize" afterward if they want full convergence.
+
+### Why not continuous optimization while idle (Avogadro style)?
+
+Avogadro's Auto-Optimize runs steepest descent every frame even when the user isn't interacting. This gives the most polished feel but requires a persistent animation loop / timer in Flutter that fires continuously, draining CPU/battery. It also raises questions about when to stop. Our approach (drag + settle) gets the primary benefit without the architectural complexity — the structure relaxes when the user is actively editing, which is when it matters most.
+
+## Two Methods
+
+Two continuous minimization methods are supported, selectable via a preference:
+
+### Method 1: Constrained Minimization (Simple)
+
+The dragged/selected atoms are **hard-frozen** at the cursor position. A few minimization steps run on all other non-frozen atoms each frame.
+
+- Dragged atoms follow the mouse perfectly.
+- Neighbors relax around the constraint.
+- Simplest to implement; maps directly onto existing `frozen_indices` infrastructure.
+
+### Method 2: Spring Restraint (Smooth)
+
+Instead of hard-freezing dragged atoms, a **harmonic spring** pulls each selected atom toward its cursor-imposed target position:
+
+```
+E_restraint(i) = 0.5 * k * |r_i - r_target_i|^2
+```
+
+where `r_target_i` is the position the user is dragging atom `i` to, and `k` is a configurable spring constant (kcal/(mol·Å²)).
+
+- Dragged atoms are pulled toward the cursor but can still respond to force field forces.
+- Produces smoother, more physically realistic behavior.
+- The atom finds a compromise between user intent and chemical geometry.
+- With very large `k`, behavior approaches Method 1 (hard constraint).
+
+### Frozen Atoms
+
+In both methods, atoms that have the persistent **frozen flag** set (via the freeze UI) are always frozen during continuous minimization, in addition to the method-specific constraints. This is consistent with how the existing discrete minimization respects the frozen flag.
+
+### Why Steepest Descent, Not L-BFGS
+
+The existing L-BFGS optimizer builds up curvature history (the `(s, y, rho)` correction pairs) that assumes a stationary objective function. During interactive dragging, the target positions change every frame, invalidating the accumulated Hessian approximation. This causes:
+
+- Stale curvature information producing poor search directions.
+- The need to reset L-BFGS memory every frame, reducing it to steepest descent anyway.
+- Potential oscillation as the optimizer "remembers" the wrong landscape.
+
+**Steepest descent** is the standard choice for interactive minimization (Avogadro uses it for Auto-Optimize). Each step is independent — no history to invalidate. With a small fixed number of steps per frame (default: 4), the structure makes incremental progress toward a minimum without overshooting. The result is fluid, predictable motion.
+
+An alternative is **FIRE** (Fast Inertial Relaxation Engine), which converges faster than steepest descent while remaining robust to changing landscapes. FIRE could be added as a future enhancement.
+
+## Preferences
+
+### New Fields in `SimulationPreferences`
+
+```rust
+#[frb]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct SimulationPreferences {
+    // ... existing fields ...
+
+    /// Enable continuous minimization during atom dragging.
+    #[frb(non_final)]
+    #[serde(default)]
+    pub continuous_minimization: bool,
+
+    /// Use spring restraints instead of hard constraints for dragged atoms.
+    /// When false (default): dragged atoms are frozen, rest minimized (Method 1).
+    /// When true: dragged atoms are pulled by harmonic springs (Method 2).
+    #[frb(non_final)]
+    #[serde(default)]
+    pub continuous_minimization_use_springs: bool,
+
+    /// Spring constant for restraints in kcal/(mol*A^2).
+    /// Only used when continuous_minimization_use_springs is true.
+    /// Higher values make dragged atoms follow the cursor more tightly.
+    /// Default: 200.0 (stiff but not rigid).
+    #[frb(non_final)]
+    #[serde(default = "default_spring_constant")]
+    pub continuous_minimization_spring_constant: f64,
+
+    /// Number of steepest descent steps per drag frame.
+    /// Higher values give more relaxation per frame but cost more CPU time.
+    /// Default: 4 (matches Avogadro's default).
+    #[frb(non_final)]
+    #[serde(default = "default_steps_per_frame")]
+    pub continuous_minimization_steps_per_frame: u32,
+
+    /// Number of steepest descent steps to run as a "settle burst" when
+    /// the user releases the mouse after dragging. Lets the structure
+    /// relax further without a jarring full-minimize snap.
+    /// Default: 50.
+    #[frb(non_final)]
+    #[serde(default = "default_settle_steps")]
+    pub continuous_minimization_settle_steps: u32,
+}
+
+fn default_spring_constant() -> f64 { 200.0 }
+fn default_steps_per_frame() -> u32 { 4 }
+fn default_settle_steps() -> u32 { 50 }
+```
+
+All new fields use `#[serde(default)]` for backward-compatible deserialization of existing preferences files.
+
+### Default Values
+
+| Field | Default | Rationale |
+|-------|---------|-----------|
+| `continuous_minimization` | `false` | Opt-in feature, does not change default behavior |
+| `continuous_minimization_use_springs` | `false` | Simple method is the default; springs are an advanced option |
+| `continuous_minimization_spring_constant` | `200.0` | Stiff enough to follow the cursor closely, soft enough for force field feedback. Comparable to Avogadro's approach |
+| `continuous_minimization_steps_per_frame` | `4` | Matches Avogadro's default for Auto-Optimize. Balances responsiveness vs. CPU cost |
+| `continuous_minimization_settle_steps` | `50` | Enough steps to noticeably improve geometry on release without being slow (~50 × gradient eval) |
+
+### Spring Constant Guidelines
+
+The spring constant `k` in kcal/(mol·Å²) controls how tightly dragged atoms follow the cursor:
+
+- **50–100**: Loose. Atom visibly lags behind cursor. Good for seeing force field effects.
+- **200**: Default. Atom follows cursor closely but can adjust for local geometry.
+- **500–1000**: Very stiff. Atom nearly locked to cursor position. Approaches Method 1 behavior.
+
+For reference, a typical C-C bond stretch force constant in UFF is ~700 kcal/(mol·Å²), so the default of 200 is softer than a covalent bond — the atom will follow the cursor but not at the expense of badly distorting local geometry.
+
+## Implementation
+
+### New Steepest Descent Minimizer
+
+A new function in `simulation/minimize.rs`:
+
+```rust
+/// Performs N steps of steepest descent with a fixed step size.
+///
+/// Unlike L-BFGS, this has no history and is suitable for interactive use
+/// where the energy landscape changes every frame.
+///
+/// Returns the final energy.
+pub fn steepest_descent_steps(
+    ff: &dyn ForceField,
+    positions: &mut [f64],
+    frozen: &[usize],
+    num_steps: u32,
+    max_displacement: f64,
+) -> f64 {
+    let n = positions.len();
+    if n == 0 { return 0.0; }
+
+    let mut energy = 0.0;
+    let mut grad = vec![0.0; n];
+
+    for _ in 0..num_steps {
+        ff.energy_and_gradients(positions, &mut energy, &mut grad);
+        zero_frozen(&mut grad, frozen);
+
+        // Scale step so max atom displacement <= max_displacement
+        let max_atom_disp = max_per_atom_displacement(&grad);
+        if max_atom_disp < 1e-16 { break; } // already at minimum
+        let step = max_displacement / max_atom_disp;
+
+        // Apply: x -= step * grad
+        for i in 0..n {
+            positions[i] -= step * grad[i];
+        }
+    }
+
+    // Final energy evaluation
+    ff.energy_and_gradients(positions, &mut energy, &mut grad);
+    energy
+}
+```
+
+This reuses the existing `zero_frozen` and `max_per_atom_displacement` helpers.
+
+### Spring Restraint Force Field Wrapper
+
+A wrapper that adds harmonic restraints on top of any base force field:
+
+```rust
+/// Wraps a base ForceField and adds harmonic spring restraints
+/// pulling specified atoms toward target positions.
+pub struct RestrainedForceField<'a> {
+    base: &'a dyn ForceField,
+    /// (topology_index, target_x, target_y, target_z) for each restrained atom
+    restraints: Vec<(usize, f64, f64, f64)>,
+    /// Spring constant in kcal/(mol*A^2)
+    spring_constant: f64,
+}
+
+impl<'a> ForceField for RestrainedForceField<'a> {
+    fn energy_and_gradients(
+        &self,
+        positions: &[f64],
+        energy: &mut f64,
+        gradients: &mut [f64],
+    ) {
+        // Compute base energy and gradients
+        self.base.energy_and_gradients(positions, energy, gradients);
+
+        // Add restraint terms: E = 0.5 * k * |r - r_target|^2
+        // dE/dx_i = k * (x_i - x_target)
+        let k = self.spring_constant;
+        for &(topo_idx, tx, ty, tz) in &self.restraints {
+            let base = topo_idx * 3;
+            let dx = positions[base]     - tx;
+            let dy = positions[base + 1] - ty;
+            let dz = positions[base + 2] - tz;
+
+            *energy += 0.5 * k * (dx * dx + dy * dy + dz * dz);
+            gradients[base]     += k * dx;
+            gradients[base + 1] += k * dy;
+            gradients[base + 2] += k * dz;
+        }
+    }
+}
+```
+
+### Modified Drag Flow
+
+The continuous minimization hooks into the existing drag flow in `default_tool.rs` at two points:
+
+```
+ContinueDrag:
+  1. drag_selected_by_delta(sd, delta)          // existing: move selected atoms
+  2. if continuous_minimization enabled:
+       continuous_minimize_during_drag(sd)       // NEW: relax neighbors per frame
+
+EndDrag (pointer_up):
+  1. if continuous_minimization enabled:
+       continuous_minimize_settle(sd)            // NEW: settle burst
+  2. end_atom_edit_drag(sd)                      // existing: finalize undo recording
+```
+
+The settle burst runs **before** `end_atom_edit_drag` so that the settling position changes are captured by the same `DiffRecorder` and included in the single undo command.
+
+#### New Function: `continuous_minimize_during_drag`
+
+Located in `minimization.rs`:
+
+```rust
+/// Runs a few minimization steps on non-selected atoms during a drag operation.
+///
+/// This is called once per pointer-move frame when continuous minimization is enabled.
+/// It operates on the evaluated result structure, with selected atoms constrained
+/// (either frozen or spring-restrained depending on preferences).
+pub fn continuous_minimize_during_drag(
+    structure_designer: &mut StructureDesigner,
+) -> Result<(), String> {
+    let prefs = &structure_designer.preferences.simulation_preferences;
+    let use_springs = prefs.continuous_minimization_use_springs;
+    let spring_k = prefs.continuous_minimization_spring_constant;
+    let steps = prefs.continuous_minimization_steps_per_frame;
+
+    // Phase 1: Gather (immutable borrows)
+    let (topology, force_field, frozen_indices, selected_restraints, result_to_source) = {
+        let atom_edit_data = get_active_atom_edit_data(structure_designer)
+            .ok_or("No active atom_edit node")?;
+
+        if atom_edit_data.output_diff {
+            return Ok(()); // No-op in diff view
+        }
+
+        let eval_cache = structure_designer
+            .get_selected_node_eval_cache()
+            .ok_or("No eval cache")?
+            .downcast_ref::<AtomEditEvalCache>()
+            .ok_or("Wrong eval cache type")?;
+
+        let result_structure = structure_designer
+            .get_atomic_structure_from_selected_node()
+            .ok_or("No result structure")?;
+
+        let vdw_mode = if structure_designer.preferences
+            .simulation_preferences.use_vdw_cutoff
+        {
+            VdwMode::Cutoff(6.0)
+        } else {
+            VdwMode::AllPairs
+        };
+
+        let topology = match &vdw_mode {
+            VdwMode::AllPairs => MolecularTopology::from_structure(result_structure),
+            VdwMode::Cutoff(_) => MolecularTopology::from_structure_bonded_only(result_structure),
+        };
+
+        if topology.num_atoms == 0 {
+            return Ok(());
+        }
+
+        // Build selected result IDs
+        let mut selected_result_ids: HashSet<u32> = HashSet::new();
+        for &base_id in &atom_edit_data.selection.selected_base_atoms {
+            if let Some(&rid) = eval_cache.provenance.base_to_result.get(&base_id) {
+                selected_result_ids.insert(rid);
+            }
+        }
+        for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
+            if let Some(&rid) = eval_cache.provenance.diff_to_result.get(&diff_id) {
+                selected_result_ids.insert(rid);
+            }
+        }
+
+        // Frozen indices: always include frozen-flagged atoms
+        // In Method 1 (no springs): also include selected atoms
+        // In Method 2 (springs): selected atoms are NOT frozen (springs pull them)
+        let frozen_indices: Vec<usize> = topology.atom_ids.iter().enumerate()
+            .filter(|(_, result_id)| {
+                let is_frozen_flag = result_structure
+                    .get_atom(**result_id)
+                    .is_some_and(|atom| atom.is_frozen());
+                let is_selected = selected_result_ids.contains(result_id);
+
+                if use_springs {
+                    // Method 2: only persistent-frozen atoms are frozen
+                    is_frozen_flag
+                } else {
+                    // Method 1: selected + persistent-frozen atoms are frozen
+                    is_selected || is_frozen_flag
+                }
+            })
+            .map(|(i, _)| i)
+            .collect();
+
+        // For Method 2: build restraint list (selected atom targets)
+        let selected_restraints: Vec<(usize, f64, f64, f64)> = if use_springs {
+            topology.atom_ids.iter().enumerate()
+                .filter(|(_, rid)| selected_result_ids.contains(rid))
+                .map(|(topo_idx, _)| {
+                    // Target = current position (where user dragged to)
+                    let base = topo_idx * 3;
+                    (topo_idx,
+                     topology.positions[base],
+                     topology.positions[base + 1],
+                     topology.positions[base + 2])
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let force_field = UffForceField::from_topology_with_frozen(
+            &topology, vdw_mode, &frozen_indices
+        )?;
+
+        let result_to_source: Vec<Option<AtomSource>> = topology.atom_ids.iter()
+            .map(|&rid| eval_cache.provenance.sources.get(&rid).cloned())
+            .collect();
+
+        (topology, force_field, frozen_indices, selected_restraints, result_to_source)
+    };
+
+    // Phase 2: Minimize (no borrows)
+    let mut positions = topology.positions.clone();
+
+    if use_springs && !selected_restraints.is_empty() {
+        // Method 2: steepest descent with spring-restrained force field
+        let restrained_ff = RestrainedForceField {
+            base: &force_field,
+            restraints: selected_restraints,
+            spring_constant: spring_k,
+        };
+        steepest_descent_steps(
+            &restrained_ff, &mut positions, &frozen_indices, steps, 0.1,
+        );
+    } else {
+        // Method 1: steepest descent with selected atoms frozen
+        steepest_descent_steps(
+            &force_field, &mut positions, &frozen_indices, steps, 0.1,
+        );
+    }
+
+    // Phase 3: Write back (mutable borrow)
+    // Note: we do NOT use recorded methods here — continuous minimization
+    // position changes are part of the ongoing drag operation, which is
+    // already being recorded by begin_atom_edit_drag/end_atom_edit_drag.
+    let atom_edit_data = get_selected_atom_edit_data_mut(structure_designer)
+        .ok_or("No active atom_edit node")?;
+
+    for (topo_idx, source) in result_to_source.iter().enumerate() {
+        let new_pos = DVec3::new(
+            positions[topo_idx * 3],
+            positions[topo_idx * 3 + 1],
+            positions[topo_idx * 3 + 2],
+        );
+        let old_pos = DVec3::new(
+            topology.positions[topo_idx * 3],
+            topology.positions[topo_idx * 3 + 1],
+            topology.positions[topo_idx * 3 + 2],
+        );
+
+        if (new_pos - old_pos).length() < 1e-6 {
+            continue;
+        }
+
+        match source {
+            Some(AtomSource::DiffAdded(diff_id))
+            | Some(AtomSource::DiffMatchedBase { diff_id, .. }) => {
+                atom_edit_data.set_position_recorded(*diff_id, new_pos);
+            }
+            Some(AtomSource::BasePassthrough(_)) => {
+                // Base atom moved — promote to diff
+                let atomic_number = topology.atomic_numbers[topo_idx];
+                let new_diff_id = atom_edit_data.add_atom_recorded(atomic_number, new_pos);
+                atom_edit_data.set_anchor_recorded(new_diff_id, old_pos);
+            }
+            None => {}
+        }
+    }
+
+    Ok(())
+}
+```
+
+### Settle Burst: `continuous_minimize_settle`
+
+Also located in `minimization.rs`. Called once on drag end (pointer up), before `end_atom_edit_drag`:
+
+```rust
+/// Runs a burst of steepest descent steps after the user releases the mouse.
+///
+/// This lets the structure settle into a cleaner geometry after the drag.
+/// Uses the same constraints as the per-frame minimization (selected atoms
+/// frozen or spring-restrained, frozen-flagged atoms always frozen).
+pub fn continuous_minimize_settle(
+    structure_designer: &mut StructureDesigner,
+) -> Result<(), String> {
+    let settle_steps = structure_designer.preferences
+        .simulation_preferences.continuous_minimization_settle_steps;
+
+    if settle_steps == 0 {
+        return Ok(());
+    }
+
+    // Reuses the same logic as continuous_minimize_during_drag,
+    // but with settle_steps instead of steps_per_frame.
+    // Implementation: extract shared logic into a helper that takes
+    // the step count as a parameter.
+    continuous_minimize_impl(structure_designer, settle_steps)
+}
+```
+
+In practice, `continuous_minimize_during_drag` and `continuous_minimize_settle` share a common implementation (`continuous_minimize_impl`) parameterized by step count.
+
+### Write-Back and Undo Integration
+
+The continuous minimization runs **inside** the drag recording session (between `begin_atom_edit_drag` and `end_atom_edit_drag`). Both per-frame steps and the settle burst use the same `*_recorded` methods as the drag itself. This means:
+
+- All minimization-induced position changes (per-frame + settle) are captured by the `DiffRecorder`.
+- On undo, the entire drag (user movement + per-frame relaxation + settle burst) reverts as a single operation.
+- No separate undo command is needed for any continuous minimization portion.
+
+This is the correct behavior: from the user's perspective, they performed one drag gesture, and undo should revert the entire result of that gesture.
+
+### Evaluation Concern: Stale eval_cache
+
+A subtle issue: `continuous_minimize_during_drag` reads from `eval_cache` and `result_structure`, but these reflect the state **before** the current drag started (since drag uses `skip_downstream` mode for performance). The topology, provenance maps, and atom positions used for minimization come from this pre-drag snapshot.
+
+However, `drag_selected_by_delta` modifies atom positions in the **diff** (not the result structure), so the topology positions read from the result structure are stale for the dragged atoms. We handle this by:
+
+1. Reading the **current diff positions** for selected atoms (their target positions reflect the latest drag delta).
+2. For non-selected atoms, the topology positions from the result structure are correct (they haven't been dragged).
+
+Implementation: after building the topology from the result structure, we must **patch** the selected atoms' positions in the topology's position array to match their current diff positions. This ensures the force field sees the actual current geometry.
+
+```rust
+// Patch selected atom positions to match current drag state
+// (result_structure is stale — diff has the up-to-date positions)
+for (topo_idx, result_id) in topology.atom_ids.iter().enumerate() {
+    if selected_result_ids.contains(result_id) {
+        if let Some(source) = eval_cache.provenance.sources.get(result_id) {
+            let current_pos = match source {
+                AtomSource::DiffAdded(diff_id)
+                | AtomSource::DiffMatchedBase { diff_id, .. } => {
+                    atom_edit_data.diff.get_atom(*diff_id)
+                        .map(|a| a.position)
+                }
+                AtomSource::BasePassthrough(base_id) => {
+                    // If promoted during this drag, it's now in the diff
+                    // Find it via the selection's diff atoms
+                    // (base atoms get promoted to diff on first drag move)
+                    None // Will be handled after promotion
+                }
+            };
+            if let Some(pos) = current_pos {
+                let base = topo_idx * 3;
+                positions[base]     = pos.x;
+                positions[base + 1] = pos.y;
+                positions[base + 2] = pos.z;
+            }
+        }
+    }
+}
+```
+
+This position patching must happen in Phase 1 (while we have immutable access to `atom_edit_data`) and must modify the cloned positions array, not the topology directly.
+
+### Max Displacement Per Step
+
+The steepest descent `max_displacement` parameter is set to **0.1 Å** for continuous minimization (vs. 0.3 Å for batch minimization). This smaller step size ensures:
+
+- Smooth, gradual relaxation (no jarring jumps).
+- Stability even with rapidly changing constraints.
+- Predictable visual feedback.
+
+With 4 steps × 0.1 Å max = up to 0.4 Å total movement per frame for any atom, which is visible but not disorienting at typical frame rates.
+
+### Performance Considerations
+
+Continuous minimization adds computation to every drag frame. Key costs:
+
+1. **Topology construction** (`MolecularTopology::from_structure`): O(N) where N = atoms. Already fast for typical atom_edit structures (tens to hundreds of atoms).
+
+2. **Force field construction** (`UffForceField::from_topology_with_frozen`): O(interactions). Done once per frame.
+
+3. **Steepest descent steps**: 4 × (energy + gradient evaluation). Each evaluation is O(bonds + angles + torsions + vdW). With vdW cutoff, this is O(N).
+
+4. **Write-back**: O(moved atoms).
+
+For structures up to ~500 atoms with vdW cutoff, this should complete in under 10ms per frame — well within a 16ms frame budget (60fps). For larger structures, future radius-cutoff optimization would help.
+
+### No Re-evaluation of the Node Network
+
+Critically, `continuous_minimize_during_drag` does **not** trigger a full node network re-evaluation. It reads the existing result structure and modifies the diff directly. The 3D viewport update happens through the existing drag refresh path (which updates atom positions without full re-evaluation). This keeps the per-frame cost low.
+
+However, after the drag ends (`end_atom_edit_drag`), the normal refresh path runs and re-evaluates the node network with the final positions.
+
+## API
+
+No new API functions are needed for the core feature — continuous minimization is triggered automatically during drag when the preference is enabled.
+
+The preferences are already exposed to Flutter via FRB (all `SimulationPreferences` fields are accessible).
+
+### Preferences UI
+
+The existing preferences window gains new controls in the Simulation section:
+
+```
+┌─ Simulation ──────────────────────────────────────────────┐
+│                                                             │
+│  [x] Use vdW cutoff                                        │
+│                                                             │
+│  [x] Continuous minimization during drag                    │
+│                                                             │
+│      [ ] Use spring restraints (smoother)                   │
+│      Spring constant: [  200.0  ] kcal/(mol·Å²)            │
+│      Steps per frame: [    4    ]                           │
+│      Settle steps:    [   50    ]                           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The sub-options (spring restraints, spring constant, steps per frame, settle steps) are only enabled when "Continuous minimization during drag" is checked.
+
+## Implementation Steps
+
+### Phase 1: Steepest Descent and Spring Restraint Infrastructure
+
+1. **`simulation/minimize.rs`** — Add `steepest_descent_steps()` function.
+2. **`simulation/force_field.rs`** (or new file `simulation/restrained.rs`) — Add `RestrainedForceField` wrapper.
+3. **Tests** — Unit tests for steepest descent (converges on simple molecule) and spring restraint (energy/gradient correctness).
+
+### Phase 2: Preferences
+
+4. **`structure_designer_preferences.rs`** — Add five new fields to `SimulationPreferences` with defaults and serde helpers (`continuous_minimization`, `continuous_minimization_use_springs`, `continuous_minimization_spring_constant`, `continuous_minimization_steps_per_frame`, `continuous_minimization_settle_steps`).
+5. **FRB codegen** — Regenerate bindings.
+
+### Phase 3: Drag Integration
+
+6. **`minimization.rs`** — Add `continuous_minimize_impl()` shared helper, `continuous_minimize_during_drag()`, and `continuous_minimize_settle()`.
+7. **`default_tool.rs`** — Call `continuous_minimize_during_drag()` in `ContinueDrag` action after `drag_selected_by_delta()`, gated on the preference flag. Call `continuous_minimize_settle()` in `pointer_up` before `end_atom_edit_drag()`.
+8. **Tests** — Integration tests:
+   - Enable continuous minimization, simulate a drag sequence, verify neighbors moved.
+   - Verify settle burst runs on drag end and further improves geometry.
+   - Verify frozen-flagged atoms remain fixed during both per-frame and settle phases.
+
+### Phase 4: Flutter UI
+
+9. **`preferences_window.dart`** — Add checkbox and number fields for the new simulation preferences (including settle steps).
+10. **Verify** drag behavior with continuous minimization enabled.
+
+### Phase 5: Gadget Drag Integration
+
+11. **`atom_edit_gadget.rs`** — The XYZ translation gadget also drags atoms. Hook `continuous_minimize_during_drag()` into the gadget's `sync_data` path, and `continuous_minimize_settle()` into the gadget's drag-end path, so continuous minimization works regardless of whether the user drags with click-drag or the gadget handles.
+
+## Future Enhancements
+
+- **Radius cutoff**: Only minimize atoms within N bonds of the selection. Dramatically reduces cost for large structures.
+- **FIRE optimizer**: Replace steepest descent with FIRE for faster convergence per step while remaining robust to changing landscapes.
+- **Adaptive step count**: Automatically adjust steps per frame based on frame time budget.
+- **Visual energy display**: Show current energy in the status bar during drag.
+- **Per-atom spring constants**: Different stiffness for different selected atoms.
+
+## Non-Goals
+
+- **Full molecular dynamics during drag**: We perform energy minimization (seeking a local minimum), not dynamics (integrating equations of motion with temperature). MD would add thermal noise, which is not useful for a CAD tool.
+- **Automatic topology rebuild**: The topology is built once at drag start from the pre-drag result structure. Bond breaking/formation during a drag is not supported.
+- **Undo granularity**: Individual minimization frames are not separately undoable. The entire drag + relaxation is one undo step.
+
+## References
+
+- Avogadro Auto-Optimize Tool: steepest descent, 4 steps/update, fixed atoms excluded
+- PyMOL Molecular Sculpting: zone-based (green/cyan/grey), MMFF94s
+- VMD/NAMD Interactive Molecular Dynamics: harmonic spring to cursor, full MD
+- SAMSON: Adaptive articulated body dynamics + FIRE minimizer
+- Surles 1994 "Sculpting Proteins Interactively": rigid constraints + elastic restraints + user tugs
