@@ -576,30 +576,49 @@ The sub-options (spring restraints, spring constant, steps per frame, settle ste
 
 1. **`simulation/minimize.rs`** — Add `steepest_descent_steps()` function.
 2. **`simulation/force_field.rs`** (or new file `simulation/restrained.rs`) — Add `RestrainedForceField` wrapper.
-3. **Tests** — Unit tests for steepest descent (converges on simple molecule) and spring restraint (energy/gradient correctness).
+3. **Tests** — Unit tests in `rust/tests/crystolecule/simulation/`:
+   - **Steepest descent converges on simple molecule** — distorted methane or ethane, verify energy decreases and final geometry is reasonable.
+   - **Steepest descent with frozen atoms** — freeze one atom, verify it doesn't move while others do. (New code path separate from L-BFGS, needs its own frozen test.)
+   - **Steepest descent early exit** — molecule already at equilibrium, verify it exits early when gradient is near zero (the `< 1e-16` check) and returns without modifying positions.
+   - **Steepest descent with zero atoms** — empty position array, returns 0.0 energy.
+   - **RestrainedForceField gradient numerical check** — finite-difference verification that analytical spring gradients match numerical derivatives. Same pattern as existing UFF energy tests (perturb each coordinate by epsilon, compare `(E(x+h) - E(x-h)) / 2h` to analytical gradient).
+   - **RestrainedForceField with k=0** — verify output is identical to base force field (no restraint contribution to energy or gradients).
+   - **RestrainedForceField with very large k** — atom stays near target position, effectively frozen.
+   - **Large k spring produces same result as frozen constraint** — run the same distorted molecule through both methods: steepest descent with selected atoms frozen (Method 1) and steepest descent with selected atoms spring-restrained at k=10000 (Method 2). Verify that final positions of non-selected atoms are approximately equal (within tolerance), and that selected atoms in the spring method remain within a tight tolerance of their target positions. This is a convergence test: as k → ∞, Method 2 should converge to Method 1.
 
 ### Phase 2: Preferences
 
 4. **`structure_designer_preferences.rs`** — Add five new fields to `SimulationPreferences` with defaults and serde helpers (`continuous_minimization`, `continuous_minimization_use_springs`, `continuous_minimization_spring_constant`, `continuous_minimization_steps_per_frame`, `continuous_minimization_settle_steps`).
 5. **FRB codegen** — Regenerate bindings.
+6. **Tests** — Preferences tests in `rust/tests/structure_designer/`:
+   - **Serde backward compatibility** — deserialize a `SimulationPreferences` JSON that lacks the new fields, verify all defaults are applied correctly (tolerant reader pattern).
+   - **Serde roundtrip** — serialize with all new fields set to non-default values, deserialize, verify they survive.
 
 ### Phase 3: Drag Integration
 
-6. **`minimization.rs`** — Add `continuous_minimize_impl()` shared helper, `continuous_minimize_during_drag()`, and `continuous_minimize_settle()`.
-7. **`default_tool.rs`** — Call `continuous_minimize_during_drag()` in `ContinueDrag` action after `drag_selected_by_delta()`, gated on the preference flag. Call `continuous_minimize_settle()` in `pointer_up` before `end_atom_edit_drag()`.
-8. **Tests** — Integration tests:
-   - Enable continuous minimization, simulate a drag sequence, verify neighbors moved.
-   - Verify settle burst runs on drag end and further improves geometry.
-   - Verify frozen-flagged atoms remain fixed during both per-frame and settle phases.
+7. **`minimization.rs`** — Add `continuous_minimize_impl()` shared helper, `continuous_minimize_during_drag()`, and `continuous_minimize_settle()`.
+8. **`default_tool.rs`** — Call `continuous_minimize_during_drag()` in `ContinueDrag` action after `drag_selected_by_delta()`, gated on the preference flag. Call `continuous_minimize_settle()` in `pointer_up` before `end_atom_edit_drag()`.
+9. **Tests** — Integration tests in `rust/tests/structure_designer/`:
+   - **Continuous minimization during drag — neighbors move** — enable continuous minimization, simulate a drag sequence (select atom, drag by delta), verify non-selected neighbor atoms moved toward lower energy.
+   - **Settle burst improves geometry** — drag with continuous minimization, capture positions after per-frame steps, then run settle burst, verify energy decreased further and neighbor positions improved.
+   - **Frozen-flagged atoms fixed during per-frame and settle** — set frozen flag on specific atoms, drag with continuous minimization, verify frozen atoms remain at their original positions throughout.
+   - **Method 1 vs Method 2 both produce valid geometry** — same drag scenario with both methods, verify both result in lower energy than no minimization. Verify Method 1 keeps selected atoms exactly at cursor position while Method 2 allows slight deviation.
+   - **Spring method selected atoms move toward target** — drag with Method 2, verify selected atoms end up close to (but not necessarily exactly at) the cursor-imposed target position.
+   - **Continuous minimization disabled — no side effects** — drag with preference off, verify neighbor positions are unchanged (no regression on existing behavior).
+   - **Diff view no-op** — set `output_diff = true`, call `continuous_minimize_during_drag`, verify it returns Ok(()) without modifying anything.
+   - **Empty selection** — no atoms selected during drag, continuous minimization should be a no-op or handle gracefully without error.
+   - **Stale position patching** — verify that the force field sees dragged atoms at their current (post-delta) positions, not the stale pre-drag result_structure positions. (Can be tested by checking that forces on neighbors reflect the dragged geometry.)
+   - **Undo reverts entire drag + relaxation + settle** — enable continuous minimization, drag, verify positions changed, undo, verify ALL positions (dragged + neighbor-relaxed + settle-relaxed) revert to pre-drag state.
+   - **Base atom promotion during continuous minimize** — a neighbor that was a `BasePassthrough` atom gets moved by the minimizer, verify it's correctly promoted to diff with anchor set to original position.
 
 ### Phase 4: Flutter UI
 
-9. **`preferences_window.dart`** — Add checkbox and number fields for the new simulation preferences (including settle steps).
-10. **Verify** drag behavior with continuous minimization enabled.
+10. **`preferences_window.dart`** — Add checkbox and number fields for the new simulation preferences (including settle steps).
+11. **Verify** drag behavior with continuous minimization enabled.
 
 ### Phase 5: Gadget Drag Integration
 
-11. **`atom_edit_gadget.rs`** — The XYZ translation gadget also drags atoms. Hook `continuous_minimize_during_drag()` into the gadget's `sync_data` path, and `continuous_minimize_settle()` into the gadget's drag-end path, so continuous minimization works regardless of whether the user drags with click-drag or the gadget handles.
+12. **`atom_edit_gadget.rs`** — The XYZ translation gadget also drags atoms. Hook `continuous_minimize_during_drag()` into the gadget's `sync_data` path, and `continuous_minimize_settle()` into the gadget's drag-end path, so continuous minimization works regardless of whether the user drags with click-drag or the gadget handles.
 
 ## Future Enhancements
 
