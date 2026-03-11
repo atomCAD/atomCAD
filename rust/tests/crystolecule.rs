@@ -58,6 +58,9 @@ mod spatial_grid_test;
 #[path = "crystolecule/simulation/minimize_test.rs"]
 mod minimize_test;
 
+#[path = "crystolecule/simulation/steepest_descent_test.rs"]
+mod steepest_descent_test;
+
 #[path = "crystolecule/fragment_test.rs"]
 mod fragment_test;
 

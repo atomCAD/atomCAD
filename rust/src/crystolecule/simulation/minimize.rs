@@ -266,7 +266,7 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
 /// The direction vector is a flat [x0,y0,z0,x1,y1,z1,...] array. Returns the
 /// maximum Euclidean displacement over all atoms (i.e., max |d_i| where d_i
 /// is the 3D displacement vector for atom i).
-fn max_per_atom_displacement(d: &[f64]) -> f64 {
+pub(crate) fn max_per_atom_displacement(d: &[f64]) -> f64 {
     let mut max_disp = 0.0_f64;
     for chunk in d.chunks_exact(3) {
         let disp = (chunk[0] * chunk[0] + chunk[1] * chunk[1] + chunk[2] * chunk[2]).sqrt();
@@ -281,7 +281,7 @@ fn max_per_atom_displacement(d: &[f64]) -> f64 {
 ///
 /// Each frozen atom index corresponds to 3 consecutive entries in the gradient
 /// array (x, y, z). Zeroing these prevents the optimizer from moving frozen atoms.
-fn zero_frozen(grad: &mut [f64], frozen: &[usize]) {
+pub(crate) fn zero_frozen(grad: &mut [f64], frozen: &[usize]) {
     for &atom_idx in frozen {
         let base = atom_idx * 3;
         if base + 2 < grad.len() {
@@ -290,4 +290,52 @@ fn zero_frozen(grad: &mut [f64], frozen: &[usize]) {
             grad[base + 2] = 0.0;
         }
     }
+}
+
+/// Performs N steps of steepest descent with a fixed maximum displacement per step.
+///
+/// Unlike L-BFGS, this has no history and is suitable for interactive use
+/// where the energy landscape changes every frame (e.g., continuous minimization
+/// during atom dragging).
+///
+/// Each step computes the gradient, scales it so the maximum per-atom displacement
+/// does not exceed `max_displacement`, and moves atoms in the negative gradient
+/// direction. Frozen atoms are held fixed.
+///
+/// Returns the final energy.
+pub fn steepest_descent_steps(
+    ff: &dyn ForceField,
+    positions: &mut [f64],
+    frozen: &[usize],
+    num_steps: u32,
+    max_displacement: f64,
+) -> f64 {
+    let n = positions.len();
+    if n == 0 {
+        return 0.0;
+    }
+
+    let mut energy = 0.0;
+    let mut grad = vec![0.0; n];
+
+    for _ in 0..num_steps {
+        ff.energy_and_gradients(positions, &mut energy, &mut grad);
+        zero_frozen(&mut grad, frozen);
+
+        // Scale step so max atom displacement <= max_displacement
+        let max_atom_disp = max_per_atom_displacement(&grad);
+        if max_atom_disp < 1e-16 {
+            break; // already at minimum
+        }
+        let step = max_displacement / max_atom_disp;
+
+        // Apply: x -= step * grad
+        for i in 0..n {
+            positions[i] -= step * grad[i];
+        }
+    }
+
+    // Final energy evaluation
+    ff.energy_and_gradients(positions, &mut energy, &mut grad);
+    energy
 }
