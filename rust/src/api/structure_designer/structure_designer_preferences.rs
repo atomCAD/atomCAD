@@ -298,7 +298,7 @@ impl From<LayoutAlgorithmPreference> for LayoutAlgorithm {
 
 /// Preferences for energy minimization simulation.
 #[frb]
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SimulationPreferences {
     /// Use spatial grid with distance cutoff for van der Waals interactions.
     /// When false, all nonbonded pairs are computed exactly (O(N^2)).
@@ -306,18 +306,67 @@ pub struct SimulationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_true")]
     pub use_vdw_cutoff: bool,
+
+    /// Enable continuous minimization during atom dragging.
+    #[frb(non_final)]
+    #[serde(default)]
+    pub continuous_minimization: bool,
+
+    /// Use spring restraints instead of hard constraints for dragged atoms.
+    /// When false (default): dragged atoms are frozen, rest minimized (Method 1).
+    /// When true: dragged atoms are pulled by harmonic springs (Method 2).
+    #[frb(non_final)]
+    #[serde(default)]
+    pub continuous_minimization_use_springs: bool,
+
+    /// Spring constant for restraints in kcal/(mol*A^2).
+    /// Only used when continuous_minimization_use_springs is true.
+    /// Higher values make dragged atoms follow the cursor more tightly.
+    /// Default: 200.0 (stiff but not rigid).
+    #[frb(non_final)]
+    #[serde(default = "default_spring_constant")]
+    pub continuous_minimization_spring_constant: f64,
+
+    /// Number of steepest descent steps per drag frame.
+    /// Higher values give more relaxation per frame but cost more CPU time.
+    /// Default: 4 (matches Avogadro's default).
+    #[frb(non_final)]
+    #[serde(default = "default_steps_per_frame")]
+    pub continuous_minimization_steps_per_frame: u32,
+
+    /// Number of steepest descent steps to run as a "settle burst" when
+    /// the user releases the mouse after dragging. Lets the structure
+    /// relax further without a jarring full-minimize snap.
+    /// Default: 50.
+    #[frb(non_final)]
+    #[serde(default = "default_settle_steps")]
+    pub continuous_minimization_settle_steps: u32,
 }
 
 impl Default for SimulationPreferences {
     fn default() -> Self {
         Self {
             use_vdw_cutoff: true,
+            continuous_minimization: false,
+            continuous_minimization_use_springs: false,
+            continuous_minimization_spring_constant: 200.0,
+            continuous_minimization_steps_per_frame: 4,
+            continuous_minimization_settle_steps: 50,
         }
     }
 }
 
 fn default_true() -> bool {
     true
+}
+fn default_spring_constant() -> f64 {
+    200.0
+}
+fn default_steps_per_frame() -> u32 {
+    4
+}
+fn default_settle_steps() -> u32 {
+    50
 }
 
 /// Preferences for auto-layout operations.

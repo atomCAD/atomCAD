@@ -263,6 +263,33 @@ fn test_default_values_match_documentation() {
         LayoutAlgorithmPreference::Sugiyama
     );
     assert!(prefs.layout_preferences.auto_layout_after_edit);
+
+    // Simulation defaults
+    assert!(prefs.simulation_preferences.use_vdw_cutoff);
+    assert!(!prefs.simulation_preferences.continuous_minimization);
+    assert!(
+        !prefs
+            .simulation_preferences
+            .continuous_minimization_use_springs
+    );
+    assert_eq!(
+        prefs
+            .simulation_preferences
+            .continuous_minimization_spring_constant,
+        200.0
+    );
+    assert_eq!(
+        prefs
+            .simulation_preferences
+            .continuous_minimization_steps_per_frame,
+        4
+    );
+    assert_eq!(
+        prefs
+            .simulation_preferences
+            .continuous_minimization_settle_steps,
+        50
+    );
 }
 
 /// Test serialization of non-default values.
@@ -334,6 +361,11 @@ fn test_non_default_values_roundtrip() {
         },
         simulation_preferences: SimulationPreferences {
             use_vdw_cutoff: true,
+            continuous_minimization: true,
+            continuous_minimization_use_springs: true,
+            continuous_minimization_spring_constant: 500.0,
+            continuous_minimization_steps_per_frame: 8,
+            continuous_minimization_settle_steps: 100,
         },
     };
 
@@ -422,4 +454,88 @@ fn test_non_default_values_roundtrip() {
     assert!(!loaded.layout_preferences.auto_layout_after_edit);
 
     assert!(loaded.simulation_preferences.use_vdw_cutoff);
+    assert!(loaded.simulation_preferences.continuous_minimization);
+    assert!(
+        loaded
+            .simulation_preferences
+            .continuous_minimization_use_springs
+    );
+    assert_eq!(
+        loaded
+            .simulation_preferences
+            .continuous_minimization_spring_constant,
+        500.0
+    );
+    assert_eq!(
+        loaded
+            .simulation_preferences
+            .continuous_minimization_steps_per_frame,
+        8
+    );
+    assert_eq!(
+        loaded
+            .simulation_preferences
+            .continuous_minimization_settle_steps,
+        100
+    );
+}
+
+/// Test backward compatibility: SimulationPreferences JSON without continuous minimization
+/// fields should deserialize with correct defaults.
+#[test]
+fn test_simulation_preferences_backward_compatibility() {
+    // JSON from before continuous minimization was added
+    let old_json = r#"{
+        "simulation_preferences": {
+            "use_vdw_cutoff": true
+        }
+    }"#;
+
+    let loaded: StructureDesignerPreferences =
+        serde_json::from_str(old_json).expect("Failed to deserialize old preferences");
+
+    assert!(loaded.simulation_preferences.use_vdw_cutoff);
+    assert!(!loaded.simulation_preferences.continuous_minimization);
+    assert!(
+        !loaded
+            .simulation_preferences
+            .continuous_minimization_use_springs
+    );
+    assert_eq!(
+        loaded
+            .simulation_preferences
+            .continuous_minimization_spring_constant,
+        200.0
+    );
+    assert_eq!(
+        loaded
+            .simulation_preferences
+            .continuous_minimization_steps_per_frame,
+        4
+    );
+    assert_eq!(
+        loaded
+            .simulation_preferences
+            .continuous_minimization_settle_steps,
+        50
+    );
+}
+
+/// Test roundtrip of continuous minimization fields with non-default values.
+#[test]
+fn test_continuous_minimization_preferences_roundtrip() {
+    let prefs = SimulationPreferences {
+        use_vdw_cutoff: false,
+        continuous_minimization: true,
+        continuous_minimization_use_springs: true,
+        continuous_minimization_spring_constant: 75.0,
+        continuous_minimization_steps_per_frame: 10,
+        continuous_minimization_settle_steps: 200,
+    };
+
+    let json = serde_json::to_string(&prefs).expect("Failed to serialize");
+    let loaded: SimulationPreferences =
+        serde_json::from_str(&json).expect("Failed to deserialize");
+
+    assert_eq!(loaded, prefs);
 }
