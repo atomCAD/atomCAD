@@ -14,7 +14,7 @@ Continuous minimization has two phases:
 
 2. **Settle burst on drag end**: When the user releases the mouse, an additional burst of steepest descent steps (default 50) runs before the drag operation finalizes. This lets the structure "settle" into a cleaner geometry, since the per-frame steps during fast dragging may not be enough for full relaxation.
 
-The settle burst uses the same algorithm (steepest descent) and the same constraints as the per-frame steps. Because it's steepest descent rather than a full L-BFGS batch minimize, the settling is gradual and produces no jarring "snap" to a distant minimum.
+The settle burst uses the same algorithm (steepest descent) but **removes all drag-specific constraints**: selected atoms are neither frozen nor spring-restrained. Since the user has released the mouse, there is no cursor position to constrain to — the entire structure (selected + neighbors) relaxes freely toward a local minimum. Only atoms with the persistent frozen flag remain frozen. Because it's steepest descent with a limited step count rather than a full L-BFGS batch minimize, the settling is gradual and produces no jarring "snap" to a distant minimum.
 
 Both phases run inside the `begin_atom_edit_drag` / `end_atom_edit_drag` recording session, so the entire drag + relaxation + settling reverts as a single undo operation.
 
@@ -239,39 +239,70 @@ impl<'a> ForceField for RestrainedForceField<'a> {
 The continuous minimization hooks into the existing drag flow in `default_tool.rs` at two points:
 
 ```
+BeginDrag (on first move past threshold):
+  1. begin_atom_edit_drag(sd)                    // existing: start undo recording
+  2. promoted_base_atoms = HashMap::new()        // NEW: track base→diff promotions
+
 ContinueDrag:
-  1. drag_selected_by_delta(sd, delta)          // existing: move selected atoms
+  1. drag_selected_by_delta(sd, delta)           // existing: move selected atoms
   2. if continuous_minimization enabled:
-       continuous_minimize_during_drag(sd)       // NEW: relax neighbors per frame
+       continuous_minimize_during_drag(sd,       // NEW: relax neighbors per frame
+           &mut promoted_base_atoms)
 
 EndDrag (pointer_up):
   1. if continuous_minimization enabled:
-       continuous_minimize_settle(sd)            // NEW: settle burst
+       continuous_minimize_settle(sd,            // NEW: settle burst
+           &mut promoted_base_atoms)
   2. end_atom_edit_drag(sd)                      // existing: finalize undo recording
+  // promoted_base_atoms dropped here
 ```
 
 The settle burst runs **before** `end_atom_edit_drag` so that the settling position changes are captured by the same `DiffRecorder` and included in the single undo command.
 
-#### New Function: `continuous_minimize_during_drag`
+#### `continuous_minimize_during_drag`
 
-Located in `minimization.rs`:
+Thin wrapper that reads preferences and delegates to the shared impl:
 
 ```rust
-/// Runs a few minimization steps on non-selected atoms during a drag operation.
-///
-/// This is called once per pointer-move frame when continuous minimization is enabled.
-/// It operates on the evaluated result structure, with selected atoms constrained
-/// (either frozen or spring-restrained depending on preferences).
 pub fn continuous_minimize_during_drag(
     structure_designer: &mut StructureDesigner,
+    promoted_base_atoms: &mut HashMap<u32, u32>,
 ) -> Result<(), String> {
     let prefs = &structure_designer.preferences.simulation_preferences;
-    let use_springs = prefs.continuous_minimization_use_springs;
-    let spring_k = prefs.continuous_minimization_spring_constant;
     let steps = prefs.continuous_minimization_steps_per_frame;
+    let use_springs = prefs.continuous_minimization_use_springs;
+    continuous_minimize_impl(
+        structure_designer,
+        steps,
+        promoted_base_atoms,
+        !use_springs,  // freeze_selected: true for Method 1, false for Method 2
+        use_springs,   // use_springs
+    )
+}
+```
+
+#### Shared Implementation: `continuous_minimize_impl`
+
+Located in `minimization.rs`. Both `continuous_minimize_during_drag` and `continuous_minimize_settle` delegate to this function.
+
+```rust
+/// Shared implementation for continuous minimization.
+///
+/// `freeze_selected`: if true, selected atoms are hard-frozen (Method 1 during drag).
+/// `use_springs`: if true, selected atoms are spring-restrained (Method 2 during drag).
+/// Both false during settle burst — selected atoms relax freely.
+fn continuous_minimize_impl(
+    structure_designer: &mut StructureDesigner,
+    steps: u32,
+    promoted_base_atoms: &mut HashMap<u32, u32>,
+    freeze_selected: bool,
+    use_springs: bool,
+) -> Result<(), String> {
+    let prefs = &structure_designer.preferences.simulation_preferences;
+    let spring_k = prefs.continuous_minimization_spring_constant;
 
     // Phase 1: Gather (immutable borrows)
-    let (topology, force_field, frozen_indices, selected_restraints, result_to_source) = {
+    let (topology, force_field, frozen_indices, selected_topo_indices, result_to_source) = {
         let atom_edit_data = get_active_atom_edit_data(structure_designer)
             .ok_or("No active atom_edit node")?;
 
@@ -319,9 +350,10 @@ pub fn continuous_minimize_during_drag(
             }
         }
 
-        // Frozen indices: always include frozen-flagged atoms
-        // In Method 1 (no springs): also include selected atoms
-        // In Method 2 (springs): selected atoms are NOT frozen (springs pull them)
+        // Frozen indices: always include persistent-frozen atoms.
+        // If freeze_selected is true (Method 1 during drag): also freeze selected atoms.
+        // If freeze_selected is false (Method 2 during drag, or settle burst):
+        //   selected atoms are NOT frozen.
         let frozen_indices: Vec<usize> = topology.atom_ids.iter().enumerate()
             .filter(|(_, result_id)| {
                 let is_frozen_flag = result_structure
@@ -329,29 +361,23 @@ pub fn continuous_minimize_during_drag(
                     .is_some_and(|atom| atom.is_frozen());
                 let is_selected = selected_result_ids.contains(result_id);
 
-                if use_springs {
-                    // Method 2: only persistent-frozen atoms are frozen
-                    is_frozen_flag
-                } else {
-                    // Method 1: selected + persistent-frozen atoms are frozen
+                if freeze_selected {
                     is_selected || is_frozen_flag
+                } else {
+                    is_frozen_flag
                 }
             })
             .map(|(i, _)| i)
             .collect();
 
         // For Method 2: build restraint list (selected atom targets)
-        let selected_restraints: Vec<(usize, f64, f64, f64)> = if use_springs {
+        // NOTE: targets are built from topology.positions here (stale).
+        // They are re-computed from the patched positions array in Phase 1b,
+        // after position patching has applied current diff positions.
+        let selected_topo_indices: Vec<usize> = if use_springs {
             topology.atom_ids.iter().enumerate()
                 .filter(|(_, rid)| selected_result_ids.contains(rid))
-                .map(|(topo_idx, _)| {
-                    // Target = current position (where user dragged to)
-                    let base = topo_idx * 3;
-                    (topo_idx,
-                     topology.positions[base],
-                     topology.positions[base + 1],
-                     topology.positions[base + 2])
-                })
+                .map(|(topo_idx, _)| topo_idx)
                 .collect()
         } else {
             Vec::new()
@@ -365,11 +391,65 @@ pub fn continuous_minimize_during_drag(
             .map(|&rid| eval_cache.provenance.sources.get(&rid).cloned())
             .collect();
 
-        (topology, force_field, frozen_indices, selected_restraints, result_to_source)
+        (topology, force_field, frozen_indices, selected_topo_indices, result_to_source)
     };
 
-    // Phase 2: Minimize (no borrows)
+    // Phase 1b: Patch stale positions (immutable borrow of atom_edit_data)
+    // The topology was built from the stale result_structure. Patch all atoms
+    // that have current diff positions (selected atoms + neighbors moved by
+    // previous frames). See "Evaluation Concern: Stale eval_cache" section.
     let mut positions = topology.positions.clone();
+    {
+        let atom_edit_data = get_active_atom_edit_data(structure_designer)
+            .ok_or("No active atom_edit node")?;
+        let eval_cache = structure_designer
+            .get_selected_node_eval_cache()
+            .ok_or("No eval cache")?
+            .downcast_ref::<AtomEditEvalCache>()
+            .ok_or("Wrong eval cache type")?;
+
+        for (topo_idx, result_id) in topology.atom_ids.iter().enumerate() {
+            // First: check if this atom has a diff entry via provenance
+            if let Some(source) = eval_cache.provenance.sources.get(result_id) {
+                let current_pos = match source {
+                    AtomSource::DiffAdded(diff_id)
+                    | AtomSource::DiffMatchedBase { diff_id, .. } => {
+                        atom_edit_data.diff.get_atom(*diff_id)
+                            .map(|a| a.position)
+                    }
+                    AtomSource::BasePassthrough(base_id) => {
+                        // Check if promoted in a previous frame
+                        promoted_base_atoms.get(base_id)
+                            .and_then(|&diff_id| {
+                                atom_edit_data.diff.get_atom(diff_id)
+                                    .map(|a| a.position)
+                            })
+                    }
+                };
+                if let Some(pos) = current_pos {
+                    let base = topo_idx * 3;
+                    positions[base]     = pos.x;
+                    positions[base + 1] = pos.y;
+                    positions[base + 2] = pos.z;
+                }
+            }
+        }
+    }
+
+    // Save pre-minimization positions for the movement threshold check
+    // and for anchor positions when promoting BasePassthrough atoms.
+    // These are the patched (current) positions, not the stale topology positions.
+    let pre_minimize_positions = positions.clone();
+
+    // Phase 2: Minimize (no borrows on structure_designer)
+    // Build spring restraints from patched (current) positions
+    let selected_restraints: Vec<(usize, f64, f64, f64)> = selected_topo_indices
+        .iter()
+        .map(|&topo_idx| {
+            let base = topo_idx * 3;
+            (topo_idx, positions[base], positions[base + 1], positions[base + 2])
+        })
+        .collect();
 
     if use_springs && !selected_restraints.is_empty() {
         // Method 2: steepest descent with spring-restrained force field
@@ -389,9 +469,10 @@ pub fn continuous_minimize_during_drag(
     }
 
     // Phase 3: Write back (mutable borrow)
-    // Note: we do NOT use recorded methods here — continuous minimization
-    // position changes are part of the ongoing drag operation, which is
-    // already being recorded by begin_atom_edit_drag/end_atom_edit_drag.
+    // We use the *_recorded methods because the DiffRecorder is active
+    // (started by begin_atom_edit_drag). This ensures all minimization-
+    // induced position changes are captured and will coalesce with the
+    // drag deltas into a single undo command on end_atom_edit_drag.
     let atom_edit_data = get_selected_atom_edit_data_mut(structure_designer)
         .ok_or("No active atom_edit node")?;
 
@@ -402,9 +483,9 @@ pub fn continuous_minimize_during_drag(
             positions[topo_idx * 3 + 2],
         );
         let old_pos = DVec3::new(
-            topology.positions[topo_idx * 3],
-            topology.positions[topo_idx * 3 + 1],
-            topology.positions[topo_idx * 3 + 2],
+            pre_minimize_positions[topo_idx * 3],
+            pre_minimize_positions[topo_idx * 3 + 1],
+            pre_minimize_positions[topo_idx * 3 + 2],
         );
 
         if (new_pos - old_pos).length() < 1e-6 {
@@ -416,11 +497,30 @@ pub fn continuous_minimize_during_drag(
             | Some(AtomSource::DiffMatchedBase { diff_id, .. }) => {
                 atom_edit_data.set_position_recorded(*diff_id, new_pos);
             }
-            Some(AtomSource::BasePassthrough(_)) => {
-                // Base atom moved — promote to diff
-                let atomic_number = topology.atomic_numbers[topo_idx];
-                let new_diff_id = atom_edit_data.add_atom_recorded(atomic_number, new_pos);
-                atom_edit_data.set_anchor_recorded(new_diff_id, old_pos);
+            Some(AtomSource::BasePassthrough(base_id)) => {
+                // Base atom moved by minimizer — promote to diff.
+                // Guard: check if this base atom was already promoted in a
+                // previous frame (provenance is stale, so the same atom may
+                // appear as BasePassthrough on every frame). Consult the
+                // drag session's promoted_base_atoms map.
+                if let Some(&existing_diff_id) = promoted_base_atoms.get(base_id) {
+                    // Already promoted — just update its position
+                    atom_edit_data.set_position_recorded(existing_diff_id, new_pos);
+                } else {
+                    // First promotion — create diff entry with anchor at the
+                    // original base position (from the stale result_structure,
+                    // NOT the patched position). The anchor must match the
+                    // base atom's position so apply_diff can match it back.
+                    let atomic_number = topology.atomic_numbers[topo_idx];
+                    let original_pos = DVec3::new(
+                        topology.positions[topo_idx * 3],
+                        topology.positions[topo_idx * 3 + 1],
+                        topology.positions[topo_idx * 3 + 2],
+                    );
+                    let new_diff_id = atom_edit_data.add_atom_recorded(atomic_number, new_pos);
+                    atom_edit_data.set_anchor_recorded(new_diff_id, original_pos);
+                    promoted_base_atoms.insert(*base_id, new_diff_id);
+                }
             }
             None => {}
         }
@@ -438,10 +538,13 @@ Also located in `minimization.rs`. Called once on drag end (pointer up), before 
 /// Runs a burst of steepest descent steps after the user releases the mouse.
 ///
 /// This lets the structure settle into a cleaner geometry after the drag.
-/// Uses the same constraints as the per-frame minimization (selected atoms
-/// frozen or spring-restrained, frozen-flagged atoms always frozen).
+/// Unlike per-frame minimization, the settle burst does NOT freeze or
+/// spring-restrain the selected atoms — the user has released the mouse,
+/// so there is no cursor position to constrain to. The entire structure
+/// relaxes freely (only persistent-frozen atoms remain frozen).
 pub fn continuous_minimize_settle(
     structure_designer: &mut StructureDesigner,
+    promoted_base_atoms: &mut HashMap<u32, u32>,  // base_id → diff_id
 ) -> Result<(), String> {
     let settle_steps = structure_designer.preferences
         .simulation_preferences.continuous_minimization_settle_steps;
@@ -450,15 +553,21 @@ pub fn continuous_minimize_settle(
         return Ok(());
     }
 
-    // Reuses the same logic as continuous_minimize_during_drag,
-    // but with settle_steps instead of steps_per_frame.
-    // Implementation: extract shared logic into a helper that takes
-    // the step count as a parameter.
-    continuous_minimize_impl(structure_designer, settle_steps)
+    // Reuses the shared helper with freeze_selected=false and
+    // use_springs=false, so selected atoms participate freely.
+    continuous_minimize_impl(
+        structure_designer,
+        settle_steps,
+        promoted_base_atoms,
+        false,  // freeze_selected
+        false,  // use_springs
+    )
 }
 ```
 
-In practice, `continuous_minimize_during_drag` and `continuous_minimize_settle` share a common implementation (`continuous_minimize_impl`) parameterized by step count.
+In practice, `continuous_minimize_during_drag` and `continuous_minimize_settle` share a common implementation (`continuous_minimize_impl`) parameterized by step count, the `promoted_base_atoms` map, and constraint flags. During drag, `freeze_selected` and `use_springs` are set according to the user's preference. During settle, both are `false` — selected atoms are free to relax.
+
+The `promoted_base_atoms` map (`HashMap<u32, u32>`, base atom ID → diff atom ID) is stored on the drag session (e.g., as a field on `PendingAtomEditDrag` or alongside it in `StructureDesigner`). It is created empty when `begin_atom_edit_drag` starts a drag, populated during write-back as `BasePassthrough` atoms are promoted, and dropped when `end_atom_edit_drag` completes. This gives it the correct lifetime — it spans all per-frame minimizations and the settle burst within a single drag gesture.
 
 ### Write-Back and Undo Integration
 
@@ -474,44 +583,19 @@ This is the correct behavior: from the user's perspective, they performed one dr
 
 A subtle issue: `continuous_minimize_during_drag` reads from `eval_cache` and `result_structure`, but these reflect the state **before** the current drag started (since drag uses `skip_downstream` mode for performance). The topology, provenance maps, and atom positions used for minimization come from this pre-drag snapshot.
 
-However, `drag_selected_by_delta` modifies atom positions in the **diff** (not the result structure), so the topology positions read from the result structure are stale for the dragged atoms. We handle this by:
+However, `drag_selected_by_delta` modifies atom positions in the **diff** (not the result structure), so the topology positions read from the result structure are stale. This staleness affects **two** categories of atoms:
 
-1. Reading the **current diff positions** for selected atoms (their target positions reflect the latest drag delta).
-2. For non-selected atoms, the topology positions from the result structure are correct (they haven't been dragged).
+1. **Selected/dragged atoms**: Their positions have been updated by `drag_selected_by_delta` in the diff but not in the result structure.
+2. **Non-selected atoms moved by previous minimization frames**: On frame N, the minimizer moves neighbor atoms and writes new positions to the diff. On frame N+1, the topology is rebuilt from the stale result structure, so these neighbors appear at their **original** pre-drag positions — the minimizer's accumulated progress is lost.
 
-Implementation: after building the topology from the result structure, we must **patch** the selected atoms' positions in the topology's position array to match their current diff positions. This ensures the force field sees the actual current geometry.
+Both must be patched. This is implemented in **Phase 1b** of `continuous_minimize_during_drag` (see the function code above). For each atom in the topology:
 
-```rust
-// Patch selected atom positions to match current drag state
-// (result_structure is stale — diff has the up-to-date positions)
-for (topo_idx, result_id) in topology.atom_ids.iter().enumerate() {
-    if selected_result_ids.contains(result_id) {
-        if let Some(source) = eval_cache.provenance.sources.get(result_id) {
-            let current_pos = match source {
-                AtomSource::DiffAdded(diff_id)
-                | AtomSource::DiffMatchedBase { diff_id, .. } => {
-                    atom_edit_data.diff.get_atom(*diff_id)
-                        .map(|a| a.position)
-                }
-                AtomSource::BasePassthrough(base_id) => {
-                    // If promoted during this drag, it's now in the diff
-                    // Find it via the selection's diff atoms
-                    // (base atoms get promoted to diff on first drag move)
-                    None // Will be handled after promotion
-                }
-            };
-            if let Some(pos) = current_pos {
-                let base = topo_idx * 3;
-                positions[base]     = pos.x;
-                positions[base + 1] = pos.y;
-                positions[base + 2] = pos.z;
-            }
-        }
-    }
-}
-```
+- **DiffAdded / DiffMatchedBase**: Read current position directly from the diff.
+- **BasePassthrough**: Consult the `promoted_base_atoms` map to find the diff entry created by a previous frame's write-back. If found, use the diff position; otherwise the atom hasn't been moved yet and the stale position is correct.
 
-This position patching must happen in Phase 1 (while we have immutable access to `atom_edit_data`) and must modify the cloned positions array, not the topology directly.
+The patching modifies the cloned `positions` array (not the topology), and happens before the force field and restraint targets are built, so both see the correct geometry.
+
+**Tracking promoted base atoms across frames:** Because provenance is stale, a `BasePassthrough` atom promoted to diff on frame N still appears as `BasePassthrough` on frame N+1. The drag session maintains a `promoted_base_atoms: HashMap<u32, u32>` map (base atom ID → diff atom ID) that is populated during write-back whenever a `BasePassthrough` is first promoted, and consulted during position patching on subsequent frames. This map is created at drag start and dropped at drag end (see Modified Drag Flow above).
 
 ### Max Displacement Per Step
 
@@ -600,9 +684,10 @@ The sub-options (spring restraints, spring constant, steps per frame, settle ste
 8. **`default_tool.rs`** — Call `continuous_minimize_during_drag()` in `ContinueDrag` action after `drag_selected_by_delta()`, gated on the preference flag. Call `continuous_minimize_settle()` in `pointer_up` before `end_atom_edit_drag()`.
 9. **Tests** — Integration tests in `rust/tests/structure_designer/`:
    - **Continuous minimization during drag — neighbors move** — enable continuous minimization, simulate a drag sequence (select atom, drag by delta), verify non-selected neighbor atoms moved toward lower energy.
-   - **Settle burst improves geometry** — drag with continuous minimization, capture positions after per-frame steps, then run settle burst, verify energy decreased further and neighbor positions improved.
-   - **Frozen-flagged atoms fixed during per-frame and settle** — set frozen flag on specific atoms, drag with continuous minimization, verify frozen atoms remain at their original positions throughout.
-   - **Method 1 vs Method 2 both produce valid geometry** — same drag scenario with both methods, verify both result in lower energy than no minimization. Verify Method 1 keeps selected atoms exactly at cursor position while Method 2 allows slight deviation.
+   - **Settle burst improves geometry** — drag with continuous minimization, capture positions after per-frame steps, then run settle burst, verify energy decreased further and both selected and neighbor positions improved.
+   - **Settle burst relaxes selected atoms** — drag an atom to a strained position (Method 1, selected frozen during drag), run settle burst, verify the selected atom moves away from the cursor position toward better geometry. Confirms that settle does not freeze selected atoms.
+   - **Frozen-flagged atoms fixed during per-frame and settle** — set frozen flag on specific atoms, drag with continuous minimization, verify persistent-frozen atoms remain at their original positions throughout (during drag AND settle).
+   - **Method 1 vs Method 2 both produce valid geometry** — same drag scenario with both methods, verify both result in lower energy than no minimization. Verify Method 1 keeps selected atoms exactly at cursor position during drag while Method 2 allows slight deviation. After settle, both methods allow selected atoms to move.
    - **Spring method selected atoms move toward target** — drag with Method 2, verify selected atoms end up close to (but not necessarily exactly at) the cursor-imposed target position.
    - **Continuous minimization disabled — no side effects** — drag with preference off, verify neighbor positions are unchanged (no regression on existing behavior).
    - **Diff view no-op** — set `output_diff = true`, call `continuous_minimize_during_drag`, verify it returns Ok(()) without modifying anything.
@@ -631,7 +716,7 @@ The sub-options (spring restraints, spring constant, steps per frame, settle ste
 ## Non-Goals
 
 - **Full molecular dynamics during drag**: We perform energy minimization (seeking a local minimum), not dynamics (integrating equations of motion with temperature). MD would add thermal noise, which is not useful for a CAD tool.
-- **Automatic topology rebuild**: The topology is built once at drag start from the pre-drag result structure. Bond breaking/formation during a drag is not supported.
+- **Automatic topology rebuild**: The topology connectivity (bonds, angles, etc.) is derived from the pre-drag result structure and does not change during a drag. Bond breaking/formation during a drag is not supported.
 - **Undo granularity**: Individual minimization frames are not separately undoable. The entire drag + relaxation is one undo step.
 
 ## References
