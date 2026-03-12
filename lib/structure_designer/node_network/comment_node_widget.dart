@@ -222,6 +222,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   }
 
   void _startResize(DragStartDetails details) {
+    sd_api.beginEditCommentNode(nodeId: widget.node.id);
     setState(() {
       _isResizing = true;
       _resizeStartWidth = _width;
@@ -252,6 +253,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   }
 
   void _endResize(BuildContext context) {
+    sd_api.endEditCommentNode();
     setState(() {
       _isResizing = false;
     });

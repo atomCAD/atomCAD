@@ -3847,7 +3847,9 @@ pub fn run_cli_batch(config: super::structure_designer_api_types::BatchCliConfig
     }
 }
 
-/// Resize a comment node
+/// Resize a comment node.
+/// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
+/// around the resize drag to get a single coalesced undo entry.
 #[flutter_rust_bridge::frb(sync)]
 pub fn resize_comment_node(node_id: u64, width: f64, height: f64) {
     unsafe {
@@ -3877,7 +3879,9 @@ pub fn resize_comment_node(node_id: u64, width: f64, height: f64) {
     }
 }
 
-/// Update a comment node's label and text
+/// Update a comment node's label and text.
+/// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
+/// around the editing session to get a single coalesced undo entry.
 #[flutter_rust_bridge::frb(sync)]
 pub fn update_comment_node(node_id: u64, label: String, text: String) {
     unsafe {
@@ -3903,6 +3907,28 @@ pub fn update_comment_node(node_id: u64, label: String, text: String) {
                     }
                 }
             }
+        });
+    }
+}
+
+/// Called when a comment node text field gains focus or resize drag begins.
+/// Captures a snapshot for undo coalescing.
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_edit_comment_node(node_id: u64) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.begin_comment_edit(node_id);
+        });
+    }
+}
+
+/// Called when a comment node text field loses focus or resize drag ends.
+/// Pushes a single undo command if the comment data changed.
+#[flutter_rust_bridge::frb(sync)]
+pub fn end_edit_comment_node() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.end_comment_edit();
         });
     }
 }

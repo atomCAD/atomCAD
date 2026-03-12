@@ -735,7 +735,9 @@ APIResult runCliSingle({required CliConfig config}) => RustLib.instance.api
 APIResult runCliBatch({required BatchCliConfig config}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiRunCliBatch(config: config);
 
-/// Resize a comment node
+/// Resize a comment node.
+/// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
+/// around the resize drag to get a single coalesced undo entry.
 void resizeCommentNode(
         {required BigInt nodeId,
         required double width,
@@ -744,7 +746,9 @@ void resizeCommentNode(
         .crateApiStructureDesignerStructureDesignerApiResizeCommentNode(
             nodeId: nodeId, width: width, height: height);
 
-/// Update a comment node's label and text
+/// Update a comment node's label and text.
+/// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
+/// around the editing session to get a single coalesced undo entry.
 void updateCommentNode(
         {required BigInt nodeId,
         required String label,
@@ -752,6 +756,17 @@ void updateCommentNode(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiUpdateCommentNode(
             nodeId: nodeId, label: label, text: text);
+
+/// Called when a comment node text field gains focus or resize drag begins.
+/// Captures a snapshot for undo coalescing.
+void beginEditCommentNode({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiBeginEditCommentNode(
+        nodeId: nodeId);
+
+/// Called when a comment node text field loses focus or resize drag ends.
+/// Pushes a single undo command if the comment data changed.
+void endEditCommentNode() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiEndEditCommentNode();
 
 /// Get comment node data for property panel editing
 APICommentData? getCommentData({required BigInt nodeId}) => RustLib.instance.api

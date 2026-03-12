@@ -79,6 +79,8 @@ pub struct StructureDesigner {
     pub pending_atom_edit_drag: Option<super::nodes::atom_edit::atom_edit::PendingAtomEditDrag>,
     // Temporary state during a gadget drag operation (for undo coalescing of non-atom_edit nodes)
     pub pending_gadget_drag: Option<super::undo::snapshot::PendingGadgetDrag>,
+    // Temporary state during comment node editing (text typing or resize drag)
+    pub pending_comment_edit: Option<super::undo::snapshot::PendingGadgetDrag>,
 }
 
 impl Default for StructureDesigner {
@@ -114,6 +116,7 @@ impl StructureDesigner {
             pending_move: None,
             pending_atom_edit_drag: None,
             pending_gadget_drag: None,
+            pending_comment_edit: None,
         }
     }
 }
@@ -1874,6 +1877,7 @@ impl StructureDesigner {
         self.undo_stack.clear();
         self.pending_move = None;
         self.pending_gadget_drag = None;
+        self.pending_comment_edit = None;
 
         // Clear evaluation cache
         self.network_evaluator.clear_csg_cache();
@@ -3163,6 +3167,54 @@ impl StructureDesigner {
                     node_type_name: pending.node_type_name,
                     old_data_json: pending.old_data_json,
                     new_data_json: new_data_json,
+                });
+            }
+        }
+    }
+
+    /// Called when a comment node text field gains focus or resize drag begins.
+    /// Captures a snapshot of the comment data before editing starts.
+    pub fn begin_comment_edit(&mut self, node_id: u64) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+        let node_type_name = match self.node_type_registry.node_networks.get(&network_name) {
+            Some(network) => match network.nodes.get(&node_id) {
+                Some(node) => node.node_type_name.clone(),
+                None => return,
+            },
+            None => return,
+        };
+
+        if let Some(old_data_json) = self.snapshot_node_data(&network_name, node_id) {
+            self.pending_comment_edit = Some(super::undo::snapshot::PendingGadgetDrag {
+                network_name,
+                node_id,
+                node_type_name,
+                old_data_json,
+            });
+        }
+    }
+
+    /// Called when a comment node text field loses focus or resize drag ends.
+    /// Compares the before/after snapshots and pushes a SetNodeDataCommand if they differ.
+    pub fn end_comment_edit(&mut self) {
+        let pending = match self.pending_comment_edit.take() {
+            Some(p) => p,
+            None => return,
+        };
+
+        if let Some(new_data_json) = self.snapshot_node_data(&pending.network_name, pending.node_id)
+        {
+            if pending.old_data_json != new_data_json {
+                self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
+                    description: format!("Edit {}", pending.node_type_name),
+                    network_name: pending.network_name,
+                    node_id: pending.node_id,
+                    node_type_name: pending.node_type_name,
+                    old_data_json: pending.old_data_json,
+                    new_data_json,
                 });
             }
         }
