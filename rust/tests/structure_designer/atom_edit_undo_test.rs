@@ -976,7 +976,9 @@ fn undo_atom_edit_transform_diff_atoms() {
 
     {
         let data = get_data_mut(&mut designer);
-        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(0.0, 5.0, 0.0)).length() < 1e-10);
+        assert!(
+            (data.diff.get_atom(1).unwrap().position - DVec3::new(0.0, 5.0, 0.0)).length() < 1e-10
+        );
     }
 
     // Undo
@@ -988,7 +990,9 @@ fn undo_atom_edit_transform_diff_atoms() {
     assert!(designer.redo());
     {
         let data = get_data_mut(&mut designer);
-        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(0.0, 5.0, 0.0)).length() < 1e-10);
+        assert!(
+            (data.diff.get_atom(1).unwrap().position - DVec3::new(0.0, 5.0, 0.0)).length() < 1e-10
+        );
     }
 }
 
@@ -1155,8 +1159,12 @@ fn undo_atom_edit_drag_is_single_step() {
     // Verify final positions
     {
         let data = get_data_mut(&mut designer);
-        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-10);
-        assert!((data.diff.get_atom(2).unwrap().position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-10);
+        assert!(
+            (data.diff.get_atom(1).unwrap().position - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-10
+        );
+        assert!(
+            (data.diff.get_atom(2).unwrap().position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-10
+        );
     }
 
     // Undo — should restore original positions in one step
@@ -1168,8 +1176,12 @@ fn undo_atom_edit_drag_is_single_step() {
     assert!(designer.redo());
     {
         let data = get_data_mut(&mut designer);
-        assert!((data.diff.get_atom(1).unwrap().position - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-10);
-        assert!((data.diff.get_atom(2).unwrap().position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-10);
+        assert!(
+            (data.diff.get_atom(1).unwrap().position - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-10
+        );
+        assert!(
+            (data.diff.get_atom(2).unwrap().position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-10
+        );
     }
 
     // Should not be able to undo further (only one command was pushed)
@@ -1969,13 +1981,22 @@ fn undo_atom_edit_toggle_include_base_bonds_in_diff() {
         "Toggle base bonds in diff",
         |d| &mut d.include_base_bonds_in_diff,
     );
-    assert_eq!(get_data_mut(&mut designer).include_base_bonds_in_diff, !initial);
+    assert_eq!(
+        get_data_mut(&mut designer).include_base_bonds_in_diff,
+        !initial
+    );
 
     assert!(designer.undo());
-    assert_eq!(get_data_mut(&mut designer).include_base_bonds_in_diff, initial);
+    assert_eq!(
+        get_data_mut(&mut designer).include_base_bonds_in_diff,
+        initial
+    );
 
     assert!(designer.redo());
-    assert_eq!(get_data_mut(&mut designer).include_base_bonds_in_diff, !initial);
+    assert_eq!(
+        get_data_mut(&mut designer).include_base_bonds_in_diff,
+        !initial
+    );
 }
 
 #[test]
@@ -2004,20 +2025,14 @@ fn undo_atom_edit_toggle_flag_double_toggle() {
     let mut designer = setup_atom_edit();
     assert!(!get_data_mut(&mut designer).output_diff);
 
-    push_toggle_flag_command(
-        &mut designer,
-        AtomEditFlag::OutputDiff,
-        "Toggle 1",
-        |d| &mut d.output_diff,
-    );
+    push_toggle_flag_command(&mut designer, AtomEditFlag::OutputDiff, "Toggle 1", |d| {
+        &mut d.output_diff
+    });
     assert!(get_data_mut(&mut designer).output_diff);
 
-    push_toggle_flag_command(
-        &mut designer,
-        AtomEditFlag::OutputDiff,
-        "Toggle 2",
-        |d| &mut d.output_diff,
-    );
+    push_toggle_flag_command(&mut designer, AtomEditFlag::OutputDiff, "Toggle 2", |d| {
+        &mut d.output_diff
+    });
     assert!(!get_data_mut(&mut designer).output_diff);
 
     // Undo second toggle
@@ -2040,11 +2055,7 @@ fn undo_atom_edit_toggle_flag_double_toggle() {
 // =============================================================================
 
 /// Helper to push an AtomEditFrozenChangeCommand that freezes specific atoms.
-fn push_freeze_command(
-    designer: &mut StructureDesigner,
-    base_ids: &[u32],
-    diff_ids: &[u32],
-) {
+fn push_freeze_command(designer: &mut StructureDesigner, base_ids: &[u32], diff_ids: &[u32]) {
     let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
     let mut delta = FrozenDelta {
         added: Vec::new(),
@@ -2072,11 +2083,7 @@ fn push_freeze_command(
 }
 
 /// Helper to push an AtomEditFrozenChangeCommand that unfreezes specific atoms.
-fn push_unfreeze_command(
-    designer: &mut StructureDesigner,
-    base_ids: &[u32],
-    diff_ids: &[u32],
-) {
+fn push_unfreeze_command(designer: &mut StructureDesigner, base_ids: &[u32], diff_ids: &[u32]) {
     let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
     let mut delta = FrozenDelta {
         added: Vec::new(),
@@ -2323,12 +2330,9 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     });
 
     // 2. Toggle output_diff
-    push_toggle_flag_command(
-        &mut designer,
-        AtomEditFlag::OutputDiff,
-        "Toggle",
-        |d| &mut d.output_diff,
-    );
+    push_toggle_flag_command(&mut designer, AtomEditFlag::OutputDiff, "Toggle", |d| {
+        &mut d.output_diff
+    });
 
     // 3. Freeze atom 1
     push_freeze_command(&mut designer, &[], &[1]);

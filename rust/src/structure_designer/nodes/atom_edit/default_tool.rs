@@ -1,4 +1,5 @@
 use super::atom_edit_data::*;
+use super::minimization::{continuous_minimize_during_drag, continuous_minimize_settle};
 use super::operations::{change_bond_order, cycle_bond_order, drag_selected_by_delta};
 use super::selection::*;
 use super::types::*;
@@ -430,6 +431,25 @@ pub fn default_tool_pointer_move(
                 // Apply delta to all selected atoms
                 drag_selected_by_delta(structure_designer, delta);
 
+                // Continuous minimization: relax neighbors per frame
+                if structure_designer
+                    .preferences
+                    .simulation_preferences
+                    .continuous_minimization
+                {
+                    // Take promoted_base_atoms out of pending drag to avoid borrow conflict
+                    let mut promoted = structure_designer
+                        .pending_atom_edit_drag
+                        .as_mut()
+                        .map(|p| std::mem::take(&mut p.promoted_base_atoms))
+                        .unwrap_or_default();
+                    let _ = continuous_minimize_during_drag(structure_designer, &mut promoted);
+                    // Put it back
+                    if let Some(pending) = &mut structure_designer.pending_atom_edit_drag {
+                        pending.promoted_base_atoms = promoted;
+                    }
+                }
+
                 // Update the last_world_pos in the interaction state
                 set_interaction_state(
                     structure_designer,
@@ -593,13 +613,9 @@ pub fn default_tool_pointer_up(
                 if let Some(order) = current_order {
                     let new_order = cycle_bond_order(order);
                     let bond_ref = bond_reference.clone();
-                    with_atom_edit_undo(
-                        structure_designer,
-                        "Change bond order",
-                        |sd| {
-                            change_bond_order(sd, &bond_ref, new_order);
-                        },
-                    );
+                    with_atom_edit_undo(structure_designer, "Change bond order", |sd| {
+                        change_bond_order(sd, &bond_ref, new_order);
+                    });
                 }
                 PointerUpResult::SelectionChanged
             } else {
@@ -644,6 +660,24 @@ pub fn default_tool_pointer_up(
         Some(PendingClickInfo::DragCompleted) => {
             // Screen-plane drag finished. Atoms are already at their new positions
             // (updated incrementally during drag). The state has been reset to Idle.
+
+            // Settle burst: run additional steepest descent steps before finalizing
+            if structure_designer
+                .preferences
+                .simulation_preferences
+                .continuous_minimization
+            {
+                let mut promoted = structure_designer
+                    .pending_atom_edit_drag
+                    .as_mut()
+                    .map(|p| std::mem::take(&mut p.promoted_base_atoms))
+                    .unwrap_or_default();
+                let _ = continuous_minimize_settle(structure_designer, &mut promoted);
+                if let Some(pending) = &mut structure_designer.pending_atom_edit_drag {
+                    pending.promoted_base_atoms = promoted;
+                }
+            }
+
             // End undo recording and push the coalesced command.
             end_atom_edit_drag(structure_designer);
             PointerUpResult::DragCommitted

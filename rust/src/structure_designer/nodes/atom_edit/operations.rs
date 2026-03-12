@@ -311,7 +311,7 @@ fn gather_base_atom_promotion_info(
 /// - Diff atoms: position updated in-place, anchor set on first move
 /// - Base atoms: added to diff with anchor at original position, then moved to
 ///   the provenance-based diff selection so subsequent deltas update the same atom
-pub(super) fn drag_selected_by_delta(structure_designer: &mut StructureDesigner, delta: DVec3) {
+pub fn drag_selected_by_delta(structure_designer: &mut StructureDesigner, delta: DVec3) {
     // Phase 1: Gather info about base atoms that need to be added to the diff
     let base_atoms_info: Vec<BaseAtomPromotionInfo> = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {

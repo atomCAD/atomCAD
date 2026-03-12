@@ -34,8 +34,7 @@ pub struct RestrainedForceField<'a> {
 impl ForceField for RestrainedForceField<'_> {
     fn energy_and_gradients(&self, positions: &[f64], energy: &mut f64, gradients: &mut [f64]) {
         // Compute base energy and gradients
-        self.base
-            .energy_and_gradients(positions, energy, gradients);
+        self.base.energy_and_gradients(positions, energy, gradients);
 
         // Add restraint terms: E = 0.5 * k * |r - r_target|^2
         // dE/dx_i = k * (x_i - x_target)

@@ -1536,6 +1536,11 @@ fn get_atom_edit_data_for_recording(
 pub struct PendingAtomEditDrag {
     pub network_name: String,
     pub node_id: u64,
+    /// Tracks base atoms promoted to diff by continuous minimization.
+    /// Maps base atom ID → diff atom ID. Created empty at drag start,
+    /// populated during write-back as BasePassthrough atoms are promoted,
+    /// and dropped when the drag ends.
+    pub promoted_base_atoms: HashMap<u32, u32>,
 }
 
 /// Begin recording for a drag operation on the atom_edit node.
@@ -1557,6 +1562,7 @@ pub fn begin_atom_edit_drag(structure_designer: &mut StructureDesigner) {
     structure_designer.pending_atom_edit_drag = Some(PendingAtomEditDrag {
         network_name,
         node_id,
+        promoted_base_atoms: HashMap::new(),
     });
 }
 

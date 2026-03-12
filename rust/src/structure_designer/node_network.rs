@@ -990,8 +990,10 @@ impl NodeNetwork {
             }
         }
         // Remove any selected wires that reference removed nodes
-        self.selected_wires
-            .retain(|w| !removed_ids.contains(&w.source_node_id) && !removed_ids.contains(&w.destination_node_id));
+        self.selected_wires.retain(|w| {
+            !removed_ids.contains(&w.source_node_id)
+                && !removed_ids.contains(&w.destination_node_id)
+        });
     }
 
     /// Provides gadget for the active node (used for property panels)

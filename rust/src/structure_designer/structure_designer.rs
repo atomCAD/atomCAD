@@ -76,8 +76,7 @@ pub struct StructureDesigner {
     // Temporary state during a node drag operation (for move coalescing)
     pub pending_move: Option<PendingMove>,
     // Temporary state during an atom edit drag operation (for drag coalescing)
-    pub pending_atom_edit_drag:
-        Option<super::nodes::atom_edit::atom_edit::PendingAtomEditDrag>,
+    pub pending_atom_edit_drag: Option<super::nodes::atom_edit::atom_edit::PendingAtomEditDrag>,
     // Temporary state during a gadget drag operation (for undo coalescing of non-atom_edit nodes)
     pub pending_gadget_drag: Option<super::undo::snapshot::PendingGadgetDrag>,
 }
@@ -3093,13 +3092,12 @@ impl StructureDesigner {
         }
 
         if let Some(old_data_json) = self.snapshot_node_data(&network_name, node_id) {
-            self.pending_gadget_drag =
-                Some(super::undo::snapshot::PendingGadgetDrag {
-                    network_name,
-                    node_id,
-                    node_type_name,
-                    old_data_json,
-                });
+            self.pending_gadget_drag = Some(super::undo::snapshot::PendingGadgetDrag {
+                network_name,
+                node_id,
+                node_type_name,
+                old_data_json,
+            });
         }
     }
 
@@ -3111,20 +3109,17 @@ impl StructureDesigner {
             None => return,
         };
 
-        if let Some(new_data_json) =
-            self.snapshot_node_data(&pending.network_name, pending.node_id)
+        if let Some(new_data_json) = self.snapshot_node_data(&pending.network_name, pending.node_id)
         {
             if pending.old_data_json != new_data_json {
-                self.push_command(
-                    super::undo::commands::set_node_data::SetNodeDataCommand {
-                        description: format!("Edit {}", pending.node_type_name),
-                        network_name: pending.network_name,
-                        node_id: pending.node_id,
-                        node_type_name: pending.node_type_name,
-                        old_data_json: pending.old_data_json,
-                        new_data_json: new_data_json,
-                    },
-                );
+                self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
+                    description: format!("Edit {}", pending.node_type_name),
+                    network_name: pending.network_name,
+                    node_id: pending.node_id,
+                    node_type_name: pending.node_type_name,
+                    old_data_json: pending.old_data_json,
+                    new_data_json: new_data_json,
+                });
             }
         }
     }

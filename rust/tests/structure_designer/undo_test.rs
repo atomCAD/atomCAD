@@ -1629,10 +1629,7 @@ fn undo_description_move_single_node() {
     designer.begin_move_nodes();
     designer.move_selected_nodes(DVec2::new(10.0, 0.0));
     designer.end_move_nodes();
-    assert_eq!(
-        designer.undo_stack.undo_description(),
-        Some("Move sphere")
-    );
+    assert_eq!(designer.undo_stack.undo_description(), Some("Move sphere"));
 }
 
 #[test]
@@ -1649,10 +1646,7 @@ fn undo_description_move_multiple_nodes() {
     designer.begin_move_nodes();
     designer.move_selected_nodes(DVec2::new(10.0, 0.0));
     designer.end_move_nodes();
-    assert_eq!(
-        designer.undo_stack.undo_description(),
-        Some("Move 2 nodes")
-    );
+    assert_eq!(designer.undo_stack.undo_description(), Some("Move 2 nodes"));
 }
 
 #[test]

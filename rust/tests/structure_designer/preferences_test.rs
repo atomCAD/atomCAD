@@ -534,8 +534,7 @@ fn test_continuous_minimization_preferences_roundtrip() {
     };
 
     let json = serde_json::to_string(&prefs).expect("Failed to serialize");
-    let loaded: SimulationPreferences =
-        serde_json::from_str(&json).expect("Failed to deserialize");
+    let loaded: SimulationPreferences = serde_json::from_str(&json).expect("Failed to deserialize");
 
     assert_eq!(loaded, prefs);
 }

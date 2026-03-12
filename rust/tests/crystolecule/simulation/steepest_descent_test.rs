@@ -14,7 +14,9 @@
 use glam::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::crystolecule::simulation::force_field::{ForceField, RestrainedForceField};
+use rust_lib_flutter_cad::crystolecule::simulation::force_field::{
+    ForceField, RestrainedForceField,
+};
 use rust_lib_flutter_cad::crystolecule::simulation::minimize::steepest_descent_steps;
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
 use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
@@ -235,8 +237,7 @@ fn sd_frozen_atom_on_real_molecule() {
     );
 
     // At least one hydrogen should have moved
-    let any_moved = (3..positions.len())
-        .any(|i| (positions[i] - original_pos[i]).abs() > 1e-6);
+    let any_moved = (3..positions.len()).any(|i| (positions[i] - original_pos[i]).abs() > 1e-6);
     assert!(any_moved, "no non-frozen atoms moved");
 }
 
@@ -280,7 +281,12 @@ fn restrained_ff_gradient_matches_numerical() {
     let restrained = RestrainedForceField {
         base: &ff,
         // Restrain atom 1 (first hydrogen) to a shifted position
-        restraints: vec![(1, positions[3] + 0.5, positions[4] - 0.3, positions[5] + 0.2)],
+        restraints: vec![(
+            1,
+            positions[3] + 0.5,
+            positions[4] - 0.3,
+            positions[5] + 0.2,
+        )],
         spring_constant: 200.0,
     };
 
@@ -595,10 +601,7 @@ fn restrained_ff_energy_contribution_is_correct() {
     restrained.energy_and_gradients(&positions, &mut energy, &mut grad);
 
     // E = 0.5 * 100 * (1^2 + 0 + 0) = 50.0
-    assert!(
-        (energy - 50.0).abs() < 1e-10,
-        "expected 50.0, got {energy}"
-    );
+    assert!((energy - 50.0).abs() < 1e-10, "expected 50.0, got {energy}");
 
     // Gradient at coord 0: k * (0 - 1) = -100
     assert!(

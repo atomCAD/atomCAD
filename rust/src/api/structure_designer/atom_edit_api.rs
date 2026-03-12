@@ -174,11 +174,8 @@ pub fn add_bond_pointer_up(ray_origin: APIVec3, ray_direction: APIVec3) -> bool 
                     &mut cad_instance.structure_designer,
                     "Add bond",
                     |sd| {
-                        result = atom_edit::add_bond_pointer_up(
-                            sd,
-                            &ray_origin_vec3,
-                            &ray_dir_vec3,
-                        );
+                        result =
+                            atom_edit::add_bond_pointer_up(sd, &ray_origin_vec3, &ray_dir_vec3);
                     },
                 );
                 refresh_structure_designer_auto(cad_instance);
@@ -847,12 +844,7 @@ pub fn atom_edit_modify_angle(
                     &mut cad_instance.structure_designer,
                     "Modify angle",
                     |sd| {
-                        result = modify_angle(
-                            sd,
-                            target_angle_degrees,
-                            move_choice,
-                            move_fragment,
-                        );
+                        result = modify_angle(sd, target_angle_degrees, move_choice, move_fragment);
                     },
                 );
                 refresh_structure_designer_auto(cad_instance);
@@ -892,12 +884,8 @@ pub fn atom_edit_modify_dihedral(
                     &mut cad_instance.structure_designer,
                     "Modify dihedral",
                     |sd| {
-                        result = modify_dihedral(
-                            sd,
-                            target_angle_degrees,
-                            move_choice,
-                            move_fragment,
-                        );
+                        result =
+                            modify_dihedral(sd, target_angle_degrees, move_choice, move_fragment);
                     },
                 );
                 refresh_structure_designer_auto(cad_instance);
