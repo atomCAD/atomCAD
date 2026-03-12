@@ -155,6 +155,9 @@ class APIAtomEditData {
   /// True if any atom has the frozen flag set.
   final bool hasFrozenAtoms;
 
+  /// Whether continuous minimization is enabled on this atom_edit node.
+  final bool continuousMinimization;
+
   const APIAtomEditData({
     required this.activeTool,
     this.bondToolLastAtomId,
@@ -176,6 +179,7 @@ class APIAtomEditData {
     this.measurement,
     this.lastSelectedResultAtomId,
     required this.hasFrozenAtoms,
+    required this.continuousMinimization,
   });
 
   @override
@@ -199,7 +203,8 @@ class APIAtomEditData {
       diffStats.hashCode ^
       measurement.hashCode ^
       lastSelectedResultAtomId.hashCode ^
-      hasFrozenAtoms.hashCode;
+      hasFrozenAtoms.hashCode ^
+      continuousMinimization.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -225,7 +230,8 @@ class APIAtomEditData {
           diffStats == other.diffStats &&
           measurement == other.measurement &&
           lastSelectedResultAtomId == other.lastSelectedResultAtomId &&
-          hasFrozenAtoms == other.hasFrozenAtoms;
+          hasFrozenAtoms == other.hasFrozenAtoms &&
+          continuousMinimization == other.continuousMinimization;
 }
 
 enum APIAtomEditTool {

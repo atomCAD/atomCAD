@@ -3044,6 +3044,31 @@ impl StructureDesigner {
         if let Some(gadget) = &mut self.gadget {
             gadget.drag(handle_index, ray_origin, ray_direction);
         }
+
+        // Continuous minimization: sync atom positions to the diff each frame
+        // so the minimizer sees current geometry, then relax neighbors.
+        if super::nodes::atom_edit::atom_edit::get_active_atom_edit_data(self)
+            .is_some_and(|d| d.continuous_minimization)
+        {
+            // Apply current gadget delta to diff atom positions
+            self.sync_gadget_data();
+
+            // Take promoted_base_atoms out of pending drag to avoid borrow conflict
+            let mut promoted = self
+                .pending_atom_edit_drag
+                .as_mut()
+                .map(|p| std::mem::take(&mut p.promoted_base_atoms))
+                .unwrap_or_default();
+            let _ = super::nodes::atom_edit::atom_edit::continuous_minimize_during_drag(
+                self,
+                &mut promoted,
+            );
+            // Put it back
+            if let Some(pending) = &mut self.pending_atom_edit_drag {
+                pending.promoted_base_atoms = promoted;
+            }
+        }
+
         // Gadget dragging only needs lightweight refresh (tessellation update)
         self.mark_lightweight_refresh();
     }
@@ -3052,6 +3077,25 @@ impl StructureDesigner {
         if let Some(gadget) = &mut self.gadget {
             gadget.end_drag();
             self.sync_gadget_data();
+
+            // Settle burst: run additional steepest descent steps before finalizing
+            if super::nodes::atom_edit::atom_edit::get_active_atom_edit_data(self)
+                .is_some_and(|d| d.continuous_minimization)
+            {
+                let mut promoted = self
+                    .pending_atom_edit_drag
+                    .as_mut()
+                    .map(|p| std::mem::take(&mut p.promoted_base_atoms))
+                    .unwrap_or_default();
+                let _ = super::nodes::atom_edit::atom_edit::continuous_minimize_settle(
+                    self,
+                    &mut promoted,
+                );
+                if let Some(pending) = &mut self.pending_atom_edit_drag {
+                    pending.promoted_base_atoms = promoted;
+                }
+            }
+
             // End atom_edit drag recording and push the coalesced undo command
             super::nodes::atom_edit::atom_edit::end_atom_edit_drag(self);
             // For non-atom_edit nodes, snapshot after and push undo command

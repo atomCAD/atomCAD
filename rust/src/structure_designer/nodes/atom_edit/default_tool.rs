@@ -432,10 +432,8 @@ pub fn default_tool_pointer_move(
                 drag_selected_by_delta(structure_designer, delta);
 
                 // Continuous minimization: relax neighbors per frame
-                if structure_designer
-                    .preferences
-                    .simulation_preferences
-                    .continuous_minimization
+                if get_active_atom_edit_data(structure_designer)
+                    .is_some_and(|d| d.continuous_minimization)
                 {
                     // Take promoted_base_atoms out of pending drag to avoid borrow conflict
                     let mut promoted = structure_designer
@@ -662,10 +660,8 @@ pub fn default_tool_pointer_up(
             // (updated incrementally during drag). The state has been reset to Idle.
 
             // Settle burst: run additional steepest descent steps before finalizing
-            if structure_designer
-                .preferences
-                .simulation_preferences
-                .continuous_minimization
+            if get_active_atom_edit_data(structure_designer)
+                .is_some_and(|d| d.continuous_minimization)
             {
                 let mut promoted = structure_designer
                     .pending_atom_edit_drag

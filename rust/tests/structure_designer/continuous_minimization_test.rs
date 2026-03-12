@@ -108,12 +108,10 @@ fn setup_ethane_atom_edit() -> (StructureDesigner, u64, u64) {
     (designer, value_id, atom_edit_id)
 }
 
-/// Enable continuous minimization in the designer's preferences.
+/// Enable continuous minimization on the active atom_edit node.
 fn enable_continuous_minimization(designer: &mut StructureDesigner) {
-    designer
-        .preferences
-        .simulation_preferences
-        .continuous_minimization = true;
+    let data = get_selected_atom_edit_data_mut(designer).unwrap();
+    data.continuous_minimization = true;
 }
 
 /// Record all result atom positions as a snapshot.
@@ -199,11 +197,10 @@ fn simulate_drag_with_continuous_minimize(designer: &mut StructureDesigner, delt
 fn continuous_minimization_disabled_no_side_effects() {
     let (mut designer, _, _) = setup_ethane_atom_edit();
 
-    // Continuous minimization is disabled by default
+    // Continuous minimization is disabled by default on the node
     assert!(
-        !designer
-            .preferences
-            .simulation_preferences
+        !get_selected_atom_edit_data_mut(&mut designer)
+            .unwrap()
             .continuous_minimization
     );
 

@@ -54,6 +54,8 @@ pub struct SerializableAtomEditData {
     pub tolerance: f64,
     #[serde(default)]
     pub error_on_stale_entries: bool,
+    #[serde(default)]
+    pub continuous_minimization: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frozen_base_atoms: Vec<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -124,6 +126,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         include_base_bonds_in_diff: data.include_base_bonds_in_diff,
         tolerance: data.tolerance,
         error_on_stale_entries: data.error_on_stale_entries,
+        continuous_minimization: data.continuous_minimization,
         frozen_base_atoms: frozen_base,
         frozen_diff_atoms: frozen_diff,
     })
@@ -184,6 +187,7 @@ pub fn serializable_to_atom_edit_data(
         serializable.include_base_bonds_in_diff,
         serializable.tolerance,
         serializable.error_on_stale_entries,
+        serializable.continuous_minimization,
         serializable.frozen_base_atoms.iter().copied().collect(),
         serializable.frozen_diff_atoms.iter().copied().collect(),
     ))

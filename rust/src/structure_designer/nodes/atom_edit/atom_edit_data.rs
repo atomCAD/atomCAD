@@ -49,6 +49,8 @@ pub struct AtomEditData {
     pub tolerance: f64,
     /// When true + result view, return error if any diff diagnostics are non-zero
     pub error_on_stale_entries: bool,
+    /// When true, run steepest descent minimization each frame during atom dragging
+    pub continuous_minimization: bool,
     /// Base atom IDs that are frozen (tracked by provenance)
     pub frozen_base_atoms: HashSet<u32>,
     /// Diff atom IDs that are frozen (tracked by provenance)
@@ -90,6 +92,7 @@ impl AtomEditData {
             include_base_bonds_in_diff: true,
             tolerance: DEFAULT_TOLERANCE,
             error_on_stale_entries: false,
+            continuous_minimization: false,
             frozen_base_atoms: HashSet::new(),
             frozen_diff_atoms: HashSet::new(),
             selection: AtomEditSelection::new(),
@@ -114,6 +117,7 @@ impl AtomEditData {
         include_base_bonds_in_diff: bool,
         tolerance: f64,
         error_on_stale_entries: bool,
+        continuous_minimization: bool,
         frozen_base_atoms: HashSet<u32>,
         frozen_diff_atoms: HashSet<u32>,
     ) -> Self {
@@ -124,6 +128,7 @@ impl AtomEditData {
             include_base_bonds_in_diff,
             tolerance,
             error_on_stale_entries,
+            continuous_minimization,
             frozen_base_atoms,
             frozen_diff_atoms,
             measurement_marked_atom_id: None,
@@ -1188,6 +1193,7 @@ impl NodeData for AtomEditData {
             include_base_bonds_in_diff: self.include_base_bonds_in_diff,
             tolerance: self.tolerance,
             error_on_stale_entries: self.error_on_stale_entries,
+            continuous_minimization: self.continuous_minimization,
             selection: self.selection.clone(),
             active_tool: match &self.active_tool {
                 AtomEditTool::Default(state) => AtomEditTool::Default(DefaultToolState {

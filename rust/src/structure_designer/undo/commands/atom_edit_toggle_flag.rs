@@ -8,6 +8,7 @@ pub enum AtomEditFlag {
     ShowAnchorArrows,
     IncludeBaseBondsInDiff,
     ErrorOnStaleEntries,
+    ContinuousMinimization,
 }
 
 /// Command for undoing/redoing atom_edit boolean flag toggles.
@@ -59,5 +60,6 @@ fn set_flag(data: &mut AtomEditData, flag: AtomEditFlag, value: bool) {
         AtomEditFlag::ShowAnchorArrows => data.show_anchor_arrows = value,
         AtomEditFlag::IncludeBaseBondsInDiff => data.include_base_bonds_in_diff = value,
         AtomEditFlag::ErrorOnStaleEntries => data.error_on_stale_entries = value,
+        AtomEditFlag::ContinuousMinimization => data.continuous_minimization = value,
     }
 }

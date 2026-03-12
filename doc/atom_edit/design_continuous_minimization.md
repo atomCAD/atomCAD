@@ -71,18 +71,25 @@ An alternative is **FIRE** (Fast Inertial Relaxation Engine), which converges fa
 
 ## Preferences
 
-### New Fields in `SimulationPreferences`
+### Enable/Disable Toggle: Per-Node on `AtomEditData`
+
+The `continuous_minimization` boolean is stored on `AtomEditData` (per-node), not in `SimulationPreferences`. This is because:
+
+- Enabling/disabling continuous minimization is an everyday editing action, not a one-time preference.
+- Different atom_edit nodes may benefit from different settings (small molecules vs. large structures).
+- It follows the same pattern as `output_diff`, `show_anchor_arrows`, etc. — per-node flags toggled from the atom_edit UI.
+
+The toggle appears in the atom_edit panel's Energy Minimization section (next to the Minimize buttons). It uses `AtomEditToggleFlagCommand` with `AtomEditFlag::ContinuousMinimization` for undo support. It is serialized with the node data in `.cnnd` files.
+
+### Algorithm Parameters in `SimulationPreferences`
+
+The algorithm tuning knobs remain in `SimulationPreferences` (global preferences):
 
 ```rust
 #[frb]
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct SimulationPreferences {
     // ... existing fields ...
-
-    /// Enable continuous minimization during atom dragging.
-    #[frb(non_final)]
-    #[serde(default)]
-    pub continuous_minimization: bool,
 
     /// Use spring restraints instead of hard constraints for dragged atoms.
     /// When false (default): dragged atoms are frozen, rest minimized (Method 1).
@@ -126,7 +133,7 @@ All new fields use `#[serde(default)]` for backward-compatible deserialization o
 
 | Field | Default | Rationale |
 |-------|---------|-----------|
-| `continuous_minimization` | `false` | Opt-in feature, does not change default behavior |
+| `continuous_minimization` (on AtomEditData) | `false` | Opt-in feature, does not change default behavior |
 | `continuous_minimization_use_springs` | `false` | Simple method is the default; springs are an advanced option |
 | `continuous_minimization_spring_constant` | `200.0` | Stiff enough to follow the cursor closely, soft enough for force field feedback. Comparable to Avogadro's approach |
 | `continuous_minimization_steps_per_frame` | `4` | Matches Avogadro's default for Auto-Optimize. Balances responsiveness vs. CPU cost |
@@ -637,22 +644,32 @@ The preferences are already exposed to Flutter via FRB (all `SimulationPreferenc
 
 The existing preferences window gains new controls in the Simulation section:
 
+The **on/off toggle** is in the **atom_edit panel** (Energy Minimization section):
+
+```
+┌─ Energy Minimization ─────────────────────────────────────┐
+│  [x] Continuous minimization during drag                    │
+│                                                             │
+│  [Minimize diff]  [Minimize unfrozen]  [Minimize selected]  │
+│  ...                                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The **algorithm parameters** are in the **Preferences** window (Simulation section):
+
 ```
 ┌─ Simulation ──────────────────────────────────────────────┐
 │                                                             │
 │  [x] Use vdW cutoff                                        │
 │                                                             │
-│  [x] Continuous minimization during drag                    │
-│                                                             │
-│      [ ] Use spring restraints (smoother)                   │
-│      Spring constant: [  200.0  ] kcal/(mol·Å²)            │
-│      Steps per frame: [    4    ]                           │
-│      Settle steps:    [   50    ]                           │
+│  Continuous Minimization                                    │
+│  [ ] Use spring restraints (smoother)                       │
+│  Spring constant: [  200.0  ] kcal/(mol·Å²)                │
+│  Steps per frame: [    4    ]                               │
+│  Settle steps:    [   50    ]                               │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
-
-The sub-options (spring restraints, spring constant, steps per frame, settle steps) are only enabled when "Continuous minimization during drag" is checked.
 
 ## Implementation Steps
 

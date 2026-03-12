@@ -851,6 +851,29 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Continuous minimization toggle
+        Tooltip(
+          message:
+              'Runs steepest descent minimization each frame while dragging atoms.\n'
+              'Neighboring atoms relax in real time around the drag.',
+          child: Row(
+            children: [
+              SizedBox(
+                height: 24,
+                width: 24,
+                child: Checkbox(
+                  value: _stagedData!.continuousMinimization,
+                  onChanged: (_) {
+                    widget.model.toggleAtomEditContinuousMinimization();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('Continuous minimization during drag'),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
         // Freeze control buttons (2x2 grid)
         Row(
           children: [

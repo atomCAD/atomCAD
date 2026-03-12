@@ -402,6 +402,25 @@ pub fn atom_edit_toggle_error_on_stale_entries() -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_toggle_continuous_minimization() -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                toggle_atom_edit_flag(
+                    &mut cad_instance.structure_designer,
+                    AtomEditFlag::ContinuousMinimization,
+                    "Toggle continuous minimization",
+                    |d| &mut d.continuous_minimization,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                true
+            },
+            false,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_active_atom_edit_tool() -> Option<APIAtomEditTool> {
     unsafe {
         with_mut_cad_instance_or(

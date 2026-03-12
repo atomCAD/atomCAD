@@ -307,11 +307,6 @@ pub struct SimulationPreferences {
     #[serde(default = "default_true")]
     pub use_vdw_cutoff: bool,
 
-    /// Enable continuous minimization during atom dragging.
-    #[frb(non_final)]
-    #[serde(default)]
-    pub continuous_minimization: bool,
-
     /// Use spring restraints instead of hard constraints for dragged atoms.
     /// When false (default): dragged atoms are frozen, rest minimized (Method 1).
     /// When true: dragged atoms are pulled by harmonic springs (Method 2).
@@ -347,7 +342,6 @@ impl Default for SimulationPreferences {
     fn default() -> Self {
         Self {
             use_vdw_cutoff: true,
-            continuous_minimization: false,
             continuous_minimization_use_springs: false,
             continuous_minimization_spring_constant: 200.0,
             continuous_minimization_steps_per_frame: 4,

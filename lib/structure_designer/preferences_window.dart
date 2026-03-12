@@ -62,10 +62,7 @@ class PreferencesKeys {
       Key('pref_auto_layout_after_edit_checkbox');
 
   // Simulation settings
-  static const Key useVdwCutoffCheckbox =
-      Key('pref_use_vdw_cutoff_checkbox');
-  static const Key continuousMinimizationCheckbox =
-      Key('pref_continuous_minimization_checkbox');
+  static const Key useVdwCutoffCheckbox = Key('pref_use_vdw_cutoff_checkbox');
   static const Key continuousMinimizationUseSpringsCheckbox =
       Key('pref_continuous_minimization_use_springs_checkbox');
   static const Key continuousMinimizationSpringConstantInput =
@@ -1104,23 +1101,37 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                           ),
                           const SizedBox(height: AppSpacing.small),
 
-                          // Continuous minimization checkbox
+                          // Continuous minimization algorithm parameters
+                          // (The on/off toggle is per-node, in the atom_edit panel)
+                          const SizedBox(height: AppSpacing.small),
+                          Text(
+                            'Continuous Minimization',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Use spring restraints checkbox
                           Tooltip(
                             message:
-                                'Runs steepest descent minimization each frame while dragging atoms.\n'
-                                'Neighboring atoms relax in real time around the drag.',
+                                'When enabled, dragged atoms are pulled toward the cursor by harmonic springs\n'
+                                'instead of being hard-frozen. Produces smoother, more physically realistic behavior.',
                             child: Row(
                               children: [
                                 Checkbox(
                                   key: PreferencesKeys
-                                      .continuousMinimizationCheckbox,
+                                      .continuousMinimizationUseSpringsCheckbox,
                                   value: _preferences.simulationPreferences
-                                      .continuousMinimization,
+                                      .continuousMinimizationUseSprings,
                                   onChanged: (value) {
                                     if (value != null) {
                                       setState(() {
                                         _preferences.simulationPreferences
-                                            .continuousMinimization = value;
+                                                .continuousMinimizationUseSprings =
+                                            value;
                                       });
                                       _applyPreferences();
                                     }
@@ -1128,122 +1139,74 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 ),
                                 const SizedBox(width: 8),
                                 const Expanded(
-                                  child: Text(
-                                      'Continuous minimization during drag'),
+                                  child:
+                                      Text('Use spring restraints (smoother)'),
                                 ),
                               ],
                             ),
                           ),
 
-                          // Sub-options, only enabled when continuous minimization is on
+                          // Spring constant (only when springs enabled)
                           if (_preferences.simulationPreferences
-                              .continuousMinimization) ...[
+                              .continuousMinimizationUseSprings) ...[
                             const SizedBox(height: AppSpacing.small),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 32),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Use spring restraints checkbox
-                                  Tooltip(
-                                    message:
-                                        'When enabled, dragged atoms are pulled toward the cursor by harmonic springs\n'
-                                        'instead of being hard-frozen. Produces smoother, more physically realistic behavior.',
-                                    child: Row(
-                                      children: [
-                                        Checkbox(
-                                          key: PreferencesKeys
-                                              .continuousMinimizationUseSpringsCheckbox,
-                                          value: _preferences
-                                              .simulationPreferences
-                                              .continuousMinimizationUseSprings,
-                                          onChanged: (value) {
-                                            if (value != null) {
-                                              setState(() {
-                                                _preferences
-                                                    .simulationPreferences
-                                                    .continuousMinimizationUseSprings = value;
-                                              });
-                                              _applyPreferences();
-                                            }
-                                          },
-                                        ),
-                                        const SizedBox(width: 8),
-                                        const Expanded(
-                                          child: Text(
-                                              'Use spring restraints (smoother)'),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // Spring constant (only when springs enabled)
-                                  if (_preferences.simulationPreferences
-                                      .continuousMinimizationUseSprings) ...[
-                                    const SizedBox(height: AppSpacing.small),
-                                    FloatInput(
-                                      key: PreferencesKeys
-                                          .continuousMinimizationSpringConstantInput,
-                                      label:
-                                          'Spring constant (kcal/(mol\u00B7\u00C5\u00B2))',
-                                      value: _preferences
-                                          .simulationPreferences
-                                          .continuousMinimizationSpringConstant,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _preferences
-                                              .simulationPreferences
-                                              .continuousMinimizationSpringConstant = value;
-                                        });
-                                        _applyPreferences();
-                                      },
-                                    ),
-                                  ],
-
-                                  const SizedBox(height: AppSpacing.small),
-
-                                  // Steps per frame
-                                  IntInput(
-                                    key: PreferencesKeys
-                                        .continuousMinimizationStepsPerFrameInput,
-                                    label: 'Steps per frame',
-                                    value: _preferences.simulationPreferences
-                                        .continuousMinimizationStepsPerFrame,
-                                    minimumValue: 1,
-                                    maximumValue: 50,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _preferences.simulationPreferences
-                                                .continuousMinimizationStepsPerFrame =
-                                            value;
-                                      });
-                                      _applyPreferences();
-                                    },
-                                  ),
-                                  const SizedBox(height: AppSpacing.small),
-
-                                  // Settle steps
-                                  IntInput(
-                                    key: PreferencesKeys
-                                        .continuousMinimizationSettleStepsInput,
-                                    label: 'Settle steps on release',
-                                    value: _preferences.simulationPreferences
-                                        .continuousMinimizationSettleSteps,
-                                    minimumValue: 0,
-                                    maximumValue: 500,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _preferences.simulationPreferences
-                                                .continuousMinimizationSettleSteps =
-                                            value;
-                                      });
-                                      _applyPreferences();
-                                    },
-                                  ),
-                                ],
-                              ),
+                            FloatInput(
+                              key: PreferencesKeys
+                                  .continuousMinimizationSpringConstantInput,
+                              label:
+                                  'Spring constant (kcal/(mol\u00B7\u00C5\u00B2))',
+                              value: _preferences.simulationPreferences
+                                  .continuousMinimizationSpringConstant,
+                              onChanged: (value) {
+                                setState(() {
+                                  _preferences.simulationPreferences
+                                          .continuousMinimizationSpringConstant =
+                                      value;
+                                });
+                                _applyPreferences();
+                              },
                             ),
                           ],
+
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Steps per frame
+                          IntInput(
+                            key: PreferencesKeys
+                                .continuousMinimizationStepsPerFrameInput,
+                            label: 'Steps per frame',
+                            value: _preferences.simulationPreferences
+                                .continuousMinimizationStepsPerFrame,
+                            minimumValue: 1,
+                            maximumValue: 50,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.simulationPreferences
+                                        .continuousMinimizationStepsPerFrame =
+                                    value;
+                              });
+                              _applyPreferences();
+                            },
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Settle steps
+                          IntInput(
+                            key: PreferencesKeys
+                                .continuousMinimizationSettleStepsInput,
+                            label: 'Settle steps on release',
+                            value: _preferences.simulationPreferences
+                                .continuousMinimizationSettleSteps,
+                            minimumValue: 0,
+                            maximumValue: 500,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.simulationPreferences
+                                    .continuousMinimizationSettleSteps = value;
+                              });
+                              _applyPreferences();
+                            },
+                          ),
                         ],
                       ),
                     ),

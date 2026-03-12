@@ -896,6 +896,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void toggleAtomEditContinuousMinimization() {
+    atom_edit_api.atomEditToggleContinuousMinimization();
+    refreshFromKernel();
+  }
+
   void setAtomEditSelectedElement(int atomicNumber) {
     if (nodeNetworkView == null) return;
     atom_edit_api.setAtomEditSelectedElement(atomicNumber: atomicNumber);

@@ -388,6 +388,8 @@ pub struct APIAtomEditData {
     pub last_selected_result_atom_id: Option<u32>,
     /// True if any atom has the frozen flag set.
     pub has_frozen_atoms: bool,
+    /// Whether continuous minimization is enabled on this atom_edit node.
+    pub continuous_minimization: bool,
 }
 
 /// Measurement computed from selected atoms (2-4 atoms).
