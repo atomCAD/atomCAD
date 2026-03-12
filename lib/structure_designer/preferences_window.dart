@@ -67,6 +67,8 @@ class PreferencesKeys {
       Key('pref_continuous_minimization_steps_per_frame_input');
   static const Key continuousMinimizationSettleStepsInput =
       Key('pref_continuous_minimization_settle_steps_input');
+  static const Key continuousMinimizationMaxDisplacementInput =
+      Key('pref_continuous_minimization_max_displacement_input');
 }
 
 /// A modal preferences window for the structure designer.
@@ -1148,6 +1150,33 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               });
                               _applyPreferences();
                             },
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Max displacement per step
+                          Tooltip(
+                            message:
+                                'Maximum atom displacement per steepest descent step (\u00C5).\n'
+                                'Lower values make the structure respond more lazily to drags.\n'
+                                'Higher values make it more rigid/responsive.\n'
+                                'Default: 0.1 \u00C5.',
+                            child: FloatInput(
+                              key: PreferencesKeys
+                                  .continuousMinimizationMaxDisplacementInput,
+                              label: 'Max displacement per step (\u00C5)',
+                              value: _preferences.simulationPreferences
+                                  .continuousMinimizationMaxDisplacement,
+                              onChanged: (value) {
+                                // Clamp to sensible range
+                                final clamped = value.clamp(0.001, 1.0);
+                                setState(() {
+                                  _preferences.simulationPreferences
+                                          .continuousMinimizationMaxDisplacement =
+                                      clamped;
+                                });
+                                _applyPreferences();
+                              },
+                            ),
                           ),
                         ],
                       ),

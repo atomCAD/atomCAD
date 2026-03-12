@@ -10922,12 +10922,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SimulationPreferences dco_decode_simulation_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return SimulationPreferences(
       useVdwCutoff: dco_decode_bool(arr[0]),
       continuousMinimizationStepsPerFrame: dco_decode_u_32(arr[1]),
       continuousMinimizationSettleSteps: dco_decode_u_32(arr[2]),
+      continuousMinimizationMaxDisplacement: dco_decode_f_64(arr[3]),
     );
   }
 
@@ -13784,12 +13785,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_useVdwCutoff = sse_decode_bool(deserializer);
     var var_continuousMinimizationStepsPerFrame = sse_decode_u_32(deserializer);
     var var_continuousMinimizationSettleSteps = sse_decode_u_32(deserializer);
+    var var_continuousMinimizationMaxDisplacement =
+        sse_decode_f_64(deserializer);
     return SimulationPreferences(
         useVdwCutoff: var_useVdwCutoff,
         continuousMinimizationStepsPerFrame:
             var_continuousMinimizationStepsPerFrame,
         continuousMinimizationSettleSteps:
-            var_continuousMinimizationSettleSteps);
+            var_continuousMinimizationSettleSteps,
+        continuousMinimizationMaxDisplacement:
+            var_continuousMinimizationMaxDisplacement);
   }
 
   @protected
@@ -16242,6 +16247,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.useVdwCutoff, serializer);
     sse_encode_u_32(self.continuousMinimizationStepsPerFrame, serializer);
     sse_encode_u_32(self.continuousMinimizationSettleSteps, serializer);
+    sse_encode_f_64(self.continuousMinimizationMaxDisplacement, serializer);
   }
 
   @protected

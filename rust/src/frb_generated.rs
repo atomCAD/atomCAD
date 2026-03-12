@@ -10553,7 +10553,8 @@ impl SseDecode
         let mut var_useVdwCutoff = <bool>::sse_decode(deserializer);
         let mut var_continuousMinimizationStepsPerFrame = <u32>::sse_decode(deserializer);
         let mut var_continuousMinimizationSettleSteps = <u32>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::SimulationPreferences{use_vdw_cutoff: var_useVdwCutoff, continuous_minimization_steps_per_frame: var_continuousMinimizationStepsPerFrame, continuous_minimization_settle_steps: var_continuousMinimizationSettleSteps};
+        let mut var_continuousMinimizationMaxDisplacement = <f64>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::SimulationPreferences{use_vdw_cutoff: var_useVdwCutoff, continuous_minimization_steps_per_frame: var_continuousMinimizationStepsPerFrame, continuous_minimization_settle_steps: var_continuousMinimizationSettleSteps, continuous_minimization_max_displacement: var_continuousMinimizationMaxDisplacement};
     }
 }
 
@@ -13723,6 +13724,9 @@ impl flutter_rust_bridge::IntoDart
             self.continuous_minimization_settle_steps
                 .into_into_dart()
                 .into_dart(),
+            self.continuous_minimization_max_displacement
+                .into_into_dart()
+                .into_dart(),
         ]
         .into_dart()
     }
@@ -16008,6 +16012,7 @@ impl SseEncode
         <bool>::sse_encode(self.use_vdw_cutoff, serializer);
         <u32>::sse_encode(self.continuous_minimization_steps_per_frame, serializer);
         <u32>::sse_encode(self.continuous_minimization_settle_steps, serializer);
+        <f64>::sse_encode(self.continuous_minimization_max_displacement, serializer);
     }
 }
 

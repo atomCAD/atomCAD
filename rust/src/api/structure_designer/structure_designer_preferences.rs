@@ -321,6 +321,15 @@ pub struct SimulationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_settle_steps")]
     pub continuous_minimization_settle_steps: u32,
+
+    /// Maximum displacement (in Angstroms) for any single atom per steepest
+    /// descent step during continuous minimization.
+    /// Lower values make the structure respond more lazily to drags.
+    /// Higher values make it more rigid/responsive.
+    /// Default: 0.1 Å.
+    #[frb(non_final)]
+    #[serde(default = "default_max_displacement")]
+    pub continuous_minimization_max_displacement: f64,
 }
 
 impl Default for SimulationPreferences {
@@ -329,6 +338,7 @@ impl Default for SimulationPreferences {
             use_vdw_cutoff: true,
             continuous_minimization_steps_per_frame: 4,
             continuous_minimization_settle_steps: 50,
+            continuous_minimization_max_displacement: 0.1,
         }
     }
 }
@@ -341,6 +351,9 @@ fn default_steps_per_frame() -> u32 {
 }
 fn default_settle_steps() -> u32 {
     50
+}
+fn default_max_displacement() -> f64 {
+    0.1
 }
 
 /// Preferences for auto-layout operations.

@@ -212,9 +212,14 @@ pub fn continuous_minimize_during_drag(
         .preferences
         .simulation_preferences
         .continuous_minimization_steps_per_frame;
+    let max_displacement = structure_designer
+        .preferences
+        .simulation_preferences
+        .continuous_minimization_max_displacement;
     continuous_minimize_impl(
         structure_designer,
         steps,
+        max_displacement,
         promoted_base_atoms,
         true, // freeze_selected: selected atoms stay at cursor position
     )
@@ -234,6 +239,10 @@ pub fn continuous_minimize_settle(
         .preferences
         .simulation_preferences
         .continuous_minimization_settle_steps;
+    let max_displacement = structure_designer
+        .preferences
+        .simulation_preferences
+        .continuous_minimization_max_displacement;
 
     if settle_steps == 0 {
         return Ok(());
@@ -242,6 +251,7 @@ pub fn continuous_minimize_settle(
     continuous_minimize_impl(
         structure_designer,
         settle_steps,
+        max_displacement,
         promoted_base_atoms,
         false, // freeze_selected: selected atoms relax freely during settle
     )
@@ -254,6 +264,7 @@ pub fn continuous_minimize_settle(
 fn continuous_minimize_impl(
     structure_designer: &mut StructureDesigner,
     steps: u32,
+    max_displacement: f64,
     promoted_base_atoms: &mut HashMap<u32, u32>,
     freeze_selected: bool,
 ) -> Result<(), String> {
@@ -384,7 +395,7 @@ fn continuous_minimize_impl(
 
     // Phase 2: Minimize (no borrows on structure_designer)
     // Steepest descent with selected atoms frozen (during drag) or free (settle)
-    steepest_descent_steps(&force_field, &mut positions, &frozen_indices, steps, 0.1);
+    steepest_descent_steps(&force_field, &mut positions, &frozen_indices, steps, max_displacement);
 
     // Phase 3: Write back (mutable borrow)
     let atom_edit_data =

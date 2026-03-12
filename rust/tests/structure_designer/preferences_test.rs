@@ -351,6 +351,7 @@ fn test_non_default_values_roundtrip() {
             use_vdw_cutoff: true,
             continuous_minimization_steps_per_frame: 8,
             continuous_minimization_settle_steps: 100,
+            continuous_minimization_max_displacement: 0.05,
         },
     };
 
@@ -489,6 +490,7 @@ fn test_continuous_minimization_preferences_roundtrip() {
         use_vdw_cutoff: false,
         continuous_minimization_steps_per_frame: 10,
         continuous_minimization_settle_steps: 200,
+        continuous_minimization_max_displacement: 0.05,
     };
 
     let json = serde_json::to_string(&prefs).expect("Failed to serialize");
