@@ -142,6 +142,7 @@ tests/crystolecule/
     ├── uff_force_field_test.rs    # Full force field validation
     ├── uff_vdw_test.rs            # Van der Waals tests
     ├── minimize_test.rs           # L-BFGS + end-to-end minimization
+    ├── steepest_descent_test.rs   # Steepest descent (continuous minimization)
     └── test_data/                 # Reference data from RDKit
 ```
 

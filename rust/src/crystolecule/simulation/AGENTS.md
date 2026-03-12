@@ -13,7 +13,7 @@ simulation/
 ├── mod.rs          # Public API: minimize_energy(), MinimizationResult
 ├── force_field.rs  # ForceField trait (energy_and_gradients)
 ├── topology.rs     # MolecularTopology: interaction list enumeration
-├── minimize.rs     # L-BFGS optimizer with frozen atom support
+├── minimize.rs     # L-BFGS optimizer + steepest descent, frozen atom support
 └── uff/            # UFF force field implementation (see uff/AGENTS.md)
 ```
 
@@ -46,6 +46,10 @@ pub fn minimize_energy(structure: &mut AtomicStructure) -> Result<MinimizationRe
 // Lower-level (used by atom_edit minimize)
 pub fn minimize_with_force_field(ff: &impl ForceField, positions: &mut [f64],
     config: &MinimizationConfig, frozen: &[usize]) -> LbfgsResult
+
+// Steepest descent (used by continuous minimization during drag)
+pub fn steepest_descent_steps(ff: &dyn ForceField, positions: &mut [f64],
+    frozen: &[usize], num_steps: u32, max_displacement: f64) -> f64
 ```
 
 ## MolecularTopology
@@ -78,6 +82,7 @@ Frozen atoms have their gradient components zeroed, so the optimizer never moves
 
 - **Relax node** (`structure_designer/nodes/relax.rs`): calls `minimize_energy()` on standalone structures
 - **atom_edit node** (`structure_designer/nodes/atom_edit/atom_edit.rs`): calls `minimize_with_force_field()` with frozen atom support, writes positions back to diff
+- **Continuous minimization** (`structure_designer/nodes/atom_edit/minimization.rs`): calls `steepest_descent_steps()` during drag to relax neighbors in real time. Selected atoms are frozen at cursor position; a settle burst runs on drag end with all atoms free. Design doc: `doc/atom_edit/design_continuous_minimization.md`
 - **API** (`api/structure_designer/atom_edit_api.rs`): `atom_edit_minimize(freeze_mode)` exposes to Flutter
 
 ## Testing
@@ -96,6 +101,7 @@ tests/crystolecule/simulation/
 ├── uff_force_field_test.rs     # Full force field energy + gradients (33 tests)
 ├── uff_vdw_test.rs             # Van der Waals tests (C1-C4 series)
 ├── minimize_test.rs            # L-BFGS + end-to-end minimization (47 tests)
+├── steepest_descent_test.rs    # Steepest descent convergence, frozen atoms, edge cases
 └── test_data/
     ├── uff_reference.json      # Ground-truth from RDKit (9 molecules)
     ├── generate_uff_reference.py  # Script to regenerate reference data
@@ -120,3 +126,4 @@ tests/crystolecule/simulation/
 - `doc/energy_minimization_plan.md` — full implementation plan with phase details
 - `doc/vdw_plan.md` — van der Waals implementation specifics
 - `doc/atom_edit_minimize_plan.md` — atom_edit integration details
+- `doc/atom_edit/design_continuous_minimization.md` — continuous minimization during drag

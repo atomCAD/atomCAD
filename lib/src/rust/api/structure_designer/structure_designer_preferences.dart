@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_samples_per_unit_cell`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_spring_constant`, `default_steps_per_frame`, `default_true`
+// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_samples_per_unit_cell`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 enum AtomicRenderingMethod {
@@ -289,17 +289,6 @@ class SimulationPreferences {
   /// When true (default), a 6 A cutoff is used for faster computation on large structures.
   bool useVdwCutoff;
 
-  /// Use spring restraints instead of hard constraints for dragged atoms.
-  /// When false (default): dragged atoms are frozen, rest minimized (Method 1).
-  /// When true: dragged atoms are pulled by harmonic springs (Method 2).
-  bool continuousMinimizationUseSprings;
-
-  /// Spring constant for restraints in kcal/(mol*A^2).
-  /// Only used when continuous_minimization_use_springs is true.
-  /// Higher values make dragged atoms follow the cursor more tightly.
-  /// Default: 200.0 (stiff but not rigid).
-  double continuousMinimizationSpringConstant;
-
   /// Number of steepest descent steps per drag frame.
   /// Higher values give more relaxation per frame but cost more CPU time.
   /// Default: 4 (matches Avogadro's default).
@@ -313,8 +302,6 @@ class SimulationPreferences {
 
   SimulationPreferences({
     required this.useVdwCutoff,
-    required this.continuousMinimizationUseSprings,
-    required this.continuousMinimizationSpringConstant,
     required this.continuousMinimizationStepsPerFrame,
     required this.continuousMinimizationSettleSteps,
   });
@@ -325,8 +312,6 @@ class SimulationPreferences {
   @override
   int get hashCode =>
       useVdwCutoff.hashCode ^
-      continuousMinimizationUseSprings.hashCode ^
-      continuousMinimizationSpringConstant.hashCode ^
       continuousMinimizationStepsPerFrame.hashCode ^
       continuousMinimizationSettleSteps.hashCode;
 
@@ -336,10 +321,6 @@ class SimulationPreferences {
       other is SimulationPreferences &&
           runtimeType == other.runtimeType &&
           useVdwCutoff == other.useVdwCutoff &&
-          continuousMinimizationUseSprings ==
-              other.continuousMinimizationUseSprings &&
-          continuousMinimizationSpringConstant ==
-              other.continuousMinimizationSpringConstant &&
           continuousMinimizationStepsPerFrame ==
               other.continuousMinimizationStepsPerFrame &&
           continuousMinimizationSettleSteps ==

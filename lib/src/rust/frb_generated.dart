@@ -10922,14 +10922,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SimulationPreferences dco_decode_simulation_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return SimulationPreferences(
       useVdwCutoff: dco_decode_bool(arr[0]),
-      continuousMinimizationUseSprings: dco_decode_bool(arr[1]),
-      continuousMinimizationSpringConstant: dco_decode_f_64(arr[2]),
-      continuousMinimizationStepsPerFrame: dco_decode_u_32(arr[3]),
-      continuousMinimizationSettleSteps: dco_decode_u_32(arr[4]),
+      continuousMinimizationStepsPerFrame: dco_decode_u_32(arr[1]),
+      continuousMinimizationSettleSteps: dco_decode_u_32(arr[2]),
     );
   }
 
@@ -13784,16 +13782,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_useVdwCutoff = sse_decode_bool(deserializer);
-    var var_continuousMinimizationUseSprings = sse_decode_bool(deserializer);
-    var var_continuousMinimizationSpringConstant =
-        sse_decode_f_64(deserializer);
     var var_continuousMinimizationStepsPerFrame = sse_decode_u_32(deserializer);
     var var_continuousMinimizationSettleSteps = sse_decode_u_32(deserializer);
     return SimulationPreferences(
         useVdwCutoff: var_useVdwCutoff,
-        continuousMinimizationUseSprings: var_continuousMinimizationUseSprings,
-        continuousMinimizationSpringConstant:
-            var_continuousMinimizationSpringConstant,
         continuousMinimizationStepsPerFrame:
             var_continuousMinimizationStepsPerFrame,
         continuousMinimizationSettleSteps:
@@ -16248,8 +16240,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SimulationPreferences self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.useVdwCutoff, serializer);
-    sse_encode_bool(self.continuousMinimizationUseSprings, serializer);
-    sse_encode_f_64(self.continuousMinimizationSpringConstant, serializer);
     sse_encode_u_32(self.continuousMinimizationStepsPerFrame, serializer);
     sse_encode_u_32(self.continuousMinimizationSettleSteps, serializer);
   }

@@ -4,7 +4,7 @@
 /// - Neighbors relax during drag when continuous minimization is enabled
 /// - Settle burst improves geometry after drag end
 /// - Frozen atoms remain fixed
-/// - Method 1 (frozen) and Method 2 (springs) both produce valid results
+/// - Selected atoms stay at cursor position during drag
 /// - Continuous minimization disabled has no side effects
 /// - Diff view is a no-op
 /// - Undo reverts the entire drag + relaxation + settle
@@ -429,14 +429,9 @@ fn frozen_atoms_remain_fixed_during_continuous_minimize() {
 }
 
 #[test]
-fn method1_keeps_selected_at_cursor_position() {
+fn selected_atoms_stay_at_cursor_position() {
     let (mut designer, _, _) = setup_ethane_atom_edit();
     enable_continuous_minimization(&mut designer);
-    // Method 1: frozen (default, use_springs = false)
-    designer
-        .preferences
-        .simulation_preferences
-        .continuous_minimization_use_springs = false;
     designer
         .preferences
         .simulation_preferences
@@ -444,7 +439,7 @@ fn method1_keeps_selected_at_cursor_position() {
     designer
         .preferences
         .simulation_preferences
-        .continuous_minimization_settle_steps = 0; // No settle for this test
+        .continuous_minimization_settle_steps = 0;
 
     let result = get_selected_atomic_structure(&designer);
     let first_atom_id = *result.atom_ids().next().unwrap();
@@ -468,7 +463,7 @@ fn method1_keeps_selected_at_cursor_position() {
         pending.promoted_base_atoms = promoted;
     }
 
-    // In Method 1, the selected atom is frozen at the cursor position.
+    // The selected atom is frozen at the cursor position during drag.
     // Check the diff to see where the atom ended up.
     let data = get_selected_atom_edit_data_mut(&mut designer).unwrap();
     // Find the diff atom that corresponds to the dragged atom
@@ -482,72 +477,7 @@ fn method1_keeps_selected_at_cursor_position() {
     }
     assert!(
         found_at_cursor,
-        "Method 1: selected atom should remain at cursor position after continuous minimize"
-    );
-
-    end_atom_edit_drag(&mut designer);
-}
-
-#[test]
-fn method2_springs_allows_slight_deviation() {
-    let (mut designer, _, _) = setup_ethane_atom_edit();
-    enable_continuous_minimization(&mut designer);
-    // Method 2: springs
-    designer
-        .preferences
-        .simulation_preferences
-        .continuous_minimization_use_springs = true;
-    designer
-        .preferences
-        .simulation_preferences
-        .continuous_minimization_spring_constant = 200.0;
-    designer
-        .preferences
-        .simulation_preferences
-        .continuous_minimization_steps_per_frame = 20;
-    designer
-        .preferences
-        .simulation_preferences
-        .continuous_minimization_settle_steps = 0;
-
-    let result = get_selected_atomic_structure(&designer);
-    let first_atom_id = *result.atom_ids().next().unwrap();
-    let original_pos = result.get_atom(first_atom_id).unwrap().position;
-    select_result_atom(&mut designer, first_atom_id);
-
-    let drag_delta = DVec3::new(-1.0, 0.0, 0.0);
-    let target_pos = original_pos + drag_delta;
-
-    begin_atom_edit_drag(&mut designer);
-    // drag_selected_by_delta imported at file top
-    drag_selected_by_delta(&mut designer, drag_delta);
-
-    let mut promoted = designer
-        .pending_atom_edit_drag
-        .as_mut()
-        .map(|p| std::mem::take(&mut p.promoted_base_atoms))
-        .unwrap_or_default();
-    let _ = continuous_minimize_during_drag(&mut designer, &mut promoted);
-    if let Some(pending) = &mut designer.pending_atom_edit_drag {
-        pending.promoted_base_atoms = promoted;
-    }
-
-    // Method 2: selected atom should be close to target but may deviate slightly
-    let data = get_selected_atom_edit_data_mut(&mut designer).unwrap();
-    let mut min_dist_to_target = f64::MAX;
-    for (_, atom) in data.diff.iter_atoms() {
-        if atom.atomic_number == 6 {
-            let dist = (atom.position - target_pos).length();
-            if dist < min_dist_to_target {
-                min_dist_to_target = dist;
-            }
-        }
-    }
-    // With k=200, the atom should be close to target (within ~0.5 A)
-    assert!(
-        min_dist_to_target < 0.5,
-        "Method 2: selected atom should be close to target (dist={:.3})",
-        min_dist_to_target
+        "Selected atom should remain at cursor position after continuous minimize"
     );
 
     end_atom_edit_drag(&mut designer);
@@ -694,11 +624,6 @@ fn base_atom_promotion_during_continuous_minimize() {
 fn settle_relaxes_selected_atoms() {
     let (mut designer, _, _) = setup_ethane_atom_edit();
     enable_continuous_minimization(&mut designer);
-    // Method 1: selected atoms frozen during drag
-    designer
-        .preferences
-        .simulation_preferences
-        .continuous_minimization_use_springs = false;
     designer
         .preferences
         .simulation_preferences

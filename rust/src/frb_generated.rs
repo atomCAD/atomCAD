@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -10551,11 +10551,9 @@ impl SseDecode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_useVdwCutoff = <bool>::sse_decode(deserializer);
-        let mut var_continuousMinimizationUseSprings = <bool>::sse_decode(deserializer);
-        let mut var_continuousMinimizationSpringConstant = <f64>::sse_decode(deserializer);
         let mut var_continuousMinimizationStepsPerFrame = <u32>::sse_decode(deserializer);
         let mut var_continuousMinimizationSettleSteps = <u32>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::SimulationPreferences{use_vdw_cutoff: var_useVdwCutoff, continuous_minimization_use_springs: var_continuousMinimizationUseSprings, continuous_minimization_spring_constant: var_continuousMinimizationSpringConstant, continuous_minimization_steps_per_frame: var_continuousMinimizationStepsPerFrame, continuous_minimization_settle_steps: var_continuousMinimizationSettleSteps};
+        return crate::api::structure_designer::structure_designer_preferences::SimulationPreferences{use_vdw_cutoff: var_useVdwCutoff, continuous_minimization_steps_per_frame: var_continuousMinimizationStepsPerFrame, continuous_minimization_settle_steps: var_continuousMinimizationSettleSteps};
     }
 }
 
@@ -13719,12 +13717,6 @@ impl flutter_rust_bridge::IntoDart
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.use_vdw_cutoff.into_into_dart().into_dart(),
-            self.continuous_minimization_use_springs
-                .into_into_dart()
-                .into_dart(),
-            self.continuous_minimization_spring_constant
-                .into_into_dart()
-                .into_dart(),
             self.continuous_minimization_steps_per_frame
                 .into_into_dart()
                 .into_dart(),
@@ -16014,8 +16006,6 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.use_vdw_cutoff, serializer);
-        <bool>::sse_encode(self.continuous_minimization_use_springs, serializer);
-        <f64>::sse_encode(self.continuous_minimization_spring_constant, serializer);
         <u32>::sse_encode(self.continuous_minimization_steps_per_frame, serializer);
         <u32>::sse_encode(self.continuous_minimization_settle_steps, serializer);
     }
@@ -16103,7 +16093,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -16127,7 +16117,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

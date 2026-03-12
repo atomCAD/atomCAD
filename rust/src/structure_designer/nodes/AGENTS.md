@@ -82,7 +82,7 @@ Key files:
 - `default_tool.rs` - Default tool pointer event state machine
 - `add_atom_tool.rs` - Add Atom tool interaction
 - `add_bond_tool.rs` - Add Bond tool interaction
-- `minimization.rs` - UFF energy minimization
+- `minimization.rs` - UFF energy minimization (batch + continuous during drag)
 - `atom_edit_gadget.rs` - XYZ selection gadget
 - `text_format.rs` - Human-readable diff text format
 

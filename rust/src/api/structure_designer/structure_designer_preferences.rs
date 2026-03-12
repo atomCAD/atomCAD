@@ -307,21 +307,6 @@ pub struct SimulationPreferences {
     #[serde(default = "default_true")]
     pub use_vdw_cutoff: bool,
 
-    /// Use spring restraints instead of hard constraints for dragged atoms.
-    /// When false (default): dragged atoms are frozen, rest minimized (Method 1).
-    /// When true: dragged atoms are pulled by harmonic springs (Method 2).
-    #[frb(non_final)]
-    #[serde(default)]
-    pub continuous_minimization_use_springs: bool,
-
-    /// Spring constant for restraints in kcal/(mol*A^2).
-    /// Only used when continuous_minimization_use_springs is true.
-    /// Higher values make dragged atoms follow the cursor more tightly.
-    /// Default: 200.0 (stiff but not rigid).
-    #[frb(non_final)]
-    #[serde(default = "default_spring_constant")]
-    pub continuous_minimization_spring_constant: f64,
-
     /// Number of steepest descent steps per drag frame.
     /// Higher values give more relaxation per frame but cost more CPU time.
     /// Default: 4 (matches Avogadro's default).
@@ -342,8 +327,6 @@ impl Default for SimulationPreferences {
     fn default() -> Self {
         Self {
             use_vdw_cutoff: true,
-            continuous_minimization_use_springs: false,
-            continuous_minimization_spring_constant: 200.0,
             continuous_minimization_steps_per_frame: 4,
             continuous_minimization_settle_steps: 50,
         }
@@ -352,9 +335,6 @@ impl Default for SimulationPreferences {
 
 fn default_true() -> bool {
     true
-}
-fn default_spring_constant() -> f64 {
-    200.0
 }
 fn default_steps_per_frame() -> u32 {
     4

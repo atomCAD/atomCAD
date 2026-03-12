@@ -1,11 +1,8 @@
 use super::atom_edit_data::*;
 use super::types::*;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
-use crate::crystolecule::simulation::force_field::RestrainedForceField;
 use crate::crystolecule::simulation::minimize::MinimizationConfig;
-use crate::crystolecule::simulation::minimize::{
-    minimize_with_force_field, steepest_descent_steps,
-};
+use crate::crystolecule::simulation::minimize::{minimize_with_force_field, steepest_descent_steps};
 use crate::crystolecule::simulation::topology::MolecularTopology;
 use crate::crystolecule::simulation::uff::{UffForceField, VdwMode};
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -205,21 +202,21 @@ pub fn minimize_atom_edit(
 
 /// Runs a few steepest descent steps during a drag frame to relax neighbors.
 ///
-/// Reads preferences to determine the method (frozen vs. spring) and step count,
-/// then delegates to `continuous_minimize_impl`.
+/// Selected atoms are hard-frozen at the cursor position while neighbors
+/// relax around them via steepest descent.
 pub fn continuous_minimize_during_drag(
     structure_designer: &mut StructureDesigner,
     promoted_base_atoms: &mut HashMap<u32, u32>,
 ) -> Result<(), String> {
-    let prefs = &structure_designer.preferences.simulation_preferences;
-    let steps = prefs.continuous_minimization_steps_per_frame;
-    let use_springs = prefs.continuous_minimization_use_springs;
+    let steps = structure_designer
+        .preferences
+        .simulation_preferences
+        .continuous_minimization_steps_per_frame;
     continuous_minimize_impl(
         structure_designer,
         steps,
         promoted_base_atoms,
-        !use_springs, // freeze_selected: true for Method 1, false for Method 2
-        use_springs,  // use_springs
+        true, // freeze_selected: selected atoms stay at cursor position
     )
 }
 
@@ -246,28 +243,22 @@ pub fn continuous_minimize_settle(
         structure_designer,
         settle_steps,
         promoted_base_atoms,
-        false, // freeze_selected
-        false, // use_springs
+        false, // freeze_selected: selected atoms relax freely during settle
     )
 }
 
 /// Shared implementation for continuous minimization.
 ///
-/// `freeze_selected`: if true, selected atoms are hard-frozen (Method 1 during drag).
-/// `use_springs`: if true, selected atoms are spring-restrained (Method 2 during drag).
-/// Both false during settle burst — selected atoms relax freely.
+/// `freeze_selected`: if true, selected atoms are hard-frozen (during drag).
+/// If false, selected atoms relax freely (settle burst).
 fn continuous_minimize_impl(
     structure_designer: &mut StructureDesigner,
     steps: u32,
     promoted_base_atoms: &mut HashMap<u32, u32>,
     freeze_selected: bool,
-    use_springs: bool,
 ) -> Result<(), String> {
-    let prefs = &structure_designer.preferences.simulation_preferences;
-    let spring_k = prefs.continuous_minimization_spring_constant;
-
     // Phase 1: Gather (immutable borrows)
-    let (topology, force_field, frozen_indices, selected_topo_indices, result_to_source) = {
+    let (topology, force_field, frozen_indices, result_to_source) = {
         let atom_edit_data =
             get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
 
@@ -318,7 +309,7 @@ fn continuous_minimize_impl(
         }
 
         // Frozen indices: always include persistent-frozen atoms.
-        // If freeze_selected (Method 1): also freeze selected atoms.
+        // If freeze_selected (during drag): also freeze selected atoms.
         let frozen_indices: Vec<usize> = topology
             .atom_ids
             .iter()
@@ -338,19 +329,6 @@ fn continuous_minimize_impl(
             .map(|(i, _)| i)
             .collect();
 
-        // For Method 2: build list of selected topology indices for spring targets
-        let selected_topo_indices: Vec<usize> = if use_springs {
-            topology
-                .atom_ids
-                .iter()
-                .enumerate()
-                .filter(|(_, rid)| selected_result_ids.contains(rid))
-                .map(|(topo_idx, _)| topo_idx)
-                .collect()
-        } else {
-            Vec::new()
-        };
-
         let force_field =
             UffForceField::from_topology_with_frozen(&topology, vdw_mode, &frozen_indices)?;
 
@@ -360,13 +338,7 @@ fn continuous_minimize_impl(
             .map(|&rid| eval_cache.provenance.sources.get(&rid).cloned())
             .collect();
 
-        (
-            topology,
-            force_field,
-            frozen_indices,
-            selected_topo_indices,
-            result_to_source,
-        )
+        (topology, force_field, frozen_indices, result_to_source)
     };
 
     // Phase 1b: Patch stale positions from the diff.
@@ -411,32 +383,8 @@ fn continuous_minimize_impl(
     let pre_minimize_positions = positions.clone();
 
     // Phase 2: Minimize (no borrows on structure_designer)
-    // Build spring restraints from patched (current) positions
-    let selected_restraints: Vec<(usize, f64, f64, f64)> = selected_topo_indices
-        .iter()
-        .map(|&topo_idx| {
-            let base = topo_idx * 3;
-            (
-                topo_idx,
-                positions[base],
-                positions[base + 1],
-                positions[base + 2],
-            )
-        })
-        .collect();
-
-    if use_springs && !selected_restraints.is_empty() {
-        // Method 2: steepest descent with spring-restrained force field
-        let restrained_ff = RestrainedForceField {
-            base: &force_field,
-            restraints: selected_restraints,
-            spring_constant: spring_k,
-        };
-        steepest_descent_steps(&restrained_ff, &mut positions, &frozen_indices, steps, 0.1);
-    } else {
-        // Method 1 (or settle): steepest descent with selected atoms frozen
-        steepest_descent_steps(&force_field, &mut positions, &frozen_indices, steps, 0.1);
-    }
+    // Steepest descent with selected atoms frozen (during drag) or free (settle)
+    steepest_descent_steps(&force_field, &mut positions, &frozen_indices, steps, 0.1);
 
     // Phase 3: Write back (mutable borrow)
     let atom_edit_data =

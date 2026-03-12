@@ -63,10 +63,6 @@ class PreferencesKeys {
 
   // Simulation settings
   static const Key useVdwCutoffCheckbox = Key('pref_use_vdw_cutoff_checkbox');
-  static const Key continuousMinimizationUseSpringsCheckbox =
-      Key('pref_continuous_minimization_use_springs_checkbox');
-  static const Key continuousMinimizationSpringConstantInput =
-      Key('pref_continuous_minimization_spring_constant_input');
   static const Key continuousMinimizationStepsPerFrameInput =
       Key('pref_continuous_minimization_steps_per_frame_input');
   static const Key continuousMinimizationSettleStepsInput =
@@ -1113,60 +1109,6 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             ),
                           ),
                           const SizedBox(height: AppSpacing.small),
-
-                          // Use spring restraints checkbox
-                          Tooltip(
-                            message:
-                                'When enabled, dragged atoms are pulled toward the cursor by harmonic springs\n'
-                                'instead of being hard-frozen. Produces smoother, more physically realistic behavior.',
-                            child: Row(
-                              children: [
-                                Checkbox(
-                                  key: PreferencesKeys
-                                      .continuousMinimizationUseSpringsCheckbox,
-                                  value: _preferences.simulationPreferences
-                                      .continuousMinimizationUseSprings,
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setState(() {
-                                        _preferences.simulationPreferences
-                                                .continuousMinimizationUseSprings =
-                                            value;
-                                      });
-                                      _applyPreferences();
-                                    }
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child:
-                                      Text('Use spring restraints (smoother)'),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Spring constant (only when springs enabled)
-                          if (_preferences.simulationPreferences
-                              .continuousMinimizationUseSprings) ...[
-                            const SizedBox(height: AppSpacing.small),
-                            FloatInput(
-                              key: PreferencesKeys
-                                  .continuousMinimizationSpringConstantInput,
-                              label:
-                                  'Spring constant (kcal/(mol\u00B7\u00C5\u00B2))',
-                              value: _preferences.simulationPreferences
-                                  .continuousMinimizationSpringConstant,
-                              onChanged: (value) {
-                                setState(() {
-                                  _preferences.simulationPreferences
-                                          .continuousMinimizationSpringConstant =
-                                      value;
-                                });
-                                _applyPreferences();
-                              },
-                            ),
-                          ],
 
                           const SizedBox(height: AppSpacing.small),
 

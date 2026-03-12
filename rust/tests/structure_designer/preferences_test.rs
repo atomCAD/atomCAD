@@ -266,17 +266,6 @@ fn test_default_values_match_documentation() {
 
     // Simulation defaults
     assert!(prefs.simulation_preferences.use_vdw_cutoff);
-    assert!(
-        !prefs
-            .simulation_preferences
-            .continuous_minimization_use_springs
-    );
-    assert_eq!(
-        prefs
-            .simulation_preferences
-            .continuous_minimization_spring_constant,
-        200.0
-    );
     assert_eq!(
         prefs
             .simulation_preferences
@@ -360,8 +349,6 @@ fn test_non_default_values_roundtrip() {
         },
         simulation_preferences: SimulationPreferences {
             use_vdw_cutoff: true,
-            continuous_minimization_use_springs: true,
-            continuous_minimization_spring_constant: 500.0,
             continuous_minimization_steps_per_frame: 8,
             continuous_minimization_settle_steps: 100,
         },
@@ -452,17 +439,6 @@ fn test_non_default_values_roundtrip() {
     assert!(!loaded.layout_preferences.auto_layout_after_edit);
 
     assert!(loaded.simulation_preferences.use_vdw_cutoff);
-    assert!(
-        loaded
-            .simulation_preferences
-            .continuous_minimization_use_springs
-    );
-    assert_eq!(
-        loaded
-            .simulation_preferences
-            .continuous_minimization_spring_constant,
-        500.0
-    );
     assert_eq!(
         loaded
             .simulation_preferences
@@ -492,17 +468,6 @@ fn test_simulation_preferences_backward_compatibility() {
         serde_json::from_str(old_json).expect("Failed to deserialize old preferences");
 
     assert!(loaded.simulation_preferences.use_vdw_cutoff);
-    assert!(
-        !loaded
-            .simulation_preferences
-            .continuous_minimization_use_springs
-    );
-    assert_eq!(
-        loaded
-            .simulation_preferences
-            .continuous_minimization_spring_constant,
-        200.0
-    );
     assert_eq!(
         loaded
             .simulation_preferences
@@ -522,8 +487,6 @@ fn test_simulation_preferences_backward_compatibility() {
 fn test_continuous_minimization_preferences_roundtrip() {
     let prefs = SimulationPreferences {
         use_vdw_cutoff: false,
-        continuous_minimization_use_springs: true,
-        continuous_minimization_spring_constant: 75.0,
         continuous_minimization_steps_per_frame: 10,
         continuous_minimization_settle_steps: 200,
     };
