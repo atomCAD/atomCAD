@@ -59,7 +59,12 @@ const ANCHOR_ARROW_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0);
 // Rim highlight colors [R, G, B, intensity]
 const SELECTED_RIM_COLOR: [f32; 4] = [1.0, 0.2, 1.0, 0.8]; // Magenta
 const FROZEN_RIM_COLOR: [f32; 4] = [0.5, 0.85, 1.0, 0.7]; // Ice blue
+const MARKED_RIM_COLOR: [f32; 4] = [1.0, 1.0, 0.0, 0.8]; // Yellow
+const SECONDARY_MARKED_RIM_COLOR: [f32; 4] = [0.0, 0.5, 1.0, 0.8]; // Blue
+const DELETE_MARKER_RIM_COLOR: [f32; 4] = [0.9, 0.1, 0.1, 0.8]; // Red
 const NO_RIM: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+// Dark neutral albedo for delete markers in impostor path (rim provides the red signal)
+const DELETE_MARKER_IMPOSTOR_ALBEDO: Vec3 = Vec3::new(0.2, 0.2, 0.2);
 // radius for anchor point spheres (Angstroms)
 const ANCHOR_SPHERE_RADIUS: f64 = 0.3;
 // radius for anchor arrow cylinders (Angstroms)
@@ -856,11 +861,18 @@ pub fn tessellate_atomic_structure_impostors(
 /// Get atom appearance for impostor rendering.
 /// Returns (albedo, roughness, metallic, rim_color).
 /// Albedo is always element color (no selection color override).
-/// Rim color and material overrides follow state priority: Selected > Frozen.
-fn get_atom_impostor_appearance(atom: &Atom) -> (Vec3, f32, f32, [f32; 4]) {
+/// Rim color and material overrides follow state priority:
+/// Selected > Marked/SecondaryMarked > Delete Marker > Frozen.
+/// The winning state controls rim color AND material overrides.
+/// For material fields the winning state doesn't define, element defaults are used.
+fn get_atom_impostor_appearance(
+    atom: &Atom,
+    display_state: AtomDisplayState,
+) -> (Vec3, f32, f32, [f32; 4]) {
     // Base element color and material (no selection override)
+    // Delete markers use dark neutral albedo (rim provides the red signal)
     let (base_color, base_roughness, base_metallic) = if atom.is_delete_marker() {
-        (DELETE_MARKER_COLOR, DELETE_MARKER_ROUGHNESS, 0.0)
+        (DELETE_MARKER_IMPOSTOR_ALBEDO, DELETE_MARKER_ROUGHNESS, 0.0)
     } else if atom.is_unchanged_marker() {
         (UNCHANGED_MARKER_COLOR, UNCHANGED_MARKER_ROUGHNESS, 0.0)
     } else {
@@ -870,10 +882,28 @@ fn get_atom_impostor_appearance(atom: &Atom) -> (Vec3, f32, f32, [f32; 4]) {
         (atom_info.color, 0.25, 0.0)
     };
 
-    // State priority: Selected > Frozen
+    // State priority: Selected > Marked/SecondaryMarked > Delete Marker > Frozen
+    // The highest-priority active state wins both rim color and material overrides.
+    // For material fields the winning state doesn't define, element defaults are used.
     if atom.is_selected() {
+        // Selected: magenta rim, roughness 0.15
         (base_color, 0.15, base_metallic, SELECTED_RIM_COLOR)
+    } else if matches!(
+        display_state,
+        AtomDisplayState::Marked | AtomDisplayState::SecondaryMarked
+    ) {
+        // Marked: yellow/blue rim, no material overrides (element defaults)
+        let rim = match display_state {
+            AtomDisplayState::Marked => MARKED_RIM_COLOR,
+            AtomDisplayState::SecondaryMarked => SECONDARY_MARKED_RIM_COLOR,
+            _ => unreachable!(),
+        };
+        (base_color, base_roughness, base_metallic, rim)
+    } else if atom.is_delete_marker() {
+        // Delete Marker: red rim, roughness 0.5
+        (base_color, 0.5, base_metallic, DELETE_MARKER_RIM_COLOR)
     } else if atom.is_frozen() {
+        // Frozen: ice blue rim, roughness 0.05, metallic 0.6
         (base_color, 0.05, 0.6, FROZEN_RIM_COLOR)
     } else {
         (base_color, base_roughness, base_metallic, NO_RIM)
@@ -888,14 +918,8 @@ pub fn tessellate_atom_impostor(
     visualization: &AtomicStructureVisualization,
 ) {
     let radius = get_displayed_atom_radius(atom, visualization) as f32;
-    let (color, roughness, metallic, rim_color) = get_atom_impostor_appearance(atom);
-
-    // Override color for marked atoms (Phase 2 will replace this with rim highlights)
-    let color = match display_state {
-        AtomDisplayState::Marked => MARKER_COLOR,
-        AtomDisplayState::SecondaryMarked => SECONDARY_MARKER_COLOR,
-        AtomDisplayState::Normal => color,
-    };
+    let (color, roughness, metallic, rim_color) =
+        get_atom_impostor_appearance(atom, display_state);
 
     // Add the atom quad to the impostor mesh
     atom_impostor_mesh.add_atom_quad(

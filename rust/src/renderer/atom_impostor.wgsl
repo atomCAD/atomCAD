@@ -238,8 +238,8 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
     // Rim highlight (in linear HDR space, before tone mapping)
     let V = normalize(camera.camera_position - hit_point);
     let NdotV = max(dot(world_normal, V), 0.0);
-    let rim_start = 0.6;
-    let rim_full = 0.9;
+    let rim_start = 0.3;
+    let rim_full = 0.8;
     let rim_factor = smoothstep(rim_start, rim_full, 1.0 - NdotV);
     let rim_blend = rim_factor * input.rim_color.a;
     color = mix(color, input.rim_color.rgb, rim_blend);
