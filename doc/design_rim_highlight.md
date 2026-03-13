@@ -21,14 +21,16 @@ The rim effect is computed in the fragment shader after ray-sphere intersection,
 ```wgsl
 // After computing world_normal and view direction V:
 let NdotV = max(dot(world_normal, V), 0.0);
-let rim = smoothstep(rim_inner_edge, rim_outer_edge, 1.0 - NdotV);
+let rim = smoothstep(rim_start, rim_full, 1.0 - NdotV);
 final_albedo = mix(base_albedo, rim_color, rim * rim_intensity);
 ```
 
 Parameters:
 - **rim_color**: RGB color of the rim (per-atom, passed via vertex data)
 - **rim_intensity**: strength of the rim blend (0.0 = no rim, 1.0 = full rim color at edges). Encoded in the alpha channel of rim_color or as a separate field.
-- **rim_inner_edge / rim_outer_edge**: smoothstep thresholds controlling rim width. These can be global constants in the shader (not per-atom) since all states use the same rim shape. Suggested defaults: `inner_edge = 0.25, outer_edge = 0.7`.
+- **rim_start / rim_full**: smoothstep thresholds on `1.0 - NdotV` controlling where the rim fades in and where it reaches full strength. `rim_start` is the inner boundary (closer to sphere center) where the rim begins appearing; `rim_full` is the outer boundary (at the silhouette) where the rim is fully on. These are global constants in the shader (not per-atom) since all states use the same rim shape. Suggested defaults: `rim_start = 0.6, rim_full = 0.9`.
+
+With these defaults, the rim begins appearing at `NdotV = 0.4` (surface angled ~66° from the viewer) and reaches full strength at `NdotV = 0.1` (nearly edge-on). This confines the rim to roughly the outer 25% of the sphere's visible area, preserving element color across the center and most of the lit surface.
 
 When `rim_color` is `(0, 0, 0)` with intensity 0, the rim has no effect — this is the default for normal atoms with no special state.
 
@@ -63,18 +65,19 @@ This adds 16 bytes per vertex (64 bytes per atom, since 4 vertices per quad). Fo
 
 ### Color and State Assignments
 
-All rim colors are applied in the tessellator (`atomic_tessellator.rs`). The atom's **base albedo always reflects its element color** — no more color overrides for state.
+All rim colors are applied in the tessellator (`atomic_tessellator.rs`). The atom's **albedo always reflects its element color** — no more color overrides for state. Delete markers and unchanged markers don't have real element identities; their atomic numbers map to appropriate colors in the element color lookup (dark neutral `(0.2, 0.2, 0.2)` for delete markers, light blue `(0.4, 0.6, 0.9)` for unchanged markers), just as unknown atoms (atomic_number=0) already map to gray `(0.5, 0.5, 0.5)`.
 
-| State | Rim Color | Rim Intensity | Material Override | Notes |
-|-------|-----------|---------------|-------------------|-------|
-| Normal | — | 0.0 | — | No rim |
-| **Selected** | Magenta `(1.0, 0.2, 1.0)` | 0.8 | Roughness 0.15 | Replaces full magenta override |
-| **Frozen** | Ice blue `(0.5, 0.85, 1.0)` | 0.7 | Roughness 0.05, metallic 0.6 | Icy/glassy appearance |
-| **Marked** (measurement) | Yellow `(1.0, 1.0, 0.0)` | 0.8 | — | Primary measurement target |
-| **Secondary Marked** | Blue `(0.0, 0.5, 1.0)` | 0.8 | — | Secondary measurement target |
-| **Delete Marker** | Red `(0.9, 0.1, 0.1)` | 0.8 | Roughness 0.5 | Base albedo becomes neutral dark `(0.2, 0.2, 0.2)` instead of red |
-| **Unchanged Marker** | — | 0.0 | Roughness 0.7 | Keep current light blue albedo `(0.4, 0.6, 0.9)`, no rim needed (these are ghost atoms) |
-| **Unknown Element** | Orange `(1.0, 0.6, 0.0)` | 0.6 | — | Distinguishes from similarly-gray atoms; base albedo stays gray `(0.5, 0.5, 0.5)` |
+| State | Rim Color | Rim Intensity | Roughness | Metallic | Notes |
+|-------|-----------|---------------|-----------|----------|-------|
+| Normal | — | 0.0 | — | — | No rim |
+| **Selected** | Magenta `(1.0, 0.2, 1.0)` | 0.8 | 0.15 | — | Replaces full magenta override |
+| **Frozen** | Ice blue `(0.5, 0.85, 1.0)` | 0.7 | 0.05 | 0.6 | Icy/glassy appearance |
+| **Marked** (measurement) | Yellow `(1.0, 1.0, 0.0)` | 0.8 | — | — | Primary measurement target |
+| **Secondary Marked** | Blue `(0.0, 0.5, 1.0)` | 0.8 | — | — | Secondary measurement target |
+| **Delete Marker** | Red `(0.9, 0.1, 0.1)` | 0.8 | 0.5 | — | Albedo from element lookup (dark neutral) |
+| **Unchanged Marker** | — | 0.0 | 0.7 | — | Ghost atoms in diff view (bond endpoints that didn't change). Albedo from element lookup (light blue). No rim needed. Displayed as "Unknown" in UI. |
+
+A "—" in Roughness or Metallic means no override (element default, or falls through to a lower-priority state per the priority rules below).
 
 ### Priority Order (Overlapping States)
 
@@ -83,23 +86,24 @@ An atom can have multiple states simultaneously (e.g., selected + frozen, or sel
 1. **Selected** — always takes visual priority; user needs to see what they're about to act on
 2. **Marked / Secondary Marked** — transient measurement UI, needs immediate visibility
 3. **Delete Marker** — structural semantic, important but less transient
-4. **Unknown Element** — structural semantic
-5. **Frozen** — persistent state, lowest priority since it's the most "background" information
+4. **Frozen** — persistent state, lowest priority since it's the most "background" information
 
-When a higher-priority state provides a rim, lower-priority states are visually suppressed. However, **material overrides stack independently** of rim priority. For example, a selected + frozen atom gets:
-- Rim: magenta (from selected, higher priority)
-- Material: roughness 0.05, metallic 0.6 (from frozen — material changes are independent)
+**Unchanged Marker** is excluded from priority ordering because it has no rim (intensity 0). When no higher-priority state is active, its material overrides apply normally.
 
-This means a selected-frozen atom looks glassy/icy with a magenta rim, while a selected-normal atom looks slightly shiny with a magenta rim. The material difference provides a secondary cue even when the rim is "taken" by selection.
+The highest-priority active state wins **both** rim color and material overrides. There is no fall-through or per-field merging — one state controls the entire visual. For material fields that the winning state doesn't define, element defaults are used.
+
+Albedo is not part of the priority system — it is always the element color. Atoms without real element identities (delete markers, unchanged markers) get their albedo from the element color lookup, which maps their special atomic numbers to appropriate colors.
+
+Examples:
+
+- **Selected + frozen**: rim = magenta, roughness = 0.15, metallic = element default (all from selected).
+- **Selected + delete marker**: rim = magenta, roughness = 0.15 (all from selected). Albedo is the delete marker's element color (dark neutral) — not an override, just what the element lookup returns for this atom type.
+- **Delete marker + frozen**: rim = red, roughness = 0.5, metallic = element default (all from delete marker).
+- **Marked + frozen**: rim = yellow, roughness and metallic = element defaults (marked defines no material overrides).
 
 ### Bond Highlighting
 
-Bonds also currently use full magenta override for selection. The bond impostor shader (`bond_impostor.wgsl`) should receive analogous treatment:
-
-- Selected bonds: keep element/type-based color, add a rim/glow effect along the cylinder silhouette edges
-- Delete marker bonds: neutral dark color with red rim
-
-The cylinder rim math is similar: `1.0 - abs(dot(surface_normal, view_dir))` gives silhouette proximity for a cylinder. This is a follow-up task and not required for the initial atom implementation.
+Bonds do **not** need rim highlights. Bond colors encode bond type (gray, amber, teal, copper) — there is no element identity to preserve. Full color overrides for selection (magenta) and delete markers (red) remain appropriate for bonds.
 
 ## Files to Modify
 
@@ -115,7 +119,7 @@ The cylinder rim math is similar: `1.0 - abs(dot(surface_normal, view_dir))` giv
 
 | File | Change |
 |------|--------|
-| `rust/src/display/atomic_tessellator.rs` | Rewrite `get_atom_color_and_material()` to always return element color as albedo (remove `to_selected_color` override). Add `get_atom_rim_color()` function implementing the priority table. Update `tessellate_atom_impostor()` to pass rim color. Update delete marker tessellation to use neutral albedo + red rim. |
+| `rust/src/display/atomic_tessellator.rs` | Rewrite `get_atom_color_and_material()` to always return element color as albedo (remove `to_selected_color` override). The element color lookup already handles special atom types (delete markers, unchanged markers) — no albedo override logic needed. Add `get_atom_rim_color()` function implementing the priority table. Update `tessellate_atom_impostor()` to pass rim color. |
 
 ### Rust (crystolecule)
 
@@ -133,72 +137,107 @@ const FROZEN_RIM_COLOR: Vec4 = Vec4::new(0.5, 0.85, 1.0, 0.7);    // Ice blue
 const MARKED_RIM_COLOR: Vec4 = Vec4::new(1.0, 1.0, 0.0, 0.8);     // Yellow
 const SECONDARY_MARKED_RIM_COLOR: Vec4 = Vec4::new(0.0, 0.5, 1.0, 0.8); // Blue
 const DELETE_MARKER_RIM_COLOR: Vec4 = Vec4::new(0.9, 0.1, 0.1, 0.8);    // Red
-const UNKNOWN_ELEMENT_RIM_COLOR: Vec4 = Vec4::new(1.0, 0.6, 0.0, 0.6);  // Orange
 const NO_RIM: Vec4 = Vec4::new(0.0, 0.0, 0.0, 0.0);
 ```
 
+## Triangle Mesh Rendering Path
+
+The rim highlight system is **impostor-only**. The triangle mesh rendering path (`mesh.wgsl`) retains its current behavior:
+
+- **Selected**: full magenta color override
+- **Marked**: 3D crosshair geometry (cylinders along X/Y/Z axes)
+- **Delete/Unchanged markers**: color overrides
+- **Frozen**: no visual (same as current)
+
+Most users use the impostor path, so this is an acceptable inconsistency. If the triangle mesh path needs rim highlights in the future, the same approach applies: add `rim_color` to the mesh vertex struct, add the `dot(N, V)` rim math to `mesh.wgsl`, and pass rim colors from the mesh tessellator.
+
 ## Shader Change Detail
 
-In `atom_impostor.wgsl`, the fragment shader change:
+### Refactor: extract tone mapping from `calculate_pbr_lighting`
 
+Currently `calculate_pbr_lighting` applies Reinhard tone mapping and gamma correction internally before returning. The rim blend must happen in linear HDR space (before tone mapping), so these steps are extracted into `fs_main`:
+
+**Before (current `calculate_pbr_lighting` ending):**
 ```wgsl
-// --- Current end of fs_main ---
-// let color = calculate_pbr_lighting(hit_point, world_normal, input.albedo, ...);
-
-// --- New: apply rim highlight after PBR ---
-let V = normalize(camera.camera_position - hit_point);
-let NdotV = max(dot(world_normal, V), 0.0);
-
-// Rim parameters (global constants)
-let rim_inner = 0.25;
-let rim_outer = 0.7;
-let rim_factor = smoothstep(rim_inner, rim_outer, 1.0 - NdotV);
-
-// Blend rim color into final output (input.rim_color.a is intensity)
-let rim_blend = rim_factor * input.rim_color.a;
-var final_color = mix(color, input.rim_color.rgb, rim_blend);
-
-// Tone mapping and gamma are already applied in calculate_pbr_lighting,
-// so rim color should be in post-tonemap space, OR we apply rim before
-// tonemap by moving it inside calculate_pbr_lighting.
+    var color = light_contribution * (diffuse + specular) + ambient;
+    color = color / (color + vec3(1.0)); // Tone mapping
+    color = pow(color, vec3(1.0/2.2)); // Gamma correction
+    return color;
 ```
 
-**Note on tone mapping**: The rim blend should happen _before_ tone mapping and gamma correction for physically correct results. This means either moving the rim logic inside `calculate_pbr_lighting` or extracting tone mapping/gamma to happen after the rim blend. The latter is cleaner.
+**After (refactored):**
+```wgsl
+fn calculate_pbr_lighting(...) -> vec3<f32> {
+    // ... PBR calculation unchanged ...
+    var color = light_contribution * (diffuse + specular) + ambient;
+    // Return linear HDR color — tone mapping and gamma applied by caller
+    return color;
+}
+```
+
+This is a behavior-preserving refactor for the non-rim path: `fs_main` applies tone mapping and gamma after calling `calculate_pbr_lighting`, producing identical output for atoms with no rim.
+
+### Rim highlight in `fs_main`
+
+```wgsl
+@fragment
+fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
+    // ... ray-sphere intersection unchanged ...
+
+    // PBR lighting (returns linear HDR)
+    var color = calculate_pbr_lighting(hit_point, world_normal, input.albedo, ...);
+
+    // Rim highlight (in linear HDR space, before tone mapping)
+    let V = normalize(camera.camera_position - hit_point);
+    let NdotV = max(dot(world_normal, V), 0.0);
+    let rim_start = 0.6;
+    let rim_full = 0.9;
+    let rim_factor = smoothstep(rim_start, rim_full, 1.0 - NdotV);
+    let rim_blend = rim_factor * input.rim_color.a;
+    color = mix(color, input.rim_color.rgb, rim_blend);
+
+    // Tone mapping and gamma (moved here from calculate_pbr_lighting)
+    color = color / (color + vec3(1.0));
+    color = pow(color, vec3(1.0 / 2.2));
+
+    var output: AtomFragmentOutput;
+    output.depth = depth;
+    output.color = vec4<f32>(color, 1.0);
+    return output;
+}
+```
+
+**Why this ordering matters:** Rim colors are specified as sRGB constants (e.g., magenta `(1.0, 0.2, 1.0)`). Blending them into the PBR result in linear HDR space, then tone mapping everything together, ensures the rim and the lit surface respond identically to tone mapping. If the blend happened after tone mapping, rim colors would appear brighter and more saturated than intended because they'd skip the HDR compression step.
+
+### `mesh.wgsl` consistency
+
+The same tone-mapping extraction should be applied to `mesh.wgsl`'s `calculate_pbr_lighting` copy to keep the two shaders consistent, even though `mesh.wgsl` does not use rim highlights. This prevents a future refactor from accidentally re-introducing the problem.
 
 ## Implementation Phases
 
-### Phase 1: Core rim infrastructure
-- Add `rim_color` field to `AtomImpostorVertex` and shader
-- Implement rim calculation in fragment shader
-- Wire through tessellator with `NO_RIM` default for all atoms
-- Verify: no visual change (all atoms have zero-intensity rim)
-
-### Phase 2: Selection rim
-- Change `get_atom_color_and_material()` to return element color for selected atoms (remove magenta override)
-- Set magenta rim for selected atoms in tessellator
-- Adjust roughness (keep existing 0.15 for selected)
+### Phase 1: Infrastructure + Selection + Frozen
+- Add `rim_color: [f32; 4]` field to `AtomImpostorVertex`, update `desc()` and `add_atom_quad()`
+- Add `rim_color` to shader vertex input/output structs (`atom_impostor.wgsl`)
+- Refactor `calculate_pbr_lighting` in both `atom_impostor.wgsl` and `mesh.wgsl`: remove tone mapping and gamma correction from the function, move them to the caller (`fs_main`). This is a behavior-preserving change that enables rim blending in linear HDR space.
+- Implement rim calculation in `fs_main` between the PBR call and tone mapping/gamma
+- Change `get_atom_color_and_material()` to always return element color for selected atoms (remove magenta override)
 - Remove `to_selected_color()` function
+- Set magenta rim for selected atoms, ice-blue rim + icy material for frozen atoms
+- Implement priority: selected > frozen (if both, magenta rim but icy material)
+- All other atoms get `NO_RIM` default
 
-### Phase 3: Frozen rim
-- Set ice-blue rim + icy material (roughness 0.05, metallic 0.6) for frozen atoms
-- Priority: selected > frozen (if both, use magenta rim but keep icy material)
+### Phase 2: Marked + Delete markers
+- Set yellow/blue rim for marked/secondary-marked atoms (remove color override in `tessellate_atom_impostor()`)
+- Delete markers: remove red color override, use element color from lookup (dark neutral), add red rim
+- Unchanged markers keep current behavior (element color from lookup gives light blue, roughness 0.7, no rim)
+- Full priority chain active: Selected > Marked > Delete Marker > Frozen
 
-### Phase 4: Marked atoms rim
-- Set yellow/blue rim for marked/secondary-marked atoms
-- Remove the color override in `tessellate_atom_impostor()` for marked states
-
-### Phase 5: Delete markers and unknown elements
-- Change delete marker albedo from red to neutral dark, add red rim
-- Add orange rim for unknown element atoms (atomic_number not in ATOM_INFO)
-
-### Phase 6 (follow-up): Bond rim highlights
-- Extend bond impostor shader with similar rim logic for selected/delete-marker bonds
 
 ## Tuning
 
-The rim `inner_edge`, `outer_edge`, and per-state intensity values should be tuned visually. Suggested approach:
+The rim `rim_start`, `rim_full`, and per-state intensity values should be tuned visually. Suggested approach:
 - Start with the values in this document
 - Test with a diamond lattice (many carbon atoms) with some atoms selected and some frozen
-- Adjust rim width (inner/outer edge) for visual clarity at different zoom levels
+- Adjust rim width (rim_start/rim_full) for visual clarity at different zoom levels
 - Ensure rim is visible in both ball-and-stick and space-filling modes
 - Verify that different rim colors are distinguishable from each other when atoms of different states are adjacent
