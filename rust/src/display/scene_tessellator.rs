@@ -115,8 +115,8 @@ fn tessellate_non_lightweight_content(
         cylinder_divisions: 12,
     };
 
-    // Active geometry color: green (the original default)
-    let active_outside_material = Material::new(&Vec3::new(0.0, 1.0, 0.0), 1.0, 0.0);
+    // Active geometry color: deep orange (matches active node in node network panel)
+    let active_outside_material = Material::new(&Vec3::new(1.0, 0.2, 0.0), 1.0, 0.0);
     let active_inside_material = Material::new(&Vec3::new(1.0, 0.0, 0.0), 1.0, 0.0);
     // Non-active geometry color: desaturated blue-gray
     let default_outside_material = Material::new(&Vec3::new(0.36, 0.38, 0.65), 1.0, 0.0);

@@ -57,9 +57,9 @@ const UNCHANGED_MARKER_ROUGHNESS: f32 = 0.7;
 const ANCHOR_ARROW_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0);
 
 // Rim highlight colors [R, G, B, intensity]
-const SELECTED_RIM_COLOR: [f32; 4] = [1.0, 0.2, 1.0, 1.0]; // Magenta
+const SELECTED_RIM_COLOR: [f32; 4] = [1.0, 0.55, 0.0, 1.0]; // Selection orange
 const FROZEN_RIM_COLOR: [f32; 4] = [0.0, 0.7, 1.0, 1.0]; // Vivid cyan
-const MARKED_RIM_COLOR: [f32; 4] = [1.0, 1.0, 0.0, 1.0]; // Yellow
+const MARKED_RIM_COLOR: [f32; 4] = [1.0, 0.2, 1.0, 1.0]; // Magenta
 const SECONDARY_MARKED_RIM_COLOR: [f32; 4] = [0.0, 0.5, 1.0, 1.0]; // Blue
 const DELETE_MARKER_RIM_COLOR: [f32; 4] = [0.9, 0.1, 0.1, 1.0]; // Red
 const NO_RIM: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
@@ -536,7 +536,7 @@ pub(crate) fn tessellate_atom(
 }
 
 fn to_selected_color(_color: &Vec3) -> Vec3 {
-    Vec3::new(1.0, 0.2, 1.0) // Bright magenta for selected atoms
+    Vec3::new(0.9, 0.5, 0.0) // Selection orange (matches node network selection)
 }
 
 /// Compute a unit vector perpendicular to the bond axis between two atoms.
