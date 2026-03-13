@@ -1824,6 +1824,19 @@ class CliConfig {
           parameters == other.parameters;
 }
 
+/// Status of frozen atoms during a drag operation.
+enum DragFrozenStatus {
+  /// No frozen atoms in selection — all atoms moved normally.
+  noneFrozen,
+
+  /// Some selected atoms were frozen and skipped; others moved.
+  someFrozen,
+
+  /// All selected atoms were frozen — nothing moved.
+  allFrozen,
+  ;
+}
+
 /// Information for the factor-into-subnetwork dialog
 class FactorSelectionInfo {
   /// Whether the selection can be factored
@@ -2151,12 +2164,16 @@ class PointerMoveResult {
   final double marqueeRectW;
   final double marqueeRectH;
 
+  /// Status of frozen atoms during drag. Only meaningful when kind == Dragging.
+  final DragFrozenStatus frozenDragStatus;
+
   const PointerMoveResult({
     required this.kind,
     required this.marqueeRectX,
     required this.marqueeRectY,
     required this.marqueeRectW,
     required this.marqueeRectH,
+    required this.frozenDragStatus,
   });
 
   @override
@@ -2165,7 +2182,8 @@ class PointerMoveResult {
       marqueeRectX.hashCode ^
       marqueeRectY.hashCode ^
       marqueeRectW.hashCode ^
-      marqueeRectH.hashCode;
+      marqueeRectH.hashCode ^
+      frozenDragStatus.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2176,7 +2194,8 @@ class PointerMoveResult {
           marqueeRectX == other.marqueeRectX &&
           marqueeRectY == other.marqueeRectY &&
           marqueeRectW == other.marqueeRectW &&
-          marqueeRectH == other.marqueeRectH;
+          marqueeRectH == other.marqueeRectH &&
+          frozenDragStatus == other.frozenDragStatus;
 }
 
 /// Discriminant for default_tool_pointer_move result.

@@ -11,6 +11,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIAddBondMove
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode;
 use crate::api::structure_designer::structure_designer_api_types::PointerDownResult;
+use crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
 use crate::api::structure_designer::structure_designer_api_types::PointerDownResultKind;
 use crate::api::structure_designer::structure_designer_api_types::PointerMoveResult;
 use crate::api::structure_designer::structure_designer_api_types::PointerMoveResultKind;
@@ -758,6 +759,7 @@ pub fn default_tool_pointer_move(
                 marquee_rect_y: 0.0,
                 marquee_rect_w: 0.0,
                 marquee_rect_h: 0.0,
+                frozen_drag_status: DragFrozenStatus::NoneFrozen,
             },
         )
     }

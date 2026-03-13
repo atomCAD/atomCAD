@@ -2379,3 +2379,89 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     assert_eq!(get_data_mut(&mut designer).output_diff, initial_output_diff);
     assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
 }
+
+// =============================================================================
+// Frozen atoms and drag
+// =============================================================================
+
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
+use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::drag_selected_by_delta;
+
+#[test]
+fn drag_frozen_diff_atom_not_moved() {
+    let mut designer = setup_atom_edit();
+
+    // Add two diff atoms
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_recorded(6, DVec3::new(0.0, 0.0, 0.0));
+        data.add_atom_recorded(7, DVec3::new(2.0, 0.0, 0.0));
+        // Select both
+        data.selection.selected_diff_atoms.insert(1);
+        data.selection.selected_diff_atoms.insert(2);
+        // Freeze atom 1
+        data.frozen_diff_atoms.insert(1);
+    }
+
+    begin_atom_edit_drag(&mut designer);
+    let status = drag_selected_by_delta(&mut designer, DVec3::new(1.0, 0.0, 0.0));
+    end_atom_edit_drag(&mut designer);
+
+    // Frozen atom should not have moved
+    let data = get_data_mut(&mut designer);
+    let atom1 = data.diff.get_atom(1).unwrap();
+    assert_eq!(atom1.position, DVec3::new(0.0, 0.0, 0.0));
+
+    // Non-frozen atom should have moved
+    let atom2 = data.diff.get_atom(2).unwrap();
+    assert_eq!(atom2.position, DVec3::new(3.0, 0.0, 0.0));
+
+    assert!(matches!(status, DragFrozenStatus::SomeFrozen));
+}
+
+#[test]
+fn drag_all_frozen_returns_all_frozen() {
+    let mut designer = setup_atom_edit();
+
+    // Add one diff atom, freeze it, select it
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_recorded(6, DVec3::new(0.0, 0.0, 0.0));
+        data.selection.selected_diff_atoms.insert(1);
+        data.frozen_diff_atoms.insert(1);
+    }
+
+    begin_atom_edit_drag(&mut designer);
+    let status = drag_selected_by_delta(&mut designer, DVec3::new(1.0, 0.0, 0.0));
+    end_atom_edit_drag(&mut designer);
+
+    // Atom should not have moved
+    let data = get_data_mut(&mut designer);
+    let atom1 = data.diff.get_atom(1).unwrap();
+    assert_eq!(atom1.position, DVec3::new(0.0, 0.0, 0.0));
+
+    assert!(matches!(status, DragFrozenStatus::AllFrozen));
+}
+
+#[test]
+fn drag_no_frozen_returns_none_frozen() {
+    let mut designer = setup_atom_edit();
+
+    // Add one diff atom, select it (not frozen)
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_recorded(6, DVec3::new(0.0, 0.0, 0.0));
+        data.selection.selected_diff_atoms.insert(1);
+    }
+
+    begin_atom_edit_drag(&mut designer);
+    let status = drag_selected_by_delta(&mut designer, DVec3::new(1.0, 0.0, 0.0));
+    end_atom_edit_drag(&mut designer);
+
+    // Atom should have moved
+    let data = get_data_mut(&mut designer);
+    let atom1 = data.diff.get_atom(1).unwrap();
+    assert_eq!(atom1.position, DVec3::new(1.0, 0.0, 0.0));
+
+    assert!(matches!(status, DragFrozenStatus::NoneFrozen));
+}

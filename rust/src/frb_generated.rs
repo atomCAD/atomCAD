@@ -9154,6 +9154,19 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus::NoneFrozen,
+1 => crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus::SomeFrozen,
+2 => crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus::AllFrozen,
+            _ => unreachable!("Invalid variant for DragFrozenStatus: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::common_api_types::ElementSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10494,12 +10507,14 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_marqueeRectY = <f64>::sse_decode(deserializer);
         let mut var_marqueeRectW = <f64>::sse_decode(deserializer);
         let mut var_marqueeRectH = <f64>::sse_decode(deserializer);
+        let mut var_frozenDragStatus = <crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::PointerMoveResult {
             kind: var_kind,
             marquee_rect_x: var_marqueeRectX,
             marquee_rect_y: var_marqueeRectY,
             marquee_rect_w: var_marqueeRectW,
             marquee_rect_h: var_marqueeRectH,
+            frozen_drag_status: var_frozenDragStatus,
         };
     }
 }
@@ -13141,6 +13156,34 @@ impl
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::NoneFrozen => 0.into_dart(),
+            Self::SomeFrozen => 1.into_dart(),
+            Self::AllFrozen => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus,
+    > for crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::ElementSummary {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -13656,6 +13699,7 @@ impl flutter_rust_bridge::IntoDart
             self.marquee_rect_y.into_into_dart().into_dart(),
             self.marquee_rect_w.into_into_dart().into_dart(),
             self.marquee_rect_h.into_into_dart().into_dart(),
+            self.frozen_drag_status.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -14806,6 +14850,16 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <String>::sse_encode(self.network_name, serializer);
         <String>::sse_encode(self.output_file, serializer);
         <std::collections::HashMap<String, String>>::sse_encode(self.parameters, serializer);
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus::NoneFrozen => { 0 }
+crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus::SomeFrozen => { 1 }
+crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus::AllFrozen => { 2 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 
@@ -15976,6 +16030,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <f64>::sse_encode(self.marquee_rect_y, serializer);
         <f64>::sse_encode(self.marquee_rect_w, serializer);
         <f64>::sse_encode(self.marquee_rect_h, serializer);
+        <crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus>::sse_encode(self.frozen_drag_status, serializer);
     }
 }
 

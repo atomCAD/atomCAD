@@ -291,6 +291,16 @@ pub struct PointerDownResult {
     pub gadget_handle_index: i32,
 }
 
+/// Status of frozen atoms during a drag operation.
+pub enum DragFrozenStatus {
+    /// No frozen atoms in selection — all atoms moved normally.
+    NoneFrozen,
+    /// Some selected atoms were frozen and skipped; others moved.
+    SomeFrozen,
+    /// All selected atoms were frozen — nothing moved.
+    AllFrozen,
+}
+
 /// Discriminant for default_tool_pointer_move result.
 pub enum PointerMoveResultKind {
     /// Threshold not exceeded yet.
@@ -309,6 +319,8 @@ pub struct PointerMoveResult {
     pub marquee_rect_y: f64,
     pub marquee_rect_w: f64,
     pub marquee_rect_h: f64,
+    /// Status of frozen atoms during drag. Only meaningful when kind == Dragging.
+    pub frozen_drag_status: DragFrozenStatus,
 }
 
 /// Result of default_tool_pointer_up.

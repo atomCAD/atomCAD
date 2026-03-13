@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::atom_edit_data::*;
 use super::types::*;
+use crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
 use crate::crystolecule::atomic_structure::{BondReference, UNCHANGED_ATOMIC_NUMBER};
 use crate::crystolecule::atomic_structure_diff::{AtomSource, apply_diff};
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -311,42 +312,61 @@ fn gather_base_atom_promotion_info(
 /// - Diff atoms: position updated in-place, anchor set on first move
 /// - Base atoms: added to diff with anchor at original position, then moved to
 ///   the provenance-based diff selection so subsequent deltas update the same atom
-pub fn drag_selected_by_delta(structure_designer: &mut StructureDesigner, delta: DVec3) {
-    // Phase 1: Gather info about base atoms that need to be added to the diff
-    let base_atoms_info: Vec<BaseAtomPromotionInfo> = {
+///
+/// Frozen atoms are skipped (not moved). Returns a status indicating whether
+/// any selected atoms were frozen.
+pub fn drag_selected_by_delta(
+    structure_designer: &mut StructureDesigner,
+    delta: DVec3,
+) -> DragFrozenStatus {
+    // Phase 1: Gather info about base atoms that need to be added to the diff,
+    // and determine which atoms are frozen.
+    let (base_atoms_info, frozen_base_count): (Vec<BaseAtomPromotionInfo>, usize) = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
-            None => return,
+            None => return DragFrozenStatus::NoneFrozen,
         };
+
+        let total_base = atom_edit_data.selection.selected_base_atoms.len();
 
         // In diff view, there are no base atoms to convert
         if atom_edit_data.output_diff {
-            Vec::new()
+            (Vec::new(), 0)
         } else {
-            gather_base_atom_promotion_info(
-                structure_designer,
-                &atom_edit_data.selection.selected_base_atoms,
-            )
+            // Filter out frozen base atoms
+            let non_frozen_base: std::collections::HashSet<u32> = atom_edit_data
+                .selection
+                .selected_base_atoms
+                .iter()
+                .filter(|id| !atom_edit_data.frozen_base_atoms.contains(id))
+                .copied()
+                .collect();
+            let frozen_count = total_base - non_frozen_base.len();
+            let info =
+                gather_base_atom_promotion_info(structure_designer, &non_frozen_base);
+            (info, frozen_count)
         }
     };
 
     // Phase 2: Apply delta to diff atoms & convert base atoms to diff
     let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
         Some(data) => data,
-        None => return,
+        None => return DragFrozenStatus::NoneFrozen,
     };
 
-    // Move existing diff atoms
+    // Move existing diff atoms, skipping frozen ones
     let diff_ids: Vec<u32> = atom_edit_data
         .selection
         .selected_diff_atoms
         .iter()
+        .filter(|id| !atom_edit_data.frozen_diff_atoms.contains(id))
         .copied()
         .collect();
-    for diff_id in diff_ids {
-        if let Some(atom) = atom_edit_data.diff.get_atom(diff_id) {
+    let frozen_diff_count = atom_edit_data.selection.selected_diff_atoms.len() - diff_ids.len();
+    for diff_id in &diff_ids {
+        if let Some(atom) = atom_edit_data.diff.get_atom(*diff_id) {
             let new_pos = atom.position + delta;
-            atom_edit_data.move_in_diff(diff_id, new_pos);
+            atom_edit_data.move_in_diff(*diff_id, new_pos);
         }
     }
 
@@ -382,11 +402,24 @@ pub fn drag_selected_by_delta(structure_designer: &mut StructureDesigner, delta:
         );
     }
 
-    // Update selection transform to reflect the displacement
-    if let Some(ref mut transform) = atom_edit_data.selection.selection_transform {
-        transform.translation += delta;
+    // Update selection transform to reflect the displacement (only if something moved)
+    let moved_count = diff_ids.len() + base_atoms_info.len();
+    if moved_count > 0 {
+        if let Some(ref mut transform) = atom_edit_data.selection.selection_transform {
+            transform.translation += delta;
+        }
+        atom_edit_data.selection.clear_bonds();
     }
-    atom_edit_data.selection.clear_bonds();
+
+    // Determine frozen status
+    let total_frozen = frozen_diff_count + frozen_base_count;
+    if total_frozen == 0 {
+        DragFrozenStatus::NoneFrozen
+    } else if moved_count == 0 {
+        DragFrozenStatus::AllFrozen
+    } else {
+        DragFrozenStatus::SomeFrozen
+    }
 }
 
 /// Info needed to change a bond's order: diff atom IDs for both endpoints

@@ -5,8 +5,8 @@ use super::selection::*;
 use super::types::*;
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::{
-    PointerDownResult, PointerDownResultKind, PointerMoveResult, PointerMoveResultKind,
-    PointerUpResult,
+    DragFrozenStatus, PointerDownResult, PointerDownResultKind, PointerMoveResult,
+    PointerMoveResultKind, PointerUpResult,
 };
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::crystolecule::atomic_structure::HitTestResult;
@@ -271,6 +271,7 @@ pub fn default_tool_pointer_move(
         marquee_rect_y: 0.0,
         marquee_rect_w: 0.0,
         marquee_rect_h: 0.0,
+        frozen_drag_status: DragFrozenStatus::NoneFrozen,
     };
 
     let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
@@ -409,6 +410,7 @@ pub fn default_tool_pointer_move(
                 marquee_rect_y: 0.0,
                 marquee_rect_w: 0.0,
                 marquee_rect_h: 0.0,
+                frozen_drag_status: DragFrozenStatus::NoneFrozen,
             }
         }
         MoveAction::ContinueDrag {
@@ -427,9 +429,11 @@ pub fn default_tool_pointer_move(
             // Compute incremental delta from last frame
             let delta = current_world_pos - last_world_pos;
 
+            let mut frozen_status = DragFrozenStatus::NoneFrozen;
+
             if delta.length_squared() > 0.0 {
-                // Apply delta to all selected atoms
-                drag_selected_by_delta(structure_designer, delta);
+                // Apply delta to all selected atoms (frozen atoms are skipped)
+                frozen_status = drag_selected_by_delta(structure_designer, delta);
 
                 // Continuous minimization: relax neighbors per frame
                 if get_active_atom_edit_data(structure_designer)
@@ -466,6 +470,7 @@ pub fn default_tool_pointer_move(
                 marquee_rect_y: 0.0,
                 marquee_rect_w: 0.0,
                 marquee_rect_h: 0.0,
+                frozen_drag_status: frozen_status,
             }
         }
         MoveAction::ThresholdExceededOnMarquee { start_screen } => {
@@ -483,6 +488,7 @@ pub fn default_tool_pointer_move(
                 marquee_rect_y: rect.1,
                 marquee_rect_w: rect.2,
                 marquee_rect_h: rect.3,
+                frozen_drag_status: DragFrozenStatus::NoneFrozen,
             }
         }
         MoveAction::UpdateMarquee { start_screen } => {
@@ -500,6 +506,7 @@ pub fn default_tool_pointer_move(
                 marquee_rect_y: rect.1,
                 marquee_rect_w: rect.2,
                 marquee_rect_h: rect.3,
+                frozen_drag_status: DragFrozenStatus::NoneFrozen,
             }
         }
     }

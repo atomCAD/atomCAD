@@ -24,6 +24,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
   final _StructureDesignerViewportState _viewport;
   SelectModifier? _storedModifier;
+  bool _frozenSnackbarShown = false;
 
   _AtomEditDefaultDelegate(this._viewport);
 
@@ -73,6 +74,24 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
       ));
       _viewport.renderingNeeded();
     } else if (result.kind == PointerMoveResultKind.dragging) {
+      // Show snackbar once per drag when frozen atoms are in the selection
+      if (!_frozenSnackbarShown &&
+          result.frozenDragStatus != DragFrozenStatus.noneFrozen) {
+        _frozenSnackbarShown = true;
+        final message =
+            result.frozenDragStatus == DragFrozenStatus.allFrozen
+                ? 'All selected atoms are frozen \u2014 nothing moved'
+                : 'Some frozen atoms in selection were not moved';
+        ScaffoldMessenger.of(_viewport.context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(message),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
       _viewport.renderingNeeded();
     }
     return true;
@@ -81,6 +100,8 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
   @override
   bool onPrimaryUp(Offset pos) {
     if (_viewport.isGadgetDragging) return false;
+
+    _frozenSnackbarShown = false;
 
     final ray = _viewport.getRayFromPointerPos(pos);
     atom_edit_api.defaultToolPointerUp(

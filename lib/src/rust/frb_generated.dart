@@ -10113,6 +10113,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  DragFrozenStatus dco_decode_drag_frozen_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DragFrozenStatus.values[raw as int];
+  }
+
+  @protected
   ElementSummary dco_decode_element_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -10877,14 +10883,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PointerMoveResult dco_decode_pointer_move_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return PointerMoveResult(
       kind: dco_decode_pointer_move_result_kind(arr[0]),
       marqueeRectX: dco_decode_f_64(arr[1]),
       marqueeRectY: dco_decode_f_64(arr[2]),
       marqueeRectW: dco_decode_f_64(arr[3]),
       marqueeRectH: dco_decode_f_64(arr[4]),
+      frozenDragStatus: dco_decode_drag_frozen_status(arr[5]),
     );
   }
 
@@ -12540,6 +12547,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  DragFrozenStatus sse_decode_drag_frozen_status(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return DragFrozenStatus.values[inner];
+  }
+
+  @protected
   ElementSummary sse_decode_element_summary(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_atomicNumber = sse_decode_i_16(deserializer);
@@ -13751,12 +13765,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_marqueeRectY = sse_decode_f_64(deserializer);
     var var_marqueeRectW = sse_decode_f_64(deserializer);
     var var_marqueeRectH = sse_decode_f_64(deserializer);
+    var var_frozenDragStatus = sse_decode_drag_frozen_status(deserializer);
     return PointerMoveResult(
         kind: var_kind,
         marqueeRectX: var_marqueeRectX,
         marqueeRectY: var_marqueeRectY,
         marqueeRectW: var_marqueeRectW,
-        marqueeRectH: var_marqueeRectH);
+        marqueeRectH: var_marqueeRectH,
+        frozenDragStatus: var_frozenDragStatus);
   }
 
   @protected
@@ -15177,6 +15193,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_drag_frozen_status(
+      DragFrozenStatus self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_element_summary(
       ElementSummary self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -16229,6 +16252,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.marqueeRectY, serializer);
     sse_encode_f_64(self.marqueeRectW, serializer);
     sse_encode_f_64(self.marqueeRectH, serializer);
+    sse_encode_drag_frozen_status(self.frozenDragStatus, serializer);
   }
 
   @protected

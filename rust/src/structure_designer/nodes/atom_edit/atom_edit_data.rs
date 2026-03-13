@@ -922,9 +922,12 @@ impl NodeData for AtomEditData {
         // Use existing selection_transform centroid as gadget position.
         let center = self.selection.selection_transform.as_ref()?.translation;
 
-        // Gather diff atom positions directly from the diff.
+        // Gather diff atom positions directly from the diff, skipping frozen atoms.
         let mut diff_atom_positions: Vec<(u32, DVec3)> = Vec::new();
         for &diff_id in &self.selection.selected_diff_atoms {
+            if self.frozen_diff_atoms.contains(&diff_id) {
+                continue;
+            }
             if let Some(atom) = self.diff.get_atom(diff_id) {
                 diff_atom_positions.push((diff_id, atom.position));
             }
@@ -939,6 +942,9 @@ impl NodeData for AtomEditData {
                         structure_designer.get_atomic_structure_from_selected_node()
                     {
                         for &base_id in &self.selection.selected_base_atoms {
+                            if self.frozen_base_atoms.contains(&base_id) {
+                                continue;
+                            }
                             if let Some(&result_id) = cache.provenance.base_to_result.get(&base_id)
                             {
                                 if let Some(atom) = result.get_atom(result_id) {
