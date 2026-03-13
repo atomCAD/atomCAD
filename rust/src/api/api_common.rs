@@ -396,6 +396,8 @@ pub fn refresh_structure_designer(
         wireframe_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
+        gadget_atom_impostor_mesh,
+        gadget_bond_impostor_mesh,
     ) = crate::display::scene_tessellator::tessellate_scene_content(
         &cad_instance
             .structure_designer
@@ -412,6 +414,8 @@ pub fn refresh_structure_designer(
         &wireframe_mesh,
         &atom_impostor_mesh,
         &bond_impostor_mesh,
+        &gadget_atom_impostor_mesh,
+        &gadget_bond_impostor_mesh,
         !renderer_lightweight,
     );
 

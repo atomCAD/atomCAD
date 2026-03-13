@@ -32,19 +32,30 @@ pub fn tessellate_scene_content(
     LineMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
+    AtomImpostorMesh,
+    BondImpostorMesh,
 ) {
     // ===== 1. TESSELLATE LIGHTWEIGHT CONTENT (always) =====
     let (lightweight_mesh, gadget_line_mesh) =
         tessellate_lightweight_content(scene, camera, preferences);
 
     // ===== 2. TESSELLATE NON-LIGHTWEIGHT CONTENT (when !lightweight) =====
-    let (main_mesh, wireframe_mesh, atom_impostor_mesh, bond_impostor_mesh) = if !lightweight {
+    let (
+        main_mesh,
+        wireframe_mesh,
+        atom_impostor_mesh,
+        bond_impostor_mesh,
+        gadget_atom_impostor_mesh,
+        gadget_bond_impostor_mesh,
+    ) = if !lightweight {
         tessellate_non_lightweight_content(scene, preferences)
     } else {
         // Return empty meshes for non-lightweight content
         (
             Mesh::new(),
             LineMesh::new(),
+            AtomImpostorMesh::new(),
+            BondImpostorMesh::new(),
             AtomImpostorMesh::new(),
             BondImpostorMesh::new(),
         )
@@ -57,6 +68,8 @@ pub fn tessellate_scene_content(
         wireframe_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
+        gadget_atom_impostor_mesh,
+        gadget_bond_impostor_mesh,
     )
 }
 
@@ -101,11 +114,21 @@ fn tessellate_lightweight_content(
 fn tessellate_non_lightweight_content(
     scene: &StructureDesignerScene,
     preferences: &DisplayPreferences,
-) -> (Mesh, LineMesh, AtomImpostorMesh, BondImpostorMesh) {
+) -> (
+    Mesh,
+    LineMesh,
+    AtomImpostorMesh,
+    BondImpostorMesh,
+    AtomImpostorMesh,
+    BondImpostorMesh,
+) {
     let mut main_mesh = Mesh::new();
     let mut wireframe_mesh = LineMesh::new();
     let mut atom_impostor_mesh = AtomImpostorMesh::new();
     let mut bond_impostor_mesh = BondImpostorMesh::new();
+    // Gadget impostor meshes for always-on-top guide dots
+    let mut gadget_atom_impostor_mesh = AtomImpostorMesh::new();
+    let mut gadget_bond_impostor_mesh = BondImpostorMesh::new();
 
     let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
         ball_and_stick_sphere_horizontal_divisions: 12,
@@ -149,13 +172,13 @@ fn tessellate_non_lightweight_content(
                             &atomic_tessellation_params,
                             &preferences.atomic_structure_visualization,
                         );
-                        // Render guide placement visuals (guide dots + anchor arrows)
+                        // Render guide placement visuals in gadget pass (always on top)
                         if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals
                         {
-                            atomic_tessellator::tessellate_guide_placement(
-                                &mut main_mesh,
+                            atomic_tessellator::tessellate_guide_placement_impostors(
+                                &mut gadget_atom_impostor_mesh,
+                                &mut gadget_bond_impostor_mesh,
                                 visuals,
-                                &atomic_tessellation_params,
                             );
                         }
                     }
@@ -166,12 +189,12 @@ fn tessellate_non_lightweight_content(
                             atomic_structure,
                             &preferences.atomic_structure_visualization,
                         );
-                        // Render guide placement visuals (guide dots + anchor arrows)
+                        // Render guide placement visuals in gadget pass (always on top)
                         if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals
                         {
                             atomic_tessellator::tessellate_guide_placement_impostors(
-                                &mut atom_impostor_mesh,
-                                &mut bond_impostor_mesh,
+                                &mut gadget_atom_impostor_mesh,
+                                &mut gadget_bond_impostor_mesh,
                                 visuals,
                             );
                         }
@@ -258,5 +281,7 @@ fn tessellate_non_lightweight_content(
         wireframe_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
+        gadget_atom_impostor_mesh,
+        gadget_bond_impostor_mesh,
     )
 }

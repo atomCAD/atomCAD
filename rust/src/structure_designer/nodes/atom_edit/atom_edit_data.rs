@@ -604,6 +604,7 @@ impl AtomEditData {
             AtomEditTool::AddAtom(AddAtomToolState::GuidedPlacement {
                 anchor_atom_id,
                 guide_dots,
+                merge_targets,
                 ..
             }) => {
                 if let Some(output_id) = resolve_anchor(*anchor_atom_id) {
@@ -611,12 +612,15 @@ impl AtomEditData {
                         .decorator_mut()
                         .set_atom_display_state(output_id, AtomDisplayState::Marked);
                     if let Some(anchor_atom) = output.get_atom(output_id) {
+                        let merge_flags: Vec<bool> =
+                            merge_targets.iter().map(|mt| mt.is_some()).collect();
                         output.decorator_mut().guide_placement_visuals =
                             Some(GuidePlacementVisuals {
                                 anchor_pos: anchor_atom.position,
                                 guide_dots: guide_dots.clone(),
                                 wireframe_sphere: None,
                                 wireframe_ring: None,
+                                merge_dot_flags: merge_flags,
                             });
                     }
                 }
@@ -654,6 +658,7 @@ impl AtomEditData {
                                     preview_position: *preview_position,
                                 }),
                                 wireframe_ring: None,
+                                merge_dot_flags: Vec::new(),
                             });
                     }
                 }
@@ -693,6 +698,7 @@ impl AtomEditData {
                                     normal: *ring_normal,
                                     radius: *ring_radius,
                                 }),
+                                merge_dot_flags: Vec::new(),
                             });
                     }
                 }

@@ -20,6 +20,9 @@ pub struct GuidePlacementVisuals {
     pub wireframe_sphere: Option<WireframeSphereVisuals>,
     /// If set, render a wireframe ring for free ring placement (sp3 case 1, no dihedral ref).
     pub wireframe_ring: Option<WireframeRingVisuals>,
+    /// Per-dot merge flag: true if this dot overlaps an existing atom (same or different element).
+    /// Parallel to `guide_dots`. Empty means no merge info available.
+    pub merge_dot_flags: Vec<bool>,
 }
 
 /// Visual data for a wireframe sphere (free sphere placement mode).

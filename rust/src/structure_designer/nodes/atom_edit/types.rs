@@ -1,6 +1,6 @@
 use crate::api::common_api_types::SelectModifier;
 use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
-use crate::crystolecule::atomic_structure_diff::{DiffProvenance, DiffStats};
+use crate::crystolecule::atomic_structure_diff::{AtomSource, DiffProvenance, DiffStats};
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use std::collections::HashSet;
@@ -9,6 +9,10 @@ use crate::util::transform::Transform;
 
 /// Default positional matching tolerance in Angstroms.
 pub const DEFAULT_TOLERANCE: f64 = 0.1;
+
+/// Merge tolerance for overlapping atoms during guided placement (Angstroms).
+/// Set to 1.5× hydrogen covalent radius (0.31 Å) for generous matching.
+pub const MERGE_TOLERANCE: f64 = 0.465;
 
 /// Pixel threshold (logical pixels) distinguishing click from drag.
 pub(super) const DRAG_THRESHOLD: f64 = 5.0;
@@ -62,6 +66,20 @@ pub struct DefaultToolState {
     pub show_gadget: bool,
 }
 
+/// Info about an existing atom that overlaps a guide dot position.
+/// Used for merge (same element) or replace (different element) behavior.
+#[derive(Debug, Clone)]
+pub struct MergeTarget {
+    /// Atom ID in the result structure.
+    pub result_atom_id: u32,
+    /// Atomic number of the existing atom.
+    pub atomic_number: i16,
+    /// Position of the existing atom (needed for base atom promotion in Phase 2).
+    pub position: DVec3,
+    /// Provenance of the existing atom (needed to resolve to diff ID).
+    pub atom_source: AtomSource,
+}
+
 #[derive(Debug)]
 pub enum AddAtomToolState {
     Idle,
@@ -71,6 +89,8 @@ pub enum AddAtomToolState {
         bond_distance: f64,
         /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
         is_dative_bond: bool,
+        /// Per-dot merge targets: `Some(target)` if the dot overlaps an existing atom.
+        merge_targets: Vec<Option<MergeTarget>>,
     },
     /// Free sphere placement: bare atom with no bonds, user clicks anywhere on sphere.
     GuidedFreeSphere {

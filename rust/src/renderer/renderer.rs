@@ -88,6 +88,8 @@ pub struct Renderer {
     background_mesh: GPUMesh,
     atom_impostor_mesh: GPUMesh,
     bond_impostor_mesh: GPUMesh,
+    gadget_atom_impostor_mesh: GPUMesh,
+    gadget_bond_impostor_mesh: GPUMesh,
     texture: Texture,
     texture_view: TextureView,
     depth_texture: Texture,
@@ -179,6 +181,12 @@ impl Renderer {
         let atom_impostor_mesh =
             GPUMesh::new_empty_atom_impostor_mesh(&device, &model_bind_group_layout);
         let bond_impostor_mesh =
+            GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
+
+        // Gadget impostor meshes (rendered in gadget pass, always on top)
+        let gadget_atom_impostor_mesh =
+            GPUMesh::new_empty_atom_impostor_mesh(&device, &model_bind_group_layout);
+        let gadget_bond_impostor_mesh =
             GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
 
         let texture_size = Extent3d {
@@ -325,6 +333,8 @@ impl Renderer {
             background_mesh,
             atom_impostor_mesh,
             bond_impostor_mesh,
+            gadget_atom_impostor_mesh,
+            gadget_bond_impostor_mesh,
             texture,
             texture_view,
             depth_texture,
@@ -633,6 +643,8 @@ impl Renderer {
         wireframe_mesh: &LineMesh,
         atom_impostor_mesh: &AtomImpostorMesh,
         bond_impostor_mesh: &BondImpostorMesh,
+        gadget_atom_impostor_mesh: &AtomImpostorMesh,
+        gadget_bond_impostor_mesh: &BondImpostorMesh,
         update_non_lightweight: bool,
     ) {
         self.lightweight_mesh
@@ -660,11 +672,26 @@ impl Renderer {
                 "Bond Impostors",
             );
 
+            self.gadget_atom_impostor_mesh.update_from_atom_impostor_mesh(
+                &self.device,
+                gadget_atom_impostor_mesh,
+                "Gadget Atom Impostors",
+            );
+            self.gadget_bond_impostor_mesh.update_from_bond_impostor_mesh(
+                &self.device,
+                gadget_bond_impostor_mesh,
+                "Gadget Bond Impostors",
+            );
+
             self.main_mesh.set_identity_transform(&self.queue);
             self.wireframe_mesh.set_identity_transform(&self.queue);
 
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
+            self.gadget_atom_impostor_mesh
+                .set_identity_transform(&self.queue);
+            self.gadget_bond_impostor_mesh
+                .set_identity_transform(&self.queue);
         }
     }
 
@@ -787,6 +814,18 @@ impl Renderer {
             self.lightweight_mesh.set_identity_transform(&self.queue);
             gadget_render_pass.set_pipeline(&self.triangle_pipeline);
             self.render_mesh(&mut gadget_render_pass, &self.lightweight_mesh);
+
+            // Render gadget atom impostors (guide dots, always on top)
+            self.gadget_atom_impostor_mesh
+                .set_identity_transform(&self.queue);
+            gadget_render_pass.set_pipeline(&self.atom_impostor_pipeline);
+            self.render_mesh(&mut gadget_render_pass, &self.gadget_atom_impostor_mesh);
+
+            // Render gadget bond impostors (guide dot connectors, always on top)
+            self.gadget_bond_impostor_mesh
+                .set_identity_transform(&self.queue);
+            gadget_render_pass.set_pipeline(&self.bond_impostor_pipeline);
+            self.render_mesh(&mut gadget_render_pass, &self.gadget_bond_impostor_mesh);
         }
 
         // Calculate bytes per row with proper alignment (256-byte boundary for WebGPU)

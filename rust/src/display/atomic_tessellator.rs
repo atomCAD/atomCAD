@@ -990,6 +990,8 @@ fn tessellate_bond_delete_marker_impostor(
 
 /// Color for guide dot spheres (selection magenta)
 const GUIDE_DOT_COLOR: Vec3 = Vec3::new(1.0, 0.2, 1.0);
+/// Color for merge-candidate guide dots (green — signals "will bond to existing atom")
+const GUIDE_DOT_MERGE_COLOR: Vec3 = Vec3::new(0.2, 1.0, 0.4);
 /// Radius for primary guide dots (Angstroms)
 const GUIDE_DOT_PRIMARY_RADIUS: f64 = 0.20;
 /// Radius for secondary guide dots (Angstroms)
@@ -1036,6 +1038,7 @@ pub fn tessellate_guide_placement(
 }
 
 /// Tessellate guide placement visuals using impostor rendering.
+/// Merge-candidate dots (overlapping existing atoms) are rendered in green with a rim highlight.
 pub fn tessellate_guide_placement_impostors(
     atom_impostor_mesh: &mut AtomImpostorMesh,
     bond_impostor_mesh: &mut BondImpostorMesh,
@@ -1043,17 +1046,28 @@ pub fn tessellate_guide_placement_impostors(
 ) {
     use crate::crystolecule::guided_placement::GuideDotType;
 
-    for dot in &visuals.guide_dots {
+    for (i, dot) in visuals.guide_dots.iter().enumerate() {
         let radius = match dot.dot_type {
             GuideDotType::Primary => GUIDE_DOT_PRIMARY_RADIUS,
             GuideDotType::Secondary => GUIDE_DOT_SECONDARY_RADIUS,
         };
 
-        // Guide dot sphere (magenta)
+        let is_merge = visuals
+            .merge_dot_flags
+            .get(i)
+            .copied()
+            .unwrap_or(false);
+
+        let color = if is_merge {
+            &GUIDE_DOT_MERGE_COLOR
+        } else {
+            &GUIDE_DOT_COLOR
+        };
+
         atom_impostor_mesh.add_atom_quad(
             &dot.position.as_vec3(),
             radius as f32,
-            &GUIDE_DOT_COLOR.to_array(),
+            &color.to_array(),
             0.3,
             0.0,
             &NO_RIM,

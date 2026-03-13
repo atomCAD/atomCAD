@@ -106,8 +106,9 @@ pub fn start_guided_placement(
         None => return GuidedPlacementStartResult::NoAtomHit,
     };
 
-    // Gather: atom source, hit atom info (atomic_number, position), and guided placement result
-    let (atom_source, hit_atom_info, placement_result) = {
+    // Gather: atom source, hit atom info (atomic_number, position), guided placement result,
+    // and merge targets for each guide dot (FixedDots mode only).
+    let (atom_source, hit_atom_info, placement_result, merge_targets) = {
         let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
             Some(s) => s,
             None => return GuidedPlacementStartResult::NoAtomHit,
@@ -147,12 +148,34 @@ pub fn start_guided_placement(
             bond_length_mode,
         );
 
+        // Compute merge targets for FixedDots guide dots.
+        // For each dot, check if an existing atom overlaps within MERGE_TOLERANCE.
+        let merge_targets = if let GuidedPlacementMode::FixedDots { guide_dots } = &placement.mode
+        {
+            let eval_cache_for_merge = if !is_diff_view {
+                structure_designer
+                    .get_selected_node_eval_cache()
+                    .and_then(|c| c.downcast_ref::<AtomEditEvalCache>())
+            } else {
+                None
+            };
+            compute_merge_targets(
+                result_structure,
+                guide_dots,
+                result_atom_id,
+                is_diff_view,
+                eval_cache_for_merge,
+            )
+        } else {
+            Vec::new()
+        };
+
         if is_diff_view {
             let atom = match result_structure.get_atom(result_atom_id) {
                 Some(a) => (a.atomic_number, a.position),
                 None => return GuidedPlacementStartResult::NoAtomHit,
             };
-            (None, (result_atom_id, atom), placement)
+            (None, (result_atom_id, atom), placement, merge_targets)
         } else {
             let eval_cache = match structure_designer.get_selected_node_eval_cache() {
                 Some(cache) => cache,
@@ -173,7 +196,7 @@ pub fn start_guided_placement(
                 None => return GuidedPlacementStartResult::NoAtomHit,
             };
 
-            (Some(source), (result_atom_id, atom), placement)
+            (Some(source), (result_atom_id, atom), placement, merge_targets)
         }
     };
 
@@ -231,6 +254,7 @@ pub fn start_guided_placement(
                     guide_dots: guide_dots.clone(),
                     bond_distance: placement_result.bond_distance,
                     is_dative_bond: is_dative,
+                    merge_targets,
                 };
             }
             count
@@ -299,15 +323,24 @@ pub fn hit_test_guide_dots(
 }
 
 /// Attempt to place an atom at a guide dot hit by the ray (FixedDots mode),
-/// or at the preview position (FreeSphere mode).
+/// or at the preview position (FreeSphere / FreeRing mode).
 ///
-/// Returns true if an atom was placed, false if no valid placement target was found.
+/// If the placement position overlaps an existing atom within `MERGE_TOLERANCE`:
+/// - Same element: merge (bond anchor to existing atom, no new atom created).
+/// - Different element: replace existing atom's element, then bond anchor to it.
+///
+/// Returns true if an atom was placed or merged, false if no valid target was found.
 pub fn place_guided_atom(
     structure_designer: &mut StructureDesigner,
     ray_start: &DVec3,
     ray_dir: &DVec3,
 ) -> bool {
-    // Phase 1: Extract state and determine placement position (immutable borrow)
+    // Phase 1: Extract state, determine placement position, and detect merge target
+    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
+        Some(data) => data.output_diff,
+        None => return false,
+    };
+
     let placement_info = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
@@ -319,6 +352,7 @@ pub fn place_guided_atom(
                 anchor_atom_id,
                 guide_dots,
                 is_dative_bond,
+                merge_targets,
                 ..
             }) => {
                 let dot_index = match hit_test_guide_dots(ray_start, ray_dir, guide_dots) {
@@ -326,7 +360,10 @@ pub fn place_guided_atom(
                     None => return false,
                 };
                 let position = guide_dots[dot_index].position;
-                Some((*anchor_atom_id, position, *is_dative_bond))
+                let merge_target = merge_targets
+                    .get(dot_index)
+                    .and_then(|mt| mt.clone());
+                Some((*anchor_atom_id, position, *is_dative_bond, merge_target))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
                 anchor_atom_id,
@@ -335,10 +372,10 @@ pub fn place_guided_atom(
                 is_dative_bond,
                 ..
             }) => {
-                // Use ray-sphere intersection for placement
                 let dative = *is_dative_bond;
+                let anchor = *anchor_atom_id;
                 ray_sphere_nearest_point(ray_start, ray_dir, center, *radius)
-                    .map(|hit_pos| (*anchor_atom_id, hit_pos, dative))
+                    .map(|hit_pos| (anchor, hit_pos, dative, None))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing {
                 anchor_atom_id,
@@ -351,8 +388,8 @@ pub fn place_guided_atom(
                 is_dative_bond,
                 ..
             }) => {
-                // Find the closest point on the ring, then compute positions
                 let dative = *is_dative_bond;
+                let anchor = *anchor_atom_id;
                 let cone_half_angle = cone_half_angle_for_ring(*num_ring_dots);
                 ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius)
                     .map(|point_on_ring| {
@@ -366,20 +403,57 @@ pub fn place_guided_atom(
                             *num_ring_dots,
                             cone_half_angle,
                         );
-                        // Place at the first position (the one closest to cursor click)
-                        (*anchor_atom_id, positions[0], dative)
+                        (anchor, positions[0], dative, None)
                     })
             }
             _ => None,
         }
     };
 
-    let (anchor_atom_id, position, is_dative_bond) = match placement_info {
+    let (anchor_atom_id, position, is_dative_bond, pre_computed_merge) = match placement_info {
         Some(info) => info,
         None => return false,
     };
 
-    // Phase 2: Add atom and bond to diff
+    // For FreeSphere/FreeRing, detect merge target at placement time (not pre-computed).
+    // For FixedDots, the merge target was pre-computed in start_guided_placement.
+    // We need to resolve the anchor_atom_id from diff space back to result space for exclusion.
+    let merge_target = if pre_computed_merge.is_some() {
+        pre_computed_merge
+    } else {
+        // Check result structure for nearby atoms at the placement position.
+        let result_structure = structure_designer.get_atomic_structure_from_selected_node();
+        match result_structure {
+            Some(rs) => {
+                let eval_cache = if !is_diff_view {
+                    structure_designer
+                        .get_selected_node_eval_cache()
+                        .and_then(|c| c.downcast_ref::<AtomEditEvalCache>())
+                } else {
+                    None
+                };
+                // In diff view, anchor_atom_id IS the result atom ID.
+                // In result view, we need to find the result atom ID from the diff atom ID.
+                let anchor_result_id = if is_diff_view {
+                    anchor_atom_id
+                } else {
+                    eval_cache
+                        .and_then(|c| c.provenance.diff_to_result.get(&anchor_atom_id).copied())
+                        .unwrap_or(anchor_atom_id)
+                };
+                find_merge_target_at_position(
+                    rs,
+                    &position,
+                    anchor_result_id,
+                    is_diff_view,
+                    eval_cache,
+                )
+            }
+            None => None,
+        }
+    };
+
+    // Phase 2: Add/merge atom and bond in diff
     let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
         Some(data) => data,
         None => return false,
@@ -391,8 +465,23 @@ pub fn place_guided_atom(
     } else {
         crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE
     };
-    let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, position);
-    atom_edit_data.add_bond_in_diff(anchor_atom_id, new_atom_id, bond_order);
+
+    if let Some(target) = merge_target {
+        // Resolve merge target to diff atom ID
+        let target_diff_id = resolve_to_diff_id(atom_edit_data, &target);
+        if let Some(diff_id) = target_diff_id {
+            // Different element → replace
+            if target.atomic_number != atomic_number {
+                atom_edit_data.set_atomic_number_recorded(diff_id, atomic_number);
+            }
+            // Bond anchor to the existing/replaced atom
+            atom_edit_data.add_bond_in_diff(anchor_atom_id, diff_id, bond_order);
+        }
+    } else {
+        // No overlap — standard behavior: create new atom + bond
+        let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, position);
+        atom_edit_data.add_bond_in_diff(anchor_atom_id, new_atom_id, bond_order);
+    }
 
     // Transition back to Idle
     if let AtomEditTool::AddAtom(state) = &mut atom_edit_data.active_tool {
@@ -400,6 +489,96 @@ pub fn place_guided_atom(
     }
 
     true
+}
+
+/// Resolve a MergeTarget to a diff atom ID, promoting from base if needed.
+fn resolve_to_diff_id(
+    atom_edit_data: &mut super::atom_edit_data::AtomEditData,
+    target: &MergeTarget,
+) -> Option<u32> {
+    match &target.atom_source {
+        AtomSource::BasePassthrough(_) => {
+            // Promote base atom to diff: add with same element + position
+            Some(atom_edit_data.add_atom_recorded(target.atomic_number, target.position))
+        }
+        AtomSource::DiffMatchedBase { diff_id, .. } | AtomSource::DiffAdded(diff_id) => {
+            Some(*diff_id)
+        }
+    }
+}
+
+/// Compute merge targets for each guide dot in FixedDots mode.
+/// Returns a Vec parallel to guide_dots: `Some(target)` if overlapping, `None` otherwise.
+fn compute_merge_targets(
+    result_structure: &crate::crystolecule::atomic_structure::AtomicStructure,
+    guide_dots: &[GuideDot],
+    anchor_result_atom_id: u32,
+    is_diff_view: bool,
+    eval_cache: Option<&AtomEditEvalCache>,
+) -> Vec<Option<MergeTarget>> {
+    guide_dots
+        .iter()
+        .map(|dot| {
+            find_merge_target_at_position(
+                result_structure,
+                &dot.position,
+                anchor_result_atom_id,
+                is_diff_view,
+                eval_cache,
+            )
+        })
+        .collect()
+}
+
+/// Check if an existing atom overlaps a given position within MERGE_TOLERANCE.
+/// Excludes the anchor atom. Returns the closest overlapping atom as a MergeTarget.
+fn find_merge_target_at_position(
+    result_structure: &crate::crystolecule::atomic_structure::AtomicStructure,
+    position: &DVec3,
+    anchor_result_atom_id: u32,
+    is_diff_view: bool,
+    eval_cache: Option<&AtomEditEvalCache>,
+) -> Option<MergeTarget> {
+    let nearby_ids = result_structure.get_atoms_in_radius(position, MERGE_TOLERANCE);
+    let mut best: Option<(f64, MergeTarget)> = None;
+    for atom_id in nearby_ids {
+        // Skip the anchor atom itself
+        if atom_id == anchor_result_atom_id {
+            continue;
+        }
+        let atom = match result_structure.get_atom(atom_id) {
+            Some(a) => a,
+            None => continue,
+        };
+        // Skip delete markers
+        if atom.is_delete_marker() {
+            continue;
+        }
+        let dist = atom.position.distance(*position);
+        if dist > MERGE_TOLERANCE {
+            continue;
+        }
+        // Resolve provenance
+        let atom_source = if is_diff_view {
+            // In diff view, atom IDs are diff-native — treat as DiffAdded
+            AtomSource::DiffAdded(atom_id)
+        } else {
+            match eval_cache.and_then(|c| c.provenance.sources.get(&atom_id)) {
+                Some(source) => source.clone(),
+                None => continue,
+            }
+        };
+        let candidate = MergeTarget {
+            result_atom_id: atom_id,
+            atomic_number: atom.atomic_number,
+            position: atom.position,
+            atom_source,
+        };
+        if best.is_none() || dist < best.as_ref().unwrap().0 {
+            best = Some((dist, candidate));
+        }
+    }
+    best.map(|(_, target)| target)
 }
 
 /// Update the preview position for FreeSphere or FreeRing mode based on cursor ray.
