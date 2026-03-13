@@ -83,8 +83,8 @@ Roughness and metallic are **never overridden** by state — they always use ele
 
 An atom can have multiple states simultaneously (e.g., selected + frozen, or selected + delete marker). Only **one** rim color is displayed. Priority from highest to lowest:
 
-1. **Selected** — always takes visual priority; user needs to see what they're about to act on
-2. **Marked / Secondary Marked** — transient measurement UI, needs immediate visibility
+1. **Marked / Secondary Marked** — transient measurement UI, needs immediate visibility even when atom is also selected
+2. **Selected** — user needs to see what they're about to act on
 3. **Delete Marker** — structural semantic, important but less transient
 4. **Frozen** — persistent state, lowest priority since it's the most "background" information
 

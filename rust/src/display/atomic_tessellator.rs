@@ -880,10 +880,8 @@ fn get_atom_impostor_appearance(
         (atom_info.color, 0.25, 0.0)
     };
 
-    // State priority for rim color only: Selected > Marked/SecondaryMarked > Delete Marker > Frozen
-    let rim_color = if atom.is_selected() {
-        SELECTED_RIM_COLOR
-    } else if matches!(
+    // State priority for rim color only: Marked/SecondaryMarked > Selected > Delete Marker > Frozen
+    let rim_color = if matches!(
         display_state,
         AtomDisplayState::Marked | AtomDisplayState::SecondaryMarked
     ) {
@@ -892,6 +890,8 @@ fn get_atom_impostor_appearance(
             AtomDisplayState::SecondaryMarked => SECONDARY_MARKED_RIM_COLOR,
             _ => unreachable!(),
         }
+    } else if atom.is_selected() {
+        SELECTED_RIM_COLOR
     } else if atom.is_delete_marker() {
         DELETE_MARKER_RIM_COLOR
     } else if atom.is_frozen() {
