@@ -67,17 +67,17 @@ This adds 16 bytes per vertex (64 bytes per atom, since 4 vertices per quad). Fo
 
 All rim colors are applied in the tessellator (`atomic_tessellator.rs`). The atom's **albedo always reflects its element color** — no more color overrides for state. Delete markers and unchanged markers don't have real element identities; their atomic numbers map to appropriate colors in the element color lookup (dark neutral `(0.2, 0.2, 0.2)` for delete markers, light blue `(0.4, 0.6, 0.9)` for unchanged markers), just as unknown atoms (atomic_number=0) already map to gray `(0.5, 0.5, 0.5)`.
 
-| State | Rim Color | Rim Intensity | Roughness | Metallic | Notes |
-|-------|-----------|---------------|-----------|----------|-------|
-| Normal | — | 0.0 | — | — | No rim |
-| **Selected** | Magenta `(1.0, 0.2, 1.0)` | 0.8 | 0.15 | — | Replaces full magenta override |
-| **Frozen** | Ice blue `(0.5, 0.85, 1.0)` | 0.7 | 0.05 | 0.6 | Icy/glassy appearance |
-| **Marked** (measurement) | Yellow `(1.0, 1.0, 0.0)` | 0.8 | — | — | Primary measurement target |
-| **Secondary Marked** | Blue `(0.0, 0.5, 1.0)` | 0.8 | — | — | Secondary measurement target |
-| **Delete Marker** | Red `(0.9, 0.1, 0.1)` | 0.8 | 0.5 | — | Albedo from element lookup (dark neutral) |
-| **Unchanged Marker** | — | 0.0 | 0.7 | — | Ghost atoms in diff view (bond endpoints that didn't change). Albedo from element lookup (light blue). No rim needed. Displayed as "Unknown" in UI. |
+| State | Rim Color | Rim Intensity | Notes |
+|-------|-----------|---------------|-------|
+| Normal | — | 0.0 | No rim |
+| **Selected** | Magenta `(1.0, 0.2, 1.0)` | 0.8 | Replaces full magenta override |
+| **Frozen** | Ice blue `(0.5, 0.85, 1.0)` | 0.7 | Visible indicator for frozen state |
+| **Marked** (measurement) | Yellow `(1.0, 1.0, 0.0)` | 0.8 | Primary measurement target |
+| **Secondary Marked** | Blue `(0.0, 0.5, 1.0)` | 0.8 | Secondary measurement target |
+| **Delete Marker** | Red `(0.9, 0.1, 0.1)` | 0.8 | Albedo from element lookup (dark neutral) |
+| **Unchanged Marker** | — | 0.0 | Ghost atoms in diff view (bond endpoints that didn't change). Albedo from element lookup (light blue). No rim needed. Displayed as "Unknown" in UI. |
 
-A "—" in Roughness or Metallic means no override (element default, or falls through to a lower-priority state per the priority rules below).
+Roughness and metallic are **never overridden** by state — they always use element defaults. Only the rim color changes per state. This keeps the atom's albedo recognizable under all lighting conditions.
 
 ### Priority Order (Overlapping States)
 
@@ -90,16 +90,16 @@ An atom can have multiple states simultaneously (e.g., selected + frozen, or sel
 
 **Unchanged Marker** is excluded from priority ordering because it has no rim (intensity 0). When no higher-priority state is active, its material overrides apply normally.
 
-The highest-priority active state wins **both** rim color and material overrides. There is no fall-through or per-field merging — one state controls the entire visual. For material fields that the winning state doesn't define, element defaults are used.
+The highest-priority active state wins the rim color. There is no per-field merging — one state controls the rim. Roughness, metallic, and albedo are never affected by state priority.
 
 Albedo is not part of the priority system — it is always the element color. Atoms without real element identities (delete markers, unchanged markers) get their albedo from the element color lookup, which maps their special atomic numbers to appropriate colors.
 
 Examples:
 
-- **Selected + frozen**: rim = magenta, roughness = 0.15, metallic = element default (all from selected).
-- **Selected + delete marker**: rim = magenta, roughness = 0.15 (all from selected). Albedo is the delete marker's element color (dark neutral) — not an override, just what the element lookup returns for this atom type.
-- **Delete marker + frozen**: rim = red, roughness = 0.5, metallic = element default (all from delete marker).
-- **Marked + frozen**: rim = yellow, roughness and metallic = element defaults (marked defines no material overrides).
+- **Selected + frozen**: rim = magenta (from selected). Material = element defaults.
+- **Selected + delete marker**: rim = magenta (from selected). Albedo is the delete marker's element color (dark neutral).
+- **Delete marker + frozen**: rim = red (from delete marker). Material = element defaults.
+- **Marked + frozen**: rim = yellow (from marked). Material = element defaults.
 
 ### Bond Highlighting
 

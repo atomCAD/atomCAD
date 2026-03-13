@@ -57,14 +57,14 @@ const UNCHANGED_MARKER_ROUGHNESS: f32 = 0.7;
 const ANCHOR_ARROW_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0);
 
 // Rim highlight colors [R, G, B, intensity]
-const SELECTED_RIM_COLOR: [f32; 4] = [1.0, 0.2, 1.0, 0.8]; // Magenta
-const FROZEN_RIM_COLOR: [f32; 4] = [0.5, 0.85, 1.0, 0.7]; // Ice blue
-const MARKED_RIM_COLOR: [f32; 4] = [1.0, 1.0, 0.0, 0.8]; // Yellow
-const SECONDARY_MARKED_RIM_COLOR: [f32; 4] = [0.0, 0.5, 1.0, 0.8]; // Blue
-const DELETE_MARKER_RIM_COLOR: [f32; 4] = [0.9, 0.1, 0.1, 0.8]; // Red
+const SELECTED_RIM_COLOR: [f32; 4] = [1.0, 0.2, 1.0, 1.0]; // Magenta
+const FROZEN_RIM_COLOR: [f32; 4] = [0.0, 0.7, 1.0, 1.0]; // Vivid cyan
+const MARKED_RIM_COLOR: [f32; 4] = [1.0, 1.0, 0.0, 1.0]; // Yellow
+const SECONDARY_MARKED_RIM_COLOR: [f32; 4] = [0.0, 0.5, 1.0, 1.0]; // Blue
+const DELETE_MARKER_RIM_COLOR: [f32; 4] = [0.9, 0.1, 0.1, 1.0]; // Red
 const NO_RIM: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 // Dark neutral albedo for delete markers in impostor path (rim provides the red signal)
-const DELETE_MARKER_IMPOSTOR_ALBEDO: Vec3 = Vec3::new(0.2, 0.2, 0.2);
+const DELETE_MARKER_IMPOSTOR_ALBEDO: Vec3 = Vec3::new(0.0, 0.0, 0.0);
 // radius for anchor point spheres (Angstroms)
 const ANCHOR_SPHERE_RADIUS: f64 = 0.3;
 // radius for anchor arrow cylinders (Angstroms)
@@ -861,16 +861,14 @@ pub fn tessellate_atomic_structure_impostors(
 /// Get atom appearance for impostor rendering.
 /// Returns (albedo, roughness, metallic, rim_color).
 /// Albedo is always element color (no selection color override).
-/// Rim color and material overrides follow state priority:
+/// Roughness and metallic are always element defaults (no state overrides).
+/// Rim color follows state priority:
 /// Selected > Marked/SecondaryMarked > Delete Marker > Frozen.
-/// The winning state controls rim color AND material overrides.
-/// For material fields the winning state doesn't define, element defaults are used.
 fn get_atom_impostor_appearance(
     atom: &Atom,
     display_state: AtomDisplayState,
 ) -> (Vec3, f32, f32, [f32; 4]) {
-    // Base element color and material (no selection override)
-    // Delete markers use dark neutral albedo (rim provides the red signal)
+    // Base element color and material (no state overrides for any property except rim)
     let (base_color, base_roughness, base_metallic) = if atom.is_delete_marker() {
         (DELETE_MARKER_IMPOSTOR_ALBEDO, DELETE_MARKER_ROUGHNESS, 0.0)
     } else if atom.is_unchanged_marker() {
@@ -882,32 +880,27 @@ fn get_atom_impostor_appearance(
         (atom_info.color, 0.25, 0.0)
     };
 
-    // State priority: Selected > Marked/SecondaryMarked > Delete Marker > Frozen
-    // The highest-priority active state wins both rim color and material overrides.
-    // For material fields the winning state doesn't define, element defaults are used.
-    if atom.is_selected() {
-        // Selected: magenta rim, roughness 0.15
-        (base_color, 0.15, base_metallic, SELECTED_RIM_COLOR)
+    // State priority for rim color only: Selected > Marked/SecondaryMarked > Delete Marker > Frozen
+    let rim_color = if atom.is_selected() {
+        SELECTED_RIM_COLOR
     } else if matches!(
         display_state,
         AtomDisplayState::Marked | AtomDisplayState::SecondaryMarked
     ) {
-        // Marked: yellow/blue rim, no material overrides (element defaults)
-        let rim = match display_state {
+        match display_state {
             AtomDisplayState::Marked => MARKED_RIM_COLOR,
             AtomDisplayState::SecondaryMarked => SECONDARY_MARKED_RIM_COLOR,
             _ => unreachable!(),
-        };
-        (base_color, base_roughness, base_metallic, rim)
+        }
     } else if atom.is_delete_marker() {
-        // Delete Marker: red rim, roughness 0.5
-        (base_color, 0.5, base_metallic, DELETE_MARKER_RIM_COLOR)
+        DELETE_MARKER_RIM_COLOR
     } else if atom.is_frozen() {
-        // Frozen: ice blue rim, roughness 0.05, metallic 0.6
-        (base_color, 0.05, 0.6, FROZEN_RIM_COLOR)
+        FROZEN_RIM_COLOR
     } else {
-        (base_color, base_roughness, base_metallic, NO_RIM)
-    }
+        NO_RIM
+    };
+
+    (base_color, base_roughness, base_metallic, rim_color)
 }
 
 /// Tessellate a single atom as an impostor (4 vertices, 6 indices)

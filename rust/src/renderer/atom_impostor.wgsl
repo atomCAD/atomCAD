@@ -149,7 +149,10 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     let up = normalize(cross(view_dir, right));
     
     // Create camera-facing billboard quad
-    let world_offset = (input.quad_offset.x * right + input.quad_offset.y * up) * input.radius;
+    // Pad quad beyond sphere radius so edge fragments (where rim is strongest)
+    // are not clipped by the quad boundary, especially under perspective projection.
+    let quad_padding = 1.15;
+    let world_offset = (input.quad_offset.x * right + input.quad_offset.y * up) * input.radius * quad_padding;
     let quad_world_pos = world_center + world_offset;
     
     // Transform to clip space
@@ -175,7 +178,9 @@ struct AtomFragmentOutput {
 
 @fragment
 fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
-    // Early discard for fragments outside the circle (following reference)
+    // Early discard for fragments outside the padded quad circle.
+    // quad_uv ranges from -1..1 across the padded quad, so the sphere edge
+    // is at dist_sq = 1/quad_padding^2. Discard beyond the quad circle.
     let dist_sq = dot(input.quad_uv, input.quad_uv);
     if dist_sq > 1.0 {
         discard;
@@ -212,37 +217,31 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
         discard;
     }
 
-    // Calculate the sphere surface z-offset (following reference)
-    let z_normalized = sqrt(1.0 - dist_sq);
-    let z_offset = z_normalized * input.radius;
-
-    // Adjust clip position using projection matrix (following reference)
-    let proj_z_col = camera.proj_matrix[2];
-    let center_clip = camera.view_proj * vec4<f32>(input.world_center, 1.0);
-    let adjusted_clip_pos = center_clip + proj_z_col * z_offset;
-    let depth = adjusted_clip_pos.z / adjusted_clip_pos.w;
-
     // Calculate hit point and normal (following reference)
     let hit_point = ray_origin + t * ray_dir;
     let world_normal = normalize(hit_point - input.world_center);
+
+    // Compute depth from the actual hit point
+    let hit_clip = camera.view_proj * vec4<f32>(hit_point, 1.0);
+    let depth = hit_clip.z / hit_clip.w;
+
+    // Rim highlight: blend rim color into albedo before PBR so the rim is lit
+    let V = normalize(camera.camera_position - hit_point);
+    let NdotV = max(dot(world_normal, V), 0.0);
+    let rim_start = 0.18;
+    let rim_full = 0.22;
+    let rim_factor = smoothstep(rim_start, rim_full, 1.0 - NdotV);
+    let rim_blend = rim_factor * input.rim_color.a;
+    let rim_albedo = mix(input.albedo, input.rim_color.rgb, rim_blend);
 
     // PBR lighting (returns linear HDR)
     var color = calculate_pbr_lighting(
         hit_point,
         world_normal,
-        input.albedo,
+        rim_albedo,
         input.roughness,
         input.metallic
     );
-
-    // Rim highlight (in linear HDR space, before tone mapping)
-    let V = normalize(camera.camera_position - hit_point);
-    let NdotV = max(dot(world_normal, V), 0.0);
-    let rim_start = 0.3;
-    let rim_full = 0.8;
-    let rim_factor = smoothstep(rim_start, rim_full, 1.0 - NdotV);
-    let rim_blend = rim_factor * input.rim_color.a;
-    color = mix(color, input.rim_color.rgb, rim_blend);
 
     // Tone mapping and gamma correction
     color = color / (color + vec3(1.0));
