@@ -129,9 +129,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let ambient = mix(ambient_diffuse, ambient_specular, input.metallic);
 
     var color = light_contribution * (diffuse + specular) + ambient;
-	
-    color = color / (color + vec3(1.0)); // Tone mapping
-    color = pow(color, vec3(1.0/2.2)); // Gamma correction
+
+    // Tone mapping and gamma correction
+    color = color / (color + vec3(1.0));
+    color = pow(color, vec3(1.0 / 2.2));
 
     return vec4<f32>(color, 1.0);
 }

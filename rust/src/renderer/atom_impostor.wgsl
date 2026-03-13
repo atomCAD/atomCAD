@@ -26,6 +26,7 @@ struct AtomImpostorVertexInput {
     @location(3) albedo: vec3<f32>,
     @location(4) roughness: f32,
     @location(5) metallic: f32,
+    @location(6) rim_color: vec4<f32>,
 }
 
 struct AtomImpostorVertexOutput {
@@ -37,6 +38,7 @@ struct AtomImpostorVertexOutput {
     @location(4) roughness: f32,
     @location(5) metallic: f32,
     @location(6) quad_uv: vec2<f32>, // For ray-casting (-1 to 1 range)
+    @location(7) rim_color: vec4<f32>,
 }
 
 // ============================================================================
@@ -119,10 +121,8 @@ fn calculate_pbr_lighting(
     let ambient = mix(ambient_diffuse, ambient_specular, metallic);
 
     var color = light_contribution * (diffuse + specular) + ambient;
-	
-    color = color / (color + vec3(1.0)); // Tone mapping
-    color = pow(color, vec3(1.0/2.2)); // Gamma correction
 
+    // Return linear HDR color — tone mapping and gamma applied by caller
     return color;
 }
 
@@ -163,7 +163,8 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     output.roughness = input.roughness;
     output.metallic = input.metallic;
     output.quad_uv = input.quad_offset; // -1 to 1 range for ray-casting
-    
+    output.rim_color = input.rim_color;
+
     return output;
 }
 
@@ -225,14 +226,27 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
     let hit_point = ray_origin + t * ray_dir;
     let world_normal = normalize(hit_point - input.world_center);
 
-    // Calculate PBR lighting using the shared function
-    let color = calculate_pbr_lighting(
+    // PBR lighting (returns linear HDR)
+    var color = calculate_pbr_lighting(
         hit_point,
         world_normal,
         input.albedo,
         input.roughness,
         input.metallic
     );
+
+    // Rim highlight (in linear HDR space, before tone mapping)
+    let V = normalize(camera.camera_position - hit_point);
+    let NdotV = max(dot(world_normal, V), 0.0);
+    let rim_start = 0.6;
+    let rim_full = 0.9;
+    let rim_factor = smoothstep(rim_start, rim_full, 1.0 - NdotV);
+    let rim_blend = rim_factor * input.rim_color.a;
+    color = mix(color, input.rim_color.rgb, rim_blend);
+
+    // Tone mapping and gamma correction
+    color = color / (color + vec3(1.0));
+    color = pow(color, vec3(1.0 / 2.2));
 
     var output: AtomFragmentOutput;
     output.depth = depth;

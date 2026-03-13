@@ -55,6 +55,11 @@ const UNCHANGED_MARKER_RADIUS: f64 = 0.4;
 const UNCHANGED_MARKER_ROUGHNESS: f32 = 0.7;
 // color for anchor arrows in diff structures (orange)
 const ANCHOR_ARROW_COLOR: Vec3 = Vec3::new(1.0, 0.6, 0.0);
+
+// Rim highlight colors [R, G, B, intensity]
+const SELECTED_RIM_COLOR: [f32; 4] = [1.0, 0.2, 1.0, 0.8]; // Magenta
+const FROZEN_RIM_COLOR: [f32; 4] = [0.5, 0.85, 1.0, 0.7]; // Ice blue
+const NO_RIM: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 // radius for anchor point spheres (Angstroms)
 const ANCHOR_SPHERE_RADIUS: f64 = 0.3;
 // radius for anchor arrow cylinders (Angstroms)
@@ -833,6 +838,7 @@ pub fn tessellate_atomic_structure_impostors(
                     &DELETE_MARKER_COLOR.to_array(),
                     DELETE_MARKER_ROUGHNESS,
                     0.0,
+                    &NO_RIM,
                 );
 
                 // Orange cylinder from anchor to atom's current position
@@ -847,6 +853,33 @@ pub fn tessellate_atomic_structure_impostors(
     }
 }
 
+/// Get atom appearance for impostor rendering.
+/// Returns (albedo, roughness, metallic, rim_color).
+/// Albedo is always element color (no selection color override).
+/// Rim color and material overrides follow state priority: Selected > Frozen.
+fn get_atom_impostor_appearance(atom: &Atom) -> (Vec3, f32, f32, [f32; 4]) {
+    // Base element color and material (no selection override)
+    let (base_color, base_roughness, base_metallic) = if atom.is_delete_marker() {
+        (DELETE_MARKER_COLOR, DELETE_MARKER_ROUGHNESS, 0.0)
+    } else if atom.is_unchanged_marker() {
+        (UNCHANGED_MARKER_COLOR, UNCHANGED_MARKER_ROUGHNESS, 0.0)
+    } else {
+        let atom_info = ATOM_INFO
+            .get(&(atom.atomic_number as i32))
+            .unwrap_or(&DEFAULT_ATOM_INFO);
+        (atom_info.color, 0.25, 0.0)
+    };
+
+    // State priority: Selected > Frozen
+    if atom.is_selected() {
+        (base_color, 0.15, base_metallic, SELECTED_RIM_COLOR)
+    } else if atom.is_frozen() {
+        (base_color, 0.05, 0.6, FROZEN_RIM_COLOR)
+    } else {
+        (base_color, base_roughness, base_metallic, NO_RIM)
+    }
+}
+
 /// Tessellate a single atom as an impostor (4 vertices, 6 indices)
 pub fn tessellate_atom_impostor(
     atom_impostor_mesh: &mut AtomImpostorMesh,
@@ -855,9 +888,9 @@ pub fn tessellate_atom_impostor(
     visualization: &AtomicStructureVisualization,
 ) {
     let radius = get_displayed_atom_radius(atom, visualization) as f32;
-    let (color, roughness, metallic) = get_atom_color_and_material(atom);
+    let (color, roughness, metallic, rim_color) = get_atom_impostor_appearance(atom);
 
-    // Override color for marked atoms
+    // Override color for marked atoms (Phase 2 will replace this with rim highlights)
     let color = match display_state {
         AtomDisplayState::Marked => MARKER_COLOR,
         AtomDisplayState::SecondaryMarked => SECONDARY_MARKER_COLOR,
@@ -871,6 +904,7 @@ pub fn tessellate_atom_impostor(
         &color.to_array(),
         roughness,
         metallic,
+        &rim_color,
     );
 }
 
@@ -1005,6 +1039,7 @@ pub fn tessellate_guide_placement_impostors(
             &GUIDE_DOT_COLOR.to_array(),
             0.3,
             0.0,
+            &NO_RIM,
         );
 
         // Orange cylinder from anchor to guide dot

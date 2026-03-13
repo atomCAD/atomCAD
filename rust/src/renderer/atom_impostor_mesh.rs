@@ -10,6 +10,7 @@ pub struct AtomImpostorVertex {
     pub albedo: [f32; 3],          // Atom color
     pub roughness: f32,
     pub metallic: f32,
+    pub rim_color: [f32; 4], // Rim highlight [R, G, B, intensity]
 }
 
 impl AtomImpostorVertex {
@@ -20,6 +21,7 @@ impl AtomImpostorVertex {
         albedo: &[f32; 3],
         roughness: f32,
         metallic: f32,
+        rim_color: &[f32; 4],
     ) -> Self {
         Self {
             center_position: [center_position.x, center_position.y, center_position.z],
@@ -28,6 +30,7 @@ impl AtomImpostorVertex {
             albedo: *albedo,
             roughness,
             metallic,
+            rim_color: *rim_color,
         }
     }
 
@@ -72,6 +75,12 @@ impl AtomImpostorVertex {
                     shader_location: 5,
                     format: wgpu::VertexFormat::Float32,
                 },
+                // rim_color
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 11]>() as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
             ],
         }
     }
@@ -108,6 +117,7 @@ impl AtomImpostorMesh {
         albedo: &[f32; 3],
         roughness: f32,
         metallic: f32,
+        rim_color: &[f32; 4],
     ) -> u32 {
         let base_index = self.vertices.len() as u32;
 
@@ -127,6 +137,7 @@ impl AtomImpostorMesh {
                 albedo,
                 roughness,
                 metallic,
+                rim_color,
             ));
         }
 
