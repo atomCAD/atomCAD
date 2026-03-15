@@ -126,9 +126,9 @@ fn tessellate_non_lightweight_content(
     let mut wireframe_mesh = LineMesh::new();
     let mut atom_impostor_mesh = AtomImpostorMesh::new();
     let mut bond_impostor_mesh = BondImpostorMesh::new();
-    // Gadget impostor meshes for always-on-top guide dots
-    let mut gadget_atom_impostor_mesh = AtomImpostorMesh::new();
-    let mut gadget_bond_impostor_mesh = BondImpostorMesh::new();
+    // Gadget impostor meshes (kept for API compatibility, currently empty)
+    let gadget_atom_impostor_mesh = AtomImpostorMesh::new();
+    let gadget_bond_impostor_mesh = BondImpostorMesh::new();
 
     let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
         ball_and_stick_sphere_horizontal_divisions: 12,
@@ -172,12 +172,12 @@ fn tessellate_non_lightweight_content(
                             &atomic_tessellation_params,
                             &preferences.atomic_structure_visualization,
                         );
-                        // Render guide placement visuals in gadget pass (always on top)
+                        // Render guide placement visuals in main impostor pass (normal depth)
                         if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals
                         {
                             atomic_tessellator::tessellate_guide_placement_impostors(
-                                &mut gadget_atom_impostor_mesh,
-                                &mut gadget_bond_impostor_mesh,
+                                &mut atom_impostor_mesh,
+                                &mut bond_impostor_mesh,
                                 visuals,
                             );
                         }
@@ -189,12 +189,12 @@ fn tessellate_non_lightweight_content(
                             atomic_structure,
                             &preferences.atomic_structure_visualization,
                         );
-                        // Render guide placement visuals in gadget pass (always on top)
+                        // Render guide placement visuals in main impostor pass (normal depth)
                         if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals
                         {
                             atomic_tessellator::tessellate_guide_placement_impostors(
-                                &mut gadget_atom_impostor_mesh,
-                                &mut gadget_bond_impostor_mesh,
+                                &mut atom_impostor_mesh,
+                                &mut bond_impostor_mesh,
                                 visuals,
                             );
                         }

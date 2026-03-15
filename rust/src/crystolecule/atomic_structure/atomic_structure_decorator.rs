@@ -23,6 +23,9 @@ pub struct GuidePlacementVisuals {
     /// Per-dot merge flag: true if this dot overlaps an existing atom (same or different element).
     /// Parallel to `guide_dots`. Empty means no merge info available.
     pub merge_dot_flags: Vec<bool>,
+    /// Per-dot merge target atom ID (in result structure). Parallel to `guide_dots`.
+    /// `Some(id)` if this dot overlaps an existing atom; used to apply rim highlight.
+    pub merge_target_atom_ids: Vec<Option<u32>>,
 }
 
 /// Visual data for a wireframe sphere (free sphere placement mode).

@@ -611,16 +611,29 @@ impl AtomEditData {
                     output
                         .decorator_mut()
                         .set_atom_display_state(output_id, AtomDisplayState::Marked);
-                    if let Some(anchor_atom) = output.get_atom(output_id) {
+                    let anchor_pos =
+                        output.get_atom(output_id).map(|a| a.position);
+                    if let Some(anchor_pos) = anchor_pos {
                         let merge_flags: Vec<bool> =
                             merge_targets.iter().map(|mt| mt.is_some()).collect();
+                        let merge_atom_ids: Vec<Option<u32>> = merge_targets
+                            .iter()
+                            .map(|mt| mt.as_ref().map(|t| t.result_atom_id))
+                            .collect();
+                        // Mark merge target atoms with magenta rim highlight
+                        for &atom_id in merge_atom_ids.iter().flatten() {
+                            output
+                                .decorator_mut()
+                                .set_atom_display_state(atom_id, AtomDisplayState::Marked);
+                        }
                         output.decorator_mut().guide_placement_visuals =
                             Some(GuidePlacementVisuals {
-                                anchor_pos: anchor_atom.position,
+                                anchor_pos,
                                 guide_dots: guide_dots.clone(),
                                 wireframe_sphere: None,
                                 wireframe_ring: None,
                                 merge_dot_flags: merge_flags,
+                                merge_target_atom_ids: merge_atom_ids,
                             });
                     }
                 }
@@ -659,6 +672,7 @@ impl AtomEditData {
                                 }),
                                 wireframe_ring: None,
                                 merge_dot_flags: Vec::new(),
+                                merge_target_atom_ids: Vec::new(),
                             });
                     }
                 }
@@ -699,6 +713,7 @@ impl AtomEditData {
                                     radius: *ring_radius,
                                 }),
                                 merge_dot_flags: Vec::new(),
+                                merge_target_atom_ids: Vec::new(),
                             });
                     }
                 }
