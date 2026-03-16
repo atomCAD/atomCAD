@@ -1919,6 +1919,19 @@ impl StructureDesigner {
         // Select the node
         self.select_node(node_id);
 
+        // Set active tool to Add Atom so the user can immediately start placing atoms
+        if let Some(data) = self.get_node_network_data_mut(node_id) {
+            if let Some(atom_edit_data) = data
+                .as_any_mut()
+                .downcast_mut::<crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData>()
+            {
+                atom_edit_data.active_tool =
+                    crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool::AddAtom(
+                        crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::Idle,
+                    );
+            }
+        }
+
         // Clear undo stack — new project should have no history
         self.undo_stack.clear();
 
@@ -1964,10 +1977,32 @@ impl StructureDesigner {
     }
 
     /// Sets direct editing mode and marks the design as dirty.
+    /// When entering direct editing mode, sets the active tool to Add Atom.
     pub fn set_direct_editing_mode(&mut self, mode: bool) {
         if self.direct_editing_mode != mode {
             self.direct_editing_mode = mode;
             self.is_dirty = true;
+
+            // When switching to direct editing mode, set the active tool to Add Atom
+            // so the user is ready to start placing atoms immediately.
+            if mode {
+                let node_id = self
+                    .get_active_node_network()
+                    .and_then(|n| n.active_node_id);
+                if let Some(node_id) = node_id {
+                    if let Some(data) = self.get_node_network_data_mut(node_id) {
+                        if let Some(atom_edit_data) = data
+                            .as_any_mut()
+                            .downcast_mut::<crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData>()
+                        {
+                            atom_edit_data.active_tool =
+                                crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool::AddAtom(
+                                    crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::Idle,
+                                );
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -2027,6 +2062,12 @@ impl StructureDesigner {
                 0,     // dest param index (molecule)
                 false, // not multi
             );
+        }
+
+        // Hide import_xyz node — only atom_edit should be displayed in direct mode.
+        // Without this, both nodes render their atoms, causing visual duplication.
+        if let Some(network) = self.node_type_registry.node_networks.get_mut("Main") {
+            network.displayed_node_ids.remove(&import_xyz_id);
         }
 
         // Re-select atom_edit (add_node may have changed selection)
