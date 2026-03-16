@@ -574,14 +574,30 @@ class _StructureDesignerViewportState
       }
     }
 
-    // Ctrl+M: Minimize selected atoms (Default tool only)
+    // Ctrl+Shift+M: Minimize selected atoms (Default tool only)
     if (event is KeyDownEvent &&
         HardwareKeyboard.instance.isControlPressed &&
+        HardwareKeyboard.instance.isShiftPressed &&
         event.logicalKey == LogicalKeyboardKey.keyM) {
       final tool = atom_edit_api.getActiveAtomEditTool();
       if (tool == APIAtomEditTool.default_) {
         widget.graphModel.atomEditMinimize(
           APIMinimizeFreezeMode.freeSelected,
+        );
+        renderingNeeded();
+        return KeyEventResult.handled;
+      }
+    }
+
+    // Ctrl+M: Minimize unfrozen atoms (Default tool only)
+    if (event is KeyDownEvent &&
+        HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isShiftPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyM) {
+      final tool = atom_edit_api.getActiveAtomEditTool();
+      if (tool == APIAtomEditTool.default_) {
+        widget.graphModel.atomEditMinimize(
+          APIMinimizeFreezeMode.freeAll,
         );
         renderingNeeded();
         return KeyEventResult.handled;

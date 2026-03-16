@@ -690,7 +690,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
         childrenPadding: const EdgeInsets.fromLTRB(
             AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
-        initiallyExpanded: false,
+        initiallyExpanded: widget.directEditingMode,
         dense: true,
         children: [
           _buildMinimizeSectionContent(),
@@ -711,7 +711,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
         childrenPadding: const EdgeInsets.fromLTRB(
             AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
-        initiallyExpanded: false,
+        initiallyExpanded: widget.directEditingMode,
         dense: true,
         children: [
           _buildAddHydrogenSectionContent(),
@@ -721,39 +721,46 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   }
 
   Widget _buildAddHydrogenSectionContent() {
+    final hasSelected = _stagedData?.hasSelectedAtoms ?? false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    widget.model.atomEditAddHydrogen(selectedOnly: false);
-                  },
-                  icon: const Icon(Icons.blur_on, size: 18),
-                  label: const Text('Add H\nall'),
-                  style: AppButtonStyles.primary,
-                ),
-              ),
+            _buildIconActionButton(
+              icon: Icons.add_circle,
+              tooltip: 'Add hydrogen to all atoms',
+              onPressed: () {
+                widget.model.atomEditAddHydrogen(selectedOnly: false);
+              },
+            ),
+            _buildIconActionButton(
+              icon: Icons.add_circle_outline,
+              tooltip: 'Add hydrogen to selected atoms (Ctrl+H)',
+              onPressed: hasSelected
+                  ? () {
+                      widget.model.atomEditAddHydrogen(selectedOnly: true);
+                    }
+                  : null,
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: (_stagedData?.hasSelectedAtoms ?? false)
-                      ? () {
-                          widget.model.atomEditAddHydrogen(selectedOnly: true);
-                        }
-                      : null,
-                  icon: const Icon(Icons.filter_center_focus, size: 18),
-                  label: const Text('Add H\nselected (Ctrl+H)'),
-                  style: AppButtonStyles.primary,
-                ),
-              ),
+            Container(width: 1, height: 24, color: Colors.grey.shade300),
+            const SizedBox(width: 8),
+            _buildIconActionButton(
+              icon: Icons.remove_circle,
+              tooltip: 'Remove hydrogen from all atoms',
+              onPressed: () {
+                widget.model.atomEditRemoveHydrogen(selectedOnly: false);
+              },
+            ),
+            _buildIconActionButton(
+              icon: Icons.remove_circle_outline,
+              tooltip: 'Remove hydrogen from selected atoms (Ctrl+Shift+H)',
+              onPressed: hasSelected
+                  ? () {
+                      widget.model.atomEditRemoveHydrogen(selectedOnly: true);
+                    }
+                  : null,
             ),
           ],
         ),
@@ -769,42 +776,6 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             ),
           ),
         ],
-        const SizedBox(height: AppSpacing.small),
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    widget.model.atomEditRemoveHydrogen(selectedOnly: false);
-                  },
-                  icon: const Icon(Icons.blur_off, size: 18),
-                  label: const Text('Remove H\nall'),
-                  style: AppButtonStyles.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: (_stagedData?.hasSelectedAtoms ?? false)
-                      ? () {
-                          widget.model
-                              .atomEditRemoveHydrogen(selectedOnly: true);
-                        }
-                      : null,
-                  icon:
-                      const Icon(Icons.filter_center_focus_outlined, size: 18),
-                  label: const Text('Remove H\nselected (Ctrl+Shift+H)'),
-                  style: AppButtonStyles.primary,
-                ),
-              ),
-            ),
-          ],
-        ),
         if (widget.model.lastRemoveHydrogenMessage.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.small),
           Text(
@@ -818,6 +789,34 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildIconActionButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4.0),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.all(6.0),
+            child: Icon(
+              icon,
+              size: 20,
+              color: enabled ? Colors.grey[800] : Colors.grey[400],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -873,145 +872,88 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text('Continuous minimization during drag'),
+              Text('Continuous minimization during drag',
+                  style: TextStyle(fontSize: 12)),
             ],
           ),
         ),
         const SizedBox(height: AppSpacing.small),
-        // Freeze control buttons (2x2 grid)
+        // Freeze controls + Minimize buttons in a single icon row
         Row(
           children: [
-            Expanded(
-              child: SizedBox(
-                height: 32,
-                child: OutlinedButton(
-                  onPressed: hasSelected
-                      ? () {
-                          atom_edit_api.atomEditSelectionToFrozen();
-                          widget.model.refreshFromKernel();
-                        }
-                      : null,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 4)),
-                  child: const Text('Freeze selected',
-                      style: TextStyle(fontSize: 11)),
-                ),
-              ),
+            _buildIconActionButton(
+              icon: Icons.ac_unit,
+              tooltip: 'Freeze selected',
+              onPressed: hasSelected
+                  ? () {
+                      atom_edit_api.atomEditSelectionToFrozen();
+                      widget.model.refreshFromKernel();
+                    }
+                  : null,
             ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: SizedBox(
-                height: 32,
-                child: OutlinedButton(
-                  onPressed: hasSelected
-                      ? () {
-                          atom_edit_api.atomEditSelectionToUnfrozen();
-                          widget.model.refreshFromKernel();
-                        }
-                      : null,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 4)),
-                  child: const Text('Unfreeze selected',
-                      style: TextStyle(fontSize: 11)),
-                ),
-              ),
+            _buildIconActionButton(
+              icon: Icons.whatshot,
+              tooltip: 'Unfreeze selected',
+              onPressed: hasSelected
+                  ? () {
+                      atom_edit_api.atomEditSelectionToUnfrozen();
+                      widget.model.refreshFromKernel();
+                    }
+                  : null,
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 32,
-                child: OutlinedButton(
-                  onPressed: hasFrozen
-                      ? () {
-                          atom_edit_api.atomEditFrozenToSelection();
-                          widget.model.refreshFromKernel();
-                        }
-                      : null,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 4)),
-                  child: const Text('Select frozen',
-                      style: TextStyle(fontSize: 11)),
-                ),
-              ),
+            _buildIconActionButton(
+              icon: Icons.playlist_add_check,
+              tooltip: 'Select frozen',
+              onPressed: hasFrozen
+                  ? () {
+                      atom_edit_api.atomEditFrozenToSelection();
+                      widget.model.refreshFromKernel();
+                    }
+                  : null,
             ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: SizedBox(
-                height: 32,
-                child: OutlinedButton(
-                  onPressed: hasFrozen
-                      ? () {
-                          atom_edit_api.atomEditClearFrozen();
-                          widget.model.refreshFromKernel();
-                        }
-                      : null,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 4)),
-                  child: const Text('Clear frozen',
-                      style: TextStyle(fontSize: 11)),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Minimize buttons
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: _hasDiffChanges
-                      ? () {
-                          widget.model.atomEditMinimize(
-                            APIMinimizeFreezeMode.freezeBase,
-                          );
-                        }
-                      : null,
-                  icon: const Icon(Icons.lock_outline, size: 18),
-                  label: const Text('Minimize\ndiff'),
-                  style: AppButtonStyles.primary,
-                ),
-              ),
+            _buildIconActionButton(
+              icon: Icons.clear_all,
+              tooltip: 'Clear frozen',
+              onPressed: hasFrozen
+                  ? () {
+                      atom_edit_api.atomEditClearFrozen();
+                      widget.model.refreshFromKernel();
+                    }
+                  : null,
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    widget.model.atomEditMinimize(
-                      APIMinimizeFreezeMode.freeAll,
-                    );
-                  },
-                  icon: const Icon(Icons.lock_open, size: 18),
-                  label: const Text('Minimize\nunfrozen'),
-                  style: AppButtonStyles.primary,
-                ),
-              ),
-            ),
+            Container(width: 1, height: 24, color: Colors.grey.shade300),
             const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: hasSelected
-                      ? () {
-                          widget.model.atomEditMinimize(
-                            APIMinimizeFreezeMode.freeSelected,
-                          );
-                        }
-                      : null,
-                  icon: const Icon(Icons.filter_center_focus, size: 18),
-                  label: const Text('Minimize\nselected (Ctrl+M)'),
-                  style: AppButtonStyles.primary,
-                ),
-              ),
+            _buildIconActionButton(
+              icon: Icons.lock_outline,
+              tooltip: 'Minimize diff',
+              onPressed: _hasDiffChanges
+                  ? () {
+                      widget.model.atomEditMinimize(
+                        APIMinimizeFreezeMode.freezeBase,
+                      );
+                    }
+                  : null,
+            ),
+            _buildIconActionButton(
+              icon: Icons.lock_open,
+              tooltip: 'Minimize unfrozen (Ctrl+M)',
+              onPressed: () {
+                widget.model.atomEditMinimize(
+                  APIMinimizeFreezeMode.freeAll,
+                );
+              },
+            ),
+            _buildIconActionButton(
+              icon: Icons.filter_center_focus,
+              tooltip: 'Minimize selected (Ctrl+Shift+M)',
+              onPressed: hasSelected
+                  ? () {
+                      widget.model.atomEditMinimize(
+                        APIMinimizeFreezeMode.freeSelected,
+                      );
+                    }
+                  : null,
             ),
           ],
         ),

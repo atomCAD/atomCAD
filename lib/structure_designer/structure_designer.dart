@@ -314,13 +314,14 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 ),
                 expand: false,
               ),
-              const SizedBox(height: 8),
               // Atom Edit Editor (via NodeDataWidget, which routes to AtomEditEditor)
-              Expanded(
-                child: NodeDataWidget(
+              Section(
+                title: 'Editor',
+                content: NodeDataWidget(
                   graphModel: graphModel,
                   directEditingMode: true,
                 ),
+                expand: true,
               ),
             ],
           ),
@@ -378,16 +379,20 @@ class _StructureDesignerState extends State<StructureDesigner> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // Second row: Atomic structure visualization
+                  // Second row: Atomic structure visualization + mode switch
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
                     children: [
                       AtomicStructureVisualizationWidget(model: graphModel),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 1,
+                        height: 20,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 8),
+                      ModeToggleButtons(model: graphModel),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  // Mode switch radio buttons
-                  NodeNetworkModeRadioButtons(model: graphModel),
                 ],
               ),
             ),

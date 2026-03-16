@@ -1,10 +1,104 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../common/ui_common.dart';
 import 'atomic_structure_visualization_widget.dart';
 import 'structure_designer_model.dart';
 
+/// Icon toggle button for mode switching (Direct Editing / Node Network).
+class ModeToggleButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool isSelected;
+  final bool enabled;
+  final VoidCallback? onPressed;
+
+  const ModeToggleButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.isSelected,
+    this.enabled = true,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: isSelected ? AppColors.primaryAccent : Colors.transparent,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4.0),
+          onTap: enabled ? onPressed : null,
+          child: Padding(
+            padding: const EdgeInsets.all(2.0),
+            child: Icon(
+              icon,
+              size: 20,
+              color: isSelected
+                  ? Colors.white
+                  : (enabled ? Colors.grey[700] : Colors.grey[400]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Mode switch buttons showing Direct Editing and Node Network toggle icons.
+/// Used in both Direct Editing and Node Network display sections.
+class ModeToggleButtons extends StatelessWidget {
+  final StructureDesignerModel model;
+
+  const ModeToggleButtons({
+    super.key,
+    required this.model,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider.value(
+      value: model,
+      child: Consumer<StructureDesignerModel>(
+        builder: (context, model, child) {
+          final isDirectMode = model.directEditingMode;
+          final canSwitchToDirect =
+              isDirectMode || model.canSwitchToDirectEditingMode;
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ModeToggleButton(
+                icon: Icons.edit,
+                tooltip: canSwitchToDirect
+                    ? 'Direct Editing Mode'
+                    : 'Select a displayed atom_edit node to enter Direct Editing Mode',
+                isSelected: isDirectMode,
+                enabled: canSwitchToDirect,
+                onPressed: isDirectMode
+                    ? null
+                    : () => model.switchToDirectEditingMode(),
+              ),
+              ModeToggleButton(
+                icon: Icons.account_tree,
+                tooltip: 'Node Network Mode',
+                isSelected: !isDirectMode,
+                onPressed: isDirectMode
+                    ? () => model.switchToNodeNetworkMode()
+                    : null,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// Simplified Display widget for Direct Editing Mode.
-/// Shows atomic visualization toggle and mode switch radio buttons.
+/// Shows atomic visualization toggle and mode switch in a single row.
 class DirectModeDisplayWidget extends StatelessWidget {
   final StructureDesignerModel model;
 
@@ -15,143 +109,14 @@ class DirectModeDisplayWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: model,
-      child: Consumer<StructureDesignerModel>(
-        builder: (context, model, child) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Atomic visualization toggle (Ball and Stick / Space Filling)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  AtomicStructureVisualizationWidget(model: model),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Mode switch radio buttons
-              _buildModeRadioButtons(model),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildModeRadioButtons(StructureDesignerModel model) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        _ModeRadioTile(
-          key: const Key('mode_radio_direct_editing'),
-          label: 'Direct Editing',
-          selected: true,
-          onTap: null,
-        ),
-        _ModeRadioTile(
-          key: const Key('mode_radio_node_network'),
-          label: 'Node Network',
-          selected: false,
-          onTap: () => model.switchToNodeNetworkMode(),
-        ),
+        AtomicStructureVisualizationWidget(model: model),
+        const SizedBox(width: 8),
+        Container(width: 1, height: 20, color: Colors.grey.shade400),
+        const SizedBox(width: 8),
+        ModeToggleButtons(model: model),
       ],
-    );
-  }
-}
-
-/// Mode radio button used in both Direct and Node Network display sections.
-class _ModeRadioTile extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  const _ModeRadioTile({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null || selected;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 1.0),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: Radio<bool>(
-                value: true,
-                groupValue: selected ? true : false,
-                onChanged: enabled ? (_) => onTap?.call() : null,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: enabled ? null : Colors.grey,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Mode switch radio buttons for the Node Network Mode Display section.
-/// Shows "Direct Editing" (conditionally enabled) and "Node Network" (selected).
-class NodeNetworkModeRadioButtons extends StatelessWidget {
-  final StructureDesignerModel model;
-
-  const NodeNetworkModeRadioButtons({
-    super.key,
-    required this.model,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: model,
-      child: Consumer<StructureDesignerModel>(
-        builder: (context, model, child) {
-          final canSwitch = model.canSwitchToDirectEditingMode;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Tooltip(
-                message: canSwitch
-                    ? ''
-                    : 'Select a displayed atom_edit node to enter Direct Editing Mode',
-                child: _ModeRadioTile(
-                  key: const Key('mode_radio_direct_editing'),
-                  label: 'Direct Editing',
-                  selected: false,
-                  onTap: canSwitch
-                      ? () => model.switchToDirectEditingMode()
-                      : null,
-                ),
-              ),
-              _ModeRadioTile(
-                key: const Key('mode_radio_node_network'),
-                label: 'Node Network',
-                selected: true,
-                onTap: null,
-              ),
-            ],
-          );
-        },
-      ),
     );
   }
 }
