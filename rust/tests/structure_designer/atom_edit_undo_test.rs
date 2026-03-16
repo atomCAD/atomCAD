@@ -2386,6 +2386,8 @@ fn undo_atom_edit_sequence_restores_initial_state() {
 
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::drag_selected_by_delta;
+use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::transform_selected;
+use rust_lib_flutter_cad::util::transform::Transform;
 
 #[test]
 fn drag_frozen_diff_atom_not_moved() {
@@ -2464,4 +2466,110 @@ fn drag_no_frozen_returns_none_frozen() {
     assert_eq!(atom1.position, DVec3::new(1.0, 0.0, 0.0));
 
     assert!(matches!(status, DragFrozenStatus::NoneFrozen));
+}
+
+// =============================================================================
+// Frozen atoms: drag via transform_selected (issue #247)
+// =============================================================================
+
+/// Frozen diff atom must not be moved by transform_selected.
+/// Regression test for issue #247: frozen atoms were moved by the transform panel.
+#[test]
+fn transform_selected_frozen_diff_atom_not_moved() {
+    let mut designer = setup_atom_edit();
+
+    // Add two diff atoms
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_recorded(6, DVec3::new(0.0, 0.0, 0.0));
+        data.add_atom_recorded(7, DVec3::new(2.0, 0.0, 0.0));
+        // Select both
+        data.selection.selected_diff_atoms.insert(1);
+        data.selection.selected_diff_atoms.insert(2);
+        // Set selection centroid (midpoint of the two atoms)
+        data.selection.selection_transform = Some(Transform::new(
+            DVec3::new(1.0, 0.0, 0.0),
+            glam::f64::DQuat::IDENTITY,
+        ));
+        // Freeze atom 1
+        data.frozen_diff_atoms.insert(1);
+    }
+
+    // Apply a transform that moves to (2, 0, 0) absolute — delta = +1 x
+    let abs_transform = Transform::new(DVec3::new(2.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
+    with_atom_edit_undo(&mut designer, "Move atoms", |sd| {
+        transform_selected(sd, &abs_transform);
+    });
+
+    let data = get_data_mut(&mut designer);
+    // Frozen atom 1 must NOT have moved
+    let atom1 = data.diff.get_atom(1).unwrap();
+    assert_eq!(
+        atom1.position,
+        DVec3::new(0.0, 0.0, 0.0),
+        "Frozen diff atom must not be moved by transform_selected"
+    );
+    // Non-frozen atom 2 must have moved
+    let atom2 = data.diff.get_atom(2).unwrap();
+    assert_eq!(
+        atom2.position,
+        DVec3::new(3.0, 0.0, 0.0),
+        "Non-frozen diff atom must be moved by transform_selected"
+    );
+}
+
+/// When all selected diff atoms are frozen, transform_selected must not move any.
+#[test]
+fn transform_selected_all_frozen_diff_atoms_not_moved() {
+    let mut designer = setup_atom_edit();
+
+    {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_recorded(6, DVec3::new(0.0, 0.0, 0.0));
+        data.add_atom_recorded(6, DVec3::new(2.0, 0.0, 0.0));
+        data.selection.selected_diff_atoms.insert(1);
+        data.selection.selected_diff_atoms.insert(2);
+        data.selection.selection_transform = Some(Transform::new(
+            DVec3::new(1.0, 0.0, 0.0),
+            glam::f64::DQuat::IDENTITY,
+        ));
+        // Freeze both atoms
+        data.frozen_diff_atoms.insert(1);
+        data.frozen_diff_atoms.insert(2);
+    }
+
+    let abs_transform = Transform::new(DVec3::new(5.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
+    with_atom_edit_undo(&mut designer, "Move atoms", |sd| {
+        transform_selected(sd, &abs_transform);
+    });
+
+    let data = get_data_mut(&mut designer);
+    assert_eq!(data.diff.get_atom(1).unwrap().position, DVec3::new(0.0, 0.0, 0.0));
+    assert_eq!(data.diff.get_atom(2).unwrap().position, DVec3::new(2.0, 0.0, 0.0));
+}
+
+/// Frozen base atoms must not contribute to the status count when dragging
+/// (regression: drag_selected_by_delta correctly filters frozen base atoms).
+#[test]
+fn drag_frozen_base_atom_returns_all_frozen() {
+    let mut designer = setup_atom_edit();
+
+    // Manually insert a base atom ID into selected_base_atoms and freeze it.
+    // (No actual wired input — gather_base_atom_promotion_info will return empty,
+    // but frozen_count must still reflect the frozen atom.)
+    {
+        let data = get_data_mut(&mut designer);
+        data.selection.selected_base_atoms.insert(42);
+        data.frozen_base_atoms.insert(42);
+    }
+
+    begin_atom_edit_drag(&mut designer);
+    let status = drag_selected_by_delta(&mut designer, DVec3::new(1.0, 0.0, 0.0));
+    end_atom_edit_drag(&mut designer);
+
+    // The frozen base atom was the only selected atom; nothing moved.
+    assert!(
+        matches!(status, DragFrozenStatus::AllFrozen),
+        "Dragging only frozen base atoms must return AllFrozen"
+    );
 }

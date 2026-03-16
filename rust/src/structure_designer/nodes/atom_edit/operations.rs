@@ -230,10 +230,15 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
         let base_info: Vec<BaseAtomPromotionInfo> = if atom_edit_data.output_diff {
             Vec::new()
         } else {
-            gather_base_atom_promotion_info(
-                structure_designer,
-                &atom_edit_data.selection.selected_base_atoms,
-            )
+            // Filter out frozen base atoms so they are not moved by the transform.
+            let non_frozen_base: std::collections::HashSet<u32> = atom_edit_data
+                .selection
+                .selected_base_atoms
+                .iter()
+                .filter(|id| !atom_edit_data.frozen_base_atoms.contains(id))
+                .copied()
+                .collect();
+            gather_base_atom_promotion_info(structure_designer, &non_frozen_base)
         };
 
         (current_transform, base_info)
