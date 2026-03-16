@@ -13,15 +13,25 @@ class MainContentArea extends StatelessWidget {
   /// Whether the division between viewport and node network is vertical (true) or horizontal (false)
   final bool verticalDivision;
 
+  /// When true, render only the viewport (no node network editor or node data panel).
+  final bool directEditingMode;
+
   const MainContentArea({
     required this.graphModel,
     required this.nodeNetworkKey,
     this.verticalDivision = true,
+    this.directEditingMode = false,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (directEditingMode) {
+      return Expanded(
+        child: StructureDesignerViewport(graphModel: graphModel),
+      );
+    }
+
     return Expanded(
       child: ResizableContainer(
         direction: verticalDivision ? Axis.vertical : Axis.horizontal,

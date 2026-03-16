@@ -12,6 +12,8 @@ import 'geometry_visualization_widget.dart';
 import 'import_cnnd_library_dialog.dart';
 import 'node_networks_list/node_networks_panel.dart';
 import 'node_display_widget.dart';
+import 'node_data/node_data_widget.dart';
+import 'direct_mode_display_widget.dart';
 import 'camera_control_widget.dart';
 import 'preferences_window.dart';
 import 'main_content_area.dart';
@@ -236,90 +238,197 @@ class _StructureDesignerState extends State<StructureDesigner> {
             ),
             // Main content
             Expanded(
-              child: Row(
-                children: [
-                  // Node Networks List Panel (left sidebar)
-                  Container(
-                    width: 200,
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        right: BorderSide(
-                          color: Colors.grey,
-                          width: 1,
-                        ),
+              child: Consumer<StructureDesignerModel>(
+                builder: (context, model, child) {
+                  return Stack(
+                    children: [
+                      Row(
+                        children: [
+                          // Left sidebar
+                          model.directEditingMode
+                              ? _buildDirectEditingSidebar()
+                              : _buildNodeNetworkSidebar(),
+                          // Main content area
+                          MainContentArea(
+                            graphModel: graphModel,
+                            nodeNetworkKey: nodeNetworkKey,
+                            verticalDivision: verticalDivision,
+                            directEditingMode: model.directEditingMode,
+                          ),
+                        ],
                       ),
-                    ),
-                    child: Column(
-                      children: [
-                        // Display settings section
-                        Section(
-                          title: 'Display',
-                          content: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8.0, vertical: 4.0),
-                            child: Column(
-                              children: [
-                                // First row: Geometry visualization and Node display
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    // Geometry visualization widget (left aligned)
-                                    GeometryVisualizationWidget(
-                                        model: graphModel),
+                      // Validation warning banner (direct editing mode only)
+                      if (model.directEditingMode &&
+                          model.hasValidationErrors)
+                        _buildValidationWarningBanner(),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-                                    // Node display widget (right aligned)
-                                    NodeDisplayWidget(model: graphModel),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                // Second row: Atomic structure visualization
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    AtomicStructureVisualizationWidget(
-                                        model: graphModel),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          expand: false,
-                        ),
-                        const SizedBox(height: 8),
-                        // Camera Control section
-                        Section(
-                          title: 'Camera control',
-                          content: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8.0, vertical: 4.0),
-                            child: CameraControlWidget(model: graphModel),
-                          ),
-                          expand: false,
-                        ),
-                        const SizedBox(height: 8),
-                        // Node networks section
-                        Expanded(
-                          flex: 5,
-                          child: Section(
-                            title: 'Node networks',
-                            content: NodeNetworksPanel(model: graphModel),
-                            expand: true,
-                          ),
-                        ),
-                      ],
-                    ),
+  /// Builds the left sidebar for Direct Editing Mode.
+  /// Contains simplified Display, Camera Control, and the atom edit editor.
+  Widget _buildDirectEditingSidebar() {
+    return Container(
+      width: 280,
+      decoration: const BoxDecoration(
+        border: Border(
+          right: BorderSide(
+            color: Colors.grey,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Simplified Display section (atomic visualization + mode switch)
+          Section(
+            title: 'Display',
+            content: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0, vertical: 4.0),
+              child: DirectModeDisplayWidget(model: graphModel),
+            ),
+            expand: false,
+          ),
+          const SizedBox(height: 8),
+          // Camera Control section
+          Section(
+            title: 'Camera control',
+            content: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0, vertical: 4.0),
+              child: CameraControlWidget(model: graphModel),
+            ),
+            expand: false,
+          ),
+          const SizedBox(height: 8),
+          // Atom Edit Editor (via NodeDataWidget, which routes to AtomEditEditor)
+          Expanded(
+            child: NodeDataWidget(
+              graphModel: graphModel,
+              directEditingMode: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the left sidebar for Node Network Mode.
+  /// Contains full Display, Camera Control, and Node Networks panel.
+  Widget _buildNodeNetworkSidebar() {
+    return Container(
+      width: 200,
+      decoration: const BoxDecoration(
+        border: Border(
+          right: BorderSide(
+            color: Colors.grey,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Display settings section
+          Section(
+            title: 'Display',
+            content: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0, vertical: 4.0),
+              child: Column(
+                children: [
+                  // First row: Geometry visualization and Node display
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GeometryVisualizationWidget(model: graphModel),
+                      NodeDisplayWidget(model: graphModel),
+                    ],
                   ),
-                  // Main content area
-                  MainContentArea(
-                    graphModel: graphModel,
-                    nodeNetworkKey: nodeNetworkKey,
-                    verticalDivision: verticalDivision,
+                  const SizedBox(height: 8),
+                  // Second row: Atomic structure visualization
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      AtomicStructureVisualizationWidget(model: graphModel),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Mode switch radio buttons
+                  NodeNetworkModeRadioButtons(model: graphModel),
+                ],
+              ),
+            ),
+            expand: false,
+          ),
+          const SizedBox(height: 8),
+          // Camera Control section
+          Section(
+            title: 'Camera control',
+            content: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0, vertical: 4.0),
+              child: CameraControlWidget(model: graphModel),
+            ),
+            expand: false,
+          ),
+          const SizedBox(height: 8),
+          // Node networks section
+          Expanded(
+            flex: 5,
+            child: Section(
+              title: 'Node networks',
+              content: NodeNetworksPanel(model: graphModel),
+              expand: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds the validation warning banner shown at the top of the viewport
+  /// in Direct Editing Mode when the network has validation errors.
+  Widget _buildValidationWarningBanner() {
+    return Positioned(
+      top: 8,
+      left: 288, // Sidebar width (280) + some offset
+      right: 8,
+      child: Center(
+        child: Material(
+          elevation: 2,
+          borderRadius: BorderRadius.circular(6),
+          color: Colors.orange.shade100,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => graphModel.switchToNodeNetworkMode(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 18, color: Colors.orange.shade800),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Network has issues \u2014 click to inspect in Node Network Mode.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.orange.shade900,
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

@@ -15,12 +15,14 @@ class AtomEditEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIAtomEditData? data;
   final StructureDesignerModel model;
+  final bool directEditingMode;
 
   const AtomEditEditor({
     super.key,
     required this.nodeId,
     required this.data,
     required this.model,
+    this.directEditingMode = false,
   });
 
   @override
@@ -79,43 +81,45 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with title, info button, and view selector
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Text('Atom Edit',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(width: 8),
-                  const NodeDescriptionButton(nodeTypeName: 'atom_edit'),
-                ],
-              ),
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment<bool>(
-                    value: false,
-                    label: Text('Result'),
-                  ),
-                  ButtonSegment<bool>(
-                    value: true,
-                    label: Text('Diff'),
-                  ),
-                ],
-                selected: {_stagedData!.outputDiff},
-                onSelectionChanged: (Set<bool> selection) {
-                  widget.model.toggleAtomEditOutputDiff();
-                },
-                style: ButtonStyle(
-                  visualDensity: AppSpacing.compactVerticalDensity,
+          // Header with title, info button, and view selector (hidden in direct editing mode)
+          if (!widget.directEditingMode) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text('Atom Edit',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(width: 8),
+                    const NodeDescriptionButton(nodeTypeName: 'atom_edit'),
+                  ],
                 ),
-              ),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text('Result'),
+                    ),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('Diff'),
+                    ),
+                  ],
+                  selected: {_stagedData!.outputDiff},
+                  onSelectionChanged: (Set<bool> selection) {
+                    widget.model.toggleAtomEditOutputDiff();
+                  },
+                  style: ButtonStyle(
+                    visualDensity: AppSpacing.compactVerticalDensity,
+                  ),
+                ),
+              ],
+            ),
+            // Diff options and stats (only when there's content)
+            if (_hasOutputModeContent()) ...[
+              const SizedBox(height: AppSpacing.medium),
+              _buildOutputModeRow(),
             ],
-          ),
-          // Diff options and stats (only when there's content)
-          if (_hasOutputModeContent()) ...[
-            const SizedBox(height: AppSpacing.medium),
-            _buildOutputModeRow(),
           ],
           const SizedBox(height: AppSpacing.medium),
           // Tool buttons row
@@ -168,8 +172,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               _buildCollapsibleTransformSection(),
             ],
           ],
-          // Error on stale entries checkbox (only in result view)
-          if (!_stagedData!.outputDiff) ...[
+          // Error on stale entries checkbox (only in result view, hidden in direct editing mode)
+          if (!widget.directEditingMode && !_stagedData!.outputDiff) ...[
             const SizedBox(height: AppSpacing.large),
             Row(
               children: [

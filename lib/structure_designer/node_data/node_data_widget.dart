@@ -90,10 +90,12 @@ class PropertyEditorKeys {
 /// based on the currently selected node in the graph.
 class NodeDataWidget extends StatelessWidget {
   final StructureDesignerModel graphModel;
+  final bool directEditingMode;
 
   const NodeDataWidget({
     super.key,
     required this.graphModel,
+    this.directEditingMode = false,
   });
 
   @override
@@ -304,6 +306,7 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: atomEditData,
           model: model,
+          directEditingMode: directEditingMode,
         );
       case 'rect':
         // Fetch the rectangle data here in the parent widget

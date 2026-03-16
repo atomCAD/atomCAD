@@ -1430,6 +1430,10 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Whether any network in the design has validation errors.
+  bool get hasValidationErrors =>
+      nodeNetworkNames.any((n) => n.validationErrors != null);
+
   /// Imports an XYZ file in direct editing mode.
   /// Returns an empty string on success, or an error message on failure.
   String importXyzDirectMode(String filePath) {
