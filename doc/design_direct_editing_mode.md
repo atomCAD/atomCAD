@@ -306,69 +306,173 @@ All existing atom_edit keyboard shortcuts work identically in both modes:
 
 ---
 
+## Architecture — Where Things Live
+
+### Rust Side
+
+**`StructureDesigner` (`rust/src/structure_designer/structure_designer.rs`)**:
+- Add `direct_editing_mode: bool` field (default `true`).
+- Add `can_switch_to_direct_editing_mode(&self) -> bool` method that checks the
+  switching criteria against the active network's state (walks `nodes` HashMap
+  looking for displayed atom_edit nodes, checks selection).
+- Add `set_direct_editing_mode(&mut self, mode: bool)` setter that also marks dirty.
+
+**Serialization (`rust/src/structure_designer/serialization/`)**:
+- Add `direct_editing_mode: Option<bool>` to the serializable structure (the top-level
+  `.cnnd` JSON object). `Option` for backward compatibility — `None` deserializes as
+  `false`.
+
+**API layer (`rust/src/api/structure_designer/`)**:
+- Expose `get_direct_editing_mode() -> bool` (sync).
+- Expose `set_direct_editing_mode(mode: bool)` (sync, marks dirty).
+- Expose `can_switch_to_direct_editing_mode() -> bool` (sync).
+- Expose `new_project_direct_editing()` — creates a fresh design with one `Main`
+  network containing a single `atom_edit` node (displayed, selected, return node).
+  This is a new Rust-side function; the existing `new_project()` behavior for Node
+  Network Mode remains unchanged (blank network).
+- Expose `import_xyz_direct_editing(file_path: String) -> ApiResult` — calls
+  `new_project_direct_editing()`, then adds an `import_xyz` node, sets its file
+  path, loads the file, wires its output to the atom_edit's `molecule` input, and
+  clears the undo stack. Returns success/error.
+
+> **Why put Import XYZ logic in Rust?** The operation involves creating nodes, wiring
+> them, loading files, and clearing undo — all Rust-side state. Doing it in one Rust
+> function avoids multiple round-trips and keeps the operation atomic.
+
+### Flutter Side
+
+**`StructureDesignerModel` (`lib/structure_designer/structure_designer_model.dart`)**:
+- Add `bool directEditingMode` property, refreshed from Rust via
+  `get_direct_editing_mode()` during `refreshFromKernel()`.
+- Add `bool get canSwitchToDirectEditingMode` — calls the Rust API.
+- `switchToDirectEditingMode()`: calls `set_direct_editing_mode(true)` +
+  `refreshFromKernel()` + `notifyListeners()`.
+- `switchToNodeNetworkMode()`: calls `set_direct_editing_mode(false)` +
+  `refreshFromKernel()` + `notifyListeners()`.
+- `newProject()`: if currently in direct editing mode (or always for a fresh start),
+  call `new_project_direct_editing()` instead of the existing blank-network creation.
+- `importXyzDirectMode(String filePath)`: calls `import_xyz_direct_editing(filePath)`,
+  then `refreshFromKernel()`.
+
+**`structure_designer.dart` (main widget)**:
+- Reads `model.directEditingMode` to decide menu items and sidebar layout.
+- In direct mode, the left sidebar renders:
+  1. Simplified Display section (new `DirectModeDisplayWidget`)
+  2. Camera Control (existing `CameraControlWidget`)
+  3. Atom Edit Editor in a scrollable container
+
+**Getting atom_edit data for the sidebar**: Reuse `NodeDataWidget` placed directly in
+the sidebar. It already routes to `AtomEditEditor` based on the selected node type.
+Since the atom_edit node is always selected in direct mode, `NodeDataWidget` will
+always render `AtomEditEditor`. Pass `directEditingMode: true` through to it. This
+avoids duplicating the node-type routing logic.
+
+**`MainContentArea` (`lib/structure_designer/main_content_area.dart`)**:
+- Add `bool directEditingMode` parameter.
+- When `true`: render only `StructureDesignerViewport` (no resizable split, no
+  `NetworkEditorTabs`, no `NodeDataWidget` — those are in the sidebar now).
+- When `false`: current behavior unchanged.
+
+**Validation warning banner**: Rendered as a positioned widget at the top of the
+viewport in `structure_designer.dart` (or `structure_designer_viewport.dart`).
+Visibility controlled by: `model.directEditingMode && model.hasValidationErrors`.
+The `hasValidationErrors` property already exists (used to show red borders on
+network names in the list view). Clicking the banner switches to Node Network Mode.
+
+### Mode Switching Side Effects
+
+**Switching to Direct Editing Mode** (`switchToDirectEditingMode()`):
+1. Set `direct_editing_mode = true` on Rust side.
+2. Set active tool to Add Atom (so user is ready to edit).
+3. Refresh UI — sidebar switches to direct layout, menu items update.
+
+**Switching to Node Network Mode** (`switchToNodeNetworkMode()`):
+1. Set `direct_editing_mode = false` on Rust side.
+2. Refresh UI — full layout restored, all panels visible.
+3. No tool change — the atom_edit node remains selected with whatever tool was active.
+
+No other side effects. The node network, selection, and display state are untouched
+by mode switching — only the UI presentation changes.
+
+---
+
 ## Implementation Plan
 
-### Phase 1: Mode State and Switching
+### Phase 1: Rust — Mode State and Serialization
 
-1. Add `bool directEditingMode` property to `StructureDesignerModel`.
-2. Add `bool canSwitchToDirectEditingMode` getter that checks the criteria.
+1. Add `direct_editing_mode: bool` to `StructureDesigner`.
+2. Add `can_switch_to_direct_editing_mode()` method.
+3. Add `direct_editing_mode` to `.cnnd` serialization/deserialization
+   (`Option<bool>`, defaults to `false`).
+4. Add `new_project_direct_editing()` — creates Main network with one atom_edit
+   node (displayed, selected, return node).
+5. Add `import_xyz_direct_editing(file_path)` — calls `new_project_direct_editing()`,
+   then adds import_xyz node, sets path, loads, wires to atom_edit, clears undo.
+6. Expose all new functions in the API layer.
+7. On load: read `direct_editing_mode` from file. If `true` but criteria not met,
+   set to `false` and include a warning in the load result.
+
+### Phase 2: Flutter — Model Integration
+
+1. Add `directEditingMode` property to `StructureDesignerModel`, fetched during
+   `refreshFromKernel()`.
+2. Add `canSwitchToDirectEditingMode` getter.
 3. Add `switchToDirectEditingMode()` / `switchToNodeNetworkMode()` methods.
-   Switching marks the file dirty.
-4. On `newProject()`, set `directEditingMode = true` and create the initial
-   single-atom_edit-node network.
-5. Persist `direct_editing_mode` field in .cnnd serialization (Rust side).
-6. On `loadNodeNetworks()`, read the persisted mode. If it says direct editing
-   but the criteria aren't met, fall back to Node Network Mode with a warning.
+4. Update `newProject()` to call `new_project_direct_editing()`.
+5. Add `importXyzDirectMode(String filePath)` method.
 
-### Phase 2: Menu Bar Conditional Rendering
+### Phase 3: Flutter — Menu Bar
 
-1. In `structure_designer.dart`, wrap menu items with `if (!model.directEditingMode)`
-   guards for items hidden in direct mode.
-2. Add "Switch to Node Network Mode" / "Switch to Direct Editing Mode" items to
-   the View menu, with conditional enable/disable.
+1. Wrap menu items with `if (!model.directEditingMode)` guards.
+2. Add mode-switch items to View menu with conditional enable/disable.
+3. Add "Import XYZ" item to File menu (direct mode only). The menu item handler
+   calls `_confirmDiscardChanges()`, opens file picker, then calls
+   `model.importXyzDirectMode(filePath)`.
 
-### Phase 3: Layout Switching
+### Phase 4: Flutter — Layout Switching
 
 1. In `structure_designer.dart`, conditionally render the left sidebar:
-   - **Direct mode**: Display (simplified) + Camera Control + Atom Edit Editor
-     (scrollable, from `NodeDataWidget` or directly `AtomEditEditor`)
-   - **Node Network mode**: current layout (Display + Camera + Node Networks panel)
-2. In `main_content_area.dart`, conditionally hide the node network editor panel:
-   - **Direct mode**: viewport fills entire main content area (no resizable split)
-   - **Node Network mode**: current resizable split
-3. Left sidebar width: ~280px in direct mode (wider than current 200px to accommodate
-   the atom_edit editor controls comfortably).
+   - **Direct mode**: simplified Display + Camera Control + `NodeDataWidget`
+     (which renders `AtomEditEditor` with `directEditingMode: true`) in a
+     scrollable column. Sidebar width ~280px.
+   - **Node Network mode**: current layout unchanged.
+2. Pass `directEditingMode` to `MainContentArea`. When `true`, render only the
+   viewport (no resizable split).
 
-### Phase 4: Simplified Display Section
+### Phase 5: Flutter — Simplified Display Widget
 
-1. Create a `DirectModeDisplayWidget` (or parameterize the existing Display section)
-   that shows only atomic visualization toggle + mode radio buttons.
-2. Mode radio buttons call `switchToNodeNetworkMode()` /
-   `switchToDirectEditingMode()` on the model.
+1. Create `DirectModeDisplayWidget` containing:
+   - `AtomicStructureVisualizationWidget` (existing)
+   - Mode radio buttons ("Direct Editing" / "Node Network")
+2. "Node Network" radio button calls `switchToNodeNetworkMode()`.
+3. In Node Network Mode's Display section, add the mode radio buttons alongside
+   the existing controls. "Direct Editing" radio button calls
+   `switchToDirectEditingMode()` (disabled if `!canSwitchToDirectEditingMode`).
 
-### Phase 5: Atom Edit Editor Parameterization
+### Phase 6: Flutter — Atom Edit Editor Parameterization
 
 1. Add `bool directEditingMode` parameter to `AtomEditEditor` (default `false`).
-2. Wrap the hidden elements (header row, output mode toggle, diff options, error on
-   stale entries) with `if (!widget.directEditingMode)` guards.
-3. No other changes to the editor logic.
+2. Thread `directEditingMode` through `NodeDataWidget` → `AtomEditEditor`.
+3. Wrap hidden elements with `if (!widget.directEditingMode)` guards:
+   - Header row (title + NodeDescriptionButton)
+   - Output mode toggle (Result/Diff)
+   - Output mode options row
+   - Diff stats
+   - "Error on stale entries" checkbox
+4. No other changes to editor logic.
 
-### Phase 6: Initial State Setup
+### Phase 7: Flutter — Validation Warning Banner
 
-1. Ensure `newProject()` creates the correct initial state:
-   single network "Main", single `atom_edit` node, active + displayed + return node.
-2. Set default tool to Add Atom when entering direct editing mode.
-3. Ensure hybridization defaults to Auto.
+1. Add a positioned warning banner widget at the top of the viewport area.
+2. Visible when `model.directEditingMode && model.hasValidationErrors`.
+3. Text: "Network has issues — click to inspect in Node Network Mode."
+4. On click: call `switchToNodeNetworkMode()`.
 
-### Phase 7: Import XYZ
+### Phase 8: Flutter — Import XYZ
 
-1. Add `importXyzInDirectMode()` method to `StructureDesignerModel`:
-   - Confirms discard of unsaved changes (same as "New").
-   - Opens file picker for `.xyz` files.
-   - Calls `newProject()` to create a fresh design.
-   - Creates an `import_xyz` node, sets file path, loads file, wires to atom_edit input.
-   - Clears undo stack (fresh design).
-2. Add "Import XYZ" menu item in File menu (visible only in direct editing mode).
+1. Wire up the "Import XYZ" menu item handler:
+   confirm discard → file picker → `model.importXyzDirectMode(filePath)`.
+2. Show error dialog if the Rust API returns an error.
 
 ---
 
