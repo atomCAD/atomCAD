@@ -459,7 +459,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             const SizedBox(height: AppSpacing.medium),
             Row(
               children: [
-                Text('Hybridization:', style: TextStyle(fontSize: 13)),
+                Text('Hyb:', style: TextStyle(fontSize: 13)),
                 const SizedBox(width: 8),
                 SegmentedButton<APIHybridization>(
                   segments: const [

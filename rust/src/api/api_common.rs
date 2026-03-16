@@ -370,12 +370,6 @@ where
     }
 }
 
-pub fn add_sample_network(kernel: &mut StructureDesigner) {
-    kernel.add_node_network("sample");
-    // New networks don't have camera settings, ignore return value
-    let _ = kernel.set_active_node_network_name(Some("sample".to_string()));
-    kernel.add_node("cuboid", DVec2::new(30.0, 30.0));
-}
 
 pub fn refresh_structure_designer(
     cad_instance: &mut CADInstance,

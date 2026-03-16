@@ -1,6 +1,5 @@
 use crate::api::api_common::CAD_INSTANCE;
 use crate::api::api_common::CADInstance;
-use crate::api::api_common::add_sample_network;
 use crate::api::api_common::from_api_transform;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::refresh_structure_designer_auto;
@@ -124,10 +123,7 @@ async fn initialize_cad_instance_async() {
             cad_instance
                 .renderer
                 .update_background_mesh(&background_line_mesh);
-            add_sample_network(&mut cad_instance.structure_designer);
-            cad_instance
-                .structure_designer
-                .apply_node_display_policy(None);
+            cad_instance.structure_designer.new_project_direct_editing();
             cad_instance.structure_designer.mark_full_refresh();
             refresh_structure_designer_auto(cad_instance);
         }

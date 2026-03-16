@@ -34,6 +34,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
   // Whether the division between viewport and node network is vertical (true) or horizontal (false)
   bool verticalDivision = true;
 
+  // Resizable sidebar width for direct editing mode
+  double _directEditingSidebarWidth = 360;
+
   // GlobalKey to access the NodeNetwork widget state
   final GlobalKey<NodeNetworkState> nodeNetworkKey =
       GlobalKey<NodeNetworkState>();
@@ -275,49 +278,71 @@ class _StructureDesignerState extends State<StructureDesigner> {
   /// Builds the left sidebar for Direct Editing Mode.
   /// Contains simplified Display, Camera Control, and the atom edit editor.
   Widget _buildDirectEditingSidebar() {
-    return Container(
-      width: 280,
-      decoration: const BoxDecoration(
-        border: Border(
-          right: BorderSide(
-            color: Colors.grey,
-            width: 1,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: _directEditingSidebarWidth,
+          decoration: const BoxDecoration(
+            border: Border(
+              right: BorderSide(
+                color: Colors.grey,
+                width: 1,
+              ),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Simplified Display section (atomic visualization + mode switch)
+              Section(
+                title: 'Display',
+                content: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8.0, vertical: 4.0),
+                  child: DirectModeDisplayWidget(model: graphModel),
+                ),
+                expand: false,
+              ),
+              const SizedBox(height: 8),
+              // Camera Control section
+              Section(
+                title: 'Camera control',
+                content: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8.0, vertical: 4.0),
+                  child: CameraControlWidget(model: graphModel),
+                ),
+                expand: false,
+              ),
+              const SizedBox(height: 8),
+              // Atom Edit Editor (via NodeDataWidget, which routes to AtomEditEditor)
+              Expanded(
+                child: NodeDataWidget(
+                  graphModel: graphModel,
+                  directEditingMode: true,
+                ),
+              ),
+            ],
           ),
         ),
-      ),
-      child: Column(
-        children: [
-          // Simplified Display section (atomic visualization + mode switch)
-          Section(
-            title: 'Display',
-            content: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0, vertical: 4.0),
-              child: DirectModeDisplayWidget(model: graphModel),
-            ),
-            expand: false,
-          ),
-          const SizedBox(height: 8),
-          // Camera Control section
-          Section(
-            title: 'Camera control',
-            content: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0, vertical: 4.0),
-              child: CameraControlWidget(model: graphModel),
-            ),
-            expand: false,
-          ),
-          const SizedBox(height: 8),
-          // Atom Edit Editor (via NodeDataWidget, which routes to AtomEditEditor)
-          Expanded(
-            child: NodeDataWidget(
-              graphModel: graphModel,
-              directEditingMode: true,
+        // Drag handle for resizing
+        GestureDetector(
+          onHorizontalDragUpdate: (details) {
+            setState(() {
+              _directEditingSidebarWidth =
+                  (_directEditingSidebarWidth + details.delta.dx)
+                      .clamp(250, 500);
+            });
+          },
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeColumn,
+            child: Container(
+              width: 6,
+              color: Colors.grey.shade300,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -399,7 +424,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
   Widget _buildValidationWarningBanner() {
     return Positioned(
       top: 8,
-      left: 288, // Sidebar width (280) + some offset
+      left: _directEditingSidebarWidth + 14, // Sidebar width + drag handle + offset
       right: 8,
       child: Center(
         child: Material(
