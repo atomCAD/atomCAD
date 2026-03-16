@@ -49,243 +49,278 @@ class _StructureDesignerState extends State<StructureDesigner> {
       child: Focus(
         onKeyEvent: _handleGlobalKeyEvent,
         child: Column(
-        children: [
-          // Menu bar
-          Container(
-            height: 30,
-            decoration: const BoxDecoration(
-              color: Colors.grey,
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.black26,
-                  width: 1,
+          children: [
+            // Menu bar
+            Container(
+              height: 30,
+              decoration: const BoxDecoration(
+                color: Colors.grey,
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.black26,
+                    width: 1,
+                  ),
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                // File Menu
-                Consumer<StructureDesignerModel>(
-                  builder: (context, model, child) {
-                    return MenuWidget(
-                      key: const Key('file_menu'),
-                      label: 'File',
-                      menuItems: [
-                        MenuItemButton(
-                          key: const Key('new_design_item'),
-                          onPressed: _newDesign,
-                          child: const Text('New'),
-                        ),
-                        MenuItemButton(
-                          key: const Key('load_design_item'),
-                          onPressed: _loadDesign,
-                          child: const Text('Load Design'),
-                        ),
-                        MenuItemButton(
-                          key: const Key('save_design_item'),
-                          onPressed: model.canSave ? _saveDesign : null,
-                          child: const Text('Save Design'),
-                        ),
-                        MenuItemButton(
-                          key: const Key('save_design_as_item'),
-                          onPressed: _saveDesignAs,
-                          child: const Text('Save Design As'),
-                        ),
-                        MenuItemButton(
-                          key: const Key('export_visible_item'),
-                          onPressed: _exportVisible,
-                          child: const Text('Export visible'),
-                        ),
-                        MenuItemButton(
-                          key: const Key('import_from_library_item'),
-                          onPressed: _importFromCnndLibrary,
-                          child: const Text('Import from .cnnd library'),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+              child: Row(
+                children: [
+                  // File Menu
+                  Consumer<StructureDesignerModel>(
+                    builder: (context, model, child) {
+                      return MenuWidget(
+                        key: const Key('file_menu'),
+                        label: 'File',
+                        menuItems: [
+                          MenuItemButton(
+                            key: const Key('new_design_item'),
+                            onPressed: _newDesign,
+                            child: const Text('New'),
+                          ),
+                          MenuItemButton(
+                            key: const Key('load_design_item'),
+                            onPressed: _loadDesign,
+                            child: const Text('Load Design'),
+                          ),
+                          MenuItemButton(
+                            key: const Key('save_design_item'),
+                            onPressed: model.canSave ? _saveDesign : null,
+                            child: const Text('Save Design'),
+                          ),
+                          MenuItemButton(
+                            key: const Key('save_design_as_item'),
+                            onPressed: _saveDesignAs,
+                            child: const Text('Save Design As'),
+                          ),
+                          MenuItemButton(
+                            key: const Key('export_visible_item'),
+                            onPressed: _exportVisible,
+                            child: const Text('Export visible'),
+                          ),
+                          if (model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('import_xyz_item'),
+                              onPressed: _importXyz,
+                              child: const Text('Import XYZ'),
+                            ),
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('import_from_library_item'),
+                              onPressed: _importFromCnndLibrary,
+                              child: const Text('Import from .cnnd library'),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
 
-                // View Menu
-                MenuWidget(
-                  key: const Key('view_menu'),
-                  label: 'View',
-                  menuItems: [
-                    MenuItemButton(
-                      key: const Key('reset_view_item'),
-                      onPressed: _resetNodeNetworkView,
-                      child: const Text('Reset node network view'),
-                    ),
-                    MenuItemButton(
-                      key: const Key('toggle_layout_item'),
-                      onPressed: _toggleDivisionOrientation,
-                      child: Text(verticalDivision
-                          ? 'Switch to Horizontal Layout'
-                          : 'Switch to Vertical Layout'),
-                    ),
-                  ],
-                ),
+                  // View Menu
+                  Consumer<StructureDesignerModel>(
+                    builder: (context, model, child) {
+                      return MenuWidget(
+                        key: const Key('view_menu'),
+                        label: 'View',
+                        menuItems: [
+                          if (model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('switch_to_node_network_item'),
+                              onPressed: () =>
+                                  graphModel.switchToNodeNetworkMode(),
+                              child: const Text('Switch to Node Network Mode'),
+                            ),
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('switch_to_direct_editing_item'),
+                              onPressed: model.canSwitchToDirectEditingMode
+                                  ? () => graphModel.switchToDirectEditingMode()
+                                  : null,
+                              child:
+                                  const Text('Switch to Direct Editing Mode'),
+                            ),
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('reset_view_item'),
+                              onPressed: _resetNodeNetworkView,
+                              child: const Text('Reset node network view'),
+                            ),
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('toggle_layout_item'),
+                              onPressed: _toggleDivisionOrientation,
+                              child: Text(verticalDivision
+                                  ? 'Switch to Horizontal Layout'
+                                  : 'Switch to Vertical Layout'),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
 
-                // Edit Menu
-                Consumer<StructureDesignerModel>(
-                  builder: (context, model, child) {
-                    return MenuWidget(
-                  key: const Key('edit_menu'),
-                  label: 'Edit',
-                  menuItems: [
-                    MenuItemButton(
-                      key: const Key('undo_item'),
-                      onPressed: model.canUndo
-                          ? () {
-                              final desc = graphModel.undo();
-                              if (desc != null) {
-                                _showUndoRedoSnackBar(context, 'Undo: $desc');
-                              }
-                            }
-                          : null,
-                      shortcut:
-                          const SingleActivator(LogicalKeyboardKey.keyZ,
-                              control: true),
-                      child: Text(model.undoDescription != null
-                          ? 'Undo ${model.undoDescription}'
-                          : 'Undo'),
-                    ),
-                    MenuItemButton(
-                      key: const Key('redo_item'),
-                      onPressed: model.canRedo
-                          ? () {
-                              final desc = graphModel.redo();
-                              if (desc != null) {
-                                _showUndoRedoSnackBar(context, 'Redo: $desc');
-                              }
-                            }
-                          : null,
-                      shortcut:
-                          const SingleActivator(LogicalKeyboardKey.keyZ,
-                              control: true, shift: true),
-                      child: Text(model.redoDescription != null
-                          ? 'Redo ${model.redoDescription}'
-                          : 'Redo'),
-                    ),
-                    const Divider(),
-                    MenuItemButton(
-                      key: const Key('validate_network_item'),
-                      onPressed: () {
-                        widget.model.validateActiveNetwork();
-                      },
-                      child: const Text('Validate active network'),
-                    ),
-                    MenuItemButton(
-                      key: const Key('auto_layout_network_item'),
-                      onPressed: () {
-                        widget.model.autoLayoutNetwork();
-                        // Reset view to show all nodes after layout
-                        final state = nodeNetworkKey.currentState;
-                        if (state != null) {
-                          state.updatePanOffsetForCurrentNetwork(forceUpdate: true);
-                        }
-                      },
-                      child: const Text('Auto-Layout Network'),
-                    ),
-                    MenuItemButton(
-                      key: const Key('preferences_item'),
-                      onPressed: _showPreferences,
-                      child: const Text('Preferences'),
-                    ),
-                  ],
-                );
-                  },
-                ),
-              ],
+                  // Edit Menu
+                  Consumer<StructureDesignerModel>(
+                    builder: (context, model, child) {
+                      return MenuWidget(
+                        key: const Key('edit_menu'),
+                        label: 'Edit',
+                        menuItems: [
+                          MenuItemButton(
+                            key: const Key('undo_item'),
+                            onPressed: model.canUndo
+                                ? () {
+                                    final desc = graphModel.undo();
+                                    if (desc != null) {
+                                      _showUndoRedoSnackBar(
+                                          context, 'Undo: $desc');
+                                    }
+                                  }
+                                : null,
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.keyZ,
+                                control: true),
+                            child: Text(model.undoDescription != null
+                                ? 'Undo ${model.undoDescription}'
+                                : 'Undo'),
+                          ),
+                          MenuItemButton(
+                            key: const Key('redo_item'),
+                            onPressed: model.canRedo
+                                ? () {
+                                    final desc = graphModel.redo();
+                                    if (desc != null) {
+                                      _showUndoRedoSnackBar(
+                                          context, 'Redo: $desc');
+                                    }
+                                  }
+                                : null,
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.keyZ,
+                                control: true,
+                                shift: true),
+                            child: Text(model.redoDescription != null
+                                ? 'Redo ${model.redoDescription}'
+                                : 'Redo'),
+                          ),
+                          if (!model.directEditingMode) ...[
+                            const Divider(),
+                            MenuItemButton(
+                              key: const Key('validate_network_item'),
+                              onPressed: () {
+                                widget.model.validateActiveNetwork();
+                              },
+                              child: const Text('Validate active network'),
+                            ),
+                            MenuItemButton(
+                              key: const Key('auto_layout_network_item'),
+                              onPressed: () {
+                                widget.model.autoLayoutNetwork();
+                                // Reset view to show all nodes after layout
+                                final state = nodeNetworkKey.currentState;
+                                if (state != null) {
+                                  state.updatePanOffsetForCurrentNetwork(
+                                      forceUpdate: true);
+                                }
+                              },
+                              child: const Text('Auto-Layout Network'),
+                            ),
+                          ],
+                          MenuItemButton(
+                            key: const Key('preferences_item'),
+                            onPressed: _showPreferences,
+                            child: const Text('Preferences'),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-          // Main content
-          Expanded(
-            child: Row(
-              children: [
-                // Node Networks List Panel (left sidebar)
-                Container(
-                  width: 200,
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      right: BorderSide(
-                        color: Colors.grey,
-                        width: 1,
+            // Main content
+            Expanded(
+              child: Row(
+                children: [
+                  // Node Networks List Panel (left sidebar)
+                  Container(
+                    width: 200,
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        right: BorderSide(
+                          color: Colors.grey,
+                          width: 1,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Column(
-                    children: [
-                      // Display settings section
-                      Section(
-                        title: 'Display',
-                        content: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0, vertical: 4.0),
-                          child: Column(
-                            children: [
-                              // First row: Geometry visualization and Node display
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  // Geometry visualization widget (left aligned)
-                                  GeometryVisualizationWidget(
-                                      model: graphModel),
+                    child: Column(
+                      children: [
+                        // Display settings section
+                        Section(
+                          title: 'Display',
+                          content: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0, vertical: 4.0),
+                            child: Column(
+                              children: [
+                                // First row: Geometry visualization and Node display
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // Geometry visualization widget (left aligned)
+                                    GeometryVisualizationWidget(
+                                        model: graphModel),
 
-                                  // Node display widget (right aligned)
-                                  NodeDisplayWidget(model: graphModel),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              // Second row: Atomic structure visualization
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: [
-                                  AtomicStructureVisualizationWidget(
-                                      model: graphModel),
-                                ],
-                              ),
-                            ],
+                                    // Node display widget (right aligned)
+                                    NodeDisplayWidget(model: graphModel),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // Second row: Atomic structure visualization
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    AtomicStructureVisualizationWidget(
+                                        model: graphModel),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          expand: false,
+                        ),
+                        const SizedBox(height: 8),
+                        // Camera Control section
+                        Section(
+                          title: 'Camera control',
+                          content: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8.0, vertical: 4.0),
+                            child: CameraControlWidget(model: graphModel),
+                          ),
+                          expand: false,
+                        ),
+                        const SizedBox(height: 8),
+                        // Node networks section
+                        Expanded(
+                          flex: 5,
+                          child: Section(
+                            title: 'Node networks',
+                            content: NodeNetworksPanel(model: graphModel),
+                            expand: true,
                           ),
                         ),
-                        expand: false,
-                      ),
-                      const SizedBox(height: 8),
-                      // Camera Control section
-                      Section(
-                        title: 'Camera control',
-                        content: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0, vertical: 4.0),
-                          child: CameraControlWidget(model: graphModel),
-                        ),
-                        expand: false,
-                      ),
-                      const SizedBox(height: 8),
-                      // Node networks section
-                      Expanded(
-                        flex: 5,
-                        child: Section(
-                          title: 'Node networks',
-                          content: NodeNetworksPanel(model: graphModel),
-                          expand: true,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                // Main content area
-                MainContentArea(
-                  graphModel: graphModel,
-                  nodeNetworkKey: nodeNetworkKey,
-                  verticalDivision: verticalDivision,
-                ),
-              ],
+                  // Main content area
+                  MainContentArea(
+                    graphModel: graphModel,
+                    nodeNetworkKey: nodeNetworkKey,
+                    verticalDivision: verticalDivision,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -336,8 +371,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
     final shouldProceed = await showDraggableAlertDialog<bool>(
       context: context,
       title: const Text('Unsaved Changes'),
-      content: const Text(
-          'You have unsaved changes. Do you want to discard them?'),
+      content:
+          const Text('You have unsaved changes. Do you want to discard them?'),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
@@ -355,6 +390,34 @@ class _StructureDesignerState extends State<StructureDesigner> {
   Future<void> _newDesign() async {
     if (!await _confirmDiscardChanges()) return;
     graphModel.newProject();
+  }
+
+  Future<void> _importXyz() async {
+    if (!await _confirmDiscardChanges()) return;
+
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xyz'],
+      dialogTitle: 'Import XYZ File',
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      String filePath = result.files.first.path!;
+      final error = graphModel.importXyzDirectMode(filePath);
+      if (error.isNotEmpty && mounted) {
+        showDraggableAlertDialog(
+          context: context,
+          title: const Text('Import Error'),
+          content: Text(error),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      }
+    }
   }
 
   Future<void> _loadDesign() async {
@@ -527,8 +590,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
             ListTile(
               leading: const Icon(Icons.description),
               title: const Text('MOL format (.mol)'),
-              subtitle:
-                  const Text('Molecular structure with bond information'),
+              subtitle: const Text('Molecular structure with bond information'),
               onTap: () => Navigator.of(context).pop('mol'),
             ),
             ListTile(

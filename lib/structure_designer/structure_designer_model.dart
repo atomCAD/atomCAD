@@ -77,6 +77,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Callback to scroll the node network panel to a specific node.
   /// Registered by NodeNetworkState during init.
   void Function(BigInt nodeId)? onScrollToNode;
+  bool directEditingMode = true;
   String _lastMinimizeMessage = '';
   String _lastAddHydrogenMessage = '';
   APIBondLengthMode _bondLengthMode = APIBondLengthMode.crystal;
@@ -394,7 +395,11 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void newProject() {
-    structure_designer_api.newProject();
+    if (directEditingMode) {
+      structure_designer_api.newProjectDirectEditing();
+    } else {
+      structure_designer_api.newProject();
+    }
     refreshFromKernel();
   }
 
@@ -1283,6 +1288,7 @@ class StructureDesignerModel extends ChangeNotifier {
     preferences = structure_designer_api.getStructureDesignerPreferences();
     isDirty = structure_designer_api.isDesignDirty();
     filePath = structure_designer_api.getDesignFilePath();
+    directEditingMode = structure_designer_api.getDirectEditingMode();
 
     notifyListeners();
   }
@@ -1407,5 +1413,29 @@ class StructureDesignerModel extends ChangeNotifier {
         errorMessage: 'Import failed: $e',
       );
     }
+  }
+
+  // --- Direct Editing Mode ---
+
+  bool get canSwitchToDirectEditingMode =>
+      structure_designer_api.canSwitchToDirectEditingMode();
+
+  void switchToDirectEditingMode() {
+    structure_designer_api.setDirectEditingMode(mode: true);
+    refreshFromKernel();
+  }
+
+  void switchToNodeNetworkMode() {
+    structure_designer_api.setDirectEditingMode(mode: false);
+    refreshFromKernel();
+  }
+
+  /// Imports an XYZ file in direct editing mode.
+  /// Returns an empty string on success, or an error message on failure.
+  String importXyzDirectMode(String filePath) {
+    final result =
+        structure_designer_api.importXyzDirectEditing(filePath: filePath);
+    refreshFromKernel();
+    return result;
   }
 }

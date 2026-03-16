@@ -686,6 +686,31 @@ APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
 void newProject() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiNewProject();
 
+/// Creates a new project in direct editing mode with a single atom_edit node.
+void newProjectDirectEditing() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiNewProjectDirectEditing();
+
+/// Returns the current direct editing mode state.
+bool getDirectEditingMode() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetDirectEditingMode();
+
+/// Sets direct editing mode and marks the design as dirty.
+void setDirectEditingMode({required bool mode}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSetDirectEditingMode(
+        mode: mode);
+
+/// Returns whether the current state allows switching to direct editing mode.
+bool canSwitchToDirectEditingMode() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCanSwitchToDirectEditingMode();
+
+/// Imports an XYZ file in direct editing mode.
+/// Creates a new project with an import_xyz node wired into an atom_edit node.
+/// Returns an empty string on success, or an error message on failure.
+String importXyzDirectEditing({required String filePath}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiImportXyzDirectEditing(
+            filePath: filePath);
+
 /// Returns the number of node networks in the current project.
 int getNetworkCount() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNetworkCount();
