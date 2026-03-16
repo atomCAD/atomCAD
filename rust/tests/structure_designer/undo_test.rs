@@ -49,6 +49,7 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
     let container = SerializableNodeTypeRegistryNetworks {
         node_networks: serializable_networks,
         version: 2,
+        direct_editing_mode: false,
     };
 
     let mut value = serde_json::to_value(&container).unwrap();

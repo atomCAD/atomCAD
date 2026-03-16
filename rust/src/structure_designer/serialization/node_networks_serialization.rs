@@ -141,6 +141,10 @@ pub struct SerializableNodeNetwork {
 pub struct SerializableNodeTypeRegistryNetworks {
     pub node_networks: Vec<(String, SerializableNodeNetwork)>,
     pub version: u32, // For future compatibility
+    /// Whether the file was saved in direct editing mode.
+    /// Missing field defaults to false (Node Network Mode) for backward compatibility.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub direct_editing_mode: bool,
 }
 
 /// Converts a NodeType to its serializable counterpart
@@ -423,6 +427,7 @@ pub fn serializable_to_node_network(
 pub fn save_node_networks_to_file(
     registry: &mut NodeTypeRegistry,
     file_path: &Path,
+    direct_editing_mode: bool,
 ) -> io::Result<()> {
     // Extract design directory early
     let design_dir = file_path.parent().and_then(|p| p.to_str());
@@ -440,6 +445,7 @@ pub fn save_node_networks_to_file(
     let serializable_registry = SerializableNodeTypeRegistryNetworks {
         node_networks: serializable_networks,
         version: SERIALIZATION_VERSION,
+        direct_editing_mode,
     };
 
     // Serialize to JSON
@@ -458,6 +464,14 @@ pub fn save_node_networks_to_file(
     Ok(())
 }
 
+/// Result of loading a .cnnd file
+pub struct LoadResult {
+    /// Name of the first network in the file (empty if no networks)
+    pub first_network_name: String,
+    /// Whether the file was saved in direct editing mode
+    pub direct_editing_mode: bool,
+}
+
 /// Loads node networks from a JSON file into a NodeTypeRegistry
 ///
 /// # Parameters
@@ -465,11 +479,11 @@ pub fn save_node_networks_to_file(
 /// * `file_path` - The file path to load from as a string
 ///
 /// # Returns
-/// * `io::Result<String>` - Ok with the first network name if successful, or empty string if no networks, Err otherwise
+/// * `io::Result<LoadResult>` - Ok with load metadata if successful, Err otherwise
 pub fn load_node_networks_from_file(
     registry: &mut NodeTypeRegistry,
     file_path: &str,
-) -> io::Result<String> {
+) -> io::Result<LoadResult> {
     // Extract design directory early
     let design_dir = std::path::Path::new(file_path)
         .parent()
@@ -483,6 +497,8 @@ pub fn load_node_networks_from_file(
     // Deserialize from JSON
     let serializable_registry: SerializableNodeTypeRegistryNetworks =
         serde_json::from_str(&json_data)?;
+
+    let direct_editing_mode = serializable_registry.direct_editing_mode;
 
     // Check version for potential compatibility handling in the future
     let version = serializable_registry.version;
@@ -520,5 +536,8 @@ pub fn load_node_networks_from_file(
     // Set the design file name after successful load
     registry.design_file_name = Some(file_path.to_string());
 
-    Ok(first_network_name)
+    Ok(LoadResult {
+        first_network_name,
+        direct_editing_mode,
+    })
 }

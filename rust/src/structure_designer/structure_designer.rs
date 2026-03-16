@@ -81,6 +81,8 @@ pub struct StructureDesigner {
     pub pending_gadget_drag: Option<super::undo::snapshot::PendingGadgetDrag>,
     // Temporary state during comment node editing (text typing or resize drag)
     pub pending_comment_edit: Option<super::undo::snapshot::PendingGadgetDrag>,
+    // Direct editing mode: simplified UI focused on a single atom_edit node
+    pub direct_editing_mode: bool,
 }
 
 impl Default for StructureDesigner {
@@ -117,6 +119,7 @@ impl StructureDesigner {
             pending_atom_edit_drag: None,
             pending_gadget_drag: None,
             pending_comment_edit: None,
+            direct_editing_mode: true,
         }
     }
 }
@@ -1869,6 +1872,7 @@ impl StructureDesigner {
         // Clear file state
         self.file_path = None;
         self.is_dirty = false;
+        self.direct_editing_mode = false;
 
         // Clear navigation history
         self.navigation_history.clear();
@@ -1887,6 +1891,157 @@ impl StructureDesigner {
 
         // Mark for full refresh
         self.mark_full_refresh();
+    }
+
+    /// Creates a new project in direct editing mode.
+    /// Sets up a single "Main" network with one atom_edit node that is displayed,
+    /// selected, and set as the return node.
+    pub fn new_project_direct_editing(&mut self) {
+        // Start with a clean project
+        self.new_project();
+        self.direct_editing_mode = true;
+
+        // Add an atom_edit node at origin
+        let node_id = self.add_node("atom_edit", glam::DVec2::ZERO);
+        if node_id == 0 {
+            return;
+        }
+
+        // Set as return node (without undo tracking — fresh project)
+        if let Some(network) = self
+            .node_type_registry
+            .node_networks
+            .get_mut("Main")
+        {
+            network.return_node_id = Some(node_id);
+        }
+
+        // Select the node
+        self.select_node(node_id);
+
+        // Clear undo stack — new project should have no history
+        self.undo_stack.clear();
+
+        // Clear dirty flag — this is a fresh project
+        self.is_dirty = false;
+    }
+
+    /// Checks whether the current state allows switching to direct editing mode.
+    /// Criteria: the active network must have exactly one displayed atom_edit node,
+    /// and that node must be the currently selected node.
+    pub fn can_switch_to_direct_editing_mode(&self) -> bool {
+        let network = match self
+            .active_node_network_name
+            .as_ref()
+            .and_then(|name| self.node_type_registry.node_networks.get(name))
+        {
+            Some(n) => n,
+            None => return false,
+        };
+
+        // Find displayed atom_edit nodes
+        let displayed_atom_edit_ids: Vec<u64> = network
+            .displayed_node_ids
+            .keys()
+            .filter(|&&id| {
+                network
+                    .nodes
+                    .get(&id)
+                    .is_some_and(|node| node.node_type_name == "atom_edit")
+            })
+            .copied()
+            .collect();
+
+        // Exactly one displayed atom_edit node
+        if displayed_atom_edit_ids.len() != 1 {
+            return false;
+        }
+
+        let atom_edit_id = displayed_atom_edit_ids[0];
+
+        // That atom_edit node must be the currently selected node
+        network.active_node_id == Some(atom_edit_id)
+    }
+
+    /// Sets direct editing mode and marks the design as dirty.
+    pub fn set_direct_editing_mode(&mut self, mode: bool) {
+        if self.direct_editing_mode != mode {
+            self.direct_editing_mode = mode;
+            self.is_dirty = true;
+        }
+    }
+
+    /// Imports an XYZ file in direct editing mode.
+    /// Creates a new direct editing project, adds an import_xyz node wired into
+    /// the atom_edit node, loads the file, and clears the undo stack.
+    pub fn import_xyz_direct_editing(&mut self, file_path: &str) -> Result<(), String> {
+        // Create a fresh direct editing project
+        self.new_project_direct_editing();
+
+        // Find the atom_edit node in Main
+        let atom_edit_id = {
+            let network = self
+                .node_type_registry
+                .node_networks
+                .get("Main")
+                .ok_or("Main network not found")?;
+            network
+                .nodes
+                .values()
+                .find(|n| n.node_type_name == "atom_edit")
+                .map(|n| n.id)
+                .ok_or("atom_edit node not found")?
+        };
+
+        // Add import_xyz node to the left of atom_edit
+        let import_xyz_id = self.add_node("import_xyz", glam::DVec2::new(-300.0, 0.0));
+        if import_xyz_id == 0 {
+            return Err("Failed to add import_xyz node".to_string());
+        }
+
+        // Set the file path on the import_xyz node and load the atomic structure
+        {
+            use crate::crystolecule::io::xyz_loader::load_xyz;
+            use crate::structure_designer::nodes::import_xyz::ImportXYZData;
+
+            let atomic_structure = load_xyz(file_path, true)
+                .map_err(|e| format!("Failed to load XYZ file: {}", e))?;
+
+            let import_data = Box::new(ImportXYZData {
+                file_name: Some(file_path.to_string()),
+                atomic_structure: Some(atomic_structure),
+            });
+
+            if let Some(network) = self.node_type_registry.node_networks.get_mut("Main") {
+                network.set_node_network_data(import_xyz_id, import_data);
+            }
+        }
+
+        // Wire import_xyz output (pin 0) → atom_edit molecule input (param 0)
+        // Do this directly on the network to avoid undo tracking
+        if let Some(network) = self.node_type_registry.node_networks.get_mut("Main") {
+            network.connect_nodes(
+                import_xyz_id,
+                0, // source output pin index
+                atom_edit_id,
+                0,     // dest param index (molecule)
+                false, // not multi
+            );
+        }
+
+        // Re-select atom_edit (add_node may have changed selection)
+        self.select_node(atom_edit_id);
+
+        // Clear undo stack — fresh import
+        self.undo_stack.clear();
+
+        // Clear dirty flag — this is a fresh import
+        self.is_dirty = false;
+
+        // Mark full refresh to evaluate the new network
+        self.mark_full_refresh();
+
+        Ok(())
     }
 
     /// Navigates back in network history
@@ -3318,6 +3473,7 @@ impl StructureDesigner {
         let result = node_networks_serialization::save_node_networks_to_file(
             &mut self.node_type_registry,
             Path::new(file_path),
+            self.direct_editing_mode,
         );
 
         // Clear dirty flag and set file path if save was successful
@@ -3383,10 +3539,11 @@ impl StructureDesigner {
         &mut self,
         file_path: &str,
     ) -> std::io::Result<Option<CameraSettings>> {
-        let first_network_name = node_networks_serialization::load_node_networks_from_file(
+        let load_result = node_networks_serialization::load_node_networks_from_file(
             &mut self.node_type_registry,
             file_path,
         )?;
+        let first_network_name = load_result.first_network_name;
 
         // Validate all networks in dependency order (dependencies first)
         // This ensures call sites can be repaired before validating their parent networks
@@ -3430,6 +3587,19 @@ impl StructureDesigner {
 
         // Set the file path since we just loaded from this file
         self.file_path = Some(file_path.to_string());
+
+        // Restore direct editing mode from file, with validation
+        if load_result.direct_editing_mode {
+            if self.can_switch_to_direct_editing_mode() {
+                self.direct_editing_mode = true;
+            } else {
+                // Criteria not met — fall back to node network mode
+                self.direct_editing_mode = false;
+                println!("Warning: Could not enter Direct Editing Mode — opening in Node Network Mode.");
+            }
+        } else {
+            self.direct_editing_mode = false;
+        }
 
         // Loading networks is a structural change requiring full refresh
         self.mark_full_refresh();

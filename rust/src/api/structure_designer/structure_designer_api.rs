@@ -3641,6 +3641,80 @@ pub fn new_project() {
     }
 }
 
+/// Creates a new project in direct editing mode with a single atom_edit node.
+#[flutter_rust_bridge::frb(sync)]
+pub fn new_project_direct_editing() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.new_project_direct_editing();
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Returns the current direct editing mode state.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_direct_editing_mode() -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.direct_editing_mode,
+            false,
+        )
+    }
+}
+
+/// Sets direct editing mode and marks the design as dirty.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_direct_editing_mode(mode: bool) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance
+                .structure_designer
+                .set_direct_editing_mode(mode);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Returns whether the current state allows switching to direct editing mode.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_switch_to_direct_editing_mode() -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .can_switch_to_direct_editing_mode()
+            },
+            false,
+        )
+    }
+}
+
+/// Imports an XYZ file in direct editing mode.
+/// Creates a new project with an import_xyz node wired into an atom_edit node.
+/// Returns an empty string on success, or an error message on failure.
+#[flutter_rust_bridge::frb(sync)]
+pub fn import_xyz_direct_editing(file_path: String) -> String {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                match cad_instance
+                    .structure_designer
+                    .import_xyz_direct_editing(&file_path)
+                {
+                    Ok(()) => {
+                        refresh_structure_designer_auto(cad_instance);
+                        String::new()
+                    }
+                    Err(e) => e,
+                }
+            },
+            "No CAD instance".to_string(),
+        )
+    }
+}
+
 /// Returns the number of node networks in the current project.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_network_count() -> i32 {

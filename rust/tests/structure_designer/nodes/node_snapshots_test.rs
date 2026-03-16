@@ -29,12 +29,12 @@ struct DisplayedNodeOutput {
 
 fn evaluate_cnnd_file(file_path: &str) -> EvaluationSnapshot {
     let mut registry = NodeTypeRegistry::new();
-    let first_network_name =
+    let load_result =
         load_node_networks_from_file(&mut registry, file_path).expect("Failed to load CNND file");
 
     let network = registry
         .node_networks
-        .get(&first_network_name)
+        .get(&load_result.first_network_name)
         .expect("Network not found");
 
     let evaluator = NetworkEvaluator::new();
@@ -64,7 +64,7 @@ fn evaluate_cnnd_file(file_path: &str) -> EvaluationSnapshot {
     displayed_node_outputs.sort_by_key(|n| n.node_id);
 
     EvaluationSnapshot {
-        network_name: first_network_name,
+        network_name: load_result.first_network_name,
         node_count: network.nodes.len(),
         return_node_id: network.return_node_id,
         displayed_node_outputs,

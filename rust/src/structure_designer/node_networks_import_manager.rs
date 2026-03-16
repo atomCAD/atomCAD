@@ -40,7 +40,8 @@ impl NodeNetworksImportManager {
         let mut temp_registry = NodeTypeRegistry::new();
 
         // Load the node networks from the library file into the temporary registry
-        node_networks_serialization::load_node_networks_from_file(&mut temp_registry, file_path)?;
+        node_networks_serialization::load_node_networks_from_file(&mut temp_registry, file_path)
+            .map(|_| ())?;
 
         // Store the loaded registry and file path
         self.library_registry = Some(temp_registry);
