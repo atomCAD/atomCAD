@@ -56,13 +56,28 @@ Available via:
 - **Display section widget**: radio button (grayed out if criteria not met)
 
 **Criteria for switching back:**
-The active network must contain exactly one node, that node must be of type `atom_edit`,
-and it must be both displayed and set as the return node. If the criteria are not met,
-the menu item / radio button is disabled with a tooltip explaining why
-(e.g., "Direct Editing Mode requires a single active atom_edit node").
+1. The active network contains at least one `atom_edit` node.
+2. Exactly one `atom_edit` node is **displayed** (visible in the viewport).
+3. That `atom_edit` node is the **currently selected** node.
 
-> **Rationale:** We deliberately keep the criteria simple and strict. Attempting to
-> map arbitrary node networks back to "direct editing" would be fragile and confusing.
+If the criteria are not met, the menu item / radio button is disabled with a tooltip
+explaining why (e.g., "Select a displayed atom_edit node to enter Direct Editing Mode").
+
+Other nodes may exist in the network (e.g., upstream `sphere → atom_fill` feeding into
+the `atom_edit`, or a `comment` node). They remain in the network but are invisible to
+the user while in Direct Editing Mode — the node graph panel is hidden anyway. Switching
+back to Node Network Mode reveals everything again.
+
+> **Rationale:** The user's intent is to focus on atomic editing in the viewport. We
+> don't require the atom_edit to be the return node (a node-network concept that direct
+> mode hides) or the only node in the network (which would force users to delete valid
+> upstream work). We only require that the editing focus is unambiguous: one displayed
+> atom_edit node, currently selected.
+
+**Validation in Direct Editing Mode:** If the network contains other nodes that have
+validation errors, a subtle warning banner is shown at the top of the viewport
+(e.g., "Network has issues — switch to Node Network Mode to inspect"). This avoids
+silently hiding problems while not overwhelming the direct-editing user.
 
 ---
 
@@ -129,10 +144,11 @@ In Direct Editing Mode the Display section contains only:
 | Item | Direct Editing | Node Network | Notes |
 |------|:-:|:-:|-------|
 | New | Yes | Yes | In direct mode, creates a fresh single-atom_edit .cnnd |
-| Load Design | Yes | Yes | After load, auto-detect which mode to enter (see below) |
+| Load Design | Yes | Yes | |
 | Save Design | Yes | Yes | |
 | Save Design As | Yes | Yes | |
 | Export visible | Yes | Yes | |
+| Import XYZ | Yes | **No** | Direct mode only — see "Import XYZ" section below |
 | Import from .cnnd library | **No** | Yes | Advanced feature, node-network only |
 
 ### View Menu
@@ -181,6 +197,42 @@ energy minimization, hydrogen passivation, transform section, bond order selecto
 
 ---
 
+## Import XYZ in Direct Editing Mode
+
+A dedicated **File > Import XYZ** menu item allows direct-mode users to load an existing
+molecular structure and edit it — without needing to understand nodes or wiring.
+
+### User Experience
+
+1. User clicks **File > Import XYZ**.
+2. If there are unsaved changes, the standard "discard changes?" confirmation is shown.
+3. A file picker opens for `.xyz` files.
+4. A new design is created (same as "New"), but with an `import_xyz` node wired into
+   the `atom_edit` node. The imported structure appears in the viewport, ready for editing.
+
+### What Happens Under the Hood
+
+The operation is equivalent to **New** followed by creating and wiring an import node:
+
+```
+import_xyz ──→ atom_edit (selected, displayed)
+```
+
+1. A fresh design is created: one network "Main", one `atom_edit` node (same as "New").
+2. An `import_xyz` node is added to the network.
+3. The `.xyz` file path is set and the file is loaded.
+4. The `import_xyz` output is wired to the `atom_edit` node's `molecule` input pin.
+5. The `atom_edit` node remains selected and displayed.
+6. The undo stack is cleared (fresh design).
+
+### Why Not in Node Network Mode?
+
+In Node Network Mode the user can already create an `import_xyz` node and wire it
+manually — that's the designed workflow. Having the menu item in both modes would create
+two ways to do the same thing, with the menu-based approach being less flexible.
+
+---
+
 ## Initial State
 
 When the application starts (or "New" is selected in Direct Editing Mode):
@@ -194,16 +246,37 @@ When the application starts (or "New" is selected in Direct Editing Mode):
 
 ---
 
-## Loading a .cnnd File — Mode Auto-Detection
+## Persisting the Mode in .cnnd
 
-When a `.cnnd` file is loaded, the application checks whether the Direct Editing Mode
-criteria are met (single `atom_edit` node, active, displayed, return node in the active
-network). If so, it enters Direct Editing Mode. Otherwise, it enters Node Network Mode.
+The editing mode is stored as a top-level field in the `.cnnd` JSON:
 
-This means:
-- Files saved from Direct Editing Mode re-open in Direct Editing Mode.
-- Files with complex node networks open in Node Network Mode.
-- The mode is not persisted in the file — it is derived from structure.
+```json
+{
+  "direct_editing_mode": true,
+  ...
+}
+```
+
+**Why persist rather than derive from structure?** The mode is a *user intent*, not a
+property of the graph. Consider:
+
+- A user works in Node Network Mode with `sphere → atom_fill → atom_edit`. Without
+  persistence, reloading would silently drop them into Direct Editing Mode — surprising.
+- A beginner loads a complex .cnnd that happens to match the criteria. They'd enter
+  Direct Editing Mode unaware of 15 upstream nodes doing important work.
+- An author shares a teaching file intended for Direct Editing Mode. Without persistence,
+  the recipient's experience depends on accidental node selection state.
+
+**Backward compatibility:** Missing field defaults to `false` (Node Network Mode).
+Existing .cnnd files open in Node Network Mode as they always have.
+
+**Validation on load:** If the file says `"direct_editing_mode": true` but the switching
+criteria are not met (e.g., no atom_edit node exists, or none is displayed), fall back
+to Node Network Mode with a warning toast: "Could not enter Direct Editing Mode —
+opening in Node Network Mode."
+
+**Saving:** The current mode is written to the file on every save. When the user switches
+modes, the file is marked dirty (so the next save captures the change).
 
 ---
 
@@ -240,9 +313,12 @@ All existing atom_edit keyboard shortcuts work identically in both modes:
 1. Add `bool directEditingMode` property to `StructureDesignerModel`.
 2. Add `bool canSwitchToDirectEditingMode` getter that checks the criteria.
 3. Add `switchToDirectEditingMode()` / `switchToNodeNetworkMode()` methods.
+   Switching marks the file dirty.
 4. On `newProject()`, set `directEditingMode = true` and create the initial
    single-atom_edit-node network.
-5. On `loadNodeNetworks()`, auto-detect mode based on criteria.
+5. Persist `direct_editing_mode` field in .cnnd serialization (Rust side).
+6. On `loadNodeNetworks()`, read the persisted mode. If it says direct editing
+   but the criteria aren't met, fall back to Node Network Mode with a warning.
 
 ### Phase 2: Menu Bar Conditional Rendering
 
@@ -283,6 +359,16 @@ All existing atom_edit keyboard shortcuts work identically in both modes:
    single network "Main", single `atom_edit` node, active + displayed + return node.
 2. Set default tool to Add Atom when entering direct editing mode.
 3. Ensure hybridization defaults to Auto.
+
+### Phase 7: Import XYZ
+
+1. Add `importXyzInDirectMode()` method to `StructureDesignerModel`:
+   - Confirms discard of unsaved changes (same as "New").
+   - Opens file picker for `.xyz` files.
+   - Calls `newProject()` to create a fresh design.
+   - Creates an `import_xyz` node, sets file path, loads file, wires to atom_edit input.
+   - Clears undo stack (fresh design).
+2. Add "Import XYZ" menu item in File menu (visible only in direct editing mode).
 
 ---
 
