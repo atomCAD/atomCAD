@@ -143,7 +143,7 @@ In Direct Editing Mode the Display section contains only:
 
 | Item | Direct Editing | Node Network | Notes |
 |------|:-:|:-:|-------|
-| New | Yes | Yes | In direct mode, creates a fresh single-atom_edit .cnnd |
+| New | Yes | Yes | Respects current mode — see "New Respects Current Mode" below |
 | Load Design | Yes | Yes | |
 | Save Design | Yes | Yes | |
 | Save Design As | Yes | Yes | |
@@ -230,6 +230,26 @@ import_xyz ──→ atom_edit (selected, displayed)
 In Node Network Mode the user can already create an `import_xyz` node and wire it
 manually — that's the designed workflow. Having the menu item in both modes would create
 two ways to do the same thing, with the menu-based approach being less flexible.
+
+---
+
+## "New" Respects Current Mode
+
+"New" creates a fresh project matching the user's current mode:
+
+- **In Direct Editing Mode**: calls `new_project_direct_editing()` — one `Main` network
+  with a single `atom_edit` node (displayed, selected, return node),
+  `direct_editing_mode: true`.
+- **In Node Network Mode**: calls the existing `new_project()` — one empty `Main`
+  network, `direct_editing_mode: false`.
+
+**Rationale:** The mode is user intent (see "Persisting the Mode" section). A Node
+Network user clicking "New" expects a blank canvas for building node networks, not to be
+silently switched into Direct Editing Mode. Respecting the current mode avoids a
+repetitive papercut for advanced users while keeping the beginner experience unchanged.
+
+**First launch** has no prior mode — the default is Direct Editing Mode, so new users
+get the simplified experience automatically.
 
 ---
 
@@ -418,7 +438,8 @@ by mode switching — only the UI presentation changes.
    `refreshFromKernel()`.
 2. Add `canSwitchToDirectEditingMode` getter.
 3. Add `switchToDirectEditingMode()` / `switchToNodeNetworkMode()` methods.
-4. Update `newProject()` to call `new_project_direct_editing()`.
+4. Update `newProject()` to branch on current mode: if `directEditingMode`, call
+   `new_project_direct_editing()`; otherwise call the existing `new_project()`.
 5. Add `importXyzDirectMode(String filePath)` method.
 
 ### Phase 3: Flutter — Menu Bar
@@ -483,7 +504,8 @@ by mode switching — only the UI presentation changes.
    tuned during implementation.
 2. **Preferences in Direct Mode**: Should the Preferences window also be simplified
    (hiding node-network-specific settings)? For now, keep it as-is — minimal scope.
-3. **"New" in Node Network Mode**: Currently creates a blank network. Should it also
-   offer "New (Direct Editing)" vs "New (Node Network)"? For now, "New" always creates
-   a direct-editing-mode project (single atom_edit node). Users in Node Network Mode
-   can add more nodes/networks immediately after.
+3. ~~**"New" in Node Network Mode**~~ **Resolved:** "New" respects the current mode.
+   In Direct Editing Mode it calls `new_project_direct_editing()` (single atom_edit
+   node). In Node Network Mode it calls the existing `new_project()` (blank network).
+   The mode is user intent (see "Persisting the Mode" rationale) — overriding it on
+   every "New" would force Node Network users to switch back each time.
