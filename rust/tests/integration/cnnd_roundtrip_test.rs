@@ -18,8 +18,12 @@ fn roundtrip_cnnd_file(file_path: &str) {
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_file_path = temp_dir.path().join("roundtrip.cnnd");
 
-    save_node_networks_to_file(&mut registry, &temp_file_path, load_result.direct_editing_mode)
-        .expect("Failed to save CNND file");
+    save_node_networks_to_file(
+        &mut registry,
+        &temp_file_path,
+        load_result.direct_editing_mode,
+    )
+    .expect("Failed to save CNND file");
 
     let mut registry2 = NodeTypeRegistry::new();
     let _first_network_name2 =

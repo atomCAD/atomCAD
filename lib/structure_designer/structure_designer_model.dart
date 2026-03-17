@@ -1434,11 +1434,12 @@ class StructureDesignerModel extends ChangeNotifier {
   bool get hasValidationErrors =>
       nodeNetworkNames.any((n) => n.validationErrors != null);
 
-  /// Imports an XYZ file in direct editing mode.
+  /// Imports an XYZ file into the active atom_edit node's diff layer.
+  /// Atoms and bonds are merged as pure additions (incremental import).
   /// Returns an empty string on success, or an error message on failure.
-  String importXyzDirectMode(String filePath) {
+  String importXyzIntoAtomEdit(String filePath) {
     final result =
-        structure_designer_api.importXyzDirectEditing(filePath: filePath);
+        structure_designer_api.importXyzIntoAtomEdit(filePath: filePath);
     refreshFromKernel();
     return result;
   }

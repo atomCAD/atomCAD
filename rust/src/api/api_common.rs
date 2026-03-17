@@ -370,7 +370,6 @@ where
     }
 }
 
-
 pub fn refresh_structure_designer(
     cad_instance: &mut CADInstance,
     changes: &StructureDesignerChanges,

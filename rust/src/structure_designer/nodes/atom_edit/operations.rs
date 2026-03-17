@@ -342,8 +342,7 @@ pub fn drag_selected_by_delta(
                 .copied()
                 .collect();
             let frozen_count = total_base - non_frozen_base.len();
-            let info =
-                gather_base_atom_promotion_info(structure_designer, &non_frozen_base);
+            let info = gather_base_atom_promotion_info(structure_designer, &non_frozen_base);
             (info, frozen_count)
         }
     };

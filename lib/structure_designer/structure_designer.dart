@@ -261,8 +261,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                         ],
                       ),
                       // Validation warning banner (direct editing mode only)
-                      if (model.directEditingMode &&
-                          model.hasValidationErrors)
+                      if (model.directEditingMode && model.hasValidationErrors)
                         _buildValidationWarningBanner(),
                     ],
                   );
@@ -366,8 +365,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
           Section(
             title: 'Display',
             content: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0, vertical: 4.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: Column(
                 children: [
                   // First row: Geometry visualization and Node display
@@ -403,8 +402,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
           Section(
             title: 'Camera control',
             content: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0, vertical: 4.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: CameraControlWidget(model: graphModel),
             ),
             expand: false,
@@ -429,7 +428,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
   Widget _buildValidationWarningBanner() {
     return Positioned(
       top: 8,
-      left: _directEditingSidebarWidth + 14, // Sidebar width + drag handle + offset
+      left: _directEditingSidebarWidth +
+          14, // Sidebar width + drag handle + offset
       right: 8,
       child: Center(
         child: Material(
@@ -440,8 +440,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
             borderRadius: BorderRadius.circular(6),
             onTap: () => graphModel.switchToNodeNetworkMode(),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -532,8 +531,6 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   Future<void> _importXyz() async {
-    if (!await _confirmDiscardChanges()) return;
-
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xyz'],
@@ -542,7 +539,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
 
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
-      final error = graphModel.importXyzDirectMode(filePath);
+      final error = graphModel.importXyzIntoAtomEdit(filePath);
       if (error.isNotEmpty && mounted) {
         showDraggableAlertDialog(
           context: context,

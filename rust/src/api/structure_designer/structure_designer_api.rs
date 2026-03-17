@@ -3691,24 +3691,25 @@ pub fn can_switch_to_direct_editing_mode() -> bool {
     }
 }
 
-/// Imports an XYZ file in direct editing mode.
-/// Creates a new project with an import_xyz node wired into an atom_edit node.
+/// Imports an XYZ file into the active atom_edit node's diff layer.
+/// Atoms and bonds are merged directly as pure additions (incremental import).
 /// Returns an empty string on success, or an error message on failure.
 #[flutter_rust_bridge::frb(sync)]
-pub fn import_xyz_direct_editing(file_path: String) -> String {
+pub fn import_xyz_into_atom_edit(file_path: String) -> String {
+    use crate::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                match cad_instance
-                    .structure_designer
-                    .import_xyz_direct_editing(&file_path)
-                {
-                    Ok(()) => {
-                        refresh_structure_designer_auto(cad_instance);
-                        String::new()
+                let mut error = String::new();
+                with_atom_edit_undo(&mut cad_instance.structure_designer, "Import XYZ", |sd| {
+                    if let Err(e) = sd.import_xyz_into_atom_edit(&file_path) {
+                        error = e;
                     }
-                    Err(e) => e,
+                });
+                if error.is_empty() {
+                    refresh_structure_designer_auto(cad_instance);
                 }
+                error
             },
             "No CAD instance".to_string(),
         )

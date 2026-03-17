@@ -205,25 +205,31 @@ molecular structure and edit it — without needing to understand nodes or wirin
 ### User Experience
 
 1. User clicks **File > Import XYZ**.
-2. If there are unsaved changes, the standard "discard changes?" confirmation is shown.
-3. A file picker opens for `.xyz` files.
-4. A new design is created (same as "New"), but with an `import_xyz` node wired into
-   the `atom_edit` node. The imported structure appears in the viewport, ready for editing.
+2. A file picker opens for `.xyz` files.
+3. The imported atoms and bonds appear in the viewport, merged into the existing content.
+4. The import can be undone with a single Ctrl+Z.
+
+**Incremental behavior:** Importing a second (or third, etc.) XYZ file adds its atoms
+to the existing content rather than replacing it. This allows building up structures
+from multiple source files.
 
 ### What Happens Under the Hood
 
-The operation is equivalent to **New** followed by creating and wiring an import node:
+The imported atoms are merged directly into the `atom_edit` node's diff layer as pure
+additions — no `import_xyz` node is created, no wiring occurs. This is equivalent to
+the user having manually placed each atom and bond from the file.
 
-```
-import_xyz ──→ atom_edit (selected, displayed)
-```
+1. The `.xyz` file is loaded and parsed (with automatic bond creation).
+2. Each atom is added to the `atom_edit` diff via `add_atom_recorded()`.
+3. Each bond is added via `add_bond_recorded()`.
+4. The entire operation is wrapped in a single undo command ("Import XYZ").
 
-1. A fresh design is created: one network "Main", one `atom_edit` node (same as "New").
-2. An `import_xyz` node is added to the network.
-3. The `.xyz` file path is set and the file is loaded.
-4. The `import_xyz` output is wired to the `atom_edit` node's `molecule` input pin.
-5. The `atom_edit` node remains selected and displayed.
-6. The undo stack is cleared (fresh design).
+**Why bake into the diff instead of wiring an import_xyz node?** The atom_edit node
+stores user edits as a diff against its base input. If the base changes (e.g., a second
+import_xyz node is wired in), existing diffs may reference atoms that have shifted or
+been reindexed — the diff was authored against a different base. By merging directly
+into the diff layer, the base never changes, existing edits remain valid, and multiple
+imports compose naturally.
 
 ### Why Not in Node Network Mode?
 
@@ -426,8 +432,10 @@ by mode switching — only the UI presentation changes.
    (`Option<bool>`, defaults to `false`).
 4. Add `new_project_direct_editing()` — creates Main network with one atom_edit
    node (displayed, selected, return node).
-5. Add `import_xyz_direct_editing(file_path)` — calls `new_project_direct_editing()`,
-   then adds import_xyz node, sets path, loads, wires to atom_edit, clears undo.
+5. Add `import_xyz_into_atom_edit(file_path)` — loads XYZ file and merges atoms/bonds
+   directly into the atom_edit node's diff layer as pure additions. Wrapped in
+   `with_atom_edit_undo` for single-step undo. Add `merge_atomic_structure()` on
+   `AtomEditData` as the core bulk-add method.
 6. Expose all new functions in the API layer.
 7. On load: read `direct_editing_mode` from file. If `true` but criteria not met,
    set to `false` and include a warning in the load result.
@@ -440,15 +448,15 @@ by mode switching — only the UI presentation changes.
 3. Add `switchToDirectEditingMode()` / `switchToNodeNetworkMode()` methods.
 4. Update `newProject()` to branch on current mode: if `directEditingMode`, call
    `new_project_direct_editing()`; otherwise call the existing `new_project()`.
-5. Add `importXyzDirectMode(String filePath)` method.
+5. Add `importXyzIntoAtomEdit(String filePath)` method.
 
 ### Phase 3: Flutter — Menu Bar
 
 1. Wrap menu items with `if (!model.directEditingMode)` guards.
 2. Add mode-switch items to View menu with conditional enable/disable.
 3. Add "Import XYZ" item to File menu (direct mode only). The menu item handler
-   calls `_confirmDiscardChanges()`, opens file picker, then calls
-   `model.importXyzDirectMode(filePath)`.
+   opens file picker, then calls `model.importXyzIntoAtomEdit(filePath)`.
+   No discard-changes confirmation — import is incremental (additive).
 
 ### Phase 4: Flutter — Layout Switching
 
@@ -492,7 +500,8 @@ by mode switching — only the UI presentation changes.
 ### Phase 8: Flutter — Import XYZ
 
 1. Wire up the "Import XYZ" menu item handler:
-   confirm discard → file picker → `model.importXyzDirectMode(filePath)`.
+   file picker → `model.importXyzIntoAtomEdit(filePath)`.
+   No discard confirmation (incremental merge into existing content).
 2. Show error dialog if the Rust API returns an error.
 
 ---

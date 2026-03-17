@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => 540111989;
+  int get rustContentHash => -374873718;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -621,7 +621,7 @@ abstract class RustLibApi extends BaseApi {
   APIResult crateApiStructureDesignerImportXyzApiImportXyz(
       {required BigInt nodeId});
 
-  String crateApiStructureDesignerStructureDesignerApiImportXyzDirectEditing(
+  String crateApiStructureDesignerStructureDesignerApiImportXyzIntoAtomEdit(
       {required String filePath});
 
   Future<void> crateApiCommonApiInitApp();
@@ -5597,7 +5597,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  String crateApiStructureDesignerStructureDesignerApiImportXyzDirectEditing(
+  String crateApiStructureDesignerStructureDesignerApiImportXyzIntoAtomEdit(
       {required String filePath}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -5610,16 +5610,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiImportXyzDirectEditingConstMeta,
+          kCrateApiStructureDesignerStructureDesignerApiImportXyzIntoAtomEditConstMeta,
       argValues: [filePath],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiImportXyzDirectEditingConstMeta =>
+      get kCrateApiStructureDesignerStructureDesignerApiImportXyzIntoAtomEditConstMeta =>
           const TaskConstMeta(
-            debugName: "import_xyz_direct_editing",
+            debugName: "import_xyz_into_atom_edit",
             argNames: ["filePath"],
           );
 

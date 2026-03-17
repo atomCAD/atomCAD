@@ -672,16 +672,18 @@ impl Renderer {
                 "Bond Impostors",
             );
 
-            self.gadget_atom_impostor_mesh.update_from_atom_impostor_mesh(
-                &self.device,
-                gadget_atom_impostor_mesh,
-                "Gadget Atom Impostors",
-            );
-            self.gadget_bond_impostor_mesh.update_from_bond_impostor_mesh(
-                &self.device,
-                gadget_bond_impostor_mesh,
-                "Gadget Bond Impostors",
-            );
+            self.gadget_atom_impostor_mesh
+                .update_from_atom_impostor_mesh(
+                    &self.device,
+                    gadget_atom_impostor_mesh,
+                    "Gadget Atom Impostors",
+                );
+            self.gadget_bond_impostor_mesh
+                .update_from_bond_impostor_mesh(
+                    &self.device,
+                    gadget_bond_impostor_mesh,
+                    "Gadget Bond Impostors",
+                );
 
             self.main_mesh.set_identity_transform(&self.queue);
             self.wireframe_mesh.set_identity_transform(&self.queue);

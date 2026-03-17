@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 540111989;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -374873718;
 
 // Section: executor
 
@@ -5099,17 +5099,17 @@ fn wire__crate__api__structure_designer__import_xyz_api__import_xyz_impl(
         },
     )
 }
-fn wire__crate__api__structure_designer__structure_designer_api__import_xyz_direct_editing_impl(
+fn wire__crate__api__structure_designer__structure_designer_api__import_xyz_into_atom_edit_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "import_xyz_direct_editing", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "import_xyz_into_atom_edit", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
             let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
             let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_file_path = <String>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::import_xyz_direct_editing(api_file_path))?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::import_xyz_into_atom_edit(api_file_path))?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__common_api__init_app_impl(
@@ -11024,7 +11024,7 @@ fn pde_ffi_dispatcher_sync_impl(
 166 => wire__crate__api__structure_designer__import_api__import_compute_transitive_dependencies_impl(ptr, rust_vec_len, data_len),
 167 => wire__crate__api__structure_designer__import_api__import_networks_and_clear_impl(ptr, rust_vec_len, data_len),
 168 => wire__crate__api__structure_designer__import_xyz_api__import_xyz_impl(ptr, rust_vec_len, data_len),
-169 => wire__crate__api__structure_designer__structure_designer_api__import_xyz_direct_editing_impl(ptr, rust_vec_len, data_len),
+169 => wire__crate__api__structure_designer__structure_designer_api__import_xyz_into_atom_edit_impl(ptr, rust_vec_len, data_len),
 171 => wire__crate__api__structure_designer__structure_designer_api__is_custom_node_type_impl(ptr, rust_vec_len, data_len),
 172 => wire__crate__api__structure_designer__structure_designer_api__is_design_dirty_impl(ptr, rust_vec_len, data_len),
 173 => wire__crate__api__structure_designer__import_api__is_import_library_loaded_impl(ptr, rust_vec_len, data_len),
@@ -16330,7 +16330,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -16354,7 +16354,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

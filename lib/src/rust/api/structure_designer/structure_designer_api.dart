@@ -703,13 +703,12 @@ void setDirectEditingMode({required bool mode}) => RustLib.instance.api
 bool canSwitchToDirectEditingMode() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiCanSwitchToDirectEditingMode();
 
-/// Imports an XYZ file in direct editing mode.
-/// Creates a new project with an import_xyz node wired into an atom_edit node.
+/// Imports an XYZ file into the active atom_edit node's diff layer.
+/// Atoms and bonds are merged directly as pure additions (incremental import).
 /// Returns an empty string on success, or an error message on failure.
-String importXyzDirectEditing({required String filePath}) =>
-    RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiImportXyzDirectEditing(
-            filePath: filePath);
+String importXyzIntoAtomEdit({required String filePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiImportXyzIntoAtomEdit(
+        filePath: filePath);
 
 /// Returns the number of node networks in the current project.
 int getNetworkCount() => RustLib.instance.api

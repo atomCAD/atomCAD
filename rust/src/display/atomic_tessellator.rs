@@ -911,8 +911,7 @@ pub fn tessellate_atom_impostor(
     visualization: &AtomicStructureVisualization,
 ) {
     let radius = get_displayed_atom_radius(atom, visualization) as f32;
-    let (color, roughness, metallic, rim_color) =
-        get_atom_impostor_appearance(atom, display_state);
+    let (color, roughness, metallic, rim_color) = get_atom_impostor_appearance(atom, display_state);
 
     // Add the atom quad to the impostor mesh
     atom_impostor_mesh.add_atom_quad(

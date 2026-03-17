@@ -2,7 +2,9 @@ use super::atom_edit_data::*;
 use super::types::*;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::simulation::minimize::MinimizationConfig;
-use crate::crystolecule::simulation::minimize::{minimize_with_force_field, steepest_descent_steps};
+use crate::crystolecule::simulation::minimize::{
+    minimize_with_force_field, steepest_descent_steps,
+};
 use crate::crystolecule::simulation::topology::MolecularTopology;
 use crate::crystolecule::simulation::uff::{UffForceField, VdwMode};
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -395,7 +397,13 @@ fn continuous_minimize_impl(
 
     // Phase 2: Minimize (no borrows on structure_designer)
     // Steepest descent with selected atoms frozen (during drag) or free (settle)
-    steepest_descent_steps(&force_field, &mut positions, &frozen_indices, steps, max_displacement);
+    steepest_descent_steps(
+        &force_field,
+        &mut positions,
+        &frozen_indices,
+        steps,
+        max_displacement,
+    );
 
     // Phase 3: Write back (mutable borrow)
     let atom_edit_data =

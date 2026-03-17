@@ -2465,3 +2465,171 @@ fn drag_no_frozen_returns_none_frozen() {
 
     assert!(matches!(status, DragFrozenStatus::NoneFrozen));
 }
+
+// =============================================================================
+// merge_atomic_structure tests
+// =============================================================================
+
+#[test]
+fn test_merge_atomic_structure_basic() {
+    let mut designer = setup_atom_edit();
+
+    // Build an external structure with 3 atoms and 2 bonds
+    let mut ext = AtomicStructure::new();
+    let a1 = ext.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // Carbon
+    let a2 = ext.add_atom(7, DVec3::new(1.5, 0.0, 0.0)); // Nitrogen
+    let a3 = ext.add_atom(8, DVec3::new(3.0, 0.0, 0.0)); // Oxygen
+    ext.add_bond_checked(a1, a2, BOND_SINGLE);
+    ext.add_bond_checked(a2, a3, BOND_DOUBLE);
+
+    let data = get_data_mut(&mut designer);
+    let added_ids = data.merge_atomic_structure(&ext);
+
+    // Should have added 3 atoms
+    assert_eq!(added_ids.len(), 3);
+    assert_eq!(data.diff.get_num_of_atoms(), 3);
+    assert_eq!(data.diff.get_num_of_bonds(), 2);
+
+    // Check atoms exist with correct properties
+    let d1 = data.diff.get_atom(added_ids[0]).unwrap();
+    assert_eq!(d1.atomic_number, 6);
+    assert_eq!(d1.position, DVec3::new(0.0, 0.0, 0.0));
+
+    let d2 = data.diff.get_atom(added_ids[1]).unwrap();
+    assert_eq!(d2.atomic_number, 7);
+    assert_eq!(d2.position, DVec3::new(1.5, 0.0, 0.0));
+
+    let d3 = data.diff.get_atom(added_ids[2]).unwrap();
+    assert_eq!(d3.atomic_number, 8);
+    assert_eq!(d3.position, DVec3::new(3.0, 0.0, 0.0));
+
+    // Check bonds (verify bond between first two atoms)
+    let has_bond_1_2 = d1
+        .bonds
+        .iter()
+        .any(|b| b.other_atom_id() == added_ids[1] && b.bond_order() == BOND_SINGLE);
+    assert!(has_bond_1_2, "Expected single bond between atom 1 and 2");
+
+    let has_bond_2_3 = d2
+        .bonds
+        .iter()
+        .any(|b| b.other_atom_id() == added_ids[2] && b.bond_order() == BOND_DOUBLE);
+    assert!(has_bond_2_3, "Expected double bond between atom 2 and 3");
+
+    // No anchors — these are pure additions
+    for &id in &added_ids {
+        assert!(
+            data.diff.anchor_position(id).is_none(),
+            "Pure additions must not have anchors"
+        );
+    }
+}
+
+#[test]
+fn test_merge_atomic_structure_incremental() {
+    let mut designer = setup_atom_edit();
+
+    // Merge first structure
+    let mut ext1 = AtomicStructure::new();
+    ext1.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    ext1.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+
+    let data = get_data_mut(&mut designer);
+    let ids1 = data.merge_atomic_structure(&ext1);
+    assert_eq!(ids1.len(), 2);
+
+    // Merge second structure
+    let mut ext2 = AtomicStructure::new();
+    ext2.add_atom(7, DVec3::new(5.0, 0.0, 0.0));
+    ext2.add_atom(8, DVec3::new(6.5, 0.0, 0.0));
+    ext2.add_bond_checked(1, 2, BOND_SINGLE); // bond within ext2
+
+    let ids2 = data.merge_atomic_structure(&ext2);
+    assert_eq!(ids2.len(), 2);
+
+    // All 4 atoms should exist with no ID conflicts
+    assert_eq!(data.diff.get_num_of_atoms(), 4);
+    assert_eq!(data.diff.get_num_of_bonds(), 1);
+
+    // IDs should be distinct
+    for id1 in &ids1 {
+        for id2 in &ids2 {
+            assert_ne!(id1, id2, "IDs from different merges must not collide");
+        }
+    }
+}
+
+#[test]
+fn test_merge_atomic_structure_with_existing_edits() {
+    let mut designer = setup_atom_edit();
+
+    // Manually add an atom first
+    let data = get_data_mut(&mut designer);
+    let manual_id = data.add_atom_to_diff(6, DVec3::new(-5.0, 0.0, 0.0));
+
+    // Now merge an external structure
+    let mut ext = AtomicStructure::new();
+    ext.add_atom(14, DVec3::new(10.0, 0.0, 0.0)); // Silicon
+
+    let merged_ids = data.merge_atomic_structure(&ext);
+
+    // Both should coexist
+    assert_eq!(data.diff.get_num_of_atoms(), 2);
+    assert!(data.diff.get_atom(manual_id).is_some());
+    assert!(data.diff.get_atom(merged_ids[0]).is_some());
+    assert_ne!(manual_id, merged_ids[0]);
+}
+
+#[test]
+fn test_merge_atomic_structure_undo() {
+    let mut designer = setup_atom_edit();
+
+    // Manually add one atom (outside undo wrapper, just to have pre-existing state)
+    let data = get_data_mut(&mut designer);
+    let _manual_id = data.add_atom_to_diff(6, DVec3::new(-5.0, 0.0, 0.0));
+    designer.undo_stack.clear(); // clear any stale commands
+
+    // Build external structure
+    let mut ext = AtomicStructure::new();
+    ext.add_atom(7, DVec3::new(1.0, 0.0, 0.0));
+    ext.add_atom(8, DVec3::new(2.0, 0.0, 0.0));
+    ext.add_bond_checked(1, 2, BOND_SINGLE);
+
+    // Merge with undo wrapper
+    with_atom_edit_undo(&mut designer, "Import XYZ", |sd| {
+        let data = get_data_mut(sd);
+        data.merge_atomic_structure(&ext);
+    });
+
+    // Verify merge happened
+    let data = get_data_mut(&mut designer);
+    assert_eq!(data.diff.get_num_of_atoms(), 3); // 1 manual + 2 merged
+    assert_eq!(data.diff.get_num_of_bonds(), 1);
+
+    // Undo
+    assert!(designer.undo());
+
+    // After undo, only the manual atom should remain
+    let data = get_data_mut(&mut designer);
+    assert_eq!(data.diff.get_num_of_atoms(), 1);
+    assert_eq!(data.diff.get_num_of_bonds(), 0);
+
+    // Redo
+    assert!(designer.redo());
+
+    let data = get_data_mut(&mut designer);
+    assert_eq!(data.diff.get_num_of_atoms(), 3);
+    assert_eq!(data.diff.get_num_of_bonds(), 1);
+}
+
+#[test]
+fn test_merge_atomic_structure_empty() {
+    let mut designer = setup_atom_edit();
+
+    let ext = AtomicStructure::new();
+    let data = get_data_mut(&mut designer);
+    let added_ids = data.merge_atomic_structure(&ext);
+
+    assert!(added_ids.is_empty());
+    assert_eq!(data.diff.get_num_of_atoms(), 0);
+}

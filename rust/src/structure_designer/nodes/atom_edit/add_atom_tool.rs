@@ -150,8 +150,7 @@ pub fn start_guided_placement(
 
         // Compute merge targets for FixedDots guide dots.
         // For each dot, check if an existing atom overlaps within MERGE_TOLERANCE.
-        let merge_targets = if let GuidedPlacementMode::FixedDots { guide_dots } = &placement.mode
-        {
+        let merge_targets = if let GuidedPlacementMode::FixedDots { guide_dots } = &placement.mode {
             let eval_cache_for_merge = if !is_diff_view {
                 structure_designer
                     .get_selected_node_eval_cache()
@@ -196,7 +195,12 @@ pub fn start_guided_placement(
                 None => return GuidedPlacementStartResult::NoAtomHit,
             };
 
-            (Some(source), (result_atom_id, atom), placement, merge_targets)
+            (
+                Some(source),
+                (result_atom_id, atom),
+                placement,
+                merge_targets,
+            )
         }
     };
 
@@ -360,9 +364,7 @@ pub fn place_guided_atom(
                     None => return false,
                 };
                 let position = guide_dots[dot_index].position;
-                let merge_target = merge_targets
-                    .get(dot_index)
-                    .and_then(|mt| mt.clone());
+                let merge_target = merge_targets.get(dot_index).and_then(|mt| mt.clone());
                 Some((*anchor_atom_id, position, *is_dative_bond, merge_target))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {

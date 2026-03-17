@@ -308,6 +308,43 @@ impl AtomEditData {
         self.diff.set_atom_position(atom_id, new_position);
     }
 
+    // --- Bulk merge ---
+
+    /// Merge all atoms and bonds from an external AtomicStructure into the diff
+    /// as pure additions (no anchors). Returns the list of new diff atom IDs.
+    ///
+    /// This is used by "Import XYZ" in direct editing mode to bake imported atoms
+    /// directly into the edit layer rather than wiring an import_xyz node.
+    pub fn merge_atomic_structure(&mut self, structure: &AtomicStructure) -> Vec<u32> {
+        use rustc_hash::FxHashMap;
+
+        let mut id_map: FxHashMap<u32, u32> = FxHashMap::default();
+        let mut added_ids = Vec::new();
+
+        // Phase 1: Add all atoms
+        for (&ext_id, atom) in structure.iter_atoms() {
+            let new_id = self.add_atom_recorded(atom.atomic_number, atom.position);
+            id_map.insert(ext_id, new_id);
+            added_ids.push(new_id);
+        }
+
+        // Phase 2: Add all bonds (deduplicated — only when atom_id < other_id)
+        for (&ext_id, atom) in structure.iter_atoms() {
+            for bond in &atom.bonds {
+                let other_ext_id = bond.other_atom_id();
+                if ext_id < other_ext_id {
+                    if let (Some(&new_id1), Some(&new_id2)) =
+                        (id_map.get(&ext_id), id_map.get(&other_ext_id))
+                    {
+                        self.add_bond_recorded(new_id1, new_id2, bond.bond_order());
+                    }
+                }
+            }
+        }
+
+        added_ids
+    }
+
     // --- Direct diff mutation methods ---
 
     /// Add an atom to the diff at the given position.
@@ -611,8 +648,7 @@ impl AtomEditData {
                     output
                         .decorator_mut()
                         .set_atom_display_state(output_id, AtomDisplayState::Marked);
-                    let anchor_pos =
-                        output.get_atom(output_id).map(|a| a.position);
+                    let anchor_pos = output.get_atom(output_id).map(|a| a.position);
                     if let Some(anchor_pos) = anchor_pos {
                         let merge_flags: Vec<bool> =
                             merge_targets.iter().map(|mt| mt.is_some()).collect();

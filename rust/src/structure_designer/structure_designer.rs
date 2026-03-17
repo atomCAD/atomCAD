@@ -1908,11 +1908,7 @@ impl StructureDesigner {
         }
 
         // Set as return node (without undo tracking — fresh project)
-        if let Some(network) = self
-            .node_type_registry
-            .node_networks
-            .get_mut("Main")
-        {
+        if let Some(network) = self.node_type_registry.node_networks.get_mut("Main") {
             network.return_node_id = Some(node_id);
         }
 
@@ -2006,82 +2002,34 @@ impl StructureDesigner {
         }
     }
 
-    /// Imports an XYZ file in direct editing mode.
-    /// Creates a new direct editing project, adds an import_xyz node wired into
-    /// the atom_edit node, loads the file, and clears the undo stack.
-    pub fn import_xyz_direct_editing(&mut self, file_path: &str) -> Result<(), String> {
-        // Create a fresh direct editing project
-        self.new_project_direct_editing();
+    /// Imports an XYZ file into the active atom_edit node's diff layer.
+    /// Atoms and bonds are merged directly as pure additions (no node wiring).
+    /// This is used by direct editing mode for incremental imports.
+    /// Must be called inside `with_atom_edit_undo` for undo support.
+    pub fn import_xyz_into_atom_edit(&mut self, file_path: &str) -> Result<(), String> {
+        use crate::crystolecule::io::xyz_loader::load_xyz;
+        use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 
-        // Find the atom_edit node in Main
-        let atom_edit_id = {
-            let network = self
-                .node_type_registry
-                .node_networks
-                .get("Main")
-                .ok_or("Main network not found")?;
-            network
-                .nodes
-                .values()
-                .find(|n| n.node_type_name == "atom_edit")
-                .map(|n| n.id)
-                .ok_or("atom_edit node not found")?
-        };
+        let atomic_structure =
+            load_xyz(file_path, true).map_err(|e| format!("Failed to load XYZ file: {}", e))?;
 
-        // Add import_xyz node to the left of atom_edit
-        let import_xyz_id = self.add_node("import_xyz", glam::DVec2::new(-300.0, 0.0));
-        if import_xyz_id == 0 {
-            return Err("Failed to add import_xyz node".to_string());
-        }
+        // Get the selected atom_edit node and merge the structure into its diff
+        let selected_node_id = self
+            .get_selected_node_id_with_type("atom_edit")
+            .ok_or("No atom_edit node selected")?;
+        self.mark_node_data_changed(selected_node_id);
 
-        // Set the file path on the import_xyz node and load the atomic structure
-        {
-            use crate::crystolecule::io::xyz_loader::load_xyz;
-            use crate::structure_designer::nodes::import_xyz::ImportXYZData;
+        let node_data = self
+            .get_node_network_data_mut(selected_node_id)
+            .ok_or("Failed to get node data")?;
+        let atom_edit_data = node_data
+            .as_any_mut()
+            .downcast_mut::<AtomEditData>()
+            .ok_or("Selected node is not an atom_edit node")?;
 
-            let atomic_structure = load_xyz(file_path, true)
-                .map_err(|e| format!("Failed to load XYZ file: {}", e))?;
+        atom_edit_data.merge_atomic_structure(&atomic_structure);
 
-            let import_data = Box::new(ImportXYZData {
-                file_name: Some(file_path.to_string()),
-                atomic_structure: Some(atomic_structure),
-            });
-
-            if let Some(network) = self.node_type_registry.node_networks.get_mut("Main") {
-                network.set_node_network_data(import_xyz_id, import_data);
-            }
-        }
-
-        // Wire import_xyz output (pin 0) → atom_edit molecule input (param 0)
-        // Do this directly on the network to avoid undo tracking
-        if let Some(network) = self.node_type_registry.node_networks.get_mut("Main") {
-            network.connect_nodes(
-                import_xyz_id,
-                0, // source output pin index
-                atom_edit_id,
-                0,     // dest param index (molecule)
-                false, // not multi
-            );
-        }
-
-        // Hide import_xyz node — only atom_edit should be displayed in direct mode.
-        // Without this, both nodes render their atoms, causing visual duplication.
-        if let Some(network) = self.node_type_registry.node_networks.get_mut("Main") {
-            network.displayed_node_ids.remove(&import_xyz_id);
-        }
-
-        // Re-select atom_edit (add_node may have changed selection)
-        self.select_node(atom_edit_id);
-
-        // Clear undo stack — fresh import
-        self.undo_stack.clear();
-
-        // Clear dirty flag — this is a fresh import
-        self.is_dirty = false;
-
-        // Mark full refresh to evaluate the new network
         self.mark_full_refresh();
-
         Ok(())
     }
 
@@ -3636,7 +3584,9 @@ impl StructureDesigner {
             } else {
                 // Criteria not met — fall back to node network mode
                 self.direct_editing_mode = false;
-                println!("Warning: Could not enter Direct Editing Mode — opening in Node Network Mode.");
+                println!(
+                    "Warning: Could not enter Direct Editing Mode — opening in Node Network Mode."
+                );
             }
         } else {
             self.direct_editing_mode = false;
