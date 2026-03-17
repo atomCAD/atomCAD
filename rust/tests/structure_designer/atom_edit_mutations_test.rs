@@ -495,3 +495,71 @@ fn test_transform_clears_bond_selection() {
 
     assert!(data.selection.selected_bonds.is_empty());
 }
+
+// =============================================================================
+// apply_transform frozen atom tests (issue #247)
+// =============================================================================
+
+/// A frozen diff atom must not be moved by apply_transform.
+/// Regression test for issue #247: frozen atoms were moved by the transform panel.
+#[test]
+fn test_apply_transform_skips_frozen_diff_atom() {
+    let mut data = AtomEditData::new();
+    // Atom 1 at (0,0,0) — will be frozen
+    let frozen_id = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    // Atom 2 at (2,0,0) — will not be frozen
+    let free_id = data.diff.add_atom(6, DVec3::new(2.0, 0.0, 0.0));
+
+    data.selection.selected_diff_atoms.insert(frozen_id);
+    data.selection.selected_diff_atoms.insert(free_id);
+    // Centroid of the two atoms is (1, 0, 0)
+    data.selection.selection_transform =
+        Some(Transform::new(DVec3::new(1.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY));
+
+    // Freeze atom 1
+    data.frozen_diff_atoms.insert(frozen_id);
+
+    // Apply a +1 x translation
+    let relative = Transform::new(DVec3::new(1.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
+    data.apply_transform(&relative, &[]);
+
+    // Frozen atom must stay at its original position
+    let frozen_atom = data.diff.get_atom(frozen_id).unwrap();
+    assert_eq!(
+        frozen_atom.position,
+        DVec3::new(0.0, 0.0, 0.0),
+        "Frozen diff atom must not be moved by apply_transform"
+    );
+
+    // Non-frozen atom must have moved
+    let free_atom = data.diff.get_atom(free_id).unwrap();
+    assert_eq!(
+        free_atom.position,
+        DVec3::new(3.0, 0.0, 0.0),
+        "Non-frozen diff atom must be moved by apply_transform"
+    );
+}
+
+/// When all selected diff atoms are frozen, apply_transform must not move any.
+#[test]
+fn test_apply_transform_all_frozen_diff_atoms_not_moved() {
+    let mut data = AtomEditData::new();
+    let id1 = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let id2 = data.diff.add_atom(6, DVec3::new(2.0, 0.0, 0.0));
+
+    data.selection.selected_diff_atoms.insert(id1);
+    data.selection.selected_diff_atoms.insert(id2);
+    data.selection.selection_transform =
+        Some(Transform::new(DVec3::new(1.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY));
+
+    // Freeze both atoms
+    data.frozen_diff_atoms.insert(id1);
+    data.frozen_diff_atoms.insert(id2);
+
+    let relative = Transform::new(DVec3::new(5.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
+    data.apply_transform(&relative, &[]);
+
+    // Neither atom should have moved
+    assert_eq!(data.diff.get_atom(id1).unwrap().position, DVec3::new(0.0, 0.0, 0.0));
+    assert_eq!(data.diff.get_atom(id2).unwrap().position, DVec3::new(2.0, 0.0, 0.0));
+}

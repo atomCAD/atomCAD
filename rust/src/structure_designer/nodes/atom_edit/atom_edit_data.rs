@@ -914,8 +914,14 @@ impl AtomEditData {
         relative: &Transform,
         base_atoms: &[super::operations::BaseAtomPromotionInfo],
     ) {
-        // Transform existing diff atoms
-        let diff_ids: Vec<u32> = self.selection.selected_diff_atoms.iter().copied().collect();
+        // Transform existing diff atoms, skipping frozen ones.
+        let diff_ids: Vec<u32> = self
+            .selection
+            .selected_diff_atoms
+            .iter()
+            .filter(|&&id| !self.frozen_diff_atoms.contains(&id))
+            .copied()
+            .collect();
         for diff_id in diff_ids {
             let new_position = if let Some(atom) = self.diff.get_atom(diff_id) {
                 relative.apply_to_position(&atom.position)
