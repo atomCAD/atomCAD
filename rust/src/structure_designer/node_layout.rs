@@ -72,7 +72,10 @@ pub fn estimate_node_height(num_input_pins: usize, has_subtitle: bool) -> f64 {
 /// # Returns
 /// DVec2 with (width, height) in logical units
 pub fn estimate_node_size(num_input_pins: usize, has_subtitle: bool) -> DVec2 {
-    DVec2::new(NODE_WIDTH, estimate_node_height(num_input_pins, has_subtitle))
+    DVec2::new(
+        NODE_WIDTH,
+        estimate_node_height(num_input_pins, has_subtitle),
+    )
 }
 
 /// Returns the fixed node width.
@@ -112,13 +115,7 @@ pub fn duplicate_node_vertical_offset(num_input_pins: usize, has_subtitle: bool)
 ///
 /// # Returns
 /// `true` if the bounding boxes (expanded by gap) overlap
-pub fn nodes_overlap(
-    pos1: DVec2,
-    size1: DVec2,
-    pos2: DVec2,
-    size2: DVec2,
-    gap: f64,
-) -> bool {
+pub fn nodes_overlap(pos1: DVec2, size1: DVec2, pos2: DVec2, size2: DVec2, gap: f64) -> bool {
     let half_gap = gap / 2.0;
 
     // Expand both boxes by half the gap

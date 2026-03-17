@@ -4,15 +4,21 @@ use glam::f32::Vec3;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct BondImpostorVertex {
-    pub start_position: [f32; 3],     // Bond start position
-    pub end_position: [f32; 3],       // Bond end position  
-    pub quad_offset: [f32; 2],        // Quad corner offset
-    pub radius: f32,                  // Bond radius
-    pub color: [f32; 3],             // Bond color
+    pub start_position: [f32; 3], // Bond start position
+    pub end_position: [f32; 3],   // Bond end position
+    pub quad_offset: [f32; 2],    // Quad corner offset
+    pub radius: f32,              // Bond radius
+    pub color: [f32; 3],          // Bond color
 }
 
 impl BondImpostorVertex {
-    pub fn new(start_position: &Vec3, end_position: &Vec3, quad_offset: [f32; 2], radius: f32, color: &[f32; 3]) -> Self {
+    pub fn new(
+        start_position: &Vec3,
+        end_position: &Vec3,
+        quad_offset: [f32; 2],
+        radius: f32,
+        color: &[f32; 3],
+    ) -> Self {
         Self {
             start_position: [start_position.x, start_position.y, start_position.z],
             end_position: [end_position.x, end_position.y, end_position.z],
@@ -57,7 +63,7 @@ impl BondImpostorVertex {
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32x3,
                 },
-            ]
+            ],
         }
     }
 }
@@ -68,7 +74,7 @@ impl BondImpostorVertex {
  */
 pub struct BondImpostorMesh {
     pub vertices: Vec<BondImpostorVertex>,
-    pub indices: Vec<u32>,  // 6 indices per bond (2 triangles per quad)
+    pub indices: Vec<u32>, // 6 indices per bond (2 triangles per quad)
 }
 
 impl Default for BondImpostorMesh {
@@ -86,9 +92,15 @@ impl BondImpostorMesh {
     }
 
     // Returns the starting index of the added quad vertices
-    pub fn add_bond_quad(&mut self, start_position: &Vec3, end_position: &Vec3, radius: f32, color: &[f32; 3]) -> u32 {
+    pub fn add_bond_quad(
+        &mut self,
+        start_position: &Vec3,
+        end_position: &Vec3,
+        radius: f32,
+        color: &[f32; 3],
+    ) -> u32 {
         let base_index = self.vertices.len() as u32;
-        
+
         // Add 4 vertices for quad corners: bottom-left, bottom-right, top-right, top-left
         let quad_offsets = [
             [-1.0, -1.0], // bottom-left
@@ -96,7 +108,7 @@ impl BondImpostorMesh {
             [1.0, 1.0],   // top-right
             [-1.0, 1.0],  // top-left
         ];
-        
+
         for &offset in &quad_offsets {
             self.vertices.push(BondImpostorVertex::new(
                 start_position,
@@ -106,10 +118,10 @@ impl BondImpostorMesh {
                 color,
             ));
         }
-        
+
         // Add 6 indices for 2 triangles (quad)
         self.add_quad(base_index, base_index + 1, base_index + 2, base_index + 3);
-        
+
         base_index
     }
 
@@ -119,7 +131,7 @@ impl BondImpostorMesh {
         self.indices.push(index0);
         self.indices.push(index1);
         self.indices.push(index2);
-        
+
         // Second triangle: 2, 3, 0
         self.indices.push(index2);
         self.indices.push(index3);
@@ -127,11 +139,13 @@ impl BondImpostorMesh {
     }
 
     // Add a bond directly specifying two positions and color
-    pub fn add_bond_with_positions(&mut self, 
-                                 start_pos: &Vec3, 
-                                 end_pos: &Vec3,
-                                 radius: f32,
-                                 color: &[f32; 3]) {
+    pub fn add_bond_with_positions(
+        &mut self,
+        start_pos: &Vec3,
+        end_pos: &Vec3,
+        radius: f32,
+        color: &[f32; 3],
+    ) {
         self.add_bond_quad(start_pos, end_pos, radius, color);
     }
 
@@ -142,19 +156,3 @@ impl BondImpostorMesh {
         vertices_bytes + indices_bytes
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -282,6 +282,9 @@ class NodeNetworkState extends State<NodeNetwork> {
   Rect? _selectionRect; // Current rectangle being drawn (screen coords)
   Offset? _selectionRectStart; // Start point of rectangle drag (screen coords)
 
+  /// Last known mouse position in screen coordinates (for Ctrl+V paste)
+  Offset _lastMousePosition = Offset.zero;
+
   @override
   void initState() {
     super.initState();
@@ -291,14 +294,43 @@ class NodeNetworkState extends State<NodeNetwork> {
     });
     // Set up wire drop callback
     widget.graphModel.onWireDroppedInEmptySpace = _handleWireDropInEmptySpace;
+    // Register scroll-to-node callback for click-to-activate
+    widget.graphModel.onScrollToNode = _scrollToNode;
   }
 
   @override
   void dispose() {
-    // Clear the callback when disposing
+    // Clear the callbacks when disposing
     widget.graphModel.onWireDroppedInEmptySpace = null;
+    widget.graphModel.onScrollToNode = null;
     focusNode.dispose();
     super.dispose();
+  }
+
+  /// Scrolls the node network view to center the given node.
+  void _scrollToNode(BigInt nodeId) {
+    final node = widget.graphModel.nodeNetworkView?.nodes[nodeId];
+    if (node == null) return;
+
+    // Get the widget's render box size for centering
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final viewportSize = renderBox.size;
+
+    final scale = getZoomScale(_zoomLevel);
+    final nodeSize = getNodeSize(node, _zoomLevel);
+    // Node center in logical space
+    final nodeCenterLogical = Offset(
+      node.position.x + nodeSize.width / scale / 2,
+      node.position.y + nodeSize.height / scale / 2,
+    );
+    // Pan offset so node center maps to viewport center:
+    // screenCenter = (nodeCenterLogical + panOffset) * scale
+    // panOffset = (screenCenter / scale) - nodeCenterLogical
+    final viewportCenter = Offset(viewportSize.width / 2, viewportSize.height / 2);
+    setState(() {
+      _panOffset = (viewportCenter / scale) - nodeCenterLogical;
+    });
   }
 
   /// Handles wire dropped in empty space - shows filtered Add Node popup
@@ -690,16 +722,53 @@ class NodeNetworkState extends State<NodeNetwork> {
       return;
     }
 
-    // Only show add node popup if clicked on empty space (not on a node)
+    // Only show context menu if clicked on empty space (not on a node)
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
-      String? selectedNode = await showAddNodePopup(context);
-      if (selectedNode != null) {
-        // Convert screen position to logical coordinates for node creation
-        final scale = getZoomScale(_zoomLevel);
-        final logicalPosition =
-            screenToLogical(details.localPosition, _panOffset, scale);
-        model.createNode(selectedNode, logicalPosition);
+      final scale = getZoomScale(_zoomLevel);
+      final logicalPosition =
+          screenToLogical(details.localPosition, _panOffset, scale);
+
+      if (model.hasClipboardContent()) {
+        // Show intermediary context menu with Add Node and Paste options
+        final RenderBox overlay =
+            Overlay.of(context).context.findRenderObject() as RenderBox;
+        final RelativeRect position = RelativeRect.fromRect(
+          Rect.fromPoints(
+              details.globalPosition, details.globalPosition),
+          Offset.zero & overlay.size,
+        );
+
+        final value = await showMenu<String>(
+          context: context,
+          position: position,
+          items: [
+            const PopupMenuItem(
+              value: 'add_node',
+              child: Text('Add Node...'),
+            ),
+            const PopupMenuItem(
+              value: 'paste',
+              child: Text('Paste (Ctrl+V)'),
+            ),
+          ],
+        );
+
+        if (!context.mounted) return;
+        if (value == 'add_node') {
+          String? selectedNode = await showAddNodePopup(context);
+          if (selectedNode != null) {
+            model.createNode(selectedNode, logicalPosition);
+          }
+        } else if (value == 'paste') {
+          model.pasteAtPosition(logicalPosition.dx, logicalPosition.dy);
+        }
+      } else {
+        // No clipboard content - show Add Node dialog directly (existing behavior)
+        String? selectedNode = await showAddNodePopup(context);
+        if (selectedNode != null) {
+          model.createNode(selectedNode, logicalPosition);
+        }
       }
     }
     focusNode.requestFocus();
@@ -768,6 +837,9 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle pointer move event for panning (middle mouse or Shift + right mouse) and rectangle selection
   void _handlePointerMove(PointerMoveEvent event) {
+    // Always track mouse position for paste (Ctrl+V)
+    _lastMousePosition = event.localPosition;
+
     if ((_isMiddleMousePanning || _isShiftRightMousePanning) &&
         _lastPanPosition != null) {
       setState(() {
@@ -909,6 +981,8 @@ class NodeNetworkState extends State<NodeNetwork> {
               //    event.logicalKey.toString() +
               //    " event.physicalKey: " +
               //    event.physicalKey.toString());
+              // Ctrl+Z (undo) and Ctrl+Shift+Z / Ctrl+Y (redo) are handled
+              // by the top-level StructureDesigner keyboard handler.
               if (HardwareKeyboard.instance.isControlPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyD) {
                 if (model.nodeNetworkView == null) {
@@ -921,6 +995,29 @@ class NodeNetworkState extends State<NodeNetwork> {
                 }
 
                 model.duplicateNode(selectedNodeId);
+                return KeyEventResult.handled;
+              }
+              // Ctrl+C: Copy selection
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyC) {
+                model.copySelection();
+                return KeyEventResult.handled;
+              }
+              // Ctrl+V: Paste at cursor position
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyV) {
+                if (model.hasClipboardContent()) {
+                  final scale = getZoomScale(_zoomLevel);
+                  final logicalPos = screenToLogical(
+                      _lastMousePosition, _panOffset, scale);
+                  model.pasteAtPosition(logicalPos.dx, logicalPos.dy);
+                }
+                return KeyEventResult.handled;
+              }
+              // Ctrl+X: Cut selection
+              if (HardwareKeyboard.instance.isControlPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyX) {
+                model.cutSelection();
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.delete ||

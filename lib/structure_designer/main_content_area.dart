@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_resizable_container/flutter_resizable_container.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart';
-import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/network_editor_tabs.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
@@ -13,15 +13,25 @@ class MainContentArea extends StatelessWidget {
   /// Whether the division between viewport and node network is vertical (true) or horizontal (false)
   final bool verticalDivision;
 
+  /// When true, render only the viewport (no node network editor or node data panel).
+  final bool directEditingMode;
+
   const MainContentArea({
     required this.graphModel,
     required this.nodeNetworkKey,
     this.verticalDivision = true,
+    this.directEditingMode = false,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (directEditingMode) {
+      return Expanded(
+        child: StructureDesignerViewport(graphModel: graphModel),
+      );
+    }
+
     return Expanded(
       child: ResizableContainer(
         direction: verticalDivision ? Axis.vertical : Axis.horizontal,
@@ -51,9 +61,12 @@ class MainContentArea extends StatelessWidget {
     );
   }
 
-  /// Builds the NodeNetwork widget with the global key
+  /// Builds the NetworkEditorTabs widget (Graph/Text tabs) with the global key
   Widget _buildNodeNetwork() {
-    return NodeNetwork(key: nodeNetworkKey, graphModel: graphModel);
+    return NetworkEditorTabs(
+      graphModel: graphModel,
+      nodeNetworkKey: nodeNetworkKey,
+    );
   }
 
   /// Builds the network panel for vertical layout (side-by-side network and data)

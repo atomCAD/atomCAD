@@ -267,6 +267,50 @@ void main() {
       expect(find.text('Background color (RGB)'), findsOneWidget);
     });
 
+    testWidgets('Show axes checkbox is visible and works', (tester) async {
+      await pumpApp(tester, model);
+
+      // Open preferences dialog
+      await tester.tap(find.byKey(TestKeys.editMenu));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(TestKeys.preferencesMenuItem));
+      await tester.pumpAndSettle();
+
+      // Scroll down to find the show axes checkbox
+      await tester.scrollUntilVisible(
+        TestFinders.showAxesCheckbox,
+        100.0,
+        scrollable: find.byType(Scrollable).first,
+      );
+
+      // Verify checkbox is visible
+      expect(TestFinders.showAxesCheckbox, findsOneWidget);
+      expect(find.text('Show axes'), findsOneWidget);
+
+      // Get initial value
+      final initialValue = model.preferences?.backgroundPreferences.showAxes;
+
+      // Toggle the checkbox
+      await tester.tap(TestFinders.showAxesCheckbox);
+      await tester.pumpAndSettle();
+
+      // Verify value changed
+      expect(
+        model.preferences?.backgroundPreferences.showAxes,
+        isNot(equals(initialValue)),
+      );
+
+      // Toggle back
+      await tester.tap(TestFinders.showAxesCheckbox);
+      await tester.pumpAndSettle();
+
+      // Verify back to original
+      expect(
+        model.preferences?.backgroundPreferences.showAxes,
+        equals(initialValue),
+      );
+    });
+
     testWidgets('Show grid checkbox is visible', (tester) async {
       await pumpApp(tester, model);
 
@@ -285,7 +329,7 @@ void main() {
 
       // Verify checkbox is visible
       expect(TestFinders.showGridCheckbox, findsOneWidget);
-      expect(find.text('Show axes and grids'), findsOneWidget);
+      expect(find.text('Show grid'), findsOneWidget);
     });
 
     testWidgets('Show grid checkbox works', (tester) async {

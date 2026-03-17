@@ -68,6 +68,27 @@ vector_math.Vector3 rotatePointAroundAxis(vector_math.Vector3 axisPos,
   return rotation.rotated(point - axisPos) + axisPos;
 }
 
+/// Interface for tools that need to take over primary mouse button interactions.
+/// When the delegate returns true, the base class skips its own click-threshold
+/// / gadget logic. When it returns false, the base class runs normally.
+abstract class PrimaryPointerDelegate {
+  /// Called on primary button down. Return true to consume (base won't do
+  /// click-threshold / gadget hit test). Return false to let base handle it.
+  bool onPrimaryDown(Offset pos);
+
+  /// Called on primary button move while consumed. Return true to consume.
+  /// Return false to let base handle it (e.g., for gadget dragging).
+  bool onPrimaryMove(Offset pos);
+
+  /// Called on primary button up while consumed. Return true to consume.
+  /// Return false to let base handle it.
+  bool onPrimaryUp(Offset pos);
+
+  /// Called when the pointer interaction is cancelled (e.g., system steal,
+  /// window focus loss). Resets any in-progress interaction.
+  void onPrimaryCancel();
+}
+
 abstract class CadViewport extends StatefulWidget {
   const CadViewport({super.key});
 }
@@ -95,9 +116,35 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   double _cameraMovePerPixel = 0.0;
 
   bool isGadgetDragging = false;
+  bool _delegateConsumedDown = false;
+
+  // Coalesced camera drag position — multiple mouse events between frames
+  // are merged so only the last position is processed before each render.
+  Offset? _pendingCameraDragPos;
 
   int draggedGadgetHandle =
       -1; // Relevant when _dragState == ViewportDragState.gadgetDrag
+
+  /// Override in subclass to provide a delegate for the active tool.
+  @protected
+  PrimaryPointerDelegate? get primaryPointerDelegate => null;
+
+  /// Start a gadget drag from a known handle index (no Flutter-side hit test).
+  /// Used when Rust already determined the gadget was hit.
+  @protected
+  void startGadgetDragFromHandle(int handleIndex, Offset pointerPos) {
+    dragState = ViewportDragState.defaultDrag;
+    _dragStartPointerPos = pointerPos;
+    final ray = getRayFromPointerPos(pointerPos);
+    isGadgetDragging = true;
+    draggedGadgetHandle = transformDraggedGadgetHandle(handleIndex);
+    gadgetStartDrag(
+      handleIndex: draggedGadgetHandle,
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    renderingNeeded();
+  }
 
   void onPointerSignal(PointerSignalEvent pointerSignal) {
     if (pointerSignal is PointerScrollEvent) {
@@ -186,7 +233,12 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     if (event.kind == PointerDeviceKind.mouse) {
       switch (event.buttons) {
         case kPrimaryMouseButton:
-          //print('Left mouse button pressed at ${event.position}');
+          final delegate = primaryPointerDelegate;
+          if (delegate != null && delegate.onPrimaryDown(event.localPosition)) {
+            _delegateConsumedDown = true;
+            return;
+          }
+          _delegateConsumedDown = false;
           startPrimaryDrag(event.localPosition);
           break;
         case kSecondaryMouseButton:
@@ -208,13 +260,20 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
   void onPointerMove(PointerMoveEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
-      //print('Mouse moved to ${event.position}');
+      if (_delegateConsumedDown) {
+        final delegate = primaryPointerDelegate;
+        if (delegate != null && delegate.onPrimaryMove(event.localPosition)) {
+          return;
+        }
+        // Delegate declined move (e.g., gadget dragging) — fall through to base
+      }
       switch (dragState) {
         case ViewportDragState.move:
-          cameraMove(event.localPosition);
-          break;
         case ViewportDragState.rotate:
-          rotateCamera(event.localPosition);
+          // Coalesce camera drag events — just store latest position,
+          // actual update happens once in _handlePersistentFrame before render.
+          _pendingCameraDragPos = event.localPosition;
+          renderingNeeded();
           break;
         case ViewportDragState.defaultDrag:
           defaultDrag(event.localPosition);
@@ -226,8 +285,32 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
   void onPointerUp(PointerUpEvent event) {
     if (event.kind == PointerDeviceKind.mouse) {
-      //print('Mouse button released at ${event.position}');
+      if (_delegateConsumedDown) {
+        final delegate = primaryPointerDelegate;
+        if (delegate != null && delegate.onPrimaryUp(event.localPosition)) {
+          _delegateConsumedDown = false;
+          return;
+        }
+        // Delegate declined up (e.g., gadget dragging) — fall through to base
+        _delegateConsumedDown = false;
+      }
       endDrag(event.localPosition);
+    }
+  }
+
+  void onPointerCancel(PointerCancelEvent event) {
+    if (_delegateConsumedDown) {
+      final delegate = primaryPointerDelegate;
+      delegate?.onPrimaryCancel();
+      _delegateConsumedDown = false;
+    }
+    // Reset any base-class drag state
+    if (dragState != ViewportDragState.noDrag) {
+      dragState = ViewportDragState.noDrag;
+      if (isGadgetDragging) {
+        gadgetEndDrag();
+        isGadgetDragging = false;
+      }
     }
   }
 
@@ -238,7 +321,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void _moveCameraAndRender(
       {required APIVec3 eye, required APIVec3 target, required APIVec3 up}) {
     moveCamera(eye: eye, target: target, up: up);
-    refreshFromKernel();
+    // Skip refreshFromKernel() during camera drags — only camera data changed,
+    // node networks/tools/preferences are untouched. Refresh on drag end instead.
     renderingNeeded();
   }
 
@@ -304,7 +388,28 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
   void _handlePersistentFrame(Duration timeStamp) {
     // Check if widget is still mounted to prevent errors
     if (mounted && _texturePtr != null) {
+      // Process coalesced camera drag before rendering — many mouse events
+      // may have queued up while the previous render was blocking; only the
+      // last position matters.
+      _flushPendingCameraDrag();
       provideTexture(texturePtr: _texturePtr!);
+    }
+  }
+
+  void _flushPendingCameraDrag([ViewportDragState? overrideState]) {
+    final pos = _pendingCameraDragPos;
+    if (pos == null) return;
+    _pendingCameraDragPos = null;
+
+    switch (overrideState ?? dragState) {
+      case ViewportDragState.move:
+        cameraMove(pos);
+        break;
+      case ViewportDragState.rotate:
+        rotateCamera(pos);
+        break;
+      default:
+        break;
     }
   }
 
@@ -508,6 +613,14 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
 
     dragState = ViewportDragState.noDrag;
 
+    // Flush any coalesced camera move so the final position is applied,
+    // then refresh the full UI state (was skipped during drag for performance).
+    if (oldDragState == ViewportDragState.move ||
+        oldDragState == ViewportDragState.rotate) {
+      _flushPendingCameraDrag(oldDragState);
+      refreshFromKernel();
+    }
+
     if (oldDragState == ViewportDragState.defaultDrag && isGadgetDragging) {
       gadgetEndDrag();
       renderingNeeded();
@@ -633,6 +746,9 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
                   },
                   onPointerUp: (PointerUpEvent event) {
                     onPointerUp(event);
+                  },
+                  onPointerCancel: (PointerCancelEvent event) {
+                    onPointerCancel(event);
                   },
                   child: Texture(
                     textureId: textureId!,

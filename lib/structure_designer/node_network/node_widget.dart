@@ -6,6 +6,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
+import 'package:flutter_cad/structure_designer/factor_into_subnetwork_dialog.dart';
 
 /// Key constants for node widget testing
 class NodeWidgetKeys {
@@ -236,7 +237,10 @@ class NodeWidget extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque, // Make entire node area interactive
       onTapDown: (details) => _handleNodeTap(context),
-      onPanStart: (details) => _handleNodeTap(context),
+      onPanStart: (details) {
+        _handleNodeTap(context);
+        _handleNodeDragStart(context);
+      },
       onPanUpdate: (details) => _handleNodeDrag(context, details),
       onPanEnd: (details) => _handleNodeDragEnd(context),
       onSecondaryTapDown: (details) => _handleContextMenu(context, details),
@@ -267,69 +271,13 @@ class NodeWidget extends StatelessWidget {
         // Title Bar
         GestureDetector(
           onTapDown: (details) => _handleNodeTap(context),
-          onPanStart: (details) => _handleNodeTap(context),
+          onPanStart: (details) {
+            _handleNodeTap(context);
+            _handleNodeDragStart(context);
+          },
           onPanUpdate: (details) => _handleNodeDrag(context, details),
           onPanEnd: (details) => _handleNodeDragEnd(context),
-          onSecondaryTapDown: (details) {
-            final model =
-                Provider.of<StructureDesignerModel>(context, listen: false);
-            model.setSelectedNode(node.id);
-
-            final RenderBox overlay =
-                Overlay.of(context).context.findRenderObject() as RenderBox;
-            final RelativeRect position = RelativeRect.fromRect(
-              Rect.fromPoints(
-                details.globalPosition,
-                details.globalPosition,
-              ),
-              Offset.zero & overlay.size,
-            );
-
-            // Check if this is a custom node
-            final bool isCustomNode =
-                isCustomNodeType(nodeTypeName: node.nodeTypeName);
-
-            showMenu(
-              context: context,
-              position: position,
-              items: [
-                if (isCustomNode)
-                  PopupMenuItem(
-                    value: 'go_to_definition',
-                    child: Text('Go to Definition'),
-                  ),
-                PopupMenuItem(
-                  value: 'return',
-                  child: Text(node.returnNode
-                      ? 'Unset as return node'
-                      : 'Set as return node'),
-                ),
-                PopupMenuItem(
-                  value: 'duplicate',
-                  child: Text('Duplicate node (Ctrl+D)'),
-                ),
-              ],
-            ).then((value) {
-              if (!context.mounted) return;
-              if (value == 'go_to_definition') {
-                final model =
-                    Provider.of<StructureDesignerModel>(context, listen: false);
-                model.setActiveNodeNetwork(node.nodeTypeName);
-              } else if (value == 'return') {
-                final model =
-                    Provider.of<StructureDesignerModel>(context, listen: false);
-                if (node.returnNode) {
-                  model.setReturnNodeId(null);
-                } else {
-                  model.setReturnNodeId(node.id);
-                }
-              } else if (value == 'duplicate') {
-                final model =
-                    Provider.of<StructureDesignerModel>(context, listen: false);
-                model.duplicateNode(node.id);
-              }
-            });
-          },
+          onSecondaryTapDown: (details) => _handleContextMenu(context, details),
           child: Container(
             padding:
                 const EdgeInsets.only(top: 4, bottom: 4, left: 8, right: 2),
@@ -565,6 +513,12 @@ class NodeWidget extends StatelessWidget {
     }
   }
 
+  /// Handles the start of a node drag - captures positions for undo coalescing
+  void _handleNodeDragStart(BuildContext context) {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    model.beginMoveNodes();
+  }
+
   /// Handles node drag for positioning - moves all selected nodes if this node is selected
   void _handleNodeDrag(BuildContext context, DragUpdateDetails details) {
     // Convert screen-space delta to logical-space delta
@@ -592,12 +546,19 @@ class NodeWidget extends StatelessWidget {
       // Only commit position of this single node
       model.updateNodePosition(node.id);
     }
+    // End the move group for undo coalescing
+    model.endMoveNodes();
   }
 
   /// Handles context menu for node
   void _handleContextMenu(BuildContext context, TapDownDetails details) {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
-    model.setSelectedNode(node.id);
+
+    // Only change selection if this node isn't already selected
+    // This preserves multi-selection for operations like "Factor out to Subnetwork"
+    if (!node.selected) {
+      model.setSelectedNode(node.id);
+    }
 
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -610,6 +571,10 @@ class NodeWidget extends StatelessWidget {
     );
 
     final bool isCustomNode = isCustomNodeType(nodeTypeName: node.nodeTypeName);
+
+    // Check if the selection can be factored into a subnetwork
+    final factorInfo = getFactorSelectionInfo();
+    final bool canFactor = factorInfo.canFactor;
 
     showMenu(
       context: context,
@@ -629,6 +594,19 @@ class NodeWidget extends StatelessWidget {
           value: 'duplicate',
           child: Text('Duplicate node (Ctrl+D)'),
         ),
+        PopupMenuItem(
+          value: 'copy',
+          child: Text('Copy (Ctrl+C)'),
+        ),
+        PopupMenuItem(
+          value: 'cut',
+          child: Text('Cut (Ctrl+X)'),
+        ),
+        if (canFactor)
+          PopupMenuItem(
+            value: 'factor_into_subnetwork',
+            child: Text('Factor out to Subnetwork...'),
+          ),
       ],
     ).then((value) {
       if (!context.mounted) return;
@@ -648,6 +626,18 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.duplicateNode(node.id);
+      } else if (value == 'copy') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.copySelection();
+      } else if (value == 'cut') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.cutSelection();
+      } else if (value == 'factor_into_subnetwork') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        showFactorIntoSubnetworkDialog(context, model);
       }
     });
   }

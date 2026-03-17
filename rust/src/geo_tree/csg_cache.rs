@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use std::mem;
 use crate::geo_tree::csg_types::{CSGMesh, CSGSketch};
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
+use std::mem;
+use std::sync::Arc;
 
 /// Statistics for cache performance monitoring
 #[derive(Debug, Clone, Default)]
@@ -45,22 +45,36 @@ impl CacheStats {
     /// Print a formatted summary of cache statistics
     pub fn print_summary(&self) {
         println!("=== CSG Conversion Cache Statistics ===");
-        println!("Meshes:   {} hits, {} misses ({:.1}% hit rate)", 
-            self.mesh_hits, self.mesh_misses, self.mesh_hit_rate() * 100.0);
-        println!("          {:.2} MB / {:.2} MB ({:.1}% memory usage)",
+        println!(
+            "Meshes:   {} hits, {} misses ({:.1}% hit rate)",
+            self.mesh_hits,
+            self.mesh_misses,
+            self.mesh_hit_rate() * 100.0
+        );
+        println!(
+            "          {:.2} MB / {:.2} MB ({:.1}% memory usage)",
             self.mesh_memory_bytes as f64 / 1_048_576.0,
             self.mesh_capacity_bytes as f64 / 1_048_576.0,
-            (self.mesh_memory_bytes as f64 / self.mesh_capacity_bytes as f64) * 100.0);
-        println!("Sketches: {} hits, {} misses ({:.1}% hit rate)", 
-            self.sketch_hits, self.sketch_misses, self.sketch_hit_rate() * 100.0);
-        println!("          {:.2} MB / {:.2} MB ({:.1}% memory usage)",
+            (self.mesh_memory_bytes as f64 / self.mesh_capacity_bytes as f64) * 100.0
+        );
+        println!(
+            "Sketches: {} hits, {} misses ({:.1}% hit rate)",
+            self.sketch_hits,
+            self.sketch_misses,
+            self.sketch_hit_rate() * 100.0
+        );
+        println!(
+            "          {:.2} MB / {:.2} MB ({:.1}% memory usage)",
             self.sketch_memory_bytes as f64 / 1_048_576.0,
             self.sketch_capacity_bytes as f64 / 1_048_576.0,
-            (self.sketch_memory_bytes as f64 / self.sketch_capacity_bytes as f64) * 100.0);
+            (self.sketch_memory_bytes as f64 / self.sketch_capacity_bytes as f64) * 100.0
+        );
         println!("Total lookups: {}", self.total_lookups());
-        println!("Total memory: {:.2} MB / {:.2} MB",
+        println!(
+            "Total memory: {:.2} MB / {:.2} MB",
             (self.mesh_memory_bytes + self.sketch_memory_bytes) as f64 / 1_048_576.0,
-            (self.mesh_capacity_bytes + self.sketch_capacity_bytes) as f64 / 1_048_576.0);
+            (self.mesh_capacity_bytes + self.sketch_capacity_bytes) as f64 / 1_048_576.0
+        );
     }
 }
 
@@ -73,14 +87,17 @@ pub struct CsgConversionCache {
 
 impl CsgConversionCache {
     /// Create a new cache with specified memory capacities (in bytes)
-    /// 
+    ///
     /// # Arguments
     /// * `mesh_capacity_bytes` - Maximum memory for mesh cache (default: 200 MB)
     /// * `sketch_capacity_bytes` - Maximum memory for sketch cache (default: 56 MB)
     pub fn new(mesh_capacity_bytes: usize, sketch_capacity_bytes: usize) -> Self {
         Self {
             mesh_cache: MemoryBoundedLruCache::new(mesh_capacity_bytes, estimate_arc_csg_mesh_size),
-            sketch_cache: MemoryBoundedLruCache::new(sketch_capacity_bytes, estimate_arc_csg_sketch_size),
+            sketch_cache: MemoryBoundedLruCache::new(
+                sketch_capacity_bytes,
+                estimate_arc_csg_sketch_size,
+            ),
             stats: CacheStats {
                 mesh_capacity_bytes,
                 sketch_capacity_bytes,
@@ -164,7 +181,7 @@ impl CsgConversionCache {
     pub fn current_memory_usage(&self) -> usize {
         self.mesh_cache.current_memory_bytes() + self.sketch_cache.current_memory_bytes()
     }
-    
+
     /// Get total memory capacity in bytes
     pub fn total_capacity(&self) -> usize {
         self.stats.mesh_capacity_bytes + self.stats.sketch_capacity_bytes
@@ -210,10 +227,10 @@ pub fn estimate_csg_mesh_size(mesh: &CSGMesh) -> usize {
         // Vertex is Point3<f64> + Vector3<f64> = 3*8 + 3*8 = 48 bytes
         const VERTEX_SIZE: usize = 48;
         total_size += polygon.vertices.capacity() * VERTEX_SIZE;
-        
+
         // Plane is already counted in Polygon size above (it's inline)
         // OnceLock<Aabb> is already counted in Polygon size above
-        
+
         // If the polygon's bounding box is initialized, it's already in the struct
         // OnceLock doesn't allocate extra heap memory, it's inline
     }
@@ -258,7 +275,7 @@ pub fn estimate_csg_sketch_size(sketch: &CSGSketch) -> usize {
             geo::Geometry::Polygon(polygon) => {
                 // Exterior LineString: Vec<Coord<f64>>
                 total_size += polygon.exterior().0.capacity() * mem::size_of::<geo::Coord<f64>>();
-                
+
                 // Interior LineStrings (holes): Vec<LineString>
                 for interior in polygon.interiors() {
                     total_size += interior.0.capacity() * mem::size_of::<geo::Coord<f64>>();
@@ -269,12 +286,13 @@ pub fn estimate_csg_sketch_size(sketch: &CSGSketch) -> usize {
             geo::Geometry::MultiPolygon(multi_polygon) => {
                 // Vec capacity for the polygons vector
                 total_size += multi_polygon.0.capacity() * mem::size_of::<geo::Polygon<f64>>();
-                
+
                 // Each polygon in the multi-polygon
                 for polygon in &multi_polygon.0 {
                     // Exterior LineString
-                    total_size += polygon.exterior().0.capacity() * mem::size_of::<geo::Coord<f64>>();
-                    
+                    total_size +=
+                        polygon.exterior().0.capacity() * mem::size_of::<geo::Coord<f64>>();
+
                     // Interior LineStrings
                     for interior in polygon.interiors() {
                         total_size += interior.0.capacity() * mem::size_of::<geo::Coord<f64>>();
@@ -296,10 +314,10 @@ pub fn estimate_csg_sketch_size(sketch: &CSGSketch) -> usize {
 fn estimate_arc_csg_mesh_size(mesh: &Arc<CSGMesh>) -> usize {
     // Arc overhead (reference count, weak count, data pointer)
     let arc_overhead = mem::size_of::<Arc<CSGMesh>>();
-    
+
     // Actual mesh size
     let mesh_size = estimate_csg_mesh_size(mesh.as_ref());
-    
+
     arc_overhead + mesh_size
 }
 
@@ -307,25 +325,9 @@ fn estimate_arc_csg_mesh_size(mesh: &Arc<CSGMesh>) -> usize {
 fn estimate_arc_csg_sketch_size(sketch: &Arc<CSGSketch>) -> usize {
     // Arc overhead (reference count, weak count, data pointer)
     let arc_overhead = mem::size_of::<Arc<CSGSketch>>();
-    
+
     // Actual sketch size
     let sketch_size = estimate_csg_sketch_size(sketch.as_ref());
-    
+
     arc_overhead + sketch_size
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

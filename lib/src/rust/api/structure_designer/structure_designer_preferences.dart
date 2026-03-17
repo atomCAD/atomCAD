@@ -7,18 +7,25 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
   impostors,
   ;
+
+  static Future<AtomicRenderingMethod> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesAtomicRenderingMethodDefault();
 }
 
 enum AtomicStructureVisualization {
   ballAndStick,
   spaceFilling,
   ;
+
+  static Future<AtomicStructureVisualization> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesAtomicStructureVisualizationDefault();
 }
 
 class AtomicStructureVisualizationPreferences {
@@ -33,6 +40,10 @@ class AtomicStructureVisualizationPreferences {
     this.ballAndStickCullDepth,
     this.spaceFillingCullDepth,
   });
+
+  static Future<AtomicStructureVisualizationPreferences> default_() => RustLib
+      .instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesAtomicStructureVisualizationPreferencesDefault();
 
   @override
   int get hashCode =>
@@ -54,6 +65,7 @@ class AtomicStructureVisualizationPreferences {
 
 class BackgroundPreferences {
   APIIVec3 backgroundColor;
+  bool showAxes;
   bool showGrid;
   int gridSize;
   APIIVec3 gridColor;
@@ -67,6 +79,7 @@ class BackgroundPreferences {
 
   BackgroundPreferences({
     required this.backgroundColor,
+    required this.showAxes,
     required this.showGrid,
     required this.gridSize,
     required this.gridColor,
@@ -79,9 +92,13 @@ class BackgroundPreferences {
     required this.drawingPlaneGridStrongColor,
   });
 
+  static Future<BackgroundPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesBackgroundPreferencesDefault();
+
   @override
   int get hashCode =>
       backgroundColor.hashCode ^
+      showAxes.hashCode ^
       showGrid.hashCode ^
       gridSize.hashCode ^
       gridColor.hashCode ^
@@ -99,6 +116,7 @@ class BackgroundPreferences {
       other is BackgroundPreferences &&
           runtimeType == other.runtimeType &&
           backgroundColor == other.backgroundColor &&
+          showAxes == other.showAxes &&
           showGrid == other.showGrid &&
           gridSize == other.gridSize &&
           gridColor == other.gridColor &&
@@ -115,6 +133,9 @@ enum GeometryVisualization {
   surfaceSplatting,
   explicitMesh,
   ;
+
+  static Future<GeometryVisualization> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesGeometryVisualizationDefault();
 }
 
 class GeometryVisualizationPreferences {
@@ -133,6 +154,10 @@ class GeometryVisualizationPreferences {
     required this.meshSmoothing,
     required this.displayCameraTarget,
   });
+
+  static Future<GeometryVisualizationPreferences> default_() => RustLib
+      .instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesGeometryVisualizationPreferencesDefault();
 
   @override
   int get hashCode =>
@@ -194,6 +219,9 @@ class LayoutPreferences {
     required this.autoLayoutAfterEdit,
   });
 
+  static Future<LayoutPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesLayoutPreferencesDefault();
+
   @override
   int get hashCode => layoutAlgorithm.hashCode ^ autoLayoutAfterEdit.hashCode;
 
@@ -218,6 +246,9 @@ enum MeshSmoothing {
   /// duplicates vertices at smoothing group boundaries
   smoothingGroupBased,
   ;
+
+  static Future<MeshSmoothing> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesMeshSmoothingDefault();
 }
 
 enum NodeDisplayPolicy {
@@ -225,6 +256,9 @@ enum NodeDisplayPolicy {
   preferSelected,
   preferFrontier,
   ;
+
+  static Future<NodeDisplayPolicy> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesNodeDisplayPolicyDefault();
 }
 
 class NodeDisplayPreferences {
@@ -233,6 +267,9 @@ class NodeDisplayPreferences {
   NodeDisplayPreferences({
     required this.displayPolicy,
   });
+
+  static Future<NodeDisplayPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesNodeDisplayPreferencesDefault();
 
   @override
   int get hashCode => displayPolicy.hashCode;
@@ -245,6 +282,62 @@ class NodeDisplayPreferences {
           displayPolicy == other.displayPolicy;
 }
 
+/// Preferences for energy minimization simulation.
+class SimulationPreferences {
+  /// Use spatial grid with distance cutoff for van der Waals interactions.
+  /// When false, all nonbonded pairs are computed exactly (O(N^2)).
+  /// When true (default), a 6 A cutoff is used for faster computation on large structures.
+  bool useVdwCutoff;
+
+  /// Number of steepest descent steps per drag frame.
+  /// Higher values give more relaxation per frame but cost more CPU time.
+  /// Default: 4 (matches Avogadro's default).
+  int continuousMinimizationStepsPerFrame;
+
+  /// Number of steepest descent steps to run as a "settle burst" when
+  /// the user releases the mouse after dragging. Lets the structure
+  /// relax further without a jarring full-minimize snap.
+  /// Default: 50.
+  int continuousMinimizationSettleSteps;
+
+  /// Maximum displacement (in Angstroms) for any single atom per steepest
+  /// descent step during continuous minimization.
+  /// Lower values make the structure respond more lazily to drags.
+  /// Higher values make it more rigid/responsive.
+  /// Default: 0.1 Å.
+  double continuousMinimizationMaxDisplacement;
+
+  SimulationPreferences({
+    required this.useVdwCutoff,
+    required this.continuousMinimizationStepsPerFrame,
+    required this.continuousMinimizationSettleSteps,
+    required this.continuousMinimizationMaxDisplacement,
+  });
+
+  static Future<SimulationPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesSimulationPreferencesDefault();
+
+  @override
+  int get hashCode =>
+      useVdwCutoff.hashCode ^
+      continuousMinimizationStepsPerFrame.hashCode ^
+      continuousMinimizationSettleSteps.hashCode ^
+      continuousMinimizationMaxDisplacement.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SimulationPreferences &&
+          runtimeType == other.runtimeType &&
+          useVdwCutoff == other.useVdwCutoff &&
+          continuousMinimizationStepsPerFrame ==
+              other.continuousMinimizationStepsPerFrame &&
+          continuousMinimizationSettleSteps ==
+              other.continuousMinimizationSettleSteps &&
+          continuousMinimizationMaxDisplacement ==
+              other.continuousMinimizationMaxDisplacement;
+}
+
 class StructureDesignerPreferences {
   final GeometryVisualizationPreferences geometryVisualizationPreferences;
   final NodeDisplayPreferences nodeDisplayPreferences;
@@ -252,6 +345,7 @@ class StructureDesignerPreferences {
       atomicStructureVisualizationPreferences;
   final BackgroundPreferences backgroundPreferences;
   final LayoutPreferences layoutPreferences;
+  final SimulationPreferences simulationPreferences;
 
   const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
@@ -259,12 +353,16 @@ class StructureDesignerPreferences {
     required this.atomicStructureVisualizationPreferences,
     required this.backgroundPreferences,
     required this.layoutPreferences,
+    required this.simulationPreferences,
   });
 
   StructureDesignerPreferences cloneSelf() => RustLib.instance.api
           .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesCloneSelf(
         that: this,
       );
+
+  static Future<StructureDesignerPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesDefault();
 
   factory StructureDesignerPreferences() => RustLib.instance.api
       .crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew();
@@ -275,7 +373,8 @@ class StructureDesignerPreferences {
       nodeDisplayPreferences.hashCode ^
       atomicStructureVisualizationPreferences.hashCode ^
       backgroundPreferences.hashCode ^
-      layoutPreferences.hashCode;
+      layoutPreferences.hashCode ^
+      simulationPreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -288,5 +387,6 @@ class StructureDesignerPreferences {
           atomicStructureVisualizationPreferences ==
               other.atomicStructureVisualizationPreferences &&
           backgroundPreferences == other.backgroundPreferences &&
-          layoutPreferences == other.layoutPreferences;
+          layoutPreferences == other.layoutPreferences &&
+          simulationPreferences == other.simulationPreferences;
 }

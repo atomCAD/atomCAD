@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 380" width="720" height="380">
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="720" height="380" fill="#fafafa" rx="8"/>
+  <text x="360" y="25" text-anchor="middle" font-size="15" font-weight="bold" fill="#333">Bond Resolution Decision Tree</text>
+
+  <!-- Pass 3a: Base bonds -->
+  <rect x="20" y="40" width="680" height="190" fill="#e3f2fd" rx="6" stroke="#1565c0" stroke-width="1.5"/>
+  <text x="360" y="62" text-anchor="middle" font-size="12" font-weight="bold" fill="#1565c0">Pass 3a: For each base bond A─B</text>
+
+  <!-- Either endpoint deleted? -->
+  <rect x="40" y="74" width="200" height="40" fill="#ffebee" rx="4"/>
+  <text x="140" y="99" text-anchor="middle" font-size="10" fill="#c62828">Either endpoint deleted?  →  Bond deleted</text>
+
+  <!-- Both endpoints matched by diff? -->
+  <rect x="250" y="74" width="210" height="40" fill="#fff3e0" rx="4"/>
+  <text x="355" y="92" text-anchor="middle" font-size="10" fill="#e65100">Both endpoints matched by diff?</text>
+
+  <!-- At most one matched -->
+  <rect x="470" y="74" width="220" height="40" fill="#e8f5e9" rx="4"/>
+  <text x="580" y="99" text-anchor="middle" font-size="10" fill="#2e7d32">At most one matched  →  Bond survives</text>
+
+  <!-- Sub-decisions for both matched -->
+  <line x1="355" y1="114" x2="355" y2="130" stroke="#e65100" stroke-width="1"/>
+
+  <rect x="40" y="132" width="200" height="38" fill="#ffebee" rx="3"/>
+  <text x="140" y="148" text-anchor="middle" font-size="9" fill="#c62828">Diff has BOND_DELETED</text>
+  <text x="140" y="162" text-anchor="middle" font-size="10" fill="#c62828" font-weight="bold">→ Bond explicitly deleted</text>
+
+  <rect x="255" y="132" width="200" height="38" fill="#e3f2fd" rx="3"/>
+  <text x="355" y="148" text-anchor="middle" font-size="9" fill="#1565c0">Diff has bond with order N</text>
+  <text x="355" y="162" text-anchor="middle" font-size="10" fill="#1565c0" font-weight="bold">→ Bond overridden to order N</text>
+
+  <rect x="470" y="132" width="220" height="38" fill="#e8f5e9" rx="3"/>
+  <text x="580" y="148" text-anchor="middle" font-size="9" fill="#2e7d32">No diff bond between them</text>
+  <text x="580" y="162" text-anchor="middle" font-size="10" fill="#2e7d32" font-weight="bold">→ Base bond survives unchanged</text>
+
+  <text x="360" y="200" text-anchor="middle" font-size="10" fill="#555">A base bond survives by DEFAULT unless both endpoints are in the diff AND the diff overrides it.</text>
+  <text x="360" y="215" text-anchor="middle" font-size="10" fill="#555">This means moving/replacing atoms preserves their original bonds automatically.</text>
+
+  <!-- Pass 3b: New diff bonds -->
+  <rect x="20" y="240" width="680" height="130" fill="#fff3e0" rx="6" stroke="#ff9800" stroke-width="1.5"/>
+  <text x="360" y="262" text-anchor="middle" font-size="12" font-weight="bold" fill="#e65100">Pass 3b: For each diff bond NOT already processed in Pass 3a</text>
+
+  <rect x="40" y="278" width="200" height="38" fill="#ffebee" rx="3"/>
+  <text x="140" y="294" text-anchor="middle" font-size="9" fill="#c62828">Bond order = BOND_DELETED?</text>
+  <text x="140" y="308" text-anchor="middle" font-size="10" fill="#c62828" font-weight="bold">→ Skip (no base bond to delete)</text>
+
+  <rect x="260" y="278" width="200" height="38" fill="#fff8e1" rx="3"/>
+  <text x="360" y="294" text-anchor="middle" font-size="9" fill="#e65100">Either endpoint missing in result?</text>
+  <text x="360" y="308" text-anchor="middle" font-size="10" fill="#e65100" font-weight="bold">→ Skip (silently)</text>
+
+  <rect x="480" y="278" width="210" height="38" fill="#e8f5e9" rx="3"/>
+  <text x="585" y="294" text-anchor="middle" font-size="9" fill="#2e7d32">Both endpoints in result?</text>
+  <text x="585" y="308" text-anchor="middle" font-size="10" fill="#2e7d32" font-weight="bold">→ Add new bond</text>
+
+  <text x="360" y="355" text-anchor="middle" font-size="10" fill="#555">New diff bonds connect atoms that were added, moved, or replaced. They create NEW connections</text>
+  <text x="360" y="370" text-anchor="middle" font-size="10" fill="#555">that didn't exist in the base structure.</text>
+</svg>

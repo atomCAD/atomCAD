@@ -1,20 +1,22 @@
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::text_format::TextValue;
+use crate::util::as_any::AsAny;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use crate::util::as_any::AsAny;
-use serde::{Serialize, Deserialize};
-use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::NodeType;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::text_format::TextValue;
 
-
-pub trait NodeData: Any + AsAny  {
-    fn provide_gadget(&self, structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>>;
+pub trait NodeData: Any + AsAny {
+    fn provide_gadget(
+        &self,
+        structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>>;
 
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType>;
 
@@ -25,7 +27,7 @@ pub trait NodeData: Any + AsAny  {
         node_id: u64,
         registry: &NodeTypeRegistry,
         decorate: bool,
-        context: &mut NetworkEvaluationContext
+        context: &mut NetworkEvaluationContext,
     ) -> NetworkResult;
 
     // Method to clone the trait object
@@ -56,6 +58,11 @@ pub trait NodeData: Any + AsAny  {
         Ok(())
     }
 
+    /// Clears any cached input data used for interactive editing performance.
+    /// Called by the refresh system before evaluation when upstream may have changed.
+    /// Default implementation does nothing.
+    fn clear_input_cache(&self) {}
+
     /// Returns metadata for input parameters that cannot be derived from get_text_properties().
     ///
     /// This is used by the `describe` command to provide accurate information about inputs.
@@ -72,12 +79,14 @@ pub trait NodeData: Any + AsAny  {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct NoData {
-}
+pub struct NoData {}
 
 impl NodeData for NoData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-      None
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -91,10 +100,13 @@ impl NodeData for NoData {
         node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext
+        _context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
         let node = NetworkStackElement::get_top_node(network_stack, node_id);
-        NetworkResult::Error(format!("eval not implemented for node {}", node.node_type_name))
+        NetworkResult::Error(format!(
+            "eval not implemented for node {}",
+            node.node_type_name
+        ))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -118,7 +130,10 @@ pub struct CustomNodeData {
 }
 
 impl NodeData for CustomNodeData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
         None
     }
 
@@ -133,10 +148,13 @@ impl NodeData for CustomNodeData {
         node_id: u64,
         _registry: &NodeTypeRegistry,
         _decorate: bool,
-        _context: &mut NetworkEvaluationContext
+        _context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
         let node = NetworkStackElement::get_top_node(network_stack, node_id);
-        NetworkResult::Error(format!("eval not implemented for node {}", node.node_type_name))
+        NetworkResult::Error(format!(
+            "eval not implemented for node {}",
+            node.node_type_name
+        ))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -149,7 +167,8 @@ impl NodeData for CustomNodeData {
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         // Return stored literal values for serialization
-        self.literal_values.iter()
+        self.literal_values
+            .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
@@ -161,19 +180,3 @@ impl NodeData for CustomNodeData {
         Ok(())
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

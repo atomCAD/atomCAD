@@ -9,8 +9,8 @@
 use glam::DVec2;
 
 use rust_lib_flutter_cad::structure_designer::layout::common::{
-    compute_node_depths, find_sink_nodes, find_source_nodes, get_input_node_ids,
-    get_output_node_ids, LayoutAlgorithm,
+    LayoutAlgorithm, compute_node_depths, find_sink_nodes, find_source_nodes, get_input_node_ids,
+    get_output_node_ids,
 };
 use rust_lib_flutter_cad::structure_designer::layout::compute_layout;
 use rust_lib_flutter_cad::structure_designer::node_layout;
@@ -462,8 +462,14 @@ fn test_no_node_overlap() {
             let (id1, pos1) = position_vec[i];
             let (id2, pos2) = position_vec[j];
 
-            let size1 = node_sizes.get(&id1).copied().unwrap_or(DVec2::new(160.0, 83.0));
-            let size2 = node_sizes.get(&id2).copied().unwrap_or(DVec2::new(160.0, 83.0));
+            let size1 = node_sizes
+                .get(&id1)
+                .copied()
+                .unwrap_or(DVec2::new(160.0, 83.0));
+            let size2 = node_sizes
+                .get(&id2)
+                .copied()
+                .unwrap_or(DVec2::new(160.0, 83.0));
 
             // Check if boxes overlap (no additional gap required, algorithm handles spacing)
             let overlaps = node_layout::nodes_overlap(pos1, size1, pos2, size2, 0.0);
@@ -550,10 +556,10 @@ fn test_layout_network_modifies_positions() {
 fn test_layout_algorithm_enum() {
     // Test that all algorithm variants exist and have default
     let default_algo = LayoutAlgorithm::default();
-    assert_eq!(default_algo, LayoutAlgorithm::TopologicalGrid);
+    assert_eq!(default_algo, LayoutAlgorithm::Sugiyama);
 
-    // Test that Sugiyama variant can be created (falls back to TopologicalGrid until implemented)
-    let _sugiyama = LayoutAlgorithm::Sugiyama;
+    // Test that TopologicalGrid variant can be created
+    let _topological_grid = LayoutAlgorithm::TopologicalGrid;
 }
 
 #[test]

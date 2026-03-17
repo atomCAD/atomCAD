@@ -6,8 +6,105 @@
 import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
+
+/// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
+/// the rubber-band preview line as a 2D overlay.
+class APIAddBondMoveResult {
+  /// True if we are in the Dragging state (rubber-band should be drawn).
+  final bool isDragging;
+
+  /// World position of the source atom (start of the rubber-band).
+  final double sourceAtomX;
+  final double sourceAtomY;
+  final double sourceAtomZ;
+
+  /// True if source_atom position is valid.
+  final bool hasSourcePos;
+
+  /// World position of the preview end point.
+  final double previewEndX;
+  final double previewEndY;
+  final double previewEndZ;
+
+  /// True if preview_end position is valid.
+  final bool hasPreviewEnd;
+
+  /// True if the cursor is hovering over a valid snap target atom.
+  final bool snappedToAtom;
+
+  /// Current bond order setting, for visual styling of the preview line.
+  final int bondOrder;
+
+  const APIAddBondMoveResult({
+    required this.isDragging,
+    required this.sourceAtomX,
+    required this.sourceAtomY,
+    required this.sourceAtomZ,
+    required this.hasSourcePos,
+    required this.previewEndX,
+    required this.previewEndY,
+    required this.previewEndZ,
+    required this.hasPreviewEnd,
+    required this.snappedToAtom,
+    required this.bondOrder,
+  });
+
+  @override
+  int get hashCode =>
+      isDragging.hashCode ^
+      sourceAtomX.hashCode ^
+      sourceAtomY.hashCode ^
+      sourceAtomZ.hashCode ^
+      hasSourcePos.hashCode ^
+      previewEndX.hashCode ^
+      previewEndY.hashCode ^
+      previewEndZ.hashCode ^
+      hasPreviewEnd.hashCode ^
+      snappedToAtom.hashCode ^
+      bondOrder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAddBondMoveResult &&
+          runtimeType == other.runtimeType &&
+          isDragging == other.isDragging &&
+          sourceAtomX == other.sourceAtomX &&
+          sourceAtomY == other.sourceAtomY &&
+          sourceAtomZ == other.sourceAtomZ &&
+          hasSourcePos == other.hasSourcePos &&
+          previewEndX == other.previewEndX &&
+          previewEndY == other.previewEndY &&
+          previewEndZ == other.previewEndZ &&
+          hasPreviewEnd == other.hasPreviewEnd &&
+          snappedToAtom == other.snappedToAtom &&
+          bondOrder == other.bondOrder;
+}
+
+class APIApplyDiffData {
+  final double tolerance;
+  final bool errorOnStale;
+
+  const APIApplyDiffData({
+    required this.tolerance,
+    required this.errorOnStale,
+  });
+
+  @override
+  int get hashCode => tolerance.hashCode ^ errorOnStale.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIApplyDiffData &&
+          runtimeType == other.runtimeType &&
+          tolerance == other.tolerance &&
+          errorOnStale == other.errorOnStale;
+}
 
 class APIAtomCutData {
   final double cutSdfValue;
@@ -28,6 +125,120 @@ class APIAtomCutData {
           runtimeType == other.runtimeType &&
           cutSdfValue == other.cutSdfValue &&
           unitCellSize == other.unitCellSize;
+}
+
+class APIAtomEditData {
+  final APIAtomEditTool activeTool;
+  final int? bondToolLastAtomId;
+  final int bondToolBondOrder;
+  final int selectedAtomicNumber;
+  final bool isInGuidedPlacement;
+  final bool hasSelectedAtoms;
+  final bool hasSelectedBonds;
+  final int selectedBondCount;
+
+  /// Bond order of selected bonds (1-7), or None if no bonds selected or mixed orders.
+  final int? selectedBondOrder;
+  final bool hasSelection;
+  final APITransform? selectionTransform;
+  final bool outputDiff;
+  final bool showAnchorArrows;
+  final bool includeBaseBondsInDiff;
+  final bool errorOnStaleEntries;
+  final bool showGadget;
+  final APIDiffStats diffStats;
+  final APIMeasurement? measurement;
+
+  /// Result-space ID of the most recently selected atom (for dialog defaults).
+  final int? lastSelectedResultAtomId;
+
+  /// True if any atom has the frozen flag set.
+  final bool hasFrozenAtoms;
+
+  /// Whether continuous minimization is enabled on this atom_edit node.
+  final bool continuousMinimization;
+
+  const APIAtomEditData({
+    required this.activeTool,
+    this.bondToolLastAtomId,
+    required this.bondToolBondOrder,
+    required this.selectedAtomicNumber,
+    required this.isInGuidedPlacement,
+    required this.hasSelectedAtoms,
+    required this.hasSelectedBonds,
+    required this.selectedBondCount,
+    this.selectedBondOrder,
+    required this.hasSelection,
+    this.selectionTransform,
+    required this.outputDiff,
+    required this.showAnchorArrows,
+    required this.includeBaseBondsInDiff,
+    required this.errorOnStaleEntries,
+    required this.showGadget,
+    required this.diffStats,
+    this.measurement,
+    this.lastSelectedResultAtomId,
+    required this.hasFrozenAtoms,
+    required this.continuousMinimization,
+  });
+
+  @override
+  int get hashCode =>
+      activeTool.hashCode ^
+      bondToolLastAtomId.hashCode ^
+      bondToolBondOrder.hashCode ^
+      selectedAtomicNumber.hashCode ^
+      isInGuidedPlacement.hashCode ^
+      hasSelectedAtoms.hashCode ^
+      hasSelectedBonds.hashCode ^
+      selectedBondCount.hashCode ^
+      selectedBondOrder.hashCode ^
+      hasSelection.hashCode ^
+      selectionTransform.hashCode ^
+      outputDiff.hashCode ^
+      showAnchorArrows.hashCode ^
+      includeBaseBondsInDiff.hashCode ^
+      errorOnStaleEntries.hashCode ^
+      showGadget.hashCode ^
+      diffStats.hashCode ^
+      measurement.hashCode ^
+      lastSelectedResultAtomId.hashCode ^
+      hasFrozenAtoms.hashCode ^
+      continuousMinimization.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomEditData &&
+          runtimeType == other.runtimeType &&
+          activeTool == other.activeTool &&
+          bondToolLastAtomId == other.bondToolLastAtomId &&
+          bondToolBondOrder == other.bondToolBondOrder &&
+          selectedAtomicNumber == other.selectedAtomicNumber &&
+          isInGuidedPlacement == other.isInGuidedPlacement &&
+          hasSelectedAtoms == other.hasSelectedAtoms &&
+          hasSelectedBonds == other.hasSelectedBonds &&
+          selectedBondCount == other.selectedBondCount &&
+          selectedBondOrder == other.selectedBondOrder &&
+          hasSelection == other.hasSelection &&
+          selectionTransform == other.selectionTransform &&
+          outputDiff == other.outputDiff &&
+          showAnchorArrows == other.showAnchorArrows &&
+          includeBaseBondsInDiff == other.includeBaseBondsInDiff &&
+          errorOnStaleEntries == other.errorOnStaleEntries &&
+          showGadget == other.showGadget &&
+          diffStats == other.diffStats &&
+          measurement == other.measurement &&
+          lastSelectedResultAtomId == other.lastSelectedResultAtomId &&
+          hasFrozenAtoms == other.hasFrozenAtoms &&
+          continuousMinimization == other.continuousMinimization;
+}
+
+enum APIAtomEditTool {
+  default_,
+  addAtom,
+  addBond,
+  ;
 }
 
 class APIAtomFillData {
@@ -138,6 +349,26 @@ class APIAtomTransData {
           rotation == other.rotation;
 }
 
+/// Bond length computation mode for guided atom placement.
+enum APIBondLengthMode {
+  /// Use crystal lattice bond length table (with UFF fallback).
+  crystal,
+
+  /// Always use UFF rest bond length formula.
+  uff,
+  ;
+}
+
+/// Bond mode for guided atom placement saturation limits.
+enum APIBondMode {
+  /// Use element-specific covalent max neighbors.
+  covalent,
+
+  /// Use geometric max (unlocks lone pair / empty orbital positions).
+  dative,
+  ;
+}
+
 class APIBoolData {
   final bool value;
 
@@ -154,6 +385,28 @@ class APIBoolData {
       other is APIBoolData &&
           runtimeType == other.runtimeType &&
           value == other.value;
+}
+
+/// A candidate node in a viewport pick disambiguation.
+class APICandidateNode {
+  final BigInt nodeId;
+  final String nodeName;
+
+  const APICandidateNode({
+    required this.nodeId,
+    required this.nodeName,
+  });
+
+  @override
+  int get hashCode => nodeId.hashCode ^ nodeName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICandidateNode &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          nodeName == other.nodeName;
 }
 
 class APICircleData {
@@ -271,6 +524,65 @@ enum APIDataTypeBase {
   ;
 }
 
+class APIDiffStats {
+  final int atomsAdded;
+  final int atomsDeleted;
+  final int atomsModified;
+  final int bondsAdded;
+  final int bondsDeleted;
+
+  /// Anchored diff atoms whose base atom no longer exists (skipped).
+  final int orphanedTrackedAtoms;
+
+  /// Delete markers that found no base atom to delete (no-op).
+  final int unmatchedDeleteMarkers;
+
+  /// Diff bonds where one or both endpoints were missing from the result (skipped).
+  final int orphanedBonds;
+
+  /// UNCHANGED markers that matched a base atom (bond endpoint references).
+  final int unchangedReferences;
+
+  const APIDiffStats({
+    required this.atomsAdded,
+    required this.atomsDeleted,
+    required this.atomsModified,
+    required this.bondsAdded,
+    required this.bondsDeleted,
+    required this.orphanedTrackedAtoms,
+    required this.unmatchedDeleteMarkers,
+    required this.orphanedBonds,
+    required this.unchangedReferences,
+  });
+
+  @override
+  int get hashCode =>
+      atomsAdded.hashCode ^
+      atomsDeleted.hashCode ^
+      atomsModified.hashCode ^
+      bondsAdded.hashCode ^
+      bondsDeleted.hashCode ^
+      orphanedTrackedAtoms.hashCode ^
+      unmatchedDeleteMarkers.hashCode ^
+      orphanedBonds.hashCode ^
+      unchangedReferences.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDiffStats &&
+          runtimeType == other.runtimeType &&
+          atomsAdded == other.atomsAdded &&
+          atomsDeleted == other.atomsDeleted &&
+          atomsModified == other.atomsModified &&
+          bondsAdded == other.bondsAdded &&
+          bondsDeleted == other.bondsDeleted &&
+          orphanedTrackedAtoms == other.orphanedTrackedAtoms &&
+          unmatchedDeleteMarkers == other.unmatchedDeleteMarkers &&
+          orphanedBonds == other.orphanedBonds &&
+          unchangedReferences == other.unchangedReferences;
+}
+
 class APIDrawingPlaneData {
   final int maxMillerIndex;
   final APIIVec3 millerIndex;
@@ -311,8 +623,7 @@ class APIEditAtomData {
   final bool canUndo;
   final bool canRedo;
   final int? bondToolLastAtomId;
-  final int? replacementAtomicNumber;
-  final int? addAtomToolAtomicNumber;
+  final int selectedAtomicNumber;
   final bool hasSelectedAtoms;
   final bool hasSelection;
   final APITransform? selectionTransform;
@@ -322,8 +633,7 @@ class APIEditAtomData {
     required this.canUndo,
     required this.canRedo,
     this.bondToolLastAtomId,
-    this.replacementAtomicNumber,
-    this.addAtomToolAtomicNumber,
+    required this.selectedAtomicNumber,
     required this.hasSelectedAtoms,
     required this.hasSelection,
     this.selectionTransform,
@@ -335,8 +645,7 @@ class APIEditAtomData {
       canUndo.hashCode ^
       canRedo.hashCode ^
       bondToolLastAtomId.hashCode ^
-      replacementAtomicNumber.hashCode ^
-      addAtomToolAtomicNumber.hashCode ^
+      selectedAtomicNumber.hashCode ^
       hasSelectedAtoms.hashCode ^
       hasSelection.hashCode ^
       selectionTransform.hashCode;
@@ -350,8 +659,7 @@ class APIEditAtomData {
           canUndo == other.canUndo &&
           canRedo == other.canRedo &&
           bondToolLastAtomId == other.bondToolLastAtomId &&
-          replacementAtomicNumber == other.replacementAtomicNumber &&
-          addAtomToolAtomicNumber == other.addAtomToolAtomicNumber &&
+          selectedAtomicNumber == other.selectedAtomicNumber &&
           hasSelectedAtoms == other.hasSelectedAtoms &&
           hasSelection == other.hasSelection &&
           selectionTransform == other.selectionTransform;
@@ -626,6 +934,79 @@ class APIHalfSpaceData {
           subdivision == other.subdivision;
 }
 
+/// Information about the atom under the cursor, returned by hover hit test.
+class APIHoveredAtomInfo {
+  final String symbol;
+  final String elementName;
+  final int atomicNumber;
+  final double x;
+  final double y;
+  final double z;
+  final int bondCount;
+  final bool isFrozen;
+  final String nodeName;
+  final List<String> overlappingNodeNames;
+
+  const APIHoveredAtomInfo({
+    required this.symbol,
+    required this.elementName,
+    required this.atomicNumber,
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.bondCount,
+    required this.isFrozen,
+    required this.nodeName,
+    required this.overlappingNodeNames,
+  });
+
+  @override
+  int get hashCode =>
+      symbol.hashCode ^
+      elementName.hashCode ^
+      atomicNumber.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      z.hashCode ^
+      bondCount.hashCode ^
+      isFrozen.hashCode ^
+      nodeName.hashCode ^
+      overlappingNodeNames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIHoveredAtomInfo &&
+          runtimeType == other.runtimeType &&
+          symbol == other.symbol &&
+          elementName == other.elementName &&
+          atomicNumber == other.atomicNumber &&
+          x == other.x &&
+          y == other.y &&
+          z == other.z &&
+          bondCount == other.bondCount &&
+          isFrozen == other.isFrozen &&
+          nodeName == other.nodeName &&
+          overlappingNodeNames == other.overlappingNodeNames;
+}
+
+/// Hybridization override for guided atom placement.
+/// When set to Auto, hybridization is auto-detected via UFF type assignment.
+enum APIHybridization {
+  /// Auto-detect hybridization from bonding state.
+  auto,
+
+  /// sp3 tetrahedral (109.47°).
+  sp3,
+
+  /// sp2 trigonal planar (120°).
+  sp2,
+
+  /// sp1 linear (180°).
+  sp1,
+  ;
+}
+
 class APIImportXYZData {
   final String? fileName;
 
@@ -776,6 +1157,87 @@ class APIMapData {
           runtimeType == other.runtimeType &&
           inputType == other.inputType &&
           outputType == other.outputType;
+}
+
+@freezed
+sealed class APIMeasurement with _$APIMeasurement {
+  const APIMeasurement._();
+
+  /// Distance between 2 atoms in Angstroms.
+  const factory APIMeasurement.distance({
+    required double distance,
+
+    /// Result-space atom IDs for the two atoms.
+    required int atom1Id,
+    required int atom2Id,
+
+    /// Element symbols for display labels.
+    required String atom1Symbol,
+    required String atom2Symbol,
+
+    /// Whether the two atoms are bonded (enables Default button in dialog).
+    required bool isBonded,
+  }) = APIMeasurement_Distance;
+
+  /// Angle at a vertex atom, in degrees.
+  const factory APIMeasurement.angle({
+    required double angleDegrees,
+
+    /// Vertex atom identity.
+    required int vertexId,
+    required String vertexSymbol,
+
+    /// Arm atoms (indices 0 and 1 for move choice).
+    required int armAId,
+    required String armASymbol,
+    required int armBId,
+    required String armBSymbol,
+  }) = APIMeasurement_Angle;
+
+  /// Dihedral (torsion) angle around the central bond axis, in degrees.
+  const factory APIMeasurement.dihedral({
+    required double angleDegrees,
+
+    /// Chain A-B-C-D atom identities.
+    required int chainAId,
+    required String chainASymbol,
+    required int chainBId,
+    required String chainBSymbol,
+    required int chainCId,
+    required String chainCSymbol,
+    required int chainDId,
+    required String chainDSymbol,
+  }) = APIMeasurement_Dihedral;
+
+  /// Single atom info (shown when exactly 1 atom is selected).
+  const factory APIMeasurement.atomInfo({
+    /// Element symbol (e.g., "C").
+    required String symbol,
+
+    /// Full element name (e.g., "Carbon").
+    required String elementName,
+
+    /// Number of bonds on this atom (coordination number).
+    required int bondCount,
+
+    /// Position in Angstroms.
+    required double x,
+    required double y,
+    required double z,
+  }) = APIMeasurement_AtomInfo;
+}
+
+/// Freeze mode for atom_edit energy minimization.
+enum APIMinimizeFreezeMode {
+  /// Only diff atoms move; base atoms are frozen.
+  freezeBase,
+
+  /// All atoms move freely.
+  freeAll,
+
+  /// Only selected atoms move; everything else is frozen.
+  freeSelected,
+  ;
 }
 
 class APIMotifData {
@@ -1099,6 +1561,75 @@ class APIStringData {
           value == other.value;
 }
 
+/// Result of applying text format edits to the active network.
+class APITextEditResult {
+  final bool success;
+  final List<String> nodesCreated;
+  final List<String> nodesUpdated;
+  final List<String> nodesDeleted;
+  final List<String> connectionsMade;
+  final List<APITextError> errors;
+  final List<String> warnings;
+
+  const APITextEditResult({
+    required this.success,
+    required this.nodesCreated,
+    required this.nodesUpdated,
+    required this.nodesDeleted,
+    required this.connectionsMade,
+    required this.errors,
+    required this.warnings,
+  });
+
+  @override
+  int get hashCode =>
+      success.hashCode ^
+      nodesCreated.hashCode ^
+      nodesUpdated.hashCode ^
+      nodesDeleted.hashCode ^
+      connectionsMade.hashCode ^
+      errors.hashCode ^
+      warnings.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITextEditResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          nodesCreated == other.nodesCreated &&
+          nodesUpdated == other.nodesUpdated &&
+          nodesDeleted == other.nodesDeleted &&
+          connectionsMade == other.connectionsMade &&
+          errors == other.errors &&
+          warnings == other.warnings;
+}
+
+/// A parse or edit error with location information.
+class APITextError {
+  final String message;
+  final int line;
+  final int column;
+
+  const APITextError({
+    required this.message,
+    required this.line,
+    required this.column,
+  });
+
+  @override
+  int get hashCode => message.hashCode ^ line.hashCode ^ column.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITextError &&
+          runtimeType == other.runtimeType &&
+          message == other.message &&
+          line == other.line &&
+          column == other.column;
+}
+
 class APIUnitCellData {
   final double cellLengthA;
   final double cellLengthB;
@@ -1176,6 +1707,29 @@ class APIVec3Data {
       other is APIVec3Data &&
           runtimeType == other.runtimeType &&
           value == other.value;
+}
+
+@freezed
+sealed class APIViewportPickResult with _$APIViewportPickResult {
+  const APIViewportPickResult._();
+
+  /// The closest hit belongs to the already-active node — proceed with normal click handling.
+  const factory APIViewportPickResult.activeNodeHit() =
+      APIViewportPickResult_ActiveNodeHit;
+
+  /// Unambiguous hit on a non-active node — activate it.
+  const factory APIViewportPickResult.activateNode({
+    required BigInt nodeId,
+    required String nodeName,
+  }) = APIViewportPickResult_ActivateNode;
+
+  /// Multiple non-active nodes overlap at the click point — show disambiguation popup.
+  const factory APIViewportPickResult.disambiguation({
+    required List<APICandidateNode> candidates,
+  }) = APIViewportPickResult_Disambiguation;
+
+  /// Ray missed everything — proceed with normal click handling.
+  const factory APIViewportPickResult.noHit() = APIViewportPickResult_NoHit;
 }
 
 class APIIVec2Data {
@@ -1270,6 +1824,139 @@ class CliConfig {
           parameters == other.parameters;
 }
 
+/// Status of frozen atoms during a drag operation.
+enum DragFrozenStatus {
+  /// No frozen atoms in selection — all atoms moved normally.
+  noneFrozen,
+
+  /// Some selected atoms were frozen and skipped; others moved.
+  someFrozen,
+
+  /// All selected atoms were frozen — nothing moved.
+  allFrozen,
+  ;
+}
+
+/// Information for the factor-into-subnetwork dialog
+class FactorSelectionInfo {
+  /// Whether the selection can be factored
+  final bool canFactor;
+
+  /// If not valid, the reason why
+  final String? invalidReason;
+
+  /// Suggested name for the new subnetwork
+  final String suggestedName;
+
+  /// Suggested names for the parameters (one per external input)
+  final List<String> suggestedParamNames;
+
+  const FactorSelectionInfo({
+    required this.canFactor,
+    this.invalidReason,
+    required this.suggestedName,
+    required this.suggestedParamNames,
+  });
+
+  @override
+  int get hashCode =>
+      canFactor.hashCode ^
+      invalidReason.hashCode ^
+      suggestedName.hashCode ^
+      suggestedParamNames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FactorSelectionInfo &&
+          runtimeType == other.runtimeType &&
+          canFactor == other.canFactor &&
+          invalidReason == other.invalidReason &&
+          suggestedName == other.suggestedName &&
+          suggestedParamNames == other.suggestedParamNames;
+}
+
+/// Request to factor selection into subnetwork
+class FactorSelectionRequest {
+  /// Name for the new subnetwork (custom node type)
+  final String subnetworkName;
+
+  /// Names for the parameters (must match count of external inputs)
+  final List<String> paramNames;
+
+  const FactorSelectionRequest({
+    required this.subnetworkName,
+    required this.paramNames,
+  });
+
+  @override
+  int get hashCode => subnetworkName.hashCode ^ paramNames.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FactorSelectionRequest &&
+          runtimeType == other.runtimeType &&
+          subnetworkName == other.subnetworkName &&
+          paramNames == other.paramNames;
+}
+
+/// Result of factoring attempt
+class FactorSelectionResult {
+  /// Whether the factoring succeeded
+  final bool success;
+
+  /// Error message if factoring failed
+  final String? error;
+
+  /// ID of the created custom node (if successful)
+  final BigInt? newNodeId;
+
+  const FactorSelectionResult({
+    required this.success,
+    this.error,
+    this.newNodeId,
+  });
+
+  @override
+  int get hashCode => success.hashCode ^ error.hashCode ^ newNodeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FactorSelectionResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          error == other.error &&
+          newNodeId == other.newNodeId;
+}
+
+@freezed
+sealed class GuidedPlacementApiResult with _$GuidedPlacementApiResult {
+  const GuidedPlacementApiResult._();
+
+  /// No atom was hit by the ray.
+  const factory GuidedPlacementApiResult.noAtomHit() =
+      GuidedPlacementApiResult_NoAtomHit;
+
+  /// The hit atom is saturated.
+  const factory GuidedPlacementApiResult.atomSaturated({
+    /// True when the atom has lone pairs / empty orbitals
+    /// (switch to Dative bond mode to access them).
+    required bool hasAdditionalCapacity,
+
+    /// True when has_additional_capacity is true but the new element cannot
+    /// form a dative bond with the anchor (no valid donor-acceptor pair).
+    required bool dativeIncompatible,
+  }) = GuidedPlacementApiResult_AtomSaturated;
+
+  /// Guided placement started successfully.
+  const factory GuidedPlacementApiResult.guidedPlacementStarted({
+    required int guideCount,
+    required int anchorAtomId,
+  }) = GuidedPlacementApiResult_GuidedPlacementStarted;
+}
+
 class InputPinView {
   final String name;
   final String dataType;
@@ -1342,6 +2029,7 @@ enum NodeTypeCategory {
 class NodeView {
   final BigInt id;
   final String nodeTypeName;
+  final String? customName;
   APIVec2 position;
   final List<InputPinView> inputPins;
   final String outputType;
@@ -1361,6 +2049,7 @@ class NodeView {
   NodeView({
     required this.id,
     required this.nodeTypeName,
+    this.customName,
     required this.position,
     required this.inputPins,
     required this.outputType,
@@ -1382,6 +2071,7 @@ class NodeView {
   int get hashCode =>
       id.hashCode ^
       nodeTypeName.hashCode ^
+      customName.hashCode ^
       position.hashCode ^
       inputPins.hashCode ^
       outputType.hashCode ^
@@ -1405,6 +2095,7 @@ class NodeView {
           runtimeType == other.runtimeType &&
           id == other.id &&
           nodeTypeName == other.nodeTypeName &&
+          customName == other.customName &&
           position == other.position &&
           inputPins == other.inputPins &&
           outputType == other.outputType &&
@@ -1420,6 +2111,120 @@ class NodeView {
           commentText == other.commentText &&
           commentWidth == other.commentWidth &&
           commentHeight == other.commentHeight;
+}
+
+/// Result of default_tool_pointer_down.
+class PointerDownResult {
+  final PointerDownResultKind kind;
+
+  /// Only valid when kind == GadgetHit.
+  final int gadgetHandleIndex;
+
+  const PointerDownResult({
+    required this.kind,
+    required this.gadgetHandleIndex,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ gadgetHandleIndex.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PointerDownResult &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          gadgetHandleIndex == other.gadgetHandleIndex;
+}
+
+/// Discriminant for default_tool_pointer_down result.
+enum PointerDownResultKind {
+  /// A gadget handle was hit. Flutter should start existing gadget drag.
+  /// See `PointerDownResult.gadget_handle_index` for the handle.
+  gadgetHit,
+
+  /// Mouse-down on an atom. Entered PendingAtom state.
+  startedOnAtom,
+
+  /// Mouse-down on a bond. Entered PendingBond state.
+  startedOnBond,
+
+  /// Mouse-down on empty space. Entered PendingMarquee state.
+  startedOnEmpty,
+  ;
+}
+
+/// Result of default_tool_pointer_move.
+class PointerMoveResult {
+  final PointerMoveResultKind kind;
+
+  /// Marquee rectangle in screen coords [x, y, w, h]. Only valid when kind == MarqueeUpdated.
+  final double marqueeRectX;
+  final double marqueeRectY;
+  final double marqueeRectW;
+  final double marqueeRectH;
+
+  /// Status of frozen atoms during drag. Only meaningful when kind == Dragging.
+  final DragFrozenStatus frozenDragStatus;
+
+  const PointerMoveResult({
+    required this.kind,
+    required this.marqueeRectX,
+    required this.marqueeRectY,
+    required this.marqueeRectW,
+    required this.marqueeRectH,
+    required this.frozenDragStatus,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      marqueeRectX.hashCode ^
+      marqueeRectY.hashCode ^
+      marqueeRectW.hashCode ^
+      marqueeRectH.hashCode ^
+      frozenDragStatus.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PointerMoveResult &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          marqueeRectX == other.marqueeRectX &&
+          marqueeRectY == other.marqueeRectY &&
+          marqueeRectW == other.marqueeRectW &&
+          marqueeRectH == other.marqueeRectH &&
+          frozenDragStatus == other.frozenDragStatus;
+}
+
+/// Discriminant for default_tool_pointer_move result.
+enum PointerMoveResultKind {
+  /// Threshold not exceeded yet.
+  stillPending,
+
+  /// Screen-plane drag in progress (atoms moved).
+  dragging,
+
+  /// Marquee rectangle updated.
+  marqueeUpdated,
+  ;
+}
+
+/// Result of default_tool_pointer_up.
+enum PointerUpResult {
+  /// Click-select happened.
+  selectionChanged,
+
+  /// Screen-plane drag finished.
+  dragCommitted,
+
+  /// Marquee selection applied.
+  marqueeCommitted,
+
+  /// No-op (e.g., click on empty with no prior selection).
+  nothingHappened,
+  ;
 }
 
 /// Wire identifier for batch selection operations

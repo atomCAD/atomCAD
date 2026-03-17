@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
@@ -122,12 +123,11 @@ class _AddNodePopupState extends State<AddNodePopup> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
+    return DraggableDialog(
       key: AddNodePopupKeys.dialog,
       backgroundColor: Colors.black,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Container(
-        width: 560, // Wider to accommodate two panels
+      width: 560,
+      child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -364,63 +364,56 @@ class PinSelectionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
+    return DraggableDialog(
       backgroundColor: const Color(0xFF2D2D2D),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: Color(0xFF555555)),
-      ),
-      child: Container(
-        width: 280,
-        constraints: const BoxConstraints(maxHeight: 300),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                color: Color(0xFF383838),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(8),
-                  topRight: Radius.circular(8),
-                ),
-              ),
-              child: Text(
-                'Connect to $nodeTypeName',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+      width: 280,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF383838),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Text(
-                'Select input pin:',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
+            child: Text(
+              'Connect to $nodeTypeName',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: pins.length,
-                itemBuilder: (context, index) {
-                  final pin = pins[index];
-                  return _PinListItem(
-                    pin: pin,
-                    onTap: () => Navigator.of(context).pop(pin.pinIndex),
-                  );
-                },
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text(
+              'Select input pin:',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
               ),
             ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: pins.length,
+              itemBuilder: (context, index) {
+                final pin = pins[index];
+                return _PinListItem(
+                  pin: pin,
+                  onTap: () => Navigator.of(context).pop(pin.pinIndex),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

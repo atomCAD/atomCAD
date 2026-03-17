@@ -11,12 +11,16 @@ class LatticeRotEditor extends StatefulWidget {
   final BigInt nodeId;
   final APILatticeRotData? data;
   final StructureDesignerModel model;
+  final String title;
+  final String nodeTypeName;
 
   const LatticeRotEditor({
     super.key,
     required this.nodeId,
     required this.data,
     required this.model,
+    this.title = 'Lattice Rotation Properties',
+    this.nodeTypeName = 'lattice_rot',
   });
 
   @override
@@ -97,9 +101,9 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const NodeEditorHeader(
-            title: 'Lattice Rotation Properties',
-            nodeTypeName: 'lattice_rot',
+          NodeEditorHeader(
+            title: widget.title,
+            nodeTypeName: widget.nodeTypeName,
           ),
           const SizedBox(height: 16),
           

@@ -12,10 +12,10 @@
 //! output union1
 //! ```
 
-use std::collections::HashSet;
+use super::serializer::format_string;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use super::serializer::format_string;
+use std::collections::HashSet;
 
 /// Serializes a node network to text format.
 pub struct NetworkSerializer<'a> {
@@ -26,7 +26,11 @@ pub struct NetworkSerializer<'a> {
 
 impl<'a> NetworkSerializer<'a> {
     /// Create a new serializer for the given network.
-    pub fn new(network: &'a NodeNetwork, registry: &'a NodeTypeRegistry, network_name: Option<&'a str>) -> Self {
+    pub fn new(
+        network: &'a NodeNetwork,
+        registry: &'a NodeTypeRegistry,
+        network_name: Option<&'a str>,
+    ) -> Self {
         Self {
             network,
             registry,
@@ -132,7 +136,10 @@ impl<'a> NetworkSerializer<'a> {
         if temp_mark.contains(&node_id) {
             let node = self.network.nodes.get(&node_id);
             let node_type = node.map(|n| n.node_type_name.as_str()).unwrap_or("unknown");
-            return Err(format!("Cycle detected at node {} (type: {})", node_id, node_type));
+            return Err(format!(
+                "Cycle detected at node {} (type: {})",
+                node_id, node_type
+            ));
         }
 
         // Already fully visited
@@ -170,7 +177,9 @@ impl<'a> NetworkSerializer<'a> {
     /// Since all nodes now have persistent names assigned at creation,
     /// this is a simple lookup of the custom_name field.
     fn get_node_name(&self, node_id: u64) -> Option<&str> {
-        self.network.nodes.get(&node_id)
+        self.network
+            .nodes
+            .get(&node_id)
             .and_then(|node| node.custom_name.as_deref())
     }
 
@@ -210,7 +219,8 @@ impl<'a> NetworkSerializer<'a> {
                         // Sort by source node ID for deterministic output
                         let mut entries: Vec<_> = argument.argument_output_pins.iter().collect();
                         entries.sort_by_key(|(id, _)| **id);
-                        let refs: Vec<String> = entries.iter()
+                        let refs: Vec<String> = entries
+                            .iter()
                             .filter_map(|(source_id, pin_index)| {
                                 let source_name = self.get_node_name(**source_id)?;
                                 Some(self.format_reference(source_name, **pin_index))
@@ -219,7 +229,9 @@ impl<'a> NetworkSerializer<'a> {
                         properties.push((param_name.clone(), format!("[{}]", refs.join(", "))));
                     } else {
                         // Single input: format as direct reference
-                        if let Some((&source_id, &pin_index)) = argument.argument_output_pins.iter().next() {
+                        if let Some((&source_id, &pin_index)) =
+                            argument.argument_output_pins.iter().next()
+                        {
                             if let Some(source_name) = self.get_node_name(source_id) {
                                 properties.push((
                                     param_name.clone(),
@@ -250,10 +262,16 @@ impl<'a> NetworkSerializer<'a> {
         if properties.is_empty() {
             format!("{} = {}", node_name, node.node_type_name)
         } else {
-            let props_str: Vec<String> = properties.iter()
+            let props_str: Vec<String> = properties
+                .iter()
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect();
-            format!("{} = {} {{ {} }}", node_name, node.node_type_name, props_str.join(", "))
+            format!(
+                "{} = {} {{ {} }}",
+                node_name,
+                node.node_type_name,
+                props_str.join(", ")
+            )
         }
     }
 
@@ -293,7 +311,11 @@ impl<'a> NetworkSerializer<'a> {
 /// //
 /// // # 1 node
 /// ```
-pub fn serialize_network(network: &NodeNetwork, registry: &NodeTypeRegistry, network_name: Option<&str>) -> String {
+pub fn serialize_network(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    network_name: Option<&str>,
+) -> String {
     let serializer = NetworkSerializer::new(network, registry, network_name);
     serializer.serialize()
 }

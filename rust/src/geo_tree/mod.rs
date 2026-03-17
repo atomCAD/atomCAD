@@ -1,9 +1,9 @@
-use glam::f64::DVec3;
-use glam::f64::DVec2;
-use crate::util::transform::Transform;
-use std::fmt;
-use blake3;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
+use crate::util::transform::Transform;
+use blake3;
+use glam::f64::DVec2;
+use glam::f64::DVec3;
+use std::fmt;
 
 /*
  * geo_tree is a simple geometry expression tree implementation.
@@ -18,65 +18,65 @@ pub struct GeoNode {
 
 #[derive(Clone)]
 enum GeoNodeKind {
-  HalfSpace {
-    normal: DVec3,
-    center: DVec3,
-  },
-  HalfPlane {
-    // inside is to the left of the line defined by point1 -> point2
-    point1: DVec2,
-    point2: DVec2,
-  },
-  Circle {
-    center: DVec2,
-    radius: f64,  
-  },
-  Sphere {
-    center: DVec3,
-    radius: f64,
-  },
-  Polygon {
-    vertices: Vec<DVec2>,
-  },
-  Extrude {
-    height: f64,
-    direction: DVec3,
-    shape: Box<GeoNode>,
-    plane_to_world_transform: Transform,
-    infinite: bool,
-  },
-  Transform {
-    transform: Transform,
-    shape: Box<GeoNode>,
-  },
-  Union2D {
-    shapes: Vec<GeoNode>,
-  },
-  Union3D {
-    shapes: Vec<GeoNode>,
-  },
-  Intersection2D {
-    shapes: Vec<GeoNode>,
-  },
-  Intersection3D {
-    shapes: Vec<GeoNode>,
-  },
-  Difference2D {
-    base: Box<GeoNode>,
-    sub: Box<GeoNode>
-  },
-  Difference3D {
-    base: Box<GeoNode>,
-    sub: Box<GeoNode>
-  },
+    HalfSpace {
+        normal: DVec3,
+        center: DVec3,
+    },
+    HalfPlane {
+        // inside is to the left of the line defined by point1 -> point2
+        point1: DVec2,
+        point2: DVec2,
+    },
+    Circle {
+        center: DVec2,
+        radius: f64,
+    },
+    Sphere {
+        center: DVec3,
+        radius: f64,
+    },
+    Polygon {
+        vertices: Vec<DVec2>,
+    },
+    Extrude {
+        height: f64,
+        direction: DVec3,
+        shape: Box<GeoNode>,
+        plane_to_world_transform: Transform,
+        infinite: bool,
+    },
+    Transform {
+        transform: Transform,
+        shape: Box<GeoNode>,
+    },
+    Union2D {
+        shapes: Vec<GeoNode>,
+    },
+    Union3D {
+        shapes: Vec<GeoNode>,
+    },
+    Intersection2D {
+        shapes: Vec<GeoNode>,
+    },
+    Intersection3D {
+        shapes: Vec<GeoNode>,
+    },
+    Difference2D {
+        base: Box<GeoNode>,
+        sub: Box<GeoNode>,
+    },
+    Difference3D {
+        base: Box<GeoNode>,
+        sub: Box<GeoNode>,
+    },
 }
 
-mod csg_conversion;
-mod implicit_eval;
 pub mod batched_implicit_evaluator;
 pub mod csg_cache;
+mod csg_conversion;
 pub mod csg_types;
 pub mod csg_utils;
+mod implicit_eval;
 pub mod implicit_geometry;
 
 impl fmt::Display for GeoNode {
@@ -89,23 +89,39 @@ impl GeoNode {
     fn display_with_indent(&self, indent: usize) -> String {
         let prefix = "  ".repeat(indent);
         let child_prefix = "  ".repeat(indent + 1);
-        
+
         match &self.kind {
             GeoNodeKind::HalfSpace { normal, center } => {
-                format!("{}HalfSpace(normal: {}, center: {})", 
-                    prefix, format_vec3(normal), format_vec3(center))
+                format!(
+                    "{}HalfSpace(normal: {}, center: {})",
+                    prefix,
+                    format_vec3(normal),
+                    format_vec3(center)
+                )
             }
             GeoNodeKind::HalfPlane { point1, point2 } => {
-                format!("{}HalfPlane(p1: {}, p2: {})", 
-                    prefix, format_vec2(point1), format_vec2(point2))
+                format!(
+                    "{}HalfPlane(p1: {}, p2: {})",
+                    prefix,
+                    format_vec2(point1),
+                    format_vec2(point2)
+                )
             }
             GeoNodeKind::Circle { center, radius } => {
-                format!("{}Circle(center: {}, radius: {})", 
-                    prefix, format_vec2(center), format_f64(radius))
+                format!(
+                    "{}Circle(center: {}, radius: {})",
+                    prefix,
+                    format_vec2(center),
+                    format_f64(radius)
+                )
             }
             GeoNodeKind::Sphere { center, radius } => {
-                format!("{}Sphere(center: {}, radius: {})", 
-                    prefix, format_vec3(center), format_f64(radius))
+                format!(
+                    "{}Sphere(center: {}, radius: {})",
+                    prefix,
+                    format_vec3(center),
+                    format_f64(radius)
+                )
             }
             GeoNodeKind::Polygon { vertices } => {
                 let mut result = format!("{}Polygon({} vertices)", prefix, vertices.len());
@@ -114,17 +130,30 @@ impl GeoNode {
                 }
                 result
             }
-            GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite } => {
-                format!("{}Extrude(height: {}, direction: {}, transform: {}, infinite: {})\n{}", 
-                    prefix, format_f64(height), format_vec3(direction),
+            GeoNodeKind::Extrude {
+                height,
+                direction,
+                shape,
+                plane_to_world_transform,
+                infinite,
+            } => {
+                format!(
+                    "{}Extrude(height: {}, direction: {}, transform: {}, infinite: {})\n{}",
+                    prefix,
+                    format_f64(height),
+                    format_vec3(direction),
                     format_transform(plane_to_world_transform),
                     infinite,
-                    shape.display_with_indent(indent + 1))
+                    shape.display_with_indent(indent + 1)
+                )
             }
             GeoNodeKind::Transform { transform, shape } => {
-                format!("{}Transform({})\n{}", 
-                    prefix, format_transform(transform),
-                    shape.display_with_indent(indent + 1))
+                format!(
+                    "{}Transform({})\n{}",
+                    prefix,
+                    format_transform(transform),
+                    shape.display_with_indent(indent + 1)
+                )
             }
             GeoNodeKind::Union2D { shapes } => {
                 let mut result = format!("{}Union2D", prefix);
@@ -155,14 +184,24 @@ impl GeoNode {
                 result
             }
             GeoNodeKind::Difference2D { base, sub } => {
-                format!("{}Difference2D\n{}base:\n{}\n{}sub:\n{}", 
-                    prefix, child_prefix, base.display_with_indent(indent + 2),
-                    child_prefix, sub.display_with_indent(indent + 2))
+                format!(
+                    "{}Difference2D\n{}base:\n{}\n{}sub:\n{}",
+                    prefix,
+                    child_prefix,
+                    base.display_with_indent(indent + 2),
+                    child_prefix,
+                    sub.display_with_indent(indent + 2)
+                )
             }
             GeoNodeKind::Difference3D { base, sub } => {
-                format!("{}Difference3D\n{}base:\n{}\n{}sub:\n{}", 
-                    prefix, child_prefix, base.display_with_indent(indent + 2),
-                    child_prefix, sub.display_with_indent(indent + 2))
+                format!(
+                    "{}Difference3D\n{}base:\n{}\n{}sub:\n{}",
+                    prefix,
+                    child_prefix,
+                    base.display_with_indent(indent + 2),
+                    child_prefix,
+                    sub.display_with_indent(indent + 2)
+                )
             }
         }
     }
@@ -184,7 +223,7 @@ impl GeoNode {
         hasher.update(&center.x.to_le_bytes());
         hasher.update(&center.y.to_le_bytes());
         hasher.update(&center.z.to_le_bytes());
-        
+
         Self {
             kind: GeoNodeKind::HalfSpace { normal, center },
             hash: hasher.finalize(),
@@ -198,7 +237,7 @@ impl GeoNode {
         hasher.update(&point1.y.to_le_bytes());
         hasher.update(&point2.x.to_le_bytes());
         hasher.update(&point2.y.to_le_bytes());
-        
+
         Self {
             kind: GeoNodeKind::HalfPlane { point1, point2 },
             hash: hasher.finalize(),
@@ -211,7 +250,7 @@ impl GeoNode {
         hasher.update(&center.x.to_le_bytes());
         hasher.update(&center.y.to_le_bytes());
         hasher.update(&radius.to_le_bytes());
-        
+
         Self {
             kind: GeoNodeKind::Circle { center, radius },
             hash: hasher.finalize(),
@@ -225,7 +264,7 @@ impl GeoNode {
         hasher.update(&center.y.to_le_bytes());
         hasher.update(&center.z.to_le_bytes());
         hasher.update(&radius.to_le_bytes());
-        
+
         Self {
             kind: GeoNodeKind::Sphere { center, radius },
             hash: hasher.finalize(),
@@ -240,14 +279,20 @@ impl GeoNode {
             hasher.update(&v.x.to_le_bytes());
             hasher.update(&v.y.to_le_bytes());
         }
-        
+
         Self {
             kind: GeoNodeKind::Polygon { vertices },
             hash: hasher.finalize(),
         }
     }
 
-    pub fn extrude(height: f64, direction: DVec3, shape: Box<GeoNode>, plane_to_world_transform: Transform, infinite: bool) -> Self {
+    pub fn extrude(
+        height: f64,
+        direction: DVec3,
+        shape: Box<GeoNode>,
+        plane_to_world_transform: Transform,
+        infinite: bool,
+    ) -> Self {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&[0x06]); // variant tag
         hasher.update(&height.to_le_bytes());
@@ -264,9 +309,15 @@ impl GeoNode {
         hasher.update(&plane_to_world_transform.rotation.y.to_le_bytes());
         hasher.update(&plane_to_world_transform.rotation.z.to_le_bytes());
         hasher.update(&plane_to_world_transform.rotation.w.to_le_bytes());
-        
+
         Self {
-            kind: GeoNodeKind::Extrude { height, direction, shape, plane_to_world_transform, infinite },
+            kind: GeoNodeKind::Extrude {
+                height,
+                direction,
+                shape,
+                plane_to_world_transform,
+                infinite,
+            },
             hash: hasher.finalize(),
         }
     }
@@ -283,7 +334,7 @@ impl GeoNode {
         hasher.update(&transform.rotation.z.to_le_bytes());
         hasher.update(&transform.rotation.w.to_le_bytes());
         hasher.update(shape.hash.as_bytes());
-        
+
         Self {
             kind: GeoNodeKind::Transform { transform, shape },
             hash: hasher.finalize(),
@@ -297,7 +348,7 @@ impl GeoNode {
         for shape in &shapes {
             hasher.update(shape.hash.as_bytes());
         }
-        
+
         Self {
             kind: GeoNodeKind::Union2D { shapes },
             hash: hasher.finalize(),
@@ -311,7 +362,7 @@ impl GeoNode {
         for shape in &shapes {
             hasher.update(shape.hash.as_bytes());
         }
-        
+
         Self {
             kind: GeoNodeKind::Union3D { shapes },
             hash: hasher.finalize(),
@@ -325,7 +376,7 @@ impl GeoNode {
         for shape in &shapes {
             hasher.update(shape.hash.as_bytes());
         }
-        
+
         Self {
             kind: GeoNodeKind::Intersection2D { shapes },
             hash: hasher.finalize(),
@@ -339,7 +390,7 @@ impl GeoNode {
         for shape in &shapes {
             hasher.update(shape.hash.as_bytes());
         }
-        
+
         Self {
             kind: GeoNodeKind::Intersection3D { shapes },
             hash: hasher.finalize(),
@@ -351,7 +402,7 @@ impl GeoNode {
         hasher.update(&[0x0C]); // variant tag
         hasher.update(base.hash.as_bytes());
         hasher.update(sub.hash.as_bytes());
-        
+
         Self {
             kind: GeoNodeKind::Difference2D { base, sub },
             hash: hasher.finalize(),
@@ -363,7 +414,7 @@ impl GeoNode {
         hasher.update(&[0x0D]); // variant tag
         hasher.update(base.hash.as_bytes());
         hasher.update(sub.hash.as_bytes());
-        
+
         Self {
             kind: GeoNodeKind::Difference3D { base, sub },
             hash: hasher.finalize(),
@@ -377,14 +428,22 @@ fn format_vec2(v: &DVec2) -> String {
 }
 
 fn format_vec3(v: &DVec3) -> String {
-    format!("({}, {}, {})", format_f64(&v.x), format_f64(&v.y), format_f64(&v.z))
+    format!(
+        "({}, {}, {})",
+        format_f64(&v.x),
+        format_f64(&v.y),
+        format_f64(&v.z)
+    )
 }
 
 fn format_f64(f: &f64) -> String {
     if f.fract() == 0.0 {
         format!("{}", *f as i64)
     } else {
-        format!("{:.2}", f).trim_end_matches('0').trim_end_matches('.').to_string()
+        format!("{:.2}", f)
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
     }
 }
 
@@ -398,7 +457,7 @@ fn format_transform(transform: &Transform) -> String {
 impl MemorySizeEstimator for GeoNode {
     fn estimate_memory_bytes(&self) -> usize {
         let base_size = std::mem::size_of::<GeoNode>();
-        
+
         // Recursively estimate the size of the GeoNodeKind
         let kind_size = match &self.kind {
             // Leaf nodes - just their stack size
@@ -406,73 +465,69 @@ impl MemorySizeEstimator for GeoNode {
             GeoNodeKind::HalfPlane { .. } => std::mem::size_of::<DVec2>() * 2,
             GeoNodeKind::Circle { .. } => std::mem::size_of::<DVec2>() + std::mem::size_of::<f64>(),
             GeoNodeKind::Sphere { .. } => std::mem::size_of::<DVec3>() + std::mem::size_of::<f64>(),
-            
+
             // Polygon - has a Vec of vertices
             GeoNodeKind::Polygon { vertices } => {
-                std::mem::size_of::<Vec<DVec2>>() + vertices.capacity() * std::mem::size_of::<DVec2>()
-            },
-            
+                std::mem::size_of::<Vec<DVec2>>()
+                    + vertices.capacity() * std::mem::size_of::<DVec2>()
+            }
+
             // Single child nodes - recursive
             GeoNodeKind::Extrude { shape, .. } => {
-                std::mem::size_of::<f64>() 
-                    + std::mem::size_of::<DVec3>() 
+                std::mem::size_of::<f64>()
+                    + std::mem::size_of::<DVec3>()
                     + std::mem::size_of::<Box<GeoNode>>()
                     + shape.estimate_memory_bytes()
-            },
+            }
             GeoNodeKind::Transform { shape, .. } => {
-                std::mem::size_of::<Transform>() 
+                std::mem::size_of::<Transform>()
                     + std::mem::size_of::<Box<GeoNode>>()
                     + shape.estimate_memory_bytes()
-            },
-            
+            }
+
             // Multiple children nodes - recursive
             GeoNodeKind::Union2D { shapes } => {
                 std::mem::size_of::<Vec<GeoNode>>()
-                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
-            },
+                    + shapes
+                        .iter()
+                        .map(|s| s.estimate_memory_bytes())
+                        .sum::<usize>()
+            }
             GeoNodeKind::Union3D { shapes } => {
                 std::mem::size_of::<Vec<GeoNode>>()
-                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
-            },
+                    + shapes
+                        .iter()
+                        .map(|s| s.estimate_memory_bytes())
+                        .sum::<usize>()
+            }
             GeoNodeKind::Intersection2D { shapes } => {
                 std::mem::size_of::<Vec<GeoNode>>()
-                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
-            },
+                    + shapes
+                        .iter()
+                        .map(|s| s.estimate_memory_bytes())
+                        .sum::<usize>()
+            }
             GeoNodeKind::Intersection3D { shapes } => {
                 std::mem::size_of::<Vec<GeoNode>>()
-                    + shapes.iter().map(|s| s.estimate_memory_bytes()).sum::<usize>()
-            },
-            
+                    + shapes
+                        .iter()
+                        .map(|s| s.estimate_memory_bytes())
+                        .sum::<usize>()
+            }
+
             // Two children nodes - recursive
             GeoNodeKind::Difference2D { base, sub } => {
                 std::mem::size_of::<Box<GeoNode>>() * 2
                     + base.estimate_memory_bytes()
                     + sub.estimate_memory_bytes()
-            },
+            }
             GeoNodeKind::Difference3D { base, sub } => {
                 std::mem::size_of::<Box<GeoNode>>() * 2
                     + base.estimate_memory_bytes()
                     + sub.estimate_memory_bytes()
-            },
+            }
         };
-        
+
         base_size + kind_size
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

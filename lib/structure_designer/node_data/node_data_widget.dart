@@ -18,6 +18,7 @@ import 'package:flutter_cad/structure_designer/node_data/atom_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/atom_edit_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
@@ -38,6 +39,7 @@ import 'package:flutter_cad/structure_designer/node_data/motif_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_fill_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
@@ -88,10 +90,12 @@ class PropertyEditorKeys {
 /// based on the currently selected node in the graph.
 class NodeDataWidget extends StatelessWidget {
   final StructureDesignerModel graphModel;
+  final bool directEditingMode;
 
   const NodeDataWidget({
     super.key,
     required this.graphModel,
+    this.directEditingMode = false,
   });
 
   @override
@@ -111,11 +115,15 @@ class NodeDataWidget extends StatelessWidget {
               .firstOrNull;
 
           if (selectedNode == null) {
+            final description = getActiveNetworkDescription() ?? '';
+            final summary = getActiveNetworkSummary() ?? '';
             return Padding(
               padding: const EdgeInsets.all(2.0),
               child: BlockingAwareSingleChildScrollView(
                 child: NetworkDescriptionEditor(
                   key: ValueKey(nodeNetworkView.name),
+                  description: description,
+                  summary: summary,
                 ),
               ),
             );
@@ -216,6 +224,16 @@ class NodeDataWidget extends StatelessWidget {
           data: latticeMoveData,
           model: model,
         );
+      case 'atom_lmove':
+        final atomLmoveData = model.getLatticeMoveData(selectedNode.id);
+
+        return LatticeMoveEditor(
+          nodeId: selectedNode.id,
+          data: atomLmoveData,
+          model: model,
+          title: 'Atom Lattice Move Properties',
+          nodeTypeName: 'atom_lmove',
+        );
       case 'lattice_rot':
         // Fetch the lattice rotation data here in the parent widget
         final latticeRotData = model.getLatticeRotData(selectedNode.id);
@@ -224,6 +242,16 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: latticeRotData,
           model: model,
+        );
+      case 'atom_lrot':
+        final atomLrotData = model.getLatticeRotData(selectedNode.id);
+
+        return LatticeRotEditor(
+          nodeId: selectedNode.id,
+          data: atomLrotData,
+          model: model,
+          title: 'Atom Lattice Rotation Properties',
+          nodeTypeName: 'atom_lrot',
         );
       case 'atom_move':
         // Fetch the atom move data here in the parent widget
@@ -268,6 +296,17 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: editAtomData,
           model: model,
+        );
+      case 'atom_edit':
+        final atomEditData = getAtomEditData(
+          nodeId: selectedNode.id,
+        );
+
+        return AtomEditEditor(
+          nodeId: selectedNode.id,
+          data: atomEditData,
+          model: model,
+          directEditingMode: directEditingMode,
         );
       case 'rect':
         // Fetch the rectangle data here in the parent widget
@@ -505,6 +544,16 @@ class NodeDataWidget extends StatelessWidget {
         return ExportXyzEditor(
           nodeId: selectedNode.id,
           data: exportXyzData,
+          model: model,
+        );
+      case 'apply_diff':
+        final applyDiffData = getApplyDiffData(
+          nodeId: selectedNode.id,
+        );
+
+        return ApplyDiffEditor(
+          nodeId: selectedNode.id,
+          data: applyDiffData,
           model: model,
         );
       case 'atom_cut':

@@ -24,12 +24,30 @@ class CommentEditor extends StatefulWidget {
 class _CommentEditorState extends State<CommentEditor> {
   late TextEditingController _labelController;
   late TextEditingController _textController;
+  late FocusNode _labelFocusNode;
+  late FocusNode _textFocusNode;
 
   @override
   void initState() {
     super.initState();
     _labelController = TextEditingController(text: widget.data?.label ?? '');
     _textController = TextEditingController(text: widget.data?.text ?? '');
+    _labelFocusNode = FocusNode();
+    _textFocusNode = FocusNode();
+    _labelFocusNode.addListener(() {
+      if (_labelFocusNode.hasFocus) {
+        sd_api.beginEditCommentNode(nodeId: widget.nodeId);
+      } else {
+        sd_api.endEditCommentNode();
+      }
+    });
+    _textFocusNode.addListener(() {
+      if (_textFocusNode.hasFocus) {
+        sd_api.beginEditCommentNode(nodeId: widget.nodeId);
+      } else {
+        sd_api.endEditCommentNode();
+      }
+    });
   }
 
   @override
@@ -73,6 +91,7 @@ class _CommentEditorState extends State<CommentEditor> {
           const SizedBox(height: 4),
           TextField(
             controller: _labelController,
+            focusNode: _labelFocusNode,
             decoration: const InputDecoration(
               hintText: 'Optional title...',
               isDense: true,
@@ -88,6 +107,7 @@ class _CommentEditorState extends State<CommentEditor> {
           const SizedBox(height: 4),
           TextField(
             controller: _textController,
+            focusNode: _textFocusNode,
             decoration: const InputDecoration(
               hintText: 'Enter comment text...',
               border: OutlineInputBorder(),
@@ -110,6 +130,8 @@ class _CommentEditorState extends State<CommentEditor> {
 
   @override
   void dispose() {
+    _labelFocusNode.dispose();
+    _textFocusNode.dispose();
     _labelController.dispose();
     _textController.dispose();
     super.dispose();

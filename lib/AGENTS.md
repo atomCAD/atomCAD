@@ -11,7 +11,7 @@ lib/
 ├── main.dart              # Entry point (GUI + CLI modes)
 ├── common/                # Shared UI widgets and utilities
 ├── inputs/                # Input handling
-├── structure_designer/    # Main Structure Designer UI
+├── structure_designer/    # Main Structure Designer UI (see structure_designer/AGENTS.md)
 │   ├── node_network/      # Node network editor
 │   ├── node_data/         # Node property editors
 │   └── node_networks_list/# Network list panel
@@ -63,6 +63,44 @@ common_api.setCameraTransform(transform: transform);
 2. Register in `node_data_widget.dart`
 
 ## Common Patterns
+
+### Dialogs Must Be Draggable
+
+All dialogs in this application **must be draggable**. Use the `DraggableDialog` widget from `lib/common/draggable_dialog.dart`.
+
+- For simple title + content + actions dialogs, use the `showDraggableAlertDialog()` helper — it is a drop-in replacement for `showDialog()` + `AlertDialog`.
+- For custom dialog layouts, use `DraggableDialog` directly and manage padding/layout inside its `child`.
+- Always set `barrierDismissible: false` on the outer `showDialog` call — `DraggableDialog` handles its own dismissal barrier.
+- **Never** use a plain `AlertDialog` or non-draggable `showDialog` for user-facing dialogs.
+
+```dart
+import 'package:flutter_cad/common/draggable_dialog.dart';
+
+// Simple case — drop-in replacement for AlertDialog:
+showDraggableAlertDialog(
+  context: context,
+  title: const Text('My Title'),
+  content: myContentWidget,
+  actions: [
+    TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+    ElevatedButton(onPressed: onApply, child: const Text('Apply')),
+  ],
+);
+
+// Custom layout case:
+showDialog(
+  context: context,
+  barrierDismissible: false,
+  builder: (context) => DraggableDialog(
+    width: 400,
+    dismissible: true,
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [ /* ... */ ]),
+    ),
+  ),
+);
+```
 
 ### Calling Rust API
 

@@ -12,8 +12,12 @@ impl TextValue {
             TextValue::IVec2(v) => format!("({}, {})", v.x, v.y),
             TextValue::IVec3(v) => format!("({}, {}, {})", v.x, v.y, v.z),
             TextValue::Vec2(v) => format!("({}, {})", format_float(v.x), format_float(v.y)),
-            TextValue::Vec3(v) => format!("({}, {}, {})",
-                format_float(v.x), format_float(v.y), format_float(v.z)),
+            TextValue::Vec3(v) => format!(
+                "({}, {}, {})",
+                format_float(v.x),
+                format_float(v.y),
+                format_float(v.z)
+            ),
             TextValue::DataType(dt) => dt.to_string(),
             TextValue::Array(arr) => format_array(arr),
             TextValue::Object(obj) => format_object(obj),
@@ -29,7 +33,12 @@ pub fn format_float(f: f64) -> String {
         return "NaN".to_string();
     }
     if f.is_infinite() {
-        return if f.is_sign_positive() { "Infinity" } else { "-Infinity" }.to_string();
+        return if f.is_sign_positive() {
+            "Infinity"
+        } else {
+            "-Infinity"
+        }
+        .to_string();
     }
 
     let s = f.to_string();
@@ -88,7 +97,8 @@ fn format_object(obj: &[(String, TextValue)]) -> String {
         return "{}".to_string();
     }
 
-    let entries: Vec<String> = obj.iter()
+    let entries: Vec<String> = obj
+        .iter()
         .map(|(key, val)| format!("{}: {}", key, val.to_text()))
         .collect();
     format!("{{ {} }}", entries.join(", "))

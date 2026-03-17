@@ -37,7 +37,7 @@ impl NavigationHistory {
 
         // Truncate forward history
         self.history.truncate(self.current_index + 1);
-        
+
         // Add new entry
         self.history.push(network_name);
         self.current_index += 1;
@@ -106,17 +106,17 @@ impl NavigationHistory {
             Some(name) => name == network_name,
             None => false,
         };
-        
+
         // Filter out the deleted network
         let mut new_history = Vec::new();
         let mut new_index = self.current_index;
-        
+
         for (i, entry) in self.history.iter().enumerate() {
             let should_keep = match entry {
                 Some(name) => name != network_name,
                 None => true, // Keep None entries
             };
-            
+
             if should_keep {
                 new_history.push(entry.clone());
             } else {
@@ -127,7 +127,7 @@ impl NavigationHistory {
                 }
             }
         }
-        
+
         // Ensure we have at least one entry (None)
         if new_history.is_empty() {
             new_history.push(None);
@@ -136,7 +136,7 @@ impl NavigationHistory {
             // Current position was removed, clamp index to valid range
             new_index = new_index.min(new_history.len() - 1);
         }
-        
+
         self.history = new_history;
         self.current_index = new_index;
     }

@@ -1,7 +1,5 @@
 use glam::DVec2;
-use rust_lib_flutter_cad::structure_designer::node_layout::{
-    estimate_node_height, nodes_overlap,
-};
+use rust_lib_flutter_cad::structure_designer::node_layout::{estimate_node_height, nodes_overlap};
 
 #[test]
 fn test_estimate_node_height_no_inputs() {

@@ -1,7 +1,7 @@
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use glam::i32::IVec3;
+use glam::f64::{DQuat, DVec2, DVec3};
 use glam::i32::IVec2;
-use glam::f64::{DVec3, DVec2, DQuat};
+use glam::i32::IVec3;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Module to handle serialization of IVec3 type
 pub mod ivec3_serializer {
@@ -121,9 +121,7 @@ pub mod vec_ivec2_serializer {
         S: Serializer,
     {
         // Convert each IVec2 to a tuple of (i32, i32) and serialize the whole Vec
-        let tuples: Vec<(i32, i32)> = vec_ivec2.iter()
-            .map(|v| (v.x, v.y))
-            .collect();
+        let tuples: Vec<(i32, i32)> = vec_ivec2.iter().map(|v| (v.x, v.y)).collect();
         tuples.serialize(serializer)
     }
 
@@ -133,16 +131,14 @@ pub mod vec_ivec2_serializer {
     {
         // Deserialize from a Vec of tuples (i32, i32)
         let tuples = <Vec<(i32, i32)>>::deserialize(deserializer)?;
-        Ok(tuples.into_iter()
-            .map(|(x, y)| IVec2::new(x, y))
-            .collect())
+        Ok(tuples.into_iter().map(|(x, y)| IVec2::new(x, y)).collect())
     }
 }
 
 /// Module to handle serialization of Option<IVec3> type
 pub mod option_ivec3_serializer {
     use super::*;
-    
+
     pub fn serialize<S>(option_vec: &Option<IVec3>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -152,7 +148,7 @@ pub mod option_ivec3_serializer {
             None => serializer.serialize_none(),
         }
     }
-    
+
     // Helper enum to handle multiple deserialization cases
     #[derive(Deserialize)]
     #[serde(untagged)]
@@ -160,7 +156,7 @@ pub mod option_ivec3_serializer {
         Vec(#[serde(with = "ivec3_serializer")] IVec3),
         Null(Option<()>),
     }
-    
+
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<IVec3>, D::Error>
     where
         D: Deserializer<'de>,
@@ -177,7 +173,7 @@ pub mod option_ivec3_serializer {
 /// Module to handle serialization of Option<DVec3> type
 pub mod option_dvec3_serializer {
     use super::*;
-    
+
     pub fn serialize<S>(option_vec: &Option<DVec3>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -187,7 +183,7 @@ pub mod option_dvec3_serializer {
             None => serializer.serialize_none(),
         }
     }
-    
+
     // Helper enum to handle multiple deserialization cases
     #[derive(Deserialize)]
     #[serde(untagged)]
@@ -195,7 +191,7 @@ pub mod option_dvec3_serializer {
         Vec(#[serde(with = "dvec3_serializer")] DVec3),
         Null(Option<()>),
     }
-    
+
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DVec3>, D::Error>
     where
         D: Deserializer<'de>,
@@ -208,19 +204,3 @@ pub mod option_dvec3_serializer {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

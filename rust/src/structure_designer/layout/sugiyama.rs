@@ -615,7 +615,11 @@ fn assign_coordinates(
 }
 
 /// Calculate the total height of a layer including gaps.
-fn calculate_layer_height(layer: &Layer, network: &NodeNetwork, registry: &NodeTypeRegistry) -> f64 {
+fn calculate_layer_height(
+    layer: &Layer,
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+) -> f64 {
     if layer.nodes.is_empty() {
         return 0.0;
     }
@@ -670,13 +674,7 @@ fn refine_vertical_alignment(
 
                     // Check if we can move without overlapping
                     if can_move_to_y(
-                        node_id,
-                        target_y,
-                        layer_idx,
-                        positions,
-                        graph,
-                        network,
-                        registry,
+                        node_id, target_y, layer_idx, positions, graph, network, registry,
                     ) {
                         if let Some(pos) = positions.get_mut(&node_id) {
                             pos.y = target_y;
@@ -741,7 +739,13 @@ fn can_move_to_y(
                 let other_height = get_node_height(other_id, network, registry);
                 let other_size = DVec2::new(node_layout::NODE_WIDTH, other_height);
 
-                if node_layout::nodes_overlap(proposed_pos, proposed_size, other_pos, other_size, VERTICAL_GAP) {
+                if node_layout::nodes_overlap(
+                    proposed_pos,
+                    proposed_size,
+                    other_pos,
+                    other_size,
+                    VERTICAL_GAP,
+                ) {
                     return false;
                 }
             }
@@ -786,9 +790,7 @@ pub fn count_total_crossings(graph: &LayeredGraph) -> usize {
 
 /// Create a layered graph for testing purposes.
 /// Exposes the internal insert_dummy_nodes function.
-pub fn create_layered_graph_for_testing(
-    network: &NodeNetwork,
-) -> LayeredGraph {
+pub fn create_layered_graph_for_testing(network: &NodeNetwork) -> LayeredGraph {
     let depths = compute_node_depths(network);
     let layers = group_by_depth(&depths);
     insert_dummy_nodes(&layers, network, &depths)

@@ -1,5 +1,5 @@
+use crate::renderer::mesh::{Material, Mesh, Vertex};
 use glam::Vec3;
-use crate::renderer::mesh::{Mesh, Material, Vertex};
 
 /// A vertex that can be marked as occluded during tessellation
 #[derive(Clone, Copy, Debug)]
@@ -30,7 +30,12 @@ pub struct Triangle {
 
 impl Triangle {
     pub fn new(v0: u32, v1: u32, v2: u32, center_occluded: bool) -> Self {
-        Self { v0, v1, v2, center_occluded }
+        Self {
+            v0,
+            v1,
+            v2,
+            center_occluded,
+        }
     }
 }
 
@@ -44,7 +49,7 @@ pub struct OccludableMesh {
     // Pre-allocated buffers to avoid memory allocation during tessellation
     vertices: [OccludableVertex; MAX_VERTICES],
     triangles: [Triangle; MAX_TRIANGLES],
-    
+
     // Current usage counters
     vertex_count: usize,
     triangle_count: usize,
@@ -75,8 +80,11 @@ impl OccludableMesh {
 
     /// Add a vertex and return its index
     pub fn add_vertex(&mut self, vertex: OccludableVertex) -> u32 {
-        debug_assert!(self.vertex_count < MAX_VERTICES, "OccludableMesh vertex buffer overflow");
-        
+        debug_assert!(
+            self.vertex_count < MAX_VERTICES,
+            "OccludableMesh vertex buffer overflow"
+        );
+
         let index = self.vertex_count as u32;
         self.vertices[self.vertex_count] = vertex;
         self.vertex_count += 1;
@@ -85,8 +93,11 @@ impl OccludableMesh {
 
     /// Add a triangle using three vertex indices and center occlusion status
     pub fn add_triangle(&mut self, v0: u32, v1: u32, v2: u32, center_occluded: bool) {
-        debug_assert!(self.triangle_count < MAX_TRIANGLES, "OccludableMesh triangle buffer overflow");
-        
+        debug_assert!(
+            self.triangle_count < MAX_TRIANGLES,
+            "OccludableMesh triangle buffer overflow"
+        );
+
         self.triangles[self.triangle_count] = Triangle::new(v0, v1, v2, center_occluded);
         self.triangle_count += 1;
     }
@@ -139,20 +150,20 @@ impl OccludableMesh {
         // Pre-allocate index mapping array (reuse the vertices array space conceptually)
         let mut index_mapping = [0u32; MAX_VERTICES];
         let mut vertex_needed = [false; MAX_VERTICES];
-        
+
         // Step 1: Mark which vertices are needed by scanning triangles
         for i in 0..self.triangle_count {
             let triangle = &self.triangles[i];
-            
+
             // Check if triangle has any non-occluded point (vertices + center)
             let v0_occluded = self.vertices[triangle.v0 as usize].occluded;
             let v1_occluded = self.vertices[triangle.v1 as usize].occluded;
             let v2_occluded = self.vertices[triangle.v2 as usize].occluded;
             let center_occluded = triangle.center_occluded;
-            
+
             // Keep triangle if ANY vertex (including center) is NOT occluded
             let should_keep = !v0_occluded || !v1_occluded || !v2_occluded || !center_occluded;
-            
+
             if should_keep {
                 // Mark vertices as needed
                 vertex_needed[triangle.v0 as usize] = true;
@@ -160,15 +171,15 @@ impl OccludableMesh {
                 vertex_needed[triangle.v2 as usize] = true;
             }
         }
-        
+
         // Step 2: Build index mapping and add vertices to output mesh
         let vertex_start_index = output_mesh.vertices.len() as u32;
         let mut compressed_vertex_count = 0u32;
-        
+
         for old_index in 0..self.vertex_count {
             if vertex_needed[old_index] {
                 index_mapping[old_index] = compressed_vertex_count;
-                
+
                 // Add vertex directly to output mesh
                 let occludable_vertex = &self.vertices[old_index];
                 let vertex = Vertex::new(
@@ -177,48 +188,31 @@ impl OccludableMesh {
                     material,
                 );
                 output_mesh.add_vertex(vertex);
-                
+
                 compressed_vertex_count += 1;
             }
         }
-        
+
         // Step 3: Add triangles with remapped indices directly to output mesh
         for i in 0..self.triangle_count {
             let triangle = &self.triangles[i];
-            
+
             // Check if triangle should be kept (same logic as Step 1)
             let v0_occluded = self.vertices[triangle.v0 as usize].occluded;
             let v1_occluded = self.vertices[triangle.v1 as usize].occluded;
             let v2_occluded = self.vertices[triangle.v2 as usize].occluded;
             let center_occluded = triangle.center_occluded;
-            
+
             let should_keep = !v0_occluded || !v1_occluded || !v2_occluded || !center_occluded;
-            
+
             if should_keep {
                 // Add triangle with remapped indices
                 let new_v0 = vertex_start_index + index_mapping[triangle.v0 as usize];
                 let new_v1 = vertex_start_index + index_mapping[triangle.v1 as usize];
                 let new_v2 = vertex_start_index + index_mapping[triangle.v2 as usize];
-                
+
                 output_mesh.add_triangle(new_v0, new_v1, new_v2);
             }
         }
     }
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

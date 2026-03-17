@@ -34,6 +34,7 @@ pub struct GeometryVisualizationPreferences {
 
 #[derive(Clone, Debug)]
 pub struct BackgroundPreferences {
+    pub show_axes: bool,
     pub show_grid: bool,
     pub grid_size: i32,
 

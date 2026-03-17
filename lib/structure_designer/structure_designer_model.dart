@@ -16,6 +16,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
     as import_xyz_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_api.dart'
     as import_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
+    as atom_edit_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 enum PinType {
@@ -67,8 +69,41 @@ class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
   NodeNetworkView? nodeNetworkView;
   APIEditAtomTool? activeEditAtomTool = APIEditAtomTool.default_;
+  APIAtomEditTool? activeAtomEditTool = APIAtomEditTool.default_;
+  int? atomEditSelectedElement;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
-  WireDropCallback? onWireDroppedInEmptySpace; // Callback for wire drop in empty space
+  WireDropCallback?
+      onWireDroppedInEmptySpace; // Callback for wire drop in empty space
+  /// Callback to scroll the node network panel to a specific node.
+  /// Registered by NodeNetworkState during init.
+  void Function(BigInt nodeId)? onScrollToNode;
+  bool directEditingMode = true;
+  String _lastMinimizeMessage = '';
+  String _lastAddHydrogenMessage = '';
+  APIBondLengthMode _bondLengthMode = APIBondLengthMode.crystal;
+  APIHybridization _hybridizationOverride = APIHybridization.auto;
+  APIBondMode _bondMode = APIBondMode.covalent;
+
+  String get lastMinimizeMessage => _lastMinimizeMessage;
+  String get lastAddHydrogenMessage => _lastAddHydrogenMessage;
+  APIBondLengthMode get bondLengthMode => _bondLengthMode;
+  set bondLengthMode(APIBondLengthMode value) {
+    _bondLengthMode = value;
+    notifyListeners();
+  }
+
+  APIHybridization get hybridizationOverride => _hybridizationOverride;
+  set hybridizationOverride(APIHybridization value) {
+    _hybridizationOverride = value;
+    notifyListeners();
+  }
+
+  APIBondMode get bondMode => _bondMode;
+  set bondMode(APIBondMode value) {
+    _bondMode = value;
+    notifyListeners();
+  }
+
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
   StructureDesignerPreferences? preferences;
@@ -329,7 +364,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Toggle nodes and wires in selection (for Ctrl+rectangle)
-  void toggleNodesAndWiresSelection(List<BigInt> nodeIds, List<WireView> wires) {
+  void toggleNodesAndWiresSelection(
+      List<BigInt> nodeIds, List<WireView> wires) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
@@ -358,12 +394,23 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  void saveNodeNetworksAs(String filePath) {
-    structure_designer_api.saveNodeNetworksAs(filePath: filePath);
+  void newProject() {
+    if (directEditingMode) {
+      structure_designer_api.newProjectDirectEditing();
+    } else {
+      structure_designer_api.newProject();
+    }
     refreshFromKernel();
   }
 
-  bool saveNodeNetworks() {
+  APIResult saveNodeNetworksAs(String filePath) {
+    final result =
+        structure_designer_api.saveNodeNetworksAs(filePath: filePath);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult saveNodeNetworks() {
     final result = structure_designer_api.saveNodeNetworks();
     refreshFromKernel();
     return result;
@@ -415,6 +462,54 @@ class StructureDesignerModel extends ChangeNotifier {
   void autoLayoutNetwork() {
     structure_designer_api.layoutActiveNetwork();
     refreshFromKernel();
+  }
+
+  // ===== UNDO/REDO =====
+
+  /// Whether there are commands that can be undone.
+  bool get canUndo => structure_designer_api.canUndo();
+
+  /// Whether there are commands that can be redone.
+  bool get canRedo => structure_designer_api.canRedo();
+
+  /// Description of the command that would be undone, or null.
+  String? get undoDescription => structure_designer_api.undoDescription();
+
+  /// Description of the command that would be redone, or null.
+  String? get redoDescription => structure_designer_api.redoDescription();
+
+  /// Undo the last command. Returns the description of the undone command, or null.
+  String? undo() {
+    final description = structure_designer_api.undoDescription();
+    final result = structure_designer_api.undo();
+    if (result) {
+      refreshFromKernel();
+      return description;
+    }
+    return null;
+  }
+
+  /// Redo the last undone command. Returns the description of the redone command, or null.
+  String? redo() {
+    final description = structure_designer_api.redoDescription();
+    final result = structure_designer_api.redo();
+    if (result) {
+      refreshFromKernel();
+      return description;
+    }
+    return null;
+  }
+
+  // ===== MOVE COALESCING =====
+
+  /// Called when a node drag begins. Captures positions for undo coalescing.
+  void beginMoveNodes() {
+    structure_designer_api.beginMoveNodes();
+  }
+
+  /// Called when a node drag ends. Creates a single MoveNodes undo command.
+  void endMoveNodes() {
+    structure_designer_api.endMoveNodes();
   }
 
   // Called on each small update when dragging a node
@@ -538,6 +633,11 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  /// Scrolls the node network panel to center the given node.
+  void scrollToNode(BigInt nodeId) {
+    onScrollToNode?.call(nodeId);
+  }
+
   BigInt? getSelectedNodeId() {
     if (nodeNetworkView == null) return null;
     for (final node in nodeNetworkView!.nodes.values) {
@@ -555,13 +655,9 @@ class StructureDesignerModel extends ChangeNotifier {
     );
 
     if (success) {
-      // If this was the active network, update the view
-      if (nodeNetworkView != null && nodeNetworkView!.name == oldName) {
-        nodeNetworkView = structure_designer_api.getNodeNetworkView();
-      }
-      nodeNetworkNames =
-          structure_designer_api.getNodeNetworksWithValidation() ?? [];
-      notifyListeners();
+      // Always refresh the view - comment nodes in any network may reference
+      // the renamed network via backticks and need to display updated text
+      refreshFromKernel();
     }
   }
 
@@ -662,6 +758,35 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  // ===== COPY / PASTE / CUT =====
+
+  /// Copies the current selection to the clipboard.
+  /// Returns true if something was copied, false if selection was empty.
+  bool copySelection() {
+    return structure_designer_api.copySelection();
+  }
+
+  /// Pastes clipboard content at the given position (network coordinates).
+  void pasteAtPosition(double x, double y) {
+    structure_designer_api.pasteAtPosition(x: x, y: y);
+    refreshFromKernel();
+  }
+
+  /// Cuts the current selection (copy + delete).
+  /// Returns true if something was cut.
+  bool cutSelection() {
+    final result = structure_designer_api.cutSelection();
+    if (result) {
+      refreshFromKernel();
+    }
+    return result;
+  }
+
+  /// Returns true if the clipboard has content available for pasting.
+  bool hasClipboardContent() {
+    return structure_designer_api.hasClipboardContent();
+  }
+
   void deleteSelectedAtomsAndBonds() {
     if (nodeNetworkView == null) return;
     edit_atom_api.deleteSelectedAtomsAndBonds();
@@ -692,20 +817,204 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  bool setEditAtomDefaultData(int replacementAtomicNumber) {
-    if (nodeNetworkView == null) return false;
-    final result = edit_atom_api.setEditAtomDefaultData(
-        replacementAtomicNumber: replacementAtomicNumber);
+  void setEditAtomSelectedElement(int atomicNumber) {
+    if (nodeNetworkView == null) return;
+    edit_atom_api.setEditAtomSelectedElement(atomicNumber: atomicNumber);
+    refreshFromKernel();
+  }
+
+  // ===== ATOM_EDIT (NEW DIFF-BASED NODE) METHODS =====
+
+  void setActiveAtomEditTool(APIAtomEditTool tool) {
+    atom_edit_api.setActiveAtomEditTool(tool: tool);
+    _bondLengthMode = APIBondLengthMode.crystal;
+    _hybridizationOverride = APIHybridization.auto;
+    _bondMode = APIBondMode.covalent;
+    refreshFromKernel();
+  }
+
+  void atomEditSelectByRay(vector_math.Vector3 rayStart,
+      vector_math.Vector3 rayDir, SelectModifier selectModifier) {
+    atom_edit_api.atomEditSelectByRay(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+      selectModifier: selectModifier,
+    );
+    refreshFromKernel();
+  }
+
+  void atomEditAddAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
+      vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditAddAtomByRay(
+      atomicNumber: atomicNumber,
+      planeNormal: vector3ToApiVec3(planeNormal),
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+    );
+    refreshFromKernel();
+  }
+
+  // Note: atomEditDrawBondByRay removed — replaced by drag-to-bond interaction
+  // in _AtomEditAddBondDelegate (structure_designer_viewport.dart).
+
+  void atomEditDeleteSelected() {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditDeleteSelected();
+    refreshFromKernel();
+  }
+
+  void atomEditReplaceSelected(int atomicNumber) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditReplaceSelected(atomicNumber: atomicNumber);
+    refreshFromKernel();
+  }
+
+  void atomEditTransformSelected(APITransform absTransform) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditTransformSelected(absTransform: absTransform);
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditOutputDiff() {
+    atom_edit_api.atomEditToggleOutputDiff();
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditShowAnchorArrows() {
+    atom_edit_api.atomEditToggleShowAnchorArrows();
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditIncludeBaseBondsInDiff() {
+    atom_edit_api.atomEditToggleIncludeBaseBondsInDiff();
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditShowGadget() {
+    atom_edit_api.atomEditToggleShowGadget();
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditErrorOnStaleEntries() {
+    atom_edit_api.atomEditToggleErrorOnStaleEntries();
+    refreshFromKernel();
+  }
+
+  void toggleAtomEditContinuousMinimization() {
+    atom_edit_api.atomEditToggleContinuousMinimization();
+    refreshFromKernel();
+  }
+
+  void setAtomEditSelectedElement(int atomicNumber) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.setAtomEditSelectedElement(atomicNumber: atomicNumber);
+    atomEditSelectedElement = atomicNumber;
+    refreshFromKernel();
+  }
+
+  void atomEditMinimize(APIMinimizeFreezeMode freezeMode) {
+    _lastMinimizeMessage =
+        atom_edit_api.atomEditMinimize(freezeMode: freezeMode);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
+  void atomEditAddHydrogen({required bool selectedOnly}) {
+    _lastAddHydrogenMessage =
+        atom_edit_api.atomEditAddHydrogen(selectedOnly: selectedOnly);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
+  String _lastRemoveHydrogenMessage = '';
+  String get lastRemoveHydrogenMessage => _lastRemoveHydrogenMessage;
+
+  void atomEditRemoveHydrogen({required bool selectedOnly}) {
+    _lastRemoveHydrogenMessage =
+        atom_edit_api.atomEditRemoveHydrogen(selectedOnly: selectedOnly);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
+  // ===== MODIFY MEASUREMENT =====
+
+  String atomEditModifyDistance(
+      double targetDistance, bool moveFirst, bool moveFragment) {
+    final msg = atom_edit_api.atomEditModifyDistance(
+        targetDistance: targetDistance,
+        moveFirst: moveFirst,
+        moveFragment: moveFragment);
+    refreshFromKernel();
+    return msg;
+  }
+
+  String atomEditModifyAngle(
+      double targetAngleDegrees, bool moveArmA, bool moveFragment) {
+    final msg = atom_edit_api.atomEditModifyAngle(
+        targetAngleDegrees: targetAngleDegrees,
+        moveArmA: moveArmA,
+        moveFragment: moveFragment);
+    refreshFromKernel();
+    return msg;
+  }
+
+  String atomEditModifyDihedral(
+      double targetAngleDegrees, bool moveASide, bool moveFragment) {
+    final msg = atom_edit_api.atomEditModifyDihedral(
+        targetAngleDegrees: targetAngleDegrees,
+        moveASide: moveASide,
+        moveFragment: moveFragment);
+    refreshFromKernel();
+    return msg;
+  }
+
+  double? atomEditGetDefaultBondLength() {
+    return atom_edit_api.atomEditGetDefaultBondLength(
+        bondLengthMode: _bondLengthMode);
+  }
+
+  double? atomEditGetDefaultAngle() {
+    return atom_edit_api.atomEditGetDefaultAngle();
+  }
+
+  // ===== GUIDED ATOM PLACEMENT =====
+
+  GuidedPlacementApiResult atomEditStartGuidedPlacement(
+    vector_math.Vector3 rayStart,
+    vector_math.Vector3 rayDir,
+    int atomicNumber,
+    APIHybridization hybridizationOverride,
+    APIBondMode bondMode,
+    APIBondLengthMode bondLengthMode,
+  ) {
+    final result = atom_edit_api.atomEditStartGuidedPlacement(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+      atomicNumber: atomicNumber,
+      hybridizationOverride: hybridizationOverride,
+      bondMode: bondMode,
+      bondLengthMode: bondLengthMode,
+    );
     refreshFromKernel();
     return result;
   }
 
-  bool setEditAtomAddAtomData(int atomicNumber) {
-    if (nodeNetworkView == null) return false;
-    final result =
-        edit_atom_api.setEditAtomAddAtomData(atomicNumber: atomicNumber);
+  bool atomEditPlaceGuidedAtom(
+    vector_math.Vector3 rayStart,
+    vector_math.Vector3 rayDir,
+  ) {
+    final placed = atom_edit_api.atomEditPlaceGuidedAtom(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+    );
     refreshFromKernel();
-    return result;
+    return placed;
+  }
+
+  void atomEditCancelGuidedPlacement() {
+    atom_edit_api.atomEditCancelGuidedPlacement();
+    refreshFromKernel();
   }
 
   void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
@@ -953,6 +1262,11 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  void setApplyDiffData(BigInt nodeId, APIApplyDiffData data) {
+    structure_designer_api.setApplyDiffData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setAtomCutData(BigInt nodeId, APIAtomCutData data) {
     structure_designer_api.setAtomCutData(nodeId: nodeId, data: data);
     refreshFromKernel();
@@ -968,11 +1282,13 @@ class StructureDesignerModel extends ChangeNotifier {
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];
     activeEditAtomTool = edit_atom_api.getActiveEditAtomTool();
+    activeAtomEditTool = atom_edit_api.getActiveAtomEditTool();
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();
     preferences = structure_designer_api.getStructureDesignerPreferences();
     isDirty = structure_designer_api.isDesignDirty();
     filePath = structure_designer_api.getDesignFilePath();
+    directEditingMode = structure_designer_api.getDirectEditingMode();
 
     notifyListeners();
   }
@@ -1097,5 +1413,34 @@ class StructureDesignerModel extends ChangeNotifier {
         errorMessage: 'Import failed: $e',
       );
     }
+  }
+
+  // --- Direct Editing Mode ---
+
+  bool get canSwitchToDirectEditingMode =>
+      structure_designer_api.canSwitchToDirectEditingMode();
+
+  void switchToDirectEditingMode() {
+    structure_designer_api.setDirectEditingMode(mode: true);
+    refreshFromKernel();
+  }
+
+  void switchToNodeNetworkMode() {
+    structure_designer_api.setDirectEditingMode(mode: false);
+    refreshFromKernel();
+  }
+
+  /// Whether any network in the design has validation errors.
+  bool get hasValidationErrors =>
+      nodeNetworkNames.any((n) => n.validationErrors != null);
+
+  /// Imports an XYZ file into the active atom_edit node's diff layer.
+  /// Atoms and bonds are merged as pure additions (incremental import).
+  /// Returns an empty string on success, or an error message on failure.
+  String importXyzIntoAtomEdit(String filePath) {
+    final result =
+        structure_designer_api.importXyzIntoAtomEdit(filePath: filePath);
+    refreshFromKernel();
+    return result;
   }
 }

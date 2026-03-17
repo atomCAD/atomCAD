@@ -1,103 +1,124 @@
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::geo_tree::GeoNode;
+use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use glam::i32::IVec3;
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use crate::util::serialization_utils::ivec3_serializer;
-use crate::structure_designer::text_format::TextValue;
-use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::network_result::GeometrySummary;
-use crate::util::transform::Transform;
+use crate::structure_designer::node_type::{
+    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use glam::f64::DQuat;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::geo_tree::GeoNode;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
-use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::structure_designer::text_format::TextValue;
+use crate::util::serialization_utils::ivec3_serializer;
+use crate::util::transform::Transform;
+use glam::f64::DQuat;
+use glam::i32::IVec3;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SphereData {
-  #[serde(with = "ivec3_serializer")]
-  pub center: IVec3,
-  pub radius: i32,
+    #[serde(with = "ivec3_serializer")]
+    pub center: IVec3,
+    pub radius: i32,
 }
 
 impl NodeData for SphereData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
-      None
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
-      None
+        None
     }
 
     fn eval<'a>(
-      &self,
-      network_evaluator: &NetworkEvaluator,
-      network_stack: &[NetworkStackElement<'a>],
-      node_id: u64,
-      registry: &NodeTypeRegistry,
-      _decorate: bool,
-      context: &mut NetworkEvaluationContext,
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-      let center = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 0, 
-        self.center, 
-        NetworkResult::extract_ivec3
-      ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
-    
-      let radius = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 1, 
-        self.radius, 
-        NetworkResult::extract_int
-      ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
-    
-      let unit_cell = match network_evaluator.evaluate_or_default(
-        network_stack, node_id, registry, context, 2, 
-        UnitCellStruct::cubic_diamond(), 
-        NetworkResult::extract_unit_cell,
-      ) {
-        Ok(value) => value,
-        Err(error) => return error,
-      };
+        let center = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            0,
+            self.center,
+            NetworkResult::extract_ivec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
 
-      let real_center = unit_cell.ivec3_lattice_to_real(&center);
-      let real_radius = unit_cell.int_lattice_to_real(radius);
+        let radius = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.radius,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
 
-      NetworkResult::Geometry(GeometrySummary { 
-        unit_cell,
-        frame_transform: Transform::new(
-        real_center,
-        DQuat::IDENTITY,
-        ),
-        geo_tree_root: GeoNode::sphere(real_center, real_radius),
-      })
+        let unit_cell = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            UnitCellStruct::cubic_diamond(),
+            NetworkResult::extract_unit_cell,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
+
+        let real_center = unit_cell.ivec3_lattice_to_real(&center);
+        let real_radius = unit_cell.int_lattice_to_real(radius);
+
+        NetworkResult::Geometry(GeometrySummary {
+            unit_cell,
+            frame_transform: Transform::new(real_center, DQuat::IDENTITY),
+            geo_tree_root: GeoNode::sphere(real_center, real_radius),
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
         Box::new(self.clone())
     }
 
-    fn get_subtitle(&self, connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+    fn get_subtitle(
+        &self,
+        connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
         let show_center = !connected_input_pins.contains("center");
         let show_radius = !connected_input_pins.contains("radius");
 
         match (show_center, show_radius) {
-            (true, true) => Some(format!("c: ({},{},{}) r: {}",
-                self.center.x, self.center.y, self.center.z, self.radius)),
-            (true, false) => Some(format!("c: ({},{},{})",
-                self.center.x, self.center.y, self.center.z)),
+            (true, true) => Some(format!(
+                "c: ({},{},{}) r: {}",
+                self.center.x, self.center.y, self.center.z, self.radius
+            )),
+            (true, false) => Some(format!(
+                "c: ({},{},{})",
+                self.center.x, self.center.y, self.center.z
+            )),
             (false, true) => Some(format!("r: {}", self.radius)),
             (false, false) => None,
         }
@@ -112,51 +133,61 @@ impl NodeData for SphereData {
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
         if let Some(v) = props.get("center") {
-            self.center = v.as_ivec3().ok_or_else(|| "center must be an IVec3".to_string())?;
+            self.center = v
+                .as_ivec3()
+                .ok_or_else(|| "center must be an IVec3".to_string())?;
         }
         if let Some(v) = props.get("radius") {
-            self.radius = v.as_int().ok_or_else(|| "radius must be an integer".to_string())?;
+            self.radius = v
+                .as_int()
+                .ok_or_else(|| "radius must be an integer".to_string())?;
         }
         Ok(())
     }
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("unit_cell".to_string(), (false, Some("cubic diamond".to_string())));
+        m.insert(
+            "unit_cell".to_string(),
+            (false, Some("cubic diamond".to_string())),
+        );
         m
     }
 }
 
 pub fn get_node_type() -> NodeType {
-  NodeType {
-      name: "sphere".to_string(),
-      description: "Outputs a sphere with integer center coordinates and integer radius.".to_string(),
-      summary: None,
-      category: NodeTypeCategory::Geometry3D,
-      parameters: vec![
-        Parameter {
-            id: None,
-            name: "center".to_string(),
-            data_type: DataType::IVec3,
+    NodeType {
+        name: "sphere".to_string(),
+        description: "Outputs a sphere with integer center coordinates and integer radius."
+            .to_string(),
+        summary: None,
+        category: NodeTypeCategory::Geometry3D,
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "center".to_string(),
+                data_type: DataType::IVec3,
+            },
+            Parameter {
+                id: None,
+                name: "radius".to_string(),
+                data_type: DataType::Int,
+            },
+            Parameter {
+                id: None,
+                name: "unit_cell".to_string(),
+                data_type: DataType::UnitCell,
+            },
+        ],
+        output_type: DataType::Geometry,
+        public: true,
+        node_data_creator: || {
+            Box::new(SphereData {
+                center: IVec3::new(0, 0, 0),
+                radius: 1,
+            })
         },
-        Parameter {
-          id: None,
-          name: "radius".to_string(),
-          data_type: DataType::Int,
-        },
-        Parameter {
-          id: None,
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
-        },
-      ],
-      output_type: DataType::Geometry,
-      public: true,
-      node_data_creator: || Box::new(SphereData {
-        center: IVec3::new(0, 0, 0),
-        radius: 1,
-      }),
-      node_data_saver: generic_node_data_saver::<SphereData>,
-      node_data_loader: generic_node_data_loader::<SphereData>,
+        node_data_saver: generic_node_data_saver::<SphereData>,
+        node_data_loader: generic_node_data_loader::<SphereData>,
     }
 }

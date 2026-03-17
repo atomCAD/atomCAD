@@ -57,3 +57,63 @@ mod layout_after_edit_test;
 
 #[path = "structure_designer/parameter_wire_preservation_test.rs"]
 mod parameter_wire_preservation_test;
+
+#[path = "structure_designer/preferences_test.rs"]
+mod preferences_test;
+
+#[path = "structure_designer/selection_factoring_test.rs"]
+mod selection_factoring_test;
+
+#[path = "structure_designer/copy_paste_test.rs"]
+mod copy_paste_test;
+
+#[path = "structure_designer/atom_edit_text_format_test.rs"]
+mod atom_edit_text_format_test;
+
+#[path = "structure_designer/atom_edit_mutations_test.rs"]
+mod atom_edit_mutations_test;
+
+#[path = "structure_designer/atom_edit_measurement_test.rs"]
+mod atom_edit_measurement_test;
+
+#[path = "structure_designer/atom_edit_bond_order_test.rs"]
+mod atom_edit_bond_order_test;
+
+#[path = "structure_designer/atom_edit_selection_order_test.rs"]
+mod atom_edit_selection_order_test;
+
+#[path = "structure_designer/modify_measurement_test.rs"]
+mod modify_measurement_test;
+
+#[path = "structure_designer/atom_edit_move_in_diff_test.rs"]
+mod atom_edit_move_in_diff_test;
+
+#[path = "structure_designer/apply_diff_node_test.rs"]
+mod apply_diff_node_test;
+
+#[path = "structure_designer/atom_lattice_transform_test.rs"]
+mod atom_lattice_transform_test;
+
+#[path = "structure_designer/add_hydrogen_node_test.rs"]
+mod add_hydrogen_node_test;
+
+#[path = "structure_designer/remove_hydrogen_node_test.rs"]
+mod remove_hydrogen_node_test;
+
+#[path = "structure_designer/atom_edit_hydrogen_roundtrip_test.rs"]
+mod atom_edit_hydrogen_roundtrip_test;
+
+#[path = "structure_designer/raytrace_per_node_test.rs"]
+mod raytrace_per_node_test;
+
+#[path = "structure_designer/atom_edit_unchanged_test.rs"]
+mod atom_edit_unchanged_test;
+
+#[path = "structure_designer/undo_test.rs"]
+mod undo_test;
+
+#[path = "structure_designer/atom_edit_undo_test.rs"]
+mod atom_edit_undo_test;
+
+#[path = "structure_designer/continuous_minimization_test.rs"]
+mod continuous_minimization_test;

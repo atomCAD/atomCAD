@@ -4,7 +4,14 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 /// Editor for the active node network's description and summary
 /// Displayed when no node is selected
 class NetworkDescriptionEditor extends StatefulWidget {
-  const NetworkDescriptionEditor({super.key});
+  final String description;
+  final String summary;
+
+  const NetworkDescriptionEditor({
+    super.key,
+    required this.description,
+    required this.summary,
+  });
 
   @override
   State<NetworkDescriptionEditor> createState() =>
@@ -20,12 +27,24 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
   @override
   void initState() {
     super.initState();
-    final description = getActiveNetworkDescription() ?? '';
-    final summary = getActiveNetworkSummary() ?? '';
-    _descriptionController = TextEditingController(text: description);
-    _summaryController = TextEditingController(text: summary);
+    _descriptionController = TextEditingController(text: widget.description);
+    _summaryController = TextEditingController(text: widget.summary);
     _descriptionController.addListener(_onTextChanged);
     _summaryController.addListener(_onTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(NetworkDescriptionEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update controllers if external data changed and user hasn't made local edits
+    if (!_hasChanges) {
+      if (oldWidget.description != widget.description) {
+        _descriptionController.text = widget.description;
+      }
+      if (oldWidget.summary != widget.summary) {
+        _summaryController.text = widget.summary;
+      }
+    }
   }
 
   @override

@@ -1,6 +1,6 @@
-use rust_lib_flutter_cad::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 use glam::f64::DVec3;
+use rust_lib_flutter_cad::geo_tree::GeoNode;
+use rust_lib_flutter_cad::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 
 #[test]
 fn test_multi_threaded_evaluation() {
@@ -32,9 +32,13 @@ fn test_multi_threaded_evaluation() {
     // Results should be identical
     assert_eq!(single_results.len(), multi_results.len());
     for (i, (single, multi)) in single_results.iter().zip(multi_results.iter()).enumerate() {
-        assert!((single - multi).abs() < 1e-10, 
-            "Point {}: Single-threaded and multi-threaded results should be identical: {} vs {}", 
-            i, single, multi);
+        assert!(
+            (single - multi).abs() < 1e-10,
+            "Point {}: Single-threaded and multi-threaded results should be identical: {} vs {}",
+            i,
+            single,
+            multi
+        );
     }
 }
 
@@ -73,8 +77,13 @@ fn test_fallback_to_single_threaded() {
     // Verify results are correct
     for (i, &result) in results.iter().enumerate() {
         let expected = (i as f64 * 0.1) - 1.0; // Distance to sphere surface
-        assert!((result - expected).abs() < 1e-10, 
-                "Point {}: expected {}, got {}", i, expected, result);
+        assert!(
+            (result - expected).abs() < 1e-10,
+            "Point {}: expected {}, got {}",
+            i,
+            expected,
+            result
+        );
     }
 }
 
@@ -82,7 +91,7 @@ fn test_fallback_to_single_threaded() {
 fn test_complex_geometry_multi_threaded() {
     // Create a more complex geometry tree
     let sphere1 = Box::new(GeoNode::sphere(DVec3::new(-0.5, 0.0, 0.0), 0.8));
-    
+
     let sphere2 = Box::new(GeoNode::sphere(DVec3::new(0.5, 0.0, 0.0), 0.8));
 
     let union = GeoNode::union_3d(vec![*sphere1, *sphere2]);
@@ -112,15 +121,12 @@ fn test_complex_geometry_multi_threaded() {
     // Results should be identical
     assert_eq!(single_results.len(), multi_results.len());
     for (i, (single, multi)) in single_results.iter().zip(multi_results.iter()).enumerate() {
-        assert!((single - multi).abs() < 1e-10, 
-            "Point {}: Complex geometry results should be identical: {} vs {}", 
-            i, single, multi);
+        assert!(
+            (single - multi).abs() < 1e-10,
+            "Point {}: Complex geometry results should be identical: {} vs {}",
+            i,
+            single,
+            multi
+        );
     }
 }
-
-
-
-
-
-
-

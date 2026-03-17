@@ -1,8 +1,8 @@
-use lazy_static::lazy_static;
 use crate::crystolecule::motif::Motif;
 use crate::crystolecule::motif_parser::parse_motif;
+use lazy_static::lazy_static;
 
-pub const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f64 = 3.567;  // Size of one complete unit cell in Ångströms
+pub const DIAMOND_UNIT_CELL_SIZE_ANGSTROM: f64 = 3.567; // Size of one complete unit cell in Ångströms
 
 // Zincblende motif site indexes (basis indexes)
 // These correspond to the order of SITE declarations in DEFAULT_ZINCBLENDE_MOTIF
@@ -57,7 +57,7 @@ BOND INTERIOR4 .+.FACE_Y
 BOND INTERIOR4 +..FACE_X
 
 "#;
-        
+
         parse_motif(motif_text).expect("Failed to parse default zincblende motif")
     };
 }

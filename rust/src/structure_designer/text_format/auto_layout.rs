@@ -184,17 +184,10 @@ fn find_empty_position(
         .unwrap_or(0.0);
 
     // Calculate average Y position for vertical centering
-    let avg_y = network
-        .nodes
-        .values()
-        .map(|n| n.position.y)
-        .sum::<f64>()
-        / network.nodes.len() as f64;
+    let avg_y =
+        network.nodes.values().map(|n| n.position.y).sum::<f64>() / network.nodes.len() as f64;
 
-    let proposed = DVec2::new(
-        max_right + node_layout::DEFAULT_HORIZONTAL_GAP * 2.0,
-        avg_y,
-    );
+    let proposed = DVec2::new(max_right + node_layout::DEFAULT_HORIZONTAL_GAP * 2.0, avg_y);
 
     // Ensure we don't overlap (in case of unusual layouts)
     find_non_overlapping_position(network, registry, proposed, new_node_size)

@@ -7,6 +7,7 @@ import 'api/common_api.dart';
 import 'api/common_api_types.dart';
 import 'api/screenshot_api.dart';
 import 'api/structure_designer/ai_assistant_api.dart';
+import 'api/structure_designer/atom_edit_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/import_api.dart';
@@ -42,7 +43,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  APIAddBondMoveResult dco_decode_api_add_bond_move_result(dynamic raw);
+
+  @protected
+  APIApplyDiffData dco_decode_api_apply_diff_data(dynamic raw);
+
+  @protected
   APIAtomCutData dco_decode_api_atom_cut_data(dynamic raw);
+
+  @protected
+  APIAtomEditData dco_decode_api_atom_edit_data(dynamic raw);
+
+  @protected
+  APIAtomEditTool dco_decode_api_atom_edit_tool(dynamic raw);
 
   @protected
   APIAtomFillData dco_decode_api_atom_fill_data(dynamic raw);
@@ -57,6 +70,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAtomTransData dco_decode_api_atom_trans_data(dynamic raw);
 
   @protected
+  APIBondLengthMode dco_decode_api_bond_length_mode(dynamic raw);
+
+  @protected
+  APIBondMode dco_decode_api_bond_mode(dynamic raw);
+
+  @protected
   APIBoolData dco_decode_api_bool_data(dynamic raw);
 
   @protected
@@ -64,6 +83,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICameraCanonicalView dco_decode_api_camera_canonical_view(dynamic raw);
+
+  @protected
+  APICandidateNode dco_decode_api_candidate_node(dynamic raw);
 
   @protected
   APICircleData dco_decode_api_circle_data(dynamic raw);
@@ -79,6 +101,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataTypeBase dco_decode_api_data_type_base(dynamic raw);
+
+  @protected
+  APIDiffStats dco_decode_api_diff_stats(dynamic raw);
 
   @protected
   APIDrawingPlaneData dco_decode_api_drawing_plane_data(dynamic raw);
@@ -120,6 +145,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData dco_decode_api_half_space_data(dynamic raw);
 
   @protected
+  APIHoveredAtomInfo dco_decode_api_hovered_atom_info(dynamic raw);
+
+  @protected
+  APIHybridization dco_decode_api_hybridization(dynamic raw);
+
+  @protected
   APIImportXYZData dco_decode_api_import_xyz_data(dynamic raw);
 
   @protected
@@ -136,6 +167,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData dco_decode_api_map_data(dynamic raw);
+
+  @protected
+  APIMeasurement dco_decode_api_measurement(dynamic raw);
+
+  @protected
+  APIMinimizeFreezeMode dco_decode_api_minimize_freeze_mode(dynamic raw);
 
   @protected
   APIMotifData dco_decode_api_motif_data(dynamic raw);
@@ -178,6 +215,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIStringData dco_decode_api_string_data(dynamic raw);
 
   @protected
+  APITextEditResult dco_decode_api_text_edit_result(dynamic raw);
+
+  @protected
+  APITextError dco_decode_api_text_error(dynamic raw);
+
+  @protected
   APITransform dco_decode_api_transform(dynamic raw);
 
   @protected
@@ -194,6 +237,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data dco_decode_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIViewportPickResult dco_decode_api_viewport_pick_result(dynamic raw);
 
   @protected
   APIIVec2 dco_decode_apii_vec_2(dynamic raw);
@@ -228,7 +274,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  APIApplyDiffData dco_decode_box_autoadd_api_apply_diff_data(dynamic raw);
+
+  @protected
   APIAtomCutData dco_decode_box_autoadd_api_atom_cut_data(dynamic raw);
+
+  @protected
+  APIAtomEditData dco_decode_box_autoadd_api_atom_edit_data(dynamic raw);
+
+  @protected
+  APIAtomEditTool dco_decode_box_autoadd_api_atom_edit_tool(dynamic raw);
 
   @protected
   APIAtomFillData dco_decode_box_autoadd_api_atom_fill_data(dynamic raw);
@@ -298,6 +353,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData dco_decode_box_autoadd_api_half_space_data(dynamic raw);
 
   @protected
+  APIHoveredAtomInfo dco_decode_box_autoadd_api_hovered_atom_info(dynamic raw);
+
+  @protected
   APIImportXYZData dco_decode_box_autoadd_api_import_xyz_data(dynamic raw);
 
   @protected
@@ -315,6 +373,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData dco_decode_box_autoadd_api_map_data(dynamic raw);
+
+  @protected
+  APIMeasurement dco_decode_box_autoadd_api_measurement(dynamic raw);
 
   @protected
   APIMotifData dco_decode_box_autoadd_api_motif_data(dynamic raw);
@@ -374,7 +435,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
-  int dco_decode_box_autoadd_i_16(dynamic raw);
+  FactorSelectionRequest dco_decode_box_autoadd_factor_selection_request(
+      dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_i_32(dynamic raw);
@@ -397,10 +459,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw);
+
+  @protected
   BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
   @protected
   CliConfig dco_decode_cli_config(dynamic raw);
+
+  @protected
+  DragFrozenStatus dco_decode_drag_frozen_status(dynamic raw);
 
   @protected
   ElementSummary dco_decode_element_summary(dynamic raw);
@@ -409,11 +477,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FactorSelectionInfo dco_decode_factor_selection_info(dynamic raw);
+
+  @protected
+  FactorSelectionRequest dco_decode_factor_selection_request(dynamic raw);
+
+  @protected
+  FactorSelectionResult dco_decode_factor_selection_result(dynamic raw);
+
+  @protected
   GeometryVisualization dco_decode_geometry_visualization(dynamic raw);
 
   @protected
   GeometryVisualizationPreferences
       dco_decode_geometry_visualization_preferences(dynamic raw);
+
+  @protected
+  GuidedPlacementApiResult dco_decode_guided_placement_api_result(dynamic raw);
 
   @protected
   int dco_decode_i_16(dynamic raw);
@@ -434,6 +514,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
+
+  @protected
   List<APIExprParameter> dco_decode_list_api_expr_parameter(dynamic raw);
 
   @protected
@@ -452,6 +535,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
       dynamic raw);
+
+  @protected
+  List<APITextError> dco_decode_list_api_text_error(dynamic raw);
 
   @protected
   List<ElementSummary> dco_decode_list_element_summary(dynamic raw);
@@ -503,7 +589,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  APIApplyDiffData? dco_decode_opt_box_autoadd_api_apply_diff_data(dynamic raw);
+
+  @protected
   APIAtomCutData? dco_decode_opt_box_autoadd_api_atom_cut_data(dynamic raw);
+
+  @protected
+  APIAtomEditData? dco_decode_opt_box_autoadd_api_atom_edit_data(dynamic raw);
+
+  @protected
+  APIAtomEditTool? dco_decode_opt_box_autoadd_api_atom_edit_tool(dynamic raw);
 
   @protected
   APIAtomFillData? dco_decode_opt_box_autoadd_api_atom_fill_data(dynamic raw);
@@ -571,6 +666,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData? dco_decode_opt_box_autoadd_api_half_space_data(dynamic raw);
 
   @protected
+  APIHoveredAtomInfo? dco_decode_opt_box_autoadd_api_hovered_atom_info(
+      dynamic raw);
+
+  @protected
   APIImportXYZData? dco_decode_opt_box_autoadd_api_import_xyz_data(dynamic raw);
 
   @protected
@@ -590,6 +689,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData? dco_decode_opt_box_autoadd_api_map_data(dynamic raw);
+
+  @protected
+  APIMeasurement? dco_decode_opt_box_autoadd_api_measurement(dynamic raw);
 
   @protected
   APIMotifData? dco_decode_opt_box_autoadd_api_motif_data(dynamic raw);
@@ -640,9 +742,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
   @protected
-  int? dco_decode_opt_box_autoadd_i_16(dynamic raw);
-
-  @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
   @protected
@@ -663,6 +762,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
 
   @protected
@@ -678,6 +780,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PointerDownResult dco_decode_pointer_down_result(dynamic raw);
+
+  @protected
+  PointerDownResultKind dco_decode_pointer_down_result_kind(dynamic raw);
+
+  @protected
+  PointerMoveResult dco_decode_pointer_move_result(dynamic raw);
+
+  @protected
+  PointerMoveResultKind dco_decode_pointer_move_result_kind(dynamic raw);
+
+  @protected
+  PointerUpResult dco_decode_pointer_up_result(dynamic raw);
 
   @protected
   (int, String, String) dco_decode_record_i_32_string_string(dynamic raw);
@@ -696,6 +813,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SelectModifier dco_decode_select_modifier(dynamic raw);
+
+  @protected
+  SimulationPreferences dco_decode_simulation_preferences(dynamic raw);
 
   @protected
   StructureDesignerPreferences dco_decode_structure_designer_preferences(
@@ -737,7 +857,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  APIAddBondMoveResult sse_decode_api_add_bond_move_result(
+      SseDeserializer deserializer);
+
+  @protected
+  APIApplyDiffData sse_decode_api_apply_diff_data(SseDeserializer deserializer);
+
+  @protected
   APIAtomCutData sse_decode_api_atom_cut_data(SseDeserializer deserializer);
+
+  @protected
+  APIAtomEditData sse_decode_api_atom_edit_data(SseDeserializer deserializer);
+
+  @protected
+  APIAtomEditTool sse_decode_api_atom_edit_tool(SseDeserializer deserializer);
 
   @protected
   APIAtomFillData sse_decode_api_atom_fill_data(SseDeserializer deserializer);
@@ -752,6 +885,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAtomTransData sse_decode_api_atom_trans_data(SseDeserializer deserializer);
 
   @protected
+  APIBondLengthMode sse_decode_api_bond_length_mode(
+      SseDeserializer deserializer);
+
+  @protected
+  APIBondMode sse_decode_api_bond_mode(SseDeserializer deserializer);
+
+  @protected
   APIBoolData sse_decode_api_bool_data(SseDeserializer deserializer);
 
   @protected
@@ -760,6 +900,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APICameraCanonicalView sse_decode_api_camera_canonical_view(
       SseDeserializer deserializer);
+
+  @protected
+  APICandidateNode sse_decode_api_candidate_node(SseDeserializer deserializer);
 
   @protected
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
@@ -775,6 +918,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataTypeBase sse_decode_api_data_type_base(SseDeserializer deserializer);
+
+  @protected
+  APIDiffStats sse_decode_api_diff_stats(SseDeserializer deserializer);
 
   @protected
   APIDrawingPlaneData sse_decode_api_drawing_plane_data(
@@ -818,6 +964,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHalfSpaceData sse_decode_api_half_space_data(SseDeserializer deserializer);
 
   @protected
+  APIHoveredAtomInfo sse_decode_api_hovered_atom_info(
+      SseDeserializer deserializer);
+
+  @protected
+  APIHybridization sse_decode_api_hybridization(SseDeserializer deserializer);
+
+  @protected
   APIImportXYZData sse_decode_api_import_xyz_data(SseDeserializer deserializer);
 
   @protected
@@ -837,6 +990,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData sse_decode_api_map_data(SseDeserializer deserializer);
+
+  @protected
+  APIMeasurement sse_decode_api_measurement(SseDeserializer deserializer);
+
+  @protected
+  APIMinimizeFreezeMode sse_decode_api_minimize_freeze_mode(
+      SseDeserializer deserializer);
 
   @protected
   APIMotifData sse_decode_api_motif_data(SseDeserializer deserializer);
@@ -882,6 +1042,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIStringData sse_decode_api_string_data(SseDeserializer deserializer);
 
   @protected
+  APITextEditResult sse_decode_api_text_edit_result(
+      SseDeserializer deserializer);
+
+  @protected
+  APITextError sse_decode_api_text_error(SseDeserializer deserializer);
+
+  @protected
   APITransform sse_decode_api_transform(SseDeserializer deserializer);
 
   @protected
@@ -898,6 +1065,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data sse_decode_api_vec_3_data(SseDeserializer deserializer);
+
+  @protected
+  APIViewportPickResult sse_decode_api_viewport_pick_result(
+      SseDeserializer deserializer);
 
   @protected
   APIIVec2 sse_decode_apii_vec_2(SseDeserializer deserializer);
@@ -935,7 +1106,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  APIApplyDiffData sse_decode_box_autoadd_api_apply_diff_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIAtomCutData sse_decode_box_autoadd_api_atom_cut_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAtomEditData sse_decode_box_autoadd_api_atom_edit_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAtomEditTool sse_decode_box_autoadd_api_atom_edit_tool(
       SseDeserializer deserializer);
 
   @protected
@@ -1025,6 +1208,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIHoveredAtomInfo sse_decode_box_autoadd_api_hovered_atom_info(
+      SseDeserializer deserializer);
+
+  @protected
   APIImportXYZData sse_decode_box_autoadd_api_import_xyz_data(
       SseDeserializer deserializer);
 
@@ -1045,6 +1232,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData sse_decode_box_autoadd_api_map_data(SseDeserializer deserializer);
+
+  @protected
+  APIMeasurement sse_decode_box_autoadd_api_measurement(
+      SseDeserializer deserializer);
 
   @protected
   APIMotifData sse_decode_box_autoadd_api_motif_data(
@@ -1118,7 +1309,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_box_autoadd_i_16(SseDeserializer deserializer);
+  FactorSelectionRequest sse_decode_box_autoadd_factor_selection_request(
+      SseDeserializer deserializer);
 
   @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
@@ -1143,16 +1335,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
   CliConfig sse_decode_cli_config(SseDeserializer deserializer);
 
   @protected
+  DragFrozenStatus sse_decode_drag_frozen_status(SseDeserializer deserializer);
+
+  @protected
   ElementSummary sse_decode_element_summary(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  FactorSelectionInfo sse_decode_factor_selection_info(
+      SseDeserializer deserializer);
+
+  @protected
+  FactorSelectionRequest sse_decode_factor_selection_request(
+      SseDeserializer deserializer);
+
+  @protected
+  FactorSelectionResult sse_decode_factor_selection_result(
+      SseDeserializer deserializer);
 
   @protected
   GeometryVisualization sse_decode_geometry_visualization(
@@ -1162,6 +1372,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   GeometryVisualizationPreferences
       sse_decode_geometry_visualization_preferences(
           SseDeserializer deserializer);
+
+  @protected
+  GuidedPlacementApiResult sse_decode_guided_placement_api_result(
+      SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_16(SseDeserializer deserializer);
@@ -1181,6 +1395,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<APICandidateNode> sse_decode_list_api_candidate_node(
+      SseDeserializer deserializer);
 
   @protected
   List<APIExprParameter> sse_decode_list_api_expr_parameter(
@@ -1204,6 +1422,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRotationalSymmetry> sse_decode_list_api_rotational_symmetry(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APITextError> sse_decode_list_api_text_error(
       SseDeserializer deserializer);
 
   @protected
@@ -1263,7 +1485,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  APIApplyDiffData? sse_decode_opt_box_autoadd_api_apply_diff_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIAtomCutData? sse_decode_opt_box_autoadd_api_atom_cut_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAtomEditData? sse_decode_opt_box_autoadd_api_atom_edit_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAtomEditTool? sse_decode_opt_box_autoadd_api_atom_edit_tool(
       SseDeserializer deserializer);
 
   @protected
@@ -1351,6 +1585,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIHoveredAtomInfo? sse_decode_opt_box_autoadd_api_hovered_atom_info(
+      SseDeserializer deserializer);
+
+  @protected
   APIImportXYZData? sse_decode_opt_box_autoadd_api_import_xyz_data(
       SseDeserializer deserializer);
 
@@ -1372,6 +1610,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMapData? sse_decode_opt_box_autoadd_api_map_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMeasurement? sse_decode_opt_box_autoadd_api_measurement(
       SseDeserializer deserializer);
 
   @protected
@@ -1436,9 +1678,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
-  int? sse_decode_opt_box_autoadd_i_16(SseDeserializer deserializer);
-
-  @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
@@ -1461,6 +1700,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
@@ -1477,6 +1719,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PointerDownResult sse_decode_pointer_down_result(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerDownResultKind sse_decode_pointer_down_result_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerMoveResult sse_decode_pointer_move_result(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerMoveResultKind sse_decode_pointer_move_result_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  PointerUpResult sse_decode_pointer_up_result(SseDeserializer deserializer);
 
   @protected
   (int, String, String) sse_decode_record_i_32_string_string(
@@ -1499,6 +1760,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SelectModifier sse_decode_select_modifier(SseDeserializer deserializer);
+
+  @protected
+  SimulationPreferences sse_decode_simulation_preferences(
+      SseDeserializer deserializer);
 
   @protected
   StructureDesignerPreferences sse_decode_structure_designer_preferences(
@@ -1540,8 +1805,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_add_bond_move_result(
+      APIAddBondMoveResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_apply_diff_data(
+      APIApplyDiffData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_atom_cut_data(
       APIAtomCutData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_atom_edit_data(
+      APIAtomEditData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_atom_edit_tool(
+      APIAtomEditTool self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_atom_fill_data(
@@ -1560,6 +1841,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIAtomTransData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_bond_length_mode(
+      APIBondLengthMode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_bond_mode(APIBondMode self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_bool_data(APIBoolData self, SseSerializer serializer);
 
   @protected
@@ -1568,6 +1856,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_camera_canonical_view(
       APICameraCanonicalView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_candidate_node(
+      APICandidateNode self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
@@ -1585,6 +1877,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_data_type_base(
       APIDataTypeBase self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_diff_stats(APIDiffStats self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_drawing_plane_data(
@@ -1636,6 +1931,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_hovered_atom_info(
+      APIHoveredAtomInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_hybridization(
+      APIHybridization self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_import_xyz_data(
       APIImportXYZData self, SseSerializer serializer);
 
@@ -1656,6 +1959,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_map_data(APIMapData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_measurement(
+      APIMeasurement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_minimize_freeze_mode(
+      APIMinimizeFreezeMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_motif_data(APIMotifData self, SseSerializer serializer);
@@ -1704,6 +2015,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_string_data(APIStringData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_text_edit_result(
+      APITextEditResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_text_error(APITextError self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_transform(APITransform self, SseSerializer serializer);
 
   @protected
@@ -1721,6 +2039,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_vec_3_data(APIVec3Data self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_viewport_pick_result(
+      APIViewportPickResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_apii_vec_2(APIIVec2 self, SseSerializer serializer);
@@ -1758,8 +2080,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_apply_diff_data(
+      APIApplyDiffData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_atom_cut_data(
       APIAtomCutData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_atom_edit_data(
+      APIAtomEditData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_atom_edit_tool(
+      APIAtomEditTool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_atom_fill_data(
@@ -1850,6 +2184,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_hovered_atom_info(
+      APIHoveredAtomInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_import_xyz_data(
       APIImportXYZData self, SseSerializer serializer);
 
@@ -1872,6 +2210,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_map_data(
       APIMapData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_measurement(
+      APIMeasurement self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_motif_data(
@@ -1947,7 +2289,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_i_16(int self, SseSerializer serializer);
+  void sse_encode_box_autoadd_factor_selection_request(
+      FactorSelectionRequest self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
@@ -1971,10 +2314,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_cli_config(CliConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_drag_frozen_status(
+      DragFrozenStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_element_summary(
@@ -1984,12 +2334,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_factor_selection_info(
+      FactorSelectionInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_factor_selection_request(
+      FactorSelectionRequest self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_factor_selection_result(
+      FactorSelectionResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_geometry_visualization(
       GeometryVisualization self, SseSerializer serializer);
 
   @protected
   void sse_encode_geometry_visualization_preferences(
       GeometryVisualizationPreferences self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_guided_placement_api_result(
+      GuidedPlacementApiResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_16(int self, SseSerializer serializer);
@@ -2010,6 +2376,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_candidate_node(
+      List<APICandidateNode> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_expr_parameter(
@@ -2033,6 +2403,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_rotational_symmetry(
       List<APIRotationalSymmetry> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_text_error(
+      List<APITextError> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_element_summary(
@@ -2095,8 +2469,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_apply_diff_data(
+      APIApplyDiffData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_atom_cut_data(
       APIAtomCutData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_atom_edit_data(
+      APIAtomEditData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_atom_edit_tool(
+      APIAtomEditTool? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_atom_fill_data(
@@ -2183,6 +2569,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHalfSpaceData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_hovered_atom_info(
+      APIHoveredAtomInfo? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_import_xyz_data(
       APIImportXYZData? self, SseSerializer serializer);
 
@@ -2205,6 +2595,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_map_data(
       APIMapData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_measurement(
+      APIMeasurement? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_motif_data(
@@ -2270,9 +2664,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_i_16(int? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
 
   @protected
@@ -2294,6 +2685,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
 
   @protected
@@ -2310,6 +2704,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_down_result(
+      PointerDownResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_down_result_kind(
+      PointerDownResultKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_move_result(
+      PointerMoveResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_move_result_kind(
+      PointerMoveResultKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pointer_up_result(
+      PointerUpResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_i_32_string_string(
@@ -2334,6 +2748,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_select_modifier(
       SelectModifier self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_simulation_preferences(
+      SimulationPreferences self, SseSerializer serializer);
 
   @protected
   void sse_encode_structure_designer_preferences(

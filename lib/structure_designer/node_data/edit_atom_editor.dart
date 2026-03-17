@@ -26,16 +26,14 @@ class EditAtomEditor extends StatefulWidget {
 
 class _EditAtomEditorState extends State<EditAtomEditor> {
   APIEditAtomData? _stagedData;
-  int? _replacementAtomicNumber;
-  int? _addAtomAtomicNumber;
+  int? _selectedAtomicNumber;
 
   @override
   void initState() {
     super.initState();
     setState(() {
       _stagedData = widget.data;
-      _replacementAtomicNumber = widget.data?.replacementAtomicNumber;
-      _addAtomAtomicNumber = widget.data?.addAtomToolAtomicNumber;
+      _selectedAtomicNumber = widget.data?.selectedAtomicNumber;
     });
   }
 
@@ -45,8 +43,7 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
     if (oldWidget.data != widget.data) {
       setState(() {
         _stagedData = widget.data;
-        _replacementAtomicNumber = widget.data?.replacementAtomicNumber;
-        _addAtomAtomicNumber = widget.data?.addAtomToolAtomicNumber;
+        _selectedAtomicNumber = widget.data?.selectedAtomicNumber;
       });
     }
   }
@@ -177,13 +174,13 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
               children: [
                 Expanded(
                   child: SelectElementWidget(
-                    value: _replacementAtomicNumber,
+                    value: _selectedAtomicNumber,
                     onChanged: (int? newValue) {
                       setState(() {
-                        _replacementAtomicNumber = newValue;
+                        _selectedAtomicNumber = newValue;
                       });
                       if (newValue != null) {
-                        widget.model.setEditAtomDefaultData(newValue);
+                        widget.model.setEditAtomSelectedElement(newValue);
                       }
                     },
                     label: 'Replace selected atoms with',
@@ -195,13 +192,13 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                 SizedBox(
                   height: AppSpacing.buttonHeight,
                   child: ElevatedButton(
-                    onPressed: (_replacementAtomicNumber == null ||
+                    onPressed: (_selectedAtomicNumber == null ||
                             !_stagedData!.hasSelectedAtoms)
                         ? null
                         : () {
                             // Call the replaceSelectedAtoms method with the selected atomic number
-                            widget.model.replaceSelectedAtoms(
-                                _replacementAtomicNumber!);
+                            widget.model
+                                .replaceSelectedAtoms(_selectedAtomicNumber!);
                           },
                     style: AppButtonStyles.primary,
                     child: const Text('Replace'),
@@ -259,13 +256,13 @@ class _EditAtomEditorState extends State<EditAtomEditor> {
                 style: TextStyle(fontWeight: FontWeight.w500)),
             const SizedBox(height: AppSpacing.medium),
             SelectElementWidget(
-              value: _addAtomAtomicNumber,
+              value: _selectedAtomicNumber,
               onChanged: (int? newValue) {
                 setState(() {
-                  _addAtomAtomicNumber = newValue;
+                  _selectedAtomicNumber = newValue;
                 });
                 if (newValue != null) {
-                  widget.model.setEditAtomAddAtomData(newValue);
+                  widget.model.setEditAtomSelectedElement(newValue);
                 }
               },
               label: 'Element to add:',

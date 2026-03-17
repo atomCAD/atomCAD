@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 340" width="760" height="340">
+  <defs>
+    <marker id="arr2" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1565c0"/>
+    </marker>
+    <marker id="arr3" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#888"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="760" height="340" fill="#fafafa" rx="8"/>
+  <text x="380" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#333">Step 1: Positional Matching</text>
+
+  <!-- Base structure -->
+  <g transform="translate(0, 0)">
+    <rect x="30" y="45" width="220" height="270" fill="#f3e5f5" rx="6" stroke="#9c27b0" stroke-width="1"/>
+    <text x="140" y="68" text-anchor="middle" font-size="13" font-weight="bold" fill="#6a1b9a">Base Structure</text>
+
+    <circle cx="100" cy="130" r="20" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="100" y="135" text-anchor="middle" font-size="13" font-weight="bold" fill="white">C</text>
+    <text x="100" y="160" text-anchor="middle" font-size="9" fill="#666">(0, 0, 0)</text>
+
+    <circle cx="180" cy="130" r="16" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="180" y="135" text-anchor="middle" font-size="12" font-weight="bold" fill="white">H</text>
+    <text x="180" y="160" text-anchor="middle" font-size="9" fill="#666">(1, 0, 0)</text>
+
+    <circle cx="100" cy="240" r="16" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="100" y="245" text-anchor="middle" font-size="12" font-weight="bold" fill="white">H</text>
+    <text x="100" y="270" text-anchor="middle" font-size="9" fill="#666">(0, 1, 0)</text>
+
+    <line x1="120" y1="130" x2="164" y2="130" stroke="#6a1b9a" stroke-width="2"/>
+    <line x1="100" y1="150" x2="100" y2="224" stroke="#6a1b9a" stroke-width="2"/>
+  </g>
+
+  <!-- Diff structure -->
+  <g transform="translate(280, 0)">
+    <rect x="0" y="45" width="220" height="270" fill="#e8f5e9" rx="6" stroke="#4caf50" stroke-width="1"/>
+    <text x="110" y="68" text-anchor="middle" font-size="13" font-weight="bold" fill="#2e7d32">Diff Structure</text>
+
+    <!-- Move C from (0,0,0) to (0.3, 0, 0) -->
+    <circle cx="60" cy="120" r="12" fill="none" stroke="#ff9800" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="60" y="106" text-anchor="middle" font-size="9" fill="#e65100">anchor</text>
+    <line x1="72" y1="122" x2="88" y2="128" stroke="#888" stroke-width="1.5" marker-end="url(#arr3)"/>
+    <circle cx="100" cy="130" r="20" fill="#ffb74d" stroke="#e65100" stroke-width="2"/>
+    <text x="100" y="135" text-anchor="middle" font-size="13" font-weight="bold" fill="white">C</text>
+    <text x="100" y="160" text-anchor="middle" font-size="9" fill="#666">(0.3, 0, 0)</text>
+    <text x="144" y="130" font-size="10" fill="#e65100">~move</text>
+
+    <!-- Delete marker at (0, 1, 0) -->
+    <circle cx="100" cy="230" r="16" fill="#ef9a9a" stroke="#c62828" stroke-width="2" stroke-dasharray="5,3"/>
+    <line x1="90" y1="220" x2="110" y2="240" stroke="#c62828" stroke-width="2.5"/>
+    <line x1="90" y1="240" x2="110" y2="220" stroke="#c62828" stroke-width="2.5"/>
+    <text x="100" y="260" text-anchor="middle" font-size="9" fill="#666">(0, 1, 0)</text>
+    <text x="140" y="230" font-size="10" fill="#c62828">- delete</text>
+
+    <!-- Addition: N at (2, 0, 0) -->
+    <circle cx="180" cy="130" r="16" fill="#66bb6a" stroke="#2e7d32" stroke-width="2"/>
+    <text x="180" y="135" text-anchor="middle" font-size="12" font-weight="bold" fill="white">N</text>
+    <text x="180" y="160" text-anchor="middle" font-size="9" fill="#666">(2, 0, 0)</text>
+    <text x="180" y="175" font-size="10" fill="#2e7d32" text-anchor="middle">+ add</text>
+  </g>
+
+  <!-- Matching arrows -->
+  <g>
+    <text x="265" y="110" text-anchor="middle" font-size="10" fill="#1565c0" font-weight="bold">match</text>
+    <path d="M 120 125 C 160 90, 310 90, 338 120" fill="none" stroke="#1565c0" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr2)"/>
+
+    <text x="265" y="250" text-anchor="middle" font-size="10" fill="#1565c0" font-weight="bold">match</text>
+    <path d="M 116 238 C 160 250, 300 250, 338 238" fill="none" stroke="#1565c0" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr2)"/>
+
+    <text x="545" y="110" text-anchor="middle" font-size="10" fill="#888">no match</text>
+    <text x="545" y="125" text-anchor="middle" font-size="9" fill="#888">(too far)</text>
+  </g>
+
+  <!-- Result -->
+  <g transform="translate(530, 0)">
+    <rect x="10" y="45" width="210" height="270" fill="#e8eaf6" rx="6" stroke="#3f51b5" stroke-width="1"/>
+    <text x="115" y="68" text-anchor="middle" font-size="13" font-weight="bold" fill="#283593">Result</text>
+
+    <!-- C moved to (0.3, 0, 0) -->
+    <circle cx="90" cy="130" r="20" fill="#7986cb" stroke="#283593" stroke-width="2"/>
+    <text x="90" y="135" text-anchor="middle" font-size="13" font-weight="bold" fill="white">C</text>
+    <text x="90" y="160" text-anchor="middle" font-size="9" fill="#666">(0.3, 0, 0)</text>
+    <text x="90" y="175" text-anchor="middle" font-size="9" fill="#283593">modified</text>
+
+    <circle cx="160" cy="130" r="16" fill="#b0bec5" stroke="#546e7a" stroke-width="2"/>
+    <text x="160" y="135" text-anchor="middle" font-size="12" font-weight="bold" fill="white">H</text>
+    <text x="160" y="160" text-anchor="middle" font-size="9" fill="#666">(1, 0, 0)</text>
+    <text x="160" y="175" text-anchor="middle" font-size="9" fill="#546e7a">pass-through</text>
+
+    <!-- N added -->
+    <circle cx="160" cy="230" r="16" fill="#66bb6a" stroke="#2e7d32" stroke-width="2"/>
+    <text x="160" y="235" text-anchor="middle" font-size="12" font-weight="bold" fill="white">N</text>
+    <text x="160" y="260" text-anchor="middle" font-size="9" fill="#666">(2, 0, 0)</text>
+    <text x="160" y="275" text-anchor="middle" font-size="9" fill="#2e7d32">added</text>
+
+    <!-- H at (0,1,0) is DELETED -->
+    <text x="90" y="240" text-anchor="middle" font-size="10" fill="#c62828">H deleted</text>
+
+    <!-- Bond C-H -->
+    <line x1="110" y1="130" x2="144" y2="130" stroke="#283593" stroke-width="2"/>
+  </g>
+</svg>

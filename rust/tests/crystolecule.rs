@@ -1,3 +1,6 @@
+#[path = "crystolecule/atomic_structure_diff_test.rs"]
+mod atomic_structure_diff_test;
+
 #[path = "crystolecule/atomic_structure_test.rs"]
 mod atomic_structure_test;
 
@@ -21,3 +24,48 @@ mod xyz_roundtrip_test;
 
 #[path = "crystolecule/lattice_fill_test.rs"]
 mod lattice_fill_test;
+
+#[path = "crystolecule/simulation/uff_params_test.rs"]
+mod uff_params_test;
+
+#[path = "crystolecule/simulation/uff_energy_test.rs"]
+mod uff_energy_test;
+
+#[path = "crystolecule/simulation/uff_angle_test.rs"]
+mod uff_angle_test;
+
+#[path = "crystolecule/simulation/uff_torsion_test.rs"]
+mod uff_torsion_test;
+
+#[path = "crystolecule/simulation/uff_inversion_test.rs"]
+mod uff_inversion_test;
+
+#[path = "crystolecule/simulation/uff_typer_test.rs"]
+mod uff_typer_test;
+
+#[path = "crystolecule/simulation/topology_test.rs"]
+mod topology_test;
+
+#[path = "crystolecule/simulation/uff_force_field_test.rs"]
+mod uff_force_field_test;
+
+#[path = "crystolecule/simulation/uff_vdw_test.rs"]
+mod uff_vdw_test;
+
+#[path = "crystolecule/simulation/spatial_grid_test.rs"]
+mod spatial_grid_test;
+
+#[path = "crystolecule/simulation/minimize_test.rs"]
+mod minimize_test;
+
+#[path = "crystolecule/simulation/steepest_descent_test.rs"]
+mod steepest_descent_test;
+
+#[path = "crystolecule/fragment_test.rs"]
+mod fragment_test;
+
+#[path = "crystolecule/guided_placement_test.rs"]
+mod guided_placement_test;
+
+#[path = "crystolecule/hydrogen_passivation_test.rs"]
+mod hydrogen_passivation_test;

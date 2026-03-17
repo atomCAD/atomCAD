@@ -21,9 +21,9 @@ Dependencies flow downward (no circular dependencies):
 
 ## Key Modules
 
-- **structure_designer/** - Node network, evaluator, serialization (.cnnd)
-- **crystolecule/** - Atomic structures, unit cells, motifs, lattice operations
-- **geo_tree/** - CSG types, SDF evaluation, geometry caching
+- **structure_designer/** - Node network, evaluator, serialization (.cnnd) (see `src/structure_designer/AGENTS.md`)
+- **crystolecule/** - Atomic structures, unit cells, motifs, lattice operations (see `src/crystolecule/AGENTS.md`)
+- **geo_tree/** - CSG types, SDF evaluation, geometry caching (see `src/geo_tree/AGENTS.md`)
 - **renderer/** - wgpu rendering, shaders (*.wgsl), mesh management
 - **display/** - Tessellates domain objects (atoms, geometry) into meshes
 - **expr/** - Expression language (lexer, parser, validation)

@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `api_data_type_to_data_type`, `crystal_system_to_string`, `data_type_to_api_data_type`
+// These functions are ignored because they are not marked as `pub`: `api_data_type_to_data_type`, `atom_symbol`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
@@ -227,6 +227,38 @@ void moveSelectedNodes({required double deltaX, required double deltaY}) =>
         .crateApiStructureDesignerStructureDesignerApiMoveSelectedNodes(
             deltaX: deltaX, deltaY: deltaY);
 
+/// Called by Flutter when a node drag begins. Captures current positions for undo coalescing.
+void beginMoveNodes() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiBeginMoveNodes();
+
+/// Called by Flutter when a node drag ends. Creates a single MoveNodesCommand.
+void endMoveNodes() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiEndMoveNodes();
+
+/// Undo the last command. Returns true if an undo was performed.
+bool undo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiUndo();
+
+/// Redo the last undone command. Returns true if a redo was performed.
+bool redo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiRedo();
+
+/// Returns true if there is a command that can be undone.
+bool canUndo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiCanUndo();
+
+/// Returns true if there is a command that can be redone.
+bool canRedo() =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiCanRedo();
+
+/// Returns the description of the command that would be undone, or null if nothing to undo.
+String? undoDescription() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiUndoDescription();
+
+/// Returns the description of the command that would be redone, or null if nothing to redo.
+String? redoDescription() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiRedoDescription();
+
 bool toggleWireSelection(
         {required BigInt sourceNodeId,
         required int sourceOutputPinIndex,
@@ -347,6 +379,11 @@ APIAtomCutData? getAtomCutData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetAtomCutData(
         nodeId: nodeId);
 
+APIApplyDiffData? getApplyDiffData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetApplyDiffData(
+        nodeId: nodeId);
+
 APIImportXYZData? getImportXyzData({required BigInt nodeId}) => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetImportXyzData(
@@ -407,6 +444,11 @@ APIAtomTransData? getAtomTransData({required BigInt nodeId}) => RustLib
 APIEditAtomData? getEditAtomData({required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiGetEditAtomData(
+            nodeId: nodeId);
+
+APIAtomEditData? getAtomEditData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetAtomEditData(
             nodeId: nodeId);
 
 APIParameterData? getParameterData({required BigInt nodeId}) => RustLib
@@ -560,6 +602,12 @@ void setAtomCutData({required BigInt nodeId, required APIAtomCutData data}) =>
         .crateApiStructureDesignerStructureDesignerApiSetAtomCutData(
             nodeId: nodeId, data: data);
 
+void setApplyDiffData(
+        {required BigInt nodeId, required APIApplyDiffData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetApplyDiffData(
+            nodeId: nodeId, data: data);
+
 void setImportXyzData(
         {required BigInt nodeId, required APIImportXYZData data}) =>
     RustLib.instance.api
@@ -611,11 +659,11 @@ bool setReturnNodeId({BigInt? nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSetReturnNodeId(
         nodeId: nodeId);
 
-bool saveNodeNetworksAs({required String filePath}) => RustLib.instance.api
+APIResult saveNodeNetworksAs({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
         filePath: filePath);
 
-bool saveNodeNetworks() => RustLib.instance.api
+APIResult saveNodeNetworks() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworks();
 
 bool isDesignDirty() => RustLib.instance.api
@@ -637,6 +685,30 @@ APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
 /// - Clears the dirty flag
 void newProject() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiNewProject();
+
+/// Creates a new project in direct editing mode with a single atom_edit node.
+void newProjectDirectEditing() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiNewProjectDirectEditing();
+
+/// Returns the current direct editing mode state.
+bool getDirectEditingMode() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetDirectEditingMode();
+
+/// Sets direct editing mode and marks the design as dirty.
+void setDirectEditingMode({required bool mode}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSetDirectEditingMode(
+        mode: mode);
+
+/// Returns whether the current state allows switching to direct editing mode.
+bool canSwitchToDirectEditingMode() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCanSwitchToDirectEditingMode();
+
+/// Imports an XYZ file into the active atom_edit node's diff layer.
+/// Atoms and bonds are merged directly as pure additions (incremental import).
+/// Returns an empty string on success, or an error message on failure.
+String importXyzIntoAtomEdit({required String filePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiImportXyzIntoAtomEdit(
+        filePath: filePath);
 
 /// Returns the number of node networks in the current project.
 int getNetworkCount() => RustLib.instance.api
@@ -687,7 +759,9 @@ APIResult runCliSingle({required CliConfig config}) => RustLib.instance.api
 APIResult runCliBatch({required BatchCliConfig config}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiRunCliBatch(config: config);
 
-/// Resize a comment node
+/// Resize a comment node.
+/// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
+/// around the resize drag to get a single coalesced undo entry.
 void resizeCommentNode(
         {required BigInt nodeId,
         required double width,
@@ -696,7 +770,9 @@ void resizeCommentNode(
         .crateApiStructureDesignerStructureDesignerApiResizeCommentNode(
             nodeId: nodeId, width: width, height: height);
 
-/// Update a comment node's label and text
+/// Update a comment node's label and text.
+/// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
+/// around the editing session to get a single coalesced undo entry.
 void updateCommentNode(
         {required BigInt nodeId,
         required String label,
@@ -704,6 +780,17 @@ void updateCommentNode(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiUpdateCommentNode(
             nodeId: nodeId, label: label, text: text);
+
+/// Called when a comment node text field gains focus or resize drag begins.
+/// Captures a snapshot for undo coalescing.
+void beginEditCommentNode({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiBeginEditCommentNode(
+        nodeId: nodeId);
+
+/// Called when a comment node text field loses focus or resize drag ends.
+/// Pushes a single undo command if the comment data changed.
+void endEditCommentNode() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiEndEditCommentNode();
 
 /// Get comment node data for property panel editing
 APICommentData? getCommentData({required BigInt nodeId}) => RustLib.instance.api
@@ -736,3 +823,67 @@ APINodeEvaluationResult evaluateNode(
 /// - Automatically refreshes the UI after layout
 void layoutActiveNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork();
+
+/// Get information about whether/how the current selection can be factored into a subnetwork.
+///
+/// Returns information that can be used to populate the "Factor into Subnetwork" dialog,
+/// including suggested names for the subnetwork and its parameters.
+FactorSelectionInfo getFactorSelectionInfo() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetFactorSelectionInfo();
+
+/// Factor the current selection into a new subnetwork.
+///
+/// Creates a new custom node type from the selected nodes and replaces
+/// the selection with an instance of that node type.
+///
+/// # Arguments
+/// * `request` - The factoring request containing the subnetwork name and parameter names
+///
+/// # Returns
+/// A result indicating success or failure, with the new node ID on success
+FactorSelectionResult factorSelectionIntoSubnetwork(
+        {required FactorSelectionRequest request}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiFactorSelectionIntoSubnetwork(
+            request: request);
+
+bool copySelection() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCopySelection();
+
+Uint64List pasteAtPosition({required double x, required double y}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiPasteAtPosition(x: x, y: y);
+
+bool cutSelection() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCutSelection();
+
+bool hasClipboardContent() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiHasClipboardContent();
+
+/// Serialize the active node network to text format for the text editor tab.
+String serializeActiveNetworkToText() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSerializeActiveNetworkToText();
+
+/// Apply text format edits to the active node network (replace mode with position preservation).
+APITextEditResult applyTextToActiveNetwork({required String code}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiApplyTextToActiveNetwork(
+            code: code);
+
+APIHoveredAtomInfo? queryHoveredAtomInfo(
+        {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiQueryHoveredAtomInfo(
+            rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+/// Performs a viewport pick for click-to-activate.
+///
+/// Casts a ray through the scene and determines whether the click should:
+/// - Pass through to normal handling (active node hit or no hit)
+/// - Activate a different node (unambiguous non-active node hit)
+/// - Show a disambiguation popup (overlapping non-active node hits)
+APIViewportPickResult viewportPick(
+        {required APIVec3 rayOrigin, required APIVec3 rayDirection}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiViewportPick(
+            rayOrigin: rayOrigin, rayDirection: rayDirection);

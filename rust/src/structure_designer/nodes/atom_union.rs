@@ -1,24 +1,29 @@
-use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::{
+    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver, generic_node_data_loader};
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::util::transform::Transform;
-use glam::f64::{DVec3, DQuat};
-use serde::{Serialize, Deserialize};
+use glam::f64::{DQuat, DVec3};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AtomUnionData {}
 
 impl NodeData for AtomUnionData {
-    fn provide_gadget(&self, _structure_designer: &StructureDesigner) -> Option<Box<dyn NodeNetworkGadget>> {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
         None
     }
 
@@ -36,13 +41,8 @@ impl NodeData for AtomUnionData {
         context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
         // Evaluate the structures array input (required)
-        let structures_val = network_evaluator.evaluate_arg_required(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            0,
-        );
+        let structures_val =
+            network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = structures_val {
             return structures_val;
@@ -58,7 +58,9 @@ impl NodeData for AtomUnionData {
         let structure_count = structure_results.len();
 
         if structure_count == 0 {
-            return NetworkResult::Error("atom_union requires at least one input structure".to_string());
+            return NetworkResult::Error(
+                "atom_union requires at least one input structure".to_string(),
+            );
         }
 
         // Extract atomic structures and collect frame translations for averaging
@@ -93,7 +95,10 @@ impl NodeData for AtomUnionData {
         Box::new(self.clone())
     }
 
-    fn get_subtitle(&self, _connected_input_pins: &std::collections::HashSet<String>) -> Option<String> {
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
         None
     }
 

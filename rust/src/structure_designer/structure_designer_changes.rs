@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 /// Refresh mode for structure designer operations
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RefreshMode {
     /// Lightweight refresh - only update gadget tessellation
     Lightweight,
@@ -12,7 +11,6 @@ pub enum RefreshMode {
     /// Full refresh - re-evaluate everything (fallback for complex/unknown changes)
     Full,
 }
-
 
 /// Tracks changes to the structure designer to determine what needs to be refreshed
 /// This is the single source of truth for refresh operations, replacing the old
@@ -29,6 +27,10 @@ pub struct StructureDesignerChanges {
     pub previous_selection: Option<u64>,
     pub current_selection: Option<u64>,
     pub selection_changed: bool,
+    /// When true, Partial refresh re-evaluates only the directly changed nodes
+    /// without propagating to downstream dependents. Used during interactive drag
+    /// to avoid expensive downstream re-evaluation on every frame.
+    pub skip_downstream: bool,
 }
 
 impl StructureDesignerChanges {
@@ -45,13 +47,14 @@ impl StructureDesignerChanges {
         self.previous_selection = None;
         self.current_selection = None;
         self.selection_changed = false;
+        self.skip_downstream = false;
     }
-    
+
     /// Sets the refresh mode
     pub fn set_mode(&mut self, mode: RefreshMode) {
         self.mode = mode;
     }
-    
+
     /// Returns true if this is a lightweight refresh
     pub fn is_lightweight(&self) -> bool {
         self.mode == RefreshMode::Lightweight
@@ -78,7 +81,11 @@ impl StructureDesignerChanges {
     }
 
     /// Marks that selection changed
-    pub fn mark_selection_changed(&mut self, previous_selection: Option<u64>, current_selection: Option<u64>) {
+    pub fn mark_selection_changed(
+        &mut self,
+        previous_selection: Option<u64>,
+        current_selection: Option<u64>,
+    ) {
         self.previous_selection = previous_selection;
         self.current_selection = current_selection;
         self.selection_changed = true;
@@ -115,25 +122,12 @@ impl StructureDesignerChanges {
     }
 
     /// Creates a partial refresh with selection change
-    pub fn selection_changed(previous_selection: Option<u64>, current_selection: Option<u64>) -> Self {
+    pub fn selection_changed(
+        previous_selection: Option<u64>,
+        current_selection: Option<u64>,
+    ) -> Self {
         let mut changes = Self::new();
         changes.mark_selection_changed(previous_selection, current_selection);
         changes
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
