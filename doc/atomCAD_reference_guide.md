@@ -17,15 +17,48 @@ Basic features:
 - **User-definable motifs.** Geometries can be filled with motifs to create atomic structures. Motifs are user-definable: any covalently bonded crystal structure can be specified. The default motif is cubic diamond.
 - **Parametric, composable designs.** atomCAD designs are parametric and composed as visual node networks, enabling non-destructive editing. Custom node types can be created by defining subnetworks. The node network includes functional-programming elements and is Turing-complete.
 - **Surface reconstructions.** Currently only (100) 2×1 dimer reconstruction is supported (for cubic diamond) but more reconstructions will be supported in the future.
+- **Direct Editing Mode.** A streamlined entry point for beginners that hides node-network complexity, letting users build atomic structures immediately.
+- **Energy minimization.** UFF force-field energy minimization is available both as a standalone node and integrated into the atom editor for interactive structure relaxation.
+- **Hydrogen passivation & depassivation.** Automatically add or remove hydrogen atoms to satisfy valence requirements, available as both one-click actions in the atom editor and as standalone nodes.
 
 Planned features include:
 
-- Defect editing and placement tools
 - Atomically Precise Manufacturing (APM) integration
 - A streaming level-of-detail system to support larger structures that currently do not fit in memory
-- Geometry optimization and dynamics simulation support
 
 We’d love to hear about your use case: what are you using — or planning to use — atomCAD for?
+
+## Direct Editing Mode
+
+atomCAD offers two modes of operation:
+
+- **Direct Editing Mode** — A streamlined, beginner-friendly interface focused entirely on atomic structure editing.
+- **Node Network Mode** — The full-featured parametric editor with node networks, described in the rest of this guide.
+
+When you first launch atomCAD, you start in Direct Editing Mode. This mode hides node-network concepts entirely, presenting a simplified UI with just the 3D viewport, a camera control panel, a display settings panel, and the atom editor.
+
+<!-- TODO: screenshot of Direct Editing Mode layout -->
+
+### What you can do in Direct Editing Mode
+
+- Build atomic structures atom by atom using the guided placement tools
+- Import XYZ files directly (via *File > Import XYZ*)
+- Add and remove hydrogen atoms
+- Run energy minimization
+- Measure and modify distances, angles, and dihedral angles
+- Freeze atoms to prevent accidental movement
+- Export structures to `.mol` or `.xyz` format
+
+### Switching between modes
+
+- **Direct Editing → Node Network:** Use *View > Switch to Node Network Mode* or the mode radio buttons in the Display section. Always available.
+- **Node Network → Direct Editing:** Use *View > Switch to Direct Editing Mode*. This requires that exactly one `atom_edit` node is displayed and currently selected. If the criteria are not met, the menu item is disabled with a tooltip explaining why.
+
+Both modes use the same `.cnnd` file format — your work is preserved when switching between modes.
+
+### File menu differences
+
+In Direct Editing Mode, *File > Import XYZ* imports an XYZ file directly into the atom editor. The *File > Import from .cnnd library* menu item is available only in Node Network Mode (it is an advanced feature for importing node networks).
 
 ## Parts of the UI
 
@@ -95,6 +128,8 @@ The **Node Networks** panel includes browser-like navigation buttons at the top:
 
 These buttons are grayed out when navigation in that direction is unavailable.
 
+Each node network stores its own camera settings (position, orientation, orthographic mode). When you switch between node networks, the camera automatically restores to the saved view for that network. Camera settings are saved as part of the `.cnnd` file.
+
 ### Node network editor panel
 
 ![](./atomCAD_images/node_network_editor_panel.png)
@@ -152,6 +187,25 @@ When you drag any selected node, all selected nodes move together.
 
 **Visibility vs selection**
 Selecting a node does *not* make its output visible. Node visibility is controlled independently by the eye icon in the node’s upper-right corner. The **Geometry Visualization** preferences panel also contains node display policies that may automatically change node visibility when selections change (see **Geometry Visualization** preferences).
+
+**Copy and paste**
+Selected nodes can be copied and pasted:
+- `Ctrl+C` to copy, `Ctrl+V` to paste (also available via right-click context menu).
+- Internal wires between copied nodes are preserved; external connections (wires to nodes outside the selection) are dropped.
+- Pasted nodes are offset slightly so they don’t overlap the originals.
+- You can copy nodes in one network and paste into a different network.
+
+**Factor selection into subnetwork**
+You can convert a group of selected nodes into a reusable custom node type:
+1. Select one or more connected nodes.
+2. Right-click and choose **"Factor into Subnetwork..."**.
+3. A dialog opens where you can set the subnetwork name and edit parameter names.
+4. On confirmation, the selected nodes are moved into a new subnetwork and replaced with a single custom node instance.
+
+The selection must be a "single-output subset" — at most one wire may exit the selection to nodes outside it. Parameter nodes cannot be included in the selection.
+
+**Click-to-activate from viewport**
+When multiple nodes have their output visible in the 3D viewport, you can click on a rendered output to activate the node that produced it. The first click activates the node and scrolls the node network panel to reveal it; subsequent clicks on the same node’s output perform the normal action (e.g., atom selection). If outputs from multiple nodes overlap at the click position, a disambiguation popup appears letting you choose which node to activate. The active node’s geometry is rendered with a distinct color to help distinguish it from other visible outputs.
 
 ### Node Properties Panel
 
@@ -211,16 +265,19 @@ Contains common settings for the camera.
 
 ### Menu Bar
 
-Used for loading and saving a design, exporting a design to .xyz or .mol, and for opening the preferences panel.
+Used for loading and saving a design, exporting a design to .xyz or .mol, undo/redo, and for opening the preferences panel.
 
 ![](./atomCAD_images/menu_bar.png)
 
+- *File > New*: Creates a new blank design.
 - *File > Load Design*, *File > Save Design*, *File > Save Design As*: The native file format of an atomCAD design is the .cnnd file format. CNND stands for Crystal Node Network Design. It is a json based format. It contains a list of node networks. Can be used as a design file or as a design library file intended for reusing node networks from it as custom nodes in other designs.
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
+- *Edit > Undo* (`Ctrl+Z`) / *Edit > Redo* (`Ctrl+Shift+Z` or `Ctrl+Y`): Undo and redo all operations, including node edits, wire connections, atom editing, and more.
+- *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network using the Sugiyama layout algorithm for a clean, readable layout.
 
 ### Preferences Dialog
 
-The *Edit > Preferences* menu item opens the Preferences dialog, which contains advanced settings organized into categories.
+The *Edit > Preferences* menu item opens the Preferences dialog, which contains advanced settings organized into categories. All preferences are persisted across sessions.
 
 #### Geometry Visualization
 
@@ -244,7 +301,8 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 | Setting | Description |
 |---------|-------------|
 | Background Color | The scene background color. |
-| Show Grid | Toggles visibility of the Cartesian grid and axes. |
+| Show Grid | Toggles visibility of the Cartesian grid. |
+| Show Axes | Toggles visibility of the Cartesian axes (can be toggled independently from the grid). |
 | Grid Size | Spacing between grid lines. |
 | Grid Color / Grid Strong Color | Colors for regular and primary (axis-aligned) grid lines. |
 | Show Lattice Axes | Toggles dotted lines showing non-Cartesian lattice directions. |
@@ -918,42 +976,131 @@ Merges multiple atomic structures into one. The `structures` input accepts an ar
 
 ![](./atomCAD_images/atom_union.png)
 
+#### atom_lmove
+
+Translates an atomic structure by a discrete vector in **lattice space** (integer lattice coordinates). This is the atomic-structure counterpart of the `lattice_move` geometry node.
+
+**Properties**
+
+- `Translation` — 3D integer vector specifying the translation in lattice coordinates.
+
+#### atom_lrot
+
+Rotates an atomic structure in **lattice space** using discrete symmetry rotations. This is the atomic-structure counterpart of the `lattice_rot` geometry node. Only rotations that are symmetries of the unit cell are allowed.
+
+**Properties**
+
+- `Rotation` — A valid lattice symmetry rotation.
+- `Pivot` — 3D integer vector for the rotation pivot point.
+
+#### apply_diff
+
+Applies an atomic diff structure to a base atomic structure. This node is used in advanced parametric workflows where defect patches are created separately (e.g., using an `atom_edit` node with *Output diff* enabled) and then applied to different base structures or at different positions.
+
+**Input pins**
+
+- `base` — The base `Atomic` structure.
+- `diff` — The diff `Atomic` structure to apply.
+
+The diff structure encodes additions, deletions, and modifications of atoms. The node uses position-based matching to apply the diff to the base structure.
+
+#### relax
+
+Performs UFF (Universal Force Field) energy minimization on an atomic structure. Takes an `Atomic` input and outputs the minimized structure.
+
+This node is useful in node-network workflows where you want to relax a structure non-destructively as part of a parametric pipeline. For interactive minimization during atom editing, use the energy minimization feature built into the `atom_edit` node instead.
+
+#### add_hydrogen
+
+Adds hydrogen atoms to satisfy valence requirements of undersaturated atoms. Takes an `Atomic` input and outputs a hydrogen-passivated structure.
+
+The algorithm detects hybridization (sp3, sp2, sp1) automatically and places hydrogen atoms at the correct bond lengths and angles. This is the node-network counterpart of the one-click hydrogen passivation in the `atom_edit` node.
+
+#### remove_hydrogen
+
+Removes all hydrogen atoms from an atomic structure. Takes an `Atomic` input and outputs the bare framework without hydrogens.
+
+Useful in workflows like: `remove_hydrogen` → transform/edit → `add_hydrogen`, allowing you to work with the bare framework and re-passivate afterward.
+
 #### edit_atom
 
-Note: The `edit_atom` node will be more usable when we will support atomic structure relaxations.
-
-This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom_node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom_nodes at their will. 
+This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom nodes at their will.
 
 ![](./atomCAD_images/edit_atom_node.png)
 
-The edit atom node is probably the most complex node in atomCAD. When you select this node you can feel like you are in a separate sub-application inside atomCAD. The node properties section of this node contains the user interface of this 'atom editor sub-application'. 
+The edit atom node is probably the most complex node in atomCAD. When you select this node you can feel like you are in a separate sub-application inside atomCAD. The node properties section of this node contains the user interface of this 'atom editor sub-application'.
 
-The UI contains undo and redo buttons which are controlling only the commands inside the node (this is not a global undo redo functionality of the application).
-
-The atom editor UI is based on 'tools': one tool can be active at a time. The active tool determines how you can interact with the
-atomic structure on the viewport.
+The atom editor UI is based on 'tools': one tool can be active at a time. The active tool determines how you can interact with the atomic structure on the viewport. You can switch tools using keyboard shortcuts: `F2` (Default tool), `F3` (Add atom tool), `F4` or `J` (Add bond tool).
 
 ##### Default tool
 
-![](./atomCAD_images/edit_atom_props_default_tool.png)
+<!-- TODO: screenshot of updated default tool UI -->
 
 Features:
-- Select atoms and bonds using the left mouse button. Simple click replaces the selection, shift click adds to the selection and control click inverts the selection of the clicked object.
-- Delete selected
-- Replace all selected atom with a specific element
-- Transform (move and rotate) selected atoms
+- **Select** atoms and bonds using the left mouse button. Simple click replaces the selection, Shift+click adds to the selection, and Ctrl+click toggles the selection of the clicked object. Rectangle (marquee) selection is also supported.
+- **Delete selected** atoms and bonds (also available via keyboard shortcut).
+- **Replace** all selected atoms with a specific element.
+- **Transform** (move and rotate) selected atoms by dragging. Frozen atoms cannot be dragged.
+- **Measurements:** When 2–4 atoms are selected, the UI displays a measurement card:
+  - **2 atoms:** bond distance (in Ångströms)
+  - **3 atoms:** bond angle (in degrees)
+  - **4 atoms:** dihedral (torsion) angle (in degrees)
+
+  A **Modify** button on the measurement card opens a dialog where you can enter a precise target value. Atoms are moved along bond axes, rotated around vertices, or rotated around torsion axes to achieve the target value. A "move connected atoms" option (on by default) moves the fragment attached to the moving atom rather than just the single atom.
+- **Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it.
 
 ##### Add atom tool
 
-![](./atomCAD_images/edit_atom_props_add_atom_tool.png)
+<!-- TODO: screenshot of updated add atom tool UI -->
 
-- Add a specific atom by left-clicking in the viewport
+- **Free placement:** Click empty space to place an atom at the clicked position.
+- **Guided placement:** Click an existing atom to enter guided placement mode. The system computes chemically valid candidate positions based on the atom's hybridization and displays them as interactive guide dots. Click a guide dot to place and bond the new atom in one action.
+  - Supports sp3, sp2, and sp1 hybridization geometries.
+  - A **Hybridization** dropdown (Auto / sp3 / sp2 / sp1) lets you override the auto-detected hybridization.
+  - A **Bond Mode** toggle (Covalent / Dative) controls the saturation limit: Dative mode unlocks lone pair positions for coordinate bonding.
+  - When an atom is placed near an existing atom, the atoms are merged automatically.
+- Press `Escape` or click empty space to cancel guided placement and return to idle.
 
 ##### Add bond tool
 
-![](./atomCAD_images/edit_atom_props_add_bond_tool.png)
+<!-- TODO: screenshot of updated add bond tool UI -->
 
-- Add bonds by left-clicking on two atoms in the viewport
+- Add bonds by clicking two atoms in the viewport.
+- Bond order can be configured (single, double, triple). Clicking an existing bond cycles through bond orders.
+
+##### Hydrogen passivation
+
+The atom editor includes one-click hydrogen passivation and depassivation:
+
+- **Add hydrogens** (`Ctrl+H`): Adds hydrogen atoms to all undersaturated atoms (or only selected atoms if any are selected). The algorithm auto-detects hybridization and places hydrogens at correct bond lengths and angles.
+- **Remove hydrogens** (`Ctrl+Shift+H`): Removes hydrogen atoms from the structure (or only from selected atoms and their neighbors).
+
+##### Energy minimization
+
+The atom editor integrates UFF (Universal Force Field) energy minimization:
+
+- **Minimize** (`Ctrl+M`): Runs energy minimization on the structure. Three freeze modes are available:
+  - *Freeze base:* Only diff atoms (atoms you added/modified) are allowed to move.
+  - *Free all:* All atoms can move.
+  - *Free selected:* Only selected atoms can move.
+- **Continuous minimization:** When enabled, the minimizer runs automatically after each editing action, helping the structure settle into favorable geometries as you build.
+
+##### Freeze atoms
+
+Atoms can be marked as **frozen** to prevent them from being moved during dragging and energy minimization. Frozen atoms are displayed with an ice-blue rim highlight so they are easy to identify.
+
+##### Rim highlights
+
+The atom editor uses colored rim highlights to convey atom state while preserving element colors:
+
+- **Selected atoms** — magenta rim
+- **Frozen atoms** — ice-blue rim
+- **Delete markers** — red rim on neutral-colored sphere
+- **Marked atoms** (for measurements) — yellow/blue rims
+
+##### Output diff mode
+
+The `atom_edit` node can output a raw diff structure instead of the applied result by enabling the *Output diff* checkbox. This makes diffs first-class values in the node network, enabling advanced workflows where defect patches are created once and applied to different base structures using the `apply_diff` node.
 
 ### Other nodes
 
