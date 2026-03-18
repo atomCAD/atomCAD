@@ -314,13 +314,19 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 expand: false,
               ),
               // Atom Edit Editor (via NodeDataWidget, which routes to AtomEditEditor)
-              Section(
-                title: 'Editor',
-                content: NodeDataWidget(
-                  graphModel: graphModel,
-                  directEditingMode: true,
+              // Wrapped in Expanded so the sidebar Column gives it bounded height;
+              // without this, the Column passes infinite height to non-flex children,
+              // and Section(expand: true) uses Flexible/Expanded internally which
+              // requires bounded constraints.
+              Expanded(
+                child: Section(
+                  title: 'Editor',
+                  content: NodeDataWidget(
+                    graphModel: graphModel,
+                    directEditingMode: true,
+                  ),
+                  expand: true,
                 ),
-                expand: true,
               ),
             ],
           ),
