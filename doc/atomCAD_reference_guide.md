@@ -62,6 +62,7 @@ Features:
 
   A **Modify** button on the measurement card opens a dialog where you can enter a precise target value. Atoms are moved along bond axes, rotated around vertices, or rotated around torsion axes to achieve the target value. A "move connected atoms" option (on by default) moves the fragment attached to the moving atom rather than just the single atom.
 - **Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it.
+- **Quick element selection:** Type an element symbol (e.g., `C`, `N`, `O`, `Si`) on the keyboard to set the active element. The typed symbol is shown as a cursor overlay. This works in both the Default tool (for replacing selected atoms) and the Add atom tool (for setting the element of the next atom to be placed).
 
 #### Add atom tool
 
@@ -80,7 +81,9 @@ Features:
 <!-- TODO: screenshot of updated add bond tool UI -->
 
 - Add bonds by clicking two atoms in the viewport.
-- Bond order can be configured (single, double, triple). Clicking an existing bond cycles through bond orders.
+- **Bond order** can be configured. Common orders: single, double, triple. Specialized orders: quadruple, aromatic, dative, metallic.
+- Use keyboard shortcuts `1`–`7` to select the bond order: `1` single, `2` double, `3` triple, `4` quadruple, `5` aromatic, `6` dative, `7` metallic. These shortcuts also work in the Default tool when bonds are selected, changing the order of all selected bonds.
+- Clicking an existing bond cycles through the common orders (single → double → triple → single).
 
 #### Hydrogen passivation
 
@@ -93,10 +96,9 @@ The atom editor includes one-click hydrogen passivation and depassivation:
 
 The atom editor integrates UFF (Universal Force Field) energy minimization:
 
-- **Minimize** (`Ctrl+M`): Runs energy minimization on the structure. Three freeze modes are available:
-  - *Freeze base:* Only atoms you added or modified are allowed to move; the original base atoms stay fixed.
-  - *Free all:* All atoms can move.
-  - *Free selected:* Only selected atoms can move.
+- **Minimize unfrozen** (`Ctrl+M`): Runs energy minimization on all unfrozen atoms in the structure.
+- **Minimize selected** (`Ctrl+Shift+M`): Runs energy minimization on only the selected atoms.
+- **Minimize diff**: Runs energy minimization where only atoms you added or modified are allowed to move; the original base atoms stay fixed. This button is only enabled when the atom_edit node has pending diff changes.
 - **Continuous minimization:** When enabled, the minimizer runs automatically after each editing action, helping the structure settle into favorable geometries as you build. The following parameters can be tuned in *Edit > Preferences* under the **Simulation** category:
   - *Steps per frame* — Number of minimization iterations per animation frame (1–50).
   - *Settle steps on release* — Extra minimization steps run when you release a drag (0–500), giving the structure time to relax after manipulation.
@@ -105,6 +107,12 @@ The atom editor integrates UFF (Universal Force Field) energy minimization:
 #### Freeze atoms
 
 Atoms can be marked as **frozen** to prevent them from being moved during dragging and energy minimization. Frozen atoms are displayed with an ice-blue rim highlight so they are easy to identify.
+
+The atom editor provides four freeze-related buttons:
+- **Freeze selected** — Marks all selected atoms as frozen.
+- **Unfreeze selected** — Removes the frozen flag from all selected atoms.
+- **Select frozen** — Replaces the current selection with all frozen atoms.
+- **Clear frozen** — Removes the frozen flag from all atoms.
 
 #### Rim highlights
 
@@ -263,9 +271,10 @@ When you drag any selected node, all selected nodes move together.
 **Visibility vs selection**
 Selecting a node does *not* make its output visible. Node visibility is controlled independently by the eye icon in the node’s upper-right corner. The **Geometry Visualization** preferences panel also contains node display policies that may automatically change node visibility when selections change (see **Geometry Visualization** preferences).
 
-**Copy and paste**
-Selected nodes can be copied and pasted:
-- `Ctrl+C` to copy, `Ctrl+V` to paste (also available via right-click context menu).
+**Copy, cut, paste, and duplicate**
+Selected nodes can be copied, cut, and pasted:
+- `Ctrl+C` to copy, `Ctrl+X` to cut, `Ctrl+V` to paste (also available via right-click context menu).
+- `Ctrl+D` to duplicate selected nodes in place.
 - Internal wires between copied nodes are preserved; external connections (wires to nodes outside the selection) are dropped.
 - Pasted nodes are placed at the mouse cursor position.
 - You can copy nodes in one network and paste into a different network.
@@ -291,7 +300,7 @@ The properties of the active node can be edited here.
 This is different for each node, we will discuss this in depth at the specific nodes. There are some general features though:
 
 - When dragging the mouse on integer number editor fields the number can be
-incremented or decremented using the moue wheel. Shift + mouse wheel works in 10 increments.
+incremented or decremented using the mouse wheel. Shift + mouse wheel works in 10 increments.
 
 In case no node is selected the description of the active node network can be edited in the node properties panel:
 
@@ -348,7 +357,9 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *File > Load Design*, *File > Save Design*, *File > Save Design As*: The native file format of an atomCAD design is the .cnnd file format. CNND stands for Crystal Node Network Design. It is a json based format. It contains a list of node networks. Can be used as a design file or as a design library file intended for reusing node networks from it as custom nodes in other designs.
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
 - *Edit > Undo* (`Ctrl+Z`) / *Edit > Redo* (`Ctrl+Shift+Z` or `Ctrl+Y`): Undo and redo all operations, including node edits, wire connections, atom editing, and more.
+- *Edit > Validate active network*: Validates the active node network and reports any errors. Available in Node Network Mode only.
 - *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network using the Sugiyama layout algorithm for a clean, readable layout.
+- *View > Switch to Horizontal Layout* / *View > Switch to Vertical Layout*: Changes the orientation of the node network editor panel.
 
 ### Preferences Dialog
 
@@ -542,6 +553,16 @@ Adds text annotations to document your node network. Comment nodes do not have i
 
 Comment nodes can be resized by dragging the handle in the bottom-right corner.
 
+#### parameter
+
+Defines an input parameter for a subnetwork. When placed inside a node network that is used as a custom node, each `parameter` node becomes an input pin on the resulting custom node. See the [Subnetworks](#subnetworks) section for details and examples.
+
+**Properties**
+
+- `Name` — The parameter name (becomes the input pin label on the custom node).
+- `Type` — The data type of the parameter.
+- `Sort Order` — Determines the order of parameters on the custom node.
+
 ### Math and programming nodes
 
 #### int
@@ -579,6 +600,10 @@ Outputs a Vec2 value.
 Outputs a Vec3 value.
 
 ![](./atomCAD_images/vec3.png)
+
+#### bool
+
+Outputs a Bool value (`true` or `false`).
 
 #### string
 
@@ -1119,6 +1144,22 @@ The algorithm detects hybridization (sp3, sp2, sp1) automatically and places hyd
 Removes all hydrogen atoms from an atomic structure. Takes an `Atomic` input and outputs the bare framework without hydrogens.
 
 Useful in workflows like: `remove_hydrogen` → transform/edit → `add_hydrogen`, allowing you to work with the bare framework and re-passivate afterward.
+
+#### atom_cut
+
+Cuts an atomic structure using cutter geometries. Unlike `atom_fill` which creates atoms from geometry, `atom_cut` removes atoms that lie outside the cutter shapes — effectively performing a Boolean intersection between an existing atomic structure and one or more 3D geometries.
+
+**Input pins**
+
+- `molecule` — The `Atomic` structure to be cut.
+- `cutters` — An array of `Geometry` values defining the region to keep (array-typed input; you can connect multiple wires).
+
+**Properties**
+
+- `Cut SDF Value` — The SDF threshold for the cut boundary (default 0.0). Atoms with SDF values greater than this threshold are removed.
+- `Unit Cell Size` — The unit cell size in Ångströms used to normalize atom positions when evaluating against the cutter geometry.
+
+Bonds connected to removed atoms are automatically deleted.
 
 #### atom_edit
 
