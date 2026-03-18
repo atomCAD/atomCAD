@@ -431,17 +431,26 @@ fn get_atom_world_position(
 ) -> Option<DVec3> {
     let result_structure = structure_designer.get_atomic_structure_from_selected_node()?;
 
-    // First try: the diff_atom_id may be a result atom ID directly (diff view)
+    // First try: look up via provenance (result view).
+    // This must come first because in result view, the diff_atom_id may
+    // coincidentally match a different atom's result ID, giving the wrong
+    // position.
+    if let Some(eval_cache) = structure_designer.get_selected_node_eval_cache() {
+        if let Some(eval_cache) = eval_cache.downcast_ref::<AtomEditEvalCache>() {
+            if let Some(result_id) = eval_cache.provenance.diff_to_result.get(&diff_atom_id) {
+                if let Some(atom) = result_structure.get_atom(*result_id) {
+                    return Some(atom.position);
+                }
+            }
+        }
+    }
+
+    // Second try: the diff_atom_id may be a result atom ID directly (diff view)
     if let Some(atom) = result_structure.get_atom(diff_atom_id) {
         return Some(atom.position);
     }
 
-    // Second try: look up via provenance (result view)
-    let eval_cache = structure_designer.get_selected_node_eval_cache()?;
-    let eval_cache = eval_cache.downcast_ref::<AtomEditEvalCache>()?;
-    let result_id = eval_cache.provenance.diff_to_result.get(&diff_atom_id)?;
-    let atom = result_structure.get_atom(*result_id)?;
-    Some(atom.position)
+    None
 }
 
 /// Compute a default end position for the rubber-band line when not snapped to
