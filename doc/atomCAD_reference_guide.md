@@ -38,7 +38,7 @@ atomCAD offers two modes of operation:
 
 When you first launch atomCAD, you start in Direct Editing Mode. This mode hides node-network concepts entirely, presenting a simplified UI with just the 3D viewport, a camera control panel, a display settings panel, and the atom editor.
 
-<!-- TODO: screenshot of Direct Editing Mode layout -->
+![](./atomCAD_images/direct_editing_mode.png)
 
 ### The Atom Editor
 
@@ -48,7 +48,7 @@ The editor is based on **tools** — one tool can be active at a time. The activ
 
 #### Default tool
 
-<!-- TODO: screenshot of updated default tool UI -->
+![](./atomCAD_images/default_tool.png)
 
 Features:
 - **Select** atoms and bonds using the left mouse button. Simple click replaces the selection, Shift+click adds to the selection, and Ctrl+click toggles the selection of the clicked object. Rectangle (marquee) selection is also supported.
@@ -66,7 +66,7 @@ Features:
 
 #### Add atom tool
 
-<!-- TODO: screenshot of updated add atom tool UI -->
+![](./atomCAD_images/add_atom_tool.png)
 
 - **Free placement:** Click empty space to place an atom at the clicked position.
 - **Guided placement:** Click an existing atom to enter guided placement mode. The system computes chemically valid candidate positions based on the atom's hybridization and displays them as interactive guide dots. Click a guide dot to place and bond the new atom in one action.
@@ -78,7 +78,7 @@ Features:
 
 #### Add bond tool
 
-<!-- TODO: screenshot of updated add bond tool UI -->
+![](./atomCAD_images/add_bond_tool.png)
 
 - Add bonds by clicking two atoms in the viewport.
 - **Bond order** can be configured. Common orders: single, double, triple. Specialized orders: quadruple, aromatic, dative, metallic.
