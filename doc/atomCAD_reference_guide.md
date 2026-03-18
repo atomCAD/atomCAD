@@ -97,7 +97,10 @@ The atom editor integrates UFF (Universal Force Field) energy minimization:
   - *Freeze base:* Only atoms you added or modified are allowed to move; the original base atoms stay fixed.
   - *Free all:* All atoms can move.
   - *Free selected:* Only selected atoms can move.
-- **Continuous minimization:** When enabled, the minimizer runs automatically after each editing action, helping the structure settle into favorable geometries as you build.
+- **Continuous minimization:** When enabled, the minimizer runs automatically after each editing action, helping the structure settle into favorable geometries as you build. The following parameters can be tuned in *Edit > Preferences* under the **Simulation** category:
+  - *Steps per frame* — Number of minimization iterations per animation frame (1–50).
+  - *Settle steps on release* — Extra minimization steps run when you release a drag (0–500), giving the structure time to relax after manipulation.
+  - *Max displacement per step* — Maximum distance (in Ångströms) any atom can move in a single step (default 0.1 Å). Lower values produce more stable but slower convergence.
 
 #### Freeze atoms
 
@@ -355,32 +358,55 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 
 | Setting | Description |
 |---------|-------------|
+| Visualization method | *Surface Splatting*, *Solid*, or *Wireframe*. Controls how geometry node outputs are rendered. |
 | Samples Per Unit Cell | Resolution for surface splatting tessellation. Higher values produce smoother surfaces. |
 | Sharpness Angle Threshold | Angle (in degrees) used to detect sharp edges during mesh generation. |
-| Mesh Smoothing | Normal calculation method: *Smooth* (interpolated normals), *Sharp* (flat shading), or *Smoothing Group Based* (smooth within groups, sharp at edges). |
-| Display Camera Target | Shows or hides the camera pivot point as a small red cube. |
+| Mesh Rendering | Normal calculation method: *Smooth* (interpolated normals), *Sharp* (flat shading), or *Smart (detect sharp edges)* (smooth within groups, sharp at edges). |
 
 #### Atomic Structure Visualization
 
 | Setting | Description |
 |---------|-------------|
-| Rendering Method | *Impostors* (default, high-performance) or *Triangle Mesh* (traditional geometry). |
-| Ball and Stick Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Ball and Stick mode. Set to 0 to disable culling. |
+| Visualization method | *Ball and Stick* or *Space Filling*. |
+| Rendering Method | *Impostors* (high-performance) or *Triangle Mesh* (traditional geometry). |
+| Ball & Stick Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Ball and Stick mode. Set to 0 to disable culling. |
 | Space Filling Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Space Filling mode. Set to 0 to disable culling. |
+
+#### Other Settings
+
+| Setting | Description |
+|---------|-------------|
+| Display camera pivot point | Shows or hides the camera pivot point as a small red cube. |
+
+#### Layout
+
+| Setting | Description |
+|---------|-------------|
+| Auto-layout algorithm | *Topological Grid* or *Sugiyama*. Controls which algorithm is used for automatic node layout. |
+| Auto-layout after AI edit operations | When enabled, the node network is automatically re-laid out after edits made via the CLI or AI assistant. |
 
 #### Background
 
 | Setting | Description |
 |---------|-------------|
 | Background Color | The scene background color. |
+| Show Axes | Toggles visibility of the Cartesian axes. |
+| Show Lattice Axes | Toggles dotted lines showing non-Cartesian lattice directions (nested under Show Axes). |
 | Show Grid | Toggles visibility of the Cartesian grid. |
-| Show Axes | Toggles visibility of the Cartesian axes (can be toggled independently from the grid). |
 | Grid Size | Spacing between grid lines. |
 | Grid Color / Grid Strong Color | Colors for regular and primary (axis-aligned) grid lines. |
-| Show Lattice Axes | Toggles dotted lines showing non-Cartesian lattice directions. |
 | Show Lattice Grid | Toggles a secondary grid aligned to the lattice (useful for non-cubic unit cells). |
 | Lattice Grid Color / Lattice Grid Strong Color | Colors for the lattice grid lines. |
 | Drawing Plane Grid Color / Drawing Plane Grid Strong Color | Colors for the 2D drawing plane grid. |
+
+#### Simulation
+
+| Setting | Description |
+|---------|-------------|
+| Use vdW distance cutoff | Uses a 6 Å distance cutoff for van der Waals interactions during energy minimization. Faster on large structures with negligible accuracy loss. |
+| Steps per frame | Number of continuous minimization iterations per animation frame (1–50). |
+| Settle steps on release | Extra minimization steps run when a drag is released (0–500). |
+| Max displacement per step | Maximum atom displacement per minimization step in Ångströms (default 0.1 Å). |
 
 ### Import from library .cnnd files
 
