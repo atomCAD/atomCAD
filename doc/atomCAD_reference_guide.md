@@ -1175,7 +1175,7 @@ The `atom_edit` node provides the same atom editing tools described in the [Dire
 
 This section covers the additional aspects of `atom_edit` that are specific to node-network workflows.
 
-<!-- TODO: screenshot of atom_edit node -->
+![](./atomCAD_images/atom_edit.png)
 
 ##### How atom_edit stores edits
 
