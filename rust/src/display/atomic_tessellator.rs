@@ -22,8 +22,10 @@ pub struct AtomicTessellatorParams {
     pub cylinder_divisions: u32,
 }
 
-// atom radius factor for the 'balls and sticks' view
-const BAS_ATOM_RADIUS_FACTOR: f64 = 0.5;
+// atom radius factor for the 'balls and sticks' view: 25% of van der Waals radius,
+// clamped to at most 90% of covalent radius to guarantee visible bond length
+const BAS_VDW_FACTOR: f64 = 0.25;
+const BAS_COVALENT_CAP: f64 = 0.9;
 
 // radius of a bond cylinder (stick) in the 'balls and sticks' view
 pub const BAS_STICK_RADIUS: f64 = 0.1;
@@ -271,7 +273,9 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
 
     match visualization {
         AtomicStructureVisualization::BallAndStick => {
-            atom_info.covalent_radius * BAS_ATOM_RADIUS_FACTOR
+            let vdw_radius = atom_info.van_der_waals_radius * BAS_VDW_FACTOR;
+            let max_radius = atom_info.covalent_radius * BAS_COVALENT_CAP;
+            vdw_radius.min(max_radius)
         }
         AtomicStructureVisualization::SpaceFilling => atom_info.van_der_waals_radius,
     }
