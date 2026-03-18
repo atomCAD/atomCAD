@@ -23,6 +23,7 @@ Basic features:
 
 Planned features include:
 
+- Dynamics simulation support and access to more accurate (server-side) energy minimization methods
 - Atomically Precise Manufacturing (APM) integration
 - A streaming level-of-detail system to support larger structures that currently do not fit in memory
 
@@ -39,15 +40,86 @@ When you first launch atomCAD, you start in Direct Editing Mode. This mode hides
 
 <!-- TODO: screenshot of Direct Editing Mode layout -->
 
-### What you can do in Direct Editing Mode
+### The Atom Editor
 
-- Build atomic structures atom by atom using the guided placement tools
-- Import XYZ files directly (via *File > Import XYZ*)
-- Add and remove hydrogen atoms
-- Run energy minimization
-- Measure and modify distances, angles, and dihedral angles
-- Freeze atoms to prevent accidental movement
-- Export structures to `.mol` or `.xyz` format
+The atom editor is the central tool for building and modifying atomic structures in atomCAD. In Direct Editing Mode the atom editor occupies the left sidebar; in Node Network Mode the same editor appears in the Node Properties panel when an `atom_edit` node is selected. The tools and features described below work identically in both modes (with minor simplifications in Direct Editing Mode, such as hiding node-network-specific options like *Output diff*).
+
+The editor is based on **tools** — one tool can be active at a time. The active tool determines how you interact with the atomic structure in the viewport. You can switch tools using keyboard shortcuts: `F2` (Default tool), `F3` (Add atom tool), `F4` or `J` (Add bond tool).
+
+#### Default tool
+
+<!-- TODO: screenshot of updated default tool UI -->
+
+Features:
+- **Select** atoms and bonds using the left mouse button. Simple click replaces the selection, Shift+click adds to the selection, and Ctrl+click toggles the selection of the clicked object. Rectangle (marquee) selection is also supported.
+- **Delete selected** atoms and bonds (also available via keyboard shortcut).
+- **Replace** all selected atoms with a specific element.
+- **Transform** (move and rotate) selected atoms by dragging. Frozen atoms cannot be dragged.
+- **Measurements:** When 2–4 atoms are selected, the UI displays a measurement card:
+  - **2 atoms:** bond distance (in Ångströms)
+  - **3 atoms:** bond angle (in degrees)
+  - **4 atoms:** dihedral (torsion) angle (in degrees)
+
+  A **Modify** button on the measurement card opens a dialog where you can enter a precise target value. Atoms are moved along bond axes, rotated around vertices, or rotated around torsion axes to achieve the target value. A "move connected atoms" option (on by default) moves the fragment attached to the moving atom rather than just the single atom.
+- **Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it.
+
+#### Add atom tool
+
+<!-- TODO: screenshot of updated add atom tool UI -->
+
+- **Free placement:** Click empty space to place an atom at the clicked position.
+- **Guided placement:** Click an existing atom to enter guided placement mode. The system computes chemically valid candidate positions based on the atom's hybridization and displays them as interactive guide dots. Click a guide dot to place and bond the new atom in one action.
+  - Supports sp3, sp2, and sp1 hybridization geometries.
+  - A **Hybridization** dropdown (Auto / sp3 / sp2 / sp1) lets you override the auto-detected hybridization.
+  - A **Bond Mode** toggle (Covalent / Dative) controls the saturation limit: Dative mode unlocks lone pair positions for coordinate bonding.
+  - When an atom is placed near an existing atom, the atoms are merged automatically.
+- Press `Escape` or click empty space to cancel guided placement and return to idle.
+
+#### Add bond tool
+
+<!-- TODO: screenshot of updated add bond tool UI -->
+
+- Add bonds by clicking two atoms in the viewport.
+- Bond order can be configured (single, double, triple). Clicking an existing bond cycles through bond orders.
+
+#### Hydrogen passivation
+
+The atom editor includes one-click hydrogen passivation and depassivation:
+
+- **Add hydrogens** (`Ctrl+H`): Adds hydrogen atoms to all undersaturated atoms (or only selected atoms if any are selected). The algorithm auto-detects hybridization and places hydrogens at correct bond lengths and angles.
+- **Remove hydrogens** (`Ctrl+Shift+H`): Removes hydrogen atoms from the structure (or only from selected atoms and their neighbors).
+
+#### Energy minimization
+
+The atom editor integrates UFF (Universal Force Field) energy minimization:
+
+- **Minimize** (`Ctrl+M`): Runs energy minimization on the structure. Three freeze modes are available:
+  - *Freeze base:* Only atoms you added or modified are allowed to move; the original base atoms stay fixed.
+  - *Free all:* All atoms can move.
+  - *Free selected:* Only selected atoms can move.
+- **Continuous minimization:** When enabled, the minimizer runs automatically after each editing action, helping the structure settle into favorable geometries as you build.
+
+#### Freeze atoms
+
+Atoms can be marked as **frozen** to prevent them from being moved during dragging and energy minimization. Frozen atoms are displayed with an ice-blue rim highlight so they are easy to identify.
+
+#### Rim highlights
+
+The atom editor uses colored rim highlights to convey atom state while preserving element colors:
+
+- **Selected atoms** — magenta rim
+- **Frozen atoms** — ice-blue rim
+- **Delete markers** — red rim on neutral-colored sphere
+- **Marked atoms** (for measurements) — yellow/blue rims
+
+#### Import XYZ
+
+In Direct Editing Mode, *File > Import XYZ* imports atoms from an XYZ file directly into the current structure. This is the quickest way to load an existing molecule and start editing.
+
+### Other capabilities
+
+- **Undo / Redo** (`Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y`): All editing actions can be undone and redone.
+- **Export** via *File > Export visible* to `.mol` or `.xyz` format.
 
 ### Switching between modes
 
@@ -58,7 +130,7 @@ Both modes use the same `.cnnd` file format — your work is preserved when swit
 
 ### File menu differences
 
-In Direct Editing Mode, *File > Import XYZ* imports an XYZ file directly into the atom editor. The *File > Import from .cnnd library* menu item is available only in Node Network Mode (it is an advanced feature for importing node networks).
+The *File > Import from .cnnd library* menu item is available only in Node Network Mode (it is an advanced feature for importing node networks).
 
 ## Parts of the UI
 
@@ -192,7 +264,7 @@ Selecting a node does *not* make its output visible. Node visibility is controll
 Selected nodes can be copied and pasted:
 - `Ctrl+C` to copy, `Ctrl+V` to paste (also available via right-click context menu).
 - Internal wires between copied nodes are preserved; external connections (wires to nodes outside the selection) are dropped.
-- Pasted nodes are offset slightly so they don’t overlap the originals.
+- Pasted nodes are placed at the mouse cursor position.
 - You can copy nodes in one network and paste into a different network.
 
 **Factor selection into subnetwork**
@@ -1022,85 +1094,21 @@ Removes all hydrogen atoms from an atomic structure. Takes an `Atomic` input and
 
 Useful in workflows like: `remove_hydrogen` → transform/edit → `add_hydrogen`, allowing you to work with the bare framework and re-passivate afterward.
 
-#### edit_atom
+#### atom_edit
 
-This node enables the manual editing of atomic structures. In a node network every single atomic modification could be placed into a separate node but this would usually lead to a very complex node network. In atomCAD we made a compromise: an edit_atom node is a set of atomic editing commands. The user can freely group atomic editing commands into edit_atom nodes at their will.
+The `atom_edit` node provides the same atom editing tools described in the [Direct Editing Mode](#the-atom-editor) section above — all tools, keyboard shortcuts, hydrogen passivation, energy minimization, freeze, and measurements work identically. When an `atom_edit` node is selected in the node network, the atom editor appears in the Node Properties panel.
 
-![](./atomCAD_images/edit_atom_node.png)
+This section covers the additional aspects of `atom_edit` that are specific to node-network workflows.
 
-The edit atom node is probably the most complex node in atomCAD. When you select this node you can feel like you are in a separate sub-application inside atomCAD. The node properties section of this node contains the user interface of this 'atom editor sub-application'.
+<!-- TODO: screenshot of atom_edit node -->
 
-The atom editor UI is based on 'tools': one tool can be active at a time. The active tool determines how you can interact with the atomic structure on the viewport. You can switch tools using keyboard shortcuts: `F2` (Default tool), `F3` (Add atom tool), `F4` or `J` (Add bond tool).
+##### How atom_edit stores edits
 
-##### Default tool
-
-<!-- TODO: screenshot of updated default tool UI -->
-
-Features:
-- **Select** atoms and bonds using the left mouse button. Simple click replaces the selection, Shift+click adds to the selection, and Ctrl+click toggles the selection of the clicked object. Rectangle (marquee) selection is also supported.
-- **Delete selected** atoms and bonds (also available via keyboard shortcut).
-- **Replace** all selected atoms with a specific element.
-- **Transform** (move and rotate) selected atoms by dragging. Frozen atoms cannot be dragged.
-- **Measurements:** When 2–4 atoms are selected, the UI displays a measurement card:
-  - **2 atoms:** bond distance (in Ångströms)
-  - **3 atoms:** bond angle (in degrees)
-  - **4 atoms:** dihedral (torsion) angle (in degrees)
-
-  A **Modify** button on the measurement card opens a dialog where you can enter a precise target value. Atoms are moved along bond axes, rotated around vertices, or rotated around torsion axes to achieve the target value. A "move connected atoms" option (on by default) moves the fragment attached to the moving atom rather than just the single atom.
-- **Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it.
-
-##### Add atom tool
-
-<!-- TODO: screenshot of updated add atom tool UI -->
-
-- **Free placement:** Click empty space to place an atom at the clicked position.
-- **Guided placement:** Click an existing atom to enter guided placement mode. The system computes chemically valid candidate positions based on the atom's hybridization and displays them as interactive guide dots. Click a guide dot to place and bond the new atom in one action.
-  - Supports sp3, sp2, and sp1 hybridization geometries.
-  - A **Hybridization** dropdown (Auto / sp3 / sp2 / sp1) lets you override the auto-detected hybridization.
-  - A **Bond Mode** toggle (Covalent / Dative) controls the saturation limit: Dative mode unlocks lone pair positions for coordinate bonding.
-  - When an atom is placed near an existing atom, the atoms are merged automatically.
-- Press `Escape` or click empty space to cancel guided placement and return to idle.
-
-##### Add bond tool
-
-<!-- TODO: screenshot of updated add bond tool UI -->
-
-- Add bonds by clicking two atoms in the viewport.
-- Bond order can be configured (single, double, triple). Clicking an existing bond cycles through bond orders.
-
-##### Hydrogen passivation
-
-The atom editor includes one-click hydrogen passivation and depassivation:
-
-- **Add hydrogens** (`Ctrl+H`): Adds hydrogen atoms to all undersaturated atoms (or only selected atoms if any are selected). The algorithm auto-detects hybridization and places hydrogens at correct bond lengths and angles.
-- **Remove hydrogens** (`Ctrl+Shift+H`): Removes hydrogen atoms from the structure (or only from selected atoms and their neighbors).
-
-##### Energy minimization
-
-The atom editor integrates UFF (Universal Force Field) energy minimization:
-
-- **Minimize** (`Ctrl+M`): Runs energy minimization on the structure. Three freeze modes are available:
-  - *Freeze base:* Only diff atoms (atoms you added/modified) are allowed to move.
-  - *Free all:* All atoms can move.
-  - *Free selected:* Only selected atoms can move.
-- **Continuous minimization:** When enabled, the minimizer runs automatically after each editing action, helping the structure settle into favorable geometries as you build.
-
-##### Freeze atoms
-
-Atoms can be marked as **frozen** to prevent them from being moved during dragging and energy minimization. Frozen atoms are displayed with an ice-blue rim highlight so they are easy to identify.
-
-##### Rim highlights
-
-The atom editor uses colored rim highlights to convey atom state while preserving element colors:
-
-- **Selected atoms** — magenta rim
-- **Frozen atoms** — ice-blue rim
-- **Delete markers** — red rim on neutral-colored sphere
-- **Marked atoms** (for measurements) — yellow/blue rims
+Internally, an `atom_edit` node stores a **diff** — an atomic structure that encodes additions, deletions, and modifications relative to the input (base) structure. When the node is evaluated, the diff is applied to the base to produce the output. This means the `atom_edit` node is non-destructive: the base structure flows in untouched, and the diff layer captures all your edits (added atoms, deleted atoms, moved atoms, element replacements). Multiple `atom_edit` nodes can be chained, each applying its own diff to the previous result.
 
 ##### Output diff mode
 
-The `atom_edit` node can output a raw diff structure instead of the applied result by enabling the *Output diff* checkbox. This makes diffs first-class values in the node network, enabling advanced workflows where defect patches are created once and applied to different base structures using the `apply_diff` node.
+The `atom_edit` node can output the raw diff structure instead of the applied result by enabling the *Output diff* checkbox. This makes diffs first-class values in the node network, enabling advanced workflows where defect patches are created once and then repositioned (via `atom_move`, `atom_lmove`, etc.) and applied to different base structures using the `apply_diff` node.
 
 ### Other nodes
 

@@ -105,7 +105,24 @@
       "Bash(do echo:*)",
       "WebFetch(domain:calculla.com)",
       "WebFetch(domain:people.mbi.ucla.edu)",
-      "WebFetch(domain:cccbdb.nist.gov)"
+      "WebFetch(domain:cccbdb.nist.gov)",
+      "WebFetch(domain:pymol.org)",
+      "WebFetch(domain:pymolwiki.org)",
+      "WebFetch(domain:www.ks.uiuc.edu)",
+      "WebFetch(domain:jmol.sourceforge.net)",
+      "WebFetch(domain:wiki.jmol.org)",
+      "WebFetch(domain:jp-minerals.org)",
+      "WebFetch(domain:wiki.fysik.dtu.dk)",
+      "WebFetch(domain:ase-lib.org)",
+      "WebFetch(domain:www.ccdc.cam.ac.uk)",
+      "WebFetch(domain:nglviewer.org)",
+      "WebFetch(domain:chemicbook.com)",
+      "WebFetch(domain:gitlab.com)",
+      "WebFetch(domain:www.umass.edu)",
+      "WebFetch(domain:rasmol.org)",
+      "WebFetch(domain:openrasmol.org)",
+      "WebFetch(domain:www.cup.uni-muenchen.de)",
+      "WebFetch(domain:stackoverflow.com)"
     ]
   }
 }
