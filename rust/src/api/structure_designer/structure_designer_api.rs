@@ -3561,10 +3561,13 @@ pub fn save_node_networks_as(file_path: String) -> APIResult {
                     .structure_designer
                     .save_node_networks_as(&file_path)
                 {
-                    Ok(_) => APIResult {
-                        success: true,
-                        error_message: String::new(),
-                    },
+                    Ok(_) => {
+                        crate::structure_designer::recent_files::add_recent_file(&file_path);
+                        APIResult {
+                            success: true,
+                            error_message: String::new(),
+                        }
+                    }
                     Err(e) => APIResult {
                         success: false,
                         error_message: e.to_string(),
@@ -3629,6 +3632,11 @@ pub fn get_design_file_path() -> Option<String> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_recent_files() -> Vec<String> {
+    crate::structure_designer::recent_files::load_recent_files()
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn load_node_networks(file_path: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
@@ -3649,10 +3657,13 @@ pub fn load_node_networks(file_path: String) -> APIResult {
                 refresh_structure_designer_auto(cad_instance);
 
                 match result {
-                    Ok(_) => APIResult {
-                        success: true,
-                        error_message: String::new(),
-                    },
+                    Ok(_) => {
+                        crate::structure_designer::recent_files::add_recent_file(&file_path);
+                        APIResult {
+                            success: true,
+                            error_message: String::new(),
+                        }
+                    }
                     Err(e) => APIResult {
                         success: false,
                         error_message: e.to_string(),

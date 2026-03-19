@@ -20,6 +20,7 @@ pub mod node_type;
 pub mod node_type_registry;
 pub mod nodes;
 pub mod preferences;
+pub mod recent_files;
 pub mod selection_factoring;
 pub mod serialization;
 pub mod structure_designer;

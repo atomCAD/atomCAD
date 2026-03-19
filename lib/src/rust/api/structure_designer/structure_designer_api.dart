@@ -681,6 +681,9 @@ bool isDesignDirty() => RustLib.instance.api
 String? getDesignFilePath() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetDesignFilePath();
 
+List<String> getRecentFiles() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetRecentFiles();
+
 APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
         filePath: filePath);
