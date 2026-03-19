@@ -415,7 +415,13 @@ impl StructureDesigner {
         // Check if node_network_name exists and clone it to avoid borrow conflicts
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
-            None => return, // Return if node_network_name is None
+            None => {
+                // No active network — clear the scene so the viewport doesn't
+                // keep rendering stale output from a previously active network.
+                self.last_generated_structure_designer_scene =
+                    StructureDesignerScene::new();
+                return;
+            }
         };
 
         match changes.mode {
