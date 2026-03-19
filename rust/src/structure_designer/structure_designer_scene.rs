@@ -184,10 +184,17 @@ impl StructureDesignerScene {
     }
 
     /// Gets the eval cache for a specific node (typically the selected node)
-    /// Returns None if the node doesn't exist or has no eval cache
+    /// Returns None if the node doesn't exist or has no eval cache.
+    /// Also checks the invisible node cache, so eval_cache remains accessible
+    /// when a node is hidden but still selected (fixes issue #128).
     pub fn get_node_eval_cache(&self, node_id: u64) -> Option<&Box<dyn Any>> {
-        self.node_data
-            .get(&node_id)?
+        // Check visible nodes first
+        if let Some(node_data) = self.node_data.get(&node_id) {
+            return node_data.selected_node_eval_cache.as_ref();
+        }
+        // Fall back to invisible cache (node may be hidden but still selected)
+        self.invisible_node_cache
+            .peek(&node_id)?
             .selected_node_eval_cache
             .as_ref()
     }
