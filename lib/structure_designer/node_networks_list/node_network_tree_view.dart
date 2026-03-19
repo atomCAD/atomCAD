@@ -291,7 +291,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       final namespace = getNamespace(oldFullName);
       final newFullName = combineQualifiedName(namespace, newSegment);
       if (newFullName != oldFullName) {
-        widget.model.renameNodeNetwork(oldFullName, newFullName);
+        success = widget.model.renameNodeNetwork(oldFullName, newFullName);
       }
     } else {
       // Namespace node rename

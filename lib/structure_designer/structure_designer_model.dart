@@ -648,7 +648,7 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  void renameNodeNetwork(String oldName, String newName) {
+  bool renameNodeNetwork(String oldName, String newName) {
     final success = structure_designer_api.renameNodeNetwork(
       oldName: oldName,
       newName: newName,
@@ -659,6 +659,7 @@ class StructureDesignerModel extends ChangeNotifier {
       // the renamed network via backticks and need to display updated text
       refreshFromKernel();
     }
+    return success;
   }
 
   String? deleteNodeNetwork(String networkName) {

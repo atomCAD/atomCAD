@@ -242,9 +242,16 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
 
   void _commitRename() {
     if (_editingNetworkName != null) {
-      final newName = _renameController.text;
+      final newName = _renameController.text.trim();
       if (newName.isNotEmpty && newName != _editingNetworkName) {
-        widget.model.renameNodeNetwork(_editingNetworkName!, newName);
+        final success =
+            widget.model.renameNodeNetwork(_editingNetworkName!, newName);
+        if (!success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Rename failed: name already exists')),
+          );
+        }
       }
       _renameFocusNode.unfocus();
       setState(() {
