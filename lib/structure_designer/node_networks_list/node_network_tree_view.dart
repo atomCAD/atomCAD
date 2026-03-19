@@ -420,10 +420,22 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           const SizedBox(height: 8),
           const Text('Networks to be deleted:',
               style: TextStyle(fontWeight: FontWeight.bold)),
-          ...affectedNetworks.map((n) => Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text('\u2022 $n'),
-              )),
+          const SizedBox(height: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: affectedNetworks
+                    .map((n) => Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text('\u2022 $n'),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ),
         ],
       ),
       actions: [

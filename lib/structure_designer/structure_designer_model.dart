@@ -695,14 +695,7 @@ class StructureDesignerModel extends ChangeNotifier {
   String? deleteNamespace(String prefix) {
     final result = structure_designer_api.deleteNamespace(prefix: prefix);
     if (result.success) {
-      // Clear the active network view if it was under the deleted prefix
-      if (nodeNetworkView != null &&
-          nodeNetworkView!.name.startsWith('$prefix.')) {
-        nodeNetworkView = null;
-      }
-      nodeNetworkNames =
-          structure_designer_api.getNodeNetworksWithValidation() ?? [];
-      notifyListeners();
+      refreshFromKernel();
       return null;
     }
     return result.errorMessage;
