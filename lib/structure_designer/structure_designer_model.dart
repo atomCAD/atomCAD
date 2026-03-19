@@ -701,6 +701,26 @@ class StructureDesignerModel extends ChangeNotifier {
     return result.errorMessage;
   }
 
+  // --- CLI Access Rules ---
+
+  /// Check whether CLI write access is locked for a given network/namespace name.
+  bool isCliWriteLocked(String name) {
+    return structure_designer_api.isCliWriteLocked(networkName: name);
+  }
+
+  /// Set CLI access for a namespace or network name.
+  /// `allowed = true` means CLI can write, `allowed = false` means locked.
+  void setCliAccess(String name, {required bool allowed}) {
+    structure_designer_api.setCliAccess(name: name, allowed: allowed);
+    notifyListeners();
+  }
+
+  /// Get all CLI access rules as a map of prefix -> allowed.
+  Map<String, bool> getCliAccessRules() {
+    final rules = structure_designer_api.getCliAccessRules();
+    return {for (final rule in rules) rule.$1: rule.$2};
+  }
+
   void setReturnNodeId(BigInt? nodeId) {
     structure_designer_api.setReturnNodeId(nodeId: nodeId);
     refreshFromKernel();

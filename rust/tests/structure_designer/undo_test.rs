@@ -50,6 +50,7 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
         node_networks: serializable_networks,
         version: 2,
         direct_editing_mode: false,
+        cli_access_rules: std::collections::HashMap::new(),
     };
 
     let mut value = serde_json::to_value(&container).unwrap();

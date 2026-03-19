@@ -82,6 +82,11 @@ pub struct StructureDesigner {
     pub pending_comment_edit: Option<super::undo::snapshot::PendingGadgetDrag>,
     // Direct editing mode: simplified UI focused on a single atom_edit node
     pub direct_editing_mode: bool,
+    // CLI access rules: sparse map of namespace/network prefixes to allowed (true) / denied (false).
+    // To determine access for a network, find the longest matching prefix in this map.
+    // If no match, CLI write access is allowed by default.
+    // Setting a rule prunes all descendant rules to keep the map minimal.
+    pub cli_access_rules: HashMap<String, bool>,
 }
 
 impl Default for StructureDesigner {
@@ -119,6 +124,7 @@ impl StructureDesigner {
             pending_gadget_drag: None,
             pending_comment_edit: None,
             direct_editing_mode: true,
+            cli_access_rules: HashMap::new(),
         }
     }
 }
@@ -3579,6 +3585,7 @@ impl StructureDesigner {
             &mut self.node_type_registry,
             Path::new(file_path),
             self.direct_editing_mode,
+            &self.cli_access_rules,
         );
 
         // Clear dirty flag and set file path if save was successful
@@ -3686,6 +3693,9 @@ impl StructureDesigner {
 
         // Clear CSG conversion cache since we loaded a completely new file
         self.network_evaluator.clear_csg_cache();
+
+        // Restore CLI access rules from the loaded file
+        self.cli_access_rules = load_result.cli_access_rules;
 
         // Clear dirty flag since we just loaded a saved state
         self.is_dirty = false;
@@ -4223,6 +4233,60 @@ impl StructureDesigner {
             }
             counter += 1;
         }
+    }
+
+    // =========================================================================
+    // CLI Access Rules
+    // =========================================================================
+
+    /// Check whether CLI write access is locked for a given network name.
+    ///
+    /// Finds the longest matching prefix in `cli_access_rules` and returns its value.
+    /// If no rule matches, CLI write access is allowed (default: unlocked).
+    pub fn is_cli_write_locked(&self, network_name: &str) -> bool {
+        let mut best_prefix_len = 0usize;
+        let mut locked = false; // default: unlocked
+
+        for (prefix, &allowed) in &self.cli_access_rules {
+            // The prefix must match exactly or be a proper namespace prefix (followed by '.')
+            let matches = network_name == prefix
+                || network_name.starts_with(&format!("{}.", prefix));
+            if matches && prefix.len() > best_prefix_len {
+                best_prefix_len = prefix.len();
+                locked = !allowed;
+            }
+        }
+
+        locked
+    }
+
+    /// Set CLI access for a namespace or network name, pruning all descendant rules.
+    ///
+    /// `allowed = true` means CLI can write, `allowed = false` means CLI is locked out.
+    /// After setting, all entries whose prefix is a descendant of `name` are removed,
+    /// keeping the map minimal and easy to reason about.
+    pub fn set_cli_access(&mut self, name: &str, allowed: bool) {
+        // Remove all descendant rules
+        let child_prefix = format!("{}.", name);
+        self.cli_access_rules
+            .retain(|k, _| k != name && !k.starts_with(&child_prefix));
+
+        // Insert the new rule
+        self.cli_access_rules.insert(name.to_string(), allowed);
+
+        self.is_dirty = true;
+    }
+
+    /// Remove the CLI access rule for a specific prefix (revert to inherited behavior).
+    pub fn clear_cli_access(&mut self, name: &str) {
+        if self.cli_access_rules.remove(name).is_some() {
+            self.is_dirty = true;
+        }
+    }
+
+    /// Get all CLI access rules (for serialization and UI display).
+    pub fn get_cli_access_rules(&self) -> &HashMap<String, bool> {
+        &self.cli_access_rules
     }
 }
 

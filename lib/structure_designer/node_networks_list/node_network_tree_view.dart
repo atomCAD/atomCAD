@@ -483,6 +483,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       screenSize.height - globalPosition.dy,
     );
 
+    // Check current CLI lock state for this node
+    final isLocked = node.fullName != null &&
+        widget.model.isCliWriteLocked(node.fullName!);
+
     final items = <PopupMenuEntry<String>>[
       const PopupMenuItem(
         value: 'rename',
@@ -491,6 +495,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       const PopupMenuItem(
         value: 'delete',
         child: Text('Delete'),
+      ),
+      const PopupMenuDivider(),
+      PopupMenuItem(
+        value: 'toggle_cli_access',
+        child: Text(isLocked ? 'Allow CLI Access' : 'Deny CLI Access'),
       ),
     ];
 
@@ -503,6 +512,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         _startRenaming(node);
       } else if (value == 'delete') {
         _handleDelete(context, node);
+      } else if (value == 'toggle_cli_access' && node.fullName != null) {
+        widget.model.setCliAccess(node.fullName!, allowed: isLocked);
       }
     });
   }

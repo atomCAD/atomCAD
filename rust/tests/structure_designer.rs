@@ -117,3 +117,6 @@ mod atom_edit_undo_test;
 
 #[path = "structure_designer/continuous_minimization_test.rs"]
 mod continuous_minimization_test;
+
+#[path = "structure_designer/cli_access_rules_test.rs"]
+mod cli_access_rules_test;

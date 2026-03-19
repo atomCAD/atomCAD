@@ -4688,3 +4688,56 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
         )
     }
 }
+
+// =============================================================================
+// CLI Access Rules
+// =============================================================================
+
+/// Check whether CLI write access is locked for a given network name.
+/// Returns true if the network is locked from CLI write access.
+#[flutter_rust_bridge::frb(sync)]
+pub fn is_cli_write_locked(network_name: String) -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .is_cli_write_locked(&network_name)
+            },
+            false,
+        )
+    }
+}
+
+/// Set CLI access for a namespace or network name.
+/// `allowed = true` means CLI can write, `allowed = false` means CLI is locked out.
+/// Setting a rule prunes all descendant rules to keep the map minimal.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_cli_access(name: String, allowed: bool) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance
+                .structure_designer
+                .set_cli_access(&name, allowed);
+        });
+    }
+}
+
+/// Get all CLI access rules as a list of (prefix, allowed) pairs.
+/// This is used by the Flutter UI to display lock state in the tree view.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_cli_access_rules() -> Vec<(String, bool)> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .get_cli_access_rules()
+                    .iter()
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect()
+            },
+            vec![],
+        )
+    }
+}
