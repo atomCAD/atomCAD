@@ -120,3 +120,6 @@ mod continuous_minimization_test;
 
 #[path = "structure_designer/cli_access_rules_test.rs"]
 mod cli_access_rules_test;
+
+#[path = "structure_designer/relax_node_atom_limit_test.rs"]
+mod relax_node_atom_limit_test;
