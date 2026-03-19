@@ -842,6 +842,49 @@ pub fn delete_node_network(network_name: &str) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn rename_namespace(old_prefix: &str, new_prefix: &str) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let result = instance
+                    .structure_designer
+                    .rename_namespace(old_prefix, new_prefix);
+                refresh_structure_designer_auto(instance);
+                result
+            },
+            false,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn delete_namespace(prefix: &str) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let result = instance.structure_designer.delete_namespace(prefix);
+                refresh_structure_designer_auto(instance);
+
+                match result {
+                    Ok(_) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e,
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_node_display(node_id: u64, is_displayed: bool) {
     unsafe {
         with_mut_cad_instance(|instance| {

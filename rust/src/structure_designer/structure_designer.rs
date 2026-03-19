@@ -34,7 +34,6 @@ use crate::structure_designer::node_data::CustomNodeData;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
 use crate::structure_designer::node_type::{generic_node_data_loader, generic_node_data_saver};
-use crate::structure_designer::nodes::comment::CommentData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
@@ -724,55 +723,31 @@ impl StructureDesigner {
     pub fn rename_node_network(&mut self, old_name: &str, new_name: &str) -> bool {
         // Check if the old network exists and the new name doesn't already exist
         if !self.node_type_registry.node_networks.contains_key(old_name) {
-            return false; // Old network doesn't exist
+            return false;
         }
         if self.node_type_registry.node_networks.contains_key(new_name) {
-            return false; // New name already exists
+            return false;
         }
-        // Check if the new name conflicts with a built-in node type
         if self
             .node_type_registry
             .built_in_node_types
             .contains_key(new_name)
         {
-            return false; // New name conflicts with built-in node type
+            return false;
         }
 
-        // Take the network out of the registry
-        let mut network = match self.node_type_registry.node_networks.remove(old_name) {
-            Some(network) => network,
-            None => return false, // Should never happen because we checked contains_key above
-        };
+        // Core rename (registry, active name, node type refs, backtick refs)
+        super::undo::commands::rename_helpers::apply_rename_core(
+            &mut self.node_type_registry,
+            &mut self.active_node_network_name,
+            old_name,
+            new_name,
+        );
 
-        // Update the network's internal node type name
-        network.node_type.name = new_name.to_string();
-
-        // Add the network back with the new name
-        self.node_type_registry
-            .node_networks
-            .insert(new_name.to_string(), network);
-
-        // Update the active_node_network_name if it was the renamed network
-        if let Some(active_name) = &self.active_node_network_name {
-            if active_name == old_name {
-                self.active_node_network_name = Some(new_name.to_string());
-            }
-        }
-
-        // Update navigation history to reflect the rename
+        // Navigation history (not available in UndoContext)
         self.navigation_history.rename_network(old_name, new_name);
 
-        // Update all nodes in all node networks that reference the old node type name
-        // This is necessary because node networks can be used as custom nodes in other networks
-        for (_network_name, network) in self.node_type_registry.node_networks.iter_mut() {
-            for (_node_id, node) in network.nodes.iter_mut() {
-                if node.node_type_name == old_name {
-                    node.node_type_name = new_name.to_string();
-                }
-            }
-        }
-
-        // Update clipboard node_type_names to reflect the rename
+        // Clipboard node_type_names (not available in UndoContext)
         if let Some(ref mut clipboard) = self.clipboard {
             for node in clipboard.nodes.values_mut() {
                 if node.node_type_name == old_name {
@@ -781,48 +756,9 @@ impl StructureDesigner {
             }
         }
 
-        // Update backtick references in comment nodes and node network metadata across all networks
-        // This keeps documentation in sync when node networks are renamed
-        let old_pattern = format!("`{}`", old_name);
-        let new_pattern = format!("`{}`", new_name);
-        for (_network_name, network) in self.node_type_registry.node_networks.iter_mut() {
-            // Update summary and description fields of the node network
-            if network.node_type.description.contains(&old_pattern) {
-                network.node_type.description = network
-                    .node_type
-                    .description
-                    .replace(&old_pattern, &new_pattern);
-            }
-            if let Some(ref mut summary) = network.node_type.summary {
-                if summary.contains(&old_pattern) {
-                    *summary = summary.replace(&old_pattern, &new_pattern);
-                }
-            }
-
-            // Update comment nodes
-            for (_node_id, node) in network.nodes.iter_mut() {
-                if node.node_type_name == "Comment" {
-                    if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>()
-                    {
-                        if comment_data.label.contains(&old_pattern) {
-                            comment_data.label =
-                                comment_data.label.replace(&old_pattern, &new_pattern);
-                        }
-                        if comment_data.text.contains(&old_pattern) {
-                            comment_data.text =
-                                comment_data.text.replace(&old_pattern, &new_pattern);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Mark design as dirty since we renamed a network
         self.set_dirty(true);
-        // Renaming a network is a structural change requiring full refresh
         self.mark_full_refresh();
 
-        // Push undo command
         self.push_command(
             super::undo::commands::rename_network::RenameNetworkCommand {
                 old_name: old_name.to_string(),
@@ -833,8 +769,126 @@ impl StructureDesigner {
         true
     }
 
+    pub fn rename_namespace(&mut self, old_prefix: &str, new_prefix: &str) -> bool {
+        // Collect affected networks: names starting with "old_prefix."
+        let prefix_dot = format!("{}.", old_prefix);
+        let affected: Vec<String> = self
+            .node_type_registry
+            .node_networks
+            .keys()
+            .filter(|name| name.starts_with(&prefix_dot))
+            .cloned()
+            .collect();
+
+        if affected.is_empty() {
+            return false;
+        }
+
+        // Compute rename pairs and validate
+        let new_prefix_dot = format!("{}.", new_prefix);
+        let mut rename_pairs: Vec<(String, String)> = Vec::new();
+        for old_name in &affected {
+            let suffix = &old_name[prefix_dot.len()..];
+            let new_name = format!("{}{}", new_prefix_dot, suffix);
+
+            // Check for collision with existing network or built-in type
+            if self
+                .node_type_registry
+                .node_networks
+                .contains_key(&new_name)
+                && !affected.contains(&new_name)
+            {
+                return false;
+            }
+            if self
+                .node_type_registry
+                .built_in_node_types
+                .contains_key(&new_name)
+            {
+                return false;
+            }
+            rename_pairs.push((old_name.clone(), new_name));
+        }
+
+        // Perform all renames
+        for (old_name, new_name) in &rename_pairs {
+            super::undo::commands::rename_helpers::apply_rename_core(
+                &mut self.node_type_registry,
+                &mut self.active_node_network_name,
+                old_name,
+                new_name,
+            );
+        }
+
+        // Update navigation history for all renames
+        for (old_name, new_name) in &rename_pairs {
+            self.navigation_history.rename_network(old_name, new_name);
+        }
+
+        // Update clipboard for all renames
+        if let Some(ref mut clipboard) = self.clipboard {
+            for node in clipboard.nodes.values_mut() {
+                for (old_name, new_name) in &rename_pairs {
+                    if node.node_type_name == *old_name {
+                        node.node_type_name = new_name.clone();
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.set_dirty(true);
+        self.mark_full_refresh();
+
+        self.push_command(
+            super::undo::commands::rename_namespace::RenameNamespaceCommand {
+                renames: rename_pairs,
+            },
+        );
+
+        true
+    }
+
+    /// Check if any network outside `targets` references any network in `targets`.
+    /// Returns Ok(()) if safe to delete, or Err with details if blocked.
+    ///
+    /// Intra-set references (networks in `targets` referencing each other) are not blocking —
+    /// they're all being deleted together.
+    fn check_delete_references(
+        &self,
+        targets: &std::collections::HashSet<&str>,
+    ) -> Result<(), String> {
+        let mut referencing_networks = Vec::new();
+        for (current_network_name, network) in self.node_type_registry.node_networks.iter() {
+            // Skip networks that are themselves being deleted
+            if targets.contains(current_network_name.as_str()) {
+                continue;
+            }
+            for node in network.nodes.values() {
+                if targets.contains(node.node_type_name.as_str()) {
+                    referencing_networks.push(current_network_name.clone());
+                    break;
+                }
+            }
+        }
+
+        if referencing_networks.is_empty() {
+            Ok(())
+        } else {
+            let target_names: Vec<&str> = targets.iter().copied().collect();
+            Err(format!(
+                "Cannot delete {} because referenced by nodes in: {}",
+                if target_names.len() == 1 {
+                    format!("network '{}'", target_names[0])
+                } else {
+                    format!("networks under prefix ({})", target_names.join(", "))
+                },
+                referencing_networks.join(", ")
+            ))
+        }
+    }
+
     pub fn delete_node_network(&mut self, network_name: &str) -> Result<(), String> {
-        // Check if the network exists
         if !self
             .node_type_registry
             .node_networks
@@ -843,26 +897,10 @@ impl StructureDesigner {
             return Err(format!("Node network '{}' does not exist", network_name));
         }
 
-        // Check if any nodes in any network reference this network
-        // Collect the names of networks that contain nodes referencing this network
-        let mut referencing_networks = Vec::new();
-        for (current_network_name, network) in self.node_type_registry.node_networks.iter() {
-            for (_node_id, node) in network.nodes.iter() {
-                if node.node_type_name == network_name {
-                    referencing_networks.push(current_network_name.clone());
-                    break; // No need to check more nodes in this network
-                }
-            }
-        }
-
-        // If there are references, return an error with the referencing network names
-        if !referencing_networks.is_empty() {
-            return Err(format!(
-                "Cannot delete node network '{}' because it is referenced by nodes in the following networks: {}",
-                network_name,
-                referencing_networks.join(", ")
-            ));
-        }
+        // Check references using shared helper
+        let targets: std::collections::HashSet<&str> =
+            std::collections::HashSet::from([network_name]);
+        self.check_delete_references(&targets)?;
 
         // Snapshot the network before deletion (for undo)
         let network_snapshot = self.snapshot_network(network_name);
@@ -897,9 +935,7 @@ impl StructureDesigner {
         // Capture active network after deletion
         let active_network_after = self.active_node_network_name.clone();
 
-        // Mark design as dirty since we deleted a network
         self.set_dirty(true);
-        // Deleting a network requires full refresh (complex change)
         self.mark_full_refresh();
 
         // Push undo command if we successfully snapshotted
@@ -913,6 +949,80 @@ impl StructureDesigner {
                 },
             );
         }
+
+        Ok(())
+    }
+
+    pub fn delete_namespace(&mut self, prefix: &str) -> Result<(), String> {
+        // Collect affected networks: names starting with "prefix."
+        let prefix_dot = format!("{}.", prefix);
+        let affected: Vec<String> = self
+            .node_type_registry
+            .node_networks
+            .keys()
+            .filter(|name| name.starts_with(&prefix_dot))
+            .cloned()
+            .collect();
+
+        if affected.is_empty() {
+            return Err(format!("No networks found under namespace '{}'", prefix));
+        }
+
+        // Check references: only block on references from outside the set
+        let targets: std::collections::HashSet<&str> =
+            affected.iter().map(|s| s.as_str()).collect();
+        self.check_delete_references(&targets)?;
+
+        // Snapshot all affected networks
+        let mut network_snapshots = Vec::new();
+        for name in &affected {
+            if let Some(snapshot) = self.snapshot_network(name) {
+                network_snapshots.push((name.clone(), snapshot));
+            }
+        }
+
+        let active_network_before = self.active_node_network_name.clone();
+
+        // Remove all affected networks
+        for name in &affected {
+            self.node_type_registry.node_networks.remove(name);
+        }
+
+        // Update active network if it was under the prefix
+        if let Some(active_name) = &self.active_node_network_name {
+            if active_name.starts_with(&prefix_dot) {
+                self.active_node_network_name = None;
+            }
+        }
+
+        // Remove from navigation history
+        for name in &affected {
+            self.navigation_history.remove_network(name);
+        }
+
+        // Clear clipboard if it references any deleted network
+        if let Some(ref clipboard) = self.clipboard {
+            if clipboard
+                .nodes
+                .values()
+                .any(|n| targets.contains(n.node_type_name.as_str()))
+            {
+                self.clipboard = None;
+            }
+        }
+
+        let active_network_after = self.active_node_network_name.clone();
+
+        self.set_dirty(true);
+        self.mark_full_refresh();
+
+        self.push_command(
+            super::undo::commands::delete_namespace::DeleteNamespaceCommand {
+                network_snapshots,
+                active_network_before,
+                active_network_after,
+            },
+        );
 
         Ok(())
     }

@@ -100,6 +100,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   // Rename state
   String? _editingNodeFullName; // fullName of node being renamed
+  bool _editingIsLeaf = true; // Whether the node being edited is a leaf
   final TextEditingController _renameController = TextEditingController();
   final FocusNode _renameFocusNode = FocusNode();
 
@@ -255,12 +256,14 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   }
 
   void _startRenaming(_NodeNetworkTreeNode node) {
-    // Only rename leaf nodes in Phase 1
-    if (!node.isLeaf) return;
-
     setState(() {
       _editingNodeFullName = node.fullName;
-      _renameController.text = getSimpleName(node.fullName!);
+      _editingIsLeaf = node.isLeaf;
+      if (node.isLeaf) {
+        _renameController.text = getSimpleName(node.fullName!);
+      } else {
+        _renameController.text = node.label;
+      }
     });
     _renameController.selection = TextSelection(
       baseOffset: 0,
@@ -281,17 +284,52 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
 
     final oldFullName = _editingNodeFullName!;
-    final namespace = getNamespace(oldFullName);
-    final newFullName = combineQualifiedName(namespace, newSegment);
+    bool success = true;
 
-    if (newFullName != oldFullName) {
-      widget.model.renameNodeNetwork(oldFullName, newFullName);
+    if (_editingIsLeaf) {
+      // Leaf node rename
+      final namespace = getNamespace(oldFullName);
+      final newFullName = combineQualifiedName(namespace, newSegment);
+      if (newFullName != oldFullName) {
+        widget.model.renameNodeNetwork(oldFullName, newFullName);
+      }
+    } else {
+      // Namespace node rename
+      final oldPrefix = oldFullName;
+      final parentNamespace = getNamespace(oldPrefix);
+      final newPrefix = combineQualifiedName(parentNamespace, newSegment);
+      if (newPrefix != oldPrefix) {
+        success = widget.model.renameNamespace(oldPrefix, newPrefix);
+        if (success) {
+          // Migrate expansion state
+          _migrateExpansionState(oldPrefix, newPrefix);
+        }
+      }
+    }
+
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rename failed: name already exists')),
+      );
     }
 
     _renameFocusNode.unfocus();
     setState(() {
       _editingNodeFullName = null;
     });
+  }
+
+  void _migrateExpansionState(String oldPrefix, String newPrefix) {
+    final toRemove = <String>[];
+    final toAdd = <String>[];
+    for (final ns in _expandedNamespaces) {
+      if (ns == oldPrefix || ns.startsWith('$oldPrefix.')) {
+        toRemove.add(ns);
+        toAdd.add(ns.replaceFirst(oldPrefix, newPrefix));
+      }
+    }
+    _expandedNamespaces.removeAll(toRemove);
+    _expandedNamespaces.addAll(toAdd);
   }
 
   void _cancelRename() {
@@ -306,8 +344,25 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   // --- Delete logic ---
 
   void _handleDelete(BuildContext context, _NodeNetworkTreeNode node) {
-    if (!node.isLeaf) return; // Only leaf delete in Phase 1
-    _showDeleteConfirmation(context, node.fullName!);
+    if (node.isLeaf) {
+      _showDeleteConfirmation(context, node.fullName!);
+    } else {
+      final affectedNetworks = _collectLeafNames(node);
+      _showNamespaceDeleteConfirmation(
+          context, node.fullName!, affectedNetworks);
+    }
+  }
+
+  List<String> _collectLeafNames(_NodeNetworkTreeNode node) {
+    final names = <String>[];
+    if (node.isLeaf) {
+      names.add(node.fullName!);
+    } else {
+      for (final child in node.children) {
+        names.addAll(_collectLeafNames(child));
+      }
+    }
+    return names;
   }
 
   Future<void> _showDeleteConfirmation(
@@ -348,6 +403,59 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
   }
 
+  Future<void> _showNamespaceDeleteConfirmation(
+    BuildContext context,
+    String prefix,
+    List<String> affectedNetworks,
+  ) async {
+    final confirmed = await showDraggableAlertDialog<bool>(
+      context: context,
+      title: const Text('Delete Namespace'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+              'Delete "$prefix" and all ${affectedNetworks.length} network${affectedNetworks.length == 1 ? '' : 's'} within it?'),
+          const SizedBox(height: 8),
+          const Text('Networks to be deleted:',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          ...affectedNetworks.map((n) => Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text('\u2022 $n'),
+              )),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    );
+
+    if (confirmed == true && context.mounted) {
+      final errorMessage = widget.model.deleteNamespace(prefix);
+      if (errorMessage != null && context.mounted) {
+        await showDraggableAlertDialog(
+          context: context,
+          title: const Text('Cannot Delete Namespace'),
+          content: Text(errorMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      }
+    }
+  }
+
   // --- Context menu ---
 
   void _showContextMenu(
@@ -364,11 +472,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     );
 
     final items = <PopupMenuEntry<String>>[
-      if (node.isLeaf)
-        const PopupMenuItem(
-          value: 'rename',
-          child: Text('Rename'),
-        ),
+      const PopupMenuItem(
+        value: 'rename',
+        child: Text('Rename'),
+      ),
       const PopupMenuItem(
         value: 'delete',
         child: Text('Delete'),
@@ -415,8 +522,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         final node = entry.node;
         final activeNetworkName = widget.model.nodeNetworkView?.name;
         final isActive = node.isLeaf && node.fullName == activeNetworkName;
-        final isEditing =
-            node.isLeaf && _editingNodeFullName == node.fullName;
+        final isEditing = _editingNodeFullName == node.fullName;
 
         return GestureDetector(
           key: Key(node.isLeaf
@@ -426,9 +532,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
             _showContextMenu(context, node, details.globalPosition);
           },
           onDoubleTap: () {
-            if (node.isLeaf) {
-              _startRenaming(node);
-            }
+            _startRenaming(node);
           },
           child: InkWell(
             onTap: () {

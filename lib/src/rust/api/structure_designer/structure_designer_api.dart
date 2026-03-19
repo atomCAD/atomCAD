@@ -181,6 +181,15 @@ APIResult deleteNodeNetwork({required String networkName}) =>
         .crateApiStructureDesignerStructureDesignerApiDeleteNodeNetwork(
             networkName: networkName);
 
+bool renameNamespace({required String oldPrefix, required String newPrefix}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiRenameNamespace(
+            oldPrefix: oldPrefix, newPrefix: newPrefix);
+
+APIResult deleteNamespace({required String prefix}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiDeleteNamespace(
+        prefix: prefix);
+
 void setNodeDisplay({required BigInt nodeId, required bool isDisplayed}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetNodeDisplay(

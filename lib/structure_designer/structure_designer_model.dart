@@ -680,6 +680,33 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  bool renameNamespace(String oldPrefix, String newPrefix) {
+    final success = structure_designer_api.renameNamespace(
+      oldPrefix: oldPrefix,
+      newPrefix: newPrefix,
+    );
+    if (success) {
+      refreshFromKernel();
+    }
+    return success;
+  }
+
+  String? deleteNamespace(String prefix) {
+    final result = structure_designer_api.deleteNamespace(prefix: prefix);
+    if (result.success) {
+      // Clear the active network view if it was under the deleted prefix
+      if (nodeNetworkView != null &&
+          nodeNetworkView!.name.startsWith('$prefix.')) {
+        nodeNetworkView = null;
+      }
+      nodeNetworkNames =
+          structure_designer_api.getNodeNetworksWithValidation() ?? [];
+      notifyListeners();
+      return null;
+    }
+    return result.errorMessage;
+  }
+
   void setReturnNodeId(BigInt? nodeId) {
     structure_designer_api.setReturnNodeId(nodeId: nodeId);
     refreshFromKernel();

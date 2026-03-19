@@ -2544,8 +2544,14 @@ fn transform_selected_all_frozen_diff_atoms_not_moved() {
     });
 
     let data = get_data_mut(&mut designer);
-    assert_eq!(data.diff.get_atom(1).unwrap().position, DVec3::new(0.0, 0.0, 0.0));
-    assert_eq!(data.diff.get_atom(2).unwrap().position, DVec3::new(2.0, 0.0, 0.0));
+    assert_eq!(
+        data.diff.get_atom(1).unwrap().position,
+        DVec3::new(0.0, 0.0, 0.0)
+    );
+    assert_eq!(
+        data.diff.get_atom(2).unwrap().position,
+        DVec3::new(2.0, 0.0, 0.0)
+    );
 }
 
 /// Frozen base atoms must not contribute to the status count when dragging

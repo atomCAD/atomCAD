@@ -1690,3 +1690,284 @@ fn undo_description_toggle_node_display() {
         Some("Toggle sphere display")
     );
 }
+
+// ===== Namespace Rename Tests =====
+
+#[test]
+fn rename_namespace_basic() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Physics.Mechanics.Spring");
+    designer.add_node_network("Physics.Mechanics.Damper");
+    designer.add_node_network("Physics.Optics.Lens");
+
+    let result = designer.rename_namespace("Physics.Mechanics", "Physics.Dynamics");
+    assert!(result);
+
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Dynamics.Spring")
+    );
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Dynamics.Damper")
+    );
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Optics.Lens")
+    );
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Mechanics.Spring")
+    );
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Mechanics.Damper")
+    );
+}
+
+#[test]
+fn rename_namespace_updates_active_network() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("NS.Alpha");
+    designer.add_node_network("NS.Beta");
+    designer.set_active_node_network_name(Some("NS.Alpha".to_string()));
+
+    designer.rename_namespace("NS", "Renamed");
+
+    assert_eq!(
+        designer.active_node_network_name,
+        Some("Renamed.Alpha".to_string())
+    );
+}
+
+#[test]
+fn rename_namespace_collision_returns_false() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("A.Foo");
+    designer.add_node_network("B.Foo"); // Would collide with A.Foo renamed to B.Foo
+
+    let result = designer.rename_namespace("A", "B");
+    assert!(!result);
+
+    // Original networks should be unchanged
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("A.Foo")
+    );
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("B.Foo")
+    );
+}
+
+#[test]
+fn rename_namespace_no_matching_networks() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Unrelated");
+
+    let result = designer.rename_namespace("NonExistent", "Whatever");
+    assert!(!result);
+}
+
+#[test]
+fn rename_namespace_updates_node_type_references() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Lib.Helper");
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+
+    // Add a node of type "Lib.Helper" in "Main"
+    designer.add_node("Lib.Helper", DVec2::ZERO);
+
+    designer.rename_namespace("Lib", "Library");
+
+    // The node in Main should now reference "Library.Helper"
+    let main_network = designer
+        .node_type_registry
+        .node_networks
+        .get("Main")
+        .unwrap();
+    let has_updated_ref = main_network
+        .nodes
+        .values()
+        .any(|n| n.node_type_name == "Library.Helper");
+    assert!(has_updated_ref, "Node type references should be updated");
+}
+
+#[test]
+fn undo_rename_namespace() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("NS.Alpha");
+    designer.add_node_network("NS.Beta");
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.rename_namespace("NS", "Renamed");
+    });
+}
+
+#[test]
+fn undo_rename_namespace_restores_active_network() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("NS.Alpha");
+    designer.set_active_node_network_name(Some("NS.Alpha".to_string()));
+    designer.undo_stack.clear();
+
+    designer.rename_namespace("NS", "Renamed");
+    assert_eq!(
+        designer.active_node_network_name,
+        Some("Renamed.Alpha".to_string())
+    );
+
+    designer.undo();
+    assert_eq!(
+        designer.active_node_network_name,
+        Some("NS.Alpha".to_string())
+    );
+
+    designer.redo();
+    assert_eq!(
+        designer.active_node_network_name,
+        Some("Renamed.Alpha".to_string())
+    );
+}
+
+// ===== Namespace Delete Tests =====
+
+#[test]
+fn delete_namespace_basic() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Physics.Mechanics.Spring");
+    designer.add_node_network("Physics.Mechanics.Damper");
+    designer.add_node_network("Physics.Optics.Lens");
+
+    let result = designer.delete_namespace("Physics.Mechanics");
+    assert!(result.is_ok());
+
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Mechanics.Spring")
+    );
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Mechanics.Damper")
+    );
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Physics.Optics.Lens")
+    );
+}
+
+#[test]
+fn delete_namespace_clears_active_network_if_under_prefix() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("NS.Alpha");
+    designer.add_node_network("NS.Beta");
+    designer.add_node_network("Other");
+    designer.set_active_node_network_name(Some("NS.Alpha".to_string()));
+
+    designer.delete_namespace("NS").unwrap();
+
+    assert_eq!(designer.active_node_network_name, None);
+}
+
+#[test]
+fn delete_namespace_blocked_by_external_reference() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Lib.Helper");
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+
+    // Add a node of type "Lib.Helper" in "Main" (external reference)
+    designer.add_node("Lib.Helper", DVec2::ZERO);
+
+    let result = designer.delete_namespace("Lib");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("Main"));
+
+    // Networks should still exist
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("Lib.Helper")
+    );
+}
+
+#[test]
+fn delete_namespace_allows_intra_set_references() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Lib.A");
+    designer.add_node_network("Lib.B");
+
+    // Add a node of type "Lib.A" inside "Lib.B" (intra-set reference)
+    designer.set_active_node_network_name(Some("Lib.B".to_string()));
+    designer.add_node("Lib.A", DVec2::ZERO);
+
+    let result = designer.delete_namespace("Lib");
+    assert!(
+        result.is_ok(),
+        "Intra-set references should not block deletion"
+    );
+}
+
+#[test]
+fn delete_namespace_no_matching_networks() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Unrelated");
+
+    let result = designer.delete_namespace("NonExistent");
+    assert!(result.is_err());
+}
+
+#[test]
+fn undo_delete_namespace() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("NS.Alpha");
+    designer.add_node_network("NS.Beta");
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_namespace("NS").unwrap();
+    });
+}
+
+#[test]
+fn undo_delete_namespace_restores_active_network() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("NS.Alpha");
+    designer.set_active_node_network_name(Some("NS.Alpha".to_string()));
+    designer.undo_stack.clear();
+
+    designer.delete_namespace("NS").unwrap();
+    assert_eq!(designer.active_node_network_name, None);
+
+    designer.undo();
+    assert_eq!(
+        designer.active_node_network_name,
+        Some("NS.Alpha".to_string())
+    );
+
+    designer.redo();
+    assert_eq!(designer.active_node_network_name, None);
+}
