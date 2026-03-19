@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
 /// Tree node representing either a namespace (folder) or a node network (leaf).
@@ -96,12 +98,18 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   List<String>? _lastNetworkNames; // For change detection
   String? _lastActiveNetwork; // Track last active network for auto-expansion
 
+  // Rename state
+  String? _editingNodeFullName; // fullName of node being renamed
+  final TextEditingController _renameController = TextEditingController();
+  final FocusNode _renameFocusNode = FocusNode();
+
   @override
   bool get wantKeepAlive => true; // Keep widget alive when switching tabs
 
   @override
   void initState() {
     super.initState();
+    _renameFocusNode.addListener(_onRenameFocusChange);
     _updateTree();
   }
 
@@ -125,6 +133,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         _listsEqual(_lastNetworkNames!, currentNames)) {
       return; // Skip rebuild - just a selection change
     }
+
+    // Cancel any in-progress rename when network list changes
+    _cancelRename();
 
     _updateTree();
   }
@@ -235,8 +246,153 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
   }
 
+  // --- Rename logic ---
+
+  void _onRenameFocusChange() {
+    if (!_renameFocusNode.hasFocus && _editingNodeFullName != null) {
+      _commitRename();
+    }
+  }
+
+  void _startRenaming(_NodeNetworkTreeNode node) {
+    // Only rename leaf nodes in Phase 1
+    if (!node.isLeaf) return;
+
+    setState(() {
+      _editingNodeFullName = node.fullName;
+      _renameController.text = getSimpleName(node.fullName!);
+    });
+    _renameController.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _renameController.text.length,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _renameFocusNode.requestFocus();
+    });
+  }
+
+  void _commitRename() {
+    if (_editingNodeFullName == null) return;
+
+    final newSegment = _renameController.text.trim();
+    if (newSegment.isEmpty) {
+      _cancelRename();
+      return;
+    }
+
+    final oldFullName = _editingNodeFullName!;
+    final namespace = getNamespace(oldFullName);
+    final newFullName = combineQualifiedName(namespace, newSegment);
+
+    if (newFullName != oldFullName) {
+      widget.model.renameNodeNetwork(oldFullName, newFullName);
+    }
+
+    _renameFocusNode.unfocus();
+    setState(() {
+      _editingNodeFullName = null;
+    });
+  }
+
+  void _cancelRename() {
+    if (_editingNodeFullName != null) {
+      _renameFocusNode.unfocus();
+      setState(() {
+        _editingNodeFullName = null;
+      });
+    }
+  }
+
+  // --- Delete logic ---
+
+  void _handleDelete(BuildContext context, _NodeNetworkTreeNode node) {
+    if (!node.isLeaf) return; // Only leaf delete in Phase 1
+    _showDeleteConfirmation(context, node.fullName!);
+  }
+
+  Future<void> _showDeleteConfirmation(
+      BuildContext context, String networkName) async {
+    final confirmed = await showDraggableAlertDialog<bool>(
+      context: context,
+      title: const Text('Delete Network'),
+      content: Text(
+        'Are you sure you want to remove the node network "$networkName"?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    );
+
+    if (confirmed == true && context.mounted) {
+      final errorMessage = widget.model.deleteNodeNetwork(networkName);
+      if (errorMessage != null && context.mounted) {
+        await showDraggableAlertDialog(
+          context: context,
+          title: const Text('Cannot Delete Network'),
+          content: Text(errorMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      }
+    }
+  }
+
+  // --- Context menu ---
+
+  void _showContextMenu(
+    BuildContext context,
+    _NodeNetworkTreeNode node,
+    Offset globalPosition,
+  ) {
+    final screenSize = MediaQuery.of(context).size;
+    final position = RelativeRect.fromLTRB(
+      globalPosition.dx,
+      globalPosition.dy,
+      screenSize.width - globalPosition.dx,
+      screenSize.height - globalPosition.dy,
+    );
+
+    final items = <PopupMenuEntry<String>>[
+      if (node.isLeaf)
+        const PopupMenuItem(
+          value: 'rename',
+          child: Text('Rename'),
+        ),
+      const PopupMenuItem(
+        value: 'delete',
+        child: Text('Delete'),
+      ),
+    ];
+
+    showMenu<String>(
+      context: context,
+      position: position,
+      items: items,
+    ).then((value) {
+      if (value == 'rename') {
+        _startRenaming(node);
+      } else if (value == 'delete') {
+        _handleDelete(context, node);
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _renameFocusNode.removeListener(_onRenameFocusChange);
+    _renameController.dispose();
+    _renameFocusNode.dispose();
     _treeController.dispose();
     super.dispose();
   }
@@ -259,84 +415,149 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         final node = entry.node;
         final activeNetworkName = widget.model.nodeNetworkView?.name;
         final isActive = node.isLeaf && node.fullName == activeNetworkName;
+        final isEditing =
+            node.isLeaf && _editingNodeFullName == node.fullName;
 
-        return InkWell(
+        return GestureDetector(
           key: Key(node.isLeaf
               ? 'network_tree_item_${node.fullName}'
               : 'namespace_tree_item_${node.fullName}'),
-          onTap: () {
+          onSecondaryTapDown: (details) {
+            _showContextMenu(context, node, details.globalPosition);
+          },
+          onDoubleTap: () {
             if (node.isLeaf) {
-              // Leaf node - activate the network
-              widget.model.setActiveNodeNetwork(node.fullName!);
-            } else {
-              // Namespace node - toggle expansion (with state tracking)
-              _onFolderToggled(node);
+              _startRenaming(node);
             }
           },
-          child: TreeIndentation(
-            entry: entry,
-            guide: const IndentGuide.connectingLines(indent: 20),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Row(
-                children: [
-                  // Expand/collapse icon for namespace nodes
-                  if (!node.isLeaf)
-                    FolderButton(
-                      isOpen: entry.hasChildren
-                          ? _treeController.getExpansionState(node)
-                          : false,
-                      onPressed: () => _onFolderToggled(node),
-                    ),
-                  // Label (with icon for leaf nodes)
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.fromLTRB(
-                        node.isLeaf ? 6 : 0,
-                        4,
-                        8,
-                        4,
+          child: InkWell(
+            onTap: () {
+              if (isEditing) return;
+              if (node.isLeaf) {
+                // Leaf node - activate the network
+                widget.model.setActiveNodeNetwork(node.fullName!);
+              } else {
+                // Namespace node - toggle expansion (with state tracking)
+                _onFolderToggled(node);
+              }
+            },
+            child: TreeIndentation(
+              entry: entry,
+              guide: const IndentGuide.connectingLines(indent: 20),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Row(
+                  children: [
+                    // Expand/collapse icon for namespace nodes
+                    if (!node.isLeaf)
+                      FolderButton(
+                        isOpen: entry.hasChildren
+                            ? _treeController.getExpansionState(node)
+                            : false,
+                        onPressed: () => _onFolderToggled(node),
                       ),
-                      decoration: isActive
-                          ? BoxDecoration(
-                              color: AppColors.selectionBackground,
-                              borderRadius: BorderRadius.circular(4),
-                            )
-                          : null,
-                      child: Row(
-                        children: [
-                          // Icon for leaf nodes (inside the selection container)
-                          if (node.isLeaf) ...[
-                            Icon(
-                              Icons.account_tree,
-                              size: 16,
-                              color: isActive
-                                  ? AppColors.selectionForeground
-                                  : Colors.grey,
+                    // Label (with icon for leaf nodes)
+                    Expanded(
+                      child: Container(
+                        padding: EdgeInsets.fromLTRB(
+                          node.isLeaf ? 6 : 0,
+                          4,
+                          8,
+                          4,
+                        ),
+                        decoration: isActive
+                            ? BoxDecoration(
+                                color: AppColors.selectionBackground,
+                                borderRadius: BorderRadius.circular(4),
+                              )
+                            : null,
+                        child: Row(
+                          children: [
+                            // Icon for leaf nodes (inside the selection container)
+                            if (node.isLeaf) ...[
+                              Icon(
+                                Icons.account_tree,
+                                size: 16,
+                                color: isActive
+                                    ? AppColors.selectionForeground
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Expanded(
+                              child: isEditing
+                                  ? _buildRenameField(isActive)
+                                  : Text(
+                                      node.label,
+                                      style: AppTextStyles.regular.copyWith(
+                                        color: isActive
+                                            ? AppColors.selectionForeground
+                                            : null,
+                                        fontWeight: node.isLeaf
+                                            ? FontWeight.normal
+                                            : FontWeight.w500,
+                                      ),
+                                    ),
                             ),
-                            const SizedBox(width: 6),
                           ],
-                          Text(
-                            node.label,
-                            style: AppTextStyles.regular.copyWith(
-                              color: isActive
-                                  ? AppColors.selectionForeground
-                                  : null,
-                              fontWeight: node.isLeaf
-                                  ? FontWeight.normal
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildRenameField(bool isActive) {
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): _cancelRename,
+      },
+      child: SizedBox(
+        height: 24,
+        child: TextField(
+          key: const Key('tree_rename_text_field'),
+          controller: _renameController,
+          focusNode: _renameFocusNode,
+          autofocus: true,
+          style: AppTextStyles.regular.copyWith(
+            color: isActive ? Colors.white : Colors.black,
+            fontSize: 13,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 6,
+              vertical: 4,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(3),
+              borderSide: BorderSide(
+                color: isActive ? Colors.white : Colors.blue,
+                width: 1.5,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(3),
+              borderSide: BorderSide(
+                color: isActive ? Colors.white : Colors.blue,
+                width: 2.0,
+              ),
+            ),
+            filled: true,
+            fillColor: isActive
+                ? AppColors.selectionBackground?.withValues(alpha: 0.9)
+                : Colors.white,
+          ),
+          onSubmitted: (_) => _commitRename(),
+          onEditingComplete: () => _commitRename(),
+        ),
+      ),
     );
   }
 }

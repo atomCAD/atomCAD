@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
 /// List view widget for node networks with rename functionality.
@@ -90,10 +91,16 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                       value: 'rename',
                       child: Text('Rename'),
                     ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete'),
+                    ),
                   ],
                 ).then((value) {
                   if (value == 'rename') {
                     _startRenaming(networkName);
+                  } else if (value == 'delete') {
+                    _handleDelete(context, networkName);
                   }
                 });
               },
@@ -252,6 +259,43 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
       setState(() {
         _editingNetworkName = null;
       });
+    }
+  }
+
+  Future<void> _handleDelete(BuildContext context, String networkName) async {
+    final confirmed = await showDraggableAlertDialog<bool>(
+      context: context,
+      title: const Text('Delete Network'),
+      content: Text(
+        'Are you sure you want to remove the node network "$networkName"?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    );
+
+    if (confirmed == true && context.mounted) {
+      final errorMessage = widget.model.deleteNodeNetwork(networkName);
+      if (errorMessage != null && context.mounted) {
+        await showDraggableAlertDialog(
+          context: context,
+          title: const Text('Cannot Delete Network'),
+          content: Text(errorMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      }
     }
   }
 }
