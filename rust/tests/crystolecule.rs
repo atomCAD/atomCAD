@@ -69,3 +69,6 @@ mod guided_placement_test;
 
 #[path = "crystolecule/hydrogen_passivation_test.rs"]
 mod hydrogen_passivation_test;
+
+#[path = "crystolecule/simulation/sp2_sp3_typing_test.rs"]
+mod sp2_sp3_typing_test;

@@ -56,6 +56,44 @@ pub fn assign_uff_types(
         params.push(p);
     }
 
+    // Second pass: neighbor-aware sp2 promotion for conjugated systems.
+    //
+    // Nitrogen with all single bonds should be promoted to sp2 when adjacent
+    // to an sp2 atom (C_2, C_R, N_2, N_R, O_2, O_R). This handles amide
+    // nitrogen (N-C(=O)), enamine nitrogen (N-C=C), aniline nitrogen
+    // (N-C_aromatic), and similar conjugated cases where the lone pair
+    // delocalizes into the neighboring pi system.
+    //
+    // Uses a fixed-point loop because promoting one N_3->N_2 can trigger
+    // promotion of an adjacent N_3 (e.g., urea: both N atoms are amide-like
+    // but only one is initially adjacent to C_2).
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for i in 0..n {
+            if labels[i] != "N_3" {
+                continue;
+            }
+
+            let has_sp2_neighbor = bond_lists[i]
+                .iter()
+                .filter(|b| !b.is_delete_marker())
+                .any(|b| {
+                    let nbr_idx = b.other_atom_id() as usize;
+                    if nbr_idx >= n {
+                        return false;
+                    }
+                    hybridization_from_label(labels[nbr_idx]) == 2
+                });
+
+            if has_sp2_neighbor {
+                labels[i] = "N_2";
+                params[i] = get_uff_params("N_2").unwrap();
+                changed = true;
+            }
+        }
+    }
+
     Ok(AtomTypeAssignment { labels, params })
 }
 

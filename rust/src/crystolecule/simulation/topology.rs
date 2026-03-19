@@ -283,7 +283,7 @@ impl MolecularTopology {
     /// (one for each neighbor as the out-of-plane atom).
     ///
     /// Inversion centers are determined by:
-    /// - C (6), N (7), O (8): only if the atom has at least one double or aromatic bond
+    /// - C (6), N (7), O (8): if sp2-like (double/aromatic bond, or conjugated nitrogen)
     /// - Group 15 — P (15), As (33), Sb (51), Bi (83): always (pyramidal inversion)
     fn enumerate_inversions(
         neighbors: &[Vec<(usize, u8)>],
@@ -296,7 +296,7 @@ impl MolecularTopology {
                 continue;
             }
 
-            if !Self::is_inversion_center(atomic_numbers[center], nbrs) {
+            if !Self::is_inversion_center(atomic_numbers[center], nbrs, neighbors) {
                 continue;
             }
 
@@ -369,12 +369,31 @@ impl MolecularTopology {
     /// Rules (matching RDKit's Builder.cpp):
     /// - C (6), N (7), O (8): only if sp2-like (has at least one double or aromatic bond)
     /// - Group 15 — P (15), As (33), Sb (51), Bi (83): always (pyramidal inversion)
-    fn is_inversion_center(atomic_number: i16, bonds: &[(usize, u8)]) -> bool {
+    fn is_inversion_center(
+        atomic_number: i16,
+        bonds: &[(usize, u8)],
+        all_neighbors: &[Vec<(usize, u8)>],
+    ) -> bool {
         match atomic_number {
-            // C, N, O: inversion only for sp2 centers
-            6 | 7 | 8 => bonds
+            6 | 8 => bonds
                 .iter()
                 .any(|&(_, order)| order == BOND_DOUBLE || order == BOND_AROMATIC),
+            7 => {
+                // Direct sp2: nitrogen itself has a double or aromatic bond
+                let has_pi_bond = bonds
+                    .iter()
+                    .any(|&(_, order)| order == BOND_DOUBLE || order == BOND_AROMATIC);
+                if has_pi_bond {
+                    return true;
+                }
+                // Conjugated nitrogen: all single bonds but a neighbor has a
+                // double or aromatic bond (amide N-C(=O), enamine N-C=C, etc.)
+                bonds.iter().any(|&(nbr_idx, _)| {
+                    all_neighbors[nbr_idx]
+                        .iter()
+                        .any(|&(_, order)| order == BOND_DOUBLE || order == BOND_AROMATIC)
+                })
+            }
             // Group 15: pyramidal inversion regardless of bond orders
             15 | 33 | 51 | 83 => true,
             _ => false,
