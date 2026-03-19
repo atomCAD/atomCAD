@@ -124,6 +124,10 @@ pub fn apply_diff(
             // Matched UNCHANGED marker → base atom passes through unchanged
             // but we still record the mapping so bond resolution works
             let result_id = result.add_atom(base_atom.atomic_number, base_atom.position);
+            // Preserve hydrogen_passivation flag from the base atom
+            if base_atom.is_hydrogen_passivation() {
+                result.set_atom_hydrogen_passivation(result_id, true);
+            }
             provenance.sources.insert(
                 result_id,
                 AtomSource::DiffMatchedBase {
@@ -138,6 +142,10 @@ pub fn apply_diff(
             // Matched normal atom → replacement/move
             // Use the diff atom's position (which may differ from base for moves)
             let result_id = result.add_atom(diff_atom.atomic_number, diff_atom.position);
+            // Preserve hydrogen_passivation flag from the diff atom
+            if diff_atom.is_hydrogen_passivation() {
+                result.set_atom_hydrogen_passivation(result_id, true);
+            }
             provenance.sources.insert(
                 result_id,
                 AtomSource::DiffMatchedBase {
@@ -179,6 +187,10 @@ pub fn apply_diff(
         }
 
         let result_id = result.add_atom(diff_atom.atomic_number, diff_atom.position);
+        // Preserve hydrogen_passivation flag from the diff atom
+        if diff_atom.is_hydrogen_passivation() {
+            result.set_atom_hydrogen_passivation(result_id, true);
+        }
         provenance
             .sources
             .insert(result_id, AtomSource::DiffAdded(diff_id));
@@ -194,6 +206,10 @@ pub fn apply_diff(
         }
         // Not matched and not deleted → pass through
         let result_id = result.add_atom(base_atom.atomic_number, base_atom.position);
+        // Preserve hydrogen_passivation flag from the base atom
+        if base_atom.is_hydrogen_passivation() {
+            result.set_atom_hydrogen_passivation(result_id, true);
+        }
         provenance
             .sources
             .insert(result_id, AtomSource::BasePassthrough(base_atom.id));
