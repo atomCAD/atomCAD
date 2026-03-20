@@ -71,6 +71,7 @@ pub fn get_node_type() -> NodeType {
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
         output_type: DataType::None,
+        additional_output_types: vec![],
         public: false,
         node_data_creator: || {
             Box::new(ValueData {

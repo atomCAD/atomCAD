@@ -724,6 +724,7 @@ impl StructureDesigner {
         category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
         parameters: Vec::new(),
         output_type: DataType::None,
+        additional_output_types: vec![],
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,
         node_data_loader: generic_node_data_loader::<CustomNodeData>,

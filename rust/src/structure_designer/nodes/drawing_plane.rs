@@ -463,6 +463,7 @@ pub fn get_node_type() -> NodeType {
         },
       ],
       output_type: DataType::DrawingPlane,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(DrawingPlaneData {
         max_miller_index: 1,

@@ -186,6 +186,7 @@ pub fn get_node_type() -> NodeType {
         },
       ],
       output_type: DataType::Array(Box::new(DataType::Int)),
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(RangeData {
         start: 0,

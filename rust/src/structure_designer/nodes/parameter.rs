@@ -201,6 +201,7 @@ The sort order property of a parameter determines the order of the parameters in
           },
       ],
       output_type: DataType::Int, // will change based on ParameterData::data_type.
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(ParameterData {
         param_id: None,  // Will be assigned when the node is added to a network

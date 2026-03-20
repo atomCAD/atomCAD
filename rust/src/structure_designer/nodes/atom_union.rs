@@ -123,6 +123,7 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_type: DataType::Atomic,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || Box::new(AtomUnionData {}),
         node_data_saver: generic_node_data_saver::<AtomUnionData>,

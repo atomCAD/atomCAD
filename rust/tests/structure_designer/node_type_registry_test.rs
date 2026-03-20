@@ -14,6 +14,7 @@ fn create_test_network(name: &str) -> NodeNetwork {
         category: NodeTypeCategory::Custom,
         parameters: Vec::new(),
         output_type: DataType::None,
+        additional_output_types: vec![],
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,
         node_data_loader: no_data_loader,

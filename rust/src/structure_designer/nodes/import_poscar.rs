@@ -1,6 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::io::xyz_loader::load_xyz;
+use crate::crystolecule::io::poscar_loader::{load_poscar, parse_poscar};
+use crate::crystolecule::motif::Motif;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -18,14 +19,17 @@ use std::collections::HashMap;
 use std::io;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImportXYZData {
-    pub file_name: Option<String>, // If none, nothing has been imported yet.
+pub struct ImportPoscarData {
+    pub file_name: Option<String>,
 
     #[serde(skip)]
-    pub atomic_structure: Option<AtomicStructure>,
+    pub cached_unit_cell: Option<UnitCellStruct>,
+
+    #[serde(skip)]
+    pub cached_motif: Option<Motif>,
 }
 
-impl NodeData for ImportXYZData {
+impl NodeData for ImportPoscarData {
     fn provide_gadget(
         &self,
         _structure_designer: &StructureDesigner,
@@ -48,30 +52,30 @@ impl NodeData for ImportXYZData {
     ) -> NetworkResult {
         let result = network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
 
-        let atomic_structure = if let NetworkResult::None = result {
-            // No parameter provided, use the preloaded atomic structure
-            self.atomic_structure.clone()
+        let parsed = if let NetworkResult::None = result {
+            // No parameter provided, use the cached data from file load
+            match (&self.cached_unit_cell, &self.cached_motif) {
+                (Some(uc), Some(m)) => Some((uc.clone(), m.clone())),
+                _ => None,
+            }
         } else {
-            // Check for error first
             if result.is_error() {
                 return result;
             }
 
-            // Extract the file name from the string result
             if let NetworkResult::String(file_name) = result {
-                // Load the XYZ file using the file name parameter
                 let design_dir = registry
                     .design_file_name
                     .as_ref()
                     .and_then(|design_path| get_parent_directory(design_path));
 
                 match resolve_path(&file_name, design_dir.as_deref()) {
-                    Ok((resolved_path, _was_relative)) => match load_xyz(&resolved_path, true) {
-                        Ok(atomic_structure) => Some(atomic_structure),
-                        Err(_) => {
+                    Ok((resolved_path, _was_relative)) => match load_poscar(&resolved_path) {
+                        Ok((unit_cell, motif)) => Some((unit_cell, motif)),
+                        Err(e) => {
                             return NetworkResult::Error(format!(
-                                "Failed to load XYZ file: {}",
-                                file_name
+                                "Failed to load POSCAR file '{}': {}",
+                                file_name, e
                             ));
                         }
                     },
@@ -83,13 +87,18 @@ impl NodeData for ImportXYZData {
                     }
                 }
             } else {
-                return NetworkResult::Error("Expected string parameter for file name".to_string());
+                return NetworkResult::Error(
+                    "Expected string parameter for file name".to_string(),
+                );
             }
         };
 
-        match atomic_structure {
-            Some(atomic_structure) => NetworkResult::Atomic(atomic_structure.clone()),
-            None => NetworkResult::Error("No atomic structure imported".to_string()),
+        match parsed {
+            Some((unit_cell, motif)) => NetworkResult::Array(vec![
+                NetworkResult::UnitCell(unit_cell),
+                NetworkResult::Motif(motif),
+            ]),
+            None => NetworkResult::Error("No POSCAR file imported".to_string()),
         }
     }
 
@@ -131,50 +140,56 @@ impl NodeData for ImportXYZData {
     }
 }
 
-impl Default for ImportXYZData {
+impl Default for ImportPoscarData {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ImportXYZData {
+impl ImportPoscarData {
     pub fn new() -> Self {
         Self {
             file_name: None,
-            atomic_structure: None,
+            cached_unit_cell: None,
+            cached_motif: None,
         }
+    }
+
+    /// Creates an ImportPoscarData from POSCAR content string (for testing).
+    pub fn from_content(content: &str) -> Result<Self, String> {
+        let (unit_cell, motif) =
+            parse_poscar(content).map_err(|e| format!("Failed to parse POSCAR: {}", e))?;
+        Ok(Self {
+            file_name: None,
+            cached_unit_cell: Some(unit_cell),
+            cached_motif: Some(motif),
+        })
     }
 }
 
-/// Special loader for ImportXYZData that loads the atomic structure after deserializing
-pub fn import_xyz_data_loader(
+/// Special loader for ImportPoscarData that loads the POSCAR file after deserializing
+pub fn import_poscar_data_loader(
     value: &Value,
     design_dir: Option<&str>,
 ) -> io::Result<Box<dyn NodeData>> {
-    // First deserialize the basic data
-    let mut data: ImportXYZData = serde_json::from_value(value.clone())
+    let mut data: ImportPoscarData = serde_json::from_value(value.clone())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    // If there's a file name, try to load the atomic structure
     if let Some(ref file_name) = data.file_name {
-        // Resolve the path (convert relative to absolute if needed)
         match resolve_path(file_name, design_dir) {
-            Ok((resolved_path, _was_relative)) => {
-                // Load the XYZ file using the resolved absolute path
-                match load_xyz(&resolved_path, true) {
-                    Ok(atomic_structure) => {
-                        data.atomic_structure = Some(atomic_structure);
-                    }
-                    Err(_xyz_error) => {
-                        // If loading fails, leave atomic_structure as None
-                        // This allows the node to exist but show an error when evaluated
-                        data.atomic_structure = None;
-                    }
+            Ok((resolved_path, _was_relative)) => match load_poscar(&resolved_path) {
+                Ok((unit_cell, motif)) => {
+                    data.cached_unit_cell = Some(unit_cell);
+                    data.cached_motif = Some(motif);
                 }
-            }
-            Err(_path_error) => {
-                // If path resolution fails, leave atomic_structure as None
-                data.atomic_structure = None;
+                Err(_) => {
+                    data.cached_unit_cell = None;
+                    data.cached_motif = None;
+                }
+            },
+            Err(_) => {
+                data.cached_unit_cell = None;
+                data.cached_motif = None;
             }
         }
     }
@@ -182,51 +197,49 @@ pub fn import_xyz_data_loader(
     Ok(Box::new(data))
 }
 
-/// Special saver for ImportXYZData that converts file path to relative before saving
-pub fn import_xyz_data_saver(
+/// Special saver for ImportPoscarData that converts file path to relative before saving
+pub fn import_poscar_data_saver(
     node_data: &mut dyn NodeData,
     design_dir: Option<&str>,
 ) -> io::Result<Value> {
-    if let Some(data) = node_data.as_any_mut().downcast_mut::<ImportXYZData>() {
-        // If there's a file name and design directory, try to convert to relative path
+    if let Some(data) = node_data.as_any_mut().downcast_mut::<ImportPoscarData>() {
         if let (Some(file_name), Some(design_dir)) = (&data.file_name, design_dir) {
             let (potentially_relative_path, should_update) =
                 try_make_relative(file_name, Some(design_dir));
             if should_update {
-                // Update the stored path to use relative path for better portability
                 data.file_name = Some(potentially_relative_path);
             }
         }
 
-        // Now serialize the (potentially modified) data
         serde_json::to_value(data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     } else {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "Data type mismatch for import_xyz",
+            "Data type mismatch for import_poscar",
         ))
     }
 }
 
 pub fn get_node_type() -> NodeType {
     NodeType {
-      name: "import_xyz".to_string(),
-      description: "Imports an atomic structure from an xyz file.
-It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.".to_string(),
-      summary: None,
-      category: NodeTypeCategory::AtomicStructure,
-      parameters: vec![
-        Parameter {
-          id: None,
-          name: "file_name".to_string(),
-          data_type: DataType::String,
-        },
-      ],
-      output_type: DataType::Atomic,
-      additional_output_types: vec![],
-      public: true,
-      node_data_creator: || Box::new(ImportXYZData::new()),
-      node_data_saver: import_xyz_data_saver,
-      node_data_loader: import_xyz_data_loader,
+        name: "import_poscar".to_string(),
+        description: "Imports crystal structure data from a VASP POSCAR file.\n\
+            Outputs the unit cell (basis vectors) and motif (atomic sites with fractional coordinates).\n\
+            Supports VASP 5+ format with element names.\n\
+            File paths are converted to relative paths when possible for portability."
+            .to_string(),
+        summary: Some("Import crystal data from POSCAR file".to_string()),
+        category: NodeTypeCategory::AtomicStructure,
+        parameters: vec![Parameter {
+            id: None,
+            name: "file_name".to_string(),
+            data_type: DataType::String,
+        }],
+        output_type: DataType::UnitCell,
+        additional_output_types: vec![DataType::Motif],
+        public: true,
+        node_data_creator: || Box::new(ImportPoscarData::new()),
+        node_data_saver: import_poscar_data_saver,
+        node_data_loader: import_poscar_data_loader,
     }
 }

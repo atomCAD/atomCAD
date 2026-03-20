@@ -77,6 +77,7 @@ pub fn get_node_type() -> NodeType {
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
         output_type: DataType::Int,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || Box::new(IntData { value: 0 }),
         node_data_saver: generic_node_data_saver::<IntData>,

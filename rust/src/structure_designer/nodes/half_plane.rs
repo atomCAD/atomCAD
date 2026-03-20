@@ -543,6 +543,7 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
         },
       ],
       output_type: DataType::Geometry2D,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(HalfPlaneData {
         point1: IVec2::new(0, 0),

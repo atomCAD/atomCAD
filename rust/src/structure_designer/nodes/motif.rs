@@ -190,6 +190,7 @@ Lines starting with `#` are comments.".to_string(),
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],
       output_type: DataType::Motif,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(MotifData {
         definition: "".to_string(),

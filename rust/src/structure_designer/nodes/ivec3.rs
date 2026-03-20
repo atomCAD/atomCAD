@@ -173,6 +173,7 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_type: DataType::IVec3,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || {
             Box::new(IVec3Data {

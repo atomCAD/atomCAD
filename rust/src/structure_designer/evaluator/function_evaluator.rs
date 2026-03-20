@@ -45,6 +45,7 @@ impl FunctionEvaluator {
         category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
         parameters: Vec::new(),
         output_type: DataType::None,
+        additional_output_types: vec![],
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,
         node_data_loader: no_data_loader,

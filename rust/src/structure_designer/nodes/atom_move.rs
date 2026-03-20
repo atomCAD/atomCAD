@@ -278,6 +278,7 @@ This node operates in continuous space, unlike lattice_move which operates in di
             },
         ],
         output_type: DataType::Atomic,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || Box::new(AtomMoveData {
             translation: DVec3::ZERO,

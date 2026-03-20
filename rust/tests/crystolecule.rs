@@ -69,3 +69,6 @@ mod guided_placement_test;
 
 #[path = "crystolecule/hydrogen_passivation_test.rs"]
 mod hydrogen_passivation_test;
+
+#[path = "crystolecule/io/poscar_loader_test.rs"]
+mod poscar_loader_test;

@@ -411,6 +411,7 @@ Delete a vertex by dragging it onto one of its neighbour.".to_string(),
         },
       ],
       output_type: DataType::Geometry2D,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(PolygonData {
         vertices: vec![

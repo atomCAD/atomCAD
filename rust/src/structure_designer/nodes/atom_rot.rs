@@ -494,6 +494,7 @@ The rotation angle is in radians in text format (e.g., 1.5708 for 90°) and degr
             },
         ],
         output_type: DataType::Atomic,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || {
             Box::new(AtomRotData {

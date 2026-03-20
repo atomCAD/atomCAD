@@ -467,6 +467,7 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![],
       output_type: DataType::None, // will change based on the expression
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(ExprData {
         parameters: vec![

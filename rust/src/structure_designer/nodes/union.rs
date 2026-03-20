@@ -132,6 +132,7 @@ pub fn get_node_type() -> NodeType {
           },
       ],
       output_type: DataType::Geometry,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(UnionData {}),
       node_data_saver: generic_node_data_saver::<UnionData>,
