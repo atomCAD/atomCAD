@@ -81,26 +81,18 @@ pub hybridization_override_diff_atoms: HashMap<u32, u8>,
 
 #### Populating Atom.flags during evaluation
 
-During atom_edit evaluation (applying diff to base to produce the result `AtomicStructure`), the evaluator sets hybridization bits on result atoms by consulting the maps:
+During atom_edit evaluation (applying diff to base to produce the result `AtomicStructure`), the evaluator sets hybridization bits on result atoms by consulting the maps. This follows the same pattern as frozen flag propagation — iterate over the override maps (not over all result atoms), and use `base_to_result` / `diff_to_result` provenance maps to find the corresponding result atom ID:
 
 ```rust
-// In the evaluation path, after building result atoms:
-for &result_id in result_structure.atom_ids() {
-    if let Some(source) = provenance.sources.get(&result_id) {
-        let override_val = match source {
-            AtomSource::BasePassthrough(base_id) => {
-                atom_edit_data.hybridization_override_base_atoms
-                    .get(base_id).copied().unwrap_or(0)
-            }
-            AtomSource::DiffAdded(diff_id)
-            | AtomSource::DiffMatchedBase { diff_id, .. } => {
-                atom_edit_data.hybridization_override_diff_atoms
-                    .get(diff_id).copied().unwrap_or(0)
-            }
-        };
-        if override_val != 0 {
-            result_structure.set_atom_hybridization_override(result_id, override_val);
-        }
+// In the evaluation path, after building result atoms (same pattern as frozen flags):
+for (&base_id, &hyb) in &self.hybridization_override_base_atoms {
+    if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
+        result.set_atom_hybridization_override(result_id, hyb);
+    }
+}
+for (&diff_id, &hyb) in &self.hybridization_override_diff_atoms {
+    if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+        result.set_atom_hybridization_override(result_id, hyb);
     }
 }
 ```
@@ -298,18 +290,40 @@ The existing `APIHybridization` enum (`Auto`, `Sp3`, `Sp2`, `Sp1`) maps directly
 
 ### 9. Undo support
 
-Following the pattern of `AtomEditFrozenChangeCommand`, create an `AtomEditHybridizationChangeCommand`:
+Following the pattern of `AtomEditFrozenChangeCommand`, create an `AtomEditHybridizationChangeCommand`. The frozen command uses `FrozenDelta` with `added`/`removed` vectors discriminated by `FrozenProvenance`. For hybridization, the same provenance discrimination is needed, but entries also carry a value (the hybridization level). The delta tracks insertions, removals, and value changes separately:
 
 ```rust
+/// Whether a hybridization override atom ID refers to a base atom or a diff atom.
+/// Reuses the same provenance concept as FrozenProvenance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HybridizationProvenance {
+    Base,
+    Diff,
+}
+
+/// Delta representing changes to the hybridization override maps.
+#[derive(Debug, Clone)]
+pub struct HybridizationDelta {
+    /// (provenance, atom_id, new_value) — entries added to the override maps.
+    /// On undo: remove these entries. On redo: insert them.
+    pub added: Vec<(HybridizationProvenance, u32, u8)>,
+    /// (provenance, atom_id, old_value) — entries removed from the override maps.
+    /// On undo: re-insert with old_value. On redo: remove them.
+    pub removed: Vec<(HybridizationProvenance, u32, u8)>,
+    /// (provenance, atom_id, old_value, new_value) — entries whose value changed.
+    /// On undo: restore old_value. On redo: apply new_value.
+    pub changed: Vec<(HybridizationProvenance, u32, u8, u8)>,
+}
+
 pub struct AtomEditHybridizationChangeCommand {
-    /// base_atom_id → (old_value, new_value). old_value=None means was Auto.
-    base_changes: Vec<(u32, Option<u8>, Option<u8>)>,
-    /// diff_atom_id → (old_value, new_value).
-    diff_changes: Vec<(u32, Option<u8>, Option<u8>)>,
+    pub description: String,
+    pub network_name: String,
+    pub node_id: u64,
+    pub delta: HybridizationDelta,
 }
 ```
 
-This follows the same approach as `AtomEditFrozenChangeCommand`, which stores per-atom deltas for the frozen flag maps. On undo, old values are restored; on redo, new values are applied.
+On undo, `added` entries are removed, `removed` entries are re-inserted with their old values, and `changed` entries are restored to old values. On redo, the inverse. This mirrors the `FrozenDelta` structure but extends it with value tracking for the non-boolean case.
 
 ### 10. Flutter UI
 
