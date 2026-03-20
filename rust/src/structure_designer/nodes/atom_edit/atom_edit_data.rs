@@ -1413,6 +1413,7 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Atomic,
         }],
         output_type: DataType::Atomic,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new()),
         node_data_saver: |node_data, _design_dir| {

@@ -24,6 +24,7 @@ pub struct NodeType {
     pub category: NodeTypeCategory,
     pub parameters: Vec<Parameter>,
     pub output_type: DataType,
+    pub additional_output_types: Vec<DataType>,
     pub public: bool, // whether this node type is available for users to add
     pub node_data_creator: fn() -> Box<dyn NodeData>,
     #[allow(clippy::type_complexity)]
@@ -50,7 +51,12 @@ impl NodeType {
         } else if output_pin_index == 0 {
             self.output_type.clone()
         } else {
-            DataType::None
+            let idx = (output_pin_index - 1) as usize;
+            if idx < self.additional_output_types.len() {
+                self.additional_output_types[idx].clone()
+            } else {
+                DataType::None
+            }
         }
     }
 }

@@ -329,6 +329,7 @@ impl NodeNetwork {
             category: NodeTypeCategory::OtherBuiltin,
             parameters: vec![],
             output_type: DataType::None,
+            additional_output_types: vec![],
             public: false,
             node_data_creator: || Box::new(NoData {}),
             node_data_saver: no_data_saver,

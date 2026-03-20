@@ -99,6 +99,7 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Atomic,
         }],
         output_type: DataType::Atomic,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || Box::new(HydrogenDepassivateData {}),
         node_data_saver: generic_node_data_saver::<HydrogenDepassivateData>,

@@ -355,6 +355,7 @@ pub fn create_subnetwork_from_selection(
         category: NodeTypeCategory::Custom,
         parameters,
         output_type,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,

@@ -390,6 +390,7 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
           },
       ],
       output_type: DataType::Geometry,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(LatticeMoveData {
         translation: IVec3::new(0, 0, 0),
@@ -433,6 +434,7 @@ You can directly enter the translation vector or drag the axes of the gadget."
             },
         ],
         output_type: DataType::Atomic,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || {
             Box::new(LatticeMoveData {

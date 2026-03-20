@@ -637,6 +637,7 @@ This node enables the manual editing of atomic structures. In a node network eve
           },
       ],
       output_type: DataType::Atomic,
+      additional_output_types: vec![],
       public: false,
       node_data_creator: || Box::new(EditAtomData::new()),
       node_data_saver: |node_data, _design_dir| {

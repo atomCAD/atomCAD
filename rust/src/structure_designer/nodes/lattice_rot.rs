@@ -463,6 +463,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
           },
       ],
       output_type: DataType::Geometry,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(LatticeRotData {
         axis_index: None,
@@ -511,6 +512,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
           },
       ],
       output_type: DataType::Atomic,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(LatticeRotData {
         axis_index: None,

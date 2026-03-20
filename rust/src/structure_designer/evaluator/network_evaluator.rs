@@ -503,8 +503,7 @@ impl NetworkEvaluator {
                 let input_node_output_type = registry
                     .get_node_type_for_node(input_node)
                     .unwrap()
-                    .output_type
-                    .clone();
+                    .get_output_pin_type(input_node_output_pin_index);
 
                 // convert_to handles conversion to array types, so we can convert directly.
                 // The result is guaranteed to be an array, containing one or more elements.
@@ -597,8 +596,21 @@ impl NetworkEvaluator {
                 .built_in_node_types
                 .contains_key(&node.node_type_name)
             {
-                node.data
-                    .eval(self, network_stack, node_id, registry, decorate, context)
+                let eval_result = node.data
+                    .eval(self, network_stack, node_id, registry, decorate, context);
+                // For multi-output nodes, extract the specific output pin result
+                let node_type = registry.get_node_type_for_node(node);
+                if let Some(nt) = node_type {
+                    if !nt.additional_output_types.is_empty() {
+                        if let NetworkResult::Array(ref items) = eval_result {
+                            let idx = output_pin_index as usize;
+                            if idx < items.len() {
+                                return items[idx].clone();
+                            }
+                        }
+                    }
+                }
+                eval_result
             } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
                 // custom node{
                 // Do not evaluate invalid child networks

@@ -210,6 +210,7 @@ Now that we have general polygon node this node is less used."
             },
         ],
         output_type: DataType::Geometry2D,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || {
             Box::new(RegPolyData {

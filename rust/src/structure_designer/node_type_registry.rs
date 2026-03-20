@@ -24,6 +24,7 @@ use super::nodes::float::get_node_type as float_get_node_type;
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
 use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
 use super::nodes::half_space::get_node_type as half_space_get_node_type;
+use super::nodes::import_poscar::get_node_type as import_poscar_get_node_type;
 use super::nodes::import_xyz::get_node_type as import_xyz_get_node_type;
 use super::nodes::int::get_node_type as int_get_node_type;
 use super::nodes::intersect::get_node_type as intersect_get_node_type;
@@ -135,6 +136,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(atom_trans_get_node_type());
         ret.add_node_type(atom_union_get_node_type());
         ret.add_node_type(apply_diff_get_node_type());
+        ret.add_node_type(import_poscar_get_node_type());
         ret.add_node_type(import_xyz_get_node_type());
         ret.add_node_type(export_xyz_get_node_type());
         ret.add_node_type(atom_cut_get_node_type());
@@ -460,6 +462,16 @@ impl NodeTypeRegistry {
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
         let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
 
+        // Pre-compute the maximum valid output pin index for each node.
+        // Pin -1 (function pin) and pin 0 (primary output) are always valid.
+        // Pins 1..=N are valid if the node type has N additional_output_types.
+        let mut max_output_pin: std::collections::HashMap<u64, i32> = std::collections::HashMap::new();
+        for (&nid, node) in network.nodes.iter() {
+            if let Some(node_type) = self.get_node_type_for_node(node) {
+                max_output_pin.insert(nid, node_type.additional_output_types.len() as i32);
+            }
+        }
+
         // Iterate through all nodes in the network
         for node in network.nodes.values_mut() {
             // Get the node type for this node
@@ -479,13 +491,21 @@ impl NodeTypeRegistry {
             // Remove obviously invalid wire entries to avoid loading dangerous state.
             // - Drop connections referencing non-existent source nodes
             // - Drop connections with unsupported output pin indices
-            //   (currently only -1=function pin and 0=regular output pin are valid)
             for argument in node.arguments.iter_mut() {
                 argument
                     .argument_output_pins
                     .retain(|source_node_id, output_pin_index| {
-                        node_ids.contains(source_node_id)
-                            && (*output_pin_index == -1 || *output_pin_index == 0)
+                        if !node_ids.contains(source_node_id) {
+                            return false;
+                        }
+                        if *output_pin_index == -1 || *output_pin_index == 0 {
+                            return true;
+                        }
+                        // Allow valid additional output pin indices
+                        if let Some(&max_pin) = max_output_pin.get(source_node_id) {
+                            return *output_pin_index > 0 && *output_pin_index <= max_pin;
+                        }
+                        false
                     });
             }
         }

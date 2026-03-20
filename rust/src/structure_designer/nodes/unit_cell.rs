@@ -282,6 +282,7 @@ pub fn get_node_type() -> NodeType {
         },
       ],
       output_type: DataType::UnitCell,
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(UnitCellData {
         cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,

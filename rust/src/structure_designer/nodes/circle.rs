@@ -178,6 +178,7 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_type: DataType::Geometry2D,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || {
             Box::new(CircleData {

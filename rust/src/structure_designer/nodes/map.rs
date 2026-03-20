@@ -177,6 +177,7 @@ pub fn get_node_type() -> NodeType {
         },
       ],
       output_type: DataType::Array(Box::new(DataType::Float)), // will change based on the output type
+      additional_output_types: vec![],
       public: true,
       node_data_creator: || Box::new(MapData {
         input_type: DataType::Float,

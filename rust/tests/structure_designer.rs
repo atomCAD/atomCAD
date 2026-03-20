@@ -120,3 +120,6 @@ mod continuous_minimization_test;
 
 #[path = "structure_designer/cli_access_rules_test.rs"]
 mod cli_access_rules_test;
+
+#[path = "structure_designer/import_poscar_test.rs"]
+mod import_poscar_test;

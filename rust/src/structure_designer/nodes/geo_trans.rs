@@ -415,6 +415,7 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_type: DataType::Geometry,
+        additional_output_types: vec![],
         public: false,
         node_data_creator: || {
             Box::new(GeoTransData {

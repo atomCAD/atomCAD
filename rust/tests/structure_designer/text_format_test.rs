@@ -469,6 +469,7 @@ mod network_serializer_tests {
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,
+            additional_output_types: vec![],
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -665,6 +666,7 @@ mod network_editor_tests {
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,
+            additional_output_types: vec![],
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -1622,6 +1624,7 @@ mod auto_layout_tests {
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,
+            additional_output_types: vec![],
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -2216,6 +2219,7 @@ mod custom_name_tests {
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_type: DataType::Geometry,
+            additional_output_types: vec![],
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})

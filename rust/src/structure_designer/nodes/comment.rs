@@ -117,6 +117,7 @@ pub fn get_node_type() -> NodeType {
         category: NodeTypeCategory::Annotation,
         parameters: vec![],
         output_type: DataType::None,
+        additional_output_types: vec![],
         public: true,
         node_data_creator: || Box::new(CommentData::default()),
         node_data_saver: generic_node_data_saver::<CommentData>,
