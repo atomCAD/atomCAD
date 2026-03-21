@@ -181,6 +181,15 @@ APIResult deleteNodeNetwork({required String networkName}) =>
         .crateApiStructureDesignerStructureDesignerApiDeleteNodeNetwork(
             networkName: networkName);
 
+bool renameNamespace({required String oldPrefix, required String newPrefix}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiRenameNamespace(
+            oldPrefix: oldPrefix, newPrefix: newPrefix);
+
+APIResult deleteNamespace({required String prefix}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiDeleteNamespace(
+        prefix: prefix);
+
 void setNodeDisplay({required BigInt nodeId, required bool isDisplayed}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetNodeDisplay(
@@ -672,6 +681,9 @@ bool isDesignDirty() => RustLib.instance.api
 String? getDesignFilePath() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetDesignFilePath();
 
+List<String> getRecentFiles() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetRecentFiles();
+
 APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
         filePath: filePath);
@@ -887,3 +899,22 @@ APIViewportPickResult viewportPick(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiViewportPick(
             rayOrigin: rayOrigin, rayDirection: rayDirection);
+
+/// Check whether CLI write access is locked for a given network name.
+/// Returns true if the network is locked from CLI write access.
+bool isCliWriteLocked({required String networkName}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiIsCliWriteLocked(
+        networkName: networkName);
+
+/// Set CLI access for a namespace or network name.
+/// `allowed = true` means CLI can write, `allowed = false` means CLI is locked out.
+/// Setting a rule prunes all descendant rules to keep the map minimal.
+void setCliAccess({required String name, required bool allowed}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetCliAccess(
+            name: name, allowed: allowed);
+
+/// Get all CLI access rules as a list of (prefix, allowed) pairs.
+/// This is used by the Flutter UI to display lock state in the tree view.
+List<(String, bool)> getCliAccessRules() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetCliAccessRules();

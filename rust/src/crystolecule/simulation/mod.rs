@@ -11,6 +11,11 @@ use topology::MolecularTopology;
 use uff::UffForceField;
 use uff::VdwMode;
 
+/// Maximum number of atoms that `minimize_energy` will accept.
+/// Beyond this limit, the O(N²) nonbonded pair enumeration and per-iteration
+/// force evaluation become prohibitively expensive (issue #271).
+pub const MAX_MINIMIZE_ATOMS: usize = 2000;
+
 /// Result of an energy minimization run.
 #[derive(Debug)]
 pub struct MinimizationResult {
@@ -29,6 +34,9 @@ pub struct MinimizationResult {
 /// Updates atom positions in-place to lower-energy configurations.
 /// Atoms with the frozen flag (`atom.is_frozen()`) are held fixed.
 ///
+/// Returns an error if the structure exceeds `MAX_MINIMIZE_ATOMS` to prevent
+/// the UI from freezing on large inputs (issue #271).
+///
 /// # Arguments
 ///
 /// * `structure` - A mutable reference to the atomic structure to minimize
@@ -42,6 +50,15 @@ pub fn minimize_energy(
     structure: &mut AtomicStructure,
     vdw_mode: VdwMode,
 ) -> Result<MinimizationResult, String> {
+    let num_atoms = structure.get_num_of_atoms();
+    if num_atoms > MAX_MINIMIZE_ATOMS {
+        return Err(format!(
+            "Structure has {} atoms, which exceeds the minimization limit of {}. \
+             Large structures cause excessive computation time.",
+            num_atoms, MAX_MINIMIZE_ATOMS
+        ));
+    }
+
     let topology = match &vdw_mode {
         VdwMode::AllPairs => MolecularTopology::from_structure(structure),
         VdwMode::Cutoff(_) => MolecularTopology::from_structure_bonded_only(structure),

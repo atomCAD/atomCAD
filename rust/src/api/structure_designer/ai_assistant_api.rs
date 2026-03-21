@@ -141,6 +141,30 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                     }
                 };
 
+                // Check CLI access lock
+                if structure_designer.is_cli_write_locked(&network_name) {
+                    return serde_json::to_string(&EditResult {
+                        success: false,
+                        nodes_created: vec![],
+                        nodes_updated: vec![],
+                        nodes_deleted: vec![],
+                        connections_made: vec![],
+                        description_set: None,
+                        summary_set: None,
+                        output_set: None,
+                        errors: vec![
+                            format!(
+                                "Write access to '{}' is locked. To modify this network, ask the user to unlock it from the GUI.",
+                                network_name
+                            ),
+                        ],
+                        warnings: vec![],
+                    })
+                    .unwrap_or_else(|_| {
+                        r#"{"success":false,"errors":["Write access is locked. To modify this network, ask the user to unlock it from the GUI."]}"#.to_string()
+                    });
+                }
+
                 // Temporarily remove the network from the registry to avoid borrow conflicts.
                 // This is necessary because text_edit_network needs:
                 // - &mut NodeNetwork (the network we're editing)

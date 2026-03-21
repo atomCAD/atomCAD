@@ -22,6 +22,7 @@ fn roundtrip_cnnd_file(file_path: &str) {
         &mut registry,
         &temp_file_path,
         load_result.direct_editing_mode,
+        &load_result.cli_access_rules,
     )
     .expect("Failed to save CNND file");
 

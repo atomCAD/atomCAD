@@ -648,7 +648,7 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
-  void renameNodeNetwork(String oldName, String newName) {
+  bool renameNodeNetwork(String oldName, String newName) {
     final success = structure_designer_api.renameNodeNetwork(
       oldName: oldName,
       newName: newName,
@@ -659,6 +659,7 @@ class StructureDesignerModel extends ChangeNotifier {
       // the renamed network via backticks and need to display updated text
       refreshFromKernel();
     }
+    return success;
   }
 
   String? deleteNodeNetwork(String networkName) {
@@ -678,6 +679,46 @@ class StructureDesignerModel extends ChangeNotifier {
     } else {
       return result.errorMessage; // Return error message
     }
+  }
+
+  bool renameNamespace(String oldPrefix, String newPrefix) {
+    final success = structure_designer_api.renameNamespace(
+      oldPrefix: oldPrefix,
+      newPrefix: newPrefix,
+    );
+    if (success) {
+      refreshFromKernel();
+    }
+    return success;
+  }
+
+  String? deleteNamespace(String prefix) {
+    final result = structure_designer_api.deleteNamespace(prefix: prefix);
+    if (result.success) {
+      refreshFromKernel();
+      return null;
+    }
+    return result.errorMessage;
+  }
+
+  // --- CLI Access Rules ---
+
+  /// Check whether CLI write access is locked for a given network/namespace name.
+  bool isCliWriteLocked(String name) {
+    return structure_designer_api.isCliWriteLocked(networkName: name);
+  }
+
+  /// Set CLI access for a namespace or network name.
+  /// `allowed = true` means CLI can write, `allowed = false` means locked.
+  void setCliAccess(String name, {required bool allowed}) {
+    structure_designer_api.setCliAccess(name: name, allowed: allowed);
+    notifyListeners();
+  }
+
+  /// Get all CLI access rules as a map of prefix -> allowed.
+  Map<String, bool> getCliAccessRules() {
+    final rules = structure_designer_api.getCliAccessRules();
+    return {for (final rule in rules) rule.$1: rule.$2};
   }
 
   void setReturnNodeId(BigInt? nodeId) {

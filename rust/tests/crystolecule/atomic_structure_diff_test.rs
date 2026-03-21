@@ -1465,3 +1465,179 @@ fn test_unchanged_bond_to_moved_atom() {
     assert!((a.position - DVec3::new(0.0, 0.0, 0.0)).length() < 1e-6);
     assert!((b.position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-6);
 }
+
+// ============================================================================
+// Frozen flag propagation tests (issue #248)
+// ============================================================================
+
+/// Test that frozen flags on base atoms survive apply_diff when atoms pass
+/// through unmatched (no corresponding diff atom).
+#[test]
+fn frozen_flag_preserved_on_base_passthrough() {
+    // Base: two carbon atoms, first one frozen
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let c2 = base.add_atom(6, DVec3::new(3.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // Empty diff (no changes)
+    let diff = AtomicStructure::new_diff();
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+
+    // The first atom (frozen in base) should still be frozen in result
+    let result_id_for_c1 = *result.provenance.base_to_result.get(&c1).unwrap();
+    let result_id_for_c2 = *result.provenance.base_to_result.get(&c2).unwrap();
+    assert!(
+        result.result.get_atom(result_id_for_c1).unwrap().is_frozen(),
+        "Frozen flag should be preserved on base atom passthrough"
+    );
+    assert!(
+        !result.result.get_atom(result_id_for_c2).unwrap().is_frozen(),
+        "Non-frozen base atom should remain unfrozen"
+    );
+}
+
+/// Test that frozen flags are preserved when a base atom is matched by an
+/// UNCHANGED marker in the diff.
+#[test]
+fn frozen_flag_preserved_on_unchanged_marker_match() {
+    // Base: one frozen carbon
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // Diff: unchanged marker at same position
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_id = *result.provenance.base_to_result.get(&c1).unwrap();
+    assert!(
+        result.result.get_atom(result_id).unwrap().is_frozen(),
+        "Frozen flag should be preserved when base atom is matched by unchanged marker"
+    );
+}
+
+/// Test that frozen flags on diff atoms are preserved when the diff atom
+/// replaces/moves a base atom.
+#[test]
+fn frozen_flag_preserved_on_diff_replacement() {
+    // Base: one unfrozen carbon
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Diff: frozen nitrogen at same position (replacement)
+    let mut diff = AtomicStructure::new_diff();
+    let n1 = diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    diff.set_atom_frozen(n1, true);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert_eq!(result_atom.atomic_number, 7);
+    assert!(
+        result_atom.is_frozen(),
+        "Frozen flag should be preserved on diff replacement atom"
+    );
+}
+
+/// Test that frozen flags on unmatched diff atoms (additions) are preserved.
+#[test]
+fn frozen_flag_preserved_on_diff_addition() {
+    // Base: one carbon
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Diff: add a frozen nitrogen far away (unmatched)
+    let mut diff = AtomicStructure::new_diff();
+    let n1 = diff.add_atom(7, DVec3::new(10.0, 0.0, 0.0));
+    diff.set_atom_frozen(n1, true);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+
+    // Find the nitrogen in result
+    let nitrogen = result
+        .result
+        .atoms_values()
+        .find(|a| a.atomic_number == 7)
+        .unwrap();
+    assert!(
+        nitrogen.is_frozen(),
+        "Frozen flag should be preserved on added diff atom"
+    );
+
+    // The carbon should NOT be frozen
+    let carbon = result
+        .result
+        .atoms_values()
+        .find(|a| a.atomic_number == 6)
+        .unwrap();
+    assert!(
+        !carbon.is_frozen(),
+        "Non-frozen base atom should remain unfrozen"
+    );
+}
+
+/// Test that frozen flags propagate through chained apply_diff calls,
+/// simulating downstream node evaluation.
+#[test]
+fn frozen_flag_propagates_through_chained_apply_diff() {
+    // Base: two carbons, first one frozen
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let c2 = base.add_atom(6, DVec3::new(3.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // First diff: empty (passthrough)
+    let diff1 = AtomicStructure::new_diff();
+    let result1 = apply_diff(&base, &diff1, DEFAULT_TOLERANCE);
+
+    // Second diff: empty (simulating downstream node receiving result)
+    let diff2 = AtomicStructure::new_diff();
+    let result2 = apply_diff(&result1.result, &diff2, DEFAULT_TOLERANCE);
+
+    assert_eq!(result2.result.get_num_of_atoms(), 2);
+
+    // Count frozen atoms - should still be exactly 1
+    let frozen_count = result2
+        .result
+        .atoms_values()
+        .filter(|a| a.is_frozen())
+        .count();
+    assert_eq!(
+        frozen_count, 1,
+        "Frozen flag should propagate through chained apply_diff calls"
+    );
+}
+
+/// Test that when a base atom is frozen and matched by a normal diff atom,
+/// the frozen state from the base is preserved (base atom's frozen state
+/// takes precedence for matched atoms).
+#[test]
+fn frozen_flag_from_base_preserved_on_matched_replacement() {
+    // Base: one frozen carbon
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // Diff: unfrozen nitrogen at same position (replacement)
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    // The result atom should be frozen (inherited from base OR diff)
+    // At minimum, if either source is frozen, the result should be frozen.
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        result_atom.is_frozen(),
+        "Frozen flag from base should be preserved on matched replacement"
+    );
+}
