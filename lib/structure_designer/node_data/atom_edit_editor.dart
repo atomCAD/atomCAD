@@ -461,36 +461,38 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               children: [
                 Text('Hyb:', style: TextStyle(fontSize: 13)),
                 const SizedBox(width: 8),
-                SegmentedButton<APIHybridization>(
-                  segments: const [
-                    ButtonSegment<APIHybridization>(
-                      value: APIHybridization.auto,
-                      label: Text('Auto'),
-                    ),
-                    ButtonSegment<APIHybridization>(
-                      value: APIHybridization.sp3,
-                      label: Text('sp3'),
-                    ),
-                    ButtonSegment<APIHybridization>(
-                      value: APIHybridization.sp2,
-                      label: Text('sp2'),
-                    ),
-                    ButtonSegment<APIHybridization>(
-                      value: APIHybridization.sp1,
-                      label: Text('sp1'),
-                    ),
-                  ],
-                  selected: {widget.model.hybridizationOverride},
-                  onSelectionChanged: (Set<APIHybridization> selection) {
-                    widget.model.hybridizationOverride = selection.first;
-                  },
-                  style: ButtonStyle(
-                    visualDensity: AppSpacing.compactVerticalDensity,
-                    textStyle: WidgetStatePropertyAll(
-                      TextStyle(fontSize: 12),
-                    ),
-                    padding: WidgetStatePropertyAll(
-                      EdgeInsets.symmetric(horizontal: 4),
+                Expanded(
+                  child: SegmentedButton<APIHybridization>(
+                    segments: const [
+                      ButtonSegment<APIHybridization>(
+                        value: APIHybridization.auto,
+                        label: Text('Auto'),
+                      ),
+                      ButtonSegment<APIHybridization>(
+                        value: APIHybridization.sp3,
+                        label: Text('sp3'),
+                      ),
+                      ButtonSegment<APIHybridization>(
+                        value: APIHybridization.sp2,
+                        label: Text('sp2'),
+                      ),
+                      ButtonSegment<APIHybridization>(
+                        value: APIHybridization.sp1,
+                        label: Text('sp1'),
+                      ),
+                    ],
+                    selected: {widget.model.hybridizationOverride},
+                    onSelectionChanged: (Set<APIHybridization> selection) {
+                      widget.model.hybridizationOverride = selection.first;
+                    },
+                    style: ButtonStyle(
+                      visualDensity: AppSpacing.compactVerticalDensity,
+                      textStyle: WidgetStatePropertyAll(
+                        TextStyle(fontSize: 12),
+                      ),
+                      padding: WidgetStatePropertyAll(
+                        EdgeInsets.symmetric(horizontal: 4),
+                      ),
                     ),
                   ),
                 ),

@@ -10,7 +10,7 @@ edition = "2024"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
-flutter_rust_bridge = "=2.10.0"
+flutter_rust_bridge = "=2.11.1"
 dlopen = "0.1.8"
 lazy_static = "1.4.0"
 wgpu = "23.0.1"
