@@ -91,6 +91,9 @@ pub enum AddAtomToolState {
         is_dative_bond: bool,
         /// Per-dot merge targets: `Some(target)` if the dot overlaps an existing atom.
         merge_targets: Vec<Option<MergeTarget>>,
+        /// Toolbar hybridization to store as override on the anchor atom at placement time.
+        /// 0=Auto (no override written), 1=Sp3, 2=Sp2, 3=Sp1.
+        toolbar_hybridization: u8,
     },
     /// Free sphere placement: bare atom with no bonds, user clicks anywhere on sphere.
     GuidedFreeSphere {
@@ -101,6 +104,8 @@ pub enum AddAtomToolState {
         preview_position: Option<DVec3>,
         /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
         is_dative_bond: bool,
+        /// Toolbar hybridization to store as override on the anchor atom at placement time.
+        toolbar_hybridization: u8,
     },
     /// Free ring placement: ring without reference (sp3 case 1 or sp2 case 1).
     /// Guide dots rotate together on a cone ring as the user moves the cursor.
@@ -117,6 +122,8 @@ pub enum AddAtomToolState {
         preview_positions: Option<Vec<DVec3>>,
         /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
         is_dative_bond: bool,
+        /// Toolbar hybridization to store as override on the anchor atom at placement time.
+        toolbar_hybridization: u8,
     },
 }
 

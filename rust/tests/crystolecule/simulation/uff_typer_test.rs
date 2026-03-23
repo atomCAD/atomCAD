@@ -3,7 +3,8 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
 };
 use rust_lib_flutter_cad::crystolecule::simulation::uff::params::get_uff_params;
 use rust_lib_flutter_cad::crystolecule::simulation::uff::typer::{
-    assign_uff_type, assign_uff_types, bond_order_to_f64, hybridization_from_label,
+    assign_uff_type, assign_uff_type_with_override, assign_uff_types,
+    assign_uff_types_with_overrides, bond_order_to_f64, hybridization_from_label,
 };
 
 // ============================================================================
@@ -964,4 +965,236 @@ fn test_boron_types() {
         assign_uff_type(5, &[single_bond(1), single_bond(2)]).unwrap(),
         "B_2"
     );
+}
+
+// ============================================================================
+// Tests: hybridization override (assign_uff_type_with_override)
+// ============================================================================
+
+use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
+    HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
+};
+
+#[test]
+fn test_override_auto_falls_back_to_standard() {
+    // Auto (0) should behave exactly like assign_uff_type
+    let bonds = [single_bond(1), single_bond(2), single_bond(3)];
+    assert_eq!(
+        assign_uff_type_with_override(7, &bonds, HYBRIDIZATION_AUTO).unwrap(),
+        "N_3"
+    );
+}
+
+#[test]
+fn test_override_carbon_sp3() {
+    // Carbon with double bond normally → C_2, but sp3 override → C_3
+    let bonds = [double_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(6, &bonds, HYBRIDIZATION_SP3).unwrap(),
+        "C_3"
+    );
+}
+
+#[test]
+fn test_override_carbon_sp2() {
+    // Carbon with 4 single bonds normally → C_3, but sp2 override → C_2
+    let bonds = [
+        single_bond(1),
+        single_bond(2),
+        single_bond(3),
+        single_bond(4),
+    ];
+    assert_eq!(
+        assign_uff_type_with_override(6, &bonds, HYBRIDIZATION_SP2).unwrap(),
+        "C_2"
+    );
+}
+
+#[test]
+fn test_override_carbon_sp1() {
+    let bonds = [single_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(6, &bonds, HYBRIDIZATION_SP1).unwrap(),
+        "C_1"
+    );
+}
+
+#[test]
+fn test_override_nitrogen_sp2_with_three_single_bonds() {
+    // The caffeine case: N with 3 single bonds → normally N_3, override sp2 → N_2
+    let bonds = [single_bond(1), single_bond(2), single_bond(3)];
+    assert_eq!(
+        assign_uff_type_with_override(7, &bonds, HYBRIDIZATION_SP2).unwrap(),
+        "N_2"
+    );
+}
+
+#[test]
+fn test_override_nitrogen_sp3() {
+    let bonds = [double_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(7, &bonds, HYBRIDIZATION_SP3).unwrap(),
+        "N_3"
+    );
+}
+
+#[test]
+fn test_override_nitrogen_sp1() {
+    let bonds = [single_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(7, &bonds, HYBRIDIZATION_SP1).unwrap(),
+        "N_1"
+    );
+}
+
+#[test]
+fn test_override_oxygen_sp2() {
+    let bonds = [single_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(8, &bonds, HYBRIDIZATION_SP2).unwrap(),
+        "O_2"
+    );
+}
+
+#[test]
+fn test_override_oxygen_sp3() {
+    let bonds = [double_bond(1)];
+    assert_eq!(
+        assign_uff_type_with_override(8, &bonds, HYBRIDIZATION_SP3).unwrap(),
+        "O_3"
+    );
+}
+
+#[test]
+fn test_override_oxygen_sp1() {
+    let bonds = [single_bond(1)];
+    assert_eq!(
+        assign_uff_type_with_override(8, &bonds, HYBRIDIZATION_SP1).unwrap(),
+        "O_1"
+    );
+}
+
+#[test]
+fn test_override_sulfur_sp2() {
+    let bonds = [single_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(16, &bonds, HYBRIDIZATION_SP2).unwrap(),
+        "S_2"
+    );
+}
+
+#[test]
+fn test_override_sulfur_sp3_uses_bond_count_charge() {
+    // 2 bonds → S_3+2
+    let bonds = [single_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(16, &bonds, HYBRIDIZATION_SP3).unwrap(),
+        "S_3+2"
+    );
+    // 4 bonds → S_3+4
+    let bonds4 = [
+        single_bond(1),
+        single_bond(2),
+        single_bond(3),
+        single_bond(4),
+    ];
+    assert_eq!(
+        assign_uff_type_with_override(16, &bonds4, HYBRIDIZATION_SP3).unwrap(),
+        "S_3+4"
+    );
+}
+
+#[test]
+fn test_override_sulfur_sp1_falls_back() {
+    // No sp1 sulfur type → falls back to standard assignment
+    let bonds = [single_bond(1), single_bond(2)];
+    assert_eq!(
+        assign_uff_type_with_override(16, &bonds, HYBRIDIZATION_SP1).unwrap(),
+        "S_3+2" // standard assignment for 2 single bonds
+    );
+}
+
+#[test]
+fn test_override_boron_sp2() {
+    let bonds = [single_bond(1), single_bond(2), single_bond(3)];
+    assert_eq!(
+        assign_uff_type_with_override(5, &bonds, HYBRIDIZATION_SP2).unwrap(),
+        "B_2"
+    );
+}
+
+#[test]
+fn test_override_boron_sp3() {
+    let bonds = [single_bond(1), single_bond(2)];
+    // 2 bonds normally → B_2, but sp3 override → B_3
+    assert_eq!(
+        assign_uff_type_with_override(5, &bonds, HYBRIDIZATION_SP3).unwrap(),
+        "B_3"
+    );
+}
+
+#[test]
+fn test_override_ignored_for_element_without_variants() {
+    // Hydrogen has no hybridization variants — override is silently ignored
+    assert_eq!(
+        assign_uff_type_with_override(1, &[single_bond(1)], HYBRIDIZATION_SP2).unwrap(),
+        "H_"
+    );
+    // Fluorine
+    assert_eq!(
+        assign_uff_type_with_override(9, &[single_bond(1)], HYBRIDIZATION_SP3).unwrap(),
+        "F_"
+    );
+    // Silicon
+    assert_eq!(
+        assign_uff_type_with_override(14, &[single_bond(1)], HYBRIDIZATION_SP2).unwrap(),
+        "Si3"
+    );
+}
+
+#[test]
+fn test_override_sp2_maps_to_2_not_r() {
+    // Sp2 override should map to _2, not _R (aromatic/resonance), per design doc
+    let bonds = [single_bond(1), single_bond(2), single_bond(3)];
+    assert_eq!(
+        assign_uff_type_with_override(6, &bonds, HYBRIDIZATION_SP2).unwrap(),
+        "C_2"
+    );
+    assert_eq!(
+        assign_uff_type_with_override(7, &bonds, HYBRIDIZATION_SP2).unwrap(),
+        "N_2"
+    );
+}
+
+// ============================================================================
+// Tests: batch assign_uff_types_with_overrides
+// ============================================================================
+
+#[test]
+fn test_batch_override_mixed() {
+    // 3 atoms: C with sp2 override, N with auto, O with sp3 override
+    let atomic_numbers = [6i16, 7, 8];
+    let c_bonds = [single_bond(1), single_bond(2), single_bond(3)];
+    let n_bonds = [double_bond(0), single_bond(2)];
+    let o_bonds = [double_bond(0)];
+    let bond_lists: Vec<&[InlineBond]> = vec![&c_bonds, &n_bonds, &o_bonds];
+    let overrides = [HYBRIDIZATION_SP2, HYBRIDIZATION_AUTO, HYBRIDIZATION_SP3];
+
+    let result =
+        assign_uff_types_with_overrides(&atomic_numbers, &bond_lists, &overrides).unwrap();
+    assert_eq!(result.labels[0], "C_2"); // overridden
+    assert_eq!(result.labels[1], "N_2"); // auto (has double bond → N_2)
+    assert_eq!(result.labels[2], "O_3"); // overridden from O_2 to O_3
+}
+
+#[test]
+fn test_batch_override_length_mismatch() {
+    let atomic_numbers = [6i16, 7];
+    let c_bonds = [single_bond(1)];
+    let n_bonds = [single_bond(1)];
+    let bond_lists: Vec<&[InlineBond]> = vec![&c_bonds, &n_bonds];
+    let overrides = [HYBRIDIZATION_AUTO]; // wrong length
+
+    let result = assign_uff_types_with_overrides(&atomic_numbers, &bond_lists, &overrides);
+    assert!(result.is_err());
 }

@@ -10,11 +10,25 @@ use crate::crystolecule::guided_placement::{
     compute_guided_placement, compute_ring_preview_positions, cone_half_angle_for_ring,
     ray_ring_nearest_point, ray_sphere_nearest_point,
 };
+use crate::crystolecule::atomic_structure::atom::{
+    HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
+};
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::util::hit_test_utils;
 use glam::f64::DVec3;
+
+/// Convert an `Option<Hybridization>` (from the toolbar/API) to the `u8` flag value
+/// used in `Atom.flags` (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1).
+fn hybridization_to_flag(hyb: Option<Hybridization>) -> u8 {
+    match hyb {
+        None => HYBRIDIZATION_AUTO,
+        Some(Hybridization::Sp3) => HYBRIDIZATION_SP3,
+        Some(Hybridization::Sp2) => HYBRIDIZATION_SP2,
+        Some(Hybridization::Sp1) => HYBRIDIZATION_SP1,
+    }
+}
 
 /// Hit radius for guide dot spheres (Angstroms).
 const GUIDE_DOT_HIT_RADIUS: f64 = 0.3;
@@ -22,12 +36,14 @@ const GUIDE_DOT_HIT_RADIUS: f64 = 0.3;
 /// Add an atom at the ray-plane intersection point.
 ///
 /// The plane passes through the closest atom to the ray (or at a default distance).
+/// If `hybridization_override` is not Auto, the override is stored on the new atom.
 pub fn add_atom_by_ray(
     structure_designer: &mut StructureDesigner,
     atomic_number: i16,
     plane_normal: &DVec3,
     ray_start: &DVec3,
     ray_dir: &DVec3,
+    hybridization_override: Option<Hybridization>,
 ) {
     // Phase 1: Calculate position (immutable borrow)
     let position = {
@@ -62,7 +78,15 @@ pub fn add_atom_by_ray(
         None => return,
     };
 
-    atom_edit_data.add_atom_to_diff(atomic_number, position);
+    let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, position);
+
+    // Store hybridization override on the new atom if toolbar was not Auto.
+    let hyb_flag = hybridization_to_flag(hybridization_override);
+    if hyb_flag != HYBRIDIZATION_AUTO {
+        atom_edit_data
+            .hybridization_override_diff_atoms
+            .insert(new_atom_id, hyb_flag);
+    }
 }
 
 /// Result of attempting to start guided placement.
@@ -249,6 +273,7 @@ pub fn start_guided_placement(
 
     // Enter guided placement mode based on the placement result
     let is_dative = placement_result.is_dative_bond;
+    let toolbar_hyb = hybridization_to_flag(hybridization_override);
     let guide_count = match &placement_result.mode {
         GuidedPlacementMode::FixedDots { guide_dots } => {
             let count = guide_dots.len();
@@ -259,6 +284,7 @@ pub fn start_guided_placement(
                     bond_distance: placement_result.bond_distance,
                     is_dative_bond: is_dative,
                     merge_targets,
+                    toolbar_hybridization: toolbar_hyb,
                 };
             }
             count
@@ -271,6 +297,7 @@ pub fn start_guided_placement(
                     radius: *radius,
                     preview_position: None,
                     is_dative_bond: is_dative,
+                    toolbar_hybridization: toolbar_hyb,
                 };
             }
             0 // No fixed guide dots; sphere is interactive
@@ -295,6 +322,7 @@ pub fn start_guided_placement(
                     num_ring_dots: *num_ring_dots,
                     preview_positions: None,
                     is_dative_bond: is_dative,
+                    toolbar_hybridization: toolbar_hyb,
                 };
             }
             0 // No fixed guide dots; ring is interactive
@@ -357,6 +385,7 @@ pub fn place_guided_atom(
                 guide_dots,
                 is_dative_bond,
                 merge_targets,
+                toolbar_hybridization,
                 ..
             }) => {
                 let dot_index = match hit_test_guide_dots(ray_start, ray_dir, guide_dots) {
@@ -365,19 +394,21 @@ pub fn place_guided_atom(
                 };
                 let position = guide_dots[dot_index].position;
                 let merge_target = merge_targets.get(dot_index).and_then(|mt| mt.clone());
-                Some((*anchor_atom_id, position, *is_dative_bond, merge_target))
+                Some((*anchor_atom_id, position, *is_dative_bond, merge_target, *toolbar_hybridization))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
                 anchor_atom_id,
                 center,
                 radius,
                 is_dative_bond,
+                toolbar_hybridization,
                 ..
             }) => {
                 let dative = *is_dative_bond;
                 let anchor = *anchor_atom_id;
+                let hyb = *toolbar_hybridization;
                 ray_sphere_nearest_point(ray_start, ray_dir, center, *radius)
-                    .map(|hit_pos| (anchor, hit_pos, dative, None))
+                    .map(|hit_pos| (anchor, hit_pos, dative, None, hyb))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeRing {
                 anchor_atom_id,
@@ -388,10 +419,12 @@ pub fn place_guided_atom(
                 anchor_pos,
                 num_ring_dots,
                 is_dative_bond,
+                toolbar_hybridization,
                 ..
             }) => {
                 let dative = *is_dative_bond;
                 let anchor = *anchor_atom_id;
+                let hyb = *toolbar_hybridization;
                 let cone_half_angle = cone_half_angle_for_ring(*num_ring_dots);
                 ray_ring_nearest_point(ray_start, ray_dir, ring_center, ring_normal, *ring_radius)
                     .map(|point_on_ring| {
@@ -405,17 +438,18 @@ pub fn place_guided_atom(
                             *num_ring_dots,
                             cone_half_angle,
                         );
-                        (anchor, positions[0], dative, None)
+                        (anchor, positions[0], dative, None, hyb)
                     })
             }
             _ => None,
         }
     };
 
-    let (anchor_atom_id, position, is_dative_bond, pre_computed_merge) = match placement_info {
-        Some(info) => info,
-        None => return false,
-    };
+    let (anchor_atom_id, position, is_dative_bond, pre_computed_merge, toolbar_hybridization) =
+        match placement_info {
+            Some(info) => info,
+            None => return false,
+        };
 
     // For FreeSphere/FreeRing, detect merge target at placement time (not pre-computed).
     // For FixedDots, the merge target was pre-computed in start_guided_placement.
@@ -483,6 +517,14 @@ pub fn place_guided_atom(
         // No overlap — standard behavior: create new atom + bond
         let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, position);
         atom_edit_data.add_bond_in_diff(anchor_atom_id, new_atom_id, bond_order);
+    }
+
+    // Store hybridization override on the anchor atom (if toolbar was not Auto).
+    // The anchor is the atom whose geometry the user is controlling via the toolbar.
+    if toolbar_hybridization != HYBRIDIZATION_AUTO {
+        atom_edit_data
+            .hybridization_override_diff_atoms
+            .insert(anchor_atom_id, toolbar_hybridization);
     }
 
     // Transition back to Idle

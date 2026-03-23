@@ -145,6 +145,10 @@ pub struct SerializableNodeTypeRegistryNetworks {
     /// Missing field defaults to false (Node Network Mode) for backward compatibility.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub direct_editing_mode: bool,
+    /// CLI access rules: sparse map of namespace/network prefixes to allowed (true) / denied (false).
+    /// Missing field defaults to empty map (all access allowed) for backward compatibility.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub cli_access_rules: std::collections::HashMap<String, bool>,
 }
 
 /// Converts a NodeType to its serializable counterpart
@@ -428,6 +432,7 @@ pub fn save_node_networks_to_file(
     registry: &mut NodeTypeRegistry,
     file_path: &Path,
     direct_editing_mode: bool,
+    cli_access_rules: &std::collections::HashMap<String, bool>,
 ) -> io::Result<()> {
     // Extract design directory early
     let design_dir = file_path.parent().and_then(|p| p.to_str());
@@ -446,6 +451,7 @@ pub fn save_node_networks_to_file(
         node_networks: serializable_networks,
         version: SERIALIZATION_VERSION,
         direct_editing_mode,
+        cli_access_rules: cli_access_rules.clone(),
     };
 
     // Serialize to JSON
@@ -470,6 +476,8 @@ pub struct LoadResult {
     pub first_network_name: String,
     /// Whether the file was saved in direct editing mode
     pub direct_editing_mode: bool,
+    /// CLI access rules loaded from the file
+    pub cli_access_rules: std::collections::HashMap<String, bool>,
 }
 
 /// Loads node networks from a JSON file into a NodeTypeRegistry
@@ -499,6 +507,7 @@ pub fn load_node_networks_from_file(
         serde_json::from_str(&json_data)?;
 
     let direct_editing_mode = serializable_registry.direct_editing_mode;
+    let cli_access_rules = serializable_registry.cli_access_rules;
 
     // Check version for potential compatibility handling in the future
     let version = serializable_registry.version;
@@ -539,5 +548,6 @@ pub fn load_node_networks_from_file(
     Ok(LoadResult {
         first_network_name,
         direct_editing_mode,
+        cli_access_rules,
     })
 }

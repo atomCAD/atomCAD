@@ -69,3 +69,6 @@ mod guided_placement_test;
 
 #[path = "crystolecule/hydrogen_passivation_test.rs"]
 mod hydrogen_passivation_test;
+
+#[path = "crystolecule/simulation/relax_atom_limit_test.rs"]
+mod relax_atom_limit_test;

@@ -7,6 +7,8 @@ import '../common/menu_widget.dart';
 import '../common/section.dart';
 import 'structure_designer_model.dart';
 import 'node_network/node_network.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as structure_designer_api;
 import 'atomic_structure_visualization_widget.dart';
 import 'geometry_visualization_widget.dart';
 import 'import_cnnd_library_dialog.dart';
@@ -86,6 +88,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                             onPressed: _loadDesign,
                             child: const Text('Load Design'),
                           ),
+                          _buildRecentFilesSubmenu(),
                           MenuItemButton(
                             key: const Key('save_design_item'),
                             onPressed: model.canSave ? _saveDesign : null,
@@ -559,6 +562,52 @@ class _StructureDesignerState extends State<StructureDesigner> {
           ],
         );
       }
+    }
+  }
+
+  Widget _buildRecentFilesSubmenu() {
+    final recentFiles = structure_designer_api.getRecentFiles();
+    return SubmenuButton(
+      menuChildren: recentFiles.isEmpty
+          ? [
+              const MenuItemButton(
+                onPressed: null,
+                child: Text('No recent files'),
+              ),
+            ]
+          : recentFiles.map((filePath) {
+              // Show just the filename, with full path as tooltip
+              final fileName = filePath.split('\\').last.split('/').last;
+              return MenuItemButton(
+                onPressed: () => _openRecentFile(filePath),
+                child: Tooltip(
+                  message: filePath,
+                  child: Text(fileName),
+                ),
+              );
+            }).toList(),
+      child: const Text('Open Recent'),
+    );
+  }
+
+  Future<void> _openRecentFile(String filePath) async {
+    if (!await _confirmDiscardChanges()) return;
+
+    debugPrint('Opening recent file: $filePath');
+    final loadResult = graphModel.loadNodeNetworks(filePath);
+
+    if (!loadResult.success && mounted) {
+      showDraggableAlertDialog(
+        context: context,
+        title: const Text('Load Error'),
+        content: Text(loadResult.errorMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      );
     }
   }
 

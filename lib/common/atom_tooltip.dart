@@ -6,6 +6,19 @@ class AtomTooltip extends StatelessWidget {
 
   final APIHoveredAtomInfo info;
 
+  static String _hybridizationText(int override_) {
+    switch (override_) {
+      case 1:
+        return 'Hybridization: sp3 (override)';
+      case 2:
+        return 'Hybridization: sp2 (override)';
+      case 3:
+        return 'Hybridization: sp1 (override)';
+      default:
+        return 'Hybridization: auto';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -41,7 +54,17 @@ class AtomTooltip extends StatelessWidget {
               decoration: TextDecoration.none,
             ),
           ),
-          // Line 3: frozen status (only shown when frozen)
+          // Line 3: hybridization override
+          Text(
+            _hybridizationText(info.hybridizationOverride),
+            style: const TextStyle(
+              color: Color(0xCCFFFFFF),
+              fontSize: 11,
+              fontWeight: FontWeight.normal,
+              decoration: TextDecoration.none,
+            ),
+          ),
+          // Line 4: frozen status (only shown when frozen)
           if (info.isFrozen)
             const Text(
               'Frozen',

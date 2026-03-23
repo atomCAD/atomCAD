@@ -1465,3 +1465,398 @@ fn test_unchanged_bond_to_moved_atom() {
     assert!((a.position - DVec3::new(0.0, 0.0, 0.0)).length() < 1e-6);
     assert!((b.position - DVec3::new(2.0, 0.0, 0.0)).length() < 1e-6);
 }
+
+// ============================================================================
+// Frozen flag propagation tests (issue #248)
+// ============================================================================
+
+/// Test that frozen flags on base atoms survive apply_diff when atoms pass
+/// through unmatched (no corresponding diff atom).
+#[test]
+fn frozen_flag_preserved_on_base_passthrough() {
+    // Base: two carbon atoms, first one frozen
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let c2 = base.add_atom(6, DVec3::new(3.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // Empty diff (no changes)
+    let diff = AtomicStructure::new_diff();
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+
+    // The first atom (frozen in base) should still be frozen in result
+    let result_id_for_c1 = *result.provenance.base_to_result.get(&c1).unwrap();
+    let result_id_for_c2 = *result.provenance.base_to_result.get(&c2).unwrap();
+    assert!(
+        result.result.get_atom(result_id_for_c1).unwrap().is_frozen(),
+        "Frozen flag should be preserved on base atom passthrough"
+    );
+    assert!(
+        !result.result.get_atom(result_id_for_c2).unwrap().is_frozen(),
+        "Non-frozen base atom should remain unfrozen"
+    );
+}
+
+/// Test that frozen flags are preserved when a base atom is matched by an
+/// UNCHANGED marker in the diff.
+#[test]
+fn frozen_flag_preserved_on_unchanged_marker_match() {
+    // Base: one frozen carbon
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // Diff: unchanged marker at same position
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_id = *result.provenance.base_to_result.get(&c1).unwrap();
+    assert!(
+        result.result.get_atom(result_id).unwrap().is_frozen(),
+        "Frozen flag should be preserved when base atom is matched by unchanged marker"
+    );
+}
+
+/// Test that frozen flags on diff atoms are preserved when the diff atom
+/// replaces/moves a base atom.
+#[test]
+fn frozen_flag_preserved_on_diff_replacement() {
+    // Base: one unfrozen carbon
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Diff: frozen nitrogen at same position (replacement)
+    let mut diff = AtomicStructure::new_diff();
+    let n1 = diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    diff.set_atom_frozen(n1, true);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert_eq!(result_atom.atomic_number, 7);
+    assert!(
+        result_atom.is_frozen(),
+        "Frozen flag should be preserved on diff replacement atom"
+    );
+}
+
+/// Test that frozen flags on unmatched diff atoms (additions) are preserved.
+#[test]
+fn frozen_flag_preserved_on_diff_addition() {
+    // Base: one carbon
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Diff: add a frozen nitrogen far away (unmatched)
+    let mut diff = AtomicStructure::new_diff();
+    let n1 = diff.add_atom(7, DVec3::new(10.0, 0.0, 0.0));
+    diff.set_atom_frozen(n1, true);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 2);
+
+    // Find the nitrogen in result
+    let nitrogen = result
+        .result
+        .atoms_values()
+        .find(|a| a.atomic_number == 7)
+        .unwrap();
+    assert!(
+        nitrogen.is_frozen(),
+        "Frozen flag should be preserved on added diff atom"
+    );
+
+    // The carbon should NOT be frozen
+    let carbon = result
+        .result
+        .atoms_values()
+        .find(|a| a.atomic_number == 6)
+        .unwrap();
+    assert!(
+        !carbon.is_frozen(),
+        "Non-frozen base atom should remain unfrozen"
+    );
+}
+
+/// Test that frozen flags propagate through chained apply_diff calls,
+/// simulating downstream node evaluation.
+#[test]
+fn frozen_flag_propagates_through_chained_apply_diff() {
+    // Base: two carbons, first one frozen
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let _c2 = base.add_atom(6, DVec3::new(3.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // First diff: empty (passthrough)
+    let diff1 = AtomicStructure::new_diff();
+    let result1 = apply_diff(&base, &diff1, DEFAULT_TOLERANCE);
+
+    // Second diff: empty (simulating downstream node receiving result)
+    let diff2 = AtomicStructure::new_diff();
+    let result2 = apply_diff(&result1.result, &diff2, DEFAULT_TOLERANCE);
+
+    assert_eq!(result2.result.get_num_of_atoms(), 2);
+
+    // Count frozen atoms - should still be exactly 1
+    let frozen_count = result2
+        .result
+        .atoms_values()
+        .filter(|a| a.is_frozen())
+        .count();
+    assert_eq!(
+        frozen_count, 1,
+        "Frozen flag should propagate through chained apply_diff calls"
+    );
+}
+
+/// Test that when a base atom is frozen and matched by a normal diff atom,
+/// the frozen state from the base is preserved (base atom's frozen state
+/// takes precedence for matched atoms).
+#[test]
+fn frozen_flag_from_base_preserved_on_matched_replacement() {
+    // Base: one frozen carbon
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+
+    // Diff: unfrozen nitrogen at same position (replacement)
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    // The result atom should be frozen (inherited from base OR diff)
+    // At minimum, if either source is frozen, the result should be frozen.
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        result_atom.is_frozen(),
+        "Frozen flag from base should be preserved on matched replacement"
+    );
+}
+
+// ============================================================================
+// Metadata preservation tests (issue #257)
+// ============================================================================
+// These tests verify that ALL per-atom metadata (frozen flag, hydrogen_passivation
+// flag, in_crystal_depth, and future flags) pass through apply_diff() unchanged.
+
+#[test]
+fn frozen_metadata_passthrough_base_atom() {
+    // Case 4: Unmatched base atom should preserve frozen flag
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let c2 = base.add_atom(6, DVec3::new(5.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+    base.set_atom_frozen(c2, true);
+
+    // Diff adds an atom far away — base atoms are unmatched pass-throughs
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(7, DVec3::new(10.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 3);
+
+    // Check that base pass-through atoms retained their frozen flag
+    for (_, atom) in result.result.iter_atoms() {
+        if atom.atomic_number == 6 {
+            assert!(
+                atom.is_frozen(),
+                "Base pass-through atom should preserve frozen flag"
+            );
+        }
+    }
+}
+
+#[test]
+fn hydrogen_passivation_metadata_passthrough_base_atom() {
+    // Case 4: Unmatched base atom should preserve hydrogen_passivation flag
+    let mut base = AtomicStructure::new();
+    let h1 = base.add_atom(1, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_hydrogen_passivation(h1, true);
+
+    // Empty diff — base atom is unmatched pass-through
+    let diff = AtomicStructure::new_diff();
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        result_atom.is_hydrogen_passivation(),
+        "Base pass-through atom should preserve hydrogen_passivation flag"
+    );
+}
+
+#[test]
+fn in_crystal_depth_metadata_passthrough_base_atom() {
+    // Case 4: Unmatched base atom should preserve in_crystal_depth
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_in_crystal_depth(c1, 2.5);
+
+    // Empty diff — base atom is unmatched pass-through
+    let diff = AtomicStructure::new_diff();
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        (result_atom.in_crystal_depth - 2.5).abs() < 1e-6,
+        "Base pass-through atom should preserve in_crystal_depth, got {}",
+        result_atom.in_crystal_depth
+    );
+}
+
+#[test]
+fn hydrogen_passivation_metadata_unchanged_marker() {
+    // Case 1: UNCHANGED marker match should preserve hydrogen_passivation from base
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_hydrogen_passivation(c1, true);
+    base.set_atom_in_crystal_depth(c1, 1.5);
+
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        result_atom.is_hydrogen_passivation(),
+        "UNCHANGED marker match should preserve hydrogen_passivation from base"
+    );
+    assert!(
+        (result_atom.in_crystal_depth - 1.5).abs() < 1e-6,
+        "UNCHANGED marker match should preserve in_crystal_depth from base"
+    );
+}
+
+#[test]
+fn hydrogen_passivation_metadata_replacement() {
+    // Case 2: Matched replacement should merge hydrogen_passivation with OR semantics
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_hydrogen_passivation(c1, true);
+
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0)); // Replace C with N
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert_eq!(result_atom.atomic_number, 7, "Should be nitrogen");
+    assert!(
+        result_atom.is_hydrogen_passivation(),
+        "Replacement should preserve hydrogen_passivation from base via OR merge"
+    );
+}
+
+#[test]
+fn in_crystal_depth_metadata_replacement() {
+    // Case 2: Matched replacement should take in_crystal_depth from diff (primary)
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_in_crystal_depth(c1, 1.0);
+
+    let mut diff = AtomicStructure::new_diff();
+    let d1 = diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    diff.set_atom_in_crystal_depth(d1, 3.0);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        (result_atom.in_crystal_depth - 3.0).abs() < 1e-6,
+        "Replacement should take in_crystal_depth from diff (primary), got {}",
+        result_atom.in_crystal_depth
+    );
+}
+
+#[test]
+fn hydrogen_passivation_metadata_diff_addition() {
+    // Case 3: Unmatched diff addition should preserve hydrogen_passivation
+    let base = AtomicStructure::new();
+
+    let mut diff = AtomicStructure::new_diff();
+    let h1 = diff.add_atom(1, DVec3::new(0.0, 0.0, 0.0));
+    diff.set_atom_hydrogen_passivation(h1, true);
+    diff.set_atom_in_crystal_depth(h1, 4.0);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    assert_eq!(result.result.get_num_of_atoms(), 1);
+
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        result_atom.is_hydrogen_passivation(),
+        "Diff addition should preserve hydrogen_passivation"
+    );
+    assert!(
+        (result_atom.in_crystal_depth - 4.0).abs() < 1e-6,
+        "Diff addition should preserve in_crystal_depth, got {}",
+        result_atom.in_crystal_depth
+    );
+}
+
+#[test]
+fn selected_flag_not_propagated() {
+    // Selected flag is UI state and should NOT be copied through apply_diff()
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_selected(c1, true);
+
+    let diff = AtomicStructure::new_diff();
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    let result_atom = result.result.atoms_values().next().unwrap();
+    assert!(
+        !result_atom.is_selected(),
+        "Selected flag should NOT be propagated through apply_diff()"
+    );
+}
+
+#[test]
+fn all_metadata_combined_passthrough() {
+    // Comprehensive test: base atom with ALL metadata set passes through unchanged
+    let mut base = AtomicStructure::new();
+    let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.set_atom_frozen(c1, true);
+    base.set_atom_hydrogen_passivation(c1, true);
+    base.set_atom_in_crystal_depth(c1, 7.5);
+
+    // Diff modifies a different atom far away
+    let mut diff = AtomicStructure::new_diff();
+    diff.add_atom(7, DVec3::new(20.0, 0.0, 0.0));
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // Find the carbon (pass-through)
+    let c_atom = result
+        .result
+        .atoms_values()
+        .find(|a| a.atomic_number == 6)
+        .expect("Carbon should exist in result");
+
+    assert!(c_atom.is_frozen(), "frozen flag lost on pass-through");
+    assert!(
+        c_atom.is_hydrogen_passivation(),
+        "hydrogen_passivation flag lost on pass-through"
+    );
+    assert!(
+        (c_atom.in_crystal_depth - 7.5).abs() < 1e-6,
+        "in_crystal_depth lost on pass-through, got {}",
+        c_atom.in_crystal_depth
+    );
+    assert!(!c_atom.is_selected(), "selected should not propagate");
+}

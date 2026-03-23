@@ -55,6 +55,12 @@ pub struct AtomEditData {
     pub frozen_base_atoms: HashSet<u32>,
     /// Diff atom IDs that are frozen (tracked by provenance)
     pub frozen_diff_atoms: HashSet<u32>,
+    /// Hybridization overrides for base atoms. Key: base atom ID, Value: 1=Sp3, 2=Sp2, 3=Sp1.
+    /// Only non-Auto overrides are stored.
+    pub hybridization_override_base_atoms: HashMap<u32, u8>,
+    /// Hybridization overrides for diff atoms. Key: diff atom ID, Value: 1=Sp3, 2=Sp2, 3=Sp1.
+    /// Only non-Auto overrides are stored.
+    pub hybridization_override_diff_atoms: HashMap<u32, u8>,
 
     // Transient (NOT serialized)
     /// Current selection state
@@ -95,6 +101,8 @@ impl AtomEditData {
             continuous_minimization: false,
             frozen_base_atoms: HashSet::new(),
             frozen_diff_atoms: HashSet::new(),
+            hybridization_override_base_atoms: HashMap::new(),
+            hybridization_override_diff_atoms: HashMap::new(),
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 interaction_state: DefaultToolInteractionState::default(),
@@ -120,6 +128,8 @@ impl AtomEditData {
         continuous_minimization: bool,
         frozen_base_atoms: HashSet<u32>,
         frozen_diff_atoms: HashSet<u32>,
+        hybridization_override_base_atoms: HashMap<u32, u8>,
+        hybridization_override_diff_atoms: HashMap<u32, u8>,
     ) -> Self {
         Self {
             diff,
@@ -131,6 +141,8 @@ impl AtomEditData {
             continuous_minimization,
             frozen_base_atoms,
             frozen_diff_atoms,
+            hybridization_override_base_atoms,
+            hybridization_override_diff_atoms,
             measurement_marked_atom_id: None,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
@@ -147,8 +159,13 @@ impl AtomEditData {
     // --- Recording methods ---
 
     /// Start recording diff mutations for undo/redo.
+    /// Also snapshots the current hybridization override maps so that changes
+    /// can be captured as a `HybridizationDelta` when recording ends.
     pub fn begin_recording(&mut self) {
-        self.recorder = Some(DiffRecorder::default());
+        let mut recorder = DiffRecorder::default();
+        recorder.hybridization_base_snapshot = self.hybridization_override_base_atoms.clone();
+        recorder.hybridization_diff_snapshot = self.hybridization_override_diff_atoms.clone();
+        self.recorder = Some(recorder);
     }
 
     /// End recording and return the accumulated deltas.
@@ -1178,6 +1195,18 @@ impl NodeData for AtomEditData {
                 }
             }
 
+            // Apply hybridization overrides to result atoms via provenance
+            for (&base_id, &hyb) in &self.hybridization_override_base_atoms {
+                if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
+                    result.set_atom_hybridization_override(result_id, hyb);
+                }
+            }
+            for (&diff_id, &hyb) in &self.hybridization_override_diff_atoms {
+                if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+                    result.set_atom_hybridization_override(result_id, hyb);
+                }
+            }
+
             // Apply selection to result (mark atoms as selected for rendering)
             if decorate {
                 result.decorator_mut().from_selected_node = true;
@@ -1282,6 +1311,8 @@ impl NodeData for AtomEditData {
             measurement_marked_atom_id: self.measurement_marked_atom_id,
             frozen_base_atoms: self.frozen_base_atoms.clone(),
             frozen_diff_atoms: self.frozen_diff_atoms.clone(),
+            hybridization_override_base_atoms: self.hybridization_override_base_atoms.clone(),
+            hybridization_override_diff_atoms: self.hybridization_override_diff_atoms.clone(),
             recorder: None, // Never clone an active recorder
         })
     }
@@ -1654,7 +1685,22 @@ pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
 
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
         if let Some(recorder) = data.end_recording() {
-            if !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty() {
+            // Compute hybridization delta by diffing before/after snapshots
+            let hyb_delta =
+                crate::structure_designer::undo::commands::atom_edit_hybridization_change::HybridizationDelta::from_diff(
+                    &recorder.hybridization_base_snapshot,
+                    &recorder.hybridization_diff_snapshot,
+                    &data.hybridization_override_base_atoms,
+                    &data.hybridization_override_diff_atoms,
+                );
+            let hybridization_delta = if hyb_delta.is_empty() {
+                None
+            } else {
+                Some(hyb_delta)
+            };
+
+            let has_structural = !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
+            if has_structural || hybridization_delta.is_some() {
                 structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
                         description: "Move atoms".to_string(),
@@ -1662,6 +1708,7 @@ pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
                         node_id: pending.node_id,
                         atom_deltas: recorder.atom_deltas,
                         bond_deltas: recorder.bond_deltas,
+                        hybridization_delta,
                     },
                 );
             }
@@ -1702,7 +1749,22 @@ pub fn with_atom_edit_undo<F>(
     // End recording and push command
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
         if let Some(recorder) = data.end_recording() {
-            if !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty() {
+            // Compute hybridization delta by diffing before/after snapshots
+            let hyb_delta =
+                crate::structure_designer::undo::commands::atom_edit_hybridization_change::HybridizationDelta::from_diff(
+                    &recorder.hybridization_base_snapshot,
+                    &recorder.hybridization_diff_snapshot,
+                    &data.hybridization_override_base_atoms,
+                    &data.hybridization_override_diff_atoms,
+                );
+            let hybridization_delta = if hyb_delta.is_empty() {
+                None
+            } else {
+                Some(hyb_delta)
+            };
+
+            let has_structural = !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
+            if has_structural || hybridization_delta.is_some() {
                 structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
                         description: description.to_string(),
@@ -1710,6 +1772,7 @@ pub fn with_atom_edit_undo<F>(
                         node_id,
                         atom_deltas: recorder.atom_deltas,
                         bond_deltas: recorder.bond_deltas,
+                        hybridization_delta,
                     },
                 );
             }

@@ -513,8 +513,10 @@ fn test_apply_transform_skips_frozen_diff_atom() {
     data.selection.selected_diff_atoms.insert(frozen_id);
     data.selection.selected_diff_atoms.insert(free_id);
     // Centroid of the two atoms is (1, 0, 0)
-    data.selection.selection_transform =
-        Some(Transform::new(DVec3::new(1.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY));
+    data.selection.selection_transform = Some(Transform::new(
+        DVec3::new(1.0, 0.0, 0.0),
+        glam::f64::DQuat::IDENTITY,
+    ));
 
     // Freeze atom 1
     data.frozen_diff_atoms.insert(frozen_id);
@@ -549,8 +551,10 @@ fn test_apply_transform_all_frozen_diff_atoms_not_moved() {
 
     data.selection.selected_diff_atoms.insert(id1);
     data.selection.selected_diff_atoms.insert(id2);
-    data.selection.selection_transform =
-        Some(Transform::new(DVec3::new(1.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY));
+    data.selection.selection_transform = Some(Transform::new(
+        DVec3::new(1.0, 0.0, 0.0),
+        glam::f64::DQuat::IDENTITY,
+    ));
 
     // Freeze both atoms
     data.frozen_diff_atoms.insert(id1);
@@ -560,6 +564,12 @@ fn test_apply_transform_all_frozen_diff_atoms_not_moved() {
     data.apply_transform(&relative, &[]);
 
     // Neither atom should have moved
-    assert_eq!(data.diff.get_atom(id1).unwrap().position, DVec3::new(0.0, 0.0, 0.0));
-    assert_eq!(data.diff.get_atom(id2).unwrap().position, DVec3::new(2.0, 0.0, 0.0));
+    assert_eq!(
+        data.diff.get_atom(id1).unwrap().position,
+        DVec3::new(0.0, 0.0, 0.0)
+    );
+    assert_eq!(
+        data.diff.get_atom(id2).unwrap().position,
+        DVec3::new(2.0, 0.0, 0.0)
+    );
 }

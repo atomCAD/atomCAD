@@ -719,6 +719,121 @@ fn assign_sulfur_type(
     }
 }
 
+/// Assigns a UFF atom type, optionally overriding the hybridization.
+///
+/// If `forced_hybridization` is non-zero (1=Sp3, 2=Sp2, 3=Sp1), the type
+/// is chosen to match that hybridization regardless of bond orders.
+/// Falls back to the standard `assign_uff_type()` if the override is 0 (Auto)
+/// or if the element has no alternative types for the requested hybridization.
+pub fn assign_uff_type_with_override(
+    atomic_number: i16,
+    bonds: &[InlineBond],
+    forced_hybridization: u8,
+) -> Result<&'static str, String> {
+    if forced_hybridization == 0 {
+        return assign_uff_type(atomic_number, bonds);
+    }
+    match resolve_forced_type(atomic_number, bonds, forced_hybridization) {
+        Some(label) => Ok(label),
+        None => assign_uff_type(atomic_number, bonds),
+    }
+}
+
+/// Maps (element, forced_hybridization) to the correct UFF label.
+/// Returns None for elements without hybridization variants.
+fn resolve_forced_type(
+    atomic_number: i16,
+    bonds: &[InlineBond],
+    forced_hybridization: u8,
+) -> Option<&'static str> {
+    match atomic_number {
+        // Carbon: C_1 (sp1), C_2 (sp2), C_3 (sp3)
+        6 => match forced_hybridization {
+            1 => Some("C_3"),
+            2 => Some("C_2"),
+            3 => Some("C_1"),
+            _ => None,
+        },
+        // Nitrogen: N_1 (sp1), N_2 (sp2), N_3 (sp3)
+        7 => match forced_hybridization {
+            1 => Some("N_3"),
+            2 => Some("N_2"),
+            3 => Some("N_1"),
+            _ => None,
+        },
+        // Oxygen: O_1 (sp1), O_2 (sp2), O_3 (sp3)
+        8 => match forced_hybridization {
+            1 => Some("O_3"),
+            2 => Some("O_2"),
+            3 => Some("O_1"),
+            _ => None,
+        },
+        // Sulfur: S_2 (sp2), S_3+N (sp3 with bond-count charge). No sp1 variant.
+        16 => match forced_hybridization {
+            1 => {
+                // sp3: use bond-count charge like the standard typer
+                let active_count = bonds.iter().filter(|b| !b.is_delete_marker()).count();
+                match active_count {
+                    0..=2 => Some("S_3+2"),
+                    3..=4 => Some("S_3+4"),
+                    _ => Some("S_3+6"),
+                }
+            }
+            2 => Some("S_2"),
+            3 => None, // No sp1 sulfur type
+            _ => None,
+        },
+        // Boron: B_2 (sp2), B_3 (sp3). No sp1 variant.
+        5 => match forced_hybridization {
+            1 => Some("B_3"),
+            2 => Some("B_2"),
+            3 => None, // No sp1 boron type
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Assigns UFF atom types with per-atom hybridization overrides.
+///
+/// Like `assign_uff_types` but accepts a parallel `hybridization_overrides` slice.
+/// For each atom, if the override is non-zero, it is used instead of bond-order
+/// inference. Falls back to standard assignment if the override is 0 (Auto) or
+/// the element has no variant for the requested hybridization.
+pub fn assign_uff_types_with_overrides(
+    atomic_numbers: &[i16],
+    bond_lists: &[&[InlineBond]],
+    hybridization_overrides: &[u8],
+) -> Result<AtomTypeAssignment, String> {
+    let n = atomic_numbers.len();
+    if n != bond_lists.len() || n != hybridization_overrides.len() {
+        return Err(format!(
+            "Mismatched lengths: {} atomic numbers, {} bond lists, {} overrides",
+            n,
+            bond_lists.len(),
+            hybridization_overrides.len()
+        ));
+    }
+
+    let mut labels = Vec::with_capacity(n);
+    let mut params = Vec::with_capacity(n);
+
+    for i in 0..n {
+        let label =
+            assign_uff_type_with_override(atomic_numbers[i], bond_lists[i], hybridization_overrides[i])?;
+        let p = get_uff_params(label).ok_or_else(|| {
+            format!(
+                "Atom {}: assigned type '{}' but no UFF parameters found (element Z={})",
+                i, label, atomic_numbers[i]
+            )
+        })?;
+        labels.push(label);
+        params.push(p);
+    }
+
+    Ok(AtomTypeAssignment { labels, params })
+}
+
 /// Determines the effective bond order as an f64 for UFF parameter calculations.
 ///
 /// This converts atomCAD's discrete bond order representation to the continuous

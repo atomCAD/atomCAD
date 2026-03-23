@@ -103,6 +103,9 @@ pub struct MolecularTopology {
     pub inversions: Vec<InversionInteraction>,
     /// Nonbonded (1-4+) pair interactions for van der Waals.
     pub nonbonded_pairs: Vec<NonbondedPairInteraction>,
+    /// Per-atom hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1).
+    /// Indexed by topology index, same as `atomic_numbers`.
+    pub hybridization_overrides: Vec<u8>,
 }
 
 impl MolecularTopology {
@@ -129,6 +132,7 @@ impl MolecularTopology {
         let mut atom_ids = Vec::new();
         let mut atomic_numbers = Vec::new();
         let mut positions = Vec::new();
+        let mut hybridization_overrides = Vec::new();
         let mut id_to_idx: FxHashMap<u32, usize> = FxHashMap::default();
 
         for (_, atom) in structure.iter_atoms() {
@@ -139,6 +143,7 @@ impl MolecularTopology {
             id_to_idx.insert(atom.id, idx);
             atom_ids.push(atom.id);
             atomic_numbers.push(atom.atomic_number);
+            hybridization_overrides.push(atom.hybridization_override());
             positions.push(atom.position.x);
             positions.push(atom.position.y);
             positions.push(atom.position.z);
@@ -212,6 +217,7 @@ impl MolecularTopology {
             torsions,
             inversions,
             nonbonded_pairs,
+            hybridization_overrides,
         }
     }
 

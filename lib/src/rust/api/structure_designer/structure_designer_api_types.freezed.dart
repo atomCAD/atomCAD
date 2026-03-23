@@ -461,7 +461,8 @@ class APIMeasurement_AtomInfo extends APIMeasurement {
       required this.bondCount,
       required this.x,
       required this.y,
-      required this.z})
+      required this.z,
+      required this.hybridizationOverride})
       : super._();
 
   /// Element symbol (e.g., "C").
@@ -477,6 +478,9 @@ class APIMeasurement_AtomInfo extends APIMeasurement {
   final double x;
   final double y;
   final double z;
+
+  /// Hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1).
+  final int hybridizationOverride;
 
   /// Create a copy of APIMeasurement
   /// with the given fields replaced by the non-null parameter values.
@@ -498,16 +502,18 @@ class APIMeasurement_AtomInfo extends APIMeasurement {
                 other.bondCount == bondCount) &&
             (identical(other.x, x) || other.x == x) &&
             (identical(other.y, y) || other.y == y) &&
-            (identical(other.z, z) || other.z == z));
+            (identical(other.z, z) || other.z == z) &&
+            (identical(other.hybridizationOverride, hybridizationOverride) ||
+                other.hybridizationOverride == hybridizationOverride));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, symbol, elementName, bondCount, x, y, z);
+  int get hashCode => Object.hash(runtimeType, symbol, elementName, bondCount,
+      x, y, z, hybridizationOverride);
 
   @override
   String toString() {
-    return 'APIMeasurement.atomInfo(symbol: $symbol, elementName: $elementName, bondCount: $bondCount, x: $x, y: $y, z: $z)';
+    return 'APIMeasurement.atomInfo(symbol: $symbol, elementName: $elementName, bondCount: $bondCount, x: $x, y: $y, z: $z, hybridizationOverride: $hybridizationOverride)';
   }
 }
 
@@ -524,7 +530,8 @@ abstract mixin class $APIMeasurement_AtomInfoCopyWith<$Res>
       int bondCount,
       double x,
       double y,
-      double z});
+      double z,
+      int hybridizationOverride});
 }
 
 /// @nodoc
@@ -545,6 +552,7 @@ class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
     Object? x = null,
     Object? y = null,
     Object? z = null,
+    Object? hybridizationOverride = null,
   }) {
     return _then(APIMeasurement_AtomInfo(
       symbol: null == symbol
@@ -571,6 +579,10 @@ class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
           ? _self.z
           : z // ignore: cast_nullable_to_non_nullable
               as double,
+      hybridizationOverride: null == hybridizationOverride
+          ? _self.hybridizationOverride
+          : hybridizationOverride // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }

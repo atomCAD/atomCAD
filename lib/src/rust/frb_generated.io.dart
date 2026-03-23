@@ -502,6 +502,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  int dco_decode_i_8(dynamic raw);
+
+  @protected
   InputPinView dco_decode_input_pin_view(dynamic raw);
 
   @protected
@@ -554,6 +557,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<(int, String, String)> dco_decode_list_record_i_32_string_string(
       dynamic raw);
+
+  @protected
+  List<(String, bool)> dco_decode_list_record_string_bool(dynamic raw);
 
   @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
@@ -798,6 +804,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, String, String) dco_decode_record_i_32_string_string(dynamic raw);
+
+  @protected
+  (String, bool) dco_decode_record_string_bool(dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -1384,6 +1393,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_i_8(SseDeserializer deserializer);
+
+  @protected
   InputPinView sse_decode_input_pin_view(SseDeserializer deserializer);
 
   @protected
@@ -1444,6 +1456,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, String, String)> sse_decode_list_record_i_32_string_string(
+      SseDeserializer deserializer);
+
+  @protected
+  List<(String, bool)> sse_decode_list_record_string_bool(
       SseDeserializer deserializer);
 
   @protected
@@ -1742,6 +1758,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   (int, String, String) sse_decode_record_i_32_string_string(
       SseDeserializer deserializer);
+
+  @protected
+  (String, bool) sse_decode_record_string_bool(SseDeserializer deserializer);
 
   @protected
   (String, String) sse_decode_record_string_string(
@@ -2364,6 +2383,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_8(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_input_pin_view(InputPinView self, SseSerializer serializer);
 
   @protected
@@ -2427,6 +2449,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_i_32_string_string(
       List<(int, String, String)> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_record_string_bool(
+      List<(String, bool)> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_record_string_string(
@@ -2728,6 +2754,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_i_32_string_string(
       (int, String, String) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_string_bool(
+      (String, bool) self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

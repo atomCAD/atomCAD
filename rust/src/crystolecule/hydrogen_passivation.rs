@@ -1,5 +1,8 @@
 use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::atom::{
+    HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
+};
 use crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use crate::crystolecule::guided_placement::{
     Hybridization, TETRAHEDRAL_ANGLE, TRIGONAL_ANGLE, compute_sp3_case1_with_dihedral,
@@ -341,7 +344,15 @@ pub fn add_hydrogens(
         let atomic_number = atom.atomic_number;
         let position = atom.position;
 
-        let hybridization = detect_hybridization(structure, atom_id, None);
+        // Read the atom's hybridization override from flags (set by atom_edit evaluation).
+        // Convert from u8 flag value to Option<Hybridization> for detect_hybridization.
+        let hyb_override = match atom.hybridization_override() {
+            HYBRIDIZATION_SP3 => Some(Hybridization::Sp3),
+            HYBRIDIZATION_SP2 => Some(Hybridization::Sp2),
+            HYBRIDIZATION_SP1 => Some(Hybridization::Sp1),
+            HYBRIDIZATION_AUTO | _ => None,
+        };
+        let hybridization = detect_hybridization(structure, atom_id, hyb_override);
         let max_bonds = covalent_max_neighbors(atomic_number, hybridization);
         let current = count_active_neighbors(structure, atom_id);
         if current >= max_bonds {
