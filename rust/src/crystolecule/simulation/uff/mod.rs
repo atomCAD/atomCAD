@@ -20,7 +20,7 @@ use params::{
     calc_inversion_coefficients_and_force_constant, calc_torsion_params, calc_vdw_distance,
     calc_vdw_well_depth,
 };
-use typer::{assign_uff_types, bond_order_to_f64, hybridization_from_label};
+use typer::{assign_uff_types_with_overrides, bond_order_to_f64, hybridization_from_label};
 
 use std::cell::{Cell, RefCell};
 
@@ -135,9 +135,13 @@ impl UffForceField {
             atom_bonds[bond.idx2].push(InlineBond::new(bond.idx1 as u32, bond.bond_order));
         }
 
-        // Step 2: Assign UFF atom types.
+        // Step 2: Assign UFF atom types (respecting per-atom hybridization overrides).
         let bond_slices: Vec<&[InlineBond]> = atom_bonds.iter().map(|v| v.as_slice()).collect();
-        let typing = assign_uff_types(&topology.atomic_numbers, &bond_slices)?;
+        let typing = assign_uff_types_with_overrides(
+            &topology.atomic_numbers,
+            &bond_slices,
+            &topology.hybridization_overrides,
+        )?;
 
         // Step 3: Build bond order lookup: (min_idx, max_idx) → f64 bond order.
         let mut bond_order_map: FxHashMap<(usize, usize), f64> = FxHashMap::default();
