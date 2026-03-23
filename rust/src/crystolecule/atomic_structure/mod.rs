@@ -203,6 +203,12 @@ impl AtomicStructure {
         }
     }
 
+    pub fn set_atom_hybridization_override(&mut self, atom_id: u32, hybridization: u8) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.set_hybridization_override(hybridization);
+        }
+    }
+
     /// Copies all per-atom metadata (flags except selected, and in_crystal_depth)
     /// from a source atom to a target atom in this structure.
     ///

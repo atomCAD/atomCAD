@@ -40,6 +40,14 @@ pub struct SerializableDiff {
     pub anchor_positions: Vec<SerializableAnchor>,
 }
 
+/// Serializable representation of a per-atom hybridization override.
+#[derive(Serialize, Deserialize)]
+pub struct HybridizationOverrideEntry {
+    pub atom_id: u32,
+    /// 1=Sp3, 2=Sp2, 3=Sp1
+    pub hybridization: u8,
+}
+
 /// Serializable version of AtomEditData for JSON persistence.
 #[derive(Serialize, Deserialize)]
 pub struct SerializableAtomEditData {
@@ -60,6 +68,10 @@ pub struct SerializableAtomEditData {
     pub frozen_base_atoms: Vec<u32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frozen_diff_atoms: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hybridization_override_base_atoms: Vec<HybridizationOverrideEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hybridization_override_diff_atoms: Vec<HybridizationOverrideEntry>,
 }
 
 fn default_include_base_bonds_in_diff() -> bool {
@@ -115,6 +127,26 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
     let mut frozen_diff: Vec<u32> = data.frozen_diff_atoms.iter().copied().collect();
     frozen_diff.sort();
 
+    let mut hyb_base: Vec<HybridizationOverrideEntry> = data
+        .hybridization_override_base_atoms
+        .iter()
+        .map(|(&atom_id, &hybridization)| HybridizationOverrideEntry {
+            atom_id,
+            hybridization,
+        })
+        .collect();
+    hyb_base.sort_by_key(|e| e.atom_id);
+
+    let mut hyb_diff: Vec<HybridizationOverrideEntry> = data
+        .hybridization_override_diff_atoms
+        .iter()
+        .map(|(&atom_id, &hybridization)| HybridizationOverrideEntry {
+            atom_id,
+            hybridization,
+        })
+        .collect();
+    hyb_diff.sort_by_key(|e| e.atom_id);
+
     Ok(SerializableAtomEditData {
         diff: SerializableDiff {
             atoms,
@@ -129,6 +161,8 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         continuous_minimization: data.continuous_minimization,
         frozen_base_atoms: frozen_base,
         frozen_diff_atoms: frozen_diff,
+        hybridization_override_base_atoms: hyb_base,
+        hybridization_override_diff_atoms: hyb_diff,
     })
 }
 
@@ -180,6 +214,17 @@ pub fn serializable_to_atom_edit_data(
         diff.set_anchor_position(anchor.atom_id, anchor.position);
     }
 
+    let hyb_base: std::collections::HashMap<u32, u8> = serializable
+        .hybridization_override_base_atoms
+        .iter()
+        .map(|e| (e.atom_id, e.hybridization))
+        .collect();
+    let hyb_diff: std::collections::HashMap<u32, u8> = serializable
+        .hybridization_override_diff_atoms
+        .iter()
+        .map(|e| (e.atom_id, e.hybridization))
+        .collect();
+
     Ok(AtomEditData::from_deserialized(
         diff,
         serializable.output_diff,
@@ -190,5 +235,7 @@ pub fn serializable_to_atom_edit_data(
         serializable.continuous_minimization,
         serializable.frozen_base_atoms.iter().copied().collect(),
         serializable.frozen_diff_atoms.iter().copied().collect(),
+        hyb_base,
+        hyb_diff,
     ))
 }

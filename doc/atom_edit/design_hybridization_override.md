@@ -257,6 +257,8 @@ When the user clicks an existing atom (the anchor), guide dots appear based on t
 1. The **new atom** is created and bonded to the anchor. The new atom does **not** get a hybridization override (it's a terminal atom; its hybridization will be inferred from future bonds).
 2. The **anchor atom** gets the toolbar hybridization stored as its override (unless the toolbar is set to Auto, in which case any existing override on the anchor is left unchanged).
 
+Both the structural mutation (atom creation + bonding) and the override map change are captured by `DiffRecorder` as a single `AtomEditMutationCommand` (see Section 9a). This requires extending `DiffRecorder` to snapshot the hybridization override maps alongside the diff structure.
+
 **Why set on the anchor, not the new atom?** The anchor is the atom whose geometry the user is controlling. The guide dots show where the new atom will go *relative to the anchor's hybridization*. The new atom is terminal (one bond) and its hybridization is meaningless until more bonds are added.
 
 **Why at placement time, not at first click?** The first click is exploratory — the user sees guide dots and may change their mind (Escape, click elsewhere). Setting the override only when the atom is actually placed makes the operation atomic and undoable as a single action. If the user clicks the anchor with sp2 selected but then Escapes, no override is written.
@@ -290,19 +292,19 @@ The existing `APIHybridization` enum (`Auto`, `Sp3`, `Sp2`, `Sp1`) maps directly
 
 ### 9. Undo support
 
-Following the pattern of `AtomEditFrozenChangeCommand`, create an `AtomEditHybridizationChangeCommand`. The frozen command uses `FrozenDelta` with `added`/`removed` vectors discriminated by `FrozenProvenance`. For hybridization, the same provenance discrimination is needed, but entries also carry a value (the hybridization level). The delta tracks insertions, removals, and value changes separately:
+There are two distinct undo paths for hybridization overrides:
+
+#### 9a. DiffRecorder integration (for guided placement)
+
+Guided placement (Section 7) sets a hybridization override on the anchor atom as part of an atom placement action. This must be captured as a **single undoable action** together with the structural mutation (atom creation + bonding). The existing `DiffRecorder` captures structural mutations to the diff `AtomicStructure`, but the hybridization override maps (`hybridization_override_base_atoms` / `hybridization_override_diff_atoms`) are separate fields on `AtomEditData` — `DiffRecorder` doesn't know about them.
+
+**Solution:** Extend `DiffRecorder` to also snapshot and diff the hybridization override maps. Before the mutation begins, `DiffRecorder` captures a snapshot of both maps. After the mutation completes, it diffs the before/after states and records any changes as part of the `AtomEditMutationCommand`'s recorded delta. This way, undoing a guided placement that both created an atom and set an override on the anchor atom reverts both changes atomically.
+
+Concretely, `AtomEditMutationCommand` (or its delta type) gains an optional `HybridizationDelta` field:
 
 ```rust
-/// Whether a hybridization override atom ID refers to a base atom or a diff atom.
-/// Reuses the same provenance concept as FrozenProvenance.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HybridizationProvenance {
-    Base,
-    Diff,
-}
-
 /// Delta representing changes to the hybridization override maps.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HybridizationDelta {
     /// (provenance, atom_id, new_value) — entries added to the override maps.
     /// On undo: remove these entries. On redo: insert them.
@@ -315,6 +317,22 @@ pub struct HybridizationDelta {
     pub changed: Vec<(HybridizationProvenance, u32, u8, u8)>,
 }
 
+/// Whether a hybridization override atom ID refers to a base atom or a diff atom.
+/// Reuses the same provenance concept as FrozenProvenance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HybridizationProvenance {
+    Base,
+    Diff,
+}
+```
+
+When the delta is empty (the common case — most mutations don't touch hybridization), it adds no overhead. `DiffRecorder` gains `snapshot_hybridization_maps()` and `diff_hybridization_maps()` methods that are called at begin/end of recording. The `AtomEditMutationCommand::execute`/`undo` methods apply the `HybridizationDelta` alongside the structural delta.
+
+#### 9b. Standalone command (for Default tool)
+
+For the Default tool's "set hybridization on selected atoms" action (Section 8), there is no structural mutation — only the override maps change. Following the pattern of `AtomEditFrozenChangeCommand`, create an `AtomEditHybridizationChangeCommand` that uses the same `HybridizationDelta`:
+
+```rust
 pub struct AtomEditHybridizationChangeCommand {
     pub description: String,
     pub network_name: String,
@@ -324,6 +342,10 @@ pub struct AtomEditHybridizationChangeCommand {
 ```
 
 On undo, `added` entries are removed, `removed` entries are re-inserted with their old values, and `changed` entries are restored to old values. On redo, the inverse. This mirrors the `FrozenDelta` structure but extends it with value tracking for the non-boolean case.
+
+#### Why two paths?
+
+The frozen flag doesn't have this problem because frozen changes are always standalone operations (select atoms, toggle frozen) — they never happen atomically with structural mutations. Hybridization overrides, however, are set during guided placement alongside atom creation, requiring the `DiffRecorder` integration path. The standalone command path covers the Default tool case where no structural mutation is involved.
 
 ### 10. Flutter UI
 
@@ -387,7 +409,7 @@ Atoms with a non-Auto hybridization override could have a subtle visual indicato
 ## Data Flow Summary
 
 ```
-Default tool: user selects atoms, changes hybridization dropdown
+Default tool: user selects atoms, changes hybridization selector
   → atom_edit_set_hybridization_override() called
   → AtomEditData.hybridization_override_{base,diff}_atoms updated (persistence)
   → On next evaluation: result Atom.flags bits 3-4 set from maps
@@ -446,20 +468,22 @@ Hover popup:
 5. Integration test: atom_edit with sp2 override → relax node → verify override is respected
 
 ### Phase C: Guided placement integration
-1. Update `add_atom_tool.rs` placement action: when placing via guide dot, store toolbar hybridization as override on the anchor atom (AtomEditData map; flags set on next evaluation)
-2. Update `add_atom_tool.rs` void placement: store toolbar hybridization as override on the new atom
-3. Both mutations captured within the existing undo action (placement already uses `with_atom_edit_undo`)
-4. Update hydrogen passivation to read override from `Atom.flags` instead of passing `None`
-5. Tests: verify anchor gets override on guided placement; verify passivation respects overrides
+1. Extend `DiffRecorder` to snapshot/diff hybridization override maps (add `snapshot_hybridization_maps()` / `diff_hybridization_maps()` methods; add optional `HybridizationDelta` to `AtomEditMutationCommand`)
+2. Add recorded methods for hybridization override changes on `AtomEditData` (e.g., `set_hybridization_override_recorded`) so that `DiffRecorder` captures them
+3. Update `add_atom_tool.rs` placement action: when placing via guide dot, store toolbar hybridization as override on the anchor atom (AtomEditData map; flags set on next evaluation)
+4. Update `add_atom_tool.rs` void placement: store toolbar hybridization as override on the new atom
+5. Both structural and override mutations captured as a single undo action via the extended `DiffRecorder` (placement already uses `with_atom_edit_undo`)
+6. Update hydrogen passivation to read override from `Atom.flags` instead of passing `None`
+7. Tests: verify anchor gets override on guided placement; verify passivation respects overrides; verify undo of guided placement reverts both atom creation and override atomically
 
-### Phase D: API and undo
-1. Add `AtomEditHybridizationChangeCommand` (following `AtomEditFrozenChangeCommand` pattern)
-2. Add `atom_edit_set_hybridization_override` API function with undo wrapping
+### Phase D: API and undo (standalone command)
+1. Add `AtomEditHybridizationChangeCommand` (following `AtomEditFrozenChangeCommand` pattern) — reuses `HybridizationDelta` from Phase C
+2. Add `atom_edit_set_hybridization_override` API function with undo wrapping (for Default tool use)
 3. Add `atom_edit_get_selected_hybridization` API function (returns the common override of selected atoms, or a "mixed" sentinel if they differ)
-4. Tests: undo/redo of hybridization override changes
+4. Tests: undo/redo of standalone hybridization override changes (via Default tool path)
 
 ### Phase E: Flutter UI
-1. Add hybridization dropdown to Default tool toolbar, reflecting selected atoms' overrides
+1. Add hybridization selector (SegmentedButton) to Default tool toolbar, reflecting selected atoms' overrides
 2. Mixed/indeterminate state ("—") when selected atoms disagree
 3. Dropdown change calls `atom_edit_set_hybridization_override` for all selected atoms
 4. Update atom info hover popup to show hybridization with "(override)" or "(auto)" label
@@ -475,7 +499,7 @@ Hover popup:
 - **Guided placement test:** Place atom via guide dot with sp2 on toolbar → verify anchor atom gets sp2 override stored. Escape without placing → verify no override written.
 - **Void placement test:** Place atom into void with sp2 on toolbar → verify new atom gets sp2 override.
 - **Hydrogen passivation test:** Stored sp2 override limits hydrogen count correctly.
-- **Default tool selector test:** Select atoms with same override → dropdown shows that value. Select atoms with different overrides → dropdown shows mixed state. Change dropdown → all selected atoms updated.
+- **Default tool selector test:** Select atoms with same override → selector shows that value. Select atoms with different overrides → selector shows mixed state (empty selection). Change selector → all selected atoms updated.
 
 ## Backward Compatibility
 
