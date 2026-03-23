@@ -2528,6 +2528,7 @@ fn compute_selection_measurement(
                 x: atom.position.x,
                 y: atom.position.y,
                 z: atom.position.z,
+                hybridization_override: atom.hybridization_override(),
             });
         }
         return None;
@@ -4588,6 +4589,7 @@ pub fn query_hovered_atom_info(
                     z: atom.position.z,
                     bond_count,
                     is_frozen: atom.is_frozen(),
+                    hybridization_override: atom.hybridization_override(),
                     node_name,
                     overlapping_node_names,
                 })

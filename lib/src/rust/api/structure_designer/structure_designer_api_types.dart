@@ -944,6 +944,7 @@ class APIHoveredAtomInfo {
   final double z;
   final int bondCount;
   final bool isFrozen;
+  final int hybridizationOverride;
   final String nodeName;
   final List<String> overlappingNodeNames;
 
@@ -956,6 +957,7 @@ class APIHoveredAtomInfo {
     required this.z,
     required this.bondCount,
     required this.isFrozen,
+    required this.hybridizationOverride,
     required this.nodeName,
     required this.overlappingNodeNames,
   });
@@ -970,6 +972,7 @@ class APIHoveredAtomInfo {
       z.hashCode ^
       bondCount.hashCode ^
       isFrozen.hashCode ^
+      hybridizationOverride.hashCode ^
       nodeName.hashCode ^
       overlappingNodeNames.hashCode;
 
@@ -986,6 +989,7 @@ class APIHoveredAtomInfo {
           z == other.z &&
           bondCount == other.bondCount &&
           isFrozen == other.isFrozen &&
+          hybridizationOverride == other.hybridizationOverride &&
           nodeName == other.nodeName &&
           overlappingNodeNames == other.overlappingNodeNames;
 }
@@ -1224,6 +1228,9 @@ sealed class APIMeasurement with _$APIMeasurement {
     required double x,
     required double y,
     required double z,
+
+    /// Hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1).
+    required int hybridizationOverride,
   }) = APIMeasurement_AtomInfo;
 }
 

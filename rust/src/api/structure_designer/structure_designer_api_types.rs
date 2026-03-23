@@ -457,6 +457,8 @@ pub enum APIMeasurement {
         x: f64,
         y: f64,
         z: f64,
+        /// Hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1).
+        hybridization_override: u8,
     },
 }
 
@@ -480,6 +482,9 @@ pub struct APIHoveredAtomInfo {
 
     // Frozen state
     pub is_frozen: bool,
+
+    // Hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1)
+    pub hybridization_override: u8,
 
     // Node origin — name of the node that produced this atom
     pub node_name: String,

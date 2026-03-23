@@ -290,3 +290,18 @@ void atomEditClearFrozen() => RustLib.instance.api
 /// Returns true if any atom has the frozen flag set.
 bool atomEditHasFrozenAtoms() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditHasFrozenAtoms();
+
+/// Sets the hybridization override on all currently selected atoms.
+/// `Auto` removes the override (restoring bond-based inference).
+void atomEditSetHybridizationOverride(
+        {required APIHybridization hybridization}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditSetHybridizationOverride(
+            hybridization: hybridization);
+
+/// Returns the common hybridization override of the currently selected atoms.
+/// Returns -1 if no atom_edit is active or no atoms are selected.
+/// Returns 0 (Auto), 1 (Sp3), 2 (Sp2), or 3 (Sp1) if all selected atoms agree.
+/// Returns -2 if selected atoms have differing overrides (mixed state).
+int atomEditGetSelectedHybridization() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditGetSelectedHybridization();

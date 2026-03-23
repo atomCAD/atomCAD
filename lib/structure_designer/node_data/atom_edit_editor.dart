@@ -322,6 +322,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDefaultToolUI(),
+            _buildDefaultToolHybridizationInfo(),
             _buildDefaultToolBondInfo(),
           ],
         );
@@ -590,12 +591,15 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           :final x,
           :final y,
           :final z,
+          :final hybridizationOverride,
         ):
         label = '$symbol ($elementName)';
         value = '$bondCount bond${bondCount == 1 ? '' : 's'}';
         icon = Icons.science_outlined;
         canModify = false;
+        final hybLabel = _hybridizationLabel(hybridizationOverride);
         subtitle =
+            'Hybridization: $hybLabel\n'
             'Pos: (${x.toStringAsFixed(3)}, ${y.toStringAsFixed(3)}, ${z.toStringAsFixed(3)}) \u00C5';
     }
 
@@ -1000,6 +1004,113 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           ],
         ),
       ),
+    );
+  }
+
+  static String _hybridizationLabel(int override_) {
+    switch (override_) {
+      case 1:
+        return 'sp3 (override)';
+      case 2:
+        return 'sp2 (override)';
+      case 3:
+        return 'sp1 (override)';
+      default:
+        return 'auto';
+    }
+  }
+
+  static APIHybridization? _hybridizationFromRaw(int raw) {
+    switch (raw) {
+      case 0:
+        return APIHybridization.auto;
+      case 1:
+        return APIHybridization.sp3;
+      case 2:
+        return APIHybridization.sp2;
+      case 3:
+        return APIHybridization.sp1;
+      default:
+        return null; // mixed or no selection
+    }
+  }
+
+  Widget _buildDefaultToolHybridizationInfo() {
+    if (!_stagedData!.hasSelectedAtoms) return const SizedBox.shrink();
+
+    final raw = atom_edit_api.atomEditGetSelectedHybridization();
+    // -1 = no selection/no atom_edit, -2 = mixed
+    if (raw == -1) return const SizedBox.shrink();
+
+    final isMixed = raw == -2;
+    final selected = isMixed ? <APIHybridization>{} : {_hybridizationFromRaw(raw)!};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.large),
+        Card(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          color: Colors.grey[50],
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.medium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hybridization Override',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: AppSpacing.small),
+                Row(
+                  children: [
+                    Text('Hyb:', style: TextStyle(fontSize: 13)),
+                    const SizedBox(width: 8),
+                    SegmentedButton<APIHybridization>(
+                      segments: const [
+                        ButtonSegment<APIHybridization>(
+                          value: APIHybridization.auto,
+                          label: Text('Auto'),
+                        ),
+                        ButtonSegment<APIHybridization>(
+                          value: APIHybridization.sp3,
+                          label: Text('sp3'),
+                        ),
+                        ButtonSegment<APIHybridization>(
+                          value: APIHybridization.sp2,
+                          label: Text('sp2'),
+                        ),
+                        ButtonSegment<APIHybridization>(
+                          value: APIHybridization.sp1,
+                          label: Text('sp1'),
+                        ),
+                      ],
+                      selected: selected,
+                      emptySelectionAllowed: isMixed,
+                      onSelectionChanged: (Set<APIHybridization> selection) {
+                        atom_edit_api.atomEditSetHybridizationOverride(
+                          hybridization: selection.first,
+                        );
+                        widget.model.refreshFromKernel();
+                      },
+                      style: ButtonStyle(
+                        visualDensity: AppSpacing.compactVerticalDensity,
+                        textStyle: WidgetStatePropertyAll(
+                          TextStyle(fontSize: 12),
+                        ),
+                        padding: WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(horizontal: 4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
