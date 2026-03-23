@@ -22,6 +22,9 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::undo::commands::atom_edit_frozen_change::{
     AtomEditFrozenChangeCommand, FrozenDelta, FrozenProvenance,
 };
+use crate::structure_designer::undo::commands::atom_edit_hybridization_change::{
+    AtomEditHybridizationChangeCommand, HybridizationDelta, HybridizationProvenance,
+};
 use crate::structure_designer::undo::commands::atom_edit_toggle_flag::{
     AtomEditFlag, AtomEditToggleFlagCommand,
 };
@@ -1152,6 +1155,167 @@ pub fn atom_edit_has_frozen_atoms() -> bool {
                 None => false,
             },
             false,
+        )
+    }
+}
+
+// --- Hybridization override API ---
+
+/// Sets the hybridization override on all currently selected atoms.
+/// `Auto` removes the override (restoring bond-based inference).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_set_hybridization_override(
+    hybridization: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
+) {
+    use crate::api::structure_designer::structure_designer_api_types::APIHybridization;
+    use crate::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
+    };
+
+    let value: u8 = match hybridization {
+        APIHybridization::Auto => HYBRIDIZATION_AUTO,
+        APIHybridization::Sp3 => HYBRIDIZATION_SP3,
+        APIHybridization::Sp2 => HYBRIDIZATION_SP2,
+        APIHybridization::Sp1 => HYBRIDIZATION_SP1,
+    };
+
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let sd = &mut cad_instance.structure_designer;
+            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
+                let mut delta = HybridizationDelta::default();
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    // Process selected base atoms
+                    for &base_id in &data.selection.selected_base_atoms.clone() {
+                        let old = data.hybridization_override_base_atoms.get(&base_id).copied();
+                        if value == HYBRIDIZATION_AUTO {
+                            // Remove override if present
+                            if let Some(old_val) = old {
+                                data.hybridization_override_base_atoms.remove(&base_id);
+                                delta
+                                    .removed
+                                    .push((HybridizationProvenance::Base, base_id, old_val));
+                            }
+                        } else if let Some(old_val) = old {
+                            if old_val != value {
+                                data.hybridization_override_base_atoms
+                                    .insert(base_id, value);
+                                delta.changed.push((
+                                    HybridizationProvenance::Base,
+                                    base_id,
+                                    old_val,
+                                    value,
+                                ));
+                            }
+                        } else {
+                            data.hybridization_override_base_atoms
+                                .insert(base_id, value);
+                            delta
+                                .added
+                                .push((HybridizationProvenance::Base, base_id, value));
+                        }
+                    }
+                    // Process selected diff atoms
+                    for &diff_id in &data.selection.selected_diff_atoms.clone() {
+                        let old = data.hybridization_override_diff_atoms.get(&diff_id).copied();
+                        if value == HYBRIDIZATION_AUTO {
+                            if let Some(old_val) = old {
+                                data.hybridization_override_diff_atoms.remove(&diff_id);
+                                delta
+                                    .removed
+                                    .push((HybridizationProvenance::Diff, diff_id, old_val));
+                            }
+                        } else if let Some(old_val) = old {
+                            if old_val != value {
+                                data.hybridization_override_diff_atoms
+                                    .insert(diff_id, value);
+                                delta.changed.push((
+                                    HybridizationProvenance::Diff,
+                                    diff_id,
+                                    old_val,
+                                    value,
+                                ));
+                            }
+                        } else {
+                            data.hybridization_override_diff_atoms
+                                .insert(diff_id, value);
+                            delta
+                                .added
+                                .push((HybridizationProvenance::Diff, diff_id, value));
+                        }
+                    }
+                }
+                if !delta.is_empty() {
+                    sd.push_command(AtomEditHybridizationChangeCommand {
+                        description: format!("Set hybridization to {:?}", hybridization),
+                        network_name,
+                        node_id,
+                        delta,
+                    });
+                }
+            }
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Returns the common hybridization override of the currently selected atoms.
+/// Returns -1 if no atom_edit is active or no atoms are selected.
+/// Returns 0 (Auto), 1 (Sp3), 2 (Sp2), or 3 (Sp1) if all selected atoms agree.
+/// Returns -2 if selected atoms have differing overrides (mixed state).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_get_selected_hybridization() -> i8 {
+    use crate::api::api_common::with_cad_instance_or;
+    use crate::crystolecule::atomic_structure::atom::HYBRIDIZATION_AUTO;
+
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let data = match atom_edit::get_active_atom_edit_data(
+                    &cad_instance.structure_designer,
+                ) {
+                    Some(d) => d,
+                    None => return -1,
+                };
+
+                let base_selected = &data.selection.selected_base_atoms;
+                let diff_selected = &data.selection.selected_diff_atoms;
+
+                if base_selected.is_empty() && diff_selected.is_empty() {
+                    return -1;
+                }
+
+                let mut common: Option<u8> = None;
+
+                for &base_id in base_selected {
+                    let val = data
+                        .hybridization_override_base_atoms
+                        .get(&base_id)
+                        .copied()
+                        .unwrap_or(HYBRIDIZATION_AUTO);
+                    match common {
+                        None => common = Some(val),
+                        Some(c) if c != val => return -2,
+                        _ => {}
+                    }
+                }
+
+                for &diff_id in diff_selected {
+                    let val = data
+                        .hybridization_override_diff_atoms
+                        .get(&diff_id)
+                        .copied()
+                        .unwrap_or(HYBRIDIZATION_AUTO);
+                    match common {
+                        None => common = Some(val),
+                        Some(c) if c != val => return -2,
+                        _ => {}
+                    }
+                }
+
+                common.unwrap_or(HYBRIDIZATION_AUTO) as i8
+            },
+            -1,
         )
     }
 }

@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
+use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
+
 /// Whether a hybridization override atom ID refers to a base atom or a diff atom.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HybridizationProvenance {
@@ -162,4 +165,51 @@ fn diff_maps(
             delta.added.push((prov, atom_id, new_value));
         }
     }
+}
+
+/// Command for undoing/redoing hybridization override changes on selected atoms.
+#[derive(Debug)]
+pub struct AtomEditHybridizationChangeCommand {
+    pub description: String,
+    pub network_name: String,
+    pub node_id: u64,
+    pub delta: HybridizationDelta,
+}
+
+impl UndoCommand for AtomEditHybridizationChangeCommand {
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    fn undo(&self, ctx: &mut UndoContext) {
+        if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
+            self.delta.apply_undo(
+                &mut data.hybridization_override_base_atoms,
+                &mut data.hybridization_override_diff_atoms,
+            );
+        }
+    }
+
+    fn redo(&self, ctx: &mut UndoContext) {
+        if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
+            self.delta.apply_redo(
+                &mut data.hybridization_override_base_atoms,
+                &mut data.hybridization_override_diff_atoms,
+            );
+        }
+    }
+
+    fn refresh_mode(&self) -> UndoRefreshMode {
+        UndoRefreshMode::NodeDataChanged(vec![self.node_id])
+    }
+}
+
+fn get_atom_edit_data_mut<'a>(
+    ctx: &'a mut UndoContext,
+    network_name: &str,
+    node_id: u64,
+) -> Option<&'a mut AtomEditData> {
+    let network = ctx.network_mut(network_name)?;
+    let node = network.nodes.get_mut(&node_id)?;
+    node.data.as_mut().as_any_mut().downcast_mut()
 }

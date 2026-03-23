@@ -17,6 +17,9 @@ use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesig
 use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_frozen_change::{
     AtomEditFrozenChangeCommand, FrozenDelta, FrozenProvenance,
 };
+use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_hybridization_change::{
+    AtomEditHybridizationChangeCommand, HybridizationDelta, HybridizationProvenance,
+};
 use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_toggle_flag::{
     AtomEditFlag, AtomEditToggleFlagCommand,
 };
@@ -2746,4 +2749,327 @@ fn test_merge_atomic_structure_empty() {
 
     assert!(added_ids.is_empty());
     assert_eq!(data.diff.get_num_of_atoms(), 0);
+}
+
+// =============================================================================
+// Hybridization override undo tests (Phase D)
+// =============================================================================
+
+/// Helper to push an AtomEditHybridizationChangeCommand that sets hybridization
+/// on specified diff atoms.
+fn push_set_hybridization_command(
+    designer: &mut StructureDesigner,
+    diff_atom_ids: &[u32],
+    value: u8,
+) {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_AUTO;
+
+    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
+    let mut delta = HybridizationDelta::default();
+    let data = get_data_mut(designer);
+    for &diff_id in diff_atom_ids {
+        let old = data
+            .hybridization_override_diff_atoms
+            .get(&diff_id)
+            .copied();
+        if value == HYBRIDIZATION_AUTO {
+            if let Some(old_val) = old {
+                data.hybridization_override_diff_atoms.remove(&diff_id);
+                delta
+                    .removed
+                    .push((HybridizationProvenance::Diff, diff_id, old_val));
+            }
+        } else if let Some(old_val) = old {
+            if old_val != value {
+                data.hybridization_override_diff_atoms
+                    .insert(diff_id, value);
+                delta.changed.push((
+                    HybridizationProvenance::Diff,
+                    diff_id,
+                    old_val,
+                    value,
+                ));
+            }
+        } else {
+            data.hybridization_override_diff_atoms
+                .insert(diff_id, value);
+            delta
+                .added
+                .push((HybridizationProvenance::Diff, diff_id, value));
+        }
+    }
+    if !delta.is_empty() {
+        designer.push_command(AtomEditHybridizationChangeCommand {
+            description: "Set hybridization".to_string(),
+            network_name,
+            node_id,
+            delta,
+        });
+    }
+}
+
+#[test]
+fn undo_atom_edit_set_hybridization_override_diff_atoms() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+
+    let mut designer = setup_atom_edit();
+
+    // Add two diff atoms
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::ZERO); // Nitrogen
+    });
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::X); // Nitrogen
+    });
+
+    // Set sp2 override on diff atom 1
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP2)
+    );
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&2),
+        None
+    );
+
+    // Undo
+    assert!(designer.undo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        None
+    );
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP2)
+    );
+}
+
+#[test]
+fn undo_atom_edit_change_hybridization_override() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_SP1, HYBRIDIZATION_SP2,
+    };
+
+    let mut designer = setup_atom_edit();
+
+    // Add a diff atom
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::ZERO);
+    });
+
+    // Set sp2
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP2)
+    );
+
+    // Change to sp1
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP1);
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP1)
+    );
+
+    // Undo → back to sp2
+    assert!(designer.undo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP2)
+    );
+
+    // Undo again → no override
+    assert!(designer.undo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        None
+    );
+
+    // Redo → sp2
+    assert!(designer.redo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP2)
+    );
+
+    // Redo → sp1
+    assert!(designer.redo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP1)
+    );
+}
+
+#[test]
+fn undo_atom_edit_remove_hybridization_override() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP3,
+    };
+
+    let mut designer = setup_atom_edit();
+
+    // Add a diff atom and set sp3 override
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP3);
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP3)
+    );
+
+    // Set to Auto (removes override)
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_AUTO);
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        None
+    );
+
+    // Undo → sp3 restored
+    assert!(designer.undo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        Some(&HYBRIDIZATION_SP3)
+    );
+
+    // Redo → removed again
+    assert!(designer.redo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .hybridization_override_diff_atoms
+            .get(&1),
+        None
+    );
+}
+
+#[test]
+fn undo_atom_edit_set_hybridization_already_same_is_noop() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+
+    let mut designer = setup_atom_edit();
+
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::ZERO);
+    });
+
+    // Set sp2
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+
+    // Remember the current undo description
+    let desc_before = designer
+        .undo_stack
+        .undo_description()
+        .map(|s| s.to_string());
+
+    // Set sp2 again — should be a no-op (no command pushed)
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+
+    // Undo description should be unchanged (no new command was pushed)
+    assert_eq!(
+        designer
+            .undo_stack
+            .undo_description()
+            .map(|s| s.to_string()),
+        desc_before
+    );
+}
+
+#[test]
+fn undo_atom_edit_hybridization_multiple_atoms() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_SP1, HYBRIDIZATION_SP2,
+    };
+
+    let mut designer = setup_atom_edit();
+
+    // Add three diff atoms
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::X);
+    });
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(8, DVec3::Y);
+    });
+
+    // Set sp2 on atom 1, sp1 on atom 2
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+    push_set_hybridization_command(&mut designer, &[2], HYBRIDIZATION_SP1);
+
+    // Set sp2 on both atoms 2 and 3 in one command
+    push_set_hybridization_command(&mut designer, &[2, 3], HYBRIDIZATION_SP2);
+
+    let data = get_data_mut(&mut designer);
+    assert_eq!(
+        data.hybridization_override_diff_atoms.get(&1),
+        Some(&HYBRIDIZATION_SP2)
+    );
+    assert_eq!(
+        data.hybridization_override_diff_atoms.get(&2),
+        Some(&HYBRIDIZATION_SP2)
+    );
+    assert_eq!(
+        data.hybridization_override_diff_atoms.get(&3),
+        Some(&HYBRIDIZATION_SP2)
+    );
+
+    // Undo the batch → atom 2 back to sp1, atom 3 removed
+    assert!(designer.undo());
+    let data = get_data_mut(&mut designer);
+    assert_eq!(
+        data.hybridization_override_diff_atoms.get(&2),
+        Some(&HYBRIDIZATION_SP1)
+    );
+    assert_eq!(data.hybridization_override_diff_atoms.get(&3), None);
+
+    // Redo
+    assert!(designer.redo());
+    let data = get_data_mut(&mut designer);
+    assert_eq!(
+        data.hybridization_override_diff_atoms.get(&2),
+        Some(&HYBRIDIZATION_SP2)
+    );
+    assert_eq!(
+        data.hybridization_override_diff_atoms.get(&3),
+        Some(&HYBRIDIZATION_SP2)
+    );
 }
