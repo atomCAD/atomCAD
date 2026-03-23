@@ -10,7 +10,8 @@ import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/comment_node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart' as sd_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as sd_api;
 import 'package:flutter_cad/common/api_utils.dart';
 
 // Zoom levels
@@ -327,14 +328,16 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Pan offset so node center maps to viewport center:
     // screenCenter = (nodeCenterLogical + panOffset) * scale
     // panOffset = (screenCenter / scale) - nodeCenterLogical
-    final viewportCenter = Offset(viewportSize.width / 2, viewportSize.height / 2);
+    final viewportCenter =
+        Offset(viewportSize.width / 2, viewportSize.height / 2);
     setState(() {
       _panOffset = (viewportCenter / scale) - nodeCenterLogical;
     });
   }
 
   /// Handles wire dropped in empty space - shows filtered Add Node popup
-  void _handleWireDropInEmptySpace(PinReference startPin, Offset dropPosition) async {
+  void _handleWireDropInEmptySpace(
+      PinReference startPin, Offset dropPosition) async {
     final isOutput = startPin.pinType == PinType.output;
     final dataType = startPin.dataType;
 
@@ -352,7 +355,8 @@ class NodeNetworkState extends State<NodeNetwork> {
     final logicalPosition = screenToLogical(dropPosition, _panOffset, scale);
 
     // Create the new node
-    final newNodeId = widget.graphModel.createNode(selectedNodeType, logicalPosition);
+    final newNodeId =
+        widget.graphModel.createNode(selectedNodeType, logicalPosition);
     if (newNodeId == BigInt.zero) return;
 
     // Get compatible pins on the target node
@@ -629,7 +633,9 @@ class NodeNetworkState extends State<NodeNetwork> {
             : (node.inputPins.isEmpty
                 ? NODE_VERT_WIRE_OFFSET_EMPTY
                 : NODE_VERT_WIRE_OFFSET +
-                    node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM * 0.5);
+                    node.inputPins.length *
+                        NODE_VERT_WIRE_OFFSET_PER_PARAM *
+                        0.5);
         return logicalToScreen(
             nodePos + Offset(NODE_WIDTH, vertOffset), _panOffset, scale);
       } else {
@@ -644,8 +650,8 @@ class NodeNetworkState extends State<NodeNetwork> {
       final nodeScreenPos = logicalToScreen(nodePos, _panOffset, scale);
 
       if (isOutput) {
-        return Offset(
-            nodeScreenPos.dx + nodeSize.width, nodeScreenPos.dy + nodeSize.height / 2);
+        return Offset(nodeScreenPos.dx + nodeSize.width,
+            nodeScreenPos.dy + nodeSize.height / 2);
       } else {
         final numInputs = node.inputPins.length;
         final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
@@ -734,8 +740,7 @@ class NodeNetworkState extends State<NodeNetwork> {
         final RenderBox overlay =
             Overlay.of(context).context.findRenderObject() as RenderBox;
         final RelativeRect position = RelativeRect.fromRect(
-          Rect.fromPoints(
-              details.globalPosition, details.globalPosition),
+          Rect.fromPoints(details.globalPosition, details.globalPosition),
           Offset.zero & overlay.size,
         );
 
@@ -876,9 +881,61 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Initialize pan-zoom gesture if needed
   }
 
-  /// Handle trackpad/Magic Mouse pan-zoom updates for panning
+  /// Helper to recenter pan at cursor when zoom changes
+  void _setZoomLevelAtCursor(ZoomLevel newZoomLevel, Offset cursorScreen) {
+    if (newZoomLevel == _zoomLevel) return;
+
+    final oldScale = getZoomScale(_zoomLevel);
+    final newScale = getZoomScale(newZoomLevel);
+    final cursorLogical = screenToLogical(cursorScreen, _panOffset, oldScale);
+    final newPanOffset = (cursorScreen / newScale) - cursorLogical;
+
+    setState(() {
+      _zoomLevel = newZoomLevel;
+      _panOffset = newPanOffset;
+    });
+  }
+
+  void _zoomInAtCursor(Offset cursorScreen) {
+    switch (_zoomLevel) {
+      case ZoomLevel.normal:
+        return;
+      case ZoomLevel.zoomedOutMedium:
+        _setZoomLevelAtCursor(ZoomLevel.normal, cursorScreen);
+        return;
+      case ZoomLevel.zoomedOutFar:
+        _setZoomLevelAtCursor(ZoomLevel.zoomedOutMedium, cursorScreen);
+        return;
+    }
+  }
+
+  void _zoomOutAtCursor(Offset cursorScreen) {
+    switch (_zoomLevel) {
+      case ZoomLevel.normal:
+        _setZoomLevelAtCursor(ZoomLevel.zoomedOutMedium, cursorScreen);
+        return;
+      case ZoomLevel.zoomedOutMedium:
+        _setZoomLevelAtCursor(ZoomLevel.zoomedOutFar, cursorScreen);
+        return;
+      case ZoomLevel.zoomedOutFar:
+        return;
+    }
+  }
+
+  /// Handle trackpad/Magic Mouse pan-zoom updates for panning/zoom
   void _handlePointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
-    // Only handle panning when Shift is pressed
+    // Zoom gesture (pinch) when Shift is not pressed
+    if (!HardwareKeyboard.instance.isShiftPressed && event.scale != 1.0) {
+      // Use relative zoom from the event scale
+      if (event.scale > 1.0) {
+        _zoomInAtCursor(event.localPosition);
+      } else {
+        _zoomOutAtCursor(event.localPosition);
+      }
+      return;
+    }
+
+    // panning mode with Shift held
     if (HardwareKeyboard.instance.isShiftPressed &&
         (event.panDelta.dx.abs() > 0.1 || event.panDelta.dy.abs() > 0.1)) {
       setState(() {
@@ -896,55 +953,11 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handle mouse scroll for zooming with zoom-to-cursor behavior
   void _handlePointerScroll(PointerScrollEvent event) {
-    // Determine new zoom level
-    ZoomLevel newZoomLevel = _zoomLevel;
-
     if (event.scrollDelta.dy > 0) {
-      // Zoom out
-      switch (_zoomLevel) {
-        case ZoomLevel.normal:
-          newZoomLevel = ZoomLevel.zoomedOutMedium;
-          break;
-        case ZoomLevel.zoomedOutMedium:
-          newZoomLevel = ZoomLevel.zoomedOutFar;
-          break;
-        case ZoomLevel.zoomedOutFar:
-          return; // Already at max zoom out
-      }
+      _zoomOutAtCursor(event.localPosition);
     } else if (event.scrollDelta.dy < 0) {
-      // Zoom in
-      switch (_zoomLevel) {
-        case ZoomLevel.normal:
-          return; // Already at max zoom in
-        case ZoomLevel.zoomedOutMedium:
-          newZoomLevel = ZoomLevel.normal;
-          break;
-        case ZoomLevel.zoomedOutFar:
-          newZoomLevel = ZoomLevel.zoomedOutMedium;
-          break;
-      }
-    } else {
-      return;
+      _zoomInAtCursor(event.localPosition);
     }
-
-    // Calculate new pan offset to keep cursor position fixed
-    // The point under the cursor in logical space should remain under the cursor
-    final oldScale = getZoomScale(_zoomLevel);
-    final newScale = getZoomScale(newZoomLevel);
-
-    // Convert cursor position from screen to logical coordinates
-    final cursorScreen = event.localPosition;
-    final cursorLogical = screenToLogical(cursorScreen, _panOffset, oldScale);
-
-    // Calculate new pan offset so that cursorLogical maps back to cursorScreen
-    // cursorScreen = (cursorLogical + newPanOffset) * newScale
-    // newPanOffset = (cursorScreen / newScale) - cursorLogical
-    final newPanOffset = (cursorScreen / newScale) - cursorLogical;
-
-    setState(() {
-      _zoomLevel = newZoomLevel;
-      _panOffset = newPanOffset;
-    });
   }
 
   @override
@@ -1008,8 +1021,8 @@ class NodeNetworkState extends State<NodeNetwork> {
                   event.logicalKey == LogicalKeyboardKey.keyV) {
                 if (model.hasClipboardContent()) {
                   final scale = getZoomScale(_zoomLevel);
-                  final logicalPos = screenToLogical(
-                      _lastMousePosition, _panOffset, scale);
+                  final logicalPos =
+                      screenToLogical(_lastMousePosition, _panOffset, scale);
                   model.pasteAtPosition(logicalPos.dx, logicalPos.dy);
                 }
                 return KeyEventResult.handled;
