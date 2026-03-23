@@ -22,13 +22,15 @@ void atomEditAddAtomByRay(
         {required int atomicNumber,
         required APIVec3 planeNormal,
         required APIVec3 rayStart,
-        required APIVec3 rayDir}) =>
+        required APIVec3 rayDir,
+        required APIHybridization hybridizationOverride}) =>
     RustLib.instance.api
         .crateApiStructureDesignerAtomEditApiAtomEditAddAtomByRay(
             atomicNumber: atomicNumber,
             planeNormal: planeNormal,
             rayStart: rayStart,
-            rayDir: rayDir);
+            rayDir: rayDir,
+            hybridizationOverride: hybridizationOverride);
 
 /// Pointer down in AddBond tool. Returns whether an atom was hit.
 /// Triggers one refresh if an atom is hit (to show source atom highlight).

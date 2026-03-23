@@ -159,8 +159,13 @@ impl AtomEditData {
     // --- Recording methods ---
 
     /// Start recording diff mutations for undo/redo.
+    /// Also snapshots the current hybridization override maps so that changes
+    /// can be captured as a `HybridizationDelta` when recording ends.
     pub fn begin_recording(&mut self) {
-        self.recorder = Some(DiffRecorder::default());
+        let mut recorder = DiffRecorder::default();
+        recorder.hybridization_base_snapshot = self.hybridization_override_base_atoms.clone();
+        recorder.hybridization_diff_snapshot = self.hybridization_override_diff_atoms.clone();
+        self.recorder = Some(recorder);
     }
 
     /// End recording and return the accumulated deltas.
@@ -1680,7 +1685,22 @@ pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
 
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
         if let Some(recorder) = data.end_recording() {
-            if !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty() {
+            // Compute hybridization delta by diffing before/after snapshots
+            let hyb_delta =
+                crate::structure_designer::undo::commands::atom_edit_hybridization_change::HybridizationDelta::from_diff(
+                    &recorder.hybridization_base_snapshot,
+                    &recorder.hybridization_diff_snapshot,
+                    &data.hybridization_override_base_atoms,
+                    &data.hybridization_override_diff_atoms,
+                );
+            let hybridization_delta = if hyb_delta.is_empty() {
+                None
+            } else {
+                Some(hyb_delta)
+            };
+
+            let has_structural = !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
+            if has_structural || hybridization_delta.is_some() {
                 structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
                         description: "Move atoms".to_string(),
@@ -1688,6 +1708,7 @@ pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
                         node_id: pending.node_id,
                         atom_deltas: recorder.atom_deltas,
                         bond_deltas: recorder.bond_deltas,
+                        hybridization_delta,
                     },
                 );
             }
@@ -1728,7 +1749,22 @@ pub fn with_atom_edit_undo<F>(
     // End recording and push command
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
         if let Some(recorder) = data.end_recording() {
-            if !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty() {
+            // Compute hybridization delta by diffing before/after snapshots
+            let hyb_delta =
+                crate::structure_designer::undo::commands::atom_edit_hybridization_change::HybridizationDelta::from_diff(
+                    &recorder.hybridization_base_snapshot,
+                    &recorder.hybridization_diff_snapshot,
+                    &data.hybridization_override_base_atoms,
+                    &data.hybridization_override_diff_atoms,
+                );
+            let hybridization_delta = if hyb_delta.is_empty() {
+                None
+            } else {
+                Some(hyb_delta)
+            };
+
+            let has_structural = !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
+            if has_structural || hybridization_delta.is_some() {
                 structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
                         description: description.to_string(),
@@ -1736,6 +1772,7 @@ pub fn with_atom_edit_undo<F>(
                         node_id,
                         atom_deltas: recorder.atom_deltas,
                         bond_deltas: recorder.bond_deltas,
+                        hybridization_delta,
                     },
                 );
             }

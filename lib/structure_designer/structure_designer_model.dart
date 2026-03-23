@@ -892,6 +892,7 @@ class StructureDesignerModel extends ChangeNotifier {
       planeNormal: vector3ToApiVec3(planeNormal),
       rayStart: vector3ToApiVec3(rayStart),
       rayDir: vector3ToApiVec3(rayDir),
+      hybridizationOverride: _hybridizationOverride,
     );
     refreshFromKernel();
   }

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glam::f64::DVec3;
 
 /// State of an atom in the diff at a point in time.
@@ -35,10 +37,17 @@ pub struct BondDelta {
 }
 
 /// Captures diff deltas during a recording session.
+///
+/// Also snapshots the hybridization override maps at recording start, so that
+/// a `HybridizationDelta` can be computed when recording ends.
 #[derive(Debug, Default)]
 pub struct DiffRecorder {
     pub atom_deltas: Vec<AtomDelta>,
     pub bond_deltas: Vec<BondDelta>,
+    /// Snapshot of hybridization_override_base_atoms at recording start.
+    pub hybridization_base_snapshot: HashMap<u32, u8>,
+    /// Snapshot of hybridization_override_diff_atoms at recording start.
+    pub hybridization_diff_snapshot: HashMap<u32, u8>,
 }
 
 impl DiffRecorder {

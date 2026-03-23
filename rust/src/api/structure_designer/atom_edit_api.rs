@@ -57,12 +57,22 @@ pub fn atom_edit_add_atom_by_ray(
     plane_normal: APIVec3,
     ray_start: APIVec3,
     ray_dir: APIVec3,
+    hybridization_override: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
 ) {
+    use crate::api::structure_designer::structure_designer_api_types::APIHybridization;
+    use crate::crystolecule::guided_placement::Hybridization;
+
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let plane_normal_vec3 = from_api_vec3(&plane_normal);
             let ray_start_vec3 = from_api_vec3(&ray_start);
             let ray_dir_vec3 = from_api_vec3(&ray_dir);
+            let hyb_override = match hybridization_override {
+                APIHybridization::Auto => None,
+                APIHybridization::Sp3 => Some(Hybridization::Sp3),
+                APIHybridization::Sp2 => Some(Hybridization::Sp2),
+                APIHybridization::Sp1 => Some(Hybridization::Sp1),
+            };
             atom_edit::with_atom_edit_undo(
                 &mut cad_instance.structure_designer,
                 "Add atom",
@@ -73,6 +83,7 @@ pub fn atom_edit_add_atom_by_ray(
                         &plane_normal_vec3,
                         &ray_start_vec3,
                         &ray_dir_vec3,
+                        hyb_override,
                     );
                 },
             );

@@ -168,7 +168,8 @@ abstract class RustLibApi extends BaseApi {
       {required int atomicNumber,
       required APIVec3 planeNormal,
       required APIVec3 rayStart,
-      required APIVec3 rayDir});
+      required APIVec3 rayDir,
+      required APIHybridization hybridizationOverride});
 
   String crateApiStructureDesignerAtomEditApiAtomEditAddHydrogen(
       {required bool selectedOnly});
@@ -1618,7 +1619,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       {required int atomicNumber,
       required APIVec3 planeNormal,
       required APIVec3 rayStart,
-      required APIVec3 rayDir}) {
+      required APIVec3 rayDir,
+      required APIHybridization hybridizationOverride}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -1626,6 +1628,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_box_autoadd_api_vec_3(planeNormal, serializer);
         sse_encode_box_autoadd_api_vec_3(rayStart, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDir, serializer);
+        sse_encode_api_hybridization(hybridizationOverride, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
       },
       codec: SseCodec(
@@ -1634,7 +1637,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerAtomEditApiAtomEditAddAtomByRayConstMeta,
-      argValues: [atomicNumber, planeNormal, rayStart, rayDir],
+      argValues: [
+        atomicNumber,
+        planeNormal,
+        rayStart,
+        rayDir,
+        hybridizationOverride
+      ],
       apiImpl: this,
     ));
   }
@@ -1643,7 +1652,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerAtomEditApiAtomEditAddAtomByRayConstMeta =>
           const TaskConstMeta(
             debugName: "atom_edit_add_atom_by_ray",
-            argNames: ["atomicNumber", "planeNormal", "rayStart", "rayDir"],
+            argNames: [
+              "atomicNumber",
+              "planeNormal",
+              "rayStart",
+              "rayDir",
+              "hybridizationOverride"
+            ],
           );
 
   @override

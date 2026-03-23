@@ -744,43 +744,17 @@ fn wire__crate__api__structure_designer__atom_edit_api__atom_edit_add_atom_by_ra
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "atom_edit_add_atom_by_ray",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "atom_edit_add_atom_by_ray", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_atomic_number = <i16>::sse_decode(&mut deserializer);
-            let api_plane_normal =
-                <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
-            let api_ray_start =
-                <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
-            let api_ray_dir =
-                <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::atom_edit_api::atom_edit_add_atom_by_ray(
-                        api_atomic_number,
-                        api_plane_normal,
-                        api_ray_start,
-                        api_ray_dir,
-                    );
-                })?;
-                Ok(output_ok)
-            })())
-        },
-    )
+let api_plane_normal = <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
+let api_ray_start = <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
+let api_ray_dir = <crate::api::common_api_types::APIVec3>::sse_decode(&mut deserializer);
+let api_hybridization_override = <crate::api::structure_designer::structure_designer_api_types::APIHybridization>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, ()>((move || {
+                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::atom_edit_api::atom_edit_add_atom_by_ray(api_atomic_number, api_plane_normal, api_ray_start, api_ray_dir, api_hybridization_override); })?;   Ok(output_ok)
+                })()) })
 }
 fn wire__crate__api__structure_designer__atom_edit_api__atom_edit_add_hydrogen_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
