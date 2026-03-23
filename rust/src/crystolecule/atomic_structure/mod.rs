@@ -203,6 +203,41 @@ impl AtomicStructure {
         }
     }
 
+    /// Copies all per-atom metadata (flags except selected, and in_crystal_depth)
+    /// from a source atom to a target atom in this structure.
+    ///
+    /// The `selected` flag is intentionally NOT copied because it is transient UI
+    /// state that should not persist through diff application or structure merging.
+    ///
+    /// This is the canonical way to preserve metadata when constructing result atoms
+    /// via `add_atom()` (which initializes all metadata to zero). Using this method
+    /// instead of copying individual flags ensures that newly added metadata fields
+    /// are automatically preserved without requiring updates at every call site.
+    pub(crate) fn copy_atom_metadata(&mut self, target_id: u32, source: &Atom) {
+        if let Some(target) = self.get_atom_mut(target_id) {
+            // Copy all flags except selected (bit 0)
+            target.flags = source.flags & !0x1;
+            target.in_crystal_depth = source.in_crystal_depth;
+        }
+    }
+
+    /// Merges metadata from two source atoms into a target atom using OR semantics
+    /// for flags (except selected) and taking in_crystal_depth from the primary source.
+    ///
+    /// Used when a diff atom replaces/moves a base atom: if either source has a flag
+    /// set (e.g. frozen), the result inherits it.
+    pub(crate) fn merge_atom_metadata(
+        &mut self,
+        target_id: u32,
+        primary: &Atom,
+        secondary: &Atom,
+    ) {
+        if let Some(target) = self.get_atom_mut(target_id) {
+            target.flags = (primary.flags | secondary.flags) & !0x1;
+            target.in_crystal_depth = primary.in_crystal_depth;
+        }
+    }
+
     pub fn has_selected_atoms(&self) -> bool {
         self.atoms
             .iter()
