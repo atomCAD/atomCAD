@@ -270,16 +270,134 @@ This is a later phase. Initially, custom networks continue to expose only pin 0.
 
 #### 7. Serialization (.cnnd)
 
-**NodeType serialization.** Currently serializes `output_type` as a single string. Change to serialize `output_pins` as an array of `{name, data_type}` objects.
+##### How .cnnd serialization currently works
 
-**Backward compatibility on load:**
-- If the JSON has old-style `"output_type": "Atomic"`, convert to `output_pins: [{ name: "result", data_type: "Atomic" }]`.
-- If the JSON has new-style `"output_pins": [...]`, use directly.
-- On save, always write new format. Old atomCAD versions won't load new files, but this is acceptable for a forward-moving format.
+Understanding the current architecture is critical for backward compatibility:
 
-**`displayed_output_pins` serialization:**
-- Omit from JSON if empty (all nodes default to pin 0 display).
-- On load, if missing, default to empty HashMap.
+**Built-in node types** (atom_edit, sphere, cuboid, etc.) are **NOT serialized** in .cnnd files. Their `NodeType` definitions (including `output_type`) are reconstructed from the built-in registry at startup. Only the node *instances* are serialized: `node_type_name`, position, arguments, and node-specific `data` (via `node_data_saver`).
+
+**Custom network node types** are serialized as entire `SerializableNodeNetwork` entries. Each network has a `SerializableNodeType` containing `output_type: String` — this is the network's output signature when used as a node in another network. However, this `output_type` is **recomputed on load** by `update_network_output_type()` from the return node's type, so the serialized value serves mainly as a saved snapshot.
+
+**`displayed_node_ids`** is serialized as `Vec<(u64, NodeDisplayType)>` — a list of `[node_id, "Normal"|"Ghost"]` pairs. No per-pin information.
+
+**atom_edit's `output_diff`** flag is serialized inside the node's `data` JSON object via `SerializableAtomEditData`, with `#[serde(default)]` (defaults to `false` on old files that lack it).
+
+##### What changes
+
+**1. `SerializableNodeType` — `output_type` → `output_pins`**
+
+Current:
+```rust
+pub struct SerializableNodeType {
+    pub name: String,
+    pub parameters: Vec<SerializableParameter>,
+    pub output_type: String,  // e.g. "Geometry", "Atomic"
+    // ...
+}
+```
+
+New:
+```rust
+pub struct SerializableNodeType {
+    pub name: String,
+    pub parameters: Vec<SerializableParameter>,
+
+    // New field: always written on save
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub output_pins: Vec<SerializableOutputPin>,
+
+    // Old field: only read for migration, never written
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_type: Option<String>,
+
+    // ...
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SerializableOutputPin {
+    pub name: String,
+    pub data_type: String,
+}
+```
+
+**Loading logic (in `serializable_to_node_type()`):**
+```rust
+let output_pins = if !serializable.output_pins.is_empty() {
+    // New format: use output_pins directly
+    serializable.output_pins.iter().map(|p| OutputPinDefinition {
+        name: p.name.clone(),
+        data_type: DataType::from_string(&p.data_type),
+    }).collect()
+} else if let Some(ref output_type_str) = serializable.output_type {
+    // Old format: migrate single output_type to output_pins[0]
+    vec![OutputPinDefinition {
+        name: "result".to_string(),
+        data_type: DataType::from_string(output_type_str),
+    }]
+} else {
+    // Fallback: no output
+    vec![OutputPinDefinition {
+        name: "result".to_string(),
+        data_type: DataType::None,
+    }]
+};
+```
+
+**Saving logic (in `node_type_to_serializable()`):** Always write `output_pins`. Never write `output_type`. Old atomCAD versions that expect `output_type` will fail to find it, but this is acceptable for a forward-moving format.
+
+**Important:** This only affects **custom network node types**. Built-in node types get their `output_pins` from the registry, not from serialization. So old .cnnd files with built-in nodes (the vast majority) are completely unaffected. The migration only matters for .cnnd files that define custom user networks.
+
+**Additional safety:** Even for custom networks, `update_network_output_type()` recomputes the output type from the return node after loading. So even if the serialized `output_pins` is stale or migrated incorrectly, it gets corrected by the validator. The serialized value is a snapshot, not the source of truth.
+
+**2. `SerializableNodeNetwork` — add `displayed_output_pins`**
+
+```rust
+pub struct SerializableNodeNetwork {
+    pub next_node_id: u64,
+    pub node_type: SerializableNodeType,
+    pub nodes: Vec<SerializableNode>,
+    pub return_node_id: Option<u64>,
+    pub displayed_node_ids: Vec<(u64, NodeDisplayType)>,  // unchanged
+
+    // NEW: per-node pin display state. Omitted from JSON if empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub displayed_output_pins: Vec<(u64, Vec<i32>)>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_settings: Option<SerializableCameraSettings>,
+}
+```
+
+**Loading logic:**
+- Old files: `displayed_output_pins` field absent → serde defaults to empty vec → all displayed nodes show pin 0 only (backward compat)
+- New files: field present → used directly
+
+**Saving logic:** Only write if non-empty (`skip_serializing_if`). Single-output-only networks produce no `displayed_output_pins` entries, keeping old file format unchanged.
+
+**3. atom_edit `output_diff` migration**
+
+`SerializableAtomEditData` keeps the `output_diff` field for reading:
+```rust
+pub struct SerializableAtomEditData {
+    #[serde(default)]
+    pub output_diff: bool,  // kept for migration, eventually stop writing
+    // ...
+}
+```
+
+Migration happens at load time, after the atom_edit node data is deserialized and the node is inserted into the network. The loader checks: if a node is an `atom_edit` with `output_diff: true` AND the network has no `displayed_output_pins` entry for that node, then add `{node_id, [1]}` to `displayed_output_pins` (show diff pin). This logic runs once during deserialization and is idempotent.
+
+On save, `output_diff` is no longer written (or always written as `false`). The display state is captured by `displayed_output_pins` on the network.
+
+##### Summary of backward compatibility guarantees
+
+| Scenario | Behavior |
+|----------|----------|
+| Old .cnnd with built-in nodes only | Loads perfectly. Built-in types get `output_pins` from registry. `displayed_output_pins` absent → defaults. |
+| Old .cnnd with custom networks | Loads correctly. `output_type` string migrated to `output_pins[0]`. Validator recomputes from return node anyway. |
+| Old .cnnd with atom_edit `output_diff: true` | `output_diff` flag read, migrated to `displayed_output_pins` entry for that node. |
+| Old .cnnd with `displayed_node_ids` only | `displayed_output_pins` absent → all displayed nodes show pin 0 only. |
+| New .cnnd loaded by old atomCAD | Will fail on custom networks (missing `output_type` field). Built-in-only files may work if `output_type` absence is tolerated by old code. Not a supported scenario. |
 
 ### Impact on Existing Caches
 
@@ -535,6 +653,23 @@ The `.pinname` suffix after a node reference selects the output pin. Unqualified
 
 ### Implementation Phases
 
+#### Phase 0: Create Backward-Compatibility Fixtures (before any code changes)
+
+Create frozen .cnnd fixture files and their tests while the code is still unchanged. This guarantees fixtures use the real old serialization format.
+
+- Create `rust/tests/fixtures/multi_output_migration/` directory
+- Create fixture files (either by saving from the app or hand-crafting minimal JSON):
+  1. `old_builtin_only.cnnd` — network with built-in nodes, old `output_type` field
+  2. `old_custom_network.cnnd` — custom network node type with old `output_type: "Geometry"`
+  3. `old_atom_edit_output_diff_true.cnnd` — atom_edit with `output_diff: true`
+  4. `old_atom_edit_output_diff_false.cnnd` — atom_edit with `output_diff: false`
+- Write tests that load each fixture and verify current behavior (all pass against unchanged code)
+- The atom_edit `output_diff` migration tests are `#[ignore]` until Phase 3
+
+**Tests:** All fixture load tests pass against the current (pre-change) code. This establishes the baseline.
+
+**Manual testing:** N/A.
+
 #### Phase 1: Representation Change (Rust only, no behavior change)
 
 The goal is to land the new data structures while all code continues to operate on pin 0 only.
@@ -554,7 +689,27 @@ The goal is to land the new data structures while all code continues to operate 
 - Add unit tests for `OutputPinDefinition::single()`, `NodeType::output_type()` accessor, `NodeType::get_output_pin_type()` for indices -1, 0, 1+, and `NodeType::has_multi_output()`
 - Add unit tests for `EvalOutput::single()`, `EvalOutput::multi()`, `EvalOutput::get()` for valid and out-of-range indices, `EvalOutput::primary()`
 - Add a .cnnd roundtrip test: save a network with the new `output_pins` format, reload, verify `output_pins` restored correctly
-- Add a .cnnd backward-compat test: load a file with old `output_type` format, verify it migrates to `output_pins[0]` correctly
+- **Backward-compat fixture tests** (see below)
+
+**Backward-compatibility fixture tests:**
+
+Create frozen .cnnd fixture files **before implementation** that capture the old serialization format. These files are never modified — they permanently represent the old format. After Phase 1, the same tests verify migration works.
+
+Fixture files in `rust/tests/fixtures/multi_output_migration/`:
+
+1. **`old_builtin_only.cnnd`** — A simple network with built-in nodes (e.g. sphere → union). Uses old `output_type` field on the network's `node_type`. Has `displayed_node_ids` but no `displayed_output_pins`.
+   - **Test:** Load → verify all nodes resolve their types from the registry with correct `output_pins`. Verify `displayed_output_pins` defaults to empty (pin 0 for all displayed nodes). Verify evaluation produces same results as before.
+
+2. **`old_custom_network.cnnd`** — Two networks: one defines a custom node type (with old `"output_type": "Geometry"` on its `node_type`), the other uses it as a node.
+   - **Test:** Load → verify custom network's `output_pins[0]` is migrated from `output_type` string. Verify `output_type()` accessor returns the correct `DataType`. Verify the custom node instance in the second network evaluates correctly.
+
+3. **`old_atom_edit_output_diff_true.cnnd`** — A network with an atom_edit node whose data has `"output_diff": true`.
+   - **Test (Phase 3):** Load → verify `output_diff` flag is migrated to `displayed_output_pins` entry showing pin 1 for that node. (This test is written in Phase 1 but the migration logic is implemented in Phase 3, so it starts as a `#[ignore]` test and is un-ignored in Phase 3.)
+
+4. **`old_atom_edit_output_diff_false.cnnd`** — Same but with `"output_diff": false` (or absent).
+   - **Test (Phase 3):** Load → verify no `displayed_output_pins` entry for that node (defaults to pin 0).
+
+**How to create the fixtures:** Run the current (pre-change) code to save representative networks, or hand-craft minimal JSON. The key is that they use the current serialization format and are frozen before any code changes.
 
 **Manual testing:** No user-visible changes. Run the app, open existing .cnnd files, verify everything works as before. Save and re-open a file to verify the new serialization format loads correctly.
 
