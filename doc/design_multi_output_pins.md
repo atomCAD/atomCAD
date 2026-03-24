@@ -40,73 +40,140 @@ Multi-output pins allow a single node evaluation to produce multiple named resul
 ### Design Principles
 
 1. **Single evaluation, multiple results.** A node evaluates once and returns all its outputs. No separate evaluation per pin.
-2. **Backward compatible.** Nodes with a single output pin work exactly as before with zero changes. The multi-output mechanism is opt-in.
-3. **Pin 0 remains the primary output.** This preserves the return node semantics, custom network output type, and all existing wiring.
+2. **Uniform representation.** All output pins (including the primary) live in one `Vec`. No special-casing of pin 0 in the data structure. Accessor functions provide convenient access to the primary (index 0) output for code that only cares about one output.
+3. **Pin 0 remains the primary output.** This preserves the return node semantics, custom network output type, and all existing wiring. But this is a semantic convention, not a structural split.
 4. **Display is per output pin, not per node.** Each output pin of a displayed node can independently be shown/hidden in the viewport.
 
 ### Rust Backend Changes
 
-#### 1. NodeType: Multiple Output Types
+#### 1. NodeType: Unified Output Pin List
+
+Replace `output_type: DataType` with a unified `output_pins: Vec<OutputPinDefinition>`:
 
 ```rust
 // node_type.rs
-pub struct NodeType {
-    // ... existing fields ...
-    pub output_type: DataType,                       // pin 0 (unchanged)
-    pub extra_output_pins: Vec<OutputPinDefinition>,  // pins 1, 2, ... (NEW)
-    // ...
-}
 
-/// Definition of an additional output pin (index 1+).
+/// Definition of an output pin.
 #[derive(Clone, Debug)]
 pub struct OutputPinDefinition {
-    pub name: String,        // e.g. "diff"
-    pub data_type: DataType, // e.g. DataType::Atomic
+    pub name: String,        // e.g. "result", "diff"
+    pub data_type: DataType,
+}
+
+pub struct NodeType {
+    pub name: String,
+    pub description: String,
+    pub summary: Option<String>,
+    pub category: NodeTypeCategory,
+    pub parameters: Vec<Parameter>,
+    pub output_pins: Vec<OutputPinDefinition>,  // replaces `output_type: DataType`
+    pub public: bool,
+    pub node_data_creator: fn() -> Box<dyn NodeData>,
+    // ... saver, loader ...
 }
 ```
 
-**Why `extra_output_pins` instead of replacing `output_type`?** Backward compatibility. The vast majority of nodes have a single output. Replacing `output_type` with a `Vec` would require changing every node registration and every place that reads `output_type`. With `extra_output_pins`, single-output nodes don't change at all.
+**Accessor functions** for backward-compatible access:
 
-**`get_output_pin_type()` update:**
 ```rust
-pub fn get_output_pin_type(&self, output_pin_index: i32) -> DataType {
-    if output_pin_index == -1 {
-        self.get_function_type()
-    } else if output_pin_index == 0 {
-        self.output_type.clone()
-    } else {
-        let extra_index = (output_pin_index - 1) as usize;
-        self.extra_output_pins
-            .get(extra_index)
-            .map(|p| p.data_type.clone())
-            .unwrap_or(DataType::None)
+impl NodeType {
+    /// The primary output type (pin 0). Panics if no output pins.
+    pub fn output_type(&self) -> &DataType {
+        &self.output_pins[0].data_type
+    }
+
+    /// Output type for any pin index.
+    pub fn get_output_pin_type(&self, output_pin_index: i32) -> DataType {
+        if output_pin_index == -1 {
+            self.get_function_type()
+        } else {
+            self.output_pins
+                .get(output_pin_index as usize)
+                .map(|p| p.data_type.clone())
+                .unwrap_or(DataType::None)
+        }
+    }
+
+    /// Number of result output pins (excludes function pin).
+    pub fn output_pin_count(&self) -> usize {
+        self.output_pins.len()
+    }
+
+    /// Whether this node type has multiple output pins.
+    pub fn has_multi_output(&self) -> bool {
+        self.output_pins.len() > 1
     }
 }
 ```
+
+**Migration of node registrations.** Every node type currently written as:
+
+```rust
+NodeType {
+    output_type: DataType::Atomic,
+    ...
+}
+```
+
+Changes to:
+
+```rust
+NodeType {
+    output_pins: vec![OutputPinDefinition {
+        name: "result".to_string(),
+        data_type: DataType::Atomic,
+    }],
+    ...
+}
+```
+
+This is mechanical (search-and-replace with a minor template). We can also provide a helper:
+
+```rust
+impl OutputPinDefinition {
+    pub fn single(data_type: DataType) -> Vec<OutputPinDefinition> {
+        vec![OutputPinDefinition {
+            name: "result".to_string(),
+            data_type,
+        }]
+    }
+}
+```
+
+So node registrations become `output_pins: OutputPinDefinition::single(DataType::Atomic)`.
+
+**All code that currently reads `node_type.output_type`** migrates to `node_type.output_type()` (the accessor). This is also mechanical — the accessor returns `&DataType` just like the old field. In early phases, all such code continues to only use pin 0.
 
 #### 2. NodeData::eval() Returns Multiple Results
 
 ```rust
 // node_data.rs — new return type
 pub struct EvalOutput {
-    pub primary: NetworkResult,                  // pin 0 result
-    pub extra: Vec<NetworkResult>,               // pin 1, 2, ... results
+    pub results: Vec<NetworkResult>,  // index 0 = pin 0, index 1 = pin 1, ...
 }
 
 impl EvalOutput {
     /// Convenience for single-output nodes.
     pub fn single(result: NetworkResult) -> Self {
-        EvalOutput { primary: result, extra: vec![] }
+        EvalOutput { results: vec![result] }
     }
 
-    /// Get result for a given output pin index (0-based for result pins).
+    /// Multi-output constructor.
+    pub fn multi(results: Vec<NetworkResult>) -> Self {
+        EvalOutput { results }
+    }
+
+    /// Get result for a given output pin index.
     pub fn get(&self, output_pin_index: i32) -> NetworkResult {
-        if output_pin_index == 0 {
-            self.primary.clone()
-        } else {
-            let idx = (output_pin_index - 1) as usize;
-            self.extra.get(idx).cloned().unwrap_or(NetworkResult::None)
-        }
+        self.results
+            .get(output_pin_index as usize)
+            .cloned()
+            .unwrap_or(NetworkResult::None)
+    }
+
+    /// Get the primary (pin 0) result.
+    pub fn primary(&self) -> &NetworkResult {
+        &self.results[0]
     }
 }
 ```
@@ -141,35 +208,15 @@ pub fn evaluate(..., output_pin_index: i32, ...) -> NetworkResult {
 }
 ```
 
-**Critical detail:** The evaluator already has evaluation caching infrastructure. The change ensures a node with multiple outputs is only evaluated once even when multiple downstream nodes pull from different pins.
+**Eval cache.** We add a per-scene-generation cache (`HashMap<u64, EvalOutput>`) to the evaluator context. Currently the evaluator avoids redundant evaluation through the DAG traversal structure (each node evaluated at most once per downstream path). But with multi-output, the same node may be pulled from different output pins by different downstream consumers. The cache ensures one `eval()` call per node per scene generation. This is also a performance improvement for single-output nodes that fan out to multiple consumers.
 
-**Note on `eval_cache`:** Currently the evaluator doesn't cache eval results between `evaluate()` calls within a single `generate_scene()` invocation (each displayed node triggers fresh recursive evaluation). We should add a per-scene-generation cache (`HashMap<u64, EvalOutput>`) to the evaluator. This is a performance improvement even for single-output nodes and becomes essential for multi-output to avoid redundant evaluations. **Update:** Looking more closely at the code, the evaluator does already avoid redundant evaluation through the DAG traversal structure (each node evaluated at most once per downstream path). But with multi-output, the same node may be pulled from different output pins by different downstream consumers. The cache ensures one eval per node per scene generation.
+The cache must be cleared at the start of each `generate_scene()` call.
 
 #### 4. generate_scene(): Display Per Output Pin
 
 Currently `displayed_node_ids: HashMap<u64, NodeDisplayType>` tracks which nodes are visible. We need to know *which output pin* to display.
 
-**New structure:**
-
-```rust
-/// Identifies a specific output of a specific node.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct DisplayedOutput {
-    pub node_id: u64,
-    pub output_pin_index: i32,  // 0, 1, 2, ... (not -1; function pins are never displayed)
-    pub display_type: NodeDisplayType,
-}
-```
-
-**Option A: Replace `displayed_node_ids` with `displayed_outputs: HashMap<(u64, i32), NodeDisplayType>`**
-
-This is the clean approach. A node with two outputs showing would have two entries. The scene generation loop iterates displayed outputs, evaluates each (with caching), and produces a `NodeSceneData` per displayed output.
-
-**Option B: Keep `displayed_node_ids` as-is and add `displayed_output_pins: HashMap<u64, HashSet<i32>>`**
-
-More backward compatible for serialization. `displayed_node_ids` retains its role (the node is "displayed"), and `displayed_output_pins` says which pins. If a node is in `displayed_node_ids` but not in `displayed_output_pins`, it defaults to pin 0 only (backward compatibility with old files).
-
-**Recommendation: Option B.** This preserves backward compatibility with existing `.cnnd` files and minimizes changes to the display policy resolver and undo system. Single-output nodes work exactly as before.
+**Approach:** Keep `displayed_node_ids` for node-level display state (is this node visible at all?), add `displayed_output_pins: HashMap<u64, HashSet<i32>>` for per-pin control.
 
 ```rust
 // node_network.rs
@@ -182,37 +229,32 @@ pub struct NodeNetwork {
 ```
 
 **Behavior:**
-- When `displayed_output_pins` has no entry for a node, pin 0 is displayed (backward compat).
-- When toggling display for a multi-output node, the initial toggle shows pin 0. Per-pin toggles are separate.
-- `generate_scene()` generates a `NodeSceneData` per (node_id, pin_index) pair, keyed differently in the scene.
+- A node is in `displayed_node_ids` = it is "visible" (unchanged semantics).
+- `displayed_output_pins` says *which pins* of that visible node are rendered in the viewport.
+- When `displayed_output_pins` has no entry for a displayed node, **all** output pins are displayed (backward compat default — for single-output nodes this means pin 0; for multi-output nodes this means all pins). Alternative: default to pin 0 only. **Decision: default to pin 0 only.** This is safer — showing everything by default could be surprising for multi-output nodes. The absence of an entry means "legacy node, show pin 0."
+- Display policy resolver (Manual, Selected, Frontier) continues to operate at node level. Pin-level display is always explicit/manual.
 
-**Scene data key change:**
+**Scene generation:**
 
-```rust
-// structure_designer_scene.rs
-pub struct StructureDesignerScene {
-    // Change from HashMap<u64, NodeSceneData> to:
-    pub node_data: HashMap<(u64, i32), NodeSceneData>,  // (node_id, output_pin_index) → scene data
-    // ... rest unchanged ...
-}
-```
-
-**However**, this key change has widespread impact (renderer, Flutter, etc.). A more pragmatic initial approach:
-
-For the first version, keep `node_data: HashMap<u64, NodeSceneData>` and have `NodeSceneData` contain results for all displayed pins of that node:
+`generate_scene()` is called once per displayed node. It now evaluates the node (via cached `EvalOutput`) and produces `NodeSceneData` containing outputs for all displayed pins of that node.
 
 ```rust
 pub struct NodeSceneData {
-    pub outputs: Vec<(i32, NodeOutput)>,  // (pin_index, output) for each displayed pin
-    pub geo_tree: Option<GeoNode>,        // from primary output
+    pub outputs: Vec<DisplayedPinOutput>,  // one per displayed pin
     pub node_errors: HashMap<u64, String>,
     pub node_output_strings: HashMap<u64, String>,
     pub unit_cell: Option<UnitCellStruct>,
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
 }
+
+pub struct DisplayedPinOutput {
+    pub pin_index: i32,
+    pub output: NodeOutput,
+    pub geo_tree: Option<GeoNode>,
+}
 ```
 
-Or even simpler for v1: keep `output: NodeOutput` as pin 0's output, add `extra_outputs: Vec<(i32, NodeOutput)>` for additional displayed pins. The renderer handles all of them.
+**Phase 1 simplification:** In the early phases, `NodeSceneData` keeps its current single `output: NodeOutput` field. We always evaluate and display pin 0 only. The multi-output display logic is added in a later phase. This lets us land the `NodeType` and `EvalOutput` changes without touching the renderer/Flutter display pipeline.
 
 #### 5. Custom Network Nodes (Return Node)
 
@@ -221,26 +263,31 @@ When a custom network is used as a node in another network, the evaluator curren
 evaluate(child_network_stack, child_network.return_node_id.unwrap(), 0, ...)
 ```
 
-This evaluates the return node's pin 0 and uses it as the custom node's pin 0 output.
-
-**For multi-output custom networks:** The return node's multi-outputs become the custom node's multi-outputs. The evaluator dispatches:
+**For multi-output custom networks:** The return node's outputs become the custom node's outputs. The evaluator dispatches:
 ```rust
 evaluate(child_network_stack, child_network.return_node_id.unwrap(), output_pin_index, ...)
 ```
 
-The child network's return node must have matching extra output pins. The parent network's `NodeType.extra_output_pins` should mirror the return node's extra output pins. `update_network_output_type()` in the validator already handles updating `output_type` from the return node — extend it to also update `extra_output_pins`.
+The parent network's `NodeType.output_pins` should mirror the return node's output pins. `update_network_output_type()` in the validator already handles updating `output_type` from the return node — extend it to also update the full `output_pins` list.
+
+This is a later phase. Initially, custom networks continue to expose only pin 0.
 
 #### 6. Wire Connection Compatibility
 
-**No changes needed to `Wire` or `Argument`.** The wire's `source_output_pin_index: i32` already supports positive indices. `connect_nodes()` works as-is. Type validation at connection time just needs to call `get_output_pin_type(pin_index)` which already dispatches correctly with the NodeType change.
+**No changes needed to `Wire` or `Argument`.** The wire's `source_output_pin_index: i32` already supports positive indices. `connect_nodes()` works as-is. Type validation at connection time just needs to call `get_output_pin_type(pin_index)` which already dispatches correctly with the new `output_pins` vec.
 
 #### 7. Serialization (.cnnd)
 
-`NodeType` serialization needs to include `extra_output_pins`. For backward compatibility:
-- If `extra_output_pins` is empty, omit it from JSON (old format).
-- On load, if the field is missing, default to empty vec.
+**NodeType serialization.** Currently serializes `output_type` as a single string. Change to serialize `output_pins` as an array of `{name, data_type}` objects.
 
-`displayed_output_pins` similarly: omit if empty, default to empty on load.
+**Backward compatibility on load:**
+- If the JSON has old-style `"output_type": "Atomic"`, convert to `output_pins: [{ name: "result", data_type: "Atomic" }]`.
+- If the JSON has new-style `"output_pins": [...]`, use directly.
+- On save, always write new format. Old atomCAD versions won't load new files, but this is acceptable for a forward-moving format.
+
+**`displayed_output_pins` serialization:**
+- Omit from JSON if empty (all nodes default to pin 0 display).
+- On load, if missing, default to empty HashMap.
 
 ### atom_edit Node Changes
 
@@ -254,8 +301,11 @@ With multi-output:
 ```rust
 NodeType {
     name: "atom_edit".to_string(),
-    output_type: DataType::Atomic,  // pin 0: applied result
-    extra_output_pins: vec![
+    output_pins: vec![
+        OutputPinDefinition {
+            name: "result".to_string(),
+            data_type: DataType::Atomic,  // pin 0: applied result
+        },
         OutputPinDefinition {
             name: "diff".to_string(),
             data_type: DataType::Atomic,  // pin 1: raw diff
@@ -282,17 +332,18 @@ fn eval(&self, ...) -> EvalOutput {
     }
     // ... apply diff decorations
 
-    EvalOutput {
-        primary: NetworkResult::Atomic(result),
-        extra: vec![NetworkResult::Atomic(diff_output)],
-    }
+    EvalOutput::multi(vec![
+        NetworkResult::Atomic(result),
+        NetworkResult::Atomic(diff_output),
+    ])
 }
 ```
 
 **Deprecation of `output_diff` flag:** With multi-output, `output_diff` is no longer needed. The user controls visibility per pin. For migration:
-- Keep `output_diff` in serialization for backward compatibility.
-- On load, if `output_diff` is true, add pin 1 to `displayed_output_pins`. If false, only pin 0.
+- Keep `output_diff` in serialization for backward compatibility on load.
+- On load, if `output_diff` is true, add pin 1 to `displayed_output_pins` for that node. If false, only pin 0.
 - Remove `output_diff` from the properties panel.
+- The `show_anchor_arrows` and `include_base_bonds_in_diff` flags remain — they affect *how* the diff output is computed, independent of which pin is displayed.
 
 ### Flutter UI Changes
 
@@ -301,18 +352,19 @@ fn eval(&self, ...) -> EvalOutput {
 ```rust
 pub struct NodeView {
     // ... existing fields ...
-    pub output_type: String,       // pin 0 type (unchanged)
-    pub function_type: String,     // pin -1 type (unchanged)
-    pub extra_output_pins: Vec<OutputPinView>,  // NEW
-    pub displayed_output_pins: Vec<i32>,        // NEW: which pins are displayed
+    pub output_pins: Vec<OutputPinView>,        // NEW: replaces output_type
+    pub function_type: String,                  // pin -1 type (unchanged)
+    pub displayed_output_pins: Vec<i32>,        // NEW: which pins are currently displayed
 }
 
 pub struct OutputPinView {
     pub name: String,
     pub data_type: String,
-    pub index: i32,  // 1, 2, ...
+    pub index: i32,  // 0, 1, 2, ...
 }
 ```
+
+The old `output_type: String` field can be kept temporarily for compatibility and derived from `output_pins[0].data_type`.
 
 #### 2. Node Widget Layout
 
@@ -321,47 +373,57 @@ Current layout (title bar):
 [Node Type Name          ] [👁] [  ] [fn●]
 ```
 
-Proposed layout for multi-output nodes:
+**Single-output nodes** (no visual change):
 ```
-[Node Type Name                ] [fn●]
-                            [👁] [●]    ← pin 0 (primary result)
-  [param1 ●]                [👁] [●]    ← pin 1 ("diff")
-  [param2 ●]
+[Node Type Name          ] [👁] [  ] [fn●]
 ```
 
-**Key changes:**
-- The eye icon moves from the title bar to beside each output pin.
-- Each output pin gets its own row on the right side of the node body.
-- Output pin names are shown as tooltips on hover (not displayed permanently, to save space).
-- For single-output nodes, the eye icon stays in the title bar (no visual change).
+For single-output nodes, the eye icon stays in the title bar — it controls pin 0 display. No change from current behavior.
 
-**Alternative considered: eye icon in title bar with a dropdown.** Rejected — too many clicks, doesn't show state at a glance.
+**Multi-output nodes:**
+```
+┌─────────────────────────────────────┐
+│ Node Type Name              [fn●]   │  ← title bar (no eye icon here)
+├─────────────────────────────────────┤
+│                                     │
+│  [●] param1          [👁] result [●]│  ← pin 0 with eye + label
+│  [●] param2            [👁] diff [●]│  ← pin 1 with eye + label
+│                                     │
+└─────────────────────────────────────┘
+```
 
-**Alternative considered: eye icons only in title bar, one per output.** Could work for 2 outputs but doesn't scale. Also separates the eye icon from the pin it refers to, which is confusing.
+**Key layout decisions:**
+- For multi-output nodes, eye icons move from the title bar to beside each output pin on the right side.
+- Output pin **names are displayed** next to each pin (unlike the single-output case where there's nothing to distinguish). Space is tight but with short names like "result" and "diff" it fits. Names are right-aligned, before the pin circle.
+- For single-output nodes, nothing changes. The eye icon stays in the title bar.
+- On hover over an output pin, a tooltip shows the full pin name and data type.
+
+**Alternative considered: always show eye icons in title bar, one per output.** Separates the icon from the pin it refers to — confusing when there are multiple.
+
+**Alternative considered: show names only on hover.** With multiple pins, users need to see which is which at a glance. Short names are acceptable.
 
 #### 3. Display Toggle Behavior
 
 - Each output pin's eye icon toggles independently.
 - Multiple pins can be displayed simultaneously (not radio-button exclusive).
-- **Rationale:** Displaying both the result and the diff simultaneously is the core use case. Radio buttons would defeat the purpose. The viewport renders both as separate atomic structures (which can overlap, but that's useful for visual comparison).
-- When the node-level display is toggled off (e.g., by deselection or display policy), all pin displays are hidden. When toggled back on, the previously-displayed pins restore.
+- **Rationale:** Displaying both the result and the diff simultaneously is the core use case. Radio buttons would defeat the purpose. The viewport renders both as separate structures (which can overlap, but that's useful for visual comparison).
+- When the node-level display is toggled off (e.g., by display policy), all pin displays are hidden. When toggled back on, the previously-displayed pins restore.
 
 #### 4. Wire Attachment Points
 
 For multi-output nodes, output pins stack vertically on the right side:
 ```
-                    ●  ← pin 0 (top)
-                    ●  ← pin 1
-                    ●  ← pin 2 (if any)
+                    ● result  ← pin 0 (top)
+                    ● diff    ← pin 1
 ```
 
-Wire endpoint calculation needs to account for the output pin index to compute the correct vertical offset. The existing `NODE_VERT_WIRE_OFFSET_PER_PARAM` pattern extends naturally — we add a similar offset per extra output pin.
+Wire endpoint calculation accounts for the output pin index to compute the correct vertical offset. The existing `NODE_VERT_WIRE_OFFSET_PER_PARAM` pattern extends naturally.
+
+**Input/output alignment:** Input pins are on the left, output pins are on the right. They're in separate columns. A node can have more inputs than outputs or vice versa. The node body height is `max(input_pin_count, output_pin_count) * PIN_SPACING`.
 
 #### 5. NodeNetworkPainter
 
-The painter needs to:
-- Draw wires to the correct output pin vertical position based on `source_output_pin_index`.
-- Currently all result-pin wires go to the same point. With multiple result pins, each pin index maps to a different y-offset.
+The painter draws wires to the correct output pin vertical position based on `source_output_pin_index`. Currently all result-pin wires go to the same point. With multiple result pins, each pin index maps to a different y-offset.
 
 ### Text Format Changes
 
@@ -380,57 +442,77 @@ The `.pinname` suffix after a node reference selects the output pin. Unqualified
 
 ### Undo System Impact
 
-- **`displayed_output_pins`** is new state that must be captured in undo snapshots. The `SerializableNodeNetwork` format needs to include it.
-- **`SetNodeDisplay` command** needs extension or a new `SetOutputPinDisplay` command.
+- **`displayed_output_pins`** is new state captured in undo snapshots. The `SerializableNodeNetwork` format needs to include it.
+- **`SetNodeDisplay` command** needs extension or a new `SetOutputPinDisplay` command for per-pin toggling.
 - **Snapshot comparison** in tests: `normalize_json()` may need to sort `displayed_output_pins`.
-- **`output_diff` migration:** If we remove `output_diff`, the `AtomEditToggleFlagCommand` for it should migrate to `SetOutputPinDisplay` operations.
+- **`output_diff` migration:** The `AtomEditToggleFlagCommand` for `output_diff` is replaced by `SetOutputPinDisplay` operations.
 
 ### Implementation Phases
 
-#### Phase 1: Core Multi-Output Infrastructure (Rust)
-- Add `OutputPinDefinition` and `extra_output_pins` to `NodeType`
-- Change `NodeData::eval()` → `EvalOutput` (mechanical migration of all nodes to `EvalOutput::single()`)
-- Update `get_output_pin_type()` for positive indices
-- Add eval caching in evaluator
-- Update `evaluate()` to dispatch from cached `EvalOutput`
-- Add `displayed_output_pins` to `NodeNetwork`
-- Update `generate_scene()` to handle multi-output display
-- Serialization backward compatibility
+#### Phase 1: Representation Change (Rust only, no behavior change)
 
-#### Phase 2: atom_edit Multi-Output
-- Register `atom_edit` with extra "diff" output pin
-- Refactor `atom_edit` eval to produce both result and diff
+The goal is to land the new data structures while all code continues to operate on pin 0 only.
+
+- Replace `NodeType.output_type: DataType` with `output_pins: Vec<OutputPinDefinition>`
+- Add `OutputPinDefinition` struct, `OutputPinDefinition::single()` helper
+- Migrate all node type registrations to use `output_pins`
+- Add `output_type()` accessor on `NodeType` (returns `&output_pins[0].data_type`)
+- Migrate all code that reads `node_type.output_type` to use the accessor
+- Change `NodeData::eval()` → `EvalOutput`, migrate all nodes to `EvalOutput::single()`
+- Update evaluator to unwrap `EvalOutput` → primary result (no caching yet, just `.primary()`)
+- Serialization: load old `output_type` format into `output_pins[0]`, save new format
+- All tests should pass with zero behavior change
+
+#### Phase 2: Evaluator Multi-Output Support
+
+- Add per-evaluation `EvalOutput` cache to evaluator (clear per `generate_scene()`)
+- Update `evaluate()` to cache and dispatch by pin index
+- Update `generate_scene()`: evaluate all displayed pins, build scene data
+- Add `displayed_output_pins` to `NodeNetwork` with backward-compat defaults
+- `NodeSceneData` gains multi-output support
+- Renderer/display pipeline handles multiple outputs per node
+
+#### Phase 3: atom_edit Multi-Output
+
+- Register `atom_edit` with two output pins: "result" (pin 0) and "diff" (pin 1)
+- Refactor `atom_edit` eval to produce both results
 - Deprecate `output_diff` flag with migration logic
 - Update `atom_edit` gadgets/tools that check `output_diff`
 
-#### Phase 3: Flutter UI
-- Extend `NodeView` API with extra output pins and display state
-- Update node widget to show per-pin eye icons for multi-output nodes
+#### Phase 4: Flutter UI
+
+- Extend `NodeView` API with `output_pins` and `displayed_output_pins`
+- Update node widget to show per-pin eye icons and labels for multi-output nodes
 - Update wire rendering for multiple output pin positions
 - Update wire dragging/connection for output pin selection
 
-#### Phase 4: Text Format
+#### Phase 5: Text Format
+
 - Add `.pinname` output pin reference syntax to parser
 - Update serializer to emit qualified references when needed
 
-#### Phase 5: Undo Integration
+#### Phase 6: Undo Integration
+
 - `SetOutputPinDisplay` command
-- Update snapshot format
+- Update snapshot format for `displayed_output_pins`
 - Migrate `output_diff` toggle to display-based approach
 - Tests
 
-#### Phase 6: Custom Network Multi-Output
-- Update `update_network_output_type()` to propagate extra output pins from return node
+#### Phase 7: Custom Network Multi-Output
+
+- Update `update_network_output_type()` to propagate full `output_pins` from return node
 - Update custom node evaluation to pass through multi-output
-- UI for setting extra outputs on parameter/return nodes in custom networks
+- UI for defining extra outputs in custom networks
 
 ## Open Questions
 
 1. **Should all output pins of a multi-output node share the same eval, or could some be lazy?**
-   Current design: single eval, all outputs computed. If the diff computation is expensive and the user only displays pin 0, we'd still compute both. For `atom_edit`, both outputs derive from the same `apply_diff()` call so the marginal cost is low. For future nodes where extra outputs are expensive, we could add a `requested_pins: HashSet<i32>` parameter to `eval()`.
+   Current design: single eval, all outputs computed. If the diff computation is expensive and the user only displays pin 0, we'd still compute both. For `atom_edit`, both outputs derive from the same `apply_diff()` call so the marginal cost is low. For future nodes where extra outputs are expensive, we could add a `requested_pins: &HashSet<i32>` parameter to `eval()`. **Recommendation: defer this.** Add it when a real performance need arises.
 
-2. **Display policy interaction.** The display policy resolver (Manual, Selected, Frontier) currently operates on nodes. With per-pin display, should policies control which pins are shown? Proposal: policies still toggle node-level display. Pin-level display is always manual/explicit.
+2. **Display policy interaction.** The display policy resolver (Manual, Selected, Frontier) currently operates on nodes. With per-pin display, should policies control which pins are shown? **Recommendation:** Policies continue to toggle node-level display. Pin-level display is always manual/explicit.
 
-3. **What happens when you connect to pin 1 but the node only has pin 0?** Currently returns `DataType::None` which prevents connection in the UI. The type checker at wire-creation time should validate. This already works: `get_output_pin_type(1)` returns `DataType::None` for a single-output node, and `DataType::None` cannot be connected to any input.
+3. **What happens when you connect to pin 1 but the node only has pin 0?** `get_output_pin_type(1)` returns `DataType::None` for a single-output node, which cannot be connected to any input. The UI should not offer invalid pins during wire dragging.
 
-4. **atom_edit tool interaction with simultaneous display.** When both result and diff are displayed, and the user clicks an atom, which output's coordinate space is used for hit testing? Currently hit testing operates on the active/selected node's output. Proposal: hit testing uses the primary output (pin 0) when in result mode, or the diff output (pin 1) when the user's active tool context indicates diff editing. This is already the behavior — tools know whether they're working with diff-space or result-space coordinates.
+4. **atom_edit tool interaction with simultaneous display.** When both result and diff are displayed, and the user clicks an atom, which output's coordinate space is used for hit testing? Hit testing already uses the primary output (pin 0) in result mode and the diff in diff mode — tools know which space they're working in. Showing both outputs simultaneously doesn't change this; the active tool context determines which output is interactive.
+
+5. **Node body height with asymmetric input/output counts.** A node with 5 inputs and 2 outputs: the body height is driven by `max(5, 2) = 5` rows. Output pins are top-aligned within that space. This matches how input pins work today (they don't stretch to fill the body if there's only one).
