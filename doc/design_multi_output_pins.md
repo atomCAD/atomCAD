@@ -182,53 +182,189 @@ impl EvalOutput {
 
 **Alternative considered: keeping `NetworkResult` and adding `NetworkResult::Multi(Vec<NetworkResult>)`.** Rejected because it would require every consumer of `eval()` to pattern-match on `Multi` vs. a direct value, and it conflates the evaluation result structure with the value type system. `EvalOutput` is a clean wrapper that separates "how many pins" from "what type of value."
 
-#### 3. Evaluator: Dispatch Per Pin from EvalOutput
+#### 3. Evaluator: Two Methods — `evaluate()` and `evaluate_all_outputs()`
 
-The evaluator currently calls `eval()` and returns the `NetworkResult`. With multi-output, `evaluate()` calls `eval()` and extracts the requested pin:
+The evaluator gains a new method `evaluate_all_outputs()` that returns the full `EvalOutput` (all pins) from a single `eval()` call. The existing `evaluate()` delegates to it and extracts the requested pin:
 
 ```rust
-// network_evaluator.rs — evaluate()
-pub fn evaluate(..., output_pin_index: i32, ...) -> NetworkResult {
+// network_evaluator.rs
+
+/// Evaluate a node and return all output pin results.
+/// Used by generate_scene() to avoid redundant evaluation when
+/// displaying multiple output pins of the same node.
+fn evaluate_all_outputs(
+    &self,
+    network_stack: &[NetworkStackElement<'_>],
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    decorate: bool,
+    context: &mut NetworkEvaluationContext,
+) -> EvalOutput {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+    let eval_output = if registry.built_in_node_types.contains_key(&node.node_type_name) {
+        node.data.eval(self, network_stack, node_id, registry, decorate, context)
+    } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
+        // custom node — evaluate return node, get all outputs
+        // (details: validity check, child network stack, etc. — same as current evaluate())
+        ...
+    } else {
+        EvalOutput::single(NetworkResult::Error(format!("Unknown node type: {}", node.node_type_name)))
+    };
+
+    // Record error/display string from primary (pin 0) result.
+    // This preserves current behavior: node_errors and node_output_strings
+    // are keyed by node_id and reflect the primary output.
+    let primary = eval_output.primary();
+    if let NetworkResult::Error(error_message) = primary {
+        context.node_errors.insert(node_id, error_message.clone());
+    }
+    context.node_output_strings.insert(node_id, primary.to_display_string());
+
+    eval_output
+}
+
+/// Evaluate a node and return the result for a specific output pin.
+/// Used by wiring/argument resolution (evaluate_arg) and custom network evaluation.
+pub fn evaluate(
+    &self,
+    network_stack: &[NetworkStackElement<'_>],
+    node_id: u64,
+    output_pin_index: i32,
+    registry: &NodeTypeRegistry,
+    decorate: bool,
+    context: &mut NetworkEvaluationContext,
+) -> NetworkResult {
     if output_pin_index == -1 {
         // Function pin logic unchanged
         return NetworkResult::Function(Closure { ... });
     }
 
-    // Evaluate node — returns all outputs
-    let eval_output = node.data.eval(self, network_stack, node_id, registry, decorate, context);
-
-    // Extract the requested pin
-    eval_output.get(output_pin_index)
+    self.evaluate_all_outputs(network_stack, node_id, registry, decorate, context)
+        .get(output_pin_index)
 }
 ```
 
-**No new eval caching.** The evaluator does not currently cache eval results, and redundant evaluation of fan-out nodes already exists today. Multi-output does not fundamentally change this: a node with two downstream consumers is already evaluated twice regardless of whether it has one or two output pins. Adding an eval cache would be a separate performance improvement orthogonal to this feature. We keep the existing evaluation semantics unchanged.
+**No new eval caching.** The evaluator does not add a general eval cache. Redundant evaluation of fan-out nodes already exists today and is a separate concern. However, `generate_scene()` uses `evaluate_all_outputs()` to call `eval()` once per displayed node and extract all displayed pins from the single `EvalOutput` — avoiding the guaranteed double-evaluation that would occur if it called `evaluate()` separately for each displayed pin. This is not a cache; it's just holding onto the return value long enough to use all of it.
 
 #### 4. generate_scene(): Display Per Output Pin
 
 Currently `displayed_node_ids: HashMap<u64, NodeDisplayType>` tracks which nodes are visible. We need to know *which output pin* to display.
 
-**Approach:** Keep `displayed_node_ids` for node-level display state (is this node visible at all?), add `displayed_output_pins: HashMap<u64, HashSet<i32>>` for per-pin control.
+**Approach:** Replace `displayed_node_ids: HashMap<u64, NodeDisplayType>` with a unified `displayed_nodes: HashMap<u64, NodeDisplayState>` that bundles the display type and the set of displayed output pins into a single entry.
 
 ```rust
 // node_network.rs
+
+/// Display state for a single node. Bundles node-level visibility (Normal/Ghost)
+/// with per-output-pin display control.
+#[derive(Clone, Debug)]
+pub struct NodeDisplayState {
+    pub display_type: NodeDisplayType,   // Normal or Ghost
+    pub displayed_pins: HashSet<i32>,    // which output pins are rendered in the viewport
+}
+
+impl NodeDisplayState {
+    /// Default display state: Normal visibility, pin 0 only.
+    pub fn normal() -> Self {
+        Self {
+            display_type: NodeDisplayType::Normal,
+            displayed_pins: HashSet::from([0]),
+        }
+    }
+
+    pub fn with_type(display_type: NodeDisplayType) -> Self {
+        Self {
+            display_type,
+            displayed_pins: HashSet::from([0]),
+        }
+    }
+}
+
 pub struct NodeNetwork {
     // ... existing ...
-    pub displayed_node_ids: HashMap<u64, NodeDisplayType>,  // unchanged
-    pub displayed_output_pins: HashMap<u64, HashSet<i32>>,  // NEW: node_id → set of displayed pin indices
+    pub displayed_nodes: HashMap<u64, NodeDisplayState>,  // replaces displayed_node_ids
     // ...
 }
 ```
 
+**Why a single map instead of two.** An earlier version of this design kept `displayed_node_ids` unchanged and added a separate `displayed_output_pins: HashMap<u64, HashSet<i32>>` map. This creates an invariant that must be manually maintained at every mutation site: undo commands, display policy resolver, serialization load, node deletion, selection factoring, text format editor, paste/duplicate — all must keep two maps in sync. A node in one map but not the other is either a latent bug or an ambiguous "empty means default" convention. Bundling the state into one struct eliminates this entire class of bugs. If a node is displayed, all its display state is present. If it's not displayed, there's no entry at all.
+
+**Backward-compatible accessors.** The existing methods on `NodeNetwork` are updated internally but keep their signatures, so callers are unaffected:
+
+```rust
+impl NodeNetwork {
+    pub fn is_node_displayed(&self, node_id: u64) -> bool {
+        self.displayed_nodes.contains_key(&node_id)
+    }
+
+    pub fn get_node_display_type(&self, node_id: u64) -> Option<NodeDisplayType> {
+        self.displayed_nodes.get(&node_id).map(|s| s.display_type)
+    }
+
+    pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
+        if self.nodes.contains_key(&node_id) {
+            if is_displayed {
+                // Preserve existing pin state if re-displaying, otherwise default
+                self.displayed_nodes
+                    .entry(node_id)
+                    .or_insert_with(NodeDisplayState::normal);
+            } else {
+                self.displayed_nodes.remove(&node_id);
+            }
+        }
+    }
+
+    pub fn set_node_display_type(&mut self, node_id: u64, display_type: Option<NodeDisplayType>) {
+        if self.nodes.contains_key(&node_id) {
+            match display_type {
+                Some(dt) => {
+                    self.displayed_nodes
+                        .entry(node_id)
+                        .and_modify(|s| s.display_type = dt)
+                        .or_insert_with(|| NodeDisplayState::with_type(dt));
+                }
+                None => {
+                    self.displayed_nodes.remove(&node_id);
+                }
+            }
+        }
+    }
+
+    /// Get the set of displayed output pins for a node.
+    /// Returns None if the node is not displayed.
+    pub fn get_displayed_pins(&self, node_id: u64) -> Option<&HashSet<i32>> {
+        self.displayed_nodes.get(&node_id).map(|s| &s.displayed_pins)
+    }
+
+    /// Toggle a specific output pin's display state for an already-displayed node.
+    /// If the last pin is removed, the node is auto-removed from `displayed_nodes`
+    /// (a displayed node with no visible pins is wasteful — it would be evaluated
+    /// for nothing by generate_scene()).
+    pub fn set_pin_displayed(&mut self, node_id: u64, pin_index: i32, displayed: bool) {
+        if let Some(state) = self.displayed_nodes.get_mut(&node_id) {
+            if displayed {
+                state.displayed_pins.insert(pin_index);
+            } else {
+                state.displayed_pins.remove(&pin_index);
+                if state.displayed_pins.is_empty() {
+                    self.displayed_nodes.remove(&node_id);
+                }
+            }
+        }
+    }
+}
+```
+
 **Behavior:**
-- A node is in `displayed_node_ids` = it is "visible" (unchanged semantics).
-- `displayed_output_pins` says *which pins* of that visible node are rendered in the viewport.
-- When `displayed_output_pins` has no entry for a displayed node, **all** output pins are displayed (backward compat default — for single-output nodes this means pin 0; for multi-output nodes this means all pins). Alternative: default to pin 0 only. **Decision: default to pin 0 only.** This is safer — showing everything by default could be surprising for multi-output nodes. The absence of an entry means "legacy node, show pin 0."
-- Display policy resolver (Manual, Selected, Frontier) continues to operate at node level. Pin-level display is always explicit/manual.
+- A node is in `displayed_nodes` = it is "visible" (same semantics as the old `displayed_node_ids`).
+- `displayed_pins` within each entry says *which pins* are rendered in the viewport.
+- When a node becomes displayed (by any path: user toggle, display policy, undo/redo), `displayed_pins` defaults to `{0}` (pin 0 only). This is safe — the user explicitly adds more pins. No "empty means default" ambiguity.
+- Display policy resolver (Manual, Selected, Frontier) continues to operate at node level. Pin-level display is always explicit/manual. The resolver calls `set_node_display_type()` which preserves existing `displayed_pins` via the `entry().and_modify()` pattern.
 
 **Scene generation:**
 
-`generate_scene()` is called once per displayed node. It now evaluates the node (via cached `EvalOutput`) and produces `NodeSceneData` containing outputs for all displayed pins of that node.
+`generate_scene()` is called once per displayed node. It calls `evaluate_all_outputs()` once to get the full `EvalOutput`, then extracts each displayed pin's result from it. This avoids redundant evaluation when multiple pins are displayed. It produces `NodeSceneData` containing outputs for all displayed pins of that node.
 
 ```rust
 pub struct NodeSceneData {
@@ -349,7 +485,9 @@ let output_pins = if !serializable.output_pins.is_empty() {
 
 **Additional safety:** Even for custom networks, `update_network_output_type()` recomputes the output type from the return node after loading. So even if the serialized `output_pins` is stale or migrated incorrectly, it gets corrected by the validator. The serialized value is a snapshot, not the source of truth.
 
-**2. `SerializableNodeNetwork` — add `displayed_output_pins`**
+**2. `SerializableNodeNetwork` — add `displayed_output_pins` (serialization only)**
+
+The serialization format keeps `displayed_node_ids` and adds a separate `displayed_output_pins` for backward compatibility. These two fields are **merged into the unified `displayed_nodes: HashMap<u64, NodeDisplayState>` on load** and **split back out on save**.
 
 ```rust
 pub struct SerializableNodeNetwork {
@@ -357,7 +495,7 @@ pub struct SerializableNodeNetwork {
     pub node_type: SerializableNodeType,
     pub nodes: Vec<SerializableNode>,
     pub return_node_id: Option<u64>,
-    pub displayed_node_ids: Vec<(u64, NodeDisplayType)>,  // unchanged
+    pub displayed_node_ids: Vec<(u64, NodeDisplayType)>,  // always written (backward compat)
 
     // NEW: per-node pin display state. Omitted from JSON if empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -368,11 +506,44 @@ pub struct SerializableNodeNetwork {
 }
 ```
 
-**Loading logic:**
-- Old files: `displayed_output_pins` field absent → serde defaults to empty vec → all displayed nodes show pin 0 only (backward compat)
-- New files: field present → used directly
+**Loading logic (merge into `displayed_nodes`):**
+```rust
+// Build displayed_nodes from the two serialized fields
+let mut displayed_nodes = HashMap::new();
+for (node_id, display_type) in &serializable.displayed_node_ids {
+    displayed_nodes.insert(*node_id, NodeDisplayState {
+        display_type: *display_type,
+        displayed_pins: HashSet::from([0]),  // default: pin 0 only
+    });
+}
+// Overlay explicit pin display state where present
+for (node_id, pins) in &serializable.displayed_output_pins {
+    if let Some(state) = displayed_nodes.get_mut(node_id) {
+        state.displayed_pins = pins.iter().copied().collect();
+    }
+}
+network.displayed_nodes = displayed_nodes;
+```
 
-**Saving logic:** Only write if non-empty (`skip_serializing_if`). Single-output-only networks produce no `displayed_output_pins` entries, keeping old file format unchanged.
+- Old files: `displayed_output_pins` field absent → serde defaults to empty vec → all displayed nodes get `displayed_pins: {0}` (backward compat)
+- New files: field present → merged in, overriding the default `{0}`
+
+**Saving logic (split from `displayed_nodes`):**
+```rust
+let displayed_node_ids: Vec<(u64, NodeDisplayType)> = network
+    .displayed_nodes.iter()
+    .map(|(&id, state)| (id, state.display_type))
+    .collect();
+
+// Only write displayed_output_pins for nodes with non-default pin state
+let displayed_output_pins: Vec<(u64, Vec<i32>)> = network
+    .displayed_nodes.iter()
+    .filter(|(_, state)| state.displayed_pins != HashSet::from([0]))
+    .map(|(&id, state)| (id, state.displayed_pins.iter().copied().collect()))
+    .collect();
+```
+
+This keeps the JSON format identical for single-output-only networks (no `displayed_output_pins` field emitted). Old atomCAD versions can still read `displayed_node_ids` and ignore the unknown `displayed_output_pins` field.
 
 **3. atom_edit `output_diff` migration**
 
@@ -385,18 +556,18 @@ pub struct SerializableAtomEditData {
 }
 ```
 
-Migration happens at load time, after the atom_edit node data is deserialized and the node is inserted into the network. The loader checks: if a node is an `atom_edit` with `output_diff: true` AND the network has no `displayed_output_pins` entry for that node, then add `{node_id, [1]}` to `displayed_output_pins` (show diff pin). This logic runs once during deserialization and is idempotent.
+Migration happens at load time, after the atom_edit node data is deserialized and the node is inserted into the network, and after `displayed_nodes` has been built from the two serialized fields. The loader checks: if a node is an `atom_edit` with `output_diff: true` AND the node's `displayed_pins` has not already been set from `displayed_output_pins`, then set `displayed_pins` to `{1}` (show diff pin only). This logic runs once during deserialization and is idempotent.
 
-On save, `output_diff` is no longer written (or always written as `false`). The display state is captured by `displayed_output_pins` on the network.
+On save, `output_diff` is no longer written (or always written as `false`). The display state is captured in the node's `NodeDisplayState.displayed_pins` (which is serialized via `displayed_output_pins`).
 
 ##### Summary of backward compatibility guarantees
 
 | Scenario | Behavior |
 |----------|----------|
-| Old .cnnd with built-in nodes only | Loads perfectly. Built-in types get `output_pins` from registry. `displayed_output_pins` absent → defaults. |
+| Old .cnnd with built-in nodes only | Loads perfectly. Built-in types get `output_pins` from registry. No `displayed_output_pins` → all nodes get `displayed_pins: {0}`. |
 | Old .cnnd with custom networks | Loads correctly. `output_type` string migrated to `output_pins[0]`. Validator recomputes from return node anyway. |
-| Old .cnnd with atom_edit `output_diff: true` | `output_diff` flag read, migrated to `displayed_output_pins` entry for that node. |
-| Old .cnnd with `displayed_node_ids` only | `displayed_output_pins` absent → all displayed nodes show pin 0 only. |
+| Old .cnnd with atom_edit `output_diff: true` | `output_diff` flag read, migrated to `displayed_pins: {1}` in that node's `NodeDisplayState`. |
+| Old .cnnd with `displayed_node_ids` only | No `displayed_output_pins` → all entries in `displayed_nodes` get `displayed_pins: {0}`. |
 | New .cnnd loaded by old atomCAD | Will fail on custom networks (missing `output_type` field). Built-in-only files may work if `output_type` absence is tolerated by old code. Not a supported scenario. |
 
 ### Impact on Existing Caches
@@ -427,15 +598,13 @@ The codebase has several caching mechanisms. Here's how each is affected by the 
 #### 5. Per-Evaluation Context (`node_errors`, `node_output_strings`)
 
 - **What:** `HashMap<u64, String>` maps populated during DAG traversal. Error messages from `NetworkResult::Error(...)` and display strings from `result.to_display_string()`. Copied into `NodeSceneData` after evaluation.
-- **Impact: Minor.** Currently populated from the single `NetworkResult` returned by `evaluate()`. With multi-output, `evaluate()` still returns a single `NetworkResult` (for the requested pin), so the error/string capture code in `evaluate()` works as-is. However, for multi-output nodes, errors from pin 1 evaluation need consideration:
-  - Errors are accumulated inside `eval()` itself (not per-pin in the evaluator).
-  - `to_display_string()` is called on the result of `evaluate()` (one specific pin). For multi-output, the display string reflects whichever pin was requested. This is fine — the display string shown on the node widget comes from the primary pin.
+- **Impact: Minor.** With multi-output, `evaluate_all_outputs()` records error/display string from the **primary (pin 0) result**, preserving current behavior. Both `evaluate()` (single-pin path, used by wiring) and `evaluate_all_outputs()` (all-pins path, used by `generate_scene()`) share this recording logic. For multi-output nodes, errors from non-primary pins are accumulated inside `eval()` itself, not per-pin in the evaluator.
   - **No code change needed in Phase 1.** In later phases, we may want per-pin error/display strings, but this can be addressed when the UI supports it.
 
 #### 6. Undo/Redo Snapshots
 
 - **What:** `NodeSnapshot` and `SerializableNodeNetwork` store serialized node data (JSON) for undo/redo.
-- **Impact: None on snapshot mechanism.** Snapshots store serialized `NodeData`, not eval output. The `output_pins` change in `NodeType` will be reflected in `SerializableNodeNetwork`'s `node_type` field when serialized, but this is handled by the serialization migration (section 7 above), not by undo-specific code. The `displayed_output_pins` field is new network state that must be included in `SerializableNodeNetwork` — covered in the undo section below.
+- **Impact: None on snapshot mechanism.** Snapshots store serialized `NodeData`, not eval output. The `output_pins` change in `NodeType` will be reflected in `SerializableNodeNetwork`'s `node_type` field when serialized, but this is handled by the serialization migration (section 7 above), not by undo-specific code. The `displayed_output_pins` field in `SerializableNodeNetwork` captures the per-pin display state from `displayed_nodes` — this is part of the network snapshot automatically.
 
 ### atom_edit Node Changes
 
@@ -489,7 +658,7 @@ fn eval(&self, ...) -> EvalOutput {
 
 **Deprecation of `output_diff` flag:** With multi-output, `output_diff` is no longer needed. The user controls visibility per pin. For migration:
 - Keep `output_diff` in serialization for backward compatibility on load.
-- On load, if `output_diff` is true, add pin 1 to `displayed_output_pins` for that node. If false, only pin 0.
+- On load, if `output_diff` is true, set `displayed_pins` to `{1}` in that node's `NodeDisplayState`. If false, default `{0}` applies.
 - Remove `output_diff` from the properties panel.
 - The `show_anchor_arrows` and `include_base_bonds_in_diff` flags remain — they affect *how* the diff output is computed, independent of which pin is displayed.
 
@@ -548,7 +717,7 @@ pub struct NodeView {
     // ... existing fields ...
     pub output_pins: Vec<OutputPinView>,        // NEW: replaces output_type
     pub function_type: String,                  // pin -1 type (unchanged)
-    pub displayed_output_pins: Vec<i32>,        // NEW: which pins are currently displayed
+    pub displayed_pins: Vec<i32>,               // NEW: which pins are currently displayed
 }
 
 pub struct OutputPinView {
@@ -646,9 +815,9 @@ The `.pinname` suffix after a node reference selects the output pin. Unqualified
 
 ### Undo System Impact
 
-- **`displayed_output_pins`** is new state captured in undo snapshots. The `SerializableNodeNetwork` format needs to include it.
-- **`SetNodeDisplay` command** needs extension or a new `SetOutputPinDisplay` command for per-pin toggling.
-- **Snapshot comparison** in tests: `normalize_json()` may need to sort `displayed_output_pins`.
+- **`displayed_pins`** is part of `NodeDisplayState` in the unified `displayed_nodes` map, so it is automatically captured in `SerializableNodeNetwork` snapshots (serialized via `displayed_output_pins`). No separate snapshot mechanism needed.
+- **`SetNodeDisplay` command** needs extension or a new `SetOutputPinDisplay` command for per-pin toggling. `SetNodeDisplayCommand` currently stores `old_display_type: Option<NodeDisplayType>` / `new_display_type` — extend to store `old_display_state: Option<NodeDisplayState>` / `new_display_state` so pin display state is captured atomically with the display type.
+- **Snapshot comparison** in tests: `normalize_json()` may need to sort `displayed_output_pins` arrays.
 - **`output_diff` migration:** The `AtomEditToggleFlagCommand` for `output_diff` is replaced by `SetOutputPinDisplay` operations.
 
 ### Implementation Phases
@@ -698,16 +867,16 @@ Create frozen .cnnd fixture files **before implementation** that capture the old
 Fixture files in `rust/tests/fixtures/multi_output_migration/`:
 
 1. **`old_builtin_only.cnnd`** — A simple network with built-in nodes (e.g. sphere → union). Uses old `output_type` field on the network's `node_type`. Has `displayed_node_ids` but no `displayed_output_pins`.
-   - **Test:** Load → verify all nodes resolve their types from the registry with correct `output_pins`. Verify `displayed_output_pins` defaults to empty (pin 0 for all displayed nodes). Verify evaluation produces same results as before.
+   - **Test:** Load → verify all nodes resolve their types from the registry with correct `output_pins`. Verify `displayed_nodes` entries have `displayed_pins: {0}` (default). Verify evaluation produces same results as before.
 
 2. **`old_custom_network.cnnd`** — Two networks: one defines a custom node type (with old `"output_type": "Geometry"` on its `node_type`), the other uses it as a node.
    - **Test:** Load → verify custom network's `output_pins[0]` is migrated from `output_type` string. Verify `output_type()` accessor returns the correct `DataType`. Verify the custom node instance in the second network evaluates correctly.
 
 3. **`old_atom_edit_output_diff_true.cnnd`** — A network with an atom_edit node whose data has `"output_diff": true`.
-   - **Test (Phase 3):** Load → verify `output_diff` flag is migrated to `displayed_output_pins` entry showing pin 1 for that node. (This test is written in Phase 1 but the migration logic is implemented in Phase 3, so it starts as a `#[ignore]` test and is un-ignored in Phase 3.)
+   - **Test (Phase 3):** Load → verify `output_diff` flag is migrated to `displayed_pins: {1}` in that node's `NodeDisplayState`. (This test is written in Phase 1 but the migration logic is implemented in Phase 3, so it starts as a `#[ignore]` test and is un-ignored in Phase 3.)
 
 4. **`old_atom_edit_output_diff_false.cnnd`** — Same but with `"output_diff": false` (or absent).
-   - **Test (Phase 3):** Load → verify no `displayed_output_pins` entry for that node (defaults to pin 0).
+   - **Test (Phase 3):** Load → verify node's `displayed_pins` is `{0}` (default).
 
 **How to create the fixtures:** Run the current (pre-change) code to save representative networks, or hand-craft minimal JSON. The key is that they use the current serialization format and are frozen before any code changes.
 
@@ -716,19 +885,21 @@ Fixture files in `rust/tests/fixtures/multi_output_migration/`:
 #### Phase 2: Evaluator Multi-Output Support
 
 - Update `evaluate()` to dispatch by pin index from `EvalOutput`
-- Update `generate_scene()`: evaluate all displayed pins, build scene data
-- Add `displayed_output_pins` to `NodeNetwork` with backward-compat defaults
+- Add `evaluate_all_outputs()` method, have `generate_scene()` use it
+- Replace `displayed_node_ids: HashMap<u64, NodeDisplayType>` with `displayed_nodes: HashMap<u64, NodeDisplayState>` on `NodeNetwork`
+- Update all code that reads/writes `displayed_node_ids` to use the new accessors
+- Update serialization to split/merge `displayed_nodes` ↔ `displayed_node_ids` + `displayed_output_pins`
 - `NodeSceneData` gains multi-output support
 - Renderer/display pipeline handles multiple outputs per node
 - Implement interactive pin logic for hit testing (lowest-indexed displayed pin)
 
 **Tests:**
 - Test `evaluate()` with output_pin_index > 0: create a test node type with two output pins, wire pin 1 to a downstream node, verify the downstream node receives the correct value
-- Test `displayed_output_pins` defaults: node in `displayed_node_ids` but not in `displayed_output_pins` → pin 0 displayed
-- Test `displayed_output_pins` explicit: set pin 1 displayed, verify `generate_scene()` produces output for pin 1
+- Test `NodeDisplayState` defaults: new displayed node gets `displayed_pins: {0}`
+- Test `displayed_pins` explicit: set pin 1 displayed, verify `generate_scene()` produces output for pin 1
 - Test multi-output scene generation: display both pin 0 and pin 1 of a node, verify `NodeSceneData` contains both outputs
 - Test interactive pin determination: both pins displayed → pin 0 is interactive; only pin 1 displayed → pin 1 is interactive
-- Serialization roundtrip for `displayed_output_pins`
+- Serialization roundtrip: `displayed_nodes` with non-default `displayed_pins` survives save/load via the split `displayed_node_ids` + `displayed_output_pins` format
 
 **Manual testing:** No user-visible changes yet (Flutter UI not updated). All existing behavior preserved. Can verify via Rust tests that multi-output evaluation works.
 
@@ -744,25 +915,34 @@ Fixture files in `rust/tests/fixtures/multi_output_migration/`:
 - Test atom_edit eval returns `EvalOutput` with two results: pin 0 is applied result, pin 1 is raw diff
 - Test that pin 0 result matches the old `output_diff = false` output
 - Test that pin 1 result matches the old `output_diff = true` output
-- Test `output_diff` migration on load: old file with `output_diff: true` → pin 1 in `displayed_output_pins`; `output_diff: false` → pin 0 only
+- Test `output_diff` migration on load: old file with `output_diff: true` → `displayed_pins: {1}`; `output_diff: false` → `displayed_pins: {0}`
 - Test interactive pin with atom_edit: both pins displayed → hit test uses pin 0 (provenance mode); only pin 1 displayed → hit test uses pin 1 (diff-native mode)
 - Test decorations: only the interactive pin's output gets selection highlights; other pin gets inherent decorations only
 - Test `include_base_bonds_in_diff` and `show_anchor_arrows` flags still work on pin 1 output
 
 **Manual testing:** No user-visible changes yet (Flutter UI not updated). The Rust backend now produces multi-output for atom_edit but the Flutter UI still shows pin 0 only (old NodeView API). Existing behavior preserved.
 
-#### Phase 4: Flutter UI
+#### Phase 4: Flutter UI + Undo for Pin Display
 
-- Extend `NodeView` API with `output_pins` and `displayed_output_pins`
+- Extend `NodeView` API with `output_pins` and `displayed_pins`
 - Update node widget: eye icon next to each output pin, pin names for multi-output nodes
 - Update wire rendering for multiple output pin positions
 - Update wire dragging/connection for output pin selection
 - Per-pin display toggle API functions
+- `SetOutputPinDisplay` undo command for per-pin display toggling (stores `old_display_state` / `new_display_state` as `Option<NodeDisplayState>`)
+- Migrate `output_diff` toggle undo command to `SetOutputPinDisplay`
+
+**Why undo is included here:** Per-pin display toggling is the first user-visible change. Shipping it without undo would be a regression — the current `output_diff` toggle already has undo support. The undo command itself is straightforward (same pattern as `SetNodeDisplayCommand`), and the `SerializableNodeNetwork` snapshot format already includes `displayed_output_pins` from Phase 2, so snapshots automatically capture per-pin state.
 
 **Tests:**
-- Test `NodeView` API: verify `output_pins` and `displayed_output_pins` populated correctly from Rust
+- Test `NodeView` API: verify `output_pins` and `displayed_pins` populated correctly from Rust
 - Test wire position calculation: wires to pin 0 and pin 1 have different vertical offsets
 - Test node body height: `max(input_count, output_count) * PIN_SPACING`
+- Undo/redo `SetOutputPinDisplay`: toggle pin 1 display on → undo → pin 1 hidden → redo → pin 1 visible
+- Snapshot roundtrip: `displayed_nodes` with non-default `displayed_pins` preserved through snapshot → restore cycle
+- `normalize_json()` handles `displayed_output_pins` sorting for deterministic comparison
+- Full workflow test: create atom_edit node → display pin 1 → add atoms → undo all → verify initial state restored (including pin display state)
+- History eviction: verify pin display state is correctly captured in commands that get evicted
 
 **Manual testing:** This is the first phase with user-visible changes.
 - Open the app. All single-output nodes should show the eye icon next to the output pin (moved from title bar).
@@ -775,6 +955,9 @@ Fixture files in `rust/tests/fixtures/multi_output_migration/`:
 - Hover over an output pin — verify tooltip shows pin name and data type.
 - Interact with atoms (click, drag, add atom tool, add bond tool) while both pins are displayed — verify hit testing uses pin 0 (result) only. Pin 1 atoms should not be selectable.
 - Display only pin 1, interact — verify hit testing works in diff-native mode.
+- Toggle pin 1 display on atom_edit. Press Ctrl+Z — pin 1 should hide. Press Ctrl+Shift+Z — pin 1 should re-appear.
+- Make atom edits while both pins are displayed. Undo/redo — verify both pin outputs update correctly.
+- Test undo across the `output_diff` migration boundary: open an old file with `output_diff: true`, make changes, undo past the migration point.
 
 #### Phase 5: Text Format
 
@@ -792,26 +975,7 @@ Fixture files in `rust/tests/fixtures/multi_output_migration/`:
 
 **Manual testing:** Use the text editor to edit a network containing atom_edit with multi-output wires. Verify `.diff` syntax works. Verify unqualified references default to pin 0.
 
-#### Phase 6: Undo Integration
-
-- `SetOutputPinDisplay` command for per-pin display toggling
-- Update `SerializableNodeNetwork` snapshot format to include `displayed_output_pins`
-- Migrate `output_diff` toggle undo command to `SetOutputPinDisplay`
-- Tests
-
-**Tests:**
-- Undo/redo `SetOutputPinDisplay`: toggle pin 1 display on → undo → pin 1 hidden → redo → pin 1 visible
-- Snapshot roundtrip: `displayed_output_pins` preserved through snapshot → restore cycle
-- `normalize_json()` handles `displayed_output_pins` sorting for deterministic comparison
-- Full workflow test: create atom_edit node → display pin 1 → add atoms → undo all → verify initial state restored (including pin display state)
-- History eviction: verify `displayed_output_pins` state is correctly captured in commands that get evicted
-
-**Manual testing:**
-- Toggle pin 1 display on atom_edit. Press Ctrl+Z — pin 1 should hide. Press Ctrl+Shift+Z — pin 1 should re-appear.
-- Make atom edits while both pins are displayed. Undo/redo — verify both pin outputs update correctly.
-- Test undo across the `output_diff` migration boundary: open an old file with `output_diff: true`, make changes, undo past the migration point.
-
-#### Phase 7: Custom Network Multi-Output
+#### Phase 6: Custom Network Multi-Output
 
 - Update `update_network_output_type()` to propagate full `output_pins` from return node
 - Update custom node evaluation to pass through multi-output
