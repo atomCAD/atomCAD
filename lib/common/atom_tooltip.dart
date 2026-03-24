@@ -6,7 +6,7 @@ class AtomTooltip extends StatelessWidget {
 
   final APIHoveredAtomInfo info;
 
-  static String _hybridizationText(int override_) {
+  static String _hybridizationText(int override_, int inferred) {
     switch (override_) {
       case 1:
         return 'Hybridization: sp3 (override)';
@@ -15,7 +15,21 @@ class AtomTooltip extends StatelessWidget {
       case 3:
         return 'Hybridization: sp1 (override)';
       default:
-        return 'Hybridization: auto';
+        final inferredLabel = _inferredLabel(inferred);
+        return 'Hybridization: auto${inferredLabel.isNotEmpty ? ' ($inferredLabel)' : ''}';
+    }
+  }
+
+  static String _inferredLabel(int inferred) {
+    switch (inferred) {
+      case 1:
+        return 'sp3';
+      case 2:
+        return 'sp2';
+      case 3:
+        return 'sp1';
+      default:
+        return '';
     }
   }
 
@@ -56,7 +70,7 @@ class AtomTooltip extends StatelessWidget {
           ),
           // Line 3: hybridization override
           Text(
-            _hybridizationText(info.hybridizationOverride),
+            _hybridizationText(info.hybridizationOverride, info.inferredHybridization),
             style: const TextStyle(
               color: Color(0xCCFFFFFF),
               fontSize: 11,

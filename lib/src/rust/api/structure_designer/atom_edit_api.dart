@@ -305,3 +305,15 @@ void atomEditSetHybridizationOverride(
 /// Returns -2 if selected atoms have differing overrides (mixed state).
 int atomEditGetSelectedHybridization() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditGetSelectedHybridization();
+
+/// Returns the common *inferred* hybridization of the currently selected atoms.
+///
+/// This always returns the bond-order-based inference (ignoring overrides), so the
+/// UI can show "Auto (sp3)" etc. when the override is Auto.
+///
+/// Returns -1 if no atom_edit is active, no atoms are selected, or the result
+/// structure is unavailable.
+/// Returns 1 (Sp3), 2 (Sp2), or 3 (Sp1) if all selected atoms agree.
+/// Returns -2 if selected atoms have differing inferred hybridizations (mixed).
+int atomEditGetSelectedInferredHybridization() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditGetSelectedInferredHybridization();

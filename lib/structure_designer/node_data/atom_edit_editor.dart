@@ -592,12 +592,13 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           :final y,
           :final z,
           :final hybridizationOverride,
+          :final inferredHybridization,
         ):
         label = '$symbol ($elementName)';
         value = '$bondCount bond${bondCount == 1 ? '' : 's'}';
         icon = Icons.science_outlined;
         canModify = false;
-        final hybLabel = _hybridizationLabel(hybridizationOverride);
+        final hybLabel = _hybridizationLabel(hybridizationOverride, inferredHybridization);
         subtitle =
             'Hybridization: $hybLabel\n'
             'Pos: (${x.toStringAsFixed(3)}, ${y.toStringAsFixed(3)}, ${z.toStringAsFixed(3)}) \u00C5';
@@ -1007,7 +1008,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     );
   }
 
-  static String _hybridizationLabel(int override_) {
+  static String _hybridizationLabel(int override_, int inferred) {
     switch (override_) {
       case 1:
         return 'sp3 (override)';
@@ -1016,7 +1017,21 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       case 3:
         return 'sp1 (override)';
       default:
-        return 'auto';
+        final inferredLabel = _inferredHybridizationLabel(inferred);
+        return 'auto${inferredLabel.isNotEmpty ? ' ($inferredLabel)' : ''}';
+    }
+  }
+
+  static String _inferredHybridizationLabel(int inferred) {
+    switch (inferred) {
+      case 1:
+        return 'sp3';
+      case 2:
+        return 'sp2';
+      case 3:
+        return 'sp1';
+      default:
+        return '';
     }
   }
 
@@ -1044,6 +1059,11 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
 
     final isMixed = raw == -2;
     final selected = isMixed ? <APIHybridization>{} : {_hybridizationFromRaw(raw)!};
+
+    // Query inferred hybridization for subtitle when Auto is selected.
+    final inferredRaw = atom_edit_api.atomEditGetSelectedInferredHybridization();
+    final showInferred = !isMixed && raw == 0 && inferredRaw > 0;
+    final inferredLabel = _inferredHybridizationLabel(inferredRaw);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1106,6 +1126,17 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                     ),
                   ],
                 ),
+                if (showInferred)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Inferred: $inferredLabel',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

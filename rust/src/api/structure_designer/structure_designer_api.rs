@@ -2521,6 +2521,14 @@ fn compute_selection_measurement(
             let element_name = info
                 .map(|i| i.element_name.clone())
                 .unwrap_or_else(|| "Unknown".to_string());
+            let inferred_hybridization = {
+                use crate::crystolecule::guided_placement::{detect_hybridization, Hybridization};
+                match detect_hybridization(result_structure, atom_id, None) {
+                    Hybridization::Sp3 => 1,
+                    Hybridization::Sp2 => 2,
+                    Hybridization::Sp1 => 3,
+                }
+            };
             return Some(APIMeasurement::AtomInfo {
                 symbol,
                 element_name,
@@ -2529,6 +2537,7 @@ fn compute_selection_measurement(
                 y: atom.position.y,
                 z: atom.position.z,
                 hybridization_override: atom.hybridization_override(),
+                inferred_hybridization,
             });
         }
         return None;
@@ -4580,6 +4589,15 @@ pub fn query_hovered_atom_info(
                     })
                     .collect();
 
+                let inferred_hybridization = {
+                    use crate::crystolecule::guided_placement::{detect_hybridization, Hybridization};
+                    match detect_hybridization(structure, atom_id, None) {
+                        Hybridization::Sp3 => 1,
+                        Hybridization::Sp2 => 2,
+                        Hybridization::Sp1 => 3,
+                    }
+                };
+
                 Some(APIHoveredAtomInfo {
                     symbol: atom_info.symbol.clone(),
                     element_name: atom_info.element_name.clone(),
@@ -4590,6 +4608,7 @@ pub fn query_hovered_atom_info(
                     bond_count,
                     is_frozen: atom.is_frozen(),
                     hybridization_override: atom.hybridization_override(),
+                    inferred_hybridization,
                     node_name,
                     overlapping_node_names,
                 })

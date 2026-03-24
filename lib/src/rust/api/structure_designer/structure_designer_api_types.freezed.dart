@@ -462,7 +462,8 @@ class APIMeasurement_AtomInfo extends APIMeasurement {
       required this.x,
       required this.y,
       required this.z,
-      required this.hybridizationOverride})
+      required this.hybridizationOverride,
+      required this.inferredHybridization})
       : super._();
 
   /// Element symbol (e.g., "C").
@@ -481,6 +482,9 @@ class APIMeasurement_AtomInfo extends APIMeasurement {
 
   /// Hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1).
   final int hybridizationOverride;
+
+  /// Inferred hybridization from bond orders (1=Sp3, 2=Sp2, 3=Sp1, 0=unknown/terminal).
+  final int inferredHybridization;
 
   /// Create a copy of APIMeasurement
   /// with the given fields replaced by the non-null parameter values.
@@ -504,16 +508,18 @@ class APIMeasurement_AtomInfo extends APIMeasurement {
             (identical(other.y, y) || other.y == y) &&
             (identical(other.z, z) || other.z == z) &&
             (identical(other.hybridizationOverride, hybridizationOverride) ||
-                other.hybridizationOverride == hybridizationOverride));
+                other.hybridizationOverride == hybridizationOverride) &&
+            (identical(other.inferredHybridization, inferredHybridization) ||
+                other.inferredHybridization == inferredHybridization));
   }
 
   @override
   int get hashCode => Object.hash(runtimeType, symbol, elementName, bondCount,
-      x, y, z, hybridizationOverride);
+      x, y, z, hybridizationOverride, inferredHybridization);
 
   @override
   String toString() {
-    return 'APIMeasurement.atomInfo(symbol: $symbol, elementName: $elementName, bondCount: $bondCount, x: $x, y: $y, z: $z, hybridizationOverride: $hybridizationOverride)';
+    return 'APIMeasurement.atomInfo(symbol: $symbol, elementName: $elementName, bondCount: $bondCount, x: $x, y: $y, z: $z, hybridizationOverride: $hybridizationOverride, inferredHybridization: $inferredHybridization)';
   }
 }
 
@@ -531,7 +537,8 @@ abstract mixin class $APIMeasurement_AtomInfoCopyWith<$Res>
       double x,
       double y,
       double z,
-      int hybridizationOverride});
+      int hybridizationOverride,
+      int inferredHybridization});
 }
 
 /// @nodoc
@@ -553,6 +560,7 @@ class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
     Object? y = null,
     Object? z = null,
     Object? hybridizationOverride = null,
+    Object? inferredHybridization = null,
   }) {
     return _then(APIMeasurement_AtomInfo(
       symbol: null == symbol
@@ -582,6 +590,10 @@ class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
       hybridizationOverride: null == hybridizationOverride
           ? _self.hybridizationOverride
           : hybridizationOverride // ignore: cast_nullable_to_non_nullable
+              as int,
+      inferredHybridization: null == inferredHybridization
+          ? _self.inferredHybridization
+          : inferredHybridization // ignore: cast_nullable_to_non_nullable
               as int,
     ));
   }

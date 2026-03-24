@@ -1319,3 +1319,107 @@ pub fn atom_edit_get_selected_hybridization() -> i8 {
         )
     }
 }
+
+/// Returns the common *inferred* hybridization of the currently selected atoms.
+///
+/// This always returns the bond-order-based inference (ignoring overrides), so the
+/// UI can show "Auto (sp3)" etc. when the override is Auto.
+///
+/// Returns -1 if no atom_edit is active, no atoms are selected, or the result
+/// structure is unavailable.
+/// Returns 1 (Sp3), 2 (Sp2), or 3 (Sp1) if all selected atoms agree.
+/// Returns -2 if selected atoms have differing inferred hybridizations (mixed).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
+    use crate::api::api_common::with_cad_instance_or;
+    use crate::crystolecule::guided_placement::{detect_hybridization, Hybridization};
+    use crate::structure_designer::nodes::atom_edit::atom_edit::{
+        AtomEditEvalCache, SelectionProvenance,
+    };
+
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let data = match atom_edit::get_active_atom_edit_data(
+                    &cad_instance.structure_designer,
+                ) {
+                    Some(d) => d,
+                    None => return -1,
+                };
+
+                if data.selection.selected_base_atoms.is_empty()
+                    && data.selection.selected_diff_atoms.is_empty()
+                {
+                    return -1;
+                }
+
+                let result_structure = match cad_instance
+                    .structure_designer
+                    .get_atomic_structure_from_selected_node()
+                {
+                    Some(s) => s,
+                    None => return -1,
+                };
+
+                let eval_cache = cad_instance
+                    .structure_designer
+                    .get_selected_node_eval_cache()
+                    .and_then(|cache| cache.downcast_ref::<AtomEditEvalCache>());
+
+                let hyb_to_u8 = |h: Hybridization| -> u8 {
+                    match h {
+                        Hybridization::Sp3 => 1,
+                        Hybridization::Sp2 => 2,
+                        Hybridization::Sp1 => 3,
+                    }
+                };
+
+                let mut common: Option<u8> = None;
+
+                // In diff view, selected atom IDs are already result-space IDs.
+                if data.output_diff {
+                    for &diff_id in &data.selection.selected_diff_atoms {
+                        let val =
+                            hyb_to_u8(detect_hybridization(result_structure, diff_id, None));
+                        match common {
+                            None => common = Some(val),
+                            Some(c) if c != val => return -2,
+                            _ => {}
+                        }
+                    }
+                } else {
+                    // Result view: resolve through provenance.
+                    let cache = match eval_cache {
+                        Some(c) => c,
+                        None => return -1,
+                    };
+                    for &(prov, id) in &data.selection.selection_order {
+                        let result_id = match prov {
+                            SelectionProvenance::Base => {
+                                cache.provenance.base_to_result.get(&id).copied()
+                            }
+                            SelectionProvenance::Diff => {
+                                cache.provenance.diff_to_result.get(&id).copied()
+                            }
+                        };
+                        if let Some(result_id) = result_id {
+                            let val = hyb_to_u8(detect_hybridization(
+                                result_structure,
+                                result_id,
+                                None,
+                            ));
+                            match common {
+                                None => common = Some(val),
+                                Some(c) if c != val => return -2,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+
+                common.unwrap_or(0) as i8
+            },
+            -1,
+        )
+    }
+}

@@ -459,6 +459,8 @@ pub enum APIMeasurement {
         z: f64,
         /// Hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1).
         hybridization_override: u8,
+        /// Inferred hybridization from bond orders (1=Sp3, 2=Sp2, 3=Sp1, 0=unknown/terminal).
+        inferred_hybridization: u8,
     },
 }
 
@@ -485,6 +487,9 @@ pub struct APIHoveredAtomInfo {
 
     // Hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1)
     pub hybridization_override: u8,
+
+    // Inferred hybridization from bond orders (1=Sp3, 2=Sp2, 3=Sp1, 0=unknown/terminal)
+    pub inferred_hybridization: u8,
 
     // Node origin — name of the node that produced this atom
     pub node_name: String,
