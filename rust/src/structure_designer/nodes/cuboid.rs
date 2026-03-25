@@ -7,10 +7,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -51,7 +51,7 @@ impl NodeData for CuboidData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let min_corner = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
@@ -62,7 +62,7 @@ impl NodeData for CuboidData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let extent = match network_evaluator.evaluate_or_default(
@@ -75,7 +75,7 @@ impl NodeData for CuboidData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let unit_cell = match network_evaluator.evaluate_or_default(
@@ -88,7 +88,7 @@ impl NodeData for CuboidData {
             NetworkResult::extract_unit_cell,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let real_min_corner = unit_cell.ivec3_lattice_to_real(&min_corner);
@@ -103,11 +103,11 @@ impl NodeData for CuboidData {
 
         //println!("{}", geo_tree_root);
 
-        NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
             unit_cell,
             frame_transform: Transform::new(center, DQuat::IDENTITY),
             geo_tree_root,
-        })
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -269,7 +269,7 @@ pub fn get_node_type() -> NodeType {
           data_type: DataType::UnitCell,
         },
       ],
-      output_type: DataType::Geometry,
+      output_pins: OutputPinDefinition::single(DataType::Geometry),
       public: true,
       node_data_creator: || Box::new(CuboidData {
         min_corner: IVec3::new(0, 0, 0),

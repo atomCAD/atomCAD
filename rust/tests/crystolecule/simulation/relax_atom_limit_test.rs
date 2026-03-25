@@ -5,8 +5,8 @@
 
 use glam::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::simulation::{minimize_energy, MAX_MINIMIZE_ATOMS};
 use rust_lib_flutter_cad::crystolecule::simulation::uff::VdwMode;
+use rust_lib_flutter_cad::crystolecule::simulation::{MAX_MINIMIZE_ATOMS, minimize_energy};
 
 /// Creates an atomic structure with `n` disconnected carbon atoms on a grid.
 fn create_large_structure(n: usize) -> AtomicStructure {
@@ -20,7 +20,11 @@ fn create_large_structure(n: usize) -> AtomicStructure {
                 if count >= n {
                     return structure;
                 }
-                let pos = DVec3::new(ix as f64 * spacing, iy as f64 * spacing, iz as f64 * spacing);
+                let pos = DVec3::new(
+                    ix as f64 * spacing,
+                    iy as f64 * spacing,
+                    iz as f64 * spacing,
+                );
                 structure.add_atom(6, pos); // Carbon
                 count += 1;
             }
@@ -36,18 +40,24 @@ fn minimize_energy_rejects_structure_exceeding_limit_allpairs() {
     assert_eq!(structure.get_num_of_atoms(), n);
 
     let result = minimize_energy(&mut structure, VdwMode::AllPairs);
-    assert!(result.is_err(), "Expected error for {} atoms with AllPairs mode", n);
+    assert!(
+        result.is_err(),
+        "Expected error for {} atoms with AllPairs mode",
+        n
+    );
 
     let err_msg = result.unwrap_err();
     assert!(
         err_msg.contains(&n.to_string()),
         "Error should mention atom count {}: {}",
-        n, err_msg
+        n,
+        err_msg
     );
     assert!(
         err_msg.contains(&MAX_MINIMIZE_ATOMS.to_string()),
         "Error should mention limit {}: {}",
-        MAX_MINIMIZE_ATOMS, err_msg
+        MAX_MINIMIZE_ATOMS,
+        err_msg
     );
 }
 
@@ -57,7 +67,11 @@ fn minimize_energy_rejects_structure_exceeding_limit_cutoff() {
     let mut structure = create_large_structure(n);
 
     let result = minimize_energy(&mut structure, VdwMode::Cutoff(6.0));
-    assert!(result.is_err(), "Expected error for {} atoms with Cutoff mode", n);
+    assert!(
+        result.is_err(),
+        "Expected error for {} atoms with Cutoff mode",
+        n
+    );
 }
 
 #[test]
@@ -70,7 +84,11 @@ fn minimize_energy_accepts_structure_at_limit() {
     structure.add_bond(a1, a2, 1);
 
     let result = minimize_energy(&mut structure, VdwMode::AllPairs);
-    assert!(result.is_ok(), "Small structure should be accepted: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Small structure should be accepted: {:?}",
+        result.err()
+    );
 }
 
 #[test]

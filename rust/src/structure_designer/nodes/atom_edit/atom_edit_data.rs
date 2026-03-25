@@ -12,9 +12,9 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::{NodeType, Parameter};
+use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::transform::Transform;
@@ -1075,7 +1075,7 @@ impl NodeData for AtomEditData {
         registry: &crate::structure_designer::node_type_registry::NodeTypeRegistry,
         decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // Use cached input if available (populated during previous eval,
         // cleared by clear_input_cache() when upstream may have changed).
         let input_structure = if let Some(cached) = self
@@ -1089,7 +1089,7 @@ impl NodeData for AtomEditData {
             let input_val =
                 network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
             if let NetworkResult::Error(_) = input_val {
-                return input_val;
+                return EvalOutput::single(input_val);
             }
             let structure = match input_val {
                 NetworkResult::Atomic(s) => s,
@@ -1139,7 +1139,7 @@ impl NodeData for AtomEditData {
                     // Mark guided placement anchor and store guide visuals
                     self.apply_guided_placement_decoration(&mut diff_clone, None);
                 }
-                return NetworkResult::Atomic(diff_clone);
+                return EvalOutput::single(NetworkResult::Atomic(diff_clone));
             }
 
             // Apply the diff to the input
@@ -1177,7 +1177,7 @@ impl NodeData for AtomEditData {
                         };
                         context.selected_node_eval_cache = Some(Box::new(eval_cache));
                     }
-                    return NetworkResult::Error(error_msg);
+                    return EvalOutput::single(NetworkResult::Error(error_msg));
                 }
             }
 
@@ -1279,7 +1279,7 @@ impl NodeData for AtomEditData {
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            NetworkResult::Atomic(result)
+            EvalOutput::single(NetworkResult::Atomic(result))
         }
     }
 
@@ -1443,7 +1443,7 @@ pub fn get_node_type() -> NodeType {
             name: "molecule".to_string(),
             data_type: DataType::Atomic,
         }],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || Box::new(AtomEditData::new()),
         node_data_saver: |node_data, _design_dir| {
@@ -1699,7 +1699,8 @@ pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
                 Some(hyb_delta)
             };
 
-            let has_structural = !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
+            let has_structural =
+                !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
             if has_structural || hybridization_delta.is_some() {
                 structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
@@ -1763,7 +1764,8 @@ pub fn with_atom_edit_undo<F>(
                 Some(hyb_delta)
             };
 
-            let has_structural = !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
+            let has_structural =
+                !recorder.atom_deltas.is_empty() || !recorder.bond_deltas.is_empty();
             if has_structural || hybridization_delta.is_some() {
                 structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {

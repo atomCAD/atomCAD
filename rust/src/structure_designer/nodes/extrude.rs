@@ -7,10 +7,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::runtime_type_error_in_input;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -71,7 +71,7 @@ impl NodeData for ExtrudeData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         //let _timer = Timer::new("eval_extrude");
         let shape_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
@@ -80,7 +80,7 @@ impl NodeData for ExtrudeData {
         // We ignore it and use the unit cell from the shape instead.
 
         if let NetworkResult::Error(_) = shape_val {
-            return shape_val;
+            return EvalOutput::single(shape_val);
         }
 
         let height = match network_evaluator.evaluate_or_default(
@@ -93,7 +93,7 @@ impl NodeData for ExtrudeData {
             NetworkResult::extract_int,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let extrude_direction = match network_evaluator.evaluate_or_default(
@@ -106,7 +106,7 @@ impl NodeData for ExtrudeData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let infinite = match network_evaluator.evaluate_or_default(
@@ -119,7 +119,7 @@ impl NodeData for ExtrudeData {
             NetworkResult::extract_bool,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let subdivision = match network_evaluator.evaluate_or_default(
@@ -132,11 +132,13 @@ impl NodeData for ExtrudeData {
             NetworkResult::extract_int,
         ) {
             Ok(value) => value.max(1),
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         if !infinite && height <= 0 {
-            return NetworkResult::Error("Extrusion height must be positive".to_string());
+            return EvalOutput::single(NetworkResult::Error(
+                "Extrusion height must be positive".to_string(),
+            ));
         }
 
         if let NetworkResult::Geometry2D(shape) = shape_val {
@@ -156,7 +158,7 @@ impl NodeData for ExtrudeData {
                 .validate_extrude_direction(&extrude_direction)
             {
                 Ok(result) => result,
-                Err(error_msg) => return NetworkResult::Error(error_msg),
+                Err(error_msg) => return EvalOutput::single(NetworkResult::Error(error_msg)),
             };
 
             let height_real = if infinite {
@@ -180,7 +182,7 @@ impl NodeData for ExtrudeData {
             );
 
             let s = shape.geo_tree_root;
-            NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
                 unit_cell,
                 frame_transform,
                 geo_tree_root: GeoNode::extrude(
@@ -190,9 +192,9 @@ impl NodeData for ExtrudeData {
                     plane_to_world_transform,
                     infinite,
                 ),
-            })
+            }))
         } else {
-            runtime_type_error_in_input(0)
+            EvalOutput::single(runtime_type_error_in_input(0))
         }
     }
 
@@ -297,7 +299,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Int,
             },
         ],
-        output_type: DataType::Geometry,
+        output_pins: OutputPinDefinition::single(DataType::Geometry),
         public: true,
         node_data_creator: || {
             Box::new(ExtrudeData {

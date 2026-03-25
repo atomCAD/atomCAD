@@ -10,10 +10,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -74,7 +74,7 @@ impl NodeData for DrawingPlaneData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let unit_cell = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
@@ -85,7 +85,7 @@ impl NodeData for DrawingPlaneData {
             NetworkResult::extract_unit_cell,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let miller_index = match network_evaluator.evaluate_or_default(
@@ -98,7 +98,7 @@ impl NodeData for DrawingPlaneData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let center = match network_evaluator.evaluate_or_default(
@@ -111,7 +111,7 @@ impl NodeData for DrawingPlaneData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let shift = match network_evaluator.evaluate_or_default(
@@ -124,7 +124,7 @@ impl NodeData for DrawingPlaneData {
             NetworkResult::extract_int,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let subdivision = match network_evaluator.evaluate_or_default(
@@ -137,7 +137,7 @@ impl NodeData for DrawingPlaneData {
             NetworkResult::extract_int,
         ) {
             Ok(value) => value.max(1), // Ensure minimum value of 1
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
@@ -153,10 +153,10 @@ impl NodeData for DrawingPlaneData {
         let drawing_plane =
             match DrawingPlane::new(unit_cell, miller_index, center, shift, subdivision) {
                 Ok(plane) => plane,
-                Err(error_msg) => return NetworkResult::Error(error_msg),
+                Err(error_msg) => return EvalOutput::single(NetworkResult::Error(error_msg)),
             };
 
-        NetworkResult::DrawingPlane(drawing_plane)
+        EvalOutput::single(NetworkResult::DrawingPlane(drawing_plane))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -462,7 +462,7 @@ pub fn get_node_type() -> NodeType {
           data_type: DataType::Int,
         },
       ],
-      output_type: DataType::DrawingPlane,
+      output_pins: OutputPinDefinition::single(DataType::DrawingPlane),
       public: true,
       node_data_creator: || Box::new(DrawingPlaneData {
         max_miller_index: 1,

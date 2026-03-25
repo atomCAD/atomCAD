@@ -4,10 +4,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -40,8 +40,8 @@ impl NodeData for StringData {
         _registry: &NodeTypeRegistry,
         _decorate: bool,
         _context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
-        NetworkResult::String(self.value.to_string())
+    ) -> EvalOutput {
+        EvalOutput::single(NetworkResult::String(self.value.to_string()))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -77,7 +77,7 @@ pub fn get_node_type() -> NodeType {
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
-        output_type: DataType::String,
+        output_pins: OutputPinDefinition::single(DataType::String),
         public: true,
         node_data_creator: || {
             Box::new(StringData {

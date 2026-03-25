@@ -10,10 +10,10 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -44,14 +44,14 @@ impl NodeData for Diff2DData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         //let _timer = Timer::new("eval_diff");
         let node = NetworkStackElement::get_top_node(network_stack, node_id);
         let base_input_name = registry.get_parameter_name(node, 0);
         let sub_input_name = registry.get_parameter_name(node, 1);
 
         if node.arguments[0].is_empty() {
-            return input_missing_error(&base_input_name);
+            return EvalOutput::single(input_missing_error(&base_input_name));
         }
 
         let (mut geometry, mut frame_translation, base_drawing_plane) = helper_union(
@@ -64,11 +64,11 @@ impl NodeData for Diff2DData {
         );
 
         if geometry.is_none() {
-            return error_in_input(&base_input_name);
+            return EvalOutput::single(error_in_input(&base_input_name));
         }
 
         if base_drawing_plane.is_none() {
-            return unit_cell_mismatch_error();
+            return EvalOutput::single(unit_cell_mismatch_error());
         }
 
         let result_drawing_plane = base_drawing_plane.unwrap();
@@ -84,16 +84,16 @@ impl NodeData for Diff2DData {
             );
 
             if sub_geometry.is_none() {
-                return error_in_input(&sub_input_name);
+                return EvalOutput::single(error_in_input(&sub_input_name));
             }
 
             if sub_drawing_plane.is_none() {
-                return unit_cell_mismatch_error();
+                return EvalOutput::single(unit_cell_mismatch_error());
             }
 
             // Check drawing plane compatibility between base and sub
             if !result_drawing_plane.is_compatible(&sub_drawing_plane.unwrap()) {
-                return unit_cell_mismatch_error();
+                return EvalOutput::single(unit_cell_mismatch_error());
             }
 
             geometry = Some(GeoNode::difference_2d(
@@ -105,11 +105,11 @@ impl NodeData for Diff2DData {
             frame_translation *= 0.5;
         }
 
-        NetworkResult::Geometry2D(GeometrySummary2D {
+        EvalOutput::single(NetworkResult::Geometry2D(GeometrySummary2D {
             drawing_plane: result_drawing_plane,
             frame_transform: Transform2D::new(frame_translation, 0.0),
             geo_tree_root: geometry.unwrap(),
-        })
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -215,7 +215,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Array(Box::new(DataType::Geometry2D)), // A set of shapes to subtract from base
             },
         ],
-        output_type: DataType::Geometry2D,
+        output_pins: OutputPinDefinition::single(DataType::Geometry2D),
         public: true,
         node_data_creator: || Box::new(Diff2DData {}),
         node_data_saver: generic_node_data_saver::<Diff2DData>,

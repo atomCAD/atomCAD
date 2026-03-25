@@ -11,11 +11,11 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -146,17 +146,17 @@ impl NodeData for AtomFillData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // Evaluate geometry input
         let shape_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = shape_val {
-            return shape_val;
+            return EvalOutput::single(shape_val);
         }
 
         let mesh = match shape_val {
             NetworkResult::Geometry(mesh) => mesh,
-            _ => return NetworkResult::Atomic(AtomicStructure::new()),
+            _ => return EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new())),
         };
 
         // Evaluate motif input (with default)
@@ -170,7 +170,7 @@ impl NodeData for AtomFillData {
             NetworkResult::extract_motif,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Evaluate m_offset input (with default)
@@ -184,7 +184,7 @@ impl NodeData for AtomFillData {
             NetworkResult::extract_vec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Evaluate passivate input (with default)
@@ -198,7 +198,7 @@ impl NodeData for AtomFillData {
             NetworkResult::extract_bool,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Evaluate rm_single input (with default)
@@ -212,7 +212,7 @@ impl NodeData for AtomFillData {
             NetworkResult::extract_bool,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Evaluate surf_recon input (with default)
@@ -226,7 +226,7 @@ impl NodeData for AtomFillData {
             NetworkResult::extract_bool,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let invert_phase = match network_evaluator.evaluate_or_default(
@@ -239,7 +239,7 @@ impl NodeData for AtomFillData {
             NetworkResult::extract_bool,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Calculate effective parameter element values (fill in defaults for missing values)
@@ -271,7 +271,7 @@ impl NodeData for AtomFillData {
         // Call the lattice fill algorithm
         let result = fill_lattice(&config, &options, &fill_region);
 
-        NetworkResult::Atomic(result.atomic_structure)
+        EvalOutput::single(NetworkResult::Atomic(result.atomic_structure))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -415,7 +415,7 @@ pub fn get_node_type() -> NodeType {
               data_type: DataType::Bool,
           },
       ],
-      output_type: DataType::Atomic,
+      output_pins: OutputPinDefinition::single(DataType::Atomic),
       public: true,
       node_data_creator: || Box::new(AtomFillData {
         parameter_element_value_definition: String::new(),

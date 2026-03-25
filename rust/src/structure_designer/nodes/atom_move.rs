@@ -7,10 +7,10 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -61,12 +61,12 @@ impl NodeData for AtomMoveData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // 1. Get input atomic structure
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
-            return input_val;
+            return EvalOutput::single(input_val);
         }
 
         if let NetworkResult::Atomic(atomic_structure) = input_val {
@@ -81,7 +81,7 @@ impl NodeData for AtomMoveData {
                 NetworkResult::extract_vec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
@@ -94,10 +94,10 @@ impl NodeData for AtomMoveData {
             let mut result_atomic_structure = atomic_structure.clone();
             result_atomic_structure.transform(&DQuat::IDENTITY, &translation);
 
-            return NetworkResult::Atomic(result_atomic_structure);
+            return EvalOutput::single(NetworkResult::Atomic(result_atomic_structure));
         }
 
-        NetworkResult::None
+        EvalOutput::single(NetworkResult::None)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -277,7 +277,7 @@ This node operates in continuous space, unlike lattice_move which operates in di
                 data_type: DataType::Vec3,
             },
         ],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || Box::new(AtomMoveData {
             translation: DVec3::ZERO,

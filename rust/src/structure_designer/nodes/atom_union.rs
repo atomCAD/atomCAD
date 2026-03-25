@@ -5,10 +5,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -39,28 +39,30 @@ impl NodeData for AtomUnionData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // Evaluate the structures array input (required)
         let structures_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = structures_val {
-            return structures_val;
+            return EvalOutput::single(structures_val);
         }
 
         // Extract the array elements
         let structure_results = if let NetworkResult::Array(array_elements) = structures_val {
             array_elements
         } else {
-            return NetworkResult::Error("Expected array of atomic structures".to_string());
+            return EvalOutput::single(NetworkResult::Error(
+                "Expected array of atomic structures".to_string(),
+            ));
         };
 
         let structure_count = structure_results.len();
 
         if structure_count == 0 {
-            return NetworkResult::Error(
+            return EvalOutput::single(NetworkResult::Error(
                 "atom_union requires at least one input structure".to_string(),
-            );
+            ));
         }
 
         // Extract atomic structures and collect frame translations for averaging
@@ -72,7 +74,9 @@ impl NodeData for AtomUnionData {
                 frame_translation_sum += structure.frame_transform().translation;
                 atomic_structures.push(structure);
             } else {
-                return NetworkResult::Error("All inputs must be atomic structures".to_string());
+                return EvalOutput::single(NetworkResult::Error(
+                    "All inputs must be atomic structures".to_string(),
+                ));
             }
         }
 
@@ -88,7 +92,7 @@ impl NodeData for AtomUnionData {
         let avg_translation = frame_translation_sum / structure_count as f64;
         result.set_frame_transform(Transform::new(avg_translation, DQuat::IDENTITY));
 
-        NetworkResult::Atomic(result)
+        EvalOutput::single(NetworkResult::Atomic(result))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -122,7 +126,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Array(Box::new(DataType::Atomic)),
             },
         ],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || Box::new(AtomUnionData {}),
         node_data_saver: generic_node_data_saver::<AtomUnionData>,

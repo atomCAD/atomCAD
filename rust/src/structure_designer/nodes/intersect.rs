@@ -7,10 +7,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -42,7 +42,7 @@ impl NodeData for IntersectData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         //let _timer = Timer::new("eval_intersect");
         let mut shapes: Vec<GeoNode> = Vec::new();
         let mut frame_translation = DVec3::ZERO;
@@ -51,22 +51,24 @@ impl NodeData for IntersectData {
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = shapes_val {
-            return shapes_val;
+            return EvalOutput::single(shapes_val);
         }
 
         // Extract the array elements from shapes_val
         let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
             array_elements
         } else {
-            return NetworkResult::Error("Expected array of geometry shapes".to_string());
+            return EvalOutput::single(NetworkResult::Error(
+                "Expected array of geometry shapes".to_string(),
+            ));
         };
 
         let shape_count = shape_results.len();
 
         if shape_count == 0 {
-            return NetworkResult::Error(
+            return EvalOutput::single(NetworkResult::Error(
                 "Intersect requires at least one input geometry".to_string(),
-            );
+            ));
         }
 
         // Extract geometries and check unit cell compatibility
@@ -75,13 +77,15 @@ impl NodeData for IntersectData {
             if let NetworkResult::Geometry(shape) = shape_val {
                 geometries.push(shape);
             } else {
-                return NetworkResult::Error("All inputs must be geometry objects".to_string());
+                return EvalOutput::single(NetworkResult::Error(
+                    "All inputs must be geometry objects".to_string(),
+                ));
             }
         }
 
         // Check unit cell compatibility - compare all to the first geometry
         if !GeometrySummary::all_have_compatible_unit_cells(&geometries) {
-            return unit_cell_mismatch_error();
+            return EvalOutput::single(unit_cell_mismatch_error());
         }
 
         // All unit cells are compatible, proceed with intersection
@@ -94,11 +98,11 @@ impl NodeData for IntersectData {
 
         frame_translation /= shape_count as f64;
 
-        NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
             unit_cell: first_unit_cell,
             frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
             geo_tree_root: GeoNode::intersection_3d(shapes),
-        })
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -132,7 +136,7 @@ pub fn get_node_type() -> NodeType {
               data_type: DataType::Array(Box::new(DataType::Geometry)),
           },
       ],
-      output_type: DataType::Geometry,
+      output_pins: OutputPinDefinition::single(DataType::Geometry),
       public: true,
       node_data_creator: || Box::new(IntersectData {}),
       node_data_saver: generic_node_data_saver::<IntersectData>,

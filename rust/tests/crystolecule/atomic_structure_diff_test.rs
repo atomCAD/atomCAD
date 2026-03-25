@@ -1490,11 +1490,19 @@ fn frozen_flag_preserved_on_base_passthrough() {
     let result_id_for_c1 = *result.provenance.base_to_result.get(&c1).unwrap();
     let result_id_for_c2 = *result.provenance.base_to_result.get(&c2).unwrap();
     assert!(
-        result.result.get_atom(result_id_for_c1).unwrap().is_frozen(),
+        result
+            .result
+            .get_atom(result_id_for_c1)
+            .unwrap()
+            .is_frozen(),
         "Frozen flag should be preserved on base atom passthrough"
     );
     assert!(
-        !result.result.get_atom(result_id_for_c2).unwrap().is_frozen(),
+        !result
+            .result
+            .get_atom(result_id_for_c2)
+            .unwrap()
+            .is_frozen(),
         "Non-frozen base atom should remain unfrozen"
     );
 }

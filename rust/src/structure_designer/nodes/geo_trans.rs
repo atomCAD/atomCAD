@@ -12,10 +12,10 @@ use crate::structure_designer::evaluator::network_evaluator::{
 use crate::structure_designer::evaluator::network_result::{
     GeometrySummary, NetworkResult, runtime_type_error_in_input,
 };
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -74,12 +74,12 @@ impl NodeData for GeoTransData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let shape_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = shape_val {
-            shape_val
+            EvalOutput::single(shape_val)
         } else if let NetworkResult::Geometry(shape) = shape_val {
             let translation = match network_evaluator.evaluate_or_default(
                 network_stack,
@@ -91,7 +91,7 @@ impl NodeData for GeoTransData {
                 NetworkResult::extract_ivec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let rotation = match network_evaluator.evaluate_or_default(
@@ -104,7 +104,7 @@ impl NodeData for GeoTransData {
                 NetworkResult::extract_ivec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
@@ -112,9 +112,9 @@ impl NodeData for GeoTransData {
             let cubic = shape.unit_cell.is_approximately_cubic();
 
             if (!cubic) && rotation != IVec3::ZERO {
-                return NetworkResult::Error(
+                return EvalOutput::single(NetworkResult::Error(
                     "Nonzero rotation is only allowed for cubic unit cells for now.".to_string(),
-                );
+                ));
             }
 
             let rotation_euler = rotation.as_dvec3() * PI * 0.5;
@@ -150,13 +150,13 @@ impl NodeData for GeoTransData {
                 rot,
             );
 
-            NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
                 unit_cell: shape.unit_cell,
                 frame_transform,
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
-            })
+            }))
         } else {
-            runtime_type_error_in_input(0)
+            EvalOutput::single(runtime_type_error_in_input(0))
         }
     }
 
@@ -414,7 +414,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::IVec3,
             },
         ],
-        output_type: DataType::Geometry,
+        output_pins: OutputPinDefinition::single(DataType::Geometry),
         public: false,
         node_data_creator: || {
             Box::new(GeoTransData {

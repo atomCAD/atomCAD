@@ -126,7 +126,8 @@ fn roundtrip_cnnd_file(file_path: &str) {
             name
         );
         assert_eq!(
-            network1.node_type.output_type, network2.node_type.output_type,
+            network1.node_type.output_type(),
+            network2.node_type.output_type(),
             "node_type.output_type mismatch in network '{}'",
             name
         );

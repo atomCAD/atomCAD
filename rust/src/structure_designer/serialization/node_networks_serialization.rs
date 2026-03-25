@@ -4,7 +4,7 @@ use super::super::node_data::NoData;
 use super::super::node_data::NodeData;
 use super::super::node_network::NodeDisplayType;
 use super::super::node_network::{Argument, Node, NodeNetwork};
-use super::super::node_type::{NodeType, Parameter};
+use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
 use super::super::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::data_type::DataType;
@@ -54,6 +54,13 @@ pub struct SerializableParameter {
     pub data_type: String,
 }
 
+/// Serializable output pin definition for JSON serialization.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SerializableOutputPin {
+    pub name: String,
+    pub data_type: String,
+}
+
 /// Serializable version of NodeType struct for JSON serialization
 #[derive(Serialize, Deserialize)]
 pub struct SerializableNodeType {
@@ -65,7 +72,12 @@ pub struct SerializableNodeType {
     #[serde(default = "default_category")]
     pub category: String,
     pub parameters: Vec<SerializableParameter>,
-    pub output_type: String,
+    /// New field: always written on save. Contains output pin definitions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub output_pins: Vec<SerializableOutputPin>,
+    /// Old field: only read for migration from old .cnnd files. Never written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_type: Option<String>,
 }
 
 fn default_category() -> String {
@@ -162,13 +174,23 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
         })
         .collect();
 
+    let serializable_output_pins = node_type
+        .output_pins
+        .iter()
+        .map(|pin| SerializableOutputPin {
+            name: pin.name.clone(),
+            data_type: pin.data_type.to_string(),
+        })
+        .collect();
+
     SerializableNodeType {
         name: node_type.name.clone(),
         description: node_type.description.clone(),
         summary: node_type.summary.clone(),
         category: category_to_string(&node_type.category),
         parameters: serializable_parameters,
-        output_type: node_type.output_type.to_string(),
+        output_pins: serializable_output_pins,
+        output_type: None, // Old field: never written
     }
 }
 
@@ -177,13 +199,38 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
 /// # Returns
 /// * `io::Result<NodeType>` - The converted NodeType or an error if conversion fails
 pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Result<NodeType> {
-    // Parse the output type using the helper function
-    let output_type = DataType::from_string(&serializable.output_type).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Invalid output type: {}", e),
-        )
-    })?;
+    // Parse output pins: prefer new format, fall back to old output_type field
+    let output_pins = if !serializable.output_pins.is_empty() {
+        // New format: use output_pins directly
+        serializable
+            .output_pins
+            .iter()
+            .map(|p| {
+                let data_type = DataType::from_string(&p.data_type).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Invalid output pin type: {}", e),
+                    )
+                })?;
+                Ok(OutputPinDefinition {
+                    name: p.name.clone(),
+                    data_type,
+                })
+            })
+            .collect::<io::Result<Vec<_>>>()?
+    } else if let Some(ref output_type_str) = serializable.output_type {
+        // Old format: migrate single output_type to output_pins[0]
+        let output_type = DataType::from_string(output_type_str).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid output type: {}", e),
+            )
+        })?;
+        OutputPinDefinition::single(output_type)
+    } else {
+        // Fallback: no output
+        OutputPinDefinition::single(DataType::None)
+    };
 
     // Create parameters from the serializable parameters
     let parameters = serializable
@@ -216,7 +263,7 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         summary: serializable.summary.clone(),
         category,
         parameters,
-        output_type,
+        output_pins,
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,
         node_data_loader: generic_node_data_loader::<CustomNodeData>,

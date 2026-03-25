@@ -5,10 +5,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -44,46 +44,46 @@ impl NodeData for ApplyDiffData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // 1. Evaluate base (pin 0, required)
         let base_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = base_val {
-            return base_val;
+            return EvalOutput::single(base_val);
         }
 
         // 2. Evaluate diff (pin 1, required)
         let diff_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 1);
         if let NetworkResult::Error(_) = diff_val {
-            return diff_val;
+            return EvalOutput::single(diff_val);
         }
 
         // 3. Extract atomic structures
         let base = match base_val {
             NetworkResult::Atomic(s) => s,
             _ => {
-                return NetworkResult::Error(
+                return EvalOutput::single(NetworkResult::Error(
                     "apply_diff: 'base' input must be an atomic structure".to_string(),
-                );
+                ));
             }
         };
 
         let diff = match diff_val {
             NetworkResult::Atomic(s) => s,
             _ => {
-                return NetworkResult::Error(
+                return EvalOutput::single(NetworkResult::Error(
                     "apply_diff: 'diff' input must be an atomic structure".to_string(),
-                );
+                ));
             }
         };
 
         // 4. Validate: diff must be a diff structure
         if !diff.is_diff() {
-            return NetworkResult::Error(
+            return EvalOutput::single(NetworkResult::Error(
                 "apply_diff: input on 'diff' pin is not a diff structure (is_diff = false)"
                     .to_string(),
-            );
+            ));
         }
 
         // 5. Get tolerance from pin 2 or property (default from self.tolerance)
@@ -97,7 +97,7 @@ impl NodeData for ApplyDiffData {
             NetworkResult::extract_float,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // 6. Apply the diff
@@ -110,18 +110,18 @@ impl NodeData for ApplyDiffData {
                 + stats.unmatched_delete_markers
                 + stats.orphaned_bonds;
             if stale_count > 0 {
-                return NetworkResult::Error(format!(
+                return EvalOutput::single(NetworkResult::Error(format!(
                     "apply_diff: stale entries detected — {} orphaned tracked atom(s), \
                      {} unmatched delete marker(s), {} orphaned bond(s)",
                     stats.orphaned_tracked_atoms,
                     stats.unmatched_delete_markers,
                     stats.orphaned_bonds,
-                ));
+                )));
             }
         }
 
         // 8. Return the result
-        NetworkResult::Atomic(diff_result.result)
+        EvalOutput::single(NetworkResult::Atomic(diff_result.result))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -195,7 +195,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || {
             Box::new(ApplyDiffData {

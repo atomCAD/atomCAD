@@ -1,7 +1,7 @@
 use crate::structure_designer::camera_settings::CameraSettings;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::NodeType;
+use crate::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::f64::DVec2;
 use serde::{Deserialize, Serialize};
@@ -328,7 +328,7 @@ impl NodeNetwork {
             summary: None,
             category: NodeTypeCategory::OtherBuiltin,
             parameters: vec![],
-            output_type: DataType::None,
+            output_pins: OutputPinDefinition::single(DataType::None),
             public: false,
             node_data_creator: || Box::new(NoData {}),
             node_data_saver: no_data_saver,

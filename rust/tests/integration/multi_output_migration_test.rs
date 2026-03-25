@@ -26,9 +26,11 @@ const FIXTURE_DIR: &str = "tests/fixtures/multi_output_migration";
 #[test]
 fn test_load_old_builtin_only() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result =
-        load_node_networks_from_file(&mut registry, &format!("{}/old_builtin_only.cnnd", FIXTURE_DIR))
-            .expect("Failed to load old_builtin_only.cnnd");
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/old_builtin_only.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load old_builtin_only.cnnd");
 
     assert_eq!(load_result.first_network_name, "Main");
 
@@ -38,7 +40,11 @@ fn test_load_old_builtin_only() {
         .expect("Main network missing");
 
     // Verify nodes loaded correctly
-    assert_eq!(network.nodes.len(), 3, "Expected 3 nodes (sphere, cuboid, union)");
+    assert_eq!(
+        network.nodes.len(),
+        3,
+        "Expected 3 nodes (sphere, cuboid, union)"
+    );
 
     // Verify built-in node types resolve from registry
     for (_id, node) in &network.nodes {
@@ -47,7 +53,7 @@ fn test_load_old_builtin_only() {
             .unwrap_or_else(|| panic!("Node type '{}' not found in registry", node.node_type_name));
         // All these are geometry-producing nodes
         assert_ne!(
-            node_type.output_type,
+            *node_type.output_type(),
             DataType::None,
             "Node type '{}' should have a valid output type",
             node.node_type_name
@@ -72,7 +78,7 @@ fn test_load_old_builtin_only() {
     );
 
     // Verify network output_type (from old serialized field)
-    assert_eq!(network.node_type.output_type, DataType::Geometry);
+    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
 
     // Verify displayed_node_ids loaded (old format, no per-pin info)
     assert_eq!(
@@ -81,7 +87,9 @@ fn test_load_old_builtin_only() {
         "Expected 1 displayed node"
     );
     // The union/result node should be displayed as Normal
-    let return_node_id = network.return_node_id.expect("return_node_id should be set");
+    let return_node_id = network
+        .return_node_id
+        .expect("return_node_id should be set");
     assert_eq!(
         network.displayed_node_ids.get(&return_node_id),
         Some(&NodeDisplayType::Normal),
@@ -92,9 +100,11 @@ fn test_load_old_builtin_only() {
 #[test]
 fn test_roundtrip_old_builtin_only() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result =
-        load_node_networks_from_file(&mut registry, &format!("{}/old_builtin_only.cnnd", FIXTURE_DIR))
-            .expect("Failed to load");
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/old_builtin_only.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -117,7 +127,7 @@ fn test_roundtrip_old_builtin_only() {
     assert_eq!(net1.next_node_id, net2.next_node_id);
     assert_eq!(net1.return_node_id, net2.return_node_id);
     assert_eq!(net1.displayed_node_ids.len(), net2.displayed_node_ids.len());
-    assert_eq!(net1.node_type.output_type, net2.node_type.output_type);
+    assert_eq!(net1.node_type.output_type(), net2.node_type.output_type());
 }
 
 // ---------------------------------------------------------------------------
@@ -129,9 +139,11 @@ fn test_roundtrip_old_builtin_only() {
 #[test]
 fn test_load_old_custom_network() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result =
-        load_node_networks_from_file(&mut registry, &format!("{}/old_custom_network.cnnd", FIXTURE_DIR))
-            .expect("Failed to load old_custom_network.cnnd");
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/old_custom_network.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load old_custom_network.cnnd");
 
     assert_eq!(load_result.first_network_name, "Main");
 
@@ -148,7 +160,7 @@ fn test_load_old_custom_network() {
     // Verify custom network's output_type was loaded from old format
     let my_shape = registry.node_networks.get("my_shape").unwrap();
     assert_eq!(
-        my_shape.node_type.output_type,
+        *my_shape.node_type.output_type(),
         DataType::Geometry,
         "Custom network output_type should be Geometry (migrated from old output_type string)"
     );
@@ -173,15 +185,17 @@ fn test_load_old_custom_network() {
         custom_type.is_some(),
         "my_shape should be available as a node type in registry"
     );
-    assert_eq!(custom_type.unwrap().output_type, DataType::Geometry);
+    assert_eq!(*custom_type.unwrap().output_type(), DataType::Geometry);
 }
 
 #[test]
 fn test_roundtrip_old_custom_network() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result =
-        load_node_networks_from_file(&mut registry, &format!("{}/old_custom_network.cnnd", FIXTURE_DIR))
-            .expect("Failed to load");
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/old_custom_network.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -204,7 +218,10 @@ fn test_roundtrip_old_custom_network() {
 
     let shape1 = registry.node_networks.get("my_shape").unwrap();
     let shape2 = registry2.node_networks.get("my_shape").unwrap();
-    assert_eq!(shape1.node_type.output_type, shape2.node_type.output_type);
+    assert_eq!(
+        shape1.node_type.output_type(),
+        shape2.node_type.output_type()
+    );
     assert_eq!(
         shape1.node_type.parameters.len(),
         shape2.node_type.parameters.len()
@@ -241,13 +258,10 @@ fn test_load_old_atom_edit_output_diff_false() {
         .as_any_ref()
         .downcast_ref::<AtomEditData>()
         .expect("Failed to downcast to AtomEditData");
-    assert!(
-        !atom_edit_data.output_diff,
-        "output_diff should be false"
-    );
+    assert!(!atom_edit_data.output_diff, "output_diff should be false");
 
     // Verify network output_type is Atomic (atom_edit's output)
-    assert_eq!(network.node_type.output_type, DataType::Atomic);
+    assert_eq!(*network.node_type.output_type(), DataType::Atomic);
 
     // Verify the atom_edit node is displayed
     let atom_edit_id = network
@@ -303,10 +317,7 @@ fn test_load_old_atom_edit_output_diff_true() {
         .as_any_ref()
         .downcast_ref::<AtomEditData>()
         .expect("Failed to downcast to AtomEditData");
-    assert!(
-        atom_edit_data.output_diff,
-        "output_diff should be true"
-    );
+    assert!(atom_edit_data.output_diff, "output_diff should be true");
 
     // Verify the atom_edit node is displayed
     let atom_edit_id = network

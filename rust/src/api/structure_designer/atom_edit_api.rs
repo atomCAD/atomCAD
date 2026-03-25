@@ -1187,14 +1187,19 @@ pub fn atom_edit_set_hybridization_override(
                 if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
                     // Process selected base atoms
                     for &base_id in &data.selection.selected_base_atoms.clone() {
-                        let old = data.hybridization_override_base_atoms.get(&base_id).copied();
+                        let old = data
+                            .hybridization_override_base_atoms
+                            .get(&base_id)
+                            .copied();
                         if value == HYBRIDIZATION_AUTO {
                             // Remove override if present
                             if let Some(old_val) = old {
                                 data.hybridization_override_base_atoms.remove(&base_id);
-                                delta
-                                    .removed
-                                    .push((HybridizationProvenance::Base, base_id, old_val));
+                                delta.removed.push((
+                                    HybridizationProvenance::Base,
+                                    base_id,
+                                    old_val,
+                                ));
                             }
                         } else if let Some(old_val) = old {
                             if old_val != value {
@@ -1217,13 +1222,18 @@ pub fn atom_edit_set_hybridization_override(
                     }
                     // Process selected diff atoms
                     for &diff_id in &data.selection.selected_diff_atoms.clone() {
-                        let old = data.hybridization_override_diff_atoms.get(&diff_id).copied();
+                        let old = data
+                            .hybridization_override_diff_atoms
+                            .get(&diff_id)
+                            .copied();
                         if value == HYBRIDIZATION_AUTO {
                             if let Some(old_val) = old {
                                 data.hybridization_override_diff_atoms.remove(&diff_id);
-                                delta
-                                    .removed
-                                    .push((HybridizationProvenance::Diff, diff_id, old_val));
+                                delta.removed.push((
+                                    HybridizationProvenance::Diff,
+                                    diff_id,
+                                    old_val,
+                                ));
                             }
                         } else if let Some(old_val) = old {
                             if old_val != value {
@@ -1271,12 +1281,11 @@ pub fn atom_edit_get_selected_hybridization() -> i8 {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                let data = match atom_edit::get_active_atom_edit_data(
-                    &cad_instance.structure_designer,
-                ) {
-                    Some(d) => d,
-                    None => return -1,
-                };
+                let data =
+                    match atom_edit::get_active_atom_edit_data(&cad_instance.structure_designer) {
+                        Some(d) => d,
+                        None => return -1,
+                    };
 
                 let base_selected = &data.selection.selected_base_atoms;
                 let diff_selected = &data.selection.selected_diff_atoms;
@@ -1332,7 +1341,7 @@ pub fn atom_edit_get_selected_hybridization() -> i8 {
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
     use crate::api::api_common::with_cad_instance_or;
-    use crate::crystolecule::guided_placement::{detect_hybridization, Hybridization};
+    use crate::crystolecule::guided_placement::{Hybridization, detect_hybridization};
     use crate::structure_designer::nodes::atom_edit::atom_edit::{
         AtomEditEvalCache, SelectionProvenance,
     };
@@ -1340,12 +1349,11 @@ pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                let data = match atom_edit::get_active_atom_edit_data(
-                    &cad_instance.structure_designer,
-                ) {
-                    Some(d) => d,
-                    None => return -1,
-                };
+                let data =
+                    match atom_edit::get_active_atom_edit_data(&cad_instance.structure_designer) {
+                        Some(d) => d,
+                        None => return -1,
+                    };
 
                 if data.selection.selected_base_atoms.is_empty()
                     && data.selection.selected_diff_atoms.is_empty()
@@ -1379,8 +1387,7 @@ pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
                 // In diff view, selected atom IDs are already result-space IDs.
                 if data.output_diff {
                     for &diff_id in &data.selection.selected_diff_atoms {
-                        let val =
-                            hyb_to_u8(detect_hybridization(result_structure, diff_id, None));
+                        let val = hyb_to_u8(detect_hybridization(result_structure, diff_id, None));
                         match common {
                             None => common = Some(val),
                             Some(c) if c != val => return -2,
@@ -1403,11 +1410,8 @@ pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
                             }
                         };
                         if let Some(result_id) = result_id {
-                            let val = hyb_to_u8(detect_hybridization(
-                                result_structure,
-                                result_id,
-                                None,
-                            ));
+                            let val =
+                                hyb_to_u8(detect_hybridization(result_structure, result_id, None));
                             match common {
                                 None => common = Some(val),
                                 Some(c) if c != val => return -2,

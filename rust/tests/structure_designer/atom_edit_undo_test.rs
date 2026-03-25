@@ -2783,12 +2783,9 @@ fn push_set_hybridization_command(
             if old_val != value {
                 data.hybridization_override_diff_atoms
                     .insert(diff_id, value);
-                delta.changed.push((
-                    HybridizationProvenance::Diff,
-                    diff_id,
-                    old_val,
-                    value,
-                ));
+                delta
+                    .changed
+                    .push((HybridizationProvenance::Diff, diff_id, old_val, value));
             }
         } else {
             data.hybridization_override_diff_atoms

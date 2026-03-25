@@ -13,10 +13,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -65,7 +65,7 @@ impl NodeData for HalfPlaneData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let drawing_plane = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
@@ -76,7 +76,7 @@ impl NodeData for HalfPlaneData {
             NetworkResult::extract_drawing_plane,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Evaluate optional miller_index input pin
@@ -108,7 +108,7 @@ impl NodeData for HalfPlaneData {
                     NetworkResult::extract_ivec2,
                 ) {
                     Ok(value) => value,
-                    Err(error) => return error,
+                    Err(error) => return EvalOutput::single(error),
                 };
 
                 // Evaluate shift input pin
@@ -122,7 +122,7 @@ impl NodeData for HalfPlaneData {
                     NetworkResult::extract_int,
                 ) {
                     Ok(value) => value,
-                    Err(error) => return error,
+                    Err(error) => return EvalOutput::single(error),
                 };
 
                 // Evaluate subdivision input pin
@@ -136,7 +136,7 @@ impl NodeData for HalfPlaneData {
                     NetworkResult::extract_int,
                 ) {
                     Ok(value) => value.max(1), // Ensure minimum value of 1
-                    Err(error) => return error,
+                    Err(error) => return EvalOutput::single(error),
                 };
 
                 // Convert miller index to plane properties
@@ -145,7 +145,7 @@ impl NodeData for HalfPlaneData {
                     .ivec2_miller_index_to_plane_props(&miller_index)
                 {
                     Ok(props) => props,
-                    Err(error_msg) => return NetworkResult::Error(error_msg),
+                    Err(error_msg) => return EvalOutput::single(NetworkResult::Error(error_msg)),
                 };
 
                 // Convert center from lattice to real coordinates using effective unit cell
@@ -171,7 +171,7 @@ impl NodeData for HalfPlaneData {
             }
             NetworkResult::Error(error) => {
                 // Error in miller_index evaluation
-                return NetworkResult::Error(error);
+                return EvalOutput::single(NetworkResult::Error(error));
             }
             _ => {
                 // Miller index not connected - use point1 and point2 from node data
@@ -190,14 +190,14 @@ impl NodeData for HalfPlaneData {
         let normal = DVec2::new(-dir_vector.y, dir_vector.x).normalize();
 
         // Use point1 as the position and calculate the angle for the transform
-        NetworkResult::Geometry2D(GeometrySummary2D {
+        EvalOutput::single(NetworkResult::Geometry2D(GeometrySummary2D {
             drawing_plane,
             frame_transform: Transform2D::new(
                 point1,
                 normal.x.atan2(normal.y), // Angle from Y direction to normal in radians
             ),
             geo_tree_root: GeoNode::half_plane(point1, point2),
-        })
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -542,7 +542,7 @@ Both vertices are displayed as a triangle-based prism. The direction of the half
           data_type: DataType::Int,
         },
       ],
-      output_type: DataType::Geometry2D,
+      output_pins: OutputPinDefinition::single(DataType::Geometry2D),
       public: true,
       node_data_creator: || Box::new(HalfPlaneData {
         point1: IVec2::new(0, 0),

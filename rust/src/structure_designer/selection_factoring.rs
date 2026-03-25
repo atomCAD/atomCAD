@@ -10,7 +10,9 @@ use std::collections::{HashMap, HashSet};
 use super::data_type::DataType;
 use super::node_data::CustomNodeData;
 use super::node_network::{Argument, Node, NodeDisplayType, NodeNetwork};
-use super::node_type::{NodeType, Parameter, generic_node_data_loader, generic_node_data_saver};
+use super::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
 use super::node_type_registry::NodeTypeRegistry;
 use super::nodes::parameter::ParameterData;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
@@ -354,7 +356,7 @@ pub fn create_subnetwork_from_selection(
         summary: None,
         category: NodeTypeCategory::Custom,
         parameters,
-        output_type,
+        output_pins: OutputPinDefinition::single(output_type),
         public: true,
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,

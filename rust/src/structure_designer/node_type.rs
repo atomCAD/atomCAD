@@ -13,6 +13,23 @@ pub struct Parameter {
     pub data_type: DataType,
 }
 
+/// Definition of an output pin on a node type.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutputPinDefinition {
+    pub name: String,
+    pub data_type: DataType,
+}
+
+impl OutputPinDefinition {
+    /// Convenience constructor for single-output nodes.
+    pub fn single(data_type: DataType) -> Vec<OutputPinDefinition> {
+        vec![OutputPinDefinition {
+            name: "result".to_string(),
+            data_type,
+        }]
+    }
+}
+
 // A built-in or user defined node type.
 #[derive(Clone)]
 pub struct NodeType {
@@ -23,7 +40,7 @@ pub struct NodeType {
     pub summary: Option<String>,
     pub category: NodeTypeCategory,
     pub parameters: Vec<Parameter>,
-    pub output_type: DataType,
+    pub output_pins: Vec<OutputPinDefinition>,
     pub public: bool, // whether this node type is available for users to add
     pub node_data_creator: fn() -> Box<dyn NodeData>,
     #[allow(clippy::type_complexity)]
@@ -33,6 +50,11 @@ pub struct NodeType {
 }
 
 impl NodeType {
+    /// The primary output type (pin 0). Panics if no output pins.
+    pub fn output_type(&self) -> &DataType {
+        &self.output_pins[0].data_type
+    }
+
     pub fn get_function_type(&self) -> DataType {
         DataType::Function(FunctionType {
             parameter_types: self
@@ -40,18 +62,29 @@ impl NodeType {
                 .iter()
                 .map(|p| p.data_type.clone())
                 .collect(),
-            output_type: Box::new(self.output_type.clone()),
+            output_type: Box::new(self.output_type().clone()),
         })
     }
 
     pub fn get_output_pin_type(&self, output_pin_index: i32) -> DataType {
-        if output_pin_index == (-1) {
+        if output_pin_index == -1 {
             self.get_function_type()
-        } else if output_pin_index == 0 {
-            self.output_type.clone()
         } else {
-            DataType::None
+            self.output_pins
+                .get(output_pin_index as usize)
+                .map(|p| p.data_type.clone())
+                .unwrap_or(DataType::None)
         }
+    }
+
+    /// Number of result output pins (excludes function pin).
+    pub fn output_pin_count(&self) -> usize {
+        self.output_pins.len()
+    }
+
+    /// Whether this node type has multiple output pins.
+    pub fn has_multi_output(&self) -> bool {
+        self.output_pins.len() > 1
     }
 }
 

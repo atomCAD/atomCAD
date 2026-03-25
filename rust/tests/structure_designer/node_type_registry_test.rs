@@ -2,7 +2,7 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types:
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::node_data::NoData;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use rust_lib_flutter_cad::structure_designer::node_type::{no_data_loader, no_data_saver};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
@@ -13,7 +13,7 @@ fn create_test_network(name: &str) -> NodeNetwork {
         summary: None,
         category: NodeTypeCategory::Custom,
         parameters: Vec::new(),
-        output_type: DataType::None,
+        output_pins: OutputPinDefinition::single(DataType::None),
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,
         node_data_loader: no_data_loader,
@@ -275,11 +275,11 @@ fn test_get_node_type_returns_correct_properties() {
 
     let float_type = registry.get_node_type("float").unwrap();
     assert_eq!(float_type.name, "float");
-    assert_eq!(float_type.output_type, DataType::Float);
+    assert_eq!(*float_type.output_type(), DataType::Float);
 
     let sphere_type = registry.get_node_type("sphere").unwrap();
     assert_eq!(sphere_type.name, "sphere");
-    assert_eq!(sphere_type.output_type, DataType::Geometry);
+    assert_eq!(*sphere_type.output_type(), DataType::Geometry);
 }
 
 #[test]

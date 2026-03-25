@@ -819,8 +819,11 @@ pub fn assign_uff_types_with_overrides(
     let mut params = Vec::with_capacity(n);
 
     for i in 0..n {
-        let label =
-            assign_uff_type_with_override(atomic_numbers[i], bond_lists[i], hybridization_overrides[i])?;
+        let label = assign_uff_type_with_override(
+            atomic_numbers[i],
+            bond_lists[i],
+            hybridization_overrides[i],
+        )?;
         let p = get_uff_params(label).ok_or_else(|| {
             format!(
                 "Atom {}: assigned type '{}' but no UFF parameters found (element Z={})",

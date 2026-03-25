@@ -7,10 +7,10 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
-use rust_lib_flutter_cad::structure_designer::node_data::{NoData, NodeData};
+use rust_lib_flutter_cad::structure_designer::node_data::{EvalOutput, NoData, NodeData};
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
 use rust_lib_flutter_cad::structure_designer::node_network_gadget::NodeNetworkGadget;
-use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::selection_factoring::{
     analyze_selection_for_factoring, create_subnetwork_from_selection,
@@ -46,8 +46,10 @@ impl NodeData for MockNodeData {
         _registry: &NodeTypeRegistry,
         _decorate: bool,
         _context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
-        NetworkResult::Error("MockNodeData eval not implemented".to_string())
+    ) -> EvalOutput {
+        EvalOutput::single(NetworkResult::Error(
+            "MockNodeData eval not implemented".to_string(),
+        ))
     }
 
     fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
@@ -63,7 +65,7 @@ fn create_test_node_type(name: &str) -> NodeType {
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
-        output_type: DataType::Geometry,
+        output_pins: OutputPinDefinition::single(DataType::Geometry),
         public: true,
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
@@ -91,7 +93,7 @@ fn create_test_node_type_with_params(name: &str, num_params: usize) -> NodeType 
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         parameters,
-        output_type: DataType::Geometry,
+        output_pins: OutputPinDefinition::single(DataType::Geometry),
         public: true,
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,

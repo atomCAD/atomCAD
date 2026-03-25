@@ -137,7 +137,7 @@ fn test_network_output_type_from_return_node() {
 
     assert!(
         matches!(
-            network.node_type.output_type,
+            *network.node_type.output_type(),
             rust_lib_flutter_cad::structure_designer::data_type::DataType::Geometry
         ),
         "Output type should be Geometry for sphere"

@@ -122,7 +122,14 @@
       "WebFetch(domain:rasmol.org)",
       "WebFetch(domain:openrasmol.org)",
       "WebFetch(domain:www.cup.uni-muenchen.de)",
-      "WebFetch(domain:stackoverflow.com)"
+      "WebFetch(domain:stackoverflow.com)",
+      "Bash(sed -i 's/^      output_type: DataType::\\\\\\(.*\\\\\\),$/      output_pins: OutputPinDefinition::single\\(DataType::\\\\1\\),/' src/structure_designer/nodes/lattice_move.rs src/structure_designer/nodes/lattice_rot.rs)",
+      "Bash(sed -i 's/^        output_type: DataType::\\\\\\(.*\\\\\\),$/        output_pins: OutputPinDefinition::single\\(DataType::\\\\1\\),/' src/structure_designer/nodes/lattice_move.rs src/structure_designer/nodes/lattice_rot.rs)",
+      "Bash(for f:*)",
+      "Read(//c/machine_phase_systems/flutter_cad/rust/**)",
+      "Bash(done)",
+      "Bash(while read:*)",
+      "Bash(do sed:*)"
     ]
   }
 }

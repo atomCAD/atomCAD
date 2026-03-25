@@ -5,6 +5,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::Closure;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::NoData;
+use crate::structure_designer::node_type::OutputPinDefinition;
 use crate::structure_designer::node_type::no_data_loader;
 use crate::structure_designer::node_type::no_data_saver;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -44,7 +45,7 @@ impl FunctionEvaluator {
         summary: None,
         category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
         parameters: Vec::new(),
-        output_type: DataType::None,
+        output_pins: OutputPinDefinition::single(DataType::None),
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,
         node_data_loader: no_data_loader,

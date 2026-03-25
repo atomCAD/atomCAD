@@ -6,7 +6,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::sphere::SphereData;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
@@ -135,7 +135,7 @@ fn test_sphere_node_basic() {
         summary: None,
         category: NodeTypeCategory::Custom,
         parameters: vec![],
-        output_type: DataType::Geometry,
+        output_pins: OutputPinDefinition::single(DataType::Geometry),
         node_data_creator: || {
             Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
         },

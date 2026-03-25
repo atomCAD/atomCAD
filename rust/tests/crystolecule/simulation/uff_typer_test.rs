@@ -1180,8 +1180,7 @@ fn test_batch_override_mixed() {
     let bond_lists: Vec<&[InlineBond]> = vec![&c_bonds, &n_bonds, &o_bonds];
     let overrides = [HYBRIDIZATION_SP2, HYBRIDIZATION_AUTO, HYBRIDIZATION_SP3];
 
-    let result =
-        assign_uff_types_with_overrides(&atomic_numbers, &bond_lists, &overrides).unwrap();
+    let result = assign_uff_types_with_overrides(&atomic_numbers, &bond_lists, &overrides).unwrap();
     assert_eq!(result.labels[0], "C_2"); // overridden
     assert_eq!(result.labels[1], "N_2"); // auto (has double bond → N_2)
     assert_eq!(result.labels[2], "O_3"); // overridden from O_2 to O_3

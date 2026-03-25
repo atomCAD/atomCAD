@@ -12,10 +12,10 @@ use crate::structure_designer::evaluator::network_evaluator::{
 use crate::structure_designer::evaluator::network_result::{
     GeometrySummary, NetworkResult, runtime_type_error_in_input,
 };
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -76,12 +76,12 @@ impl NodeData for LatticeMoveData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = input_val {
-            return input_val;
+            return EvalOutput::single(input_val);
         }
 
         // Shared: read translation (pin 1) and subdivision (pin 2)
@@ -95,7 +95,7 @@ impl NodeData for LatticeMoveData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let lattice_subdivision = match network_evaluator.evaluate_or_default(
@@ -108,7 +108,7 @@ impl NodeData for LatticeMoveData {
             NetworkResult::extract_int,
         ) {
             Ok(value) => value.max(1), // Ensure minimum value of 1
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
@@ -126,7 +126,7 @@ impl NodeData for LatticeMoveData {
                     NetworkResult::extract_unit_cell,
                 ) {
                     Ok(value) => value,
-                    Err(error) => return error,
+                    Err(error) => return EvalOutput::single(error),
                 };
 
                 let real_translation = unit_cell.dvec3_lattice_to_real(&subdivided_translation);
@@ -141,9 +141,9 @@ impl NodeData for LatticeMoveData {
 
                 let mut result = structure.clone();
                 result.transform(&DQuat::IDENTITY, &real_translation);
-                NetworkResult::Atomic(result)
+                EvalOutput::single(NetworkResult::Atomic(result))
             } else {
-                runtime_type_error_in_input(0)
+                EvalOutput::single(runtime_type_error_in_input(0))
             }
         } else if let NetworkResult::Geometry(shape) = input_val {
             let real_translation = shape
@@ -158,16 +158,16 @@ impl NodeData for LatticeMoveData {
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
                 unit_cell: shape.unit_cell.clone(),
                 frame_transform: Transform::default(),
                 geo_tree_root: GeoNode::transform(
                     Transform::new(real_translation, DQuat::IDENTITY),
                     Box::new(shape.geo_tree_root),
                 ),
-            })
+            }))
         } else {
-            runtime_type_error_in_input(0)
+            EvalOutput::single(runtime_type_error_in_input(0))
         }
     }
 
@@ -389,7 +389,7 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
             data_type: DataType::Int,
           },
       ],
-      output_type: DataType::Geometry,
+      output_pins: OutputPinDefinition::single(DataType::Geometry),
       public: true,
       node_data_creator: || Box::new(LatticeMoveData {
         translation: IVec3::new(0, 0, 0),
@@ -432,7 +432,7 @@ You can directly enter the translation vector or drag the axes of the gadget."
                 data_type: DataType::UnitCell,
             },
         ],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || {
             Box::new(LatticeMoveData {

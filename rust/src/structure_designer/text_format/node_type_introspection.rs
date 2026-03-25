@@ -300,7 +300,7 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
     writeln!(
         output,
         "Output: {}",
-        format_data_type_for_display(&node_type.output_type)
+        format_data_type_for_display(node_type.output_type())
     )
     .unwrap();
 
@@ -309,7 +309,7 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
     if let Some(ref custom_type) = custom_node_type {
         // Check if the custom type differs from the base type
         let has_dynamic_params = custom_type.parameters != node_type.parameters;
-        let has_dynamic_output = custom_type.output_type != node_type.output_type;
+        let has_dynamic_output = *custom_type.output_type() != *node_type.output_type();
 
         if has_dynamic_params || has_dynamic_output {
             writeln!(output).unwrap();
@@ -332,7 +332,7 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
                 writeln!(
                     output,
                     "  Dynamic Output: {}",
-                    format_data_type_for_display(&custom_type.output_type)
+                    format_data_type_for_display(custom_type.output_type())
                 )
                 .unwrap();
             }

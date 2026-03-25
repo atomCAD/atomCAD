@@ -7,10 +7,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -41,7 +41,7 @@ impl NodeData for Union2DData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         //let _timer = Timer::new("eval_union");
         let mut shapes: Vec<GeoNode> = Vec::new();
         let mut frame_translation = DVec2::ZERO;
@@ -50,20 +50,24 @@ impl NodeData for Union2DData {
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = shapes_val {
-            return shapes_val;
+            return EvalOutput::single(shapes_val);
         }
 
         // Extract the array elements from shapes_val
         let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
             array_elements
         } else {
-            return NetworkResult::Error("Expected array of geometry shapes".to_string());
+            return EvalOutput::single(NetworkResult::Error(
+                "Expected array of geometry shapes".to_string(),
+            ));
         };
 
         let shape_count = shape_results.len();
 
         if shape_count == 0 {
-            return NetworkResult::Error("Union requires at least one input geometry".to_string());
+            return EvalOutput::single(NetworkResult::Error(
+                "Union requires at least one input geometry".to_string(),
+            ));
         }
 
         // Extract geometries and check unit cell compatibility
@@ -72,13 +76,15 @@ impl NodeData for Union2DData {
             if let NetworkResult::Geometry2D(shape) = shape_val {
                 geometries.push(shape);
             } else {
-                return NetworkResult::Error("All inputs must be geometry objects".to_string());
+                return EvalOutput::single(NetworkResult::Error(
+                    "All inputs must be geometry objects".to_string(),
+                ));
             }
         }
 
         // Check drawing plane compatibility - compare all to the first geometry
         if !GeometrySummary2D::all_have_compatible_drawing_planes(&geometries) {
-            return unit_cell_mismatch_error();
+            return EvalOutput::single(unit_cell_mismatch_error());
         }
 
         // All drawing planes are compatible, proceed with union
@@ -91,11 +97,11 @@ impl NodeData for Union2DData {
 
         frame_translation /= shape_count as f64;
 
-        NetworkResult::Geometry2D(GeometrySummary2D {
+        EvalOutput::single(NetworkResult::Geometry2D(GeometrySummary2D {
             drawing_plane: first_drawing_plane,
             frame_transform: Transform2D::new(frame_translation, 0.0),
             geo_tree_root: GeoNode::union_2d(shapes),
-        })
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -129,7 +135,7 @@ pub fn get_node_type() -> NodeType {
               data_type: DataType::Array(Box::new(DataType::Geometry2D)),
           },
       ],
-      output_type: DataType::Geometry2D,
+      output_pins: OutputPinDefinition::single(DataType::Geometry2D),
       public: true,
       node_data_creator: || Box::new(Union2DData {}),
       node_data_saver: generic_node_data_saver::<Union2DData>,

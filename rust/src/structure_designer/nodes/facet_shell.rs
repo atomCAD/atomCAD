@@ -11,10 +11,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::GeometrySummary;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -492,7 +492,7 @@ impl NodeData for FacetShellData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let unit_cell = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
@@ -503,7 +503,7 @@ impl NodeData for FacetShellData {
             NetworkResult::extract_unit_cell,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let center = match network_evaluator.evaluate_or_default(
@@ -516,7 +516,7 @@ impl NodeData for FacetShellData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
@@ -536,7 +536,7 @@ impl NodeData for FacetShellData {
             let plane_props = match unit_cell.ivec3_miller_index_to_plane_props(&facet.miller_index)
             {
                 Ok(props) => props,
-                Err(error_msg) => return NetworkResult::Error(error_msg),
+                Err(error_msg) => return EvalOutput::single(NetworkResult::Error(error_msg)),
             };
 
             // Calculate shift distance as multiples of d-spacing
@@ -546,14 +546,14 @@ impl NodeData for FacetShellData {
             shapes.push(GeoNode::half_space(plane_props.normal, shifted_center));
         }
 
-        NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
             unit_cell: unit_cell.clone(),
             frame_transform: Transform::new(
                 center_pos,
                 DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
             ),
             geo_tree_root: GeoNode::intersection_3d(shapes),
-        })
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -890,7 +890,7 @@ See the atomCAD reference guide for more details.".to_string(),
           data_type: DataType::IVec3,
         },
       ],
-      output_type: DataType::Geometry,
+      output_pins: OutputPinDefinition::single(DataType::Geometry),
       public: true,
       node_data_creator: || Box::new(FacetShellData::default()),
       node_data_saver: generic_node_data_saver::<FacetShellData>,

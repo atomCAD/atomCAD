@@ -6,10 +6,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -40,7 +40,8 @@ impl NodeData for MapData {
             parameter_types: vec![self.input_type.clone()],
             output_type: Box::new(self.output_type.clone()),
         });
-        custom_node_type.output_type = DataType::Array(Box::new(self.output_type.clone()));
+        custom_node_type.output_pins =
+            OutputPinDefinition::single(DataType::Array(Box::new(self.output_type.clone())));
 
         Some(custom_node_type)
     }
@@ -53,33 +54,35 @@ impl NodeData for MapData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let xs_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = xs_val {
-            return xs_val;
+            return EvalOutput::single(xs_val);
         }
 
         // Extract the array elements from xs_val
         let xs = if let NetworkResult::Array(array_elements) = xs_val {
             array_elements
         } else {
-            return NetworkResult::Error("Expected array of elements".to_string());
+            return EvalOutput::single(NetworkResult::Error(
+                "Expected array of elements".to_string(),
+            ));
         };
 
         let f_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 1);
 
         if let NetworkResult::Error(_) = f_val {
-            return f_val;
+            return EvalOutput::single(f_val);
         }
 
         // Extract the f closure from f_val
         let f = if let NetworkResult::Function(closure) = f_val {
             closure
         } else {
-            return NetworkResult::Error("Expected a closure".to_string());
+            return EvalOutput::single(NetworkResult::Error("Expected a closure".to_string()));
         };
 
         // Create a function evaluator for the closure
@@ -96,7 +99,7 @@ impl NodeData for MapData {
 
             // If there's an error in evaluation, propagate it immediately
             if let NetworkResult::Error(_) = result {
-                return result;
+                return EvalOutput::single(result);
             }
 
             // Collect the result
@@ -104,7 +107,7 @@ impl NodeData for MapData {
         }
 
         // Return the collected results as a NetworkResult::Array
-        NetworkResult::Array(results)
+        EvalOutput::single(NetworkResult::Array(results))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -176,7 +179,7 @@ pub fn get_node_type() -> NodeType {
           }), // will change based on  ParameterData::data_type.
         },
       ],
-      output_type: DataType::Array(Box::new(DataType::Float)), // will change based on the output type
+      output_pins: OutputPinDefinition::single(DataType::Array(Box::new(DataType::Float))), // will change based on the output type
       public: true,
       node_data_creator: || Box::new(MapData {
         input_type: DataType::Float,

@@ -308,7 +308,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                             (None, None, None, None)
                         };
 
-                    let output_type = node_type.output_type.clone();
+                    let output_type = node_type.output_type().clone();
                     let function_type = node_type.get_function_type();
                     node_network_view.nodes.insert(
                         node.id,
@@ -2522,7 +2522,7 @@ fn compute_selection_measurement(
                 .map(|i| i.element_name.clone())
                 .unwrap_or_else(|| "Unknown".to_string());
             let inferred_hybridization = {
-                use crate::crystolecule::guided_placement::{detect_hybridization, Hybridization};
+                use crate::crystolecule::guided_placement::{Hybridization, detect_hybridization};
                 match detect_hybridization(result_structure, atom_id, None) {
                     Hybridization::Sp3 => 1,
                     Hybridization::Sp2 => 2,
@@ -4590,7 +4590,9 @@ pub fn query_hovered_atom_info(
                     .collect();
 
                 let inferred_hybridization = {
-                    use crate::crystolecule::guided_placement::{detect_hybridization, Hybridization};
+                    use crate::crystolecule::guided_placement::{
+                        Hybridization, detect_hybridization,
+                    };
                     match detect_hybridization(structure, atom_id, None) {
                         Hybridization::Sp3 => 1,
                         Hybridization::Sp2 => 2,

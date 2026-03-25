@@ -21,7 +21,7 @@ fn test_comment_node_type() {
 #[test]
 fn test_comment_node_has_no_output() {
     let node_type = get_node_type();
-    assert_eq!(node_type.output_type, DataType::None);
+    assert_eq!(*node_type.output_type(), DataType::None);
 }
 
 #[test]

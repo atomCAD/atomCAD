@@ -8,10 +8,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -45,14 +45,14 @@ impl NodeData for AtomCutData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         //let _timer = Timer::new("eval_intersect");
 
         let molecule_input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = molecule_input_val {
-            return molecule_input_val;
+            return EvalOutput::single(molecule_input_val);
         }
 
         if let NetworkResult::Atomic(mut atomic_structure) = molecule_input_val {
@@ -60,11 +60,11 @@ impl NodeData for AtomCutData {
                 network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
 
             if let NetworkResult::None = shapes_val {
-                return NetworkResult::Atomic(atomic_structure); // no cutters plugged in, just return the input atomic structure unmodified.
+                return EvalOutput::single(NetworkResult::Atomic(atomic_structure)); // no cutters plugged in, just return the input atomic structure unmodified.
             }
 
             if let NetworkResult::Error(_) = shapes_val {
-                return shapes_val;
+                return EvalOutput::single(shapes_val);
             }
 
             let mut shapes: Vec<GeoNode> = Vec::new();
@@ -73,7 +73,9 @@ impl NodeData for AtomCutData {
             let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
                 array_elements
             } else {
-                return NetworkResult::Error("Invalid shapes input.".to_string());
+                return EvalOutput::single(NetworkResult::Error(
+                    "Invalid shapes input.".to_string(),
+                ));
             };
 
             for shape_val in shape_results {
@@ -91,9 +93,9 @@ impl NodeData for AtomCutData {
                 self.unit_cell_size,
             );
 
-            NetworkResult::Atomic(atomic_structure)
+            EvalOutput::single(NetworkResult::Atomic(atomic_structure))
         } else {
-            NetworkResult::Atomic(AtomicStructure::new())
+            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
         }
     }
 
@@ -204,7 +206,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Array(Box::new(DataType::Geometry)),
             },
         ],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || Box::new(AtomCutData::new()),
         node_data_saver: generic_node_data_saver::<AtomCutData>,

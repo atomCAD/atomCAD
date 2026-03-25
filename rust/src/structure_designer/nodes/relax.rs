@@ -7,10 +7,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -49,23 +49,23 @@ impl NodeData for RelaxData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = input_val {
-            return input_val;
+            return EvalOutput::single(input_val);
         }
 
         if let NetworkResult::Atomic(mut atomic_structure) = input_val {
             let num_atoms = atomic_structure.get_num_of_atoms();
             if num_atoms > MAX_RELAX_ATOMS {
-                return NetworkResult::Error(format!(
+                return EvalOutput::single(NetworkResult::Error(format!(
                     "Structure has {} atoms, which exceeds the relax node limit of {}. \
                      Large structures cause excessive computation time. \
                      Consider reducing the structure size or using a smaller region.",
                     num_atoms, MAX_RELAX_ATOMS
-                ));
+                )));
             }
 
             let vdw_mode = if context.use_vdw_cutoff {
@@ -84,12 +84,12 @@ impl NodeData for RelaxData {
                         context.selected_node_eval_cache = Some(Box::new(eval_cache));
                     }
 
-                    NetworkResult::Atomic(atomic_structure)
+                    EvalOutput::single(NetworkResult::Atomic(atomic_structure))
                 }
-                Err(error_msg) => NetworkResult::Error(error_msg),
+                Err(error_msg) => EvalOutput::single(NetworkResult::Error(error_msg)),
             }
         } else {
-            NetworkResult::Atomic(AtomicStructure::new())
+            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
         }
     }
 
@@ -122,7 +122,7 @@ pub fn get_node_type() -> NodeType {
             name: "molecule".to_string(),
             data_type: DataType::Atomic,
         }],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || Box::new(RelaxData {}),
         node_data_saver: generic_node_data_saver::<RelaxData>,

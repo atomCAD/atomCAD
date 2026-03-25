@@ -1,6 +1,6 @@
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_network::{Argument, NodeNetwork, ValidationError};
-use crate::structure_designer::node_type::Parameter;
+use crate::structure_designer::node_type::{OutputPinDefinition, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use std::cmp::Ordering;
@@ -370,7 +370,7 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                             node_type_registry
                                 .get_node_type_for_node(source_node)
                                 .unwrap()
-                                .output_type
+                                .output_type()
                         ),
                         Some(*dest_node_id),
                     ));
@@ -452,7 +452,7 @@ fn update_network_output_type(
     network: &mut NodeNetwork,
     node_type_registry: &NodeTypeRegistry,
 ) -> bool {
-    let old_output_type = network.node_type.output_type.clone();
+    let old_output_type = network.node_type.output_type().clone();
 
     // Determine the new output type based on return_node_id
     let new_output_type = if let Some(return_node_id) = network.return_node_id {
@@ -462,7 +462,7 @@ fn update_network_output_type(
             node_type_registry
                 .get_node_type_for_node(return_node)
                 .unwrap()
-                .output_type
+                .output_type()
                 .clone()
         } else {
             // Return node doesn't exist, set to None
@@ -474,7 +474,7 @@ fn update_network_output_type(
     };
 
     // Update the network's output type
-    network.node_type.output_type = new_output_type.clone();
+    network.node_type.output_pins = OutputPinDefinition::single(new_output_type.clone());
 
     // Return true if the output type changed
     old_output_type != new_output_type

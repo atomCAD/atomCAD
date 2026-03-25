@@ -12,9 +12,9 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::{NodeType, Parameter};
+use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
 use crate::structure_designer::nodes::edit_atom::commands::add_bond_command::AddBondCommand;
@@ -184,19 +184,19 @@ impl NodeData for EditAtomData {
         registry: &NodeTypeRegistry,
         decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = input_val {
-            return input_val;
+            return EvalOutput::single(input_val);
         }
 
         if let NetworkResult::Atomic(mut atomic_structure) = input_val {
             self.eval(&mut atomic_structure, decorate);
-            NetworkResult::Atomic(atomic_structure)
+            EvalOutput::single(NetworkResult::Atomic(atomic_structure))
         } else {
-            NetworkResult::Atomic(AtomicStructure::new())
+            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
         }
     }
 
@@ -636,7 +636,7 @@ This node enables the manual editing of atomic structures. In a node network eve
               data_type: DataType::Atomic,
           },
       ],
-      output_type: DataType::Atomic,
+      output_pins: OutputPinDefinition::single(DataType::Atomic),
       public: false,
       node_data_creator: || Box::new(EditAtomData::new()),
       node_data_saver: |node_data, _design_dir| {

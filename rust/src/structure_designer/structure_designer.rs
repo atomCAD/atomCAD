@@ -9,7 +9,7 @@ use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::node_network::NodeNetwork;
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
-use super::node_type::NodeType;
+use super::node_type::{NodeType, OutputPinDefinition};
 use super::node_type_registry::NodeTypeRegistry;
 use super::preferences::load_preferences;
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
@@ -424,8 +424,7 @@ impl StructureDesigner {
             None => {
                 // No active network — clear the scene so the viewport doesn't
                 // keep rendering stale output from a previously active network.
-                self.last_generated_structure_designer_scene =
-                    StructureDesignerScene::new();
+                self.last_generated_structure_designer_scene = StructureDesignerScene::new();
                 return;
             }
         };
@@ -723,7 +722,7 @@ impl StructureDesigner {
         summary: None,
         category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
         parameters: Vec::new(),
-        output_type: DataType::None,
+        output_pins: OutputPinDefinition::single(DataType::None),
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,
         node_data_loader: generic_node_data_loader::<CustomNodeData>,
@@ -1619,7 +1618,7 @@ impl StructureDesigner {
                     .map(|param_idx| (source_node_id, source_pin_index, target_node_id, param_idx))
             } else {
                 // Source is input, connect target's output to source's input pin
-                let target_output_type = &target_node_type.output_type;
+                let target_output_type = target_node_type.output_type();
                 let source_param_type = self
                     .node_type_registry
                     .get_node_param_data_type(source_node, source_pin_index as usize);
@@ -1704,7 +1703,7 @@ impl StructureDesigner {
             }
         } else {
             // Source is input, check if target's output is compatible
-            let target_output_type = &target_node_type.output_type;
+            let target_output_type = target_node_type.output_type();
             let source_param_type = self
                 .node_type_registry
                 .get_node_param_data_type(source_node, source_pin_index as usize);
@@ -3904,7 +3903,7 @@ impl StructureDesigner {
         let output_type = self
             .node_type_registry
             .get_node_type_for_node(node)
-            .map(|nt| nt.output_type.to_string())
+            .map(|nt| nt.output_type().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
 
         // Set up evaluation context
@@ -4249,8 +4248,8 @@ impl StructureDesigner {
 
         for (prefix, &allowed) in &self.cli_access_rules {
             // The prefix must match exactly or be a proper namespace prefix (followed by '.')
-            let matches = network_name == prefix
-                || network_name.starts_with(&format!("{}.", prefix));
+            let matches =
+                network_name == prefix || network_name.starts_with(&format!("{}.", prefix));
             if matches && prefix.len() > best_prefix_len {
                 best_prefix_len = prefix.len();
                 locked = !allowed;

@@ -6,10 +6,12 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::{NodeType, generic_node_data_saver};
+use crate::structure_designer::node_type::{
+    NodeType, OutputPinDefinition, generic_node_data_saver,
+};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
@@ -78,14 +80,14 @@ impl NodeData for MotifData {
         _registry: &NodeTypeRegistry,
         _decorate: bool,
         _context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // Return the parsed motif if available
         if let Some(ref motif) = self.motif {
-            NetworkResult::Motif(motif.clone())
+            EvalOutput::single(NetworkResult::Motif(motif.clone()))
         } else if let Some(ref error) = self.error {
-            NetworkResult::Error(error.clone())
+            EvalOutput::single(NetworkResult::Error(error.clone()))
         } else {
-            NetworkResult::Error("Motif not parsed".to_string())
+            EvalOutput::single(NetworkResult::Error("Motif not parsed".to_string()))
         }
     }
 
@@ -189,7 +191,7 @@ Lines starting with `#` are comments.".to_string(),
       summary: None,
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],
-      output_type: DataType::Motif,
+      output_pins: OutputPinDefinition::single(DataType::Motif),
       public: true,
       node_data_creator: || Box::new(MotifData {
         definition: "".to_string(),

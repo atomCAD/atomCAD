@@ -4,14 +4,14 @@ use super::atom_edit_data::{
 use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::crystolecule::atomic_structure::HitTestResult;
+use crate::crystolecule::atomic_structure::atom::{
+    HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
+};
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::guided_placement::{
     BondLengthMode, BondMode, GuideDot, GuidedPlacementMode, Hybridization,
     compute_guided_placement, compute_ring_preview_positions, cone_half_angle_for_ring,
     ray_ring_nearest_point, ray_sphere_nearest_point,
-};
-use crate::crystolecule::atomic_structure::atom::{
-    HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
 };
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
@@ -394,7 +394,13 @@ pub fn place_guided_atom(
                 };
                 let position = guide_dots[dot_index].position;
                 let merge_target = merge_targets.get(dot_index).and_then(|mt| mt.clone());
-                Some((*anchor_atom_id, position, *is_dative_bond, merge_target, *toolbar_hybridization))
+                Some((
+                    *anchor_atom_id,
+                    position,
+                    *is_dative_bond,
+                    merge_target,
+                    *toolbar_hybridization,
+                ))
             }
             AtomEditTool::AddAtom(AddAtomToolState::GuidedFreeSphere {
                 anchor_atom_id,

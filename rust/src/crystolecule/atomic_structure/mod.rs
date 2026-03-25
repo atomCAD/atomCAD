@@ -232,12 +232,7 @@ impl AtomicStructure {
     ///
     /// Used when a diff atom replaces/moves a base atom: if either source has a flag
     /// set (e.g. frozen), the result inherits it.
-    pub(crate) fn merge_atom_metadata(
-        &mut self,
-        target_id: u32,
-        primary: &Atom,
-        secondary: &Atom,
-    ) {
+    pub(crate) fn merge_atom_metadata(&mut self, target_id: u32, primary: &Atom, secondary: &Atom) {
         if let Some(target) = self.get_atom_mut(target_id) {
             target.flags = (primary.flags | secondary.flags) & !0x1;
             target.in_crystal_depth = primary.in_crystal_depth;

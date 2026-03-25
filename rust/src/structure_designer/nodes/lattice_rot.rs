@@ -13,10 +13,10 @@ use crate::structure_designer::evaluator::network_evaluator::{
 use crate::structure_designer::evaluator::network_result::{
     GeometrySummary, NetworkResult, runtime_type_error_in_input,
 };
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -74,12 +74,12 @@ impl NodeData for LatticeRotData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = input_val {
-            return input_val;
+            return EvalOutput::single(input_val);
         }
 
         // Shared: read axis_index (pin 1), step (pin 2), pivot_point (pin 3)
@@ -93,7 +93,7 @@ impl NodeData for LatticeRotData {
             NetworkResult::extract_optional_int,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let step = match network_evaluator.evaluate_or_default(
@@ -106,7 +106,7 @@ impl NodeData for LatticeRotData {
             NetworkResult::extract_int,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let pivot_point = match network_evaluator.evaluate_or_default(
@@ -119,7 +119,7 @@ impl NodeData for LatticeRotData {
             NetworkResult::extract_ivec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         if self.is_atomic_mode {
@@ -135,7 +135,7 @@ impl NodeData for LatticeRotData {
                     NetworkResult::extract_unit_cell,
                 ) {
                     Ok(value) => value,
-                    Err(error) => return error,
+                    Err(error) => return EvalOutput::single(error),
                 };
 
                 // Get all available symmetry axes for this unit cell
@@ -163,9 +163,9 @@ impl NodeData for LatticeRotData {
                 result.transform(&real_rotation_quat, &DVec3::ZERO);
                 result.transform(&DQuat::IDENTITY, &pivot_real);
 
-                NetworkResult::Atomic(result)
+                EvalOutput::single(NetworkResult::Atomic(result))
             } else {
-                runtime_type_error_in_input(0)
+                EvalOutput::single(runtime_type_error_in_input(0))
             }
         } else if let NetworkResult::Geometry(shape) = input_val {
             // Get all available symmetry axes for this unit cell
@@ -187,13 +187,13 @@ impl NodeData for LatticeRotData {
             let pivot_real = shape.unit_cell.ivec3_lattice_to_real(&pivot_point);
             let tr = Transform::new_rotation_around_point(pivot_real, real_rotation_quat);
 
-            NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
                 unit_cell: shape.unit_cell.clone(),
                 frame_transform: Transform::default(),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
-            })
+            }))
         } else {
-            runtime_type_error_in_input(0)
+            EvalOutput::single(runtime_type_error_in_input(0))
         }
     }
 
@@ -462,7 +462,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
             data_type: DataType::IVec3,
           },
       ],
-      output_type: DataType::Geometry,
+      output_pins: OutputPinDefinition::single(DataType::Geometry),
       public: true,
       node_data_creator: || Box::new(LatticeRotData {
         axis_index: None,
@@ -510,7 +510,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
             data_type: DataType::UnitCell,
           },
       ],
-      output_type: DataType::Atomic,
+      output_pins: OutputPinDefinition::single(DataType::Atomic),
       public: true,
       node_data_creator: || Box::new(LatticeRotData {
         axis_index: None,

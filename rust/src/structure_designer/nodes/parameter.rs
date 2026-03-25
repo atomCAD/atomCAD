@@ -5,10 +5,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::CustomNodeData;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -41,7 +41,7 @@ impl NodeData for ParameterData {
         let mut custom_node_type = base_node_type.clone();
 
         custom_node_type.parameters[0].data_type = self.data_type.clone();
-        custom_node_type.output_type = self.data_type.clone();
+        custom_node_type.output_pins = OutputPinDefinition::single(self.data_type.clone());
 
         Some(custom_node_type)
     }
@@ -54,16 +54,22 @@ impl NodeData for ParameterData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let evaled_in_isolation = network_stack.len() < 2;
 
         if evaled_in_isolation {
             // Check if CLI parameter is provided (has precedence over default pin)
             if let Some(cli_value) = context.top_level_parameters.get(&self.param_name) {
-                return cli_value.clone();
+                return EvalOutput::single(cli_value.clone());
             }
             // Fall back to default pin
-            return eval_default(network_evaluator, network_stack, node_id, registry, context);
+            return EvalOutput::single(eval_default(
+                network_evaluator,
+                network_stack,
+                node_id,
+                registry,
+                context,
+            ));
         }
 
         let parent_node_id = network_stack.last().unwrap().node_id;
@@ -79,13 +85,13 @@ impl NodeData for ParameterData {
 
         // If wire is connected, evaluate it (highest priority)
         if !parent_node.arguments[self.param_index].is_empty() {
-            return network_evaluator.evaluate_arg_required(
+            return EvalOutput::single(network_evaluator.evaluate_arg_required(
                 &parent_network_stack,
                 parent_node_id,
                 registry,
                 context,
                 self.param_index,
-            );
+            ));
         }
 
         // No wire connected - check for stored literal value in CustomNodeData
@@ -96,13 +102,19 @@ impl NodeData for ParameterData {
         {
             if let Some(text_value) = custom_data.literal_values.get(&self.param_name) {
                 if let Some(result) = text_value.to_network_result(&self.data_type) {
-                    return result;
+                    return EvalOutput::single(result);
                 }
             }
         }
 
         // Fall back to default pin (lowest priority)
-        eval_default(network_evaluator, network_stack, node_id, registry, context)
+        EvalOutput::single(eval_default(
+            network_evaluator,
+            network_stack,
+            node_id,
+            registry,
+            context,
+        ))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -200,7 +212,7 @@ The sort order property of a parameter determines the order of the parameters in
               data_type: DataType::Int, // will change based on  ParameterData::data_type.
           },
       ],
-      output_type: DataType::Int, // will change based on ParameterData::data_type.
+      output_pins: OutputPinDefinition::single(DataType::Int), // will change based on ParameterData::data_type.
       public: true,
       node_data_creator: || Box::new(ParameterData {
         param_id: None,  // Will be assigned when the node is added to a network

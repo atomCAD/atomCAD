@@ -4,9 +4,9 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::{NodeType, Parameter};
+use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
@@ -41,7 +41,7 @@ impl NodeData for ExportXYZData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let atomic_structure = match network_evaluator.evaluate_required(
             network_stack,
             node_id,
@@ -51,7 +51,7 @@ impl NodeData for ExportXYZData {
             NetworkResult::extract_atomic,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let file_name = match network_evaluator.evaluate_or_default(
@@ -64,12 +64,14 @@ impl NodeData for ExportXYZData {
             NetworkResult::extract_string,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Check if file name is empty
         if file_name.is_empty() {
-            return NetworkResult::Error("Missing export XYZ file name".to_string());
+            return EvalOutput::single(NetworkResult::Error(
+                "Missing export XYZ file name".to_string(),
+            ));
         }
 
         // Get design directory from registry
@@ -82,10 +84,10 @@ impl NodeData for ExportXYZData {
         let resolved_path = match resolve_path(&file_name, design_dir.as_deref()) {
             Ok((path, _was_relative)) => path,
             Err(_) => {
-                return NetworkResult::Error(format!(
+                return EvalOutput::single(NetworkResult::Error(format!(
                     "Failed to resolve export path: {}",
                     file_name
-                ));
+                )));
             }
         };
 
@@ -93,11 +95,12 @@ impl NodeData for ExportXYZData {
         match save_xyz(&atomic_structure, &resolved_path) {
             Ok(()) => {
                 // Return the atomic structure (pass-through)
-                NetworkResult::Atomic(atomic_structure)
+                EvalOutput::single(NetworkResult::Atomic(atomic_structure))
             }
-            Err(err) => {
-                NetworkResult::Error(format!("Failed to save XYZ file '{}': {}", file_name, err))
-            }
+            Err(err) => EvalOutput::single(NetworkResult::Error(format!(
+                "Failed to save XYZ file '{}': {}",
+                file_name, err
+            ))),
         }
     }
 
@@ -207,7 +210,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::String,
             },
         ],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || Box::new(ExportXYZData::new()),
         node_data_saver: export_xyz_data_saver,

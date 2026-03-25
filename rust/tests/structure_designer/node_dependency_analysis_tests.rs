@@ -4,11 +4,12 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_data::{NoData, NodeData};
 use rust_lib_flutter_cad::structure_designer::node_dependency_analysis::compute_downstream_dependents;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
 use rust_lib_flutter_cad::structure_designer::node_network_gadget::NodeNetworkGadget;
-use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use std::collections::HashSet;
@@ -40,8 +41,10 @@ impl NodeData for MockNodeData {
         _registry: &NodeTypeRegistry,
         _decorate: bool,
         _context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
-        NetworkResult::Error("MockNodeData eval not implemented".to_string())
+    ) -> EvalOutput {
+        EvalOutput::single(NetworkResult::Error(
+            "MockNodeData eval not implemented".to_string(),
+        ))
     }
 
     fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
@@ -59,7 +62,7 @@ fn create_test_node_type(name: &str) -> NodeType {
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
-        output_type: DataType::None,
+        output_pins: OutputPinDefinition::single(DataType::None),
         public: true,
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,

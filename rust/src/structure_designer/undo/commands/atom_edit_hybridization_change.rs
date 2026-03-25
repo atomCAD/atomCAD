@@ -59,11 +59,7 @@ impl HybridizationDelta {
     }
 
     /// Apply this delta in the forward (redo) direction to the given maps.
-    pub fn apply_redo(
-        &self,
-        base_map: &mut HashMap<u32, u8>,
-        diff_map: &mut HashMap<u32, u8>,
-    ) {
+    pub fn apply_redo(&self, base_map: &mut HashMap<u32, u8>, diff_map: &mut HashMap<u32, u8>) {
         for &(prov, atom_id, value) in &self.added {
             match prov {
                 HybridizationProvenance::Base => {
@@ -97,11 +93,7 @@ impl HybridizationDelta {
     }
 
     /// Apply this delta in the reverse (undo) direction to the given maps.
-    pub fn apply_undo(
-        &self,
-        base_map: &mut HashMap<u32, u8>,
-        diff_map: &mut HashMap<u32, u8>,
-    ) {
+    pub fn apply_undo(&self, base_map: &mut HashMap<u32, u8>, diff_map: &mut HashMap<u32, u8>) {
         // Remove what was added
         for &(prov, atom_id, _value) in &self.added {
             match prov {

@@ -13,10 +13,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -61,7 +61,7 @@ impl NodeData for PolygonData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let drawing_plane = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
@@ -72,7 +72,7 @@ impl NodeData for PolygonData {
             NetworkResult::extract_drawing_plane,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
@@ -91,11 +91,11 @@ impl NodeData for PolygonData {
             .map(|v| drawing_plane.effective_unit_cell.ivec2_lattice_to_real(v))
             .collect();
 
-        NetworkResult::Geometry2D(GeometrySummary2D {
+        EvalOutput::single(NetworkResult::Geometry2D(GeometrySummary2D {
             drawing_plane,
             frame_transform: Transform2D::new(DVec2::new(0.0, 0.0), 0.0),
             geo_tree_root: GeoNode::polygon(real_vertices),
-        })
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -410,7 +410,7 @@ Delete a vertex by dragging it onto one of its neighbour.".to_string(),
           data_type: DataType::DrawingPlane,
         },
       ],
-      output_type: DataType::Geometry2D,
+      output_pins: OutputPinDefinition::single(DataType::Geometry2D),
       public: true,
       node_data_creator: || Box::new(PolygonData {
         vertices: vec![

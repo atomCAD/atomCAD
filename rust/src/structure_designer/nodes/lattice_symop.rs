@@ -13,10 +13,10 @@ use crate::structure_designer::evaluator::network_evaluator::{
 use crate::structure_designer::evaluator::network_result::{
     GeometrySummary, NetworkResult, error_in_input, runtime_type_error_in_input,
 };
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -75,12 +75,12 @@ impl NodeData for LatticeSymopData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let shape_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = shape_val {
-            shape_val
+            EvalOutput::single(shape_val)
         } else if let NetworkResult::Geometry(shape) = shape_val {
             let translation = match network_evaluator.evaluate_or_default(
                 network_stack,
@@ -92,7 +92,7 @@ impl NodeData for LatticeSymopData {
                 NetworkResult::extract_ivec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let rotation_axis = match network_evaluator.evaluate_or_default(
@@ -105,7 +105,7 @@ impl NodeData for LatticeSymopData {
                 NetworkResult::extract_optional_dvec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let rotation_angle_degrees = match network_evaluator.evaluate_or_default(
@@ -118,7 +118,7 @@ impl NodeData for LatticeSymopData {
                 NetworkResult::extract_float,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let transform_only_frame = match network_evaluator.evaluate_or_default(
@@ -131,7 +131,7 @@ impl NodeData for LatticeSymopData {
                 NetworkResult::extract_bool,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
@@ -184,10 +184,10 @@ impl NodeData for LatticeSymopData {
                     }
 
                     if !is_valid {
-                        return error_in_input(&format!(
+                        return EvalOutput::single(error_in_input(&format!(
                             "Rotation axis {:?} with angle {:.2}° is not allowed for this crystal system",
                             rotation_axis, rotation_angle_degrees
-                        ));
+                        )));
                     }
 
                     // Create rotation quaternion
@@ -239,13 +239,13 @@ impl NodeData for LatticeSymopData {
                 GeoNode::transform(tr, Box::new(geo_tree_root))
             };
 
-            return NetworkResult::Geometry(GeometrySummary {
+            return EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
                 unit_cell,
                 frame_transform,
                 geo_tree_root: output_geo_tree_root,
-            });
+            }));
         } else {
-            return runtime_type_error_in_input(0);
+            return EvalOutput::single(runtime_type_error_in_input(0));
         }
     }
 
@@ -561,7 +561,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_type: DataType::Geometry,
+        output_pins: OutputPinDefinition::single(DataType::Geometry),
         public: false,
         node_data_creator: || {
             Box::new(LatticeSymopData {

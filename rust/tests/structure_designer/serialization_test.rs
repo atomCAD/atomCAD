@@ -2,7 +2,8 @@ use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::node_network::Argument;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
-    SerializableNode, SerializableNodeNetwork, SerializableNodeType, serializable_to_node_network,
+    SerializableNode, SerializableNodeNetwork, SerializableNodeType, SerializableOutputPin,
+    serializable_to_node_network,
 };
 
 fn create_built_in_node_types()
@@ -44,7 +45,11 @@ fn create_serializable_network(nodes: Vec<SerializableNode>) -> SerializableNode
             summary: None,
             category: "Custom".to_string(),
             parameters: vec![],
-            output_type: "Geometry".to_string(),
+            output_pins: vec![SerializableOutputPin {
+                name: "result".to_string(),
+                data_type: "Geometry".to_string(),
+            }],
+            output_type: None,
         },
         nodes,
         return_node_id: None,

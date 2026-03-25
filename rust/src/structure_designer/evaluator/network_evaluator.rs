@@ -179,7 +179,7 @@ impl NetworkEvaluator {
         let unit_cell = result.get_unit_cell();
 
         // Determine output and geo_tree based on node type and visualization preferences
-        let (output, geo_tree) = if registry.get_node_type_for_node(node).unwrap().output_type
+        let (output, geo_tree) = if *registry.get_node_type_for_node(node).unwrap().output_type()
             == DataType::DrawingPlane
         {
             if let NetworkResult::DrawingPlane(drawing_plane) = result {
@@ -187,7 +187,8 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry2D
+        } else if *registry.get_node_type_for_node(node).unwrap().output_type()
+            == DataType::Geometry2D
         {
             if geometry_visualization_preferences.geometry_visualization
                 == GeometryVisualization::SurfaceSplatting
@@ -219,7 +220,9 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Geometry {
+        } else if *registry.get_node_type_for_node(node).unwrap().output_type()
+            == DataType::Geometry
+        {
             if geometry_visualization_preferences.geometry_visualization
                 == GeometryVisualization::SurfaceSplatting
             {
@@ -250,7 +253,8 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if registry.get_node_type_for_node(node).unwrap().output_type == DataType::Atomic {
+        } else if *registry.get_node_type_for_node(node).unwrap().output_type() == DataType::Atomic
+        {
             if let NetworkResult::Atomic(atomic_structure) = result {
                 let mut cloned_atomic_structure = atomic_structure.clone();
                 cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
@@ -503,7 +507,7 @@ impl NetworkEvaluator {
                 let input_node_output_type = registry
                     .get_node_type_for_node(input_node)
                     .unwrap()
-                    .output_type
+                    .output_type()
                     .clone();
 
                 // convert_to handles conversion to array types, so we can convert directly.
@@ -599,6 +603,7 @@ impl NetworkEvaluator {
             {
                 node.data
                     .eval(self, network_stack, node_id, registry, decorate, context)
+                    .get(output_pin_index)
             } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
                 // custom node{
                 // Do not evaluate invalid child networks

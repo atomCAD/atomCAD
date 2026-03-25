@@ -8,10 +8,10 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -70,12 +70,12 @@ impl NodeData for AtomRotData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // 1. Get input atomic structure
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
-            return input_val;
+            return EvalOutput::single(input_val);
         }
 
         if let NetworkResult::Atomic(atomic_structure) = input_val {
@@ -90,7 +90,7 @@ impl NodeData for AtomRotData {
                 NetworkResult::extract_float,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             // 3. Get rotation axis (from pin or property)
@@ -104,7 +104,7 @@ impl NodeData for AtomRotData {
                 NetworkResult::extract_vec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             // 4. Get pivot point (from pin or property)
@@ -118,14 +118,14 @@ impl NodeData for AtomRotData {
                 NetworkResult::extract_vec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             // 5. Normalize the rotation axis
             let normalized_axis = rot_axis.normalize_or_zero();
             if normalized_axis == DVec3::ZERO {
                 // Invalid axis - return input unchanged
-                return NetworkResult::Atomic(atomic_structure);
+                return EvalOutput::single(NetworkResult::Atomic(atomic_structure));
             }
 
             // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
@@ -150,10 +150,10 @@ impl NodeData for AtomRotData {
             result.transform(&rotation_quat, &DVec3::ZERO); // Rotate around origin
             result.transform(&DQuat::IDENTITY, &pivot_point); // Move back
 
-            return NetworkResult::Atomic(result);
+            return EvalOutput::single(NetworkResult::Atomic(result));
         }
 
-        NetworkResult::None
+        EvalOutput::single(NetworkResult::None)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -493,7 +493,7 @@ The rotation angle is in radians in text format (e.g., 1.5708 for 90°) and degr
                 data_type: DataType::Vec3,
             },
         ],
-        output_type: DataType::Atomic,
+        output_pins: OutputPinDefinition::single(DataType::Atomic),
         public: true,
         node_data_creator: || {
             Box::new(AtomRotData {

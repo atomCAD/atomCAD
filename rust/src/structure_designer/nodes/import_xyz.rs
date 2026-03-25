@@ -5,9 +5,9 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::{NodeType, Parameter};
+use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
@@ -45,7 +45,7 @@ impl NodeData for ImportXYZData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let result = network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
 
         let atomic_structure = if let NetworkResult::None = result {
@@ -54,7 +54,7 @@ impl NodeData for ImportXYZData {
         } else {
             // Check for error first
             if result.is_error() {
-                return result;
+                return EvalOutput::single(result);
             }
 
             // Extract the file name from the string result
@@ -69,28 +69,30 @@ impl NodeData for ImportXYZData {
                     Ok((resolved_path, _was_relative)) => match load_xyz(&resolved_path, true) {
                         Ok(atomic_structure) => Some(atomic_structure),
                         Err(_) => {
-                            return NetworkResult::Error(format!(
+                            return EvalOutput::single(NetworkResult::Error(format!(
                                 "Failed to load XYZ file: {}",
                                 file_name
-                            ));
+                            )));
                         }
                     },
                     Err(_) => {
-                        return NetworkResult::Error(format!(
+                        return EvalOutput::single(NetworkResult::Error(format!(
                             "Failed to resolve path: {}",
                             file_name
-                        ));
+                        )));
                     }
                 }
             } else {
-                return NetworkResult::Error("Expected string parameter for file name".to_string());
+                return EvalOutput::single(NetworkResult::Error(
+                    "Expected string parameter for file name".to_string(),
+                ));
             }
         };
 
-        match atomic_structure {
+        EvalOutput::single(match atomic_structure {
             Some(atomic_structure) => NetworkResult::Atomic(atomic_structure.clone()),
             None => NetworkResult::Error("No atomic structure imported".to_string()),
-        }
+        })
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -222,7 +224,7 @@ It converts file paths to relative paths whenever possible (if the file is in th
           data_type: DataType::String,
         },
       ],
-      output_type: DataType::Atomic,
+      output_pins: OutputPinDefinition::single(DataType::Atomic),
       public: true,
       node_data_creator: || Box::new(ImportXYZData::new()),
       node_data_saver: import_xyz_data_saver,

@@ -15,7 +15,11 @@ const MAX_RECENT_FILES: usize = 10;
 /// Returns the path to the recent files JSON file.
 fn get_recent_files_path() -> Option<PathBuf> {
     let config_dir = dirs::config_dir()?;
-    Some(config_dir.join(CONFIG_DIR_NAME).join(RECENT_FILES_FILE_NAME))
+    Some(
+        config_dir
+            .join(CONFIG_DIR_NAME)
+            .join(RECENT_FILES_FILE_NAME),
+    )
 }
 
 /// Loads the list of recently opened file paths.

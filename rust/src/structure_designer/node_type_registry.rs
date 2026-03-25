@@ -178,7 +178,7 @@ impl NodeTypeRegistry {
                         .iter()
                         .any(|param| DataType::can_be_converted_to(source_type, &param.data_type))
                 } else {
-                    DataType::can_be_converted_to(&node_type.output_type, source_type)
+                    DataType::can_be_converted_to(node_type.output_type(), source_type)
                 }
             })
             .map(|(node_type, category)| APINodeTypeView {

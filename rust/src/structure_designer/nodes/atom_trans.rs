@@ -7,10 +7,10 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -63,11 +63,11 @@ impl NodeData for AtomTransData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
-            return input_val;
+            return EvalOutput::single(input_val);
         }
         if let NetworkResult::Atomic(atomic_structure) = input_val {
             let translation = match network_evaluator.evaluate_or_default(
@@ -80,7 +80,7 @@ impl NodeData for AtomTransData {
                 NetworkResult::extract_vec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let rotation = match network_evaluator.evaluate_or_default(
@@ -93,7 +93,7 @@ impl NodeData for AtomTransData {
                 NetworkResult::extract_vec3,
             ) {
                 Ok(value) => value,
-                Err(error) => return error,
+                Err(error) => return EvalOutput::single(error),
             };
 
             let rotation_quat =
@@ -129,9 +129,9 @@ impl NodeData for AtomTransData {
                 .transform(&frame_transform.rotation, &frame_transform.translation);
             result_atomic_structure.set_frame_transform(frame_transform);
 
-            NetworkResult::Atomic(result_atomic_structure)
+            EvalOutput::single(NetworkResult::Atomic(result_atomic_structure))
         } else {
-            NetworkResult::None
+            EvalOutput::single(NetworkResult::None)
         }
     }
 
@@ -372,7 +372,7 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Vec3,
           },
       ],
-      output_type: DataType::Atomic,
+      output_pins: OutputPinDefinition::single(DataType::Atomic),
       public: false,  // Deprecated: use atom_move and atom_rot instead
       node_data_creator: || Box::new(AtomTransData {
         translation: DVec3::new(0.0, 0.0, 0.0),

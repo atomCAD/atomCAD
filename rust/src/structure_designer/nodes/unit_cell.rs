@@ -6,10 +6,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -108,7 +108,7 @@ impl NodeData for UnitCellData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // Convert the unit cell data to UnitCellStruct and return it
         let default_unit_cell_struct = self.to_unit_cell_struct();
 
@@ -122,7 +122,7 @@ impl NodeData for UnitCellData {
             NetworkResult::extract_vec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let b = match network_evaluator.evaluate_or_default(
@@ -135,7 +135,7 @@ impl NodeData for UnitCellData {
             NetworkResult::extract_vec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let c = match network_evaluator.evaluate_or_default(
@@ -148,7 +148,7 @@ impl NodeData for UnitCellData {
             NetworkResult::extract_vec3,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Check if any basis vectors were overridden by comparing to defaults
@@ -160,10 +160,10 @@ impl NodeData for UnitCellData {
 
         // If none were overridden, return the default to preserve exact crystallographic parameters
         if a_is_default && b_is_default && c_is_default {
-            NetworkResult::UnitCell(default_unit_cell_struct)
+            EvalOutput::single(NetworkResult::UnitCell(default_unit_cell_struct))
         } else {
             // At least one was overridden, calculate crystallographic parameters from basis vectors
-            NetworkResult::UnitCell(UnitCellStruct::new(a, b, c))
+            EvalOutput::single(NetworkResult::UnitCell(UnitCellStruct::new(a, b, c)))
         }
     }
 
@@ -281,7 +281,7 @@ pub fn get_node_type() -> NodeType {
           data_type: DataType::Vec3,
         },
       ],
-      output_type: DataType::UnitCell,
+      output_pins: OutputPinDefinition::single(DataType::UnitCell),
       public: true,
       node_data_creator: || Box::new(UnitCellData {
         cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,

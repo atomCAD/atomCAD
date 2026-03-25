@@ -9,10 +9,12 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::{
     NetworkResult, error_in_input, input_missing_error,
 };
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
-use crate::structure_designer::node_type::{NodeType, Parameter, generic_node_data_saver};
+use crate::structure_designer::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_saver,
+};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
@@ -107,7 +109,8 @@ impl NodeData for ExprData {
         let mut custom_node_type = base_node_type.clone();
 
         // Update the output type - use DataType::None if self.output_type is None
-        custom_node_type.output_type = self.output_type.clone().unwrap_or(DataType::None);
+        custom_node_type.output_pins =
+            OutputPinDefinition::single(self.output_type.clone().unwrap_or(DataType::None));
 
         // Convert ExprParameter to Parameter, propagating the ID for wire preservation
         custom_node_type.parameters = self
@@ -131,7 +134,7 @@ impl NodeData for ExprData {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         // Collect variable values for evaluation
         let mut variables: HashMap<String, NetworkResult> = HashMap::new();
 
@@ -147,12 +150,12 @@ impl NodeData for ExprData {
 
             // Check if the result is None (input not connected)
             if let NetworkResult::None = result {
-                return input_missing_error(&param.name);
+                return EvalOutput::single(input_missing_error(&param.name));
             }
 
             // Check if the result is an error
             if let NetworkResult::Error(_) = result {
-                return error_in_input(&param.name);
+                return EvalOutput::single(error_in_input(&param.name));
             }
 
             // Add the variable to our collection
@@ -162,9 +165,9 @@ impl NodeData for ExprData {
         // If we have a parsed expression, evaluate it
         if let Some(ref expr) = self.expr {
             let function_implementations = get_function_implementations();
-            expr.evaluate(&variables, function_implementations)
+            EvalOutput::single(expr.evaluate(&variables, function_implementations))
         } else {
-            NetworkResult::Error("Expression not parsed".to_string())
+            EvalOutput::single(NetworkResult::Error("Expression not parsed".to_string()))
         }
     }
 
@@ -466,7 +469,7 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
       summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![],
-      output_type: DataType::None, // will change based on the expression
+      output_pins: OutputPinDefinition::single(DataType::None), // will change based on the expression
       public: true,
       node_data_creator: || Box::new(ExprData {
         parameters: vec![

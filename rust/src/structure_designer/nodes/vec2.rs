@@ -5,10 +5,10 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::NodeData;
+use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
@@ -44,7 +44,7 @@ impl NodeData for Vec2Data {
         registry: &NodeTypeRegistry,
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let x = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
@@ -55,7 +55,7 @@ impl NodeData for Vec2Data {
             NetworkResult::extract_float,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
         let y = match network_evaluator.evaluate_or_default(
@@ -68,10 +68,10 @@ impl NodeData for Vec2Data {
             NetworkResult::extract_float,
         ) {
             Ok(value) => value,
-            Err(error) => return error,
+            Err(error) => return EvalOutput::single(error),
         };
 
-        NetworkResult::Vec2(DVec2 { x, y })
+        EvalOutput::single(NetworkResult::Vec2(DVec2 { x, y }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -142,7 +142,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_type: DataType::Vec2,
+        output_pins: OutputPinDefinition::single(DataType::Vec2),
         public: true,
         node_data_creator: || {
             Box::new(Vec2Data {

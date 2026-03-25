@@ -12,6 +12,39 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 
+/// Return type for `NodeData::eval()`. Wraps one or more results, one per output pin.
+#[derive(Clone)]
+pub struct EvalOutput {
+    pub results: Vec<NetworkResult>,
+}
+
+impl EvalOutput {
+    /// Convenience for single-output nodes.
+    pub fn single(result: NetworkResult) -> Self {
+        EvalOutput {
+            results: vec![result],
+        }
+    }
+
+    /// Multi-output constructor.
+    pub fn multi(results: Vec<NetworkResult>) -> Self {
+        EvalOutput { results }
+    }
+
+    /// Get result for a given output pin index.
+    pub fn get(&self, output_pin_index: i32) -> NetworkResult {
+        self.results
+            .get(output_pin_index as usize)
+            .cloned()
+            .unwrap_or(NetworkResult::None)
+    }
+
+    /// Get the primary (pin 0) result.
+    pub fn primary(&self) -> &NetworkResult {
+        &self.results[0]
+    }
+}
+
 pub trait NodeData: Any + AsAny {
     fn provide_gadget(
         &self,
@@ -28,7 +61,7 @@ pub trait NodeData: Any + AsAny {
         registry: &NodeTypeRegistry,
         decorate: bool,
         context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult;
+    ) -> EvalOutput;
 
     // Method to clone the trait object
     fn clone_box(&self) -> Box<dyn NodeData>;
@@ -101,12 +134,12 @@ impl NodeData for NoData {
         _registry: &NodeTypeRegistry,
         _decorate: bool,
         _context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let node = NetworkStackElement::get_top_node(network_stack, node_id);
-        NetworkResult::Error(format!(
+        EvalOutput::single(NetworkResult::Error(format!(
             "eval not implemented for node {}",
             node.node_type_name
-        ))
+        )))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -149,12 +182,12 @@ impl NodeData for CustomNodeData {
         _registry: &NodeTypeRegistry,
         _decorate: bool,
         _context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
+    ) -> EvalOutput {
         let node = NetworkStackElement::get_top_node(network_stack, node_id);
-        NetworkResult::Error(format!(
+        EvalOutput::single(NetworkResult::Error(format!(
             "eval not implemented for node {}",
             node.node_type_name
-        ))
+        )))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

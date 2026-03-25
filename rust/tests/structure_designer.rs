@@ -123,3 +123,6 @@ mod cli_access_rules_test;
 
 #[path = "structure_designer/relax_node_atom_limit_test.rs"]
 mod relax_node_atom_limit_test;
+
+#[path = "structure_designer/multi_output_unit_test.rs"]
+mod multi_output_unit_test;

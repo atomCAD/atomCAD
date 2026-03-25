@@ -454,7 +454,7 @@ mod network_serializer_tests {
     use glam::f64::DVec2;
     use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
     fn create_test_registry() -> NodeTypeRegistry {
@@ -468,7 +468,7 @@ mod network_serializer_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_type: DataType::Geometry,
+            output_pins: OutputPinDefinition::single(DataType::Geometry),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -649,7 +649,7 @@ mod network_editor_tests {
     use super::*;
     use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
     use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
 
@@ -664,7 +664,7 @@ mod network_editor_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_type: DataType::Geometry,
+            output_pins: OutputPinDefinition::single(DataType::Geometry),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -1606,7 +1606,7 @@ mod auto_layout_tests {
     use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_layout;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
     use rust_lib_flutter_cad::structure_designer::text_format::{auto_layout, edit_network};
 
@@ -1621,7 +1621,7 @@ mod auto_layout_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_type: DataType::Geometry,
+            output_pins: OutputPinDefinition::single(DataType::Geometry),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -2200,7 +2200,7 @@ mod custom_name_tests {
     use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::data_type::DataType;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
     use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
 
@@ -2215,7 +2215,7 @@ mod custom_name_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_type: DataType::Geometry,
+            output_pins: OutputPinDefinition::single(DataType::Geometry),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
