@@ -1173,6 +1173,11 @@ impl NodeData for AtomEditData {
         if self.include_base_bonds_in_diff {
             enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, self.tolerance);
         }
+        // Apply hybridization overrides to diff atoms directly
+        // (no provenance needed — diff atom IDs ARE the output atom IDs in diff view)
+        for (&diff_id, &hyb) in &self.hybridization_override_diff_atoms {
+            diff_clone.set_atom_hybridization_override(diff_id, hyb);
+        }
         diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows;
         if decorate {
             diff_clone.decorator_mut().from_selected_node = true;

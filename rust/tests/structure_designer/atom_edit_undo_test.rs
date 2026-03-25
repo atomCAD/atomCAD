@@ -3095,3 +3095,98 @@ fn undo_atom_edit_hybridization_multiple_atoms() {
         Some(&HYBRIDIZATION_SP2)
     );
 }
+
+// =============================================================================
+// Hybridization override: diff view evaluation
+// =============================================================================
+
+/// Helper: evaluates the atom_edit node at a specific output pin and returns the AtomicStructure.
+fn evaluate_atom_edit_pin(designer: &StructureDesigner, pin_index: i32) -> AtomicStructure {
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+        NetworkEvaluationContext, NetworkStackElement,
+    };
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+
+    let network_name = designer.active_node_network_name.as_ref().unwrap();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    let node_id = network.active_node_id.unwrap();
+    let network_stack = vec![NetworkStackElement {
+        node_network: network,
+        node_id: 0,
+    }];
+    let mut context = NetworkEvaluationContext::new();
+    let result = designer.network_evaluator.evaluate(
+        &network_stack,
+        node_id,
+        pin_index,
+        &designer.node_type_registry,
+        false,
+        &mut context,
+    );
+    match result {
+        NetworkResult::Atomic(s) => s,
+        _ => panic!("Expected Atomic result for pin {pin_index}"),
+    }
+}
+
+/// Helper: evaluates the atom_edit node at pin 0 (result).
+fn evaluate_atom_edit_output(designer: &StructureDesigner) -> AtomicStructure {
+    evaluate_atom_edit_pin(designer, 0)
+}
+
+#[test]
+fn hybridization_override_appears_on_diff_view_output_atoms() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+
+    let mut designer = setup_atom_edit();
+
+    // Add a nitrogen atom to the diff
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::ZERO);
+    });
+
+    // Set sp2 override on diff atom 1
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+
+    // Enable output_diff mode
+    get_data_mut(&mut designer).output_diff = true;
+
+    // Evaluate the node — in diff view, the output should carry the override
+    let output = evaluate_atom_edit_output(&designer);
+    let atom = output.get_atom(1).expect("diff atom 1 should exist in output");
+    assert_eq!(
+        atom.hybridization_override(),
+        HYBRIDIZATION_SP2,
+        "Diff view output atom should have sp2 hybridization override on Atom.flags, got Auto"
+    );
+}
+
+#[test]
+fn hybridization_override_appears_on_pin1_diff_output() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+
+    let mut designer = setup_atom_edit();
+
+    // Add a nitrogen atom to the diff
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::ZERO);
+    });
+
+    // Set sp2 override on diff atom 1
+    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+
+    // Evaluate pin 1 (diff) directly — no output_diff flag needed
+    let output = evaluate_atom_edit_pin(&designer, 1);
+    let atom = output.get_atom(1).expect("diff atom 1 should exist in pin 1 output");
+    assert_eq!(
+        atom.hybridization_override(),
+        HYBRIDIZATION_SP2,
+        "Pin 1 (diff) output atom should have sp2 hybridization override"
+    );
+}
