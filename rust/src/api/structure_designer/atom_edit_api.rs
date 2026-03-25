@@ -328,9 +328,7 @@ pub fn atom_edit_toggle_output_diff() -> bool {
                     None => return false,
                 };
                 let currently_diff = sd.is_selected_node_in_diff_view();
-                if let Some(network) =
-                    sd.node_type_registry.node_networks.get_mut(&network_name)
-                {
+                if let Some(network) = sd.node_type_registry.node_networks.get_mut(&network_name) {
                     if currently_diff {
                         // Switch to result view: add pin 0 before removing pin 1
                         network.set_pin_displayed(node_id, 0, true);
@@ -1409,7 +1407,10 @@ pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
                 let mut common: Option<u8> = None;
 
                 // In diff view, selected atom IDs are already result-space IDs.
-                if cad_instance.structure_designer.is_selected_node_in_diff_view() {
+                if cad_instance
+                    .structure_designer
+                    .is_selected_node_in_diff_view()
+                {
                     for &diff_id in &data.selection.selected_diff_atoms {
                         let val = hyb_to_u8(detect_hybridization(result_structure, diff_id, None));
                         match common {

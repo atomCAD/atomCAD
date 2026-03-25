@@ -115,30 +115,36 @@ class NodeNetworkPainter extends CustomPainter {
 
     if (pinType == PinType.output) {
       // output pin (source pin)
-      final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId];
-      final sourceVertOffset = (pinIndex == -1)
-          ? NODE_VERT_WIRE_OFFSET_FUNCTION_PIN
-          : (sourceNode!.inputPins.isEmpty
-              ? NODE_VERT_WIRE_OFFSET_EMPTY
-              : NODE_VERT_WIRE_OFFSET +
-                  sourceNode.inputPins.length *
-                      NODE_VERT_WIRE_OFFSET_PER_PARAM *
-                      0.5);
+      final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId]!;
+      final double sourceVertOffset;
+      final String dataType;
+      if (pinIndex == -1) {
+        // Function pin in title bar
+        sourceVertOffset = NODE_VERT_WIRE_OFFSET_FUNCTION_PIN;
+        dataType = sourceNode.functionType;
+      } else {
+        // Result output pin(s) — use same vertical spacing as input pins
+        sourceVertOffset = NODE_VERT_WIRE_OFFSET +
+            (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+        // Get data type from the output pin definition
+        if (pinIndex < sourceNode.outputPins.length) {
+          dataType = sourceNode.outputPins[pinIndex].dataType;
+        } else {
+          dataType = sourceNode.outputType;
+        }
+      }
       // Use central coordinate transformation
-      final logicalPos = apiVec2ToOffset(sourceNode!.position) +
+      final logicalPos = apiVec2ToOffset(sourceNode.position) +
           Offset(NODE_WIDTH, sourceVertOffset);
-      return (
-        logicalToScreen(logicalPos, panOffset, scale),
-        sourceNode.outputType
-      );
+      return (logicalToScreen(logicalPos, panOffset, scale), dataType);
     } else {
       // input pin (dest pin)
-      final destNode = graphModel.nodeNetworkView!.nodes[nodeId];
+      final destNode = graphModel.nodeNetworkView!.nodes[nodeId]!;
       final destVertOffset = NODE_VERT_WIRE_OFFSET +
           (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
       // Use central coordinate transformation
       final logicalPos =
-          apiVec2ToOffset(destNode!.position) + Offset(0.0, destVertOffset);
+          apiVec2ToOffset(destNode.position) + Offset(0.0, destVertOffset);
       return (
         logicalToScreen(logicalPos, panOffset, scale),
         destNode.inputPins[pinIndex].dataType
@@ -157,10 +163,24 @@ class NodeNetworkPainter extends CustomPainter {
         logicalToScreen(apiVec2ToOffset(node.position), panOffset, scale);
 
     if (pinType == PinType.output) {
-      // Output wires connect to right edge, centered vertically
+      // Output wires connect to right edge
       final rightEdgeX = nodePos.dx + nodeSize.width;
-      final centerY = nodePos.dy + nodeSize.height / 2;
-      return (Offset(rightEdgeX, centerY), node.outputType);
+      final numOutputs = node.outputPins.length;
+      if (numOutputs > 1 && pinIndex >= 0) {
+        // Multi-output: distribute output pins vertically
+        final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
+        final totalHeight = (numOutputs - 1) * spacing;
+        final startY = nodePos.dy + (nodeSize.height - totalHeight) / 2;
+        final outputY = startY + (pinIndex * spacing);
+        final dataType = pinIndex < node.outputPins.length
+            ? node.outputPins[pinIndex].dataType
+            : node.outputType;
+        return (Offset(rightEdgeX, outputY), dataType);
+      } else {
+        // Single output or function pin: centered vertically
+        final centerY = nodePos.dy + nodeSize.height / 2;
+        return (Offset(rightEdgeX, centerY), node.outputType);
+      }
     } else {
       // Input wires connect to left edge with small vertical offset per input
       final leftEdgeX = nodePos.dx;

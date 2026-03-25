@@ -195,6 +195,11 @@ void setNodeDisplay({required BigInt nodeId, required bool isDisplayed}) =>
         .crateApiStructureDesignerStructureDesignerApiSetNodeDisplay(
             nodeId: nodeId, isDisplayed: isDisplayed);
 
+void toggleOutputPinDisplay({required BigInt nodeId, required int pinIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleOutputPinDisplay(
+            nodeId: nodeId, pinIndex: pinIndex);
+
 bool selectNode({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSelectNode(nodeId: nodeId);
 

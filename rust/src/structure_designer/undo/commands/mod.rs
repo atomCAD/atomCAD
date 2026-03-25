@@ -18,5 +18,6 @@ pub mod rename_namespace;
 pub mod rename_network;
 pub mod set_node_data;
 pub mod set_node_display;
+pub mod set_output_pin_display;
 pub mod set_return_node;
 pub mod text_edit_network;

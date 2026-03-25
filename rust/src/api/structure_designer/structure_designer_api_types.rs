@@ -45,6 +45,12 @@ pub struct InputPinView {
     pub multi: bool,
 }
 
+pub struct OutputPinView {
+    pub name: String,
+    pub data_type: String,
+    pub index: i32,
+}
+
 #[frb]
 pub struct NodeView {
     pub id: u64,
@@ -54,6 +60,8 @@ pub struct NodeView {
     pub position: APIVec2,
     pub input_pins: Vec<InputPinView>,
     pub output_type: String,
+    pub output_pins: Vec<OutputPinView>,
+    pub displayed_pins: Vec<i32>,
     pub function_type: String,
     pub selected: bool,
     pub active: bool, // True if this is the active node (for properties panel/gadget)

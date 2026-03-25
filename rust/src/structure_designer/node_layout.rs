@@ -43,22 +43,28 @@ pub const DEFAULT_HORIZONTAL_GAP: f64 = 50.0;
 // Size estimation functions
 // =============================================================================
 
-/// Estimates the height of a node based on its number of input pins.
+/// Estimates the height of a node based on its number of input and output pins.
 ///
 /// This matches the formula used in Flutter's `getNodeSize()` function:
 /// ```text
-/// height = title_height + max(input_pins_height, output_height) + subtitle_height + padding
+/// height = title_height + max(input_pins_height, output_pins_height) + subtitle_height + padding
 /// ```
 ///
 /// # Arguments
 /// * `num_input_pins` - Number of input parameter pins on the node
+/// * `num_output_pins` - Number of output pins on the node (typically 1)
 /// * `has_subtitle` - Whether the node displays a subtitle (e.g., node type name)
 ///
 /// # Returns
 /// Estimated height in logical units (unscaled, normal zoom level)
-pub fn estimate_node_height(num_input_pins: usize, has_subtitle: bool) -> f64 {
+pub fn estimate_node_height(
+    num_input_pins: usize,
+    num_output_pins: usize,
+    has_subtitle: bool,
+) -> f64 {
     let input_height = num_input_pins as f64 * PER_PARAM_HEIGHT;
-    let main_body_height = input_height.max(OUTPUT_HEIGHT);
+    let output_height = num_output_pins as f64 * PER_PARAM_HEIGHT;
+    let main_body_height = input_height.max(output_height).max(OUTPUT_HEIGHT);
     let subtitle = if has_subtitle { SUBTITLE_HEIGHT } else { 0.0 };
     TITLE_HEIGHT + main_body_height + subtitle + PADDING
 }
@@ -67,14 +73,19 @@ pub fn estimate_node_height(num_input_pins: usize, has_subtitle: bool) -> f64 {
 ///
 /// # Arguments
 /// * `num_input_pins` - Number of input parameter pins on the node
+/// * `num_output_pins` - Number of output pins on the node (typically 1)
 /// * `has_subtitle` - Whether the node displays a subtitle
 ///
 /// # Returns
 /// DVec2 with (width, height) in logical units
-pub fn estimate_node_size(num_input_pins: usize, has_subtitle: bool) -> DVec2 {
+pub fn estimate_node_size(
+    num_input_pins: usize,
+    num_output_pins: usize,
+    has_subtitle: bool,
+) -> DVec2 {
     DVec2::new(
         NODE_WIDTH,
-        estimate_node_height(num_input_pins, has_subtitle),
+        estimate_node_height(num_input_pins, num_output_pins, has_subtitle),
     )
 }
 
@@ -92,12 +103,17 @@ pub fn get_node_width() -> f64 {
 ///
 /// # Arguments
 /// * `num_input_pins` - Number of input pins on the original node
+/// * `num_output_pins` - Number of output pins on the original node
 /// * `has_subtitle` - Whether the original node has a subtitle
 ///
 /// # Returns
 /// Vertical offset in logical units to add to the original node's Y position
-pub fn duplicate_node_vertical_offset(num_input_pins: usize, has_subtitle: bool) -> f64 {
-    estimate_node_height(num_input_pins, has_subtitle) + DEFAULT_VERTICAL_GAP
+pub fn duplicate_node_vertical_offset(
+    num_input_pins: usize,
+    num_output_pins: usize,
+    has_subtitle: bool,
+) -> f64 {
+    estimate_node_height(num_input_pins, num_output_pins, has_subtitle) + DEFAULT_VERTICAL_GAP
 }
 
 // =============================================================================

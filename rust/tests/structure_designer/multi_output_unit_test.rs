@@ -351,6 +351,105 @@ fn test_old_format_without_displayed_output_pins_loads_with_default_pin0() {
     assert_eq!(deserialized.displayed_node_ids.len(), 1);
 }
 
+// ===== Phase 4: NodeDisplayState PartialEq tests =====
+
+#[test]
+fn test_node_display_state_partial_eq_same() {
+    let a = NodeDisplayState::normal();
+    let b = NodeDisplayState::normal();
+    assert_eq!(a, b);
+}
+
+#[test]
+fn test_node_display_state_partial_eq_different_pins() {
+    let a = NodeDisplayState::normal(); // {0}
+    let mut b = NodeDisplayState::normal();
+    b.displayed_pins.insert(1); // {0, 1}
+    assert_ne!(a, b);
+}
+
+#[test]
+fn test_node_display_state_partial_eq_different_type() {
+    let a = NodeDisplayState::with_type(NodeDisplayType::Normal);
+    let b = NodeDisplayState::with_type(NodeDisplayType::Ghost);
+    assert_ne!(a, b);
+}
+
+#[test]
+fn test_toggle_output_pin_display_on_node_network() {
+    let mut network = NodeNetwork::new_empty();
+    let node_id = network.add_node(
+        "sphere",
+        glam::f64::DVec2::ZERO,
+        1,
+        Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
+    );
+
+    // Initially only pin 0
+    assert_eq!(
+        network.get_displayed_pins(node_id),
+        Some(&HashSet::from([0]))
+    );
+
+    // Toggle pin 1 on
+    network.set_pin_displayed(node_id, 1, true);
+    assert_eq!(
+        network.get_displayed_pins(node_id),
+        Some(&HashSet::from([0, 1]))
+    );
+
+    // Toggle pin 1 off
+    network.set_pin_displayed(node_id, 1, false);
+    assert_eq!(
+        network.get_displayed_pins(node_id),
+        Some(&HashSet::from([0]))
+    );
+}
+
+#[test]
+fn test_set_pin_displayed_re_adds_removed_node() {
+    let mut network = NodeNetwork::new_empty();
+    let node_id = network.add_node(
+        "sphere",
+        glam::f64::DVec2::ZERO,
+        1,
+        Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
+    );
+
+    // Remove pin 0 — node is removed from displayed_nodes
+    network.set_pin_displayed(node_id, 0, false);
+    assert!(!network.is_node_displayed(node_id));
+
+    // Re-add pin 0 — node should be re-added to displayed_nodes
+    network.set_pin_displayed(node_id, 0, true);
+    assert!(network.is_node_displayed(node_id));
+    assert_eq!(
+        network.get_displayed_pins(node_id),
+        Some(&HashSet::from([0]))
+    );
+}
+
+#[test]
+fn test_node_layout_height_with_multi_output() {
+    use rust_lib_flutter_cad::structure_designer::node_layout;
+
+    // Single output: 0 inputs, 1 output = title(30) + max(0, 22, 25)=25 + pad(8) = 63
+    let h1 = node_layout::estimate_node_height(0, 1, false);
+    assert!((h1 - 63.0).abs() < 0.001);
+
+    // Two outputs: 0 inputs, 2 outputs = title(30) + max(0, 44, 25)=44 + pad(8) = 82
+    let h2 = node_layout::estimate_node_height(0, 2, false);
+    assert!((h2 - 82.0).abs() < 0.001);
+
+    // More inputs than outputs: 3 inputs, 2 outputs = title(30) + max(66, 44, 25)=66 + pad(8) = 104
+    let h3 = node_layout::estimate_node_height(3, 2, false);
+    assert!((h3 - 104.0).abs() < 0.001);
+
+    // More outputs than inputs: 1 input, 3 outputs = title(30) + max(22, 66, 25)=66 + pad(8) = 104
+    let h4 = node_layout::estimate_node_height(1, 3, false);
+    assert!((h4 - 104.0).abs() < 0.001);
+}
+
 // ===== Phase 2: Interactive pin tests =====
 
 #[test]

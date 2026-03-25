@@ -20,7 +20,7 @@ pub enum NodeDisplayType {
 
 /// Display state for a single node. Bundles node-level visibility (Normal/Ghost)
 /// with per-output-pin display control.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NodeDisplayState {
     pub display_type: NodeDisplayType,
     pub displayed_pins: HashSet<i32>,
@@ -242,7 +242,7 @@ pub struct NodeNetwork {
     pub nodes: HashMap<u64, Node>,
     pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
     pub displayed_nodes: HashMap<u64, NodeDisplayState>, // Map of nodes that are currently displayed with their display state
-    pub selected_node_ids: HashSet<u64>,                   // All selected nodes (multi-selection)
+    pub selected_node_ids: HashSet<u64>,                 // All selected nodes (multi-selection)
     pub active_node_id: Option<u64>, // Active node (for properties panel/gadget) - the last selected node
     pub selected_wires: Vec<Wire>,   // All selected wires (multi-selection)
     pub valid: bool,                 // Whether the node network is valid and can be evaluated
@@ -637,20 +637,30 @@ impl NodeNetwork {
     /// Get the set of displayed output pins for a node.
     /// Returns None if the node is not displayed.
     pub fn get_displayed_pins(&self, node_id: u64) -> Option<&HashSet<i32>> {
-        self.displayed_nodes.get(&node_id).map(|s| &s.displayed_pins)
+        self.displayed_nodes
+            .get(&node_id)
+            .map(|s| &s.displayed_pins)
     }
 
     /// Toggle a specific output pin's display state for an already-displayed node.
     /// If the last pin is removed, the node is auto-removed from `displayed_nodes`.
     pub fn set_pin_displayed(&mut self, node_id: u64, pin_index: i32, displayed: bool) {
-        if let Some(state) = self.displayed_nodes.get_mut(&node_id) {
-            if displayed {
+        if displayed {
+            // Add pin — create the display entry if the node isn't currently displayed
+            if self.nodes.contains_key(&node_id) {
+                let state = self
+                    .displayed_nodes
+                    .entry(node_id)
+                    .or_insert_with(|| NodeDisplayState {
+                        display_type: NodeDisplayType::Normal,
+                        displayed_pins: HashSet::new(),
+                    });
                 state.displayed_pins.insert(pin_index);
-            } else {
-                state.displayed_pins.remove(&pin_index);
-                if state.displayed_pins.is_empty() {
-                    self.displayed_nodes.remove(&node_id);
-                }
+            }
+        } else if let Some(state) = self.displayed_nodes.get_mut(&node_id) {
+            state.displayed_pins.remove(&pin_index);
+            if state.displayed_pins.is_empty() {
+                self.displayed_nodes.remove(&node_id);
             }
         }
     }
@@ -1219,6 +1229,7 @@ impl NodeNetwork {
         // The subtitle parameter is set to true as most nodes display a subtitle.
         let vert_offset = node_layout::duplicate_node_vertical_offset(
             max(cloned_arguments.len(), 1),
+            1,    // num_output_pins - conservative default
             true, // has_subtitle - assume yes for conservative spacing
         );
         let new_position = DVec2::new(

@@ -2268,6 +2268,63 @@ impl StructureDesigner {
         }
     }
 
+    /// Toggle the display state of a specific output pin on a node.
+    /// The node must already be displayed (in `displayed_nodes`) for this to take effect.
+    pub fn toggle_output_pin_display(&mut self, node_id: u64, pin_index: i32) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+
+        // Capture old display state before mutation
+        let old_display_state = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .and_then(|net| net.displayed_nodes.get(&node_id))
+            .cloned();
+
+        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
+            network.set_pin_displayed(
+                node_id,
+                pin_index,
+                !network
+                    .get_displayed_pins(node_id)
+                    .is_some_and(|pins| pins.contains(&pin_index)),
+            );
+            self.pending_changes.visibility_changed.insert(node_id);
+        }
+
+        // Capture new display state after mutation
+        let new_display_state = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .and_then(|net| net.displayed_nodes.get(&node_id))
+            .cloned();
+
+        // Only push command if display state actually changed
+        if old_display_state != new_display_state {
+            let node_type_name = self
+                .node_type_registry
+                .node_networks
+                .get(&network_name)
+                .and_then(|net| net.nodes.get(&node_id))
+                .map(|n| n.node_type_name.as_str())
+                .unwrap_or("node");
+            let description = format!("Toggle {} pin {} display", node_type_name, pin_index);
+            self.push_command(
+                super::undo::commands::set_output_pin_display::SetOutputPinDisplayCommand {
+                    network_name,
+                    node_id,
+                    old_display_state,
+                    new_display_state,
+                    description,
+                },
+            );
+        }
+    }
+
     pub fn sync_gadget_data(&mut self) -> bool {
         // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {

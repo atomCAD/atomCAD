@@ -130,14 +130,16 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   final scale = getZoomScale(zoomLevel);
 
   // Calculate estimated height at normal scale (for all zoom levels)
-  // Title bar: ~30px, main body: max(inputs, output), subtitle: ~20px, padding: ~8px
+  // Title bar: ~30px, main body: max(inputs, outputs), subtitle: ~20px, padding: ~8px
   final titleHeight = 30.0;
   final inputPinsHeight =
       node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
-  final outputHeight = 25.0; // Single output pin height
-  // Main body is a Row, so height = max(left inputs, right output)
+  final outputPinsHeight =
+      node.outputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+  final minOutputHeight = 25.0; // Minimum output area height
+  // Main body is a Row, so height = max(left inputs, right outputs)
   final mainBodyHeight =
-      inputPinsHeight > outputHeight ? inputPinsHeight : outputHeight;
+      [inputPinsHeight, outputPinsHeight, minOutputHeight].reduce((a, b) => a > b ? a : b);
   final subtitleHeight =
       (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
   final padding = 8.0;

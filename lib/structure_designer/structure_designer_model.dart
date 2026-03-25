@@ -793,6 +793,15 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void toggleOutputPinDisplay(BigInt nodeId, int pinIndex) {
+    if (nodeNetworkView == null) return;
+    structure_designer_api.toggleOutputPinDisplay(
+      nodeId: nodeId,
+      pinIndex: pinIndex,
+    );
+    refreshFromKernel();
+  }
+
   void removeSelected() {
     if (nodeNetworkView == null) return;
     structure_designer_api.deleteSelected();

@@ -28,11 +28,23 @@ impl UndoCommand for AtomEditToggleFlagCommand {
     }
 
     fn undo(&self, ctx: &mut UndoContext) {
-        apply_flag(ctx, &self.network_name, self.node_id, self.flag, self.old_value);
+        apply_flag(
+            ctx,
+            &self.network_name,
+            self.node_id,
+            self.flag,
+            self.old_value,
+        );
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        apply_flag(ctx, &self.network_name, self.node_id, self.flag, self.new_value);
+        apply_flag(
+            ctx,
+            &self.network_name,
+            self.node_id,
+            self.flag,
+            self.new_value,
+        );
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {
@@ -77,13 +89,9 @@ fn apply_flag(
             if let Some(data) = get_atom_edit_data_mut(ctx, network_name, node_id) {
                 match flag {
                     AtomEditFlag::ShowAnchorArrows => data.show_anchor_arrows = value,
-                    AtomEditFlag::IncludeBaseBondsInDiff => {
-                        data.include_base_bonds_in_diff = value
-                    }
+                    AtomEditFlag::IncludeBaseBondsInDiff => data.include_base_bonds_in_diff = value,
                     AtomEditFlag::ErrorOnStaleEntries => data.error_on_stale_entries = value,
-                    AtomEditFlag::ContinuousMinimization => {
-                        data.continuous_minimization = value
-                    }
+                    AtomEditFlag::ContinuousMinimization => data.continuous_minimization = value,
                     AtomEditFlag::OutputDiff => unreachable!(),
                 }
             }

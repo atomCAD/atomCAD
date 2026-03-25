@@ -763,15 +763,14 @@ fn can_move_to_y(
 fn get_node_height(node_id: u64, network: &NodeNetwork, registry: &NodeTypeRegistry) -> f64 {
     let node = match network.nodes.get(&node_id) {
         Some(n) => n,
-        None => return node_layout::estimate_node_height(0, true),
+        None => return node_layout::estimate_node_height(0, 1, true),
     };
 
-    let num_params = registry
-        .get_node_type(&node.node_type_name)
-        .map(|nt| nt.parameters.len())
-        .unwrap_or(0);
+    let node_type = registry.get_node_type(&node.node_type_name);
+    let num_params = node_type.map(|nt| nt.parameters.len()).unwrap_or(0);
+    let num_outputs = node_type.map(|nt| nt.output_pin_count()).unwrap_or(1);
 
-    node_layout::estimate_node_height(num_params, true)
+    node_layout::estimate_node_height(num_params, num_outputs, true)
 }
 
 // =============================================================================

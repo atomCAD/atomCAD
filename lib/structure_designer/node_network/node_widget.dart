@@ -20,8 +20,13 @@ class NodeWidgetKeys {
   static Key inputPin(BigInt nodeId, int pinIndex) =>
       Key('node_${nodeId}_input_$pinIndex');
 
-  /// Returns a Key for an output pin by node ID
-  static Key outputPin(BigInt nodeId) => Key('node_${nodeId}_output');
+  /// Returns a Key for an output pin by node ID and pin index
+  static Key outputPin(BigInt nodeId, [int pinIndex = 0]) =>
+      Key('node_${nodeId}_output_$pinIndex');
+
+  /// Returns a Key for an output pin visibility button by node ID and pin index
+  static Key outputPinVisibility(BigInt nodeId, int pinIndex) =>
+      Key('node_${nodeId}_output_vis_$pinIndex');
 
   /// Returns a Key for the function pin by node ID
   static Key functionPin(BigInt nodeId) => Key('node_${nodeId}_function');
@@ -304,19 +309,6 @@ class NodeWidget extends StatelessWidget {
                     ),
                   ),
                 ),
-                GestureDetector(
-                  key: NodeWidgetKeys.visibilityButton(node.id),
-                  onTap: () {
-                    final model = Provider.of<StructureDesignerModel>(context,
-                        listen: false);
-                    model.toggleNodeDisplay(node.id);
-                  },
-                  child: Icon(
-                    node.displayed ? Icons.visibility : Icons.visibility_off,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
                 const SizedBox(width: 4),
                 // Function pin
                 PinWidget(
@@ -332,6 +324,7 @@ class NodeWidget extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.all(2),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Left Side (Inputs)
               Expanded(
@@ -348,12 +341,12 @@ class NodeWidget extends StatelessWidget {
                       .toList(),
                 ),
               ),
-              // Right Side (Output)
-              PinWidget(
-                pinReference:
-                    PinReference(node.id, PinType.output, 0, node.outputType),
-                multi: false,
-                outputString: node.outputString,
+              // Right Side (Outputs)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: node.outputPins
+                    .map((pin) => _buildOutputPin(context, pin))
+                    .toList(),
               ),
             ],
           ),
@@ -394,6 +387,48 @@ class NodeWidget extends StatelessWidget {
             style: TextStyle(color: Colors.white, fontSize: 14),
             overflow: TextOverflow.ellipsis,
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Creates an output pin row with optional eye icon and pin name.
+  /// For single-output nodes: eye icon + pin (no label).
+  /// For multi-output nodes: eye icon + label + pin.
+  Widget _buildOutputPin(BuildContext context, OutputPinView pin) {
+    final bool isMultiOutput = node.outputPins.length > 1;
+    final bool isPinDisplayed = node.displayedPins.contains(pin.index);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Eye icon for pin display toggle
+        GestureDetector(
+          key: NodeWidgetKeys.outputPinVisibility(node.id, pin.index),
+          onTap: () {
+            final model = Provider.of<StructureDesignerModel>(context,
+                listen: false);
+            model.toggleOutputPinDisplay(node.id, pin.index);
+          },
+          child: Icon(
+            isPinDisplayed ? Icons.visibility : Icons.visibility_off,
+            color: Colors.white70,
+            size: 16,
+          ),
+        ),
+        if (isMultiOutput) ...[
+          const SizedBox(width: 2),
+          Text(
+            pin.name,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+          ),
+        ],
+        const SizedBox(width: 2),
+        PinWidget(
+          pinReference:
+              PinReference(node.id, PinType.output, pin.index, pin.dataType),
+          multi: false,
+          outputString: pin.index == 0 ? node.outputString : null,
         ),
       ],
     );

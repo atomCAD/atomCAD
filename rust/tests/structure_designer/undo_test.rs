@@ -82,6 +82,35 @@ fn normalize_json(value: &mut Value) {
                             id_a.cmp(&id_b)
                         });
                     }
+                } else if key == "displayed_output_pins" {
+                    // Sort by node_id (first element of each inner array)
+                    if let Value::Array(arr) = val {
+                        arr.sort_by(|a, b| {
+                            let id_a = a
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let id_b = b
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            id_a.cmp(&id_b)
+                        });
+                        // Also sort the pin indices within each entry
+                        for entry in arr.iter_mut() {
+                            if let Value::Array(inner) = entry {
+                                if let Some(Value::Array(pins)) = inner.get_mut(1) {
+                                    pins.sort_by(|a, b| {
+                                        let pa = a.as_i64().unwrap_or(0);
+                                        let pb = b.as_i64().unwrap_or(0);
+                                        pa.cmp(&pb)
+                                    });
+                                }
+                            }
+                        }
+                    }
                 } else if key == "nodes" {
                     // Sort nodes by id for deterministic comparison
                     // (HashMap iteration order differs after deserialize+reserialize)
@@ -766,6 +795,106 @@ fn undo_set_node_display_toggle_twice() {
 
     let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
     assert_eq!(initial, after_undo);
+}
+
+// ===== Phase 4 (multi-output): SetOutputPinDisplay Tests =====
+
+#[test]
+fn undo_toggle_output_pin_display() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    // Toggle pin 1 display on (sphere has only 1 output pin, but the toggle
+    // still works on the display state — it adds pin 1 to displayed_pins)
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.toggle_output_pin_display(sphere_id, 1);
+    });
+}
+
+#[test]
+fn undo_toggle_output_pin_display_twice() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    let initial = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Toggle pin 1 on, then off
+    designer.toggle_output_pin_display(sphere_id, 1);
+    designer.toggle_output_pin_display(sphere_id, 1);
+
+    // Undo both
+    assert!(designer.undo());
+    assert!(designer.undo());
+
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(initial, after_undo);
+}
+
+#[test]
+fn undo_toggle_output_pin_display_preserves_other_pins() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    // Add pin 1 display
+    designer.toggle_output_pin_display(sphere_id, 1);
+
+    let after_pin1 = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // Add pin 2 display, then undo — should restore to just pin 0 + pin 1
+    designer.toggle_output_pin_display(sphere_id, 2);
+    assert!(designer.undo());
+
+    let after_undo = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_eq!(after_pin1, after_undo);
+}
+
+#[test]
+fn undo_toggle_output_pin_display_removes_node_when_last_pin_removed() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    // Remove pin 0 (the only default pin) — this should remove the node from displayed_nodes
+    designer.toggle_output_pin_display(sphere_id, 0);
+
+    // Verify node is no longer displayed
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    assert!(!network.is_node_displayed(sphere_id));
+
+    // Undo — node should be displayed again with pin 0
+    assert!(designer.undo());
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    assert!(network.is_node_displayed(sphere_id));
+    assert_eq!(
+        network.get_displayed_pins(sphere_id),
+        Some(&std::collections::HashSet::from([0]))
+    );
+}
+
+#[test]
+fn undo_description_toggle_output_pin_display() {
+    let mut designer = setup_designer_with_network("test");
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    designer.toggle_output_pin_display(sphere_id, 1);
+
+    let desc = designer.undo_stack.undo_description().unwrap();
+    assert!(
+        desc.contains("sphere") && desc.contains("pin") && desc.contains("1"),
+        "Description should mention node type and pin index, got: {desc}"
+    );
 }
 
 // ===== Phase 5: PasteNodes Tests =====

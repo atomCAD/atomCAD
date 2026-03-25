@@ -2047,6 +2047,8 @@ class NodeView {
   APIVec2 position;
   final List<InputPinView> inputPins;
   final String outputType;
+  final List<OutputPinView> outputPins;
+  final Int32List displayedPins;
   final String functionType;
   final bool selected;
   final bool active;
@@ -2067,6 +2069,8 @@ class NodeView {
     required this.position,
     required this.inputPins,
     required this.outputType,
+    required this.outputPins,
+    required this.displayedPins,
     required this.functionType,
     required this.selected,
     required this.active,
@@ -2089,6 +2093,8 @@ class NodeView {
       position.hashCode ^
       inputPins.hashCode ^
       outputType.hashCode ^
+      outputPins.hashCode ^
+      displayedPins.hashCode ^
       functionType.hashCode ^
       selected.hashCode ^
       active.hashCode ^
@@ -2113,6 +2119,8 @@ class NodeView {
           position == other.position &&
           inputPins == other.inputPins &&
           outputType == other.outputType &&
+          outputPins == other.outputPins &&
+          displayedPins == other.displayedPins &&
           functionType == other.functionType &&
           selected == other.selected &&
           active == other.active &&
@@ -2125,6 +2133,30 @@ class NodeView {
           commentText == other.commentText &&
           commentWidth == other.commentWidth &&
           commentHeight == other.commentHeight;
+}
+
+class OutputPinView {
+  final String name;
+  final String dataType;
+  final int index;
+
+  const OutputPinView({
+    required this.name,
+    required this.dataType,
+    required this.index,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ dataType.hashCode ^ index.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OutputPinView &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          dataType == other.dataType &&
+          index == other.index;
 }
 
 /// Result of default_tool_pointer_down.

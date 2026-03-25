@@ -1649,7 +1649,7 @@ mod auto_layout_tests {
         let size = auto_layout::get_node_size(&registry, "sphere");
         assert_eq!(size.x, node_layout::NODE_WIDTH);
         // Should have height for 3 parameters
-        let expected_size = node_layout::estimate_node_size(3, true);
+        let expected_size = node_layout::estimate_node_size(3, 1, true);
         assert_eq!(size, expected_size);
     }
 
@@ -1695,7 +1695,7 @@ mod auto_layout_tests {
         );
 
         // Should be to the right of the int node
-        let int_size = node_layout::estimate_node_size(int_type.parameters.len(), true);
+        let int_size = node_layout::estimate_node_size(int_type.parameters.len(), 1, true);
         let expected_min_x = 200.0 + int_size.x + node_layout::DEFAULT_HORIZONTAL_GAP;
         assert!(
             position.x >= expected_min_x,
@@ -1772,7 +1772,7 @@ mod auto_layout_tests {
         // Verify no overlaps
         let nodes: Vec<_> = network.nodes.values().collect();
         let int_type = registry.get_node_type("int").unwrap();
-        let node_size = node_layout::estimate_node_size(int_type.parameters.len(), true);
+        let node_size = node_layout::estimate_node_size(int_type.parameters.len(), 1, true);
 
         for i in 0..nodes.len() {
             for j in (i + 1)..nodes.len() {
@@ -1881,7 +1881,7 @@ mod auto_layout_tests {
 
         let int_pos = DVec2::new(int_node.position.x, int_node.position.y);
         let int_type = registry.get_node_type("int").unwrap();
-        let int_size = node_layout::estimate_node_size(int_type.parameters.len(), true);
+        let int_size = node_layout::estimate_node_size(int_type.parameters.len(), 1, true);
 
         // Check no overlap with sphere nodes
         for node in network.nodes.values() {
@@ -1890,7 +1890,7 @@ mod auto_layout_tests {
             }
             let node_pos = DVec2::new(node.position.x, node.position.y);
             let node_type = registry.get_node_type(&node.node_type_name).unwrap();
-            let node_size = node_layout::estimate_node_size(node_type.parameters.len(), true);
+            let node_size = node_layout::estimate_node_size(node_type.parameters.len(), 1, true);
 
             let overlap = node_layout::nodes_overlap(
                 int_pos,

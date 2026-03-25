@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -1782291257;
+  int get rustContentHash => 1144339227;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -968,6 +968,9 @@ abstract class RustLibApi extends BaseApi {
 
   void crateApiStructureDesignerStructureDesignerApiToggleNodesSelection(
       {required Uint64List nodeIds});
+
+  void crateApiStructureDesignerStructureDesignerApiToggleOutputPinDisplay(
+      {required BigInt nodeId, required int pinIndex});
 
   bool crateApiStructureDesignerStructureDesignerApiToggleWireSelection(
       {required BigInt sourceNodeId,
@@ -8845,6 +8848,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  void crateApiStructureDesignerStructureDesignerApiToggleOutputPinDisplay(
+      {required BigInt nodeId, required int pinIndex}) {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_u_64(nodeId, serializer);
+        sse_encode_i_32(pinIndex, serializer);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 287)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerStructureDesignerApiToggleOutputPinDisplayConstMeta,
+      argValues: [nodeId, pinIndex],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerStructureDesignerApiToggleOutputPinDisplayConstMeta =>
+          const TaskConstMeta(
+            debugName: "toggle_output_pin_display",
+            argNames: ["nodeId", "pinIndex"],
+          );
+
+  @override
   bool crateApiStructureDesignerStructureDesignerApiToggleWireSelection(
       {required BigInt sourceNodeId,
       required int sourceOutputPinIndex,
@@ -8857,7 +8888,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
         sse_encode_usize(destinationArgumentIndex, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 287)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 288)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -8894,7 +8925,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_wire_identifier(wires, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 288)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 289)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8921,7 +8952,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_transform(absTransform, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 289)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 290)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8946,7 +8977,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 290)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 291)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -8970,7 +9001,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 291)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 292)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_String,
@@ -8999,7 +9030,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_64(nodeId, serializer);
         sse_encode_String(label, serializer);
         sse_encode_String(text, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 292)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 293)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -9030,7 +9061,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_64(nodeId, serializer);
         sse_encode_usize(index, serializer);
         sse_encode_box_autoadd_api_facet(facet, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 293)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 294)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -9054,7 +9085,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 294)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 295)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -9083,7 +9114,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_vec_3(rayOrigin, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDirection, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 295)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 296)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_api_viewport_pick_result,
@@ -10769,6 +10800,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<OutputPinView> dco_decode_list_output_pin_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_output_pin_view).toList();
+  }
+
+  @protected
+  Int32List dco_decode_list_prim_i_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Int32List;
+  }
+
+  @protected
   Uint64List dco_decode_list_prim_u_64_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeUint64List(raw);
@@ -10867,8 +10910,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 20)
+      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -10876,18 +10919,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       position: dco_decode_api_vec_2(arr[3]),
       inputPins: dco_decode_list_input_pin_view(arr[4]),
       outputType: dco_decode_String(arr[5]),
-      functionType: dco_decode_String(arr[6]),
-      selected: dco_decode_bool(arr[7]),
-      active: dco_decode_bool(arr[8]),
-      displayed: dco_decode_bool(arr[9]),
-      returnNode: dco_decode_bool(arr[10]),
-      error: dco_decode_opt_String(arr[11]),
-      outputString: dco_decode_opt_String(arr[12]),
-      subtitle: dco_decode_opt_String(arr[13]),
-      commentLabel: dco_decode_opt_String(arr[14]),
-      commentText: dco_decode_opt_String(arr[15]),
-      commentWidth: dco_decode_opt_box_autoadd_f_64(arr[16]),
-      commentHeight: dco_decode_opt_box_autoadd_f_64(arr[17]),
+      outputPins: dco_decode_list_output_pin_view(arr[6]),
+      displayedPins: dco_decode_list_prim_i_32_strict(arr[7]),
+      functionType: dco_decode_String(arr[8]),
+      selected: dco_decode_bool(arr[9]),
+      active: dco_decode_bool(arr[10]),
+      displayed: dco_decode_bool(arr[11]),
+      returnNode: dco_decode_bool(arr[12]),
+      error: dco_decode_opt_String(arr[13]),
+      outputString: dco_decode_opt_String(arr[14]),
+      subtitle: dco_decode_opt_String(arr[15]),
+      commentLabel: dco_decode_opt_String(arr[16]),
+      commentText: dco_decode_opt_String(arr[17]),
+      commentWidth: dco_decode_opt_box_autoadd_f_64(arr[18]),
+      commentHeight: dco_decode_opt_box_autoadd_f_64(arr[19]),
     );
   }
 
@@ -11295,6 +11340,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_list_prim_u_8_strict(raw);
+  }
+
+  @protected
+  OutputPinView dco_decode_output_pin_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return OutputPinView(
+      name: dco_decode_String(arr[0]),
+      dataType: dco_decode_String(arr[1]),
+      index: dco_decode_i_32(arr[2]),
+    );
   }
 
   @protected
@@ -13306,6 +13364,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<OutputPinView> sse_decode_list_output_pin_view(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <OutputPinView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_output_pin_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  Int32List sse_decode_list_prim_i_32_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getInt32List(len_);
+  }
+
+  @protected
   Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -13444,6 +13522,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_position = sse_decode_api_vec_2(deserializer);
     var var_inputPins = sse_decode_list_input_pin_view(deserializer);
     var var_outputType = sse_decode_String(deserializer);
+    var var_outputPins = sse_decode_list_output_pin_view(deserializer);
+    var var_displayedPins = sse_decode_list_prim_i_32_strict(deserializer);
     var var_functionType = sse_decode_String(deserializer);
     var var_selected = sse_decode_bool(deserializer);
     var var_active = sse_decode_bool(deserializer);
@@ -13463,6 +13543,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         position: var_position,
         inputPins: var_inputPins,
         outputType: var_outputType,
+        outputPins: var_outputPins,
+        displayedPins: var_displayedPins,
         functionType: var_functionType,
         selected: var_selected,
         active: var_active,
@@ -14212,6 +14294,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     } else {
       return null;
     }
+  }
+
+  @protected
+  OutputPinView sse_decode_output_pin_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_dataType = sse_decode_String(deserializer);
+    var var_index = sse_decode_i_32(deserializer);
+    return OutputPinView(
+        name: var_name, dataType: var_dataType, index: var_index);
   }
 
   @protected
@@ -15924,6 +16016,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_output_pin_view(
+      List<OutputPinView> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_output_pin_view(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_i_32_strict(
+      Int32List self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putInt32List(self);
+  }
+
+  @protected
   void sse_encode_list_prim_u_64_strict(
       Uint64List self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -16044,6 +16154,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_vec_2(self.position, serializer);
     sse_encode_list_input_pin_view(self.inputPins, serializer);
     sse_encode_String(self.outputType, serializer);
+    sse_encode_list_output_pin_view(self.outputPins, serializer);
+    sse_encode_list_prim_i_32_strict(self.displayedPins, serializer);
     sse_encode_String(self.functionType, serializer);
     sse_encode_bool(self.selected, serializer);
     sse_encode_bool(self.active, serializer);
@@ -16732,6 +16844,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (self != null) {
       sse_encode_list_prim_u_8_strict(self, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_output_pin_view(
+      OutputPinView self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.dataType, serializer);
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected

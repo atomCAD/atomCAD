@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1782291257;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1144339227;
 
 // Section: executor
 
@@ -7879,6 +7879,20 @@ fn wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_se
         },
     )
 }
+fn wire__crate__api__structure_designer__structure_designer_api__toggle_output_pin_display_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "toggle_output_pin_display", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+let api_pin_index = <i32>::sse_decode(&mut deserializer);deserializer.end();
+                transform_result_sse::<_, ()>((move || {
+                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::toggle_output_pin_display(api_node_id, api_pin_index); })?;   Ok(output_ok)
+                })()) })
+}
 fn wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -9808,6 +9822,32 @@ impl SseDecode for Vec<crate::api::structure_designer::structure_designer_api_ty
     }
 }
 
+impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::OutputPinView>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::OutputPinView>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<i32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<i32>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -9999,6 +10039,10 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             crate::api::structure_designer::structure_designer_api_types::InputPinView,
         >>::sse_decode(deserializer);
         let mut var_outputType = <String>::sse_decode(deserializer);
+        let mut var_outputPins = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::OutputPinView,
+        >>::sse_decode(deserializer);
+        let mut var_displayedPins = <Vec<i32>>::sse_decode(deserializer);
         let mut var_functionType = <String>::sse_decode(deserializer);
         let mut var_selected = <bool>::sse_decode(deserializer);
         let mut var_active = <bool>::sse_decode(deserializer);
@@ -10018,6 +10062,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             position: var_position,
             input_pins: var_inputPins,
             output_type: var_outputType,
+            output_pins: var_outputPins,
+            displayed_pins: var_displayedPins,
             function_type: var_functionType,
             selected: var_selected,
             active: var_active,
@@ -10816,6 +10862,20 @@ impl SseDecode for Option<Vec<u8>> {
     }
 }
 
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::OutputPinView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_dataType = <String>::sse_decode(deserializer);
+        let mut var_index = <i32>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::OutputPinView {
+            name: var_name,
+            data_type: var_dataType,
+            index: var_index,
+        };
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::PointerDownResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11381,15 +11441,16 @@ fn pde_ffi_dispatcher_sync_impl(
 284 => wire__crate__api__structure_designer__structure_designer_api__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
 285 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_and_wires_selection_impl(ptr, rust_vec_len, data_len),
 286 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_selection_impl(ptr, rust_vec_len, data_len),
-287 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
-288 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
-289 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
-290 => wire__crate__api__structure_designer__structure_designer_api__undo_impl(ptr, rust_vec_len, data_len),
-291 => wire__crate__api__structure_designer__structure_designer_api__undo_description_impl(ptr, rust_vec_len, data_len),
-292 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
-293 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
-294 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
-295 => wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(ptr, rust_vec_len, data_len),
+287 => wire__crate__api__structure_designer__structure_designer_api__toggle_output_pin_display_impl(ptr, rust_vec_len, data_len),
+288 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
+289 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
+290 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
+291 => wire__crate__api__structure_designer__structure_designer_api__undo_impl(ptr, rust_vec_len, data_len),
+292 => wire__crate__api__structure_designer__structure_designer_api__undo_description_impl(ptr, rust_vec_len, data_len),
+293 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
+294 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
+295 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
+296 => wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -13973,6 +14034,8 @@ impl flutter_rust_bridge::IntoDart
             self.position.into_into_dart().into_dart(),
             self.input_pins.into_into_dart().into_dart(),
             self.output_type.into_into_dart().into_dart(),
+            self.output_pins.into_into_dart().into_dart(),
+            self.displayed_pins.into_into_dart().into_dart(),
             self.function_type.into_into_dart().into_dart(),
             self.selected.into_into_dart().into_dart(),
             self.active.into_into_dart().into_dart(),
@@ -14001,6 +14064,34 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::NodeView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::OutputPinView
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.data_type.into_into_dart().into_dart(),
+            self.index.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::OutputPinView
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::OutputPinView,
+    > for crate::api::structure_designer::structure_designer_api_types::OutputPinView
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::OutputPinView {
         self
     }
 }
@@ -15493,6 +15584,28 @@ impl SseEncode for Vec<crate::api::structure_designer::structure_designer_api_ty
     }
 }
 
+impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::OutputPinView>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::OutputPinView>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<i32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <i32>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -15653,6 +15766,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <crate::api::common_api_types::APIVec2>::sse_encode(self.position, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::InputPinView>>::sse_encode(self.input_pins, serializer);
         <String>::sse_encode(self.output_type, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::OutputPinView>>::sse_encode(self.output_pins, serializer);
+        <Vec<i32>>::sse_encode(self.displayed_pins, serializer);
         <String>::sse_encode(self.function_type, serializer);
         <bool>::sse_encode(self.selected, serializer);
         <bool>::sse_encode(self.active, serializer);
@@ -16391,6 +16506,15 @@ impl SseEncode for Option<Vec<u8>> {
         if let Some(value) = self {
             <Vec<u8>>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::OutputPinView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.data_type, serializer);
+        <i32>::sse_encode(self.index, serializer);
     }
 }
 

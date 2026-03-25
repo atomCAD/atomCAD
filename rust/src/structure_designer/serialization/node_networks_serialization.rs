@@ -2,8 +2,8 @@ use super::super::camera_settings::CameraSettings;
 use super::super::node_data::CustomNodeData;
 use super::super::node_data::NoData;
 use super::super::node_data::NodeData;
-use super::super::node_network::{NodeDisplayState, NodeDisplayType};
 use super::super::node_network::{Argument, Node, NodeNetwork};
+use super::super::node_network::{NodeDisplayState, NodeDisplayType};
 use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
 use super::super::node_type_registry::NodeTypeRegistry;
@@ -436,10 +436,7 @@ pub fn serializable_to_node_network(
     // Build displayed_nodes from the two serialized fields (merge)
     let mut displayed_nodes = std::collections::HashMap::new();
     for (node_id, display_type) in &serializable.displayed_node_ids {
-        displayed_nodes.insert(
-            *node_id,
-            NodeDisplayState::with_type(*display_type),
-        );
+        displayed_nodes.insert(*node_id, NodeDisplayState::with_type(*display_type));
     }
     // Overlay explicit pin display state where present
     for (node_id, pins) in &serializable.displayed_output_pins {
@@ -472,7 +469,12 @@ pub fn serializable_to_node_network(
                 && !nodes_with_explicit_pins.contains(&node_id)
                 && network.displayed_nodes.contains_key(&node_id)
             {
-                if let Some(data) = node.data.as_ref().as_any_ref().downcast_ref::<AtomEditData>() {
+                if let Some(data) = node
+                    .data
+                    .as_ref()
+                    .as_any_ref()
+                    .downcast_ref::<AtomEditData>()
+                {
                     if data.output_diff {
                         nodes_to_migrate.push(node_id);
                     }

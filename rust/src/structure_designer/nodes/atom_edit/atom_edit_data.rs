@@ -1245,9 +1245,7 @@ impl NodeData for AtomEditData {
                 };
                 if let Some(diff_id) = mark_diff_id {
                     // Map diff atom ID to result atom ID
-                    if let Some(&result_id) =
-                        diff_result.provenance.diff_to_result.get(&diff_id)
-                    {
+                    if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
                         result.decorator_mut().set_atom_display_state(
                             result_id,
                             crate::crystolecule::atomic_structure::AtomDisplayState::Marked,

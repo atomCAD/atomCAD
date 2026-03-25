@@ -97,7 +97,12 @@ pub fn get_node_size(registry: &NodeTypeRegistry, node_type_name: &str) -> DVec2
         .map(|nt| nt.parameters.len())
         .unwrap_or(0);
 
-    node_layout::estimate_node_size(num_params, true)
+    let num_outputs = registry
+        .get_node_type(node_type_name)
+        .map(|nt| nt.output_pin_count())
+        .unwrap_or(1);
+
+    node_layout::estimate_node_size(num_params, num_outputs, true)
 }
 
 /// Find a position near the proposed location that doesn't overlap existing nodes.

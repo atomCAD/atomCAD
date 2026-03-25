@@ -551,6 +551,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<InputPinView> dco_decode_list_input_pin_view(dynamic raw);
 
   @protected
+  List<OutputPinView> dco_decode_list_output_pin_view(dynamic raw);
+
+  @protected
+  Int32List dco_decode_list_prim_i_32_strict(dynamic raw);
+
+  @protected
   Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
 
   @protected
@@ -788,6 +794,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  OutputPinView dco_decode_output_pin_view(dynamic raw);
 
   @protected
   PointerDownResult dco_decode_pointer_down_result(dynamic raw);
@@ -1451,6 +1460,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<OutputPinView> sse_decode_list_output_pin_view(
+      SseDeserializer deserializer);
+
+  @protected
+  Int32List sse_decode_list_prim_i_32_strict(SseDeserializer deserializer);
+
+  @protected
   Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
 
   @protected
@@ -1737,6 +1753,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  OutputPinView sse_decode_output_pin_view(SseDeserializer deserializer);
 
   @protected
   PointerDownResult sse_decode_pointer_down_result(
@@ -2441,6 +2460,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<InputPinView> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_output_pin_view(
+      List<OutputPinView> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_prim_i_32_strict(
+      Int32List self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_64_strict(
       Uint64List self, SseSerializer serializer);
 
@@ -2732,6 +2759,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_output_pin_view(OutputPinView self, SseSerializer serializer);
 
   @protected
   void sse_encode_pointer_down_result(

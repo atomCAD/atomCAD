@@ -274,7 +274,7 @@ fn test_no_overlap_after_layout() {
                 .get_node_type(&node.node_type_name)
                 .map(|nt| nt.parameters.len())
                 .unwrap_or(0);
-            let size = node_layout::estimate_node_size(num_params, true);
+            let size = node_layout::estimate_node_size(num_params, 1, true);
             (id, node.position, size)
         })
         .collect();

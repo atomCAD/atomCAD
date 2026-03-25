@@ -20,6 +20,7 @@ use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
+use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
 use crate::api::api_common::from_api_ivec2;
@@ -310,6 +311,29 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
                     let output_type = node_type.output_type().clone();
                     let function_type = node_type.get_function_type();
+
+                    // Build output pin views from the node type's output_pins
+                    let output_pins: Vec<OutputPinView> = node_type
+                        .output_pins
+                        .iter()
+                        .enumerate()
+                        .map(|(i, pin_def)| OutputPinView {
+                            name: pin_def.name.clone(),
+                            data_type: pin_def.data_type.to_string(),
+                            index: i as i32,
+                        })
+                        .collect();
+
+                    // Build displayed_pins from the node's display state
+                    let displayed_pins: Vec<i32> = node_network
+                        .get_displayed_pins(node.id)
+                        .map(|pins| {
+                            let mut sorted: Vec<i32> = pins.iter().copied().collect();
+                            sorted.sort();
+                            sorted
+                        })
+                        .unwrap_or_default();
+
                     node_network_view.nodes.insert(
                         node.id,
                         NodeView {
@@ -319,6 +343,8 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                             position: to_api_vec2(&node.position),
                             input_pins,
                             output_type: output_type.to_string(),
+                            output_pins,
+                            displayed_pins,
                             function_type: function_type.to_string(),
                             selected: node_network.is_node_selected(node.id),
                             active: node_network.is_node_active(node.id),
@@ -891,6 +917,18 @@ pub fn set_node_display(node_id: u64, is_displayed: bool) {
             instance
                 .structure_designer
                 .set_node_display(node_id, is_displayed);
+            refresh_structure_designer_auto(instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_output_pin_display(node_id: u64, pin_index: i32) {
+    unsafe {
+        with_mut_cad_instance(|instance| {
+            instance
+                .structure_designer
+                .toggle_output_pin_display(node_id, pin_index);
             refresh_structure_designer_auto(instance);
         });
     }
@@ -2364,25 +2402,23 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     });
 
                 // Compute measurement from selected atoms (2-4 atoms)
-                let measurement =
-                    compute_selection_measurement(
-                        atom_edit_data,
-                        atomic_structure,
-                        eval_cache,
-                        cad_instance
-                            .structure_designer
-                            .is_selected_node_in_diff_view(),
-                    );
+                let measurement = compute_selection_measurement(
+                    atom_edit_data,
+                    atomic_structure,
+                    eval_cache,
+                    cad_instance
+                        .structure_designer
+                        .is_selected_node_in_diff_view(),
+                );
 
                 // Compute last-selected result atom ID for dialog defaults
-                let last_selected_result_atom_id =
-                    compute_last_selected_result_atom_id(
-                        atom_edit_data,
-                        eval_cache,
-                        cad_instance
-                            .structure_designer
-                            .is_selected_node_in_diff_view(),
-                    );
+                let last_selected_result_atom_id = compute_last_selected_result_atom_id(
+                    atom_edit_data,
+                    eval_cache,
+                    cad_instance
+                        .structure_designer
+                        .is_selected_node_in_diff_view(),
+                );
 
                 let is_in_guided_placement = matches!(
                     &atom_edit_data.active_tool,
