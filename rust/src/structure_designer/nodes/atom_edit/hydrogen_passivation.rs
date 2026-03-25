@@ -35,10 +35,10 @@ pub fn remove_hydrogen_atom_edit(
 ) -> Result<String, String> {
     // Phase 1: Gather (immutable borrows, all owned data returned)
     let removals = {
-        let atom_edit_data =
-            get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
+        // Verify an atom_edit node is active
+        get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
 
-        if atom_edit_data.output_diff {
+        if structure_designer.is_selected_node_in_diff_view() {
             return Err("Switch to result view before removing hydrogens".to_string());
         }
 
@@ -160,10 +160,10 @@ pub fn add_hydrogen_atom_edit(
 ) -> Result<String, String> {
     // Phase 1: Gather (immutable borrows, all owned data returned)
     let (placements, base_parent_info) = {
-        let atom_edit_data =
-            get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
+        // Verify an atom_edit node is active
+        get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
 
-        if atom_edit_data.output_diff {
+        if structure_designer.is_selected_node_in_diff_view() {
             return Err("Switch to result view before adding hydrogens".to_string());
         }
 

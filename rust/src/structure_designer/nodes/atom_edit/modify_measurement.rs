@@ -439,7 +439,8 @@ fn gather_measurement_data(structure_designer: &StructureDesigner) -> Result<Gat
         ));
     }
 
-    let eval_cache = if !atom_edit_data.output_diff {
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
+    let eval_cache = if !is_diff_view {
         let cache = structure_designer
             .get_selected_node_eval_cache()
             .ok_or_else(|| "No eval cache available".to_string())?;
@@ -457,7 +458,7 @@ fn gather_measurement_data(structure_designer: &StructureDesigner) -> Result<Gat
     // the order the user selected them, making MoveChoice predictable.
     let mut selected_atoms: Vec<SelectedAtomInfo> = Vec::with_capacity(total_selected);
 
-    if atom_edit_data.output_diff {
+    if is_diff_view {
         // Diff view: diff atom IDs ARE the output atom IDs.
         // Use selection_order for deterministic ordering.
         for &(prov, id) in &atom_edit_data.selection.selection_order {
@@ -519,7 +520,7 @@ fn gather_measurement_data(structure_designer: &StructureDesigner) -> Result<Gat
     // Collect provenance info for ALL atoms in the result structure
     // (we need this to map result IDs back to diff IDs for the mutation phase)
     let mut atom_provenance = Vec::new();
-    if atom_edit_data.output_diff {
+    if is_diff_view {
         // In diff view, all result IDs are diff IDs
         for (&atom_id, _atom) in result_structure.iter_atoms() {
             atom_provenance.push(AtomProvenanceEntry {

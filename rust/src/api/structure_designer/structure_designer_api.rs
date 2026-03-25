@@ -2365,11 +2365,24 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
 
                 // Compute measurement from selected atoms (2-4 atoms)
                 let measurement =
-                    compute_selection_measurement(atom_edit_data, atomic_structure, eval_cache);
+                    compute_selection_measurement(
+                        atom_edit_data,
+                        atomic_structure,
+                        eval_cache,
+                        cad_instance
+                            .structure_designer
+                            .is_selected_node_in_diff_view(),
+                    );
 
                 // Compute last-selected result atom ID for dialog defaults
                 let last_selected_result_atom_id =
-                    compute_last_selected_result_atom_id(atom_edit_data, eval_cache);
+                    compute_last_selected_result_atom_id(
+                        atom_edit_data,
+                        eval_cache,
+                        cad_instance
+                            .structure_designer
+                            .is_selected_node_in_diff_view(),
+                    );
 
                 let is_in_guided_placement = matches!(
                     &atom_edit_data.active_tool,
@@ -2398,7 +2411,9 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         .selection_transform
                         .as_ref()
                         .map(|transform| crate::api::api_common::to_api_transform(transform)),
-                    output_diff: atom_edit_data.output_diff,
+                    output_diff: cad_instance
+                        .structure_designer
+                        .is_selected_node_in_diff_view(),
                     show_anchor_arrows: atom_edit_data.show_anchor_arrows,
                     include_base_bonds_in_diff: atom_edit_data.include_base_bonds_in_diff,
                     error_on_stale_entries: atom_edit_data.error_on_stale_entries,
@@ -2437,6 +2452,7 @@ fn compute_selection_measurement(
     atom_edit_data: &AtomEditData,
     result_structure: Option<&crate::crystolecule::atomic_structure::AtomicStructure>,
     eval_cache: Option<&AtomEditEvalCache>,
+    is_diff_view: bool,
 ) -> Option<APIMeasurement> {
     use crate::structure_designer::nodes::atom_edit::measurement::{
         MeasurementResult, SelectedAtomInfo, compute_measurement,
@@ -2459,7 +2475,7 @@ fn compute_selection_measurement(
 
     let mut selected_atoms: Vec<SelectedAtomInfo> = Vec::with_capacity(total_selected);
 
-    if atom_edit_data.output_diff {
+    if is_diff_view {
         for &(prov, id) in &atom_edit_data.selection.selection_order {
             if prov == SelectionProvenance::Diff
                 && atom_edit_data.selection.selected_diff_atoms.contains(&id)
@@ -2607,13 +2623,14 @@ fn compute_selection_measurement(
 fn compute_last_selected_result_atom_id(
     atom_edit_data: &AtomEditData,
     eval_cache: Option<&AtomEditEvalCache>,
+    is_diff_view: bool,
 ) -> Option<u32> {
     use crate::structure_designer::nodes::atom_edit::atom_edit::SelectionProvenance;
 
     let last = atom_edit_data.selection.selection_order.last()?;
     let (prov, id) = *last;
 
-    if atom_edit_data.output_diff {
+    if is_diff_view {
         // In diff view, diff IDs are result IDs
         if prov == SelectionProvenance::Diff {
             Some(id)

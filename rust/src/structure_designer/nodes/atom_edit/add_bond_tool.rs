@@ -166,10 +166,7 @@ pub fn add_bond_pointer_down(
     ray_direction: &DVec3,
 ) -> bool {
     // Phase 1: Hit test (immutable borrows)
-    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data.output_diff,
-        None => return false,
-    };
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
 
     let hit = hit_test_atom_only(structure_designer, ray_origin, ray_direction);
 
@@ -351,7 +348,7 @@ pub fn add_bond_pointer_up(
             AtomEditTool::AddBond(s) => s,
             _ => return false,
         };
-        let is_diff = data.output_diff;
+        let is_diff = structure_designer.is_selected_node_in_diff_view();
         match &state.interaction_state {
             AddBondInteractionState::Dragging { source_atom_id, .. } => {
                 (*source_atom_id, state.bond_order, is_diff)

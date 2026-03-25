@@ -24,10 +24,7 @@ use glam::f64::DVec3;
 /// - Bond delete markers: removed from diff (restores base bond).
 /// - Normal bonds: removed from diff.
 pub fn delete_selected_atoms_and_bonds(structure_designer: &mut StructureDesigner) {
-    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data.output_diff,
-        None => return,
-    };
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
 
     if is_diff_view {
         delete_selected_in_diff_view(structure_designer);
@@ -177,6 +174,7 @@ fn delete_selected_in_diff_view(structure_designer: &mut StructureDesigner) {
 ///   that entry is reused and promoted.
 pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic_number: i16) {
     // Phase 1: Gather base atom info (immutable borrows)
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
     let base_atoms_to_replace: Vec<BaseAtomPromotionInfo> = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
@@ -184,7 +182,7 @@ pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic
         };
 
         // In diff view, there are no base atoms in the selection — skip provenance
-        if atom_edit_data.output_diff {
+        if is_diff_view {
             Vec::new()
         } else {
             gather_base_atom_promotion_info(
@@ -215,6 +213,7 @@ pub fn replace_selected_atoms(structure_designer: &mut StructureDesigner, atomic
 /// Updates selection_transform algebraically (no re-evaluation needed).
 pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transform: &Transform) {
     // Phase 1: Gather info (immutable borrows)
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
     let (current_transform, base_atoms_info) = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
@@ -227,7 +226,7 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
         };
 
         // In diff view, there are no base atoms in the selection — skip provenance
-        let base_info: Vec<BaseAtomPromotionInfo> = if atom_edit_data.output_diff {
+        let base_info: Vec<BaseAtomPromotionInfo> = if is_diff_view {
             Vec::new()
         } else {
             // Filter out frozen base atoms so they are not moved by the transform.
@@ -326,6 +325,7 @@ pub fn drag_selected_by_delta(
 ) -> DragFrozenStatus {
     // Phase 1: Gather info about base atoms that need to be added to the diff,
     // and determine which atoms are frozen.
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
     let (base_atoms_info, frozen_base_count): (Vec<BaseAtomPromotionInfo>, usize) = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
             Some(data) => data,
@@ -335,7 +335,7 @@ pub fn drag_selected_by_delta(
         let total_base = atom_edit_data.selection.selected_base_atoms.len();
 
         // In diff view, there are no base atoms to convert
-        if atom_edit_data.output_diff {
+        if is_diff_view {
             (Vec::new(), 0)
         } else {
             // Filter out frozen base atoms
@@ -450,10 +450,7 @@ pub fn change_bond_order(
         return;
     }
 
-    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data.output_diff,
-        None => return,
-    };
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
 
     if is_diff_view {
         change_bond_order_diff_view(structure_designer, bond_reference, new_order);
@@ -584,10 +581,7 @@ pub fn change_selected_bonds_order(structure_designer: &mut StructureDesigner, n
         return;
     }
 
-    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data.output_diff,
-        None => return,
-    };
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
 
     if is_diff_view {
         change_selected_bonds_order_diff_view(structure_designer, new_order);

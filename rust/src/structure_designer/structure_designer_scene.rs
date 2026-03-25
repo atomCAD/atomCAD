@@ -88,11 +88,17 @@ impl NodeSceneData {
     }
 
     /// Get the output for the interactive pin.
-    pub fn interactive_output(&self) -> Option<&DisplayedPinOutput> {
+    /// For pin 0, returns the main `output` field (not the pin_outputs marker).
+    pub fn interactive_output(&self) -> Option<&NodeOutput> {
         let interactive_idx = self.interactive_pin_index()?;
-        self.pin_outputs
-            .iter()
-            .find(|p| p.pin_index == interactive_idx)
+        if interactive_idx == 0 {
+            Some(&self.output)
+        } else {
+            self.pin_outputs
+                .iter()
+                .find(|p| p.pin_index == interactive_idx)
+                .map(|p| &p.output)
+        }
     }
 }
 

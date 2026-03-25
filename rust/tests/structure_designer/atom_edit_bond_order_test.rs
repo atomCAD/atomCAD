@@ -23,21 +23,21 @@ fn setup_atom_edit_diff_view() -> StructureDesigner {
     let node_id = designer.add_node("atom_edit", DVec2::ZERO);
     designer.select_node(node_id);
 
-    // Set output_diff = true for diff view
+    // Switch to diff view by displaying pin 1 instead of pin 0
     {
         let network = designer
             .node_type_registry
             .node_networks
             .get_mut("test")
             .unwrap();
-        let data = network
-            .get_node_network_data_mut(node_id)
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut::<AtomEditData>()
-            .unwrap();
-        data.output_diff = true;
+        network.set_pin_displayed(node_id, 1, true);
+        network.set_pin_displayed(node_id, 0, false);
     }
+
+    // Refresh so scene data reflects the displayed pin state
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
 
     designer
 }

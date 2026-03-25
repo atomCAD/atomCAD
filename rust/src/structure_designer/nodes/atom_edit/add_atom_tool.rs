@@ -125,10 +125,7 @@ pub fn start_guided_placement(
     bond_length_mode: BondLengthMode,
 ) -> GuidedPlacementStartResult {
     // Phase 1: Hit test, resolve provenance, and compute guided placement (immutable)
-    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data.output_diff,
-        None => return GuidedPlacementStartResult::NoAtomHit,
-    };
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
 
     // Gather: atom source, hit atom info (atomic_number, position), guided placement result,
     // and merge targets for each guide dot (FixedDots mode only).
@@ -368,10 +365,7 @@ pub fn place_guided_atom(
     ray_dir: &DVec3,
 ) -> bool {
     // Phase 1: Extract state, determine placement position, and detect merge target
-    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data.output_diff,
-        None => return false,
-    };
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
 
     let placement_info = {
         let atom_edit_data = match get_active_atom_edit_data(structure_designer) {

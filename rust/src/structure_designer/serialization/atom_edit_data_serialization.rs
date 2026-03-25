@@ -153,7 +153,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
             bonds,
             anchor_positions,
         },
-        output_diff: data.output_diff,
+        output_diff: false, // Deprecated: display state now tracked via displayed_pins
         show_anchor_arrows: data.show_anchor_arrows,
         include_base_bonds_in_diff: data.include_base_bonds_in_diff,
         tolerance: data.tolerance,

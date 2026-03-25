@@ -7,6 +7,7 @@ use super::super::node_network::{Argument, Node, NodeNetwork};
 use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
 use super::super::node_type_registry::NodeTypeRegistry;
+use super::super::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::data_type::DataType;
 use crate::util::serialization_utils::{dvec2_serializer, dvec3_serializer};
 use glam::f64::{DVec2, DVec3};
@@ -452,6 +453,37 @@ pub fn serializable_to_node_network(
     for serializable_node in &serializable.nodes {
         let node = serializable_to_node(serializable_node, built_in_node_types, design_dir)?;
         network.nodes.insert(node.id, node);
+    }
+
+    // Migration: atom_edit output_diff → displayed_pins
+    // For old files where output_diff: true was used to switch to diff view,
+    // migrate to displayed_pins: {1} (show diff pin only) if the node wasn't
+    // already in displayed_output_pins (which would mean a newer file format).
+    {
+        let nodes_with_explicit_pins: std::collections::HashSet<u64> = serializable
+            .displayed_output_pins
+            .iter()
+            .map(|(id, _)| *id)
+            .collect();
+
+        let mut nodes_to_migrate: Vec<u64> = Vec::new();
+        for (&node_id, node) in &network.nodes {
+            if node.node_type_name == "atom_edit"
+                && !nodes_with_explicit_pins.contains(&node_id)
+                && network.displayed_nodes.contains_key(&node_id)
+            {
+                if let Some(data) = node.data.as_ref().as_any_ref().downcast_ref::<AtomEditData>() {
+                    if data.output_diff {
+                        nodes_to_migrate.push(node_id);
+                    }
+                }
+            }
+        }
+        for node_id in nodes_to_migrate {
+            if let Some(state) = network.displayed_nodes.get_mut(&node_id) {
+                state.displayed_pins = std::collections::HashSet::from([1]);
+            }
+        }
     }
 
     // Migration: assign names to nodes without custom_name (old files)

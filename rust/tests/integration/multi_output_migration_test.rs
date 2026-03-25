@@ -333,15 +333,12 @@ fn test_load_old_atom_edit_output_diff_true() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3 migration tests (ignored until Phase 3 implements the migration).
-// After Phase 3, output_diff is migrated to displayed_pins in NodeDisplayState.
+// Phase 3 migration tests: output_diff is migrated to displayed_pins in NodeDisplayState.
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "Phase 3: output_diff migration to displayed_pins not yet implemented"]
 fn test_migrate_atom_edit_output_diff_true_to_displayed_pins() {
-    // After Phase 3, loading this file should migrate output_diff: true
-    // to displayed_pins: {1} in the atom_edit node's NodeDisplayState.
+    // Loading old file with output_diff: true should migrate to displayed_pins: {1}
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
@@ -357,18 +354,17 @@ fn test_migrate_atom_edit_output_diff_true_to_displayed_pins() {
         .map(|(id, _)| *id)
         .unwrap();
 
-    // TODO Phase 3: After migration, check displayed_pins
-    // let display_state = network.displayed_nodes.get(&atom_edit_id).unwrap();
-    // assert_eq!(display_state.displayed_pins, HashSet::from([1]));
-    let _ = atom_edit_id;
-    panic!("Phase 3 migration not yet implemented");
+    let display_state = network.displayed_nodes.get(&atom_edit_id).unwrap();
+    assert_eq!(
+        display_state.displayed_pins,
+        std::collections::HashSet::from([1]),
+        "output_diff: true should migrate to displayed_pins: {{1}}"
+    );
 }
 
 #[test]
-#[ignore = "Phase 3: output_diff migration to displayed_pins not yet implemented"]
 fn test_migrate_atom_edit_output_diff_false_to_displayed_pins() {
-    // After Phase 3, loading this file should result in displayed_pins: {0}
-    // (default) for the atom_edit node's NodeDisplayState.
+    // Loading old file with output_diff: false should keep default displayed_pins: {0}
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
@@ -384,9 +380,10 @@ fn test_migrate_atom_edit_output_diff_false_to_displayed_pins() {
         .map(|(id, _)| *id)
         .unwrap();
 
-    // TODO Phase 3: After migration, check displayed_pins
-    // let display_state = network.displayed_nodes.get(&atom_edit_id).unwrap();
-    // assert_eq!(display_state.displayed_pins, HashSet::from([0]));
-    let _ = atom_edit_id;
-    panic!("Phase 3 migration not yet implemented");
+    let display_state = network.displayed_nodes.get(&atom_edit_id).unwrap();
+    assert_eq!(
+        display_state.displayed_pins,
+        std::collections::HashSet::from([0]),
+        "output_diff: false should keep default displayed_pins: {{0}}"
+    );
 }

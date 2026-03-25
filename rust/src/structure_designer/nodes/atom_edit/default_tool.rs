@@ -140,7 +140,7 @@ pub fn default_tool_pointer_down(
             }
         };
 
-        let is_diff = atom_edit_data.output_diff;
+        let is_diff = structure_designer.is_selected_node_in_diff_view();
 
         let visualization = &structure_designer
             .preferences

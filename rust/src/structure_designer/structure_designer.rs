@@ -130,22 +130,43 @@ impl StructureDesigner {
 }
 
 impl StructureDesigner {
-    // Returns the first atomic structure generated from a selected node, if any
+    /// Returns the atomic structure from the interactive pin of the selected node, if any.
+    /// The interactive pin is the lowest-indexed displayed output pin.
     pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
         use crate::structure_designer::structure_designer_scene::NodeOutput;
-        // Find the first atomic structure with from_selected_node = true
         for node_data in self
             .last_generated_structure_designer_scene
             .node_data
             .values()
         {
-            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-                if atomic_structure.decorator().from_selected_node {
-                    return Some(atomic_structure);
+            if let Some(interactive_output) = node_data.interactive_output() {
+                if let NodeOutput::Atomic(atomic_structure) = interactive_output {
+                    if atomic_structure.decorator().from_selected_node {
+                        return Some(atomic_structure);
+                    }
                 }
             }
         }
         None
+    }
+
+    /// Returns the interactive pin index for the selected node.
+    /// The interactive pin is the lowest-indexed displayed output pin.
+    /// For atom_edit: pin 0 = result view, pin 1 = diff view.
+    pub fn get_selected_node_interactive_pin(&self) -> Option<i32> {
+        let network_name = self.active_node_network_name.as_ref()?;
+        let network = self.node_type_registry.node_networks.get(network_name)?;
+        let active_node_id = network.active_node_id?;
+        self.last_generated_structure_designer_scene
+            .node_data
+            .get(&active_node_id)
+            .and_then(|data| data.interactive_pin_index())
+    }
+
+    /// Returns true if the selected atom_edit node's interactive pin is the diff pin (pin 1).
+    /// This replaces the old `output_diff` flag for determining hit test ID space.
+    pub fn is_selected_node_in_diff_view(&self) -> bool {
+        self.get_selected_node_interactive_pin() == Some(1)
     }
 
     /// Gets the eval cache for the currently active node (used for gadget creation)

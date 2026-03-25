@@ -50,11 +50,8 @@ pub fn select_atom_or_bond_by_ray(
         )
     };
 
-    // In diff view, atom IDs from the hit test are diff-native IDs — no provenance needed
-    let is_diff_view = match get_active_atom_edit_data(structure_designer) {
-        Some(data) => data.output_diff,
-        None => false,
-    };
+    // In diff view (interactive pin = 1), atom IDs from the hit test are diff-native
+    let is_diff_view = structure_designer.is_selected_node_in_diff_view();
 
     match hit_result {
         HitTestResult::Atom(atom_id, _distance) => {
@@ -404,11 +401,7 @@ pub(super) fn select_atoms_in_screen_rect(
             Some(s) => s,
             None => return false,
         };
-        let atom_edit_data = match get_active_atom_edit_data(structure_designer) {
-            Some(data) => data,
-            None => return false,
-        };
-        let is_diff = atom_edit_data.output_diff;
+        let is_diff = structure_designer.is_selected_node_in_diff_view();
 
         // Collect result atom IDs whose projections are inside the rectangle
         let mut inside_atom_ids: Vec<u32> = Vec::new();

@@ -1015,7 +1015,9 @@ impl NodeData for AtomEditData {
 
         // Gather base atom info (needs eval cache for provenance → result positions).
         let mut base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>)> = Vec::new();
-        if !self.selection.selected_base_atoms.is_empty() && !self.output_diff {
+        if !self.selection.selected_base_atoms.is_empty()
+            && !structure_designer.is_selected_node_in_diff_view()
+        {
             if let Some(eval_cache) = structure_designer.get_selected_node_eval_cache() {
                 if let Some(cache) = eval_cache.downcast_ref::<AtomEditEvalCache>() {
                     if let Some(result) =
@@ -1101,186 +1103,184 @@ impl NodeData for AtomEditData {
             structure
         };
 
-        {
-            if self.output_diff {
-                // Output the diff itself for visualization/debugging
-                let mut diff_clone = self.diff.clone();
-                if self.include_base_bonds_in_diff {
-                    enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, self.tolerance);
+        // Apply the diff to the input
+        let diff_result = apply_diff(&input_structure, &self.diff, self.tolerance);
+
+        // Error on stale entries: if enabled and any diagnostics are non-zero, return error
+        if self.error_on_stale_entries {
+            let s = &diff_result.stats;
+            if s.orphaned_tracked_atoms > 0
+                || s.unmatched_delete_markers > 0
+                || s.orphaned_bonds > 0
+            {
+                let mut parts = Vec::new();
+                if s.orphaned_tracked_atoms > 0 {
+                    parts.push(format!(
+                        "{} orphaned tracked atom(s)",
+                        s.orphaned_tracked_atoms
+                    ));
                 }
-                diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows;
-                if decorate {
-                    diff_clone.decorator_mut().from_selected_node = true;
+                if s.unmatched_delete_markers > 0 {
+                    parts.push(format!(
+                        "{} unmatched delete marker(s)",
+                        s.unmatched_delete_markers
+                    ));
+                }
+                if s.orphaned_bonds > 0 {
+                    parts.push(format!("{} orphaned bond(s)", s.orphaned_bonds));
+                }
+                let error_msg = format!("Stale entries: {}", parts.join(", "));
+                // Store eval cache before returning error so the panel can still show diagnostics
+                if network_stack.len() == 1 {
+                    let eval_cache = AtomEditEvalCache {
+                        provenance: diff_result.provenance,
+                        stats: diff_result.stats,
+                    };
+                    context.selected_node_eval_cache = Some(Box::new(eval_cache));
+                }
+                return EvalOutput::single(NetworkResult::Error(error_msg));
+            }
+        }
 
-                    // Apply diff atom selection directly (no provenance needed —
-                    // diff atom IDs ARE the output atom IDs in diff view)
-                    for &diff_id in &self.selection.selected_diff_atoms {
-                        diff_clone.set_atom_selected(diff_id, true);
+        let mut result = diff_result.result;
+
+        // Apply frozen flags to result atoms via provenance
+        for &base_id in &self.frozen_base_atoms {
+            if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
+                result.set_atom_frozen(result_id, true);
+            }
+        }
+        for &diff_id in &self.frozen_diff_atoms {
+            if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+                result.set_atom_frozen(result_id, true);
+            }
+        }
+
+        // Apply hybridization overrides to result atoms via provenance
+        for (&base_id, &hyb) in &self.hybridization_override_base_atoms {
+            if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
+                result.set_atom_hybridization_override(result_id, hyb);
+            }
+        }
+        for (&diff_id, &hyb) in &self.hybridization_override_diff_atoms {
+            if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+                result.set_atom_hybridization_override(result_id, hyb);
+            }
+        }
+
+        // --- Pin 1 (diff): build diff output with inherent decorations ---
+        let mut diff_clone = self.diff.clone();
+        if self.include_base_bonds_in_diff {
+            enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, self.tolerance);
+        }
+        diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows;
+        if decorate {
+            diff_clone.decorator_mut().from_selected_node = true;
+
+            // Apply diff atom selection directly (no provenance needed —
+            // diff atom IDs ARE the output atom IDs in diff view)
+            for &diff_id in &self.selection.selected_diff_atoms {
+                diff_clone.set_atom_selected(diff_id, true);
+            }
+
+            // Apply bond selection
+            for bond_ref in &self.selection.selected_bonds {
+                diff_clone.decorator_mut().select_bond(bond_ref);
+            }
+
+            // Apply selection transform
+            if let Some(ref transform) = self.selection.selection_transform {
+                diff_clone.decorator_mut().selection_transform = Some(transform.clone());
+            }
+
+            // Mark measurement-dialog atom (in diff view, ID is used directly)
+            if let Some(mark_id) = self.measurement_marked_atom_id {
+                diff_clone.decorator_mut().set_atom_display_state(
+                    mark_id,
+                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                );
+            }
+
+            // Mark guided placement anchor and store guide visuals
+            self.apply_guided_placement_decoration(&mut diff_clone, None);
+        }
+
+        // --- Pin 0 (result): apply selection/tool decorations ---
+        if decorate {
+            result.decorator_mut().from_selected_node = true;
+
+            // Apply atom selection via provenance maps
+            for &base_id in &self.selection.selected_base_atoms {
+                if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
+                    result.set_atom_selected(result_id, true);
+                }
+                // Silently skip stale IDs
+            }
+
+            for &diff_id in &self.selection.selected_diff_atoms {
+                if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+                    result.set_atom_selected(result_id, true);
+                }
+                // Silently skip stale IDs
+            }
+
+            // Apply bond selection
+            for bond_ref in &self.selection.selected_bonds {
+                result.decorator_mut().select_bond(bond_ref);
+            }
+
+            // Apply selection transform
+            if let Some(ref transform) = self.selection.selection_transform {
+                result.decorator_mut().selection_transform = Some(transform.clone());
+            }
+
+            // Mark AddBond tool's source atom if in Pending or Dragging state
+            if let AtomEditTool::AddBond(state) = &self.active_tool {
+                let mark_diff_id = match &state.interaction_state {
+                    AddBondInteractionState::Pending { hit_atom_id, .. } => Some(*hit_atom_id),
+                    AddBondInteractionState::Dragging { source_atom_id, .. } => {
+                        Some(*source_atom_id)
                     }
-
-                    // Apply bond selection
-                    for bond_ref in &self.selection.selected_bonds {
-                        diff_clone.decorator_mut().select_bond(bond_ref);
-                    }
-
-                    // Apply selection transform
-                    if let Some(ref transform) = self.selection.selection_transform {
-                        diff_clone.decorator_mut().selection_transform = Some(transform.clone());
-                    }
-
-                    // Mark measurement-dialog atom (in diff view, ID is used directly)
-                    if let Some(mark_id) = self.measurement_marked_atom_id {
-                        diff_clone.decorator_mut().set_atom_display_state(
-                            mark_id,
+                    AddBondInteractionState::Idle => state.last_atom_id,
+                };
+                if let Some(diff_id) = mark_diff_id {
+                    // Map diff atom ID to result atom ID
+                    if let Some(&result_id) =
+                        diff_result.provenance.diff_to_result.get(&diff_id)
+                    {
+                        result.decorator_mut().set_atom_display_state(
+                            result_id,
                             crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
                         );
                     }
-
-                    // Mark guided placement anchor and store guide visuals
-                    self.apply_guided_placement_decoration(&mut diff_clone, None);
-                }
-                return EvalOutput::single(NetworkResult::Atomic(diff_clone));
-            }
-
-            // Apply the diff to the input
-            let diff_result = apply_diff(&input_structure, &self.diff, self.tolerance);
-
-            // Error on stale entries: if enabled and any diagnostics are non-zero, return error
-            if self.error_on_stale_entries {
-                let s = &diff_result.stats;
-                if s.orphaned_tracked_atoms > 0
-                    || s.unmatched_delete_markers > 0
-                    || s.orphaned_bonds > 0
-                {
-                    let mut parts = Vec::new();
-                    if s.orphaned_tracked_atoms > 0 {
-                        parts.push(format!(
-                            "{} orphaned tracked atom(s)",
-                            s.orphaned_tracked_atoms
-                        ));
-                    }
-                    if s.unmatched_delete_markers > 0 {
-                        parts.push(format!(
-                            "{} unmatched delete marker(s)",
-                            s.unmatched_delete_markers
-                        ));
-                    }
-                    if s.orphaned_bonds > 0 {
-                        parts.push(format!("{} orphaned bond(s)", s.orphaned_bonds));
-                    }
-                    let error_msg = format!("Stale entries: {}", parts.join(", "));
-                    // Store eval cache before returning error so the panel can still show diagnostics
-                    if network_stack.len() == 1 {
-                        let eval_cache = AtomEditEvalCache {
-                            provenance: diff_result.provenance,
-                            stats: diff_result.stats,
-                        };
-                        context.selected_node_eval_cache = Some(Box::new(eval_cache));
-                    }
-                    return EvalOutput::single(NetworkResult::Error(error_msg));
                 }
             }
 
-            let mut result = diff_result.result;
-
-            // Apply frozen flags to result atoms via provenance
-            for &base_id in &self.frozen_base_atoms {
-                if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
-                    result.set_atom_frozen(result_id, true);
-                }
-            }
-            for &diff_id in &self.frozen_diff_atoms {
-                if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
-                    result.set_atom_frozen(result_id, true);
-                }
+            // Mark measurement-dialog atom (result-space ID, applied directly)
+            if let Some(mark_id) = self.measurement_marked_atom_id {
+                result.decorator_mut().set_atom_display_state(
+                    mark_id,
+                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                );
             }
 
-            // Apply hybridization overrides to result atoms via provenance
-            for (&base_id, &hyb) in &self.hybridization_override_base_atoms {
-                if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
-                    result.set_atom_hybridization_override(result_id, hyb);
-                }
-            }
-            for (&diff_id, &hyb) in &self.hybridization_override_diff_atoms {
-                if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
-                    result.set_atom_hybridization_override(result_id, hyb);
-                }
-            }
-
-            // Apply selection to result (mark atoms as selected for rendering)
-            if decorate {
-                result.decorator_mut().from_selected_node = true;
-
-                // Apply atom selection via provenance maps
-                for &base_id in &self.selection.selected_base_atoms {
-                    if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
-                        result.set_atom_selected(result_id, true);
-                    }
-                    // Silently skip stale IDs
-                }
-
-                for &diff_id in &self.selection.selected_diff_atoms {
-                    if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
-                        result.set_atom_selected(result_id, true);
-                    }
-                    // Silently skip stale IDs
-                }
-
-                // Apply bond selection
-                for bond_ref in &self.selection.selected_bonds {
-                    result.decorator_mut().select_bond(bond_ref);
-                }
-
-                // Apply selection transform
-                if let Some(ref transform) = self.selection.selection_transform {
-                    result.decorator_mut().selection_transform = Some(transform.clone());
-                }
-
-                // Mark AddBond tool's source atom if in Pending or Dragging state
-                if let AtomEditTool::AddBond(state) = &self.active_tool {
-                    let mark_diff_id = match &state.interaction_state {
-                        AddBondInteractionState::Pending { hit_atom_id, .. } => Some(*hit_atom_id),
-                        AddBondInteractionState::Dragging { source_atom_id, .. } => {
-                            Some(*source_atom_id)
-                        }
-                        AddBondInteractionState::Idle => state.last_atom_id,
-                    };
-                    if let Some(diff_id) = mark_diff_id {
-                        // Map diff atom ID to result atom ID
-                        if let Some(&result_id) =
-                            diff_result.provenance.diff_to_result.get(&diff_id)
-                        {
-                            result.decorator_mut().set_atom_display_state(
-                                result_id,
-                                crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
-                            );
-                        }
-                    }
-                }
-
-                // Mark measurement-dialog atom (result-space ID, applied directly)
-                if let Some(mark_id) = self.measurement_marked_atom_id {
-                    result.decorator_mut().set_atom_display_state(
-                        mark_id,
-                        crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
-                    );
-                }
-
-                // Mark guided placement anchor and store guide visuals
-                self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
-            }
-
-            // Store provenance and stats in eval cache for root-level evaluations
-            if network_stack.len() == 1 {
-                let eval_cache = AtomEditEvalCache {
-                    provenance: diff_result.provenance,
-                    stats: diff_result.stats,
-                };
-                context.selected_node_eval_cache = Some(Box::new(eval_cache));
-            }
-
-            EvalOutput::single(NetworkResult::Atomic(result))
+            // Mark guided placement anchor and store guide visuals
+            self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
         }
+
+        // Store provenance and stats in eval cache for root-level evaluations
+        if network_stack.len() == 1 {
+            let eval_cache = AtomEditEvalCache {
+                provenance: diff_result.provenance,
+                stats: diff_result.stats,
+            };
+            context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+
+        EvalOutput::multi(vec![
+            NetworkResult::Atomic(result),
+            NetworkResult::Atomic(diff_clone),
+        ])
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -1443,7 +1443,16 @@ pub fn get_node_type() -> NodeType {
             name: "molecule".to_string(),
             data_type: DataType::Atomic,
         }],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: vec![
+            OutputPinDefinition {
+                name: "result".to_string(),
+                data_type: DataType::Atomic,
+            },
+            OutputPinDefinition {
+                name: "diff".to_string(),
+                data_type: DataType::Atomic,
+            },
+        ],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new()),
         node_data_saver: |node_data, _design_dir| {

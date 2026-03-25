@@ -38,7 +38,7 @@ pub fn minimize_atom_edit(
             get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
 
         // Check if we're in diff view — minimization always operates on the full result
-        if atom_edit_data.output_diff {
+        if structure_designer.is_selected_node_in_diff_view() {
             return Err("Switch to result view before minimizing".to_string());
         }
 
@@ -275,7 +275,7 @@ fn continuous_minimize_impl(
         let atom_edit_data =
             get_active_atom_edit_data(structure_designer).ok_or("No active atom_edit node")?;
 
-        if atom_edit_data.output_diff {
+        if structure_designer.is_selected_node_in_diff_view() {
             return Ok(()); // No-op in diff view
         }
 

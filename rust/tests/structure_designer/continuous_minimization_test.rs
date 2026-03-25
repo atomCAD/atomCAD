@@ -485,13 +485,18 @@ fn selected_atoms_stay_at_cursor_position() {
 
 #[test]
 fn diff_view_is_noop() {
-    let (mut designer, _, _) = setup_ethane_atom_edit();
+    let (mut designer, _, atom_edit_id) = setup_ethane_atom_edit();
     enable_continuous_minimization(&mut designer);
 
-    // Switch to diff view
+    // Switch to diff view by displaying pin 1 instead of pin 0
     {
-        let data = get_selected_atom_edit_data_mut(&mut designer).unwrap();
-        data.output_diff = true;
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test")
+            .unwrap();
+        network.set_pin_displayed(atom_edit_id, 1, true);
+        network.set_pin_displayed(atom_edit_id, 0, false);
     }
     do_full_refresh(&mut designer);
 

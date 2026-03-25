@@ -28,15 +28,11 @@ impl UndoCommand for AtomEditToggleFlagCommand {
     }
 
     fn undo(&self, ctx: &mut UndoContext) {
-        if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
-            set_flag(data, self.flag, self.old_value);
-        }
+        apply_flag(ctx, &self.network_name, self.node_id, self.flag, self.old_value);
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
-            set_flag(data, self.flag, self.new_value);
-        }
+        apply_flag(ctx, &self.network_name, self.node_id, self.flag, self.new_value);
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {
@@ -54,12 +50,43 @@ fn get_atom_edit_data_mut<'a>(
     node.data.as_mut().as_any_mut().downcast_mut()
 }
 
-fn set_flag(data: &mut AtomEditData, flag: AtomEditFlag, value: bool) {
+fn apply_flag(
+    ctx: &mut UndoContext,
+    network_name: &str,
+    node_id: u64,
+    flag: AtomEditFlag,
+    value: bool,
+) {
     match flag {
-        AtomEditFlag::OutputDiff => data.output_diff = value,
-        AtomEditFlag::ShowAnchorArrows => data.show_anchor_arrows = value,
-        AtomEditFlag::IncludeBaseBondsInDiff => data.include_base_bonds_in_diff = value,
-        AtomEditFlag::ErrorOnStaleEntries => data.error_on_stale_entries = value,
-        AtomEditFlag::ContinuousMinimization => data.continuous_minimization = value,
+        AtomEditFlag::OutputDiff => {
+            // OutputDiff now controls which pin is displayed rather than a data flag.
+            // value=true means diff view (pin 1), value=false means result view (pin 0).
+            if let Some(network) = ctx.network_mut(network_name) {
+                if value {
+                    // Add pin 1 before removing pin 0 to avoid emptying displayed_pins
+                    network.set_pin_displayed(node_id, 1, true);
+                    network.set_pin_displayed(node_id, 0, false);
+                } else {
+                    // Add pin 0 before removing pin 1 to avoid emptying displayed_pins
+                    network.set_pin_displayed(node_id, 0, true);
+                    network.set_pin_displayed(node_id, 1, false);
+                }
+            }
+        }
+        _ => {
+            if let Some(data) = get_atom_edit_data_mut(ctx, network_name, node_id) {
+                match flag {
+                    AtomEditFlag::ShowAnchorArrows => data.show_anchor_arrows = value,
+                    AtomEditFlag::IncludeBaseBondsInDiff => {
+                        data.include_base_bonds_in_diff = value
+                    }
+                    AtomEditFlag::ErrorOnStaleEntries => data.error_on_stale_entries = value,
+                    AtomEditFlag::ContinuousMinimization => {
+                        data.continuous_minimization = value
+                    }
+                    AtomEditFlag::OutputDiff => unreachable!(),
+                }
+            }
+        }
     }
 }

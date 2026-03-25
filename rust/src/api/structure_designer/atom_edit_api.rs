@@ -320,12 +320,36 @@ pub fn atom_edit_toggle_output_diff() -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                toggle_atom_edit_flag(
-                    &mut cad_instance.structure_designer,
-                    AtomEditFlag::OutputDiff,
-                    "Toggle output diff",
-                    |d| &mut d.output_diff,
-                );
+                // Toggle between displaying pin 0 (result) and pin 1 (diff)
+                // by modifying the network's displayed_nodes directly.
+                let sd = &mut cad_instance.structure_designer;
+                let (network_name, node_id) = match atom_edit::get_atom_edit_node_info_pub(sd) {
+                    Some(info) => info,
+                    None => return false,
+                };
+                let currently_diff = sd.is_selected_node_in_diff_view();
+                if let Some(network) =
+                    sd.node_type_registry.node_networks.get_mut(&network_name)
+                {
+                    if currently_diff {
+                        // Switch to result view: add pin 0 before removing pin 1
+                        network.set_pin_displayed(node_id, 0, true);
+                        network.set_pin_displayed(node_id, 1, false);
+                    } else {
+                        // Switch to diff view: add pin 1 before removing pin 0
+                        network.set_pin_displayed(node_id, 1, true);
+                        network.set_pin_displayed(node_id, 0, false);
+                    }
+                }
+                // Push undo command
+                sd.push_command(AtomEditToggleFlagCommand {
+                    description: "Toggle output diff".to_string(),
+                    network_name,
+                    node_id,
+                    flag: AtomEditFlag::OutputDiff,
+                    old_value: currently_diff,
+                    new_value: !currently_diff,
+                });
                 refresh_structure_designer_auto(cad_instance);
                 true
             },
@@ -1385,7 +1409,7 @@ pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
                 let mut common: Option<u8> = None;
 
                 // In diff view, selected atom IDs are already result-space IDs.
-                if data.output_diff {
+                if cad_instance.structure_designer.is_selected_node_in_diff_view() {
                     for &diff_id in &data.selection.selected_diff_atoms {
                         let val = hyb_to_u8(detect_hybridization(result_structure, diff_id, None));
                         match common {

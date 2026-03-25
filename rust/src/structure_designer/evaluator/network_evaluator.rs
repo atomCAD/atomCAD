@@ -209,7 +209,13 @@ impl NetworkEvaluator {
         let mut pin_outputs = Vec::new();
         for &pin_index in &displayed_pins {
             if pin_index == 0 {
-                // Pin 0 is already computed above — skip redundant conversion
+                // Pin 0 is already computed above in `output` — skip redundant conversion.
+                // It's tracked in pin_outputs as a marker so interactive_pin_index works.
+                pin_outputs.push(DisplayedPinOutput {
+                    pin_index: 0,
+                    output: NodeOutput::None, // Actual output is in NodeSceneData.output
+                    geo_tree: None,
+                });
                 continue;
             }
             let pin_result = eval_output.get(pin_index);
