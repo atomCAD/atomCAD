@@ -362,6 +362,19 @@ impl AtomEditData {
         added_ids
     }
 
+    // --- Promotion helpers ---
+
+    /// Migrate per-atom metadata from base to diff when a base atom is promoted.
+    /// Must be called at every promotion site alongside selection migration.
+    pub fn promote_base_atom_metadata(&mut self, base_id: u32, diff_id: u32) {
+        if let Some(hyb) = self.hybridization_override_base_atoms.remove(&base_id) {
+            self.hybridization_override_diff_atoms.insert(diff_id, hyb);
+        }
+        if self.frozen_base_atoms.remove(&base_id) {
+            self.frozen_diff_atoms.insert(diff_id);
+        }
+    }
+
     // --- Direct diff mutation methods ---
 
     /// Add an atom to the diff at the given position.
@@ -920,6 +933,7 @@ impl AtomEditData {
                 SelectionProvenance::Diff,
                 diff_id,
             );
+            self.promote_base_atom_metadata(info.base_id, diff_id);
         }
 
         self.selection.clear_bonds();
@@ -973,6 +987,7 @@ impl AtomEditData {
                 SelectionProvenance::Diff,
                 diff_id,
             );
+            self.promote_base_atom_metadata(info.base_id, diff_id);
         }
 
         // Update selection transform algebraically (no need to re-eval)
@@ -1173,8 +1188,11 @@ impl NodeData for AtomEditData {
         if self.include_base_bonds_in_diff {
             enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, self.tolerance);
         }
-        // Apply hybridization overrides to diff atoms directly
+        // Apply per-atom metadata to diff atoms directly
         // (no provenance needed — diff atom IDs ARE the output atom IDs in diff view)
+        for &diff_id in &self.frozen_diff_atoms {
+            diff_clone.set_atom_frozen(diff_id, true);
+        }
         for (&diff_id, &hyb) in &self.hybridization_override_diff_atoms {
             diff_clone.set_atom_hybridization_override(diff_id, hyb);
         }

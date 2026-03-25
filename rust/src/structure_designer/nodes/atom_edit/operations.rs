@@ -404,6 +404,7 @@ pub fn drag_selected_by_delta(
             SelectionProvenance::Diff,
             diff_id,
         );
+        atom_edit_data.promote_base_atom_metadata(info.base_id, diff_id);
     }
 
     // Update selection transform to reflect the displacement (only if something moved)

@@ -3190,3 +3190,220 @@ fn hybridization_override_appears_on_pin1_diff_output() {
         "Pin 1 (diff) output atom should have sp2 hybridization override"
     );
 }
+
+/// Regression test: when a hybridization override is set on a base atom and then
+/// the atom is promoted (moved into diff), the override must migrate from
+/// `hybridization_override_base_atoms` to `hybridization_override_diff_atoms`.
+#[test]
+fn hybridization_override_migrated_on_base_atom_promotion() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    // Create a base structure with one carbon atom at origin
+    let mut base = AtomicStructure::new();
+    let base_atom_id = base.add_atom(6, DVec3::ZERO);
+
+    // Set up designer with atom_edit wired to the base structure
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("test")
+        .unwrap();
+    let value_data = Box::new(ValueData {
+        value: NetworkResult::Atomic(base),
+    });
+    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+    designer.select_node(atom_edit_id);
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
+    designer.undo_stack.clear();
+
+    // Set hybridization override on the base atom BEFORE moving it
+    {
+        let data = get_data_mut(&mut designer);
+        data.hybridization_override_base_atoms
+            .insert(base_atom_id, HYBRIDIZATION_SP2);
+    }
+
+    // Verify it's in the base map
+    assert!(get_data_mut(&mut designer)
+        .hybridization_override_base_atoms
+        .contains_key(&base_atom_id));
+
+    // Promote the base atom via apply_transform (simulates a user drag)
+    {
+        use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::BaseAtomPromotionInfo;
+        use rust_lib_flutter_cad::util::transform::Transform;
+
+        let data = get_data_mut(&mut designer);
+        let base_atoms = vec![BaseAtomPromotionInfo {
+            base_id: base_atom_id,
+            atomic_number: 6,
+            position: DVec3::ZERO,
+            existing_diff_id: None,
+        }];
+        let transform = Transform::new(DVec3::new(0.5, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
+        data.apply_transform(&transform, &base_atoms);
+    }
+
+    // After promotion: override should have migrated from base to diff
+    let data = get_data_mut(&mut designer);
+    assert!(
+        data.hybridization_override_base_atoms.is_empty(),
+        "Override should be removed from base map after promotion"
+    );
+    assert_eq!(
+        data.hybridization_override_diff_atoms.len(),
+        1,
+        "Override should be in diff map after promotion"
+    );
+
+    // The diff atom should have the sp2 override
+    let diff_hyb = data.hybridization_override_diff_atoms.values().next().unwrap();
+    assert_eq!(
+        *diff_hyb, HYBRIDIZATION_SP2,
+        "Migrated override should be sp2"
+    );
+
+    // Evaluate pin 1 (diff) — the promoted atom should carry the override
+    let diff_output = evaluate_atom_edit_pin(&designer, 1);
+    let mut found_override = false;
+    for &atom_id in diff_output.atom_ids() {
+        let atom = diff_output.get_atom(atom_id).unwrap();
+        if atom.hybridization_override() == HYBRIDIZATION_SP2 {
+            found_override = true;
+            break;
+        }
+    }
+    assert!(
+        found_override,
+        "Pin 1 (diff) output should show sp2 hybridization override after promotion"
+    );
+}
+
+/// Same as above but for frozen flag migration during promotion.
+#[test]
+fn frozen_flag_migrated_on_base_atom_promotion() {
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    let mut base = AtomicStructure::new();
+    let base_atom_id = base.add_atom(6, DVec3::ZERO);
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("test")
+        .unwrap();
+    let value_data = Box::new(ValueData {
+        value: NetworkResult::Atomic(base),
+    });
+    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+    designer.select_node(atom_edit_id);
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
+    designer.undo_stack.clear();
+
+    // Freeze the base atom BEFORE promoting
+    {
+        let data = get_data_mut(&mut designer);
+        data.frozen_base_atoms.insert(base_atom_id);
+    }
+    assert!(get_data_mut(&mut designer)
+        .frozen_base_atoms
+        .contains(&base_atom_id));
+
+    // Promote via apply_transform
+    {
+        use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::BaseAtomPromotionInfo;
+        use rust_lib_flutter_cad::util::transform::Transform;
+
+        let data = get_data_mut(&mut designer);
+        let base_atoms = vec![BaseAtomPromotionInfo {
+            base_id: base_atom_id,
+            atomic_number: 6,
+            position: DVec3::ZERO,
+            existing_diff_id: None,
+        }];
+        let transform = Transform::new(DVec3::new(0.5, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
+        data.apply_transform(&transform, &base_atoms);
+    }
+
+    let data = get_data_mut(&mut designer);
+    assert!(
+        data.frozen_base_atoms.is_empty(),
+        "Frozen flag should be removed from base set after promotion"
+    );
+    assert_eq!(
+        data.frozen_diff_atoms.len(),
+        1,
+        "Frozen flag should be in diff set after promotion"
+    );
+}
+
+/// Regression test: freezing a diff atom must appear on pin 1 (diff) output.
+#[test]
+fn frozen_diff_atom_appears_on_pin1_output() {
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::ZERO);
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("test")
+        .unwrap();
+    let value_data = Box::new(ValueData {
+        value: NetworkResult::Atomic(base),
+    });
+    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+    designer.select_node(atom_edit_id);
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
+    designer.undo_stack.clear();
+
+    // Add a diff atom and freeze it
+    let diff_id;
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::new(1.0, 0.0, 0.0));
+    });
+    diff_id = 1; // first atom added to diff gets id 1
+
+    get_data_mut(&mut designer).frozen_diff_atoms.insert(diff_id);
+
+    // Evaluate pin 1 — the frozen flag should be on the atom
+    let diff_output = evaluate_atom_edit_pin(&designer, 1);
+    let atom = diff_output.get_atom(diff_id).expect("diff atom should exist");
+    assert!(
+        atom.is_frozen(),
+        "Frozen diff atom should have frozen flag set in pin 1 output"
+    );
+}

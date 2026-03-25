@@ -180,6 +180,7 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
                     .selected_base_atoms
                     .remove(&base_id);
                 atom_edit_data.selection.selected_diff_atoms.insert(diff_id);
+                atom_edit_data.promote_base_atom_metadata(base_id, diff_id);
                 converted.push((diff_id, position));
             }
             self.base_converted.set(true);
