@@ -53,7 +53,10 @@ structure_designer/
 | `StructureDesigner` | `structure_designer.rs` | Top-level application state, orchestrates everything |
 | `NodeNetwork` | `node_network.rs` | DAG of nodes with connections, selection, display state |
 | `Node` | `node_network.rs` | Single node: type, position, arguments, data |
-| `NodeType` | `node_type.rs` | Node signature: parameters, output type, serialization fns |
+| `NodeType` | `node_type.rs` | Node signature: parameters, output pins, serialization fns |
+| `OutputPinDefinition` | `node_type.rs` | Output pin name + data type |
+| `EvalOutput` | `node_data.rs` | Multi-output eval result (Vec of NetworkResult) |
+| `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
 | `DataType` | `data_type.rs` | Pin type system (Bool, Float, Vec3, Geometry, Atomic, etc.) |
 | `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types |
@@ -79,9 +82,22 @@ User Action → StructureDesigner method
 
 Check `DataType::can_be_converted_to()` for the complete rules.
 
+## Multi-Output Pins
+
+Nodes can have multiple named output pins. Key types and conventions:
+
+- **`NodeType.output_pins: Vec<OutputPinDefinition>`** — replaces the old single `output_type` field. Use `output_type()` accessor for pin 0's type. Use `OutputPinDefinition::single(DataType::X)` for single-output nodes.
+- **`NodeData::eval()` returns `EvalOutput`** — use `EvalOutput::single(result)` for single-output nodes, `EvalOutput::multi(vec![...])` for multi-output.
+- **`NodeDisplayState`** — replaces `displayed_node_ids`. Bundles `display_type: NodeDisplayType` + `displayed_pins: HashSet<i32>`. The map is `displayed_nodes: HashMap<u64, NodeDisplayState>`.
+- **Display is per output pin**, not per node. Display policy operates at node level; pin-level display is always explicit/manual.
+- **Interactive pin** = lowest-indexed displayed output pin (for hit testing). See `NodeSceneData::interactive_pin_index()`.
+- **Pin indexing:** -1 = function pin, 0 = primary result, 1+ = additional outputs.
+
+Design doc: `doc/design_multi_output_pins.md`.
+
 ## Node Networks as Custom Types
 
-A `NodeNetwork` can itself become a node type usable in other networks. The `NodeTypeRegistry` manages both built-in node types and user-defined network-as-node types. Parameter nodes in a network become the custom type's input pins.
+A `NodeNetwork` can itself become a node type usable in other networks. The `NodeTypeRegistry` manages both built-in node types and user-defined network-as-node types. Parameter nodes in a network become the custom type's input pins. The return node's full `output_pins` are propagated to the custom node type (multi-output passthrough).
 
 ## Change Tracking & Refresh
 

@@ -96,6 +96,15 @@ When overlapping outputs are detected (within 0.1 Å), a disambiguation overlay 
 
 Design doc: `doc/design_click_to_activate_node.md`.
 
+## Multi-Output Pin UI
+
+- **Eye icon** is per output pin, not in the title bar. Each output pin row has its own eye toggle.
+- **Multi-output nodes** (e.g. atom_edit) show pin names ("result", "diff") next to each output pin. Single-output nodes do not show pin names.
+- **`NodeView.output_pins: Vec<OutputPinView>`** and **`displayed_pins: Vec<i32>`** from the Rust API.
+- **`toggleOutputPinDisplay(nodeId, pinIndex)`** model method toggles individual pin visibility.
+- **Wire rendering:** output pin y-offset is per-pin (same formula as input pins). `getNodeSize()` / `estimate_node_height()` use `max(inputs, outputs, minHeight)`.
+- **`OutputPinView { name, data_type, index }`** API type for each output pin.
+
 ## Undo/Redo Integration
 
 Keyboard shortcuts in `node_network/node_network.dart`:

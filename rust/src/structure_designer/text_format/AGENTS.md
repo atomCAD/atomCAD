@@ -34,6 +34,7 @@ output result
 - **Arrays:** `values: [1, 2, 3]`
 - **Vectors:** `pos: (1.0, 2.0, 3.0)`
 - **Strings:** `name: "hello"` or `name: '''multi-line'''`
+- **Multi-output pin refs:** `input: atom_edit.diff` (selects pin by name). Unqualified `input: atom_edit` defaults to pin 0. Serializer emits `.pinname` only for pin index > 0.
 
 ## NetworkEditor (network_editor.rs)
 

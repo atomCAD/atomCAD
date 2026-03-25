@@ -20,11 +20,19 @@ Core evaluation logic in `generate_scene()`:
 5. Builds `StructureDesignerScene` with visible + cached invisible node data
 
 Key methods:
-- `evaluate()` - Recursive node evaluation with caching
+- `evaluate(network_stack, node_id, output_pin_index, ...)` - Recursive node evaluation; returns `NetworkResult` for one pin
+- `evaluate_all_outputs(network_stack, node_id, ...)` - Returns full `EvalOutput` (all pins) from a single `eval()` call
 - `evaluate_arg()` / `evaluate_arg_required()` - Extract input pin values with type conversion
 - `generate_scene()` - Top-level entry point producing the full scene
 
 Handles both built-in nodes (call `NodeData::eval()`) and custom node types (recursive network evaluation via `FunctionEvaluator`).
+
+## Multi-Output Evaluation
+
+- `NodeData::eval()` returns `EvalOutput` (wraps `Vec<NetworkResult>`). Single-output nodes use `EvalOutput::single()`.
+- `evaluate()` calls `evaluate_all_outputs()` internally and extracts the requested pin.
+- `generate_scene()` uses `evaluate_all_outputs()` once per displayed node, avoiding redundant evaluation when multiple pins are displayed.
+- **Custom network nodes** pass through all outputs from the return node: `evaluate_all_outputs()` calls itself recursively on the return node, and `evaluate()` forwards the `output_pin_index` to the return node.
 
 ## NetworkResult
 

@@ -460,6 +460,16 @@ impl NodeTypeRegistry {
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
         let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
 
+        // Build a map of node_id -> output_pin_count for wire validation
+        let pin_counts: HashMap<u64, usize> = network
+            .nodes
+            .iter()
+            .filter_map(|(&nid, n)| {
+                self.get_node_type_for_node(n)
+                    .map(|nt| (nid, nt.output_pin_count()))
+            })
+            .collect();
+
         // Iterate through all nodes in the network
         for node in network.nodes.values_mut() {
             // Get the node type for this node
@@ -479,13 +489,23 @@ impl NodeTypeRegistry {
             // Remove obviously invalid wire entries to avoid loading dangerous state.
             // - Drop connections referencing non-existent source nodes
             // - Drop connections with unsupported output pin indices
-            //   (currently only -1=function pin and 0=regular output pin are valid)
+            //   (-1=function pin, 0..N-1=result output pins based on the source node's type)
             for argument in node.arguments.iter_mut() {
                 argument
                     .argument_output_pins
                     .retain(|source_node_id, output_pin_index| {
-                        node_ids.contains(source_node_id)
-                            && (*output_pin_index == -1 || *output_pin_index == 0)
+                        if !node_ids.contains(source_node_id) {
+                            return false;
+                        }
+                        if *output_pin_index == -1 {
+                            return true;
+                        }
+                        if let Some(&count) = pin_counts.get(source_node_id) {
+                            (*output_pin_index as usize) < count
+                        } else {
+                            // Unknown type — keep wire, let validator catch it
+                            true
+                        }
                     });
             }
         }

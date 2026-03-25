@@ -335,8 +335,8 @@ mod parser_tests {
 
         if let Statement::Assignment { properties, .. } = &stmts[0] {
             if let PropertyValue::Array(arr) = &properties[0].1 {
-                assert!(matches!(&arr[0], PropertyValue::NodeRef(s) if s == "sphere1"));
-                assert!(matches!(&arr[1], PropertyValue::NodeRef(s) if s == "box1"));
+                assert!(matches!(&arr[0], PropertyValue::NodeRef(s, None) if s == "sphere1"));
+                assert!(matches!(&arr[1], PropertyValue::NodeRef(s, None) if s == "box1"));
             } else {
                 panic!("Expected array");
             }
@@ -2760,5 +2760,501 @@ mod persistent_node_names_phase6_tests {
 
         // "int1" should no longer exist
         assert!(designer.find_node_id_by_name("int1").is_none());
+    }
+}
+
+// ============================================================================
+// Multi-Output Pin Text Format Tests (Phase 5)
+// ============================================================================
+
+mod multi_output_text_format_tests {
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+    use rust_lib_flutter_cad::structure_designer::text_format::{
+        Parser, PropertyValue, Statement, edit_network, serialize_network,
+    };
+
+    fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
+        let mut designer = StructureDesigner::new();
+        designer.add_node_network(network_name);
+        designer.set_active_node_network_name(Some(network_name.to_string()));
+        designer
+    }
+
+    fn edit_designer_network(
+        designer: &mut StructureDesigner,
+        network_name: &str,
+        code: &str,
+        replace: bool,
+    ) -> rust_lib_flutter_cad::structure_designer::text_format::EditResult {
+        let mut network = designer
+            .node_type_registry
+            .node_networks
+            .remove(network_name)
+            .unwrap();
+        let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert(network_name.to_string(), network);
+        result
+    }
+
+    // --- Parser Tests ---
+
+    #[test]
+    fn test_parse_qualified_pin_reference() {
+        // `some_node { input: atom_edit.diff }` correctly references pin "diff" of atom_edit
+        let stmts = Parser::parse("some_node = apply_diff { diff: atom_edit.diff }").unwrap();
+
+        if let Statement::Assignment { properties, .. } = &stmts[0] {
+            assert_eq!(properties[0].0, "diff");
+            match &properties[0].1 {
+                PropertyValue::NodeRef(name, Some(pin_name)) => {
+                    assert_eq!(name, "atom_edit");
+                    assert_eq!(pin_name, "diff");
+                }
+                other => panic!("Expected NodeRef with pin name, got {:?}", other),
+            }
+        } else {
+            panic!("Expected assignment");
+        }
+    }
+
+    #[test]
+    fn test_parse_unqualified_defaults_to_no_pin() {
+        // `some_node { input: atom_edit }` (unqualified) defaults to pin 0
+        let stmts = Parser::parse("some_node = apply_diff { diff: atom_edit }").unwrap();
+
+        if let Statement::Assignment { properties, .. } = &stmts[0] {
+            match &properties[0].1 {
+                PropertyValue::NodeRef(name, None) => {
+                    assert_eq!(name, "atom_edit");
+                }
+                other => panic!("Expected NodeRef without pin name, got {:?}", other),
+            }
+        } else {
+            panic!("Expected assignment");
+        }
+    }
+
+    #[test]
+    fn test_parse_explicit_result_pin() {
+        // `some_node { input: atom_edit.result }` explicitly references pin 0
+        let stmts =
+            Parser::parse("some_node = apply_diff { diff: atom_edit.result }").unwrap();
+
+        if let Statement::Assignment { properties, .. } = &stmts[0] {
+            match &properties[0].1 {
+                PropertyValue::NodeRef(name, Some(pin_name)) => {
+                    assert_eq!(name, "atom_edit");
+                    assert_eq!(pin_name, "result");
+                }
+                other => panic!("Expected NodeRef with pin name 'result', got {:?}", other),
+            }
+        } else {
+            panic!("Expected assignment");
+        }
+    }
+
+    #[test]
+    fn test_parse_qualified_pin_in_array() {
+        // Test pin references inside arrays
+        let stmts =
+            Parser::parse("u = union { shapes: [atom_edit.result, atom_edit.diff] }").unwrap();
+
+        if let Statement::Assignment { properties, .. } = &stmts[0] {
+            if let PropertyValue::Array(arr) = &properties[0].1 {
+                match &arr[0] {
+                    PropertyValue::NodeRef(name, Some(pin)) => {
+                        assert_eq!(name, "atom_edit");
+                        assert_eq!(pin, "result");
+                    }
+                    other => panic!("Expected NodeRef with pin, got {:?}", other),
+                }
+                match &arr[1] {
+                    PropertyValue::NodeRef(name, Some(pin)) => {
+                        assert_eq!(name, "atom_edit");
+                        assert_eq!(pin, "diff");
+                    }
+                    other => panic!("Expected NodeRef with pin, got {:?}", other),
+                }
+            } else {
+                panic!("Expected array");
+            }
+        } else {
+            panic!("Expected assignment");
+        }
+    }
+
+    // --- Network Editor Tests ---
+
+    #[test]
+    fn test_edit_qualified_pin_reference_wires_correctly() {
+        // atom_edit has two output pins: "result" (pin 0) and "diff" (pin 1)
+        // Wiring `atom_edit.diff` should set pin_index = 1
+        let mut designer = setup_designer_with_network("test_net");
+
+        let result = edit_designer_network(
+            &mut designer,
+            "test_net",
+            r#"
+                ae = atom_edit
+                ad = apply_diff { diff: ae.diff }
+            "#,
+            true,
+        );
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_net")
+            .unwrap();
+
+        // Find apply_diff node
+        let ad_id = network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ad"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ae_id = network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ae"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ad_node = network.nodes.get(&ad_id).unwrap();
+        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
+        assert_eq!(pin_index, Some(&1), "Should wire to pin 1 (diff)");
+    }
+
+    #[test]
+    fn test_edit_unqualified_wires_to_pin_0() {
+        let mut designer = setup_designer_with_network("test_net");
+
+        let result = edit_designer_network(
+            &mut designer,
+            "test_net",
+            r#"
+                ae = atom_edit
+                ad = apply_diff { diff: ae }
+            "#,
+            true,
+        );
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_net")
+            .unwrap();
+
+        let ad_id = network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ad"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ae_id = network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ae"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ad_node = network.nodes.get(&ad_id).unwrap();
+        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
+        assert_eq!(pin_index, Some(&0), "Should wire to pin 0 (default)");
+    }
+
+    #[test]
+    fn test_edit_explicit_result_wires_to_pin_0() {
+        let mut designer = setup_designer_with_network("test_net");
+
+        let result = edit_designer_network(
+            &mut designer,
+            "test_net",
+            r#"
+                ae = atom_edit
+                ad = apply_diff { diff: ae.result }
+            "#,
+            true,
+        );
+
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_net")
+            .unwrap();
+
+        let ad_id = network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ad"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ae_id = network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ae"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ad_node = network.nodes.get(&ad_id).unwrap();
+        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
+        assert_eq!(
+            pin_index,
+            Some(&0),
+            "Explicit .result should wire to pin 0"
+        );
+    }
+
+    #[test]
+    fn test_edit_nonexistent_pin_produces_warning() {
+        let mut designer = setup_designer_with_network("test_net");
+
+        let result = edit_designer_network(
+            &mut designer,
+            "test_net",
+            r#"
+                ae = atom_edit
+                ad = apply_diff { diff: ae.nonexistent }
+            "#,
+            true,
+        );
+
+        // The edit should still succeed overall (warnings, not errors)
+        // but there should be a warning about the nonexistent pin
+        assert!(
+            result.warnings.iter().any(|w| w.contains("nonexistent")),
+            "Should warn about nonexistent pin, warnings: {:?}",
+            result.warnings
+        );
+    }
+
+    // --- Serializer Tests ---
+
+    #[test]
+    fn test_serialize_wire_from_pin_1_uses_pinname() {
+        // Create a network where a wire connects from pin 1 of atom_edit
+        let mut designer = setup_designer_with_network("test_net");
+
+        // First create nodes via text edit
+        let result = edit_designer_network(
+            &mut designer,
+            "test_net",
+            r#"
+                ae = atom_edit
+                ad = apply_diff { diff: ae.diff }
+            "#,
+            true,
+        );
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        // Serialize
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_net")
+            .unwrap();
+        let text = serialize_network(network, &designer.node_type_registry, None);
+
+        // Should contain `.diff` qualifier
+        assert!(
+            text.contains("ae.diff"),
+            "Serialized text should contain 'ae.diff', got:\n{}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_serialize_wire_from_pin_0_no_qualifier() {
+        let mut designer = setup_designer_with_network("test_net");
+
+        let result = edit_designer_network(
+            &mut designer,
+            "test_net",
+            r#"
+                ae = atom_edit
+                ad = apply_diff { diff: ae }
+            "#,
+            true,
+        );
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_net")
+            .unwrap();
+        let text = serialize_network(network, &designer.node_type_registry, None);
+
+        // Should NOT contain `.result` or any pin qualifier for pin 0
+        assert!(
+            !text.contains("ae.result"),
+            "Pin 0 should not have qualifier, got:\n{}",
+            text
+        );
+        // But should still have the reference
+        assert!(
+            text.contains("diff: ae"),
+            "Should have plain reference, got:\n{}",
+            text
+        );
+    }
+
+    // --- Roundtrip Test ---
+
+    #[test]
+    fn test_roundtrip_multi_output_pin_reference() {
+        // Parse → serialize → parse produces identical network
+        let mut designer = setup_designer_with_network("test_net");
+
+        let code = r#"
+            ae = atom_edit
+            ad = apply_diff { diff: ae.diff }
+            output ad
+        "#;
+
+        let result = edit_designer_network(&mut designer, "test_net", code, true);
+        assert!(result.success, "First edit should succeed: {:?}", result.errors);
+
+        // Serialize
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_net")
+            .unwrap();
+        let serialized = serialize_network(network, &designer.node_type_registry, None);
+
+        // Parse back into a fresh network
+        let mut designer2 = setup_designer_with_network("test_net2");
+        let result2 = edit_designer_network(&mut designer2, "test_net2", &serialized, true);
+        assert!(
+            result2.success,
+            "Second edit should succeed: {:?}",
+            result2.errors
+        );
+
+        // Verify the wire connection is preserved
+        let network2 = designer2
+            .node_type_registry
+            .node_networks
+            .get("test_net2")
+            .unwrap();
+
+        let ad_id = network2
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ad"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ae_id = network2
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ae"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        let ad_node = network2.nodes.get(&ad_id).unwrap();
+        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
+        assert_eq!(
+            pin_index,
+            Some(&1),
+            "Roundtrip should preserve pin 1 (diff) wire"
+        );
+
+        // Serialize again and compare
+        let serialized2 = serialize_network(network2, &designer2.node_type_registry, None);
+        assert_eq!(
+            serialized, serialized2,
+            "Double roundtrip should produce identical text"
+        );
+    }
+
+    #[test]
+    fn test_roundtrip_mixed_pin_references() {
+        // Network with both pin 0 (unqualified) and pin 1 (qualified) references
+        let mut designer = setup_designer_with_network("test_net");
+
+        let code = r#"
+            ae = atom_edit
+            ad1 = apply_diff { diff: ae }
+            ad2 = apply_diff { diff: ae.diff }
+        "#;
+
+        let result = edit_designer_network(&mut designer, "test_net", code, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test_net")
+            .unwrap();
+        let serialized = serialize_network(network, &designer.node_type_registry, None);
+
+        // ad1 should reference `ae` (no qualifier)
+        // ad2 should reference `ae.diff`
+        assert!(
+            serialized.contains("ae.diff"),
+            "Should contain qualified reference, got:\n{}",
+            serialized
+        );
+
+        // Parse back and verify
+        let mut designer2 = setup_designer_with_network("test_net2");
+        let result2 = edit_designer_network(&mut designer2, "test_net2", &serialized, true);
+        assert!(
+            result2.success,
+            "Roundtrip edit should succeed: {:?}",
+            result2.errors
+        );
+
+        let network2 = designer2
+            .node_type_registry
+            .node_networks
+            .get("test_net2")
+            .unwrap();
+
+        let ae_id = network2
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ae"))
+            .map(|(&id, _)| id)
+            .unwrap();
+
+        // Check ad1 wired to pin 0
+        let ad1_id = network2
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ad1"))
+            .map(|(&id, _)| id)
+            .unwrap();
+        let ad1_pin = network2.nodes.get(&ad1_id).unwrap().arguments[1]
+            .argument_output_pins
+            .get(&ae_id);
+        assert_eq!(ad1_pin, Some(&0), "ad1 should wire to pin 0");
+
+        // Check ad2 wired to pin 1
+        let ad2_id = network2
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some("ad2"))
+            .map(|(&id, _)| id)
+            .unwrap();
+        let ad2_pin = network2.nodes.get(&ad2_id).unwrap().arguments[1]
+            .argument_output_pins
+            .get(&ae_id);
+        assert_eq!(ad2_pin, Some(&1), "ad2 should wire to pin 1 (diff)");
     }
 }

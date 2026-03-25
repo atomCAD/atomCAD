@@ -82,12 +82,21 @@ impl EditResult {
     }
 }
 
+/// A source reference extracted from a property value.
+#[derive(Debug, Clone)]
+struct SourceRef {
+    name: String,
+    is_function_ref: bool,
+    /// Output pin name for multi-output nodes (e.g., "diff" in `atom_edit.diff`)
+    pin_name: Option<String>,
+}
+
 /// Pending connection to be made after all nodes are created.
 #[derive(Debug, Clone)]
 struct PendingConnection {
     dest_node_name: String,
     param_name: String,
-    source_refs: Vec<(String, bool)>, // (source_name, is_function_ref)
+    source_refs: Vec<SourceRef>,
 }
 
 /// Edits a node network based on text format commands.
@@ -355,9 +364,9 @@ impl<'a> NetworkEditor<'a> {
         connections: &mut Vec<(u64, i32)>,
     ) {
         match prop_value {
-            PropertyValue::NodeRef(name) => {
+            PropertyValue::NodeRef(name, _pin_name) => {
                 if let Some(&node_id) = self.name_to_id.get(name) {
-                    connections.push((node_id, 0)); // Regular output pin
+                    connections.push((node_id, 0)); // Regular output pin (pin index doesn't matter for layout)
                 }
             }
             PropertyValue::FunctionRef(name) => {
@@ -405,7 +414,7 @@ impl<'a> NetworkEditor<'a> {
                     .collect();
                 converted.map(TextValue::Array)
             }
-            PropertyValue::NodeRef(_) | PropertyValue::FunctionRef(_) => None,
+            PropertyValue::NodeRef(..) | PropertyValue::FunctionRef(_) => None,
         }
     }
 
@@ -533,10 +542,18 @@ impl<'a> NetworkEditor<'a> {
 
     /// Extract source node references from a property value.
     #[allow(clippy::only_used_in_recursion)]
-    fn extract_source_refs(&self, prop_value: &PropertyValue) -> Vec<(String, bool)> {
+    fn extract_source_refs(&self, prop_value: &PropertyValue) -> Vec<SourceRef> {
         match prop_value {
-            PropertyValue::NodeRef(name) => vec![(name.clone(), false)],
-            PropertyValue::FunctionRef(name) => vec![(name.clone(), true)],
+            PropertyValue::NodeRef(name, pin_name) => vec![SourceRef {
+                name: name.clone(),
+                is_function_ref: false,
+                pin_name: pin_name.clone(),
+            }],
+            PropertyValue::FunctionRef(name) => vec![SourceRef {
+                name: name.clone(),
+                is_function_ref: true,
+                pin_name: None,
+            }],
             PropertyValue::Array(items) => items
                 .iter()
                 .flat_map(|item| self.extract_source_refs(item))
@@ -591,14 +608,21 @@ impl<'a> NetworkEditor<'a> {
         }
 
         // Wire each source
-        for (source_name, is_function_ref) in &conn.source_refs {
+        for source_ref in &conn.source_refs {
             let source_node_id = *self
                 .name_to_id
-                .get(source_name)
-                .ok_or_else(|| format!("Source node '{}' not found", source_name))?;
+                .get(&source_ref.name)
+                .ok_or_else(|| format!("Source node '{}' not found", source_ref.name))?;
 
-            // Determine output pin index (-1 for function pin, 0 for regular)
-            let output_pin_index = if *is_function_ref { -1 } else { 0 };
+            // Determine output pin index
+            let output_pin_index = if source_ref.is_function_ref {
+                -1
+            } else if let Some(ref pin_name) = source_ref.pin_name {
+                // Resolve pin name to pin index using the source node's type
+                self.resolve_output_pin_index(source_node_id, pin_name)?
+            } else {
+                0
+            };
 
             // Add the connection
             // We need to re-borrow dest_node since we released it above
@@ -608,14 +632,60 @@ impl<'a> NetworkEditor<'a> {
                     .insert(source_node_id, output_pin_index);
             }
 
-            let ref_type = if *is_function_ref { "@" } else { "" };
+            let ref_type = if source_ref.is_function_ref { "@" } else { "" };
+            let pin_suffix = source_ref
+                .pin_name
+                .as_ref()
+                .map(|p| format!(".{}", p))
+                .unwrap_or_default();
             self.result.connections_made.push(format!(
-                "{}.{} <- {}{}",
-                conn.dest_node_name, conn.param_name, ref_type, source_name
+                "{}.{} <- {}{}{}",
+                conn.dest_node_name, conn.param_name, ref_type, source_ref.name, pin_suffix
             ));
         }
 
         Ok(())
+    }
+
+    /// Resolve an output pin name to its index on a source node.
+    fn resolve_output_pin_index(
+        &self,
+        source_node_id: u64,
+        pin_name: &str,
+    ) -> Result<i32, String> {
+        let source_node = self
+            .network
+            .nodes
+            .get(&source_node_id)
+            .ok_or_else(|| "Source node not found".to_string())?;
+
+        let node_type = self
+            .registry
+            .get_node_type_for_node(source_node)
+            .ok_or_else(|| {
+                format!(
+                    "Node type '{}' not found for pin resolution",
+                    source_node.node_type_name
+                )
+            })?;
+
+        for (index, pin_def) in node_type.output_pins.iter().enumerate() {
+            if pin_def.name == pin_name {
+                return Ok(index as i32);
+            }
+        }
+
+        Err(format!(
+            "Output pin '{}' not found on node type '{}' (available pins: {})",
+            pin_name,
+            source_node.node_type_name,
+            node_type
+                .output_pins
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
     }
 
     /// Get the parameter index for a parameter name.

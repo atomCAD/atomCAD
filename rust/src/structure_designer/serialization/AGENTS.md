@@ -28,6 +28,13 @@ Key entry points:
 - Camera settings persisted per network (optional)
 - Version field enables forward-compatible migrations
 
+## Multi-Output Pin Serialization
+
+- **`SerializableNodeType.output_pins: Vec<SerializableOutputPin>`** — always written on save. Old `output_type: Option<String>` is read-only for migration (single type → `output_pins[0]`).
+- **`SerializableNodeNetwork.displayed_output_pins: Vec<(u64, Vec<i32>)>`** — per-node pin display state. Omitted if empty (backward compat). On load, merged with `displayed_node_ids` into the unified `displayed_nodes: HashMap<u64, NodeDisplayState>`. Default is `{0}` (pin 0 only).
+- **`displayed_node_ids`** is always written (backward compat with old readers). On save, split from `displayed_nodes`.
+- **atom_edit `output_diff` migration:** On load, `output_diff: true` → `displayed_pins: {1}`. No longer written on save.
+
 ## EditAtom Data
 
 `EditAtomData` has its own serialization for the command history:

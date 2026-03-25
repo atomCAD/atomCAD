@@ -39,6 +39,8 @@ pub trait NodeData: Send + Sync {
 
 ### NodeType Registration
 
+**IMPORTANT:** `output_type` field no longer exists on `NodeType`. Use `output_pins` with `OutputPinDefinition::single()` for single-output nodes.
+
 ```rust
 NodeType {
     name: "MyNode".to_string(),
@@ -48,7 +50,11 @@ NodeType {
     parameters: vec![
         Parameter::new("input_name", DataType::Float),
     ],
-    output_type: DataType::Geometry,
+    output_pins: OutputPinDefinition::single(DataType::Geometry),  // single output
+    // For multi-output: output_pins: vec![
+    //     OutputPinDefinition { name: "result".into(), data_type: DataType::Atomic },
+    //     OutputPinDefinition { name: "diff".into(), data_type: DataType::Atomic },
+    // ],
     public: true,
     node_data_creator: || Box::new(NoData),
     node_data_saver: no_data_saver,
@@ -56,12 +62,14 @@ NodeType {
 }
 ```
 
+Access pin 0's type via `node_type.output_type()` accessor.
+
 ### Evaluation Pattern
 
-Most nodes follow this pattern in `eval()`:
+`eval()` returns `EvalOutput`, not `NetworkResult` directly:
 1. Extract inputs: `evaluator.evaluate_arg(node, 0)?` or `evaluate_arg_required(node, 0)?`
 2. Convert types: `result.extract_float()`, `result.extract_geometry()`, etc.
-3. Compute output and return `Ok(NetworkResult::Geometry(...))`
+3. Return `EvalOutput::single(NetworkResult::Geometry(...))` for single-output, or `EvalOutput::multi(vec![...])` for multi-output
 
 ## edit_atom/ Subdirectory
 

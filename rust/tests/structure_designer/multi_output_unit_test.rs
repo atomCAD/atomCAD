@@ -1,12 +1,17 @@
-// Unit tests for multi-output pin data structures (Phase 1 + Phase 2).
+// Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6).
 
+use glam::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_network::{
     NodeDisplayState, NodeDisplayType, NodeNetwork,
 };
 use rust_lib_flutter_cad::structure_designer::node_type::OutputPinDefinition;
+use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use std::collections::HashSet;
 
 // ===== OutputPinDefinition tests =====
@@ -558,4 +563,288 @@ fn test_node_scene_data_interactive_pin_empty() {
     };
 
     assert_eq!(scene_data.interactive_pin_index(), None);
+}
+
+// ===== Phase 6: Custom Network Multi-Output tests =====
+
+fn setup_designer_with_network(name: &str) -> StructureDesigner {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network(name);
+    designer.set_active_node_network_name(Some(name.to_string()));
+    designer
+}
+
+/// Helper to evaluate a node in a network and return the NetworkResult for a specific pin.
+fn evaluate_pin(
+    designer: &StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+    pin_index: i32,
+) -> NetworkResult {
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(network_name).unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let network_stack = vec![NetworkStackElement {
+        node_network: network,
+        node_id: 0,
+    }];
+    evaluator.evaluate(&network_stack, node_id, pin_index, registry, false, &mut context)
+}
+
+/// Custom network with a multi-output return node propagates all output pins to the custom node type.
+#[test]
+fn test_custom_network_multi_output_return_node_propagates_pins() {
+    let mut designer = setup_designer_with_network("inner");
+
+    // Add an atom_edit node (which has 2 output pins: result + diff)
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.set_return_node_id(Some(atom_edit_id));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("inner")
+        .unwrap();
+
+    // The custom network type should now have 2 output pins matching atom_edit
+    assert_eq!(
+        network.node_type.output_pin_count(),
+        2,
+        "Custom network should have 2 output pins from atom_edit return node"
+    );
+    assert_eq!(network.node_type.output_pins[0].name, "result");
+    assert_eq!(*network.node_type.output_type(), DataType::Atomic);
+    assert_eq!(network.node_type.output_pins[1].name, "diff");
+    assert_eq!(network.node_type.output_pins[1].data_type, DataType::Atomic);
+    assert!(network.node_type.has_multi_output());
+}
+
+/// Custom network with single-output return node behaves as before (one output pin).
+#[test]
+fn test_custom_network_single_output_return_node() {
+    let mut designer = setup_designer_with_network("inner");
+
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("inner")
+        .unwrap();
+
+    assert_eq!(network.node_type.output_pin_count(), 1);
+    assert_eq!(network.node_type.output_pins[0].name, "result");
+    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
+    assert!(!network.node_type.has_multi_output());
+}
+
+/// Switching return node from multi-output to single-output updates output_pins.
+#[test]
+fn test_custom_network_return_node_change_multi_to_single() {
+    let mut designer = setup_designer_with_network("inner");
+
+    // Start with atom_edit (2 pins)
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    designer.set_return_node_id(Some(atom_edit_id));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("inner")
+        .unwrap();
+    assert_eq!(network.node_type.output_pin_count(), 2);
+
+    // Switch to sphere (1 pin)
+    designer.set_return_node_id(Some(sphere_id));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("inner")
+        .unwrap();
+    assert_eq!(network.node_type.output_pin_count(), 1);
+    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
+}
+
+/// Switching return node from single-output to multi-output updates output_pins.
+#[test]
+fn test_custom_network_return_node_change_single_to_multi() {
+    let mut designer = setup_designer_with_network("inner");
+
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
+
+    // Start with sphere (1 pin)
+    designer.set_return_node_id(Some(sphere_id));
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("inner")
+        .unwrap();
+    assert_eq!(network.node_type.output_pin_count(), 1);
+
+    // Switch to atom_edit (2 pins)
+    designer.set_return_node_id(Some(atom_edit_id));
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("inner")
+        .unwrap();
+    assert_eq!(network.node_type.output_pin_count(), 2);
+}
+
+/// No return node → single output pin with DataType::None.
+#[test]
+fn test_custom_network_no_return_node() {
+    let mut designer = setup_designer_with_network("inner");
+    designer.add_node("sphere", DVec2::ZERO);
+    // Don't set return node
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("inner")
+        .unwrap();
+    assert_eq!(network.node_type.output_pin_count(), 1);
+    assert_eq!(*network.node_type.output_type(), DataType::None);
+}
+
+/// Using a custom network as a node in another network: pin 0 evaluation works.
+#[test]
+fn test_custom_network_node_evaluate_pin0() {
+    let mut designer = setup_designer_with_network("inner");
+
+    // inner: sphere as return node
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+
+    // Create outer network and add a node of type "inner"
+    designer.add_node_network("outer");
+    designer.set_active_node_network_name(Some("outer".to_string()));
+    let inner_node_id = designer.add_node("inner", DVec2::ZERO);
+
+    // Evaluate pin 0 of the custom node
+    let result = evaluate_pin(&designer, "outer", inner_node_id, 0);
+    assert!(
+        !matches!(result, NetworkResult::Error(_)),
+        "Pin 0 evaluation should not error"
+    );
+}
+
+/// Using a custom network with multi-output return node: pin 1 evaluation passes through.
+#[test]
+fn test_custom_network_node_evaluate_pin1() {
+    let mut designer = setup_designer_with_network("inner");
+
+    // inner: atom_edit as return node (2 output pins)
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.set_return_node_id(Some(atom_edit_id));
+
+    // Create outer network and add a node of type "inner"
+    designer.add_node_network("outer");
+    designer.set_active_node_network_name(Some("outer".to_string()));
+    let inner_node_id = designer.add_node("inner", DVec2::ZERO);
+
+    // Evaluate pin 0 (result)
+    let result_pin0 = evaluate_pin(&designer, "outer", inner_node_id, 0);
+    assert!(
+        matches!(result_pin0, NetworkResult::Atomic(_)),
+        "Pin 0 should be Atomic"
+    );
+
+    // Evaluate pin 1 (diff) — should also be Atomic
+    let result_pin1 = evaluate_pin(&designer, "outer", inner_node_id, 1);
+    assert!(
+        matches!(result_pin1, NetworkResult::Atomic(_)),
+        "Pin 1 should be Atomic"
+    );
+}
+
+/// Wiring from pin 1 of a custom node to a downstream node works.
+#[test]
+fn test_custom_network_wire_from_pin1() {
+    let mut designer = setup_designer_with_network("inner");
+
+    // inner: atom_edit as return node
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.set_return_node_id(Some(atom_edit_id));
+
+    // outer: use inner node, wire pin 1 to apply_diff's base input
+    designer.add_node_network("outer");
+    designer.set_active_node_network_name(Some("outer".to_string()));
+    let inner_node_id = designer.add_node("inner", DVec2::ZERO);
+    let apply_diff_id = designer.add_node("apply_diff", DVec2::new(200.0, 0.0));
+
+    // Wire from pin 1 (diff output) of inner to input 0 (base) of apply_diff
+    designer.connect_nodes(inner_node_id, 1, apply_diff_id, 0);
+
+    // Validate the network — should be valid with the wire to pin 1
+    designer.validate_active_network();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("outer")
+        .unwrap();
+    assert!(network.valid, "Network should be valid with wire from pin 1");
+
+    // The wire should still exist
+    let apply_diff_node = network.nodes.get(&apply_diff_id).unwrap();
+    assert!(
+        !apply_diff_node.arguments[0].argument_output_pins.is_empty(),
+        "Wire from pin 1 should be preserved"
+    );
+    assert_eq!(
+        apply_diff_node.arguments[0].argument_output_pins[&inner_node_id],
+        1,
+        "Wire should reference pin index 1"
+    );
+}
+
+/// When return node changes from multi to single output, wires to removed pins are disconnected.
+#[test]
+fn test_custom_network_shrink_output_pins_disconnects_wires() {
+    let mut designer = setup_designer_with_network("inner");
+
+    // inner: atom_edit as return node (2 pins)
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.set_return_node_id(Some(atom_edit_id));
+
+    // outer: wire from pin 1 of inner to a downstream node
+    designer.add_node_network("outer");
+    designer.set_active_node_network_name(Some("outer".to_string()));
+    let inner_node_id = designer.add_node("inner", DVec2::ZERO);
+    let apply_diff_id = designer.add_node("apply_diff", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(inner_node_id, 1, apply_diff_id, 0);
+
+    // Verify the wire exists
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("outer")
+            .unwrap();
+        let node = network.nodes.get(&apply_diff_id).unwrap();
+        assert_eq!(node.arguments[0].argument_output_pins.len(), 1);
+    }
+
+    // Now change inner's return node to sphere (single output)
+    designer.set_active_node_network_name(Some("inner".to_string()));
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+
+    // The outer network should be re-validated and the wire to pin 1 should be removed
+    // because inner now only has pin 0
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("outer")
+        .unwrap();
+    let node = network.nodes.get(&apply_diff_id).unwrap();
+    assert!(
+        node.arguments[0].argument_output_pins.is_empty(),
+        "Wire to pin 1 should be disconnected after inner shrinks to single output"
+    );
 }

@@ -71,7 +71,8 @@ Consistent with most CAD applications. Simplifies the system significantly.
 
 ## Known Pitfalls
 
-- **Display state**: `add_node_with_id` always adds to `displayed_node_ids`. If the original node wasn't displayed (e.g., from `duplicate_node`), explicitly remove after re-add on redo.
+- **Display state**: `add_node_with_id` always adds to `displayed_nodes`. If the original node wasn't displayed (e.g., from `duplicate_node`), explicitly remove after re-add on redo. Undo commands store `Vec<(u64, NodeDisplayType)>` and wrap in `NodeDisplayState::with_type()`.
+- **Per-pin display**: `SetOutputPinDisplayCommand` stores full `Option<NodeDisplayState>` for old/new state (atomic undo). `displayed_output_pins` is included in `SerializableNodeNetwork` snapshots automatically.
 - **next_node_id / next_param_id**: Must be saved/restored on undo. JSON snapshot comparison includes these fields.
-- **HashMap ordering**: `displayed_node_ids` and `nodes` are HashMaps; test snapshot comparisons use `normalize_json()` to sort arrays.
+- **HashMap ordering**: `displayed_nodes` and `nodes` are HashMaps; test snapshot comparisons use `normalize_json()` to sort `displayed_node_ids`, `displayed_output_pins`, and `nodes` arrays.
 - **validate_active_network**: Must be called after Full refresh undo/redo to update derived state like `output_type`.

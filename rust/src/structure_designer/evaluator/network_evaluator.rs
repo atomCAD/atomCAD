@@ -643,7 +643,7 @@ impl NetworkEvaluator {
             node.data
                 .eval(self, network_stack, node_id, registry, decorate, context)
         } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
-            // custom node — evaluate return node, get all outputs
+            // custom node — evaluate return node, pass through all outputs
             if !child_network.valid {
                 return EvalOutput::single(NetworkResult::Error(format!(
                     "{} is invalid",
@@ -661,21 +661,26 @@ impl NetworkEvaluator {
                     node.node_type_name
                 )));
             }
-            // For now, custom networks still return pin 0 only
-            let result = self.evaluate(
+            let eval_output = self.evaluate_all_outputs(
                 &child_network_stack,
                 child_network.return_node_id.unwrap(),
-                0,
                 registry,
                 false,
                 context,
             );
-            let result = if let NetworkResult::Error(_) = &result {
-                NetworkResult::Error(format!("Error in {}", node.node_type_name))
-            } else {
-                result
-            };
-            EvalOutput::single(result)
+            // Wrap errors with the custom network name for better diagnostics
+            let results: Vec<NetworkResult> = eval_output
+                .results
+                .into_iter()
+                .map(|r| {
+                    if let NetworkResult::Error(_) = &r {
+                        NetworkResult::Error(format!("Error in {}", node.node_type_name))
+                    } else {
+                        r
+                    }
+                })
+                .collect();
+            EvalOutput::multi(results)
         } else {
             EvalOutput::single(NetworkResult::Error(format!(
                 "Unknown node type: {}",
@@ -744,8 +749,7 @@ impl NetworkEvaluator {
                     .eval(self, network_stack, node_id, registry, decorate, context)
                     .get(output_pin_index)
             } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
-                // custom node{
-                // Do not evaluate invalid child networks
+                // custom node — pass through the requested output pin index to the return node
                 if !child_network.valid {
                     return NetworkResult::Error(format!("{} is invalid", node.node_type_name));
                 }
@@ -763,7 +767,7 @@ impl NetworkEvaluator {
                 let result = self.evaluate(
                     &child_network_stack,
                     child_network.return_node_id.unwrap(),
-                    0,
+                    output_pin_index,
                     registry,
                     false,
                     context,

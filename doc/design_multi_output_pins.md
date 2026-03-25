@@ -959,7 +959,7 @@ Fixture files in `rust/tests/fixtures/multi_output_migration/`:
 - Make atom edits while both pins are displayed. Undo/redo — verify both pin outputs update correctly.
 - Test undo across the `output_diff` migration boundary: open an old file with `output_diff: true`, make changes, undo past the migration point.
 
-#### Phase 5: Text Format
+#### Phase 5: Text Format (DONE)
 
 - Add `.pinname` output pin reference syntax to parser
 - Update serializer to emit qualified references when needed
@@ -979,7 +979,6 @@ Fixture files in `rust/tests/fixtures/multi_output_migration/`:
 
 - Update `update_network_output_type()` to propagate full `output_pins` from return node
 - Update custom node evaluation to pass through multi-output
-- UI for defining extra outputs in custom networks
 
 **Tests:**
 - Test custom network with multi-output return node: return node has 2 output pins → custom node type has 2 output pins

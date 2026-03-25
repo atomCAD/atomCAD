@@ -60,6 +60,7 @@ pub enum Token {
     LeftParen,    // (
     RightParen,   // )
     At,           // @
+    Dot,          // .
     Hash,         // #
     Output,       // output keyword
     Delete,       // delete keyword
@@ -107,8 +108,9 @@ pub enum Statement {
 pub enum PropertyValue {
     /// A literal value (number, string, vector, etc.)
     Literal(TextValue),
-    /// A node reference: `other_node`
-    NodeRef(String),
+    /// A node reference: `other_node` or `other_node.pin_name`
+    /// The optional second field is the output pin name for multi-output nodes.
+    NodeRef(String, Option<String>),
     /// A function pin reference: `@node_name`
     FunctionRef(String),
     /// Array of references or values: `[sphere1, box1]`
@@ -304,6 +306,15 @@ impl Lexer {
                 self.advance();
                 Ok(TokenInfo {
                     token: Token::At,
+                    line,
+                    column,
+                })
+            }
+
+            Some('.') => {
+                self.advance();
+                Ok(TokenInfo {
+                    token: Token::Dot,
                     line,
                     column,
                 })
@@ -821,8 +832,15 @@ impl Parser {
                     // It's a valid DataType like "Int", "Float", "Vec3", etc.
                     Ok(PropertyValue::Literal(TextValue::DataType(dt)))
                 } else {
-                    // It's a node reference
-                    Ok(PropertyValue::NodeRef(name))
+                    // Check for `.pin_name` suffix (multi-output pin reference)
+                    let pin_name = if self.peek() == &Token::Dot {
+                        self.bump(); // consume dot
+                        Some(self.expect_identifier()?)
+                    } else {
+                        None
+                    };
+                    // It's a node reference, optionally qualified with a pin name
+                    Ok(PropertyValue::NodeRef(name, pin_name))
                 }
             }
             Token::Int(i) => {

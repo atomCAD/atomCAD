@@ -247,6 +247,40 @@ fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &Node
     }
 }
 
+/// Removes wire connections that reference output pins that no longer exist on the source node.
+/// This handles the case where a custom network's return node changes from multi-output to
+/// single-output, leaving dangling wires to pins that were removed.
+fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) {
+    // First pass: build a map of node_id -> output_pin_count for all nodes
+    let pin_counts: HashMap<u64, usize> = network
+        .nodes
+        .iter()
+        .filter_map(|(&node_id, node)| {
+            node_type_registry
+                .get_node_type_for_node(node)
+                .map(|nt| (node_id, nt.output_pin_count()))
+        })
+        .collect();
+
+    // Second pass: remove wires to non-existent output pins
+    for node in network.nodes.values_mut() {
+        for argument in node.arguments.iter_mut() {
+            argument
+                .argument_output_pins
+                .retain(|source_node_id, output_pin_index| {
+                    if *output_pin_index == -1 {
+                        return true; // Function pin is always valid
+                    }
+                    if let Some(&count) = pin_counts.get(source_node_id) {
+                        (*output_pin_index as usize) < count
+                    } else {
+                        true // Unknown source — let validate_wires catch it
+                    }
+                });
+        }
+    }
+}
+
 fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> bool {
     // Validate wires - pure checking, no repairs
     for (dest_node_id, dest_node) in &network.nodes {
@@ -430,6 +464,9 @@ pub fn validate_network(
     // REPAIR PHASE: Ensure argument counts match parameter counts in this network
     repair_network_arguments(network, node_type_registry);
 
+    // REPAIR PHASE: Remove wires to output pins that no longer exist
+    repair_output_pin_wires(network, node_type_registry);
+
     // VALIDATION PHASE: Check wire validity (pure checking)
     if !validate_wires(network, node_type_registry) {
         network.valid = false;
@@ -452,30 +489,36 @@ fn update_network_output_type(
     network: &mut NodeNetwork,
     node_type_registry: &NodeTypeRegistry,
 ) -> bool {
-    let old_output_type = network.node_type.output_type().clone();
+    let old_output_pins = network.node_type.output_pins.clone();
 
-    // Determine the new output type based on return_node_id
-    let new_output_type = if let Some(return_node_id) = network.return_node_id {
+    // Determine the new output pins based on return_node_id
+    let new_output_pins = if let Some(return_node_id) = network.return_node_id {
         // Get the return node
         if let Some(return_node) = network.nodes.get(&return_node_id) {
-            // Get the node type to find its output type
+            // Get the node type to find its full output pins
             node_type_registry
                 .get_node_type_for_node(return_node)
                 .unwrap()
-                .output_type()
+                .output_pins
                 .clone()
         } else {
             // Return node doesn't exist, set to None
-            DataType::None
+            OutputPinDefinition::single(DataType::None)
         }
     } else {
         // No return node, output type is None
-        DataType::None
+        OutputPinDefinition::single(DataType::None)
     };
 
-    // Update the network's output type
-    network.node_type.output_pins = OutputPinDefinition::single(new_output_type.clone());
+    // Update the network's output pins
+    network.node_type.output_pins = new_output_pins.clone();
 
-    // Return true if the output type changed
-    old_output_type != new_output_type
+    // Check if output pins changed (count or types)
+    let changed = old_output_pins.len() != new_output_pins.len()
+        || old_output_pins
+            .iter()
+            .zip(new_output_pins.iter())
+            .any(|(old, new)| old.name != new.name || old.data_type != new.data_type);
+
+    changed
 }

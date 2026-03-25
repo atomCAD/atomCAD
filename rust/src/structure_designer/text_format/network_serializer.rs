@@ -223,7 +223,11 @@ impl<'a> NetworkSerializer<'a> {
                             .iter()
                             .filter_map(|(source_id, pin_index)| {
                                 let source_name = self.get_node_name(**source_id)?;
-                                Some(self.format_reference(source_name, **pin_index))
+                                Some(self.format_reference(
+                                    source_name,
+                                    **pin_index,
+                                    **source_id,
+                                ))
                             })
                             .collect();
                         properties.push((param_name.clone(), format!("[{}]", refs.join(", "))));
@@ -235,7 +239,7 @@ impl<'a> NetworkSerializer<'a> {
                             if let Some(source_name) = self.get_node_name(source_id) {
                                 properties.push((
                                     param_name.clone(),
-                                    self.format_reference(source_name, pin_index),
+                                    self.format_reference(source_name, pin_index, source_id),
                                 ));
                             }
                         }
@@ -275,15 +279,39 @@ impl<'a> NetworkSerializer<'a> {
         }
     }
 
-    /// Format a node reference, handling function pin references with @ prefix.
-    fn format_reference(&self, source_name: &str, pin_index: i32) -> String {
+    /// Format a node reference, handling function pin references with @ prefix
+    /// and multi-output pin references with `.pinname` suffix.
+    fn format_reference(
+        &self,
+        source_name: &str,
+        pin_index: i32,
+        source_node_id: u64,
+    ) -> String {
         if pin_index == -1 {
             // Function pin reference
             format!("@{}", source_name)
+        } else if pin_index > 0 {
+            // Multi-output pin: look up the pin name from the node type
+            if let Some(pin_name) = self.get_output_pin_name(source_node_id, pin_index) {
+                format!("{}.{}", source_name, pin_name)
+            } else {
+                // Fallback: use numeric index if pin name unavailable
+                format!("{}.pin{}", source_name, pin_index)
+            }
         } else {
-            // Regular output reference
+            // Pin 0: regular output reference (no qualifier for backward compat)
             source_name.to_string()
         }
+    }
+
+    /// Look up the name of an output pin by index on a given node.
+    fn get_output_pin_name(&self, node_id: u64, pin_index: i32) -> Option<String> {
+        let node = self.network.nodes.get(&node_id)?;
+        let node_type = self.registry.get_node_type_for_node(node)?;
+        node_type
+            .output_pins
+            .get(pin_index as usize)
+            .map(|p| p.name.clone())
     }
 }
 
