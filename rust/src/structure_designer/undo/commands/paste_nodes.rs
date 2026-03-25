@@ -1,4 +1,4 @@
-use crate::structure_designer::node_network::NodeDisplayType;
+use crate::structure_designer::node_network::{NodeDisplayState, NodeDisplayType};
 use crate::structure_designer::undo::snapshot::{NodeSnapshot, WireSnapshot};
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
@@ -76,7 +76,9 @@ impl PasteNodesCommand {
 
             // Restore display states
             for &(node_id, display_type) in &self.display_states {
-                network.displayed_node_ids.insert(node_id, display_type);
+                network
+                    .displayed_nodes
+                    .insert(node_id, NodeDisplayState::with_type(display_type));
             }
         }
     }
@@ -97,7 +99,7 @@ impl PasteNodesCommand {
                 }
 
                 // Remove from displayed nodes
-                network.displayed_node_ids.remove(&node_id);
+                network.displayed_nodes.remove(&node_id);
 
                 // Remove the node
                 network.nodes.remove(&node_id);

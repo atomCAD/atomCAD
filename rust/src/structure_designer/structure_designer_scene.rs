@@ -11,6 +11,13 @@ use crate::util::memory_size_estimator::MemorySizeEstimator;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 
+/// Output of a single displayed output pin.
+pub struct DisplayedPinOutput {
+    pub pin_index: i32,
+    pub output: NodeOutput,
+    pub geo_tree: Option<GeoNode>,
+}
+
 /// The explicit geometric/data output of a single node evaluation
 /// This represents the tessellatable/renderable output
 pub enum NodeOutput {
@@ -36,13 +43,15 @@ pub enum NodeOutput {
 /// Represents the complete output of evaluating a single displayed node,
 /// including its primary output and all metadata from the evaluation chain
 pub struct NodeSceneData {
-    /// The explicit renderable output of this node (atomic structure, mesh, point cloud, etc.)
+    /// The primary renderable output of this node (backward-compatible: always pin 0 or interactive pin)
     pub output: NodeOutput,
 
-    /// The CSG geometry tree (if this is a geometry node)
-    /// This can coexist with explicit output (e.g., a PolyMesh derived from this geo_tree)
-    /// The geo_tree is kept for potential future operations or alternative visualizations
+    /// The CSG geometry tree for the primary output (if this is a geometry node)
     pub geo_tree: Option<GeoNode>,
+
+    /// Per-pin outputs for all displayed pins of this node.
+    /// Includes the primary output as well as any additional displayed pins.
+    pub pin_outputs: Vec<DisplayedPinOutput>,
 
     /// Errors collected during evaluation of this node and its dependencies
     /// Maps node_id -> error_message for all nodes in the evaluation chain
@@ -65,11 +74,25 @@ impl NodeSceneData {
         Self {
             output,
             geo_tree: None,
+            pin_outputs: Vec::new(),
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
             unit_cell: None,
             selected_node_eval_cache: None,
         }
+    }
+
+    /// Get the interactive pin index (lowest-indexed displayed pin).
+    pub fn interactive_pin_index(&self) -> Option<i32> {
+        self.pin_outputs.iter().map(|p| p.pin_index).min()
+    }
+
+    /// Get the output for the interactive pin.
+    pub fn interactive_output(&self) -> Option<&DisplayedPinOutput> {
+        let interactive_idx = self.interactive_pin_index()?;
+        self.pin_outputs
+            .iter()
+            .find(|p| p.pin_index == interactive_idx)
     }
 }
 
@@ -262,9 +285,24 @@ impl MemorySizeEstimator for NodeSceneData {
             0
         };
 
+        // Estimate pin_outputs Vec
+        let pin_outputs_size: usize = self
+            .pin_outputs
+            .iter()
+            .map(|p| {
+                p.output.estimate_memory_bytes()
+                    + p.geo_tree
+                        .as_ref()
+                        .map(|t| t.estimate_memory_bytes())
+                        .unwrap_or(0)
+                    + std::mem::size_of::<DisplayedPinOutput>()
+            })
+            .sum();
+
         base_size
             + output_size
             + geo_tree_size
+            + pin_outputs_size
             + node_errors_size
             + node_output_strings_size
             + unit_cell_size

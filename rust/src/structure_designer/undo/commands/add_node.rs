@@ -65,7 +65,7 @@ impl UndoCommand for AddNodeCommand {
             }
 
             // Remove from displayed nodes
-            network.displayed_node_ids.remove(&self.node_id);
+            network.displayed_nodes.remove(&self.node_id);
 
             // Remove the node
             network.nodes.remove(&self.node_id);

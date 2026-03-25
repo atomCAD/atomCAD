@@ -799,7 +799,7 @@ mod network_editor_tests {
             .expect("Should find sphere node");
 
         assert!(
-            network.displayed_node_ids.contains_key(&sphere_node.id),
+            network.displayed_nodes.contains_key(&sphere_node.id),
             "Sphere should be visible"
         );
 
@@ -811,7 +811,7 @@ mod network_editor_tests {
             .expect("Should find int node");
 
         assert!(
-            !network.displayed_node_ids.contains_key(&int_node.id),
+            !network.displayed_nodes.contains_key(&int_node.id),
             "Int should not be visible"
         );
     }

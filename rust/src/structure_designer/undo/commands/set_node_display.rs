@@ -1,4 +1,4 @@
-use crate::structure_designer::node_network::NodeDisplayType;
+use crate::structure_designer::node_network::{NodeDisplayState, NodeDisplayType};
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
 /// Command for undoing/redoing toggling a node's display state.
@@ -20,10 +20,14 @@ impl UndoCommand for SetNodeDisplayCommand {
         if let Some(network) = ctx.network_mut(&self.network_name) {
             match self.old_display_type {
                 Some(dt) => {
-                    network.displayed_node_ids.insert(self.node_id, dt);
+                    network
+                        .displayed_nodes
+                        .entry(self.node_id)
+                        .and_modify(|s| s.display_type = dt)
+                        .or_insert_with(|| NodeDisplayState::with_type(dt));
                 }
                 None => {
-                    network.displayed_node_ids.remove(&self.node_id);
+                    network.displayed_nodes.remove(&self.node_id);
                 }
             }
         }
@@ -33,10 +37,14 @@ impl UndoCommand for SetNodeDisplayCommand {
         if let Some(network) = ctx.network_mut(&self.network_name) {
             match self.new_display_type {
                 Some(dt) => {
-                    network.displayed_node_ids.insert(self.node_id, dt);
+                    network
+                        .displayed_nodes
+                        .entry(self.node_id)
+                        .and_modify(|s| s.display_type = dt)
+                        .or_insert_with(|| NodeDisplayState::with_type(dt));
                 }
                 None => {
-                    network.displayed_node_ids.remove(&self.node_id);
+                    network.displayed_nodes.remove(&self.node_id);
                 }
             }
         }

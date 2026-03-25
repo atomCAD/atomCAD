@@ -18,6 +18,31 @@ pub enum NodeDisplayType {
     Ghost,
 }
 
+/// Display state for a single node. Bundles node-level visibility (Normal/Ghost)
+/// with per-output-pin display control.
+#[derive(Clone, Debug)]
+pub struct NodeDisplayState {
+    pub display_type: NodeDisplayType,
+    pub displayed_pins: HashSet<i32>,
+}
+
+impl NodeDisplayState {
+    /// Default display state: Normal visibility, pin 0 only.
+    pub fn normal() -> Self {
+        Self {
+            display_type: NodeDisplayType::Normal,
+            displayed_pins: HashSet::from([0]),
+        }
+    }
+
+    pub fn with_type(display_type: NodeDisplayType) -> Self {
+        Self {
+            display_type,
+            displayed_pins: HashSet::from([0]),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ValidationError {
     pub error_text: String,
@@ -216,7 +241,7 @@ pub struct NodeNetwork {
     pub node_type: NodeType, // This is the node type when this node network is used as a node in another network. (analog to a function header in programming)
     pub nodes: HashMap<u64, Node>,
     pub return_node_id: Option<u64>, // Only node networks with a return node can be used as a node (a.k.a can be called)
-    pub displayed_node_ids: HashMap<u64, NodeDisplayType>, // Map of nodes that are currently displayed with their display type (Normal or Ghost)
+    pub displayed_nodes: HashMap<u64, NodeDisplayState>, // Map of nodes that are currently displayed with their display state
     pub selected_node_ids: HashSet<u64>,                   // All selected nodes (multi-selection)
     pub active_node_id: Option<u64>, // Active node (for properties panel/gadget) - the last selected node
     pub selected_wires: Vec<Wire>,   // All selected wires (multi-selection)
@@ -304,7 +329,7 @@ impl NodeNetwork {
             node_type,
             nodes: HashMap::new(),
             return_node_id: None,
-            displayed_node_ids: HashMap::new(),
+            displayed_nodes: HashMap::new(),
             selected_node_ids: HashSet::new(),
             active_node_id: None,
             selected_wires: Vec::new(),
@@ -572,10 +597,12 @@ impl NodeNetwork {
     pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
         if self.nodes.contains_key(&node_id) {
             if is_displayed {
-                self.displayed_node_ids
-                    .insert(node_id, NodeDisplayType::Normal);
+                // Preserve existing pin state if re-displaying, otherwise default
+                self.displayed_nodes
+                    .entry(node_id)
+                    .or_insert_with(NodeDisplayState::normal);
             } else {
-                self.displayed_node_ids.remove(&node_id);
+                self.displayed_nodes.remove(&node_id);
             }
         }
     }
@@ -584,11 +611,14 @@ impl NodeNetwork {
     pub fn set_node_display_type(&mut self, node_id: u64, display_type: Option<NodeDisplayType>) {
         if self.nodes.contains_key(&node_id) {
             match display_type {
-                Some(display_type) => {
-                    self.displayed_node_ids.insert(node_id, display_type);
+                Some(dt) => {
+                    self.displayed_nodes
+                        .entry(node_id)
+                        .and_modify(|s| s.display_type = dt)
+                        .or_insert_with(|| NodeDisplayState::with_type(dt));
                 }
                 None => {
-                    self.displayed_node_ids.remove(&node_id);
+                    self.displayed_nodes.remove(&node_id);
                 }
             }
         }
@@ -596,12 +626,39 @@ impl NodeNetwork {
 
     /// Check if a node is currently displayed
     pub fn is_node_displayed(&self, node_id: u64) -> bool {
-        self.displayed_node_ids.contains_key(&node_id)
+        self.displayed_nodes.contains_key(&node_id)
     }
 
     /// Get the display type of a node if it is displayed
     pub fn get_node_display_type(&self, node_id: u64) -> Option<NodeDisplayType> {
-        self.displayed_node_ids.get(&node_id).copied()
+        self.displayed_nodes.get(&node_id).map(|s| s.display_type)
+    }
+
+    /// Get the set of displayed output pins for a node.
+    /// Returns None if the node is not displayed.
+    pub fn get_displayed_pins(&self, node_id: u64) -> Option<&HashSet<i32>> {
+        self.displayed_nodes.get(&node_id).map(|s| &s.displayed_pins)
+    }
+
+    /// Toggle a specific output pin's display state for an already-displayed node.
+    /// If the last pin is removed, the node is auto-removed from `displayed_nodes`.
+    pub fn set_pin_displayed(&mut self, node_id: u64, pin_index: i32, displayed: bool) {
+        if let Some(state) = self.displayed_nodes.get_mut(&node_id) {
+            if displayed {
+                state.displayed_pins.insert(pin_index);
+            } else {
+                state.displayed_pins.remove(&pin_index);
+                if state.displayed_pins.is_empty() {
+                    self.displayed_nodes.remove(&node_id);
+                }
+            }
+        }
+    }
+
+    /// Get the full display state for a node.
+    /// Returns None if the node is not displayed.
+    pub fn get_node_display_state(&self, node_id: u64) -> Option<&NodeDisplayState> {
+        self.displayed_nodes.get(&node_id)
     }
 
     // ===== NODE SELECTION =====
@@ -1045,8 +1102,8 @@ impl NodeNetwork {
 
             // Collect display states of deleted nodes
             for &node_id in &self.selected_node_ids {
-                if let Some(&display_type) = self.displayed_node_ids.get(&node_id) {
-                    info.display_states.push((node_id, display_type));
+                if let Some(state) = self.displayed_nodes.get(&node_id) {
+                    info.display_states.push((node_id, state.display_type));
                 }
             }
 
@@ -1082,7 +1139,7 @@ impl NodeNetwork {
                 }
 
                 // Remove from displayed nodes if present
-                self.displayed_node_ids.remove(&node_id);
+                self.displayed_nodes.remove(&node_id);
 
                 // Remove the node itself
                 self.nodes.remove(&node_id);

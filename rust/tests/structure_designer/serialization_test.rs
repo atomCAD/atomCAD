@@ -54,6 +54,7 @@ fn create_serializable_network(nodes: Vec<SerializableNode>) -> SerializableNode
         nodes,
         return_node_id: None,
         displayed_node_ids: vec![],
+        displayed_output_pins: vec![],
         camera_settings: None,
     }
 }

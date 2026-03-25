@@ -254,7 +254,7 @@ impl<'a> NetworkSerializer<'a> {
         }
 
         // Third pass: add visibility property (only if visible, since invisible is the default)
-        if self.network.displayed_node_ids.contains_key(&node_id) {
+        if self.network.displayed_nodes.contains_key(&node_id) {
             properties.push(("visible".to_string(), "true".to_string()));
         }
 

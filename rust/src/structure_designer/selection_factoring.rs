@@ -556,7 +556,7 @@ pub fn replace_selection_with_custom_node(
         }
 
         // Remove from displayed nodes
-        network.displayed_node_ids.remove(&node_id);
+        network.displayed_nodes.remove(&node_id);
 
         // Remove the node
         network.nodes.remove(&node_id);

@@ -33,7 +33,7 @@ impl UndoCommand for DuplicateNodeCommand {
             }
 
             // Remove from displayed nodes
-            network.displayed_node_ids.remove(&self.new_node_id);
+            network.displayed_nodes.remove(&self.new_node_id);
 
             // Remove the node
             network.nodes.remove(&self.new_node_id);
@@ -83,7 +83,7 @@ impl UndoCommand for DuplicateNodeCommand {
             // add_node_with_id always displays the node, but duplicate_node
             // does not set display state (it's handled by the display policy).
             // Remove from displayed to match the original behavior.
-            network.displayed_node_ids.remove(&snap.node_id);
+            network.displayed_nodes.remove(&snap.node_id);
 
             // Restore custom name and arguments
             if let Some(node) = network.nodes.get_mut(&snap.node_id) {

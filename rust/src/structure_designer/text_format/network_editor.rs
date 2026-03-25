@@ -188,7 +188,7 @@ impl<'a> NetworkEditor<'a> {
 
         // Clear other state
         self.network.return_node_id = None;
-        self.network.displayed_node_ids.clear();
+        self.network.displayed_nodes.clear();
         self.network.selected_node_ids.clear();
         self.network.active_node_id = None;
         self.network.selected_wires.clear();
@@ -668,7 +668,7 @@ impl<'a> NetworkEditor<'a> {
         self.remove_wires_for_node(node_id);
 
         // Remove from displayed nodes
-        self.network.displayed_node_ids.remove(&node_id);
+        self.network.displayed_nodes.remove(&node_id);
 
         // Clear return node if this was it
         if self.network.return_node_id == Some(node_id) {

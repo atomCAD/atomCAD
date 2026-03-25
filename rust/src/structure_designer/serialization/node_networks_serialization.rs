@@ -2,7 +2,7 @@ use super::super::camera_settings::CameraSettings;
 use super::super::node_data::CustomNodeData;
 use super::super::node_data::NoData;
 use super::super::node_data::NodeData;
-use super::super::node_network::NodeDisplayType;
+use super::super::node_network::{NodeDisplayState, NodeDisplayType};
 use super::super::node_network::{Argument, Node, NodeNetwork};
 use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
@@ -142,7 +142,10 @@ pub struct SerializableNodeNetwork {
     pub node_type: SerializableNodeType,
     pub nodes: Vec<SerializableNode>, // Store as vec instead of HashMap
     pub return_node_id: Option<u64>,
-    pub displayed_node_ids: Vec<(u64, NodeDisplayType)>, // Store as vec instead of HashSet
+    pub displayed_node_ids: Vec<(u64, NodeDisplayType)>, // Always written for backward compat
+    /// Per-node pin display state. Omitted from JSON if empty (backward compat).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub displayed_output_pins: Vec<(u64, Vec<i32>)>,
     /// Camera settings for this network's 3D viewport (backward compatible - defaults to None for old files)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub camera_settings: Option<SerializableCameraSettings>,
@@ -363,11 +366,20 @@ pub fn node_network_to_serializable(
         serializable_nodes.push(serializable_node);
     }
 
-    // Convert displayed_node_ids from HashMap to Vec of tuples
+    // Split displayed_nodes into displayed_node_ids + displayed_output_pins for serialization
     let displayed_node_ids: Vec<(u64, NodeDisplayType)> = network
-        .displayed_node_ids
+        .displayed_nodes
         .iter()
-        .map(|(key, value)| (*key, *value))
+        .map(|(&id, state)| (id, state.display_type))
+        .collect();
+
+    // Only write displayed_output_pins for nodes with non-default pin state
+    let default_pins: std::collections::HashSet<i32> = std::collections::HashSet::from([0]);
+    let displayed_output_pins: Vec<(u64, Vec<i32>)> = network
+        .displayed_nodes
+        .iter()
+        .filter(|(_, state)| state.displayed_pins != default_pins)
+        .map(|(&id, state)| (id, state.displayed_pins.iter().copied().collect()))
         .collect();
 
     // Create a serializable version of the node type
@@ -393,6 +405,7 @@ pub fn node_network_to_serializable(
         nodes: serializable_nodes,
         return_node_id: network.return_node_id,
         displayed_node_ids,
+        displayed_output_pins,
         camera_settings,
     })
 }
@@ -419,12 +432,21 @@ pub fn serializable_to_node_network(
     network.next_node_id = serializable.next_node_id;
     network.return_node_id = serializable.return_node_id;
 
-    // Convert displayed_node_ids from Vec of tuples to HashMap without taking ownership
-    network.displayed_node_ids = serializable
-        .displayed_node_ids
-        .iter()
-        .map(|(id, display_type)| (*id, *display_type))
-        .collect();
+    // Build displayed_nodes from the two serialized fields (merge)
+    let mut displayed_nodes = std::collections::HashMap::new();
+    for (node_id, display_type) in &serializable.displayed_node_ids {
+        displayed_nodes.insert(
+            *node_id,
+            NodeDisplayState::with_type(*display_type),
+        );
+    }
+    // Overlay explicit pin display state where present
+    for (node_id, pins) in &serializable.displayed_output_pins {
+        if let Some(state) = displayed_nodes.get_mut(node_id) {
+            state.displayed_pins = pins.iter().copied().collect();
+        }
+    }
+    network.displayed_nodes = displayed_nodes;
 
     // Process each node
     for serializable_node in &serializable.nodes {

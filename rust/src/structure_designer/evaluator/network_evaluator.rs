@@ -13,11 +13,14 @@ use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud;
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
 use crate::structure_designer::node_network::Node;
+use crate::structure_designer::node_data::EvalOutput;
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
-use crate::structure_designer::structure_designer_scene::{NodeOutput, NodeSceneData};
+use crate::structure_designer::structure_designer_scene::{
+    DisplayedPinOutput, NodeOutput, NodeSceneData,
+};
 
 use super::network_result::Closure;
 use super::network_result::input_missing_error;
@@ -163,114 +166,76 @@ impl NetworkEvaluator {
             .unwrap()
             .node_network
             .is_node_selected(node_id);
-        let result = {
+
+        // Evaluate all outputs once (avoids redundant evaluation for multi-output nodes)
+        let eval_output = {
             //let _timer = Timer::new("evaluate inside generate_scene");
-            self.evaluate(
+            self.evaluate_all_outputs(
                 &network_stack,
                 node_id,
-                0,
                 registry,
                 from_selected_node,
                 &mut context,
             )
         };
 
-        // Get the unit cell before the result is potentially moved
-        let unit_cell = result.get_unit_cell();
+        // Get the unit cell from the primary (pin 0) result
+        let unit_cell = eval_output.primary().get_unit_cell();
 
-        // Determine output and geo_tree based on node type and visualization preferences
-        let (output, geo_tree) = if *registry.get_node_type_for_node(node).unwrap().output_type()
-            == DataType::DrawingPlane
-        {
-            if let NetworkResult::DrawingPlane(drawing_plane) = result {
-                (NodeOutput::DrawingPlane(drawing_plane), None)
-            } else {
-                (NodeOutput::None, None)
+        // Convert primary result (pin 0) to NodeOutput for backward compat
+        let result = eval_output.get(0);
+        let node_type = registry.get_node_type_for_node(node).unwrap();
+        let (output, geo_tree) = self.convert_result_to_node_output(
+            result,
+            node_type.output_type(),
+            from_selected_node,
+            &network_stack,
+            node_id,
+            registry,
+            &mut context,
+            geometry_visualization_preferences,
+        );
+
+        // Build pin_outputs for all displayed pins
+        let displayed_pins: Vec<i32> = network
+            .get_displayed_pins(node_id)
+            .map(|pins| {
+                let mut v: Vec<i32> = pins.iter().copied().collect();
+                v.sort();
+                v
+            })
+            .unwrap_or_else(|| vec![0]);
+
+        let mut pin_outputs = Vec::new();
+        for &pin_index in &displayed_pins {
+            if pin_index == 0 {
+                // Pin 0 is already computed above — skip redundant conversion
+                continue;
             }
-        } else if *registry.get_node_type_for_node(node).unwrap().output_type()
-            == DataType::Geometry2D
-        {
-            if geometry_visualization_preferences.geometry_visualization
-                == GeometryVisualization::SurfaceSplatting
-            {
-                if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
-                    let point_cloud = generate_2d_point_cloud(
-                        &geometry_summary_2d.geo_tree_root,
-                        &mut context,
-                        geometry_visualization_preferences,
-                    );
-                    (
-                        NodeOutput::SurfacePointCloud2D(point_cloud),
-                        Some(geometry_summary_2d.geo_tree_root),
-                    )
-                } else {
-                    (NodeOutput::None, None)
-                }
-            } else if geometry_visualization_preferences.geometry_visualization
-                == GeometryVisualization::ExplicitMesh
-            {
-                self.generate_explicit_mesh_output(
-                    result,
-                    &network_stack,
-                    node_id,
-                    registry,
-                    &mut context,
-                    geometry_visualization_preferences,
-                )
-            } else {
-                (NodeOutput::None, None)
-            }
-        } else if *registry.get_node_type_for_node(node).unwrap().output_type()
-            == DataType::Geometry
-        {
-            if geometry_visualization_preferences.geometry_visualization
-                == GeometryVisualization::SurfaceSplatting
-            {
-                if let NetworkResult::Geometry(geometry_summary) = result {
-                    let point_cloud = generate_point_cloud(
-                        &geometry_summary.geo_tree_root,
-                        &mut context,
-                        geometry_visualization_preferences,
-                    );
-                    (
-                        NodeOutput::SurfacePointCloud(point_cloud),
-                        Some(geometry_summary.geo_tree_root),
-                    )
-                } else {
-                    (NodeOutput::None, None)
-                }
-            } else if geometry_visualization_preferences.geometry_visualization
-                == GeometryVisualization::ExplicitMesh
-            {
-                self.generate_explicit_mesh_output(
-                    result,
-                    &network_stack,
-                    node_id,
-                    registry,
-                    &mut context,
-                    geometry_visualization_preferences,
-                )
-            } else {
-                (NodeOutput::None, None)
-            }
-        } else if *registry.get_node_type_for_node(node).unwrap().output_type() == DataType::Atomic
-        {
-            if let NetworkResult::Atomic(atomic_structure) = result {
-                let mut cloned_atomic_structure = atomic_structure.clone();
-                cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
-                (NodeOutput::Atomic(cloned_atomic_structure), None)
-            } else {
-                (NodeOutput::None, None)
-            }
-        } else {
-            (NodeOutput::None, None)
-        };
+            let pin_result = eval_output.get(pin_index);
+            let pin_data_type = node_type.get_output_pin_type(pin_index);
+            let (pin_output, pin_geo_tree) = self.convert_result_to_node_output(
+                pin_result,
+                &pin_data_type,
+                from_selected_node,
+                &network_stack,
+                node_id,
+                registry,
+                &mut context,
+                geometry_visualization_preferences,
+            );
+            pin_outputs.push(DisplayedPinOutput {
+                pin_index,
+                output: pin_output,
+                geo_tree: pin_geo_tree,
+            });
+        }
 
         // Build NodeSceneData
-
         NodeSceneData {
             output,
             geo_tree,
+            pin_outputs,
             node_errors: context.node_errors.clone(),
             node_output_strings: context.node_output_strings.clone(),
             unit_cell,
@@ -368,6 +333,100 @@ impl NetworkEvaluator {
         };
 
         (output, geo_tree)
+    }
+
+    /// Converts a NetworkResult to a NodeOutput based on the data type and visualization preferences.
+    #[allow(clippy::too_many_arguments)]
+    fn convert_result_to_node_output<'a>(
+        &mut self,
+        result: NetworkResult,
+        data_type: &DataType,
+        from_selected_node: bool,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
+        geometry_visualization_preferences: &GeometryVisualizationPreferences,
+    ) -> (NodeOutput, Option<GeoNode>) {
+        if *data_type == DataType::DrawingPlane {
+            if let NetworkResult::DrawingPlane(drawing_plane) = result {
+                (NodeOutput::DrawingPlane(drawing_plane), None)
+            } else {
+                (NodeOutput::None, None)
+            }
+        } else if *data_type == DataType::Geometry2D {
+            if geometry_visualization_preferences.geometry_visualization
+                == GeometryVisualization::SurfaceSplatting
+            {
+                if let NetworkResult::Geometry2D(geometry_summary_2d) = result {
+                    let point_cloud = generate_2d_point_cloud(
+                        &geometry_summary_2d.geo_tree_root,
+                        context,
+                        geometry_visualization_preferences,
+                    );
+                    (
+                        NodeOutput::SurfacePointCloud2D(point_cloud),
+                        Some(geometry_summary_2d.geo_tree_root),
+                    )
+                } else {
+                    (NodeOutput::None, None)
+                }
+            } else if geometry_visualization_preferences.geometry_visualization
+                == GeometryVisualization::ExplicitMesh
+            {
+                self.generate_explicit_mesh_output(
+                    result,
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    geometry_visualization_preferences,
+                )
+            } else {
+                (NodeOutput::None, None)
+            }
+        } else if *data_type == DataType::Geometry {
+            if geometry_visualization_preferences.geometry_visualization
+                == GeometryVisualization::SurfaceSplatting
+            {
+                if let NetworkResult::Geometry(geometry_summary) = result {
+                    let point_cloud = generate_point_cloud(
+                        &geometry_summary.geo_tree_root,
+                        context,
+                        geometry_visualization_preferences,
+                    );
+                    (
+                        NodeOutput::SurfacePointCloud(point_cloud),
+                        Some(geometry_summary.geo_tree_root),
+                    )
+                } else {
+                    (NodeOutput::None, None)
+                }
+            } else if geometry_visualization_preferences.geometry_visualization
+                == GeometryVisualization::ExplicitMesh
+            {
+                self.generate_explicit_mesh_output(
+                    result,
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    geometry_visualization_preferences,
+                )
+            } else {
+                (NodeOutput::None, None)
+            }
+        } else if *data_type == DataType::Atomic {
+            if let NetworkResult::Atomic(atomic_structure) = result {
+                let mut cloned_atomic_structure = atomic_structure.clone();
+                cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
+                (NodeOutput::Atomic(cloned_atomic_structure), None)
+            } else {
+                (NodeOutput::None, None)
+            }
+        } else {
+            (NodeOutput::None, None)
+        }
     }
 
     /// Helper method for the common pattern: get value from node data, or override with input pin
@@ -554,6 +613,78 @@ impl NetworkEvaluator {
                 NetworkResult::None // Nothing is connected
             }
         }
+    }
+
+    /// Evaluate a node and return all output pin results.
+    /// Used by generate_scene() to avoid redundant evaluation when
+    /// displaying multiple output pins of the same node.
+    pub fn evaluate_all_outputs<'a>(
+        &self,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+        let eval_output = if registry
+            .built_in_node_types
+            .contains_key(&node.node_type_name)
+        {
+            node.data
+                .eval(self, network_stack, node_id, registry, decorate, context)
+        } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
+            // custom node — evaluate return node, get all outputs
+            if !child_network.valid {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "{} is invalid",
+                    node.node_type_name
+                )));
+            }
+            let mut child_network_stack = network_stack.to_vec();
+            child_network_stack.push(NetworkStackElement {
+                node_network: child_network,
+                node_id,
+            });
+            if child_network.return_node_id.is_none() {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "{} has no return node",
+                    node.node_type_name
+                )));
+            }
+            // For now, custom networks still return pin 0 only
+            let result = self.evaluate(
+                &child_network_stack,
+                child_network.return_node_id.unwrap(),
+                0,
+                registry,
+                false,
+                context,
+            );
+            let result = if let NetworkResult::Error(_) = &result {
+                NetworkResult::Error(format!("Error in {}", node.node_type_name))
+            } else {
+                result
+            };
+            EvalOutput::single(result)
+        } else {
+            EvalOutput::single(NetworkResult::Error(format!(
+                "Unknown node type: {}",
+                node.node_type_name
+            )))
+        };
+
+        // Record error/display string from primary (pin 0) result
+        let primary = eval_output.primary();
+        if let NetworkResult::Error(error_message) = primary {
+            context.node_errors.insert(node_id, error_message.clone());
+        }
+        context
+            .node_output_strings
+            .insert(node_id, primary.to_display_string());
+
+        eval_output
     }
 
     // Evaluates the specified node (calculates the NetworkResult on its output pin).

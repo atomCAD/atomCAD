@@ -80,9 +80,9 @@ fn test_load_old_builtin_only() {
     // Verify network output_type (from old serialized field)
     assert_eq!(*network.node_type.output_type(), DataType::Geometry);
 
-    // Verify displayed_node_ids loaded (old format, no per-pin info)
+    // Verify displayed_nodes loaded (old format, no per-pin info)
     assert_eq!(
-        network.displayed_node_ids.len(),
+        network.displayed_nodes.len(),
         1,
         "Expected 1 displayed node"
     );
@@ -91,8 +91,8 @@ fn test_load_old_builtin_only() {
         .return_node_id
         .expect("return_node_id should be set");
     assert_eq!(
-        network.displayed_node_ids.get(&return_node_id),
-        Some(&NodeDisplayType::Normal),
+        network.get_node_display_type(return_node_id),
+        Some(NodeDisplayType::Normal),
         "Return node should be displayed as Normal"
     );
 }
@@ -126,7 +126,7 @@ fn test_roundtrip_old_builtin_only() {
     assert_eq!(net1.nodes.len(), net2.nodes.len());
     assert_eq!(net1.next_node_id, net2.next_node_id);
     assert_eq!(net1.return_node_id, net2.return_node_id);
-    assert_eq!(net1.displayed_node_ids.len(), net2.displayed_node_ids.len());
+    assert_eq!(net1.displayed_nodes.len(), net2.displayed_nodes.len());
     assert_eq!(net1.node_type.output_type(), net2.node_type.output_type());
 }
 
@@ -271,8 +271,8 @@ fn test_load_old_atom_edit_output_diff_false() {
         .map(|(id, _)| *id)
         .unwrap();
     assert_eq!(
-        network.displayed_node_ids.get(&atom_edit_id),
-        Some(&NodeDisplayType::Normal),
+        network.get_node_display_type(atom_edit_id),
+        Some(NodeDisplayType::Normal),
         "atom_edit node should be displayed"
     );
 
@@ -327,8 +327,8 @@ fn test_load_old_atom_edit_output_diff_true() {
         .map(|(id, _)| *id)
         .unwrap();
     assert_eq!(
-        network.displayed_node_ids.get(&atom_edit_id),
-        Some(&NodeDisplayType::Normal),
+        network.get_node_display_type(atom_edit_id),
+        Some(NodeDisplayType::Normal),
     );
 }
 

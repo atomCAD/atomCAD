@@ -48,7 +48,7 @@ fn evaluate_cnnd_file(file_path: &str) -> EvaluationSnapshot {
 
     let mut displayed_node_outputs: Vec<DisplayedNodeOutput> = Vec::new();
 
-    for &node_id in network.displayed_node_ids.keys() {
+    for &node_id in network.displayed_nodes.keys() {
         let result = evaluator.evaluate(&network_stack, node_id, 0, &registry, false, &mut context);
         let node = network
             .nodes

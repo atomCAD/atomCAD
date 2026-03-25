@@ -467,16 +467,16 @@ impl StructureDesigner {
         let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
 
         // Clear input caches on all displayed nodes (full refresh: upstream may have changed)
-        for node_entry in &network.displayed_node_ids {
+        for node_entry in &network.displayed_nodes {
             if let Some(data) = network.get_node_network_data(*node_entry.0) {
                 data.clear_input_cache();
             }
         }
 
         // Generate NodeSceneData for each displayed node and populate node_data HashMap
-        for node_entry in &network.displayed_node_ids {
+        for node_entry in &network.displayed_nodes {
             let node_id = *node_entry.0;
-            let display_type = *node_entry.1;
+            let display_type = node_entry.1.display_type;
 
             // Generate NodeSceneData for this node
             let node_data = self.network_evaluator.generate_scene(
@@ -531,7 +531,7 @@ impl StructureDesigner {
 
         // Step 1: Cache nodes that became invisible
         for &node_id in &changes.visibility_changed {
-            if !network.displayed_node_ids.contains_key(&node_id) {
+            if !network.displayed_nodes.contains_key(&node_id) {
                 // Node became invisible - move to cache for potential future restoration
                 self.last_generated_structure_designer_scene
                     .move_to_cache(node_id);
@@ -568,7 +568,7 @@ impl StructureDesigner {
         let mut nodes_needing_evaluation = HashSet::new();
 
         for &node_id in &changes.visibility_changed {
-            if network.displayed_node_ids.contains_key(&node_id) {
+            if network.displayed_nodes.contains_key(&node_id) {
                 // Node became visible - try to restore from cache (ultra-fast path)
                 let restored = self
                     .last_generated_structure_designer_scene
@@ -585,7 +585,7 @@ impl StructureDesigner {
 
         // Step 4: Add visible nodes affected by data changes to evaluation set
         for &node_id in &affected_by_data_changes {
-            if network.displayed_node_ids.contains_key(&node_id) {
+            if network.displayed_nodes.contains_key(&node_id) {
                 nodes_needing_evaluation.insert(node_id);
             }
         }
@@ -594,13 +594,13 @@ impl StructureDesigner {
         if changes.selection_changed {
             // Add previous selected node (needs from_selected_node set to false)
             if let Some(prev_node_id) = changes.previous_selection {
-                if network.displayed_node_ids.contains_key(&prev_node_id) {
+                if network.displayed_nodes.contains_key(&prev_node_id) {
                     nodes_needing_evaluation.insert(prev_node_id);
                 }
             }
             // Add current selected node (needs from_selected_node set to true)
             if let Some(curr_node_id) = changes.current_selection {
-                if network.displayed_node_ids.contains_key(&curr_node_id) {
+                if network.displayed_nodes.contains_key(&curr_node_id) {
                     nodes_needing_evaluation.insert(curr_node_id);
                 }
             }
@@ -619,8 +619,8 @@ impl StructureDesigner {
                         Some(network) => network,
                         None => continue,
                     };
-                    match network.displayed_node_ids.get(&node_id) {
-                        Some(&display_type) => display_type,
+                    match network.displayed_nodes.get(&node_id) {
+                        Some(state) => state.display_type,
                         None => continue, // Skip if not displayed (shouldn't happen)
                     }
                 };
@@ -1358,8 +1358,8 @@ impl StructureDesigner {
                         }
                     }
 
-                    if let Some(&display_type) = network.displayed_node_ids.get(&node_id) {
-                        display_states.push((node_id, display_type));
+                    if let Some(state) = network.displayed_nodes.get(&node_id) {
+                        display_states.push((node_id, state.display_type));
                     }
                 }
             }
@@ -2071,7 +2071,7 @@ impl StructureDesigner {
 
         // Find displayed atom_edit nodes
         let displayed_atom_edit_ids: Vec<u64> = network
-            .displayed_node_ids
+            .displayed_nodes
             .keys()
             .filter(|&&id| {
                 network
@@ -2210,7 +2210,7 @@ impl StructureDesigner {
             .node_type_registry
             .node_networks
             .get(&network_name)
-            .and_then(|net| net.displayed_node_ids.get(&node_id).copied());
+            .and_then(|net| net.get_node_display_type(node_id));
 
         if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
             network.set_node_display(node_id, is_displayed);
@@ -2223,7 +2223,7 @@ impl StructureDesigner {
             .node_type_registry
             .node_networks
             .get(&network_name)
-            .and_then(|net| net.displayed_node_ids.get(&node_id).copied());
+            .and_then(|net| net.get_node_display_type(node_id));
 
         // Only push command if display state actually changed
         if old_display_type != new_display_type {

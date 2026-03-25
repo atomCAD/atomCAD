@@ -66,9 +66,9 @@ fn roundtrip_cnnd_file(file_path: &str) {
             name
         );
         assert_eq!(
-            network1.displayed_node_ids.len(),
-            network2.displayed_node_ids.len(),
-            "displayed_node_ids count mismatch in network '{}'",
+            network1.displayed_nodes.len(),
+            network2.displayed_nodes.len(),
+            "displayed_nodes count mismatch in network '{}'",
             name
         );
 
