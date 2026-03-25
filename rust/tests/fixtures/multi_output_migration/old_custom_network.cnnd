@@ -1,0 +1,121 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "my_shape",
+            "custom_name": "part",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "my_shape",
+      {
+        "next_node_id": 5,
+        "node_type": {
+          "name": "my_shape",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "size",
+              "data_type": "Int"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "parameter",
+            "custom_name": "size",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_id": 2,
+              "param_index": 0,
+              "param_name": "size",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "sphere",
+            "custom_name": "s",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "sphere",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "radius": 1
+            }
+          }
+        ],
+        "return_node_id": 4,
+        "displayed_node_ids": []
+      }
+    ]
+  ],
+  "version": 2
+}

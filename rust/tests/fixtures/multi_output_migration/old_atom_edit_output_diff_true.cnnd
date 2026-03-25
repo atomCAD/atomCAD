@@ -1,0 +1,142 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 4,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Atomic"
+        },
+        "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "atom_edit",
+            "custom_name": "edited",
+            "position": [
+              520.0,
+              164.5
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              }
+            ],
+            "data_type": "atom_edit",
+            "data": {
+              "continuous_minimization": false,
+              "diff": {
+                "atoms": [
+                  {
+                    "atomic_number": 6,
+                    "id": 1,
+                    "position": [
+                      0.0,
+                      0.0,
+                      0.0
+                    ]
+                  }
+                ]
+              },
+              "error_on_stale_entries": false,
+              "include_base_bonds_in_diff": true,
+              "output_diff": true,
+              "show_anchor_arrows": true,
+              "tolerance": 0.1
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "sphere",
+            "custom_name": "geom",
+            "position": [
+              100.0,
+              164.5
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "sphere",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "radius": 3
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "atom_fill",
+            "custom_name": "atoms",
+            "position": [
+              310.0,
+              164.5
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "invert_phase": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": "",
+              "remove_single_bond_atoms_before_passivation": false,
+              "surface_reconstruction": false
+            }
+          }
+        ],
+        "return_node_id": 3,
+        "displayed_node_ids": [
+          [
+            3,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}
