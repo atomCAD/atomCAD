@@ -1,5 +1,5 @@
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
@@ -196,24 +196,19 @@ impl NetworkEvaluator {
             geometry_visualization_preferences,
         );
 
-        // Build pin_outputs for all displayed pins
-        let displayed_pins: Vec<i32> = network
-            .get_displayed_pins(node_id)
-            .map(|pins| {
-                let mut v: Vec<i32> = pins.iter().copied().collect();
-                v.sort();
-                v
-            })
-            .unwrap_or_else(|| vec![0]);
-
-        let mut pin_outputs = Vec::new();
-        for &pin_index in &displayed_pins {
+        // Build pin_outputs for ALL output pins (not just displayed ones).
+        // This makes NodeSceneData cache-safe: pin display can be toggled
+        // without re-evaluation. displayed_outputs() filters at render time.
+        let pin_count = node_type.output_pin_count();
+        let mut pin_outputs = Vec::with_capacity(pin_count);
+        for pin_index_usize in 0..pin_count {
+            let pin_index = pin_index_usize as i32;
             if pin_index == 0 {
-                // Pin 0 is already computed above in `output` — skip redundant conversion.
-                // It's tracked in pin_outputs as a marker so interactive_pin_index works.
+                // Pin 0's actual data lives in NodeSceneData.output / .geo_tree.
+                // displayed_outputs() resolves pin 0 from those fields.
                 pin_outputs.push(DisplayedPinOutput {
                     pin_index: 0,
-                    output: NodeOutput::None, // Actual output is in NodeSceneData.output
+                    output: NodeOutput::None,
                     geo_tree: None,
                 });
                 continue;
@@ -237,11 +232,18 @@ impl NetworkEvaluator {
             });
         }
 
+        // Get current displayed pins from the network
+        let displayed_pins = network
+            .get_displayed_pins(node_id)
+            .cloned()
+            .unwrap_or_else(|| HashSet::from([0]));
+
         // Build NodeSceneData
         NodeSceneData {
             output,
             geo_tree,
             pin_outputs,
+            displayed_pins,
             node_errors: context.node_errors.clone(),
             node_output_strings: context.node_output_strings.clone(),
             unit_cell,

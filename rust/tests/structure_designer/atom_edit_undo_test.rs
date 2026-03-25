@@ -1919,59 +1919,32 @@ fn push_toggle_flag_command(
 ) {
     let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
 
-    match flag {
-        AtomEditFlag::OutputDiff => {
-            // OutputDiff now toggles displayed pins instead of data.output_diff.
-            // Check current displayed pin state to determine old/new values.
-            let network = designer
-                .node_type_registry
-                .node_networks
-                .get("test")
-                .unwrap();
-            let old_value = network
-                .get_displayed_pins(node_id)
-                .map_or(false, |pins| pins.contains(&1));
-            let new_value = !old_value;
+    let data = get_data_mut(designer);
+    let field = accessor(data);
+    let old_value = *field;
+    let new_value = !old_value;
+    *field = new_value;
+    designer.push_command(AtomEditToggleFlagCommand {
+        description: description.to_string(),
+        network_name,
+        node_id,
+        flag,
+        old_value,
+        new_value,
+    });
+}
 
-            // Apply the toggle (same as AtomEditToggleFlagCommand::apply_flag)
-            let network = designer
-                .node_type_registry
-                .node_networks
-                .get_mut("test")
-                .unwrap();
-            if new_value {
-                network.set_pin_displayed(node_id, 1, true);
-                network.set_pin_displayed(node_id, 0, false);
-            } else {
-                network.set_pin_displayed(node_id, 0, true);
-                network.set_pin_displayed(node_id, 1, false);
-            }
-
-            designer.push_command(AtomEditToggleFlagCommand {
-                description: description.to_string(),
-                network_name,
-                node_id,
-                flag,
-                old_value,
-                new_value,
-            });
-        }
-        _ => {
-            let data = get_data_mut(designer);
-            let field = accessor(data);
-            let old_value = *field;
-            let new_value = !old_value;
-            *field = new_value;
-            designer.push_command(AtomEditToggleFlagCommand {
-                description: description.to_string(),
-                network_name,
-                node_id,
-                flag,
-                old_value,
-                new_value,
-            });
-        }
-    }
+/// Helper to toggle pin display on the active atom_edit node (uses the proper
+/// `toggle_output_pin_display` path which pushes a `SetOutputPinDisplayCommand`).
+fn toggle_pin_display(designer: &mut StructureDesigner, pin_index: i32) {
+    let node_id = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap()
+        .active_node_id
+        .unwrap();
+    designer.toggle_output_pin_display(node_id, pin_index);
 }
 
 /// Helper to check if the atom_edit node is in diff view (pin 1 displayed).
@@ -1988,21 +1961,23 @@ fn is_in_diff_view(designer: &StructureDesigner) -> bool {
 }
 
 #[test]
-fn undo_atom_edit_toggle_output_diff() {
+fn undo_atom_edit_toggle_pin_display() {
     let mut designer = setup_atom_edit();
     assert!(!is_in_diff_view(&designer));
 
-    push_toggle_flag_command(
-        &mut designer,
-        AtomEditFlag::OutputDiff,
-        "Toggle output diff",
-        |d| &mut d.output_diff,
-    );
+    // Toggle: show diff pin (1), hide result pin (0)
+    toggle_pin_display(&mut designer, 1);
+    toggle_pin_display(&mut designer, 0);
     assert!(is_in_diff_view(&designer));
 
+    // Undo hide pin 0
+    assert!(designer.undo());
+    // Undo show pin 1
     assert!(designer.undo());
     assert!(!is_in_diff_view(&designer));
 
+    // Redo both
+    assert!(designer.redo());
     assert!(designer.redo());
     assert!(is_in_diff_view(&designer));
 }
@@ -2077,33 +2052,35 @@ fn undo_atom_edit_toggle_error_on_stale_entries() {
 }
 
 #[test]
-fn undo_atom_edit_toggle_flag_double_toggle() {
-    // Toggle twice, undo both, redo both
+fn undo_atom_edit_toggle_pin_display_double_toggle() {
+    // Toggle to diff view, then back to result view, undo both, redo both
     let mut designer = setup_atom_edit();
     assert!(!is_in_diff_view(&designer));
 
-    push_toggle_flag_command(&mut designer, AtomEditFlag::OutputDiff, "Toggle 1", |d| {
-        &mut d.output_diff
-    });
+    // Switch to diff view: show pin 1, hide pin 0
+    toggle_pin_display(&mut designer, 1);
+    toggle_pin_display(&mut designer, 0);
     assert!(is_in_diff_view(&designer));
 
-    push_toggle_flag_command(&mut designer, AtomEditFlag::OutputDiff, "Toggle 2", |d| {
-        &mut d.output_diff
-    });
+    // Switch back to result view: show pin 0, hide pin 1
+    toggle_pin_display(&mut designer, 0);
+    toggle_pin_display(&mut designer, 1);
     assert!(!is_in_diff_view(&designer));
 
-    // Undo second toggle
+    // Undo back to diff view (undo hide pin 1, undo show pin 0)
+    assert!(designer.undo());
     assert!(designer.undo());
     assert!(is_in_diff_view(&designer));
 
-    // Undo first toggle
+    // Undo back to result view (undo hide pin 0, undo show pin 1)
+    assert!(designer.undo());
     assert!(designer.undo());
     assert!(!is_in_diff_view(&designer));
 
-    // Redo both
-    assert!(designer.redo());
-    assert!(is_in_diff_view(&designer));
-    assert!(designer.redo());
+    // Redo all 4
+    for _ in 0..4 {
+        assert!(designer.redo());
+    }
     assert!(!is_in_diff_view(&designer));
 }
 
@@ -2304,16 +2281,13 @@ fn undo_atom_edit_freeze_already_frozen_is_noop() {
 // =============================================================================
 
 #[test]
-fn undo_atom_edit_flag_interleaved_with_mutations() {
-    // Toggle flag, add atom, undo both in order
+fn undo_atom_edit_pin_display_interleaved_with_mutations() {
+    // Toggle pin display, add atom, undo both in order
     let mut designer = setup_atom_edit();
 
-    push_toggle_flag_command(
-        &mut designer,
-        AtomEditFlag::OutputDiff,
-        "Toggle output diff",
-        |d| &mut d.output_diff,
-    );
+    // Switch to diff view
+    toggle_pin_display(&mut designer, 1);
+    toggle_pin_display(&mut designer, 0);
     assert!(is_in_diff_view(&designer));
 
     with_atom_edit_undo(&mut designer, "Add atom", |sd| {
@@ -2325,15 +2299,17 @@ fn undo_atom_edit_flag_interleaved_with_mutations() {
     // Undo add atom
     assert!(designer.undo());
     assert_eq!(diff_atom_count(&mut designer), 0);
-    // Flag should still be toggled
+    // Pin display should still show diff view
     assert!(is_in_diff_view(&designer));
 
-    // Undo toggle flag
+    // Undo both pin toggles
+    assert!(designer.undo());
     assert!(designer.undo());
     assert!(!is_in_diff_view(&designer));
 
-    // Redo both
-    assert!(designer.redo()); // toggle
+    // Redo all
+    assert!(designer.redo()); // show pin 1
+    assert!(designer.redo()); // hide pin 0
     assert!(is_in_diff_view(&designer));
     assert!(designer.redo()); // add atom
     assert_eq!(diff_atom_count(&mut designer), 1);
@@ -2375,7 +2351,7 @@ fn undo_atom_edit_frozen_interleaved_with_mutations() {
 
 #[test]
 fn undo_atom_edit_sequence_restores_initial_state() {
-    // Comprehensive: add atom, toggle flag, freeze, add another, toggle back, undo all
+    // Comprehensive: add atom, toggle pin display, freeze, add another, toggle back, undo all
     let mut designer = setup_atom_edit();
 
     let initial_diff_view = is_in_diff_view(&designer);
@@ -2386,10 +2362,9 @@ fn undo_atom_edit_sequence_restores_initial_state() {
         data.add_atom_to_diff(6, DVec3::ZERO);
     });
 
-    // 2. Toggle output_diff
-    push_toggle_flag_command(&mut designer, AtomEditFlag::OutputDiff, "Toggle", |d| {
-        &mut d.output_diff
-    });
+    // 2. Switch to diff view (2 undo commands: show pin 1, hide pin 0)
+    toggle_pin_display(&mut designer, 1);
+    toggle_pin_display(&mut designer, 0);
 
     // 3. Freeze atom 1
     push_freeze_command(&mut designer, &[], &[1]);
@@ -2400,21 +2375,17 @@ fn undo_atom_edit_sequence_restores_initial_state() {
         data.add_atom_to_diff(7, DVec3::X);
     });
 
-    // 5. Toggle output_diff back
-    push_toggle_flag_command(
-        &mut designer,
-        AtomEditFlag::OutputDiff,
-        "Toggle back",
-        |d| &mut d.output_diff,
-    );
+    // 5. Switch back to result view (2 undo commands: show pin 0, hide pin 1)
+    toggle_pin_display(&mut designer, 0);
+    toggle_pin_display(&mut designer, 1);
 
     // Verify current state
     assert_eq!(diff_atom_count(&mut designer), 2);
     assert_eq!(is_in_diff_view(&designer), initial_diff_view);
     assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
 
-    // Undo all 5 operations
-    for _ in 0..5 {
+    // Undo all 7 operations (was 5, now 7 because pin toggles are 2 commands each)
+    for _ in 0..7 {
         assert!(designer.undo());
     }
 
@@ -2426,8 +2397,8 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     // Cannot undo further
     assert!(!designer.undo());
 
-    // Redo all 5
-    for _ in 0..5 {
+    // Redo all 7
+    for _ in 0..7 {
         assert!(designer.redo());
     }
 

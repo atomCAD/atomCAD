@@ -466,6 +466,7 @@ fn test_node_scene_data_interactive_pin_single() {
             output: NodeOutput::None,
             geo_tree: None,
         }],
+        displayed_pins: std::collections::HashSet::from([0]),
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,
@@ -496,6 +497,7 @@ fn test_node_scene_data_interactive_pin_multi() {
                 geo_tree: None,
             },
         ],
+        displayed_pins: std::collections::HashSet::from([0, 1]),
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,
@@ -515,11 +517,19 @@ fn test_node_scene_data_interactive_pin_only_pin1() {
     let scene_data = NodeSceneData {
         output: NodeOutput::None,
         geo_tree: None,
-        pin_outputs: vec![DisplayedPinOutput {
-            pin_index: 1,
-            output: NodeOutput::None,
-            geo_tree: None,
-        }],
+        pin_outputs: vec![
+            DisplayedPinOutput {
+                pin_index: 0,
+                output: NodeOutput::None,
+                geo_tree: None,
+            },
+            DisplayedPinOutput {
+                pin_index: 1,
+                output: NodeOutput::None,
+                geo_tree: None,
+            },
+        ],
+        displayed_pins: std::collections::HashSet::from([1]),
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,
@@ -540,6 +550,7 @@ fn test_node_scene_data_interactive_pin_empty() {
         output: NodeOutput::None,
         geo_tree: None,
         pin_outputs: vec![],
+        displayed_pins: std::collections::HashSet::new(),
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,

@@ -927,10 +927,6 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void toggleAtomEditOutputDiff() {
-    atom_edit_api.atomEditToggleOutputDiff();
-    refreshFromKernel();
-  }
 
   void toggleAtomEditShowAnchorArrows() {
     atom_edit_api.atomEditToggleShowAnchorArrows();

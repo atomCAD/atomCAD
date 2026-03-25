@@ -59,20 +59,30 @@ class PinViewWidget extends StatelessWidget {
   final String dataType;
   final bool multi;
   final String? outputString;
+  final String? pinName;
 
   const PinViewWidget(
       {super.key,
       required this.dataType,
       required this.multi,
-      this.outputString});
+      this.outputString,
+      this.pinName});
 
   @override
   Widget build(BuildContext context) {
     final color = getDataTypeColor(dataType);
 
-    String tooltipMessage = dataType;
+    String tooltipMessage = '';
+    if (pinName != null && pinName!.isNotEmpty) {
+      tooltipMessage = pinName!;
+    }
+    if (tooltipMessage.isNotEmpty) {
+      tooltipMessage = '$tooltipMessage\n$dataType';
+    } else {
+      tooltipMessage = dataType;
+    }
     if (outputString != null && outputString!.isNotEmpty) {
-      tooltipMessage = '$dataType\n$outputString';
+      tooltipMessage = '$tooltipMessage\n$outputString';
     }
 
     return Tooltip(
@@ -104,8 +114,12 @@ class PinWidget extends StatelessWidget {
   final PinReference pinReference;
   final bool multi;
   final String? outputString;
+  final String? pinName;
   PinWidget(
-      {required this.pinReference, required this.multi, this.outputString})
+      {required this.pinReference,
+      required this.multi,
+      this.outputString,
+      this.pinName})
       : super(
             key: ValueKey(pinReference.pinIndex +
                 ((pinReference.pinType == PinType.output) ? 1000 : 0)));
@@ -139,7 +153,8 @@ class PinWidget extends StatelessWidget {
                 child: PinViewWidget(
                     dataType: pinReference.dataType,
                     multi: multi,
-                    outputString: outputString),
+                    outputString: outputString,
+                    pinName: pinName),
               ),
             ),
             child: SizedBox(
@@ -149,7 +164,8 @@ class PinWidget extends StatelessWidget {
                 child: PinViewWidget(
                     dataType: pinReference.dataType,
                     multi: multi,
-                    outputString: outputString),
+                    outputString: outputString,
+                    pinName: pinName),
               ),
             ),
             onDragUpdate: (details) {
@@ -392,11 +408,9 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
-  /// Creates an output pin row with optional eye icon and pin name.
-  /// For single-output nodes: eye icon + pin (no label).
-  /// For multi-output nodes: eye icon + label + pin.
+  /// Creates an output pin row with eye icon and pin dot.
+  /// Pin name is shown in the hover tooltip, not inline.
   Widget _buildOutputPin(BuildContext context, OutputPinView pin) {
-    final bool isMultiOutput = node.outputPins.length > 1;
     final bool isPinDisplayed = node.displayedPins.contains(pin.index);
 
     return Row(
@@ -416,19 +430,13 @@ class NodeWidget extends StatelessWidget {
             size: 16,
           ),
         ),
-        if (isMultiOutput) ...[
-          const SizedBox(width: 2),
-          Text(
-            pin.name,
-            style: const TextStyle(color: Colors.white, fontSize: 14),
-          ),
-        ],
         const SizedBox(width: 2),
         PinWidget(
           pinReference:
               PinReference(node.id, PinType.output, pin.index, pin.dataType),
           multi: false,
           outputString: pin.index == 0 ? node.outputString : null,
+          pinName: node.outputPins.length > 1 ? pin.name : null,
         ),
       ],
     );

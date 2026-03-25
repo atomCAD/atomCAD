@@ -43,15 +43,20 @@ pub enum NodeOutput {
 /// Represents the complete output of evaluating a single displayed node,
 /// including its primary output and all metadata from the evaluation chain
 pub struct NodeSceneData {
-    /// The primary renderable output of this node (backward-compatible: always pin 0 or interactive pin)
+    /// The primary renderable output of this node (backward-compatible: always pin 0)
     pub output: NodeOutput,
 
     /// The CSG geometry tree for the primary output (if this is a geometry node)
     pub geo_tree: Option<GeoNode>,
 
-    /// Per-pin outputs for all displayed pins of this node.
-    /// Includes the primary output as well as any additional displayed pins.
+    /// Converted outputs for ALL output pins of this node (not just displayed ones).
+    /// Pin 0 uses a `NodeOutput::None` marker — its actual data is in `output`/`geo_tree`.
+    /// This is populated at evaluation time and remains valid across pin display toggles.
     pub pin_outputs: Vec<DisplayedPinOutput>,
+
+    /// Which output pins are currently displayed. Updated by pin display toggles
+    /// without re-evaluation. `displayed_outputs()` uses this to filter `pin_outputs`.
+    pub displayed_pins: HashSet<i32>,
 
     /// Errors collected during evaluation of this node and its dependencies
     /// Maps node_id -> error_message for all nodes in the evaluation chain
@@ -75,6 +80,7 @@ impl NodeSceneData {
             output,
             geo_tree: None,
             pin_outputs: Vec::new(),
+            displayed_pins: HashSet::from([0]),
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
             unit_cell: None,
@@ -84,11 +90,10 @@ impl NodeSceneData {
 
     /// Get the interactive pin index (lowest-indexed displayed pin).
     pub fn interactive_pin_index(&self) -> Option<i32> {
-        self.pin_outputs.iter().map(|p| p.pin_index).min()
+        self.displayed_pins.iter().copied().min()
     }
 
-    /// Get the output for the interactive pin.
-    /// For pin 0, returns the main `output` field (not the pin_outputs marker).
+    /// Get the output for the interactive pin (lowest-indexed displayed pin).
     pub fn interactive_output(&self) -> Option<&NodeOutput> {
         let interactive_idx = self.interactive_pin_index()?;
         if interactive_idx == 0 {
@@ -99,6 +104,29 @@ impl NodeSceneData {
                 .find(|p| p.pin_index == interactive_idx)
                 .map(|p| &p.output)
         }
+    }
+
+    /// Iterate over displayed pin outputs only, resolving pin 0 from the main
+    /// `output`/`geo_tree` fields. Each item is `(pin_index, &NodeOutput, Option<&GeoNode>)`.
+    ///
+    /// When `pin_outputs` is empty (e.g. nodes constructed without multi-output info),
+    /// falls back to yielding the main `output`/`geo_tree` as pin 0.
+    pub fn displayed_outputs(&self) -> impl Iterator<Item = (i32, &NodeOutput, Option<&GeoNode>)> {
+        let use_fallback = self.pin_outputs.is_empty();
+        let fallback = use_fallback.then_some((0, &self.output, self.geo_tree.as_ref()));
+        let displayed_pins = &self.displayed_pins;
+        fallback.into_iter().chain(
+            self.pin_outputs
+                .iter()
+                .filter(move |p| displayed_pins.contains(&p.pin_index))
+                .map(move |p| {
+                    if p.pin_index == 0 {
+                        (0, &self.output, self.geo_tree.as_ref())
+                    } else {
+                        (p.pin_index, &p.output, p.geo_tree.as_ref())
+                    }
+                }),
+        )
     }
 }
 
@@ -188,6 +216,13 @@ impl StructureDesignerScene {
             true
         } else {
             false
+        }
+    }
+
+    /// Updates the `displayed_pins` on a node in the invisible cache (if present).
+    pub fn update_cached_displayed_pins(&mut self, node_id: u64, displayed_pins: HashSet<i32>) {
+        if let Some(node_data) = self.invisible_node_cache.get_mut(&node_id) {
+            node_data.displayed_pins = displayed_pins;
         }
     }
 

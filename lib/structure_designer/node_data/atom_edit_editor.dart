@@ -84,35 +84,11 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           // Header with title, info button, and view selector (hidden in direct editing mode)
           if (!widget.directEditingMode) ...[
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text('Atom Edit',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(width: 8),
-                    const NodeDescriptionButton(nodeTypeName: 'atom_edit'),
-                  ],
-                ),
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment<bool>(
-                      value: false,
-                      label: Text('Result'),
-                    ),
-                    ButtonSegment<bool>(
-                      value: true,
-                      label: Text('Diff'),
-                    ),
-                  ],
-                  selected: {_stagedData!.outputDiff},
-                  onSelectionChanged: (Set<bool> selection) {
-                    widget.model.toggleAtomEditOutputDiff();
-                  },
-                  style: ButtonStyle(
-                    visualDensity: AppSpacing.compactVerticalDensity,
-                  ),
-                ),
+                Text('Atom Edit',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(width: 8),
+                const NodeDescriptionButton(nodeTypeName: 'atom_edit'),
               ],
             ),
             // Diff options and stats (only when there's content)

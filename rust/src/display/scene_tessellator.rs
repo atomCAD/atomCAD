@@ -161,117 +161,122 @@ fn tessellate_non_lightweight_content(
             &default_inside_material
         };
 
-        match &node_data.output {
-            NodeOutput::Atomic(atomic_structure) => {
-                // Tessellate atomic structures based on rendering method
-                match preferences.atomic_structure_visualization.rendering_method {
-                    AtomicRenderingMethod::TriangleMesh => {
-                        atomic_tessellator::tessellate_atomic_structure(
-                            &mut main_mesh,
-                            atomic_structure,
-                            &atomic_tessellation_params,
-                            &preferences.atomic_structure_visualization,
-                        );
-                        // Render guide placement visuals in main impostor pass (normal depth)
-                        if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals
-                        {
-                            atomic_tessellator::tessellate_guide_placement_impostors(
+        // Render every displayed output pin for this node
+        for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
+            match pin_output {
+                NodeOutput::Atomic(atomic_structure) => {
+                    // Tessellate atomic structures based on rendering method
+                    match preferences.atomic_structure_visualization.rendering_method {
+                        AtomicRenderingMethod::TriangleMesh => {
+                            atomic_tessellator::tessellate_atomic_structure(
+                                &mut main_mesh,
+                                atomic_structure,
+                                &atomic_tessellation_params,
+                                &preferences.atomic_structure_visualization,
+                            );
+                            // Render guide placement visuals in main impostor pass (normal depth)
+                            if let Some(visuals) =
+                                &atomic_structure.decorator().guide_placement_visuals
+                            {
+                                atomic_tessellator::tessellate_guide_placement_impostors(
+                                    &mut atom_impostor_mesh,
+                                    &mut bond_impostor_mesh,
+                                    visuals,
+                                );
+                            }
+                        }
+                        AtomicRenderingMethod::Impostors => {
+                            atomic_tessellator::tessellate_atomic_structure_impostors(
                                 &mut atom_impostor_mesh,
                                 &mut bond_impostor_mesh,
-                                visuals,
+                                atomic_structure,
+                                &preferences.atomic_structure_visualization,
                             );
+                            // Render guide placement visuals in main impostor pass (normal depth)
+                            if let Some(visuals) =
+                                &atomic_structure.decorator().guide_placement_visuals
+                            {
+                                atomic_tessellator::tessellate_guide_placement_impostors(
+                                    &mut atom_impostor_mesh,
+                                    &mut bond_impostor_mesh,
+                                    visuals,
+                                );
+                            }
                         }
                     }
-                    AtomicRenderingMethod::Impostors => {
-                        atomic_tessellator::tessellate_atomic_structure_impostors(
-                            &mut atom_impostor_mesh,
-                            &mut bond_impostor_mesh,
-                            atomic_structure,
-                            &preferences.atomic_structure_visualization,
-                        );
-                        // Render guide placement visuals in main impostor pass (normal depth)
-                        if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals
-                        {
-                            atomic_tessellator::tessellate_guide_placement_impostors(
-                                &mut atom_impostor_mesh,
-                                &mut bond_impostor_mesh,
-                                visuals,
+
+                    // Render wireframe visuals for free placement (shared between rendering methods)
+                    if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals {
+                        if let Some(sphere_visuals) = &visuals.wireframe_sphere {
+                            guided_placement_tessellator::tessellate_guided_wireframe_sphere(
+                                &mut wireframe_mesh,
+                                sphere_visuals,
+                            );
+                        }
+                        if let Some(ring_visuals) = &visuals.wireframe_ring {
+                            guided_placement_tessellator::tessellate_guided_wireframe_ring(
+                                &mut wireframe_mesh,
+                                ring_visuals,
                             );
                         }
                     }
                 }
 
-                // Render wireframe visuals for free placement (shared between rendering methods)
-                if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals {
-                    if let Some(sphere_visuals) = &visuals.wireframe_sphere {
-                        guided_placement_tessellator::tessellate_guided_wireframe_sphere(
-                            &mut wireframe_mesh,
-                            sphere_visuals,
-                        );
-                    }
-                    if let Some(ring_visuals) = &visuals.wireframe_ring {
-                        guided_placement_tessellator::tessellate_guided_wireframe_ring(
-                            &mut wireframe_mesh,
-                            ring_visuals,
-                        );
-                    }
-                }
-            }
-
-            NodeOutput::SurfacePointCloud(point_cloud) => {
-                surface_point_tessellator::tessellate_surface_point_cloud(
-                    &mut main_mesh,
-                    point_cloud,
-                    outside_material,
-                    inside_material,
-                );
-            }
-
-            NodeOutput::SurfacePointCloud2D(point_cloud_2d) => {
-                surface_point_tessellator::tessellate_surface_point_cloud_2d(
-                    &mut main_mesh,
-                    point_cloud_2d,
-                    outside_material,
-                    inside_material,
-                );
-            }
-
-            NodeOutput::PolyMesh(poly_mesh) => {
-                if preferences.geometry_visualization.wireframe_geometry {
-                    let wireframe_color = if is_active {
-                        [1.0, 1.0, 1.0]
-                    } else {
-                        [0.5, 0.55, 0.6]
-                    };
-                    tessellate_poly_mesh_to_line_mesh(
-                        poly_mesh,
-                        &mut wireframe_mesh,
-                        preferences.geometry_visualization.mesh_smoothing.clone(),
-                        wireframe_color,
-                        wireframe_color,
-                    );
-                } else {
-                    tessellate_poly_mesh(
-                        poly_mesh,
+                NodeOutput::SurfacePointCloud(point_cloud) => {
+                    surface_point_tessellator::tessellate_surface_point_cloud(
                         &mut main_mesh,
-                        preferences.geometry_visualization.mesh_smoothing.clone(),
+                        point_cloud,
                         outside_material,
-                        Some(inside_material),
-                        Some(&highlighted_material),
+                        inside_material,
                     );
                 }
-            }
 
-            NodeOutput::DrawingPlane(drawing_plane) => {
-                coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
-                    &mut wireframe_mesh,
-                    drawing_plane,
-                    &preferences.background,
-                );
-            }
+                NodeOutput::SurfacePointCloud2D(point_cloud_2d) => {
+                    surface_point_tessellator::tessellate_surface_point_cloud_2d(
+                        &mut main_mesh,
+                        point_cloud_2d,
+                        outside_material,
+                        inside_material,
+                    );
+                }
 
-            NodeOutput::None => {
-                // No renderable output for this node
+                NodeOutput::PolyMesh(poly_mesh) => {
+                    if preferences.geometry_visualization.wireframe_geometry {
+                        let wireframe_color = if is_active {
+                            [1.0, 1.0, 1.0]
+                        } else {
+                            [0.5, 0.55, 0.6]
+                        };
+                        tessellate_poly_mesh_to_line_mesh(
+                            poly_mesh,
+                            &mut wireframe_mesh,
+                            preferences.geometry_visualization.mesh_smoothing.clone(),
+                            wireframe_color,
+                            wireframe_color,
+                        );
+                    } else {
+                        tessellate_poly_mesh(
+                            poly_mesh,
+                            &mut main_mesh,
+                            preferences.geometry_visualization.mesh_smoothing.clone(),
+                            outside_material,
+                            Some(inside_material),
+                            Some(&highlighted_material),
+                        );
+                    }
+                }
+
+                NodeOutput::DrawingPlane(drawing_plane) => {
+                    coordinate_system_tessellator::tessellate_drawing_plane_grid_and_axes(
+                        &mut wireframe_mesh,
+                        drawing_plane,
+                        &preferences.background,
+                    );
+                }
+
+                NodeOutput::None => {
+                    // No renderable output for this pin
+                }
             }
         }
     }

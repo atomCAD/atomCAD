@@ -2293,6 +2293,24 @@ impl StructureDesigner {
                     .is_some_and(|pins| pins.contains(&pin_index)),
             );
             self.pending_changes.visibility_changed.insert(node_id);
+
+            // Update displayed_pins on cached NodeSceneData so it renders the
+            // correct pins when restored from cache without re-evaluation.
+            let new_pins = network
+                .get_displayed_pins(node_id)
+                .cloned()
+                .unwrap_or_default();
+            // Update in live node_data
+            if let Some(scene_data) = self
+                .last_generated_structure_designer_scene
+                .node_data
+                .get_mut(&node_id)
+            {
+                scene_data.displayed_pins = new_pins.clone();
+            }
+            // Update in invisible cache
+            self.last_generated_structure_designer_scene
+                .update_cached_displayed_pins(node_id, new_pins);
         }
 
         // Capture new display state after mutation
@@ -3059,34 +3077,40 @@ impl StructureDesigner {
             .node_data
             .values()
         {
-            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-                match atomic_structure.hit_test(
-                    ray_origin,
-                    ray_direction,
-                    visualization,
-                    |atom| get_displayed_atom_radius(atom, &display_visualization),
-                    BAS_STICK_RADIUS,
-                ) {
-                    crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
-                    | crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) => {
-                        // Update minimum distance if this hit is closer
-                        min_distance = match min_distance {
-                            None => Some(distance),
-                            Some(current_min) if distance < current_min => Some(distance),
-                            _ => min_distance,
-                        };
+            for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
+                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                    match atomic_structure.hit_test(
+                        ray_origin,
+                        ray_direction,
+                        visualization,
+                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        BAS_STICK_RADIUS,
+                    ) {
+                        crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
+                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(
+                            _,
+                            distance,
+                        ) => {
+                            // Update minimum distance if this hit is closer
+                            min_distance = match min_distance {
+                                None => Some(distance),
+                                Some(current_min) if distance < current_min => Some(distance),
+                                _ => min_distance,
+                            };
+                        }
+                        crate::crystolecule::atomic_structure::HitTestResult::None => {}
                     }
-                    crate::crystolecule::atomic_structure::HitTestResult::None => {}
                 }
             }
         }
 
-        // Collect all geo_trees from node_data
+        // Collect all geo_trees from displayed outputs
         let geometries: Vec<&dyn ImplicitGeometry3D> = self
             .last_generated_structure_designer_scene
             .node_data
             .values()
-            .filter_map(|node_data| node_data.geo_tree.as_ref())
+            .flat_map(|node_data| node_data.displayed_outputs())
+            .filter_map(|(_pin_index, _output, geo_tree)| geo_tree)
             .map(|geo_node| geo_node as &dyn ImplicitGeometry3D)
             .collect();
 
@@ -3138,16 +3162,18 @@ impl StructureDesigner {
             .node_data
             .values()
         {
-            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-                if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
-                    ray_origin,
-                    ray_direction,
-                    visualization,
-                    |atom| get_displayed_atom_radius(atom, &display_visualization),
-                    BAS_STICK_RADIUS,
-                ) {
-                    if closest.as_ref().is_none_or(|c| distance < c.2) {
-                        closest = Some((atom_id, atomic_structure, distance));
+            for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
+                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                    if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
+                        ray_origin,
+                        ray_direction,
+                        visualization,
+                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        BAS_STICK_RADIUS,
+                    ) {
+                        if closest.as_ref().is_none_or(|c| distance < c.2) {
+                            closest = Some((atom_id, atomic_structure, distance));
+                        }
                     }
                 }
             }
@@ -3188,16 +3214,18 @@ impl StructureDesigner {
             .node_data
             .iter()
         {
-            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-                if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
-                    ray_origin,
-                    ray_direction,
-                    visualization,
-                    |atom| get_displayed_atom_radius(atom, &display_visualization),
-                    BAS_STICK_RADIUS,
-                ) {
-                    if closest.as_ref().is_none_or(|c| distance < c.3) {
-                        closest = Some((atom_id, atomic_structure, node_id, distance));
+            for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
+                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                    if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
+                        ray_origin,
+                        ray_direction,
+                        visualization,
+                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        BAS_STICK_RADIUS,
+                    ) {
+                        if closest.as_ref().is_none_or(|c| distance < c.3) {
+                            closest = Some((atom_id, atomic_structure, node_id, distance));
+                        }
                     }
                 }
             }
@@ -3241,33 +3269,42 @@ impl StructureDesigner {
         {
             let mut min_distance: Option<f64> = None;
 
-            // Hit-test atomic structures
-            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-                match atomic_structure.hit_test(
-                    ray_origin,
-                    ray_direction,
-                    visualization,
-                    |atom| get_displayed_atom_radius(atom, &display_visualization),
-                    BAS_STICK_RADIUS,
-                ) {
-                    crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
-                    | crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) => {
-                        min_distance = Some(distance);
+            // Hit-test all displayed outputs for this node
+            for (_pin_index, pin_output, pin_geo_tree) in node_data.displayed_outputs() {
+                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                    match atomic_structure.hit_test(
+                        ray_origin,
+                        ray_direction,
+                        visualization,
+                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        BAS_STICK_RADIUS,
+                    ) {
+                        crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
+                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(
+                            _,
+                            distance,
+                        ) => {
+                            min_distance = match min_distance {
+                                None => Some(distance),
+                                Some(current_min) if distance < current_min => Some(distance),
+                                _ => min_distance,
+                            };
+                        }
+                        crate::crystolecule::atomic_structure::HitTestResult::None => {}
                     }
-                    crate::crystolecule::atomic_structure::HitTestResult::None => {}
                 }
-            }
 
-            // Hit-test geometry (SDF)
-            if let Some(geo_tree) = &node_data.geo_tree {
-                if let Some(geo_distance) =
-                    raytrace_geometry(geo_tree, ray_origin, ray_direction, 1.0)
-                {
-                    min_distance = match min_distance {
-                        None => Some(geo_distance),
-                        Some(current_min) if geo_distance < current_min => Some(geo_distance),
-                        _ => min_distance,
-                    };
+                // Hit-test geometry (SDF)
+                if let Some(geo_tree) = pin_geo_tree {
+                    if let Some(geo_distance) =
+                        raytrace_geometry(geo_tree, ray_origin, ray_direction, 1.0)
+                    {
+                        min_distance = match min_distance {
+                            None => Some(geo_distance),
+                            Some(current_min) if geo_distance < current_min => Some(geo_distance),
+                            _ => min_distance,
+                        };
+                    }
                 }
             }
 
@@ -4072,15 +4109,17 @@ impl StructureDesigner {
         let mut merged_structure = AtomicStructure::new();
         let mut has_structures = false;
 
-        // Merge all atomic structures from node_data into one
+        // Merge all displayed atomic structures from node_data into one
         for node_data in self
             .last_generated_structure_designer_scene
             .node_data
             .values()
         {
-            if let NodeOutput::Atomic(atomic_structure) = &node_data.output {
-                merged_structure.add_atomic_structure(atomic_structure);
-                has_structures = true;
+            for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
+                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                    merged_structure.add_atomic_structure(atomic_structure);
+                    has_structures = true;
+                }
             }
         }
 

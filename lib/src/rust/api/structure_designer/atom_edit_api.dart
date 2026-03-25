@@ -83,9 +83,6 @@ void atomEditTransformSelected({required APITransform absTransform}) =>
         .crateApiStructureDesignerAtomEditApiAtomEditTransformSelected(
             absTransform: absTransform);
 
-bool atomEditToggleOutputDiff() => RustLib.instance.api
-    .crateApiStructureDesignerAtomEditApiAtomEditToggleOutputDiff();
-
 bool atomEditToggleShowAnchorArrows() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditToggleShowAnchorArrows();
 
