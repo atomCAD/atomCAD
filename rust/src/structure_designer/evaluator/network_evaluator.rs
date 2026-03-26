@@ -5,6 +5,7 @@ use crate::api::structure_designer::structure_designer_preferences::GeometryVisu
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::csg_cache::CsgConversionCache;
 use crate::structure_designer::data_type::DataType;
@@ -23,7 +24,12 @@ use crate::structure_designer::structure_designer_scene::{
 };
 
 use super::network_result::Closure;
+use super::network_result::{GeometrySummary, GeometrySummary2D};
 use super::network_result::input_missing_error;
+use crate::util::transform::Transform;
+use crate::util::transform::Transform2D;
+use glam::f64::{DQuat, DVec3};
+use glam::f64::DVec2;
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -432,8 +438,140 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
+        } else if let DataType::Array(inner_type) = data_type {
+            if let NetworkResult::Array(elements) = result {
+                self.convert_array_to_node_output(
+                    elements,
+                    inner_type,
+                    from_selected_node,
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    geometry_visualization_preferences,
+                )
+            } else {
+                (NodeOutput::None, None)
+            }
         } else {
             (NodeOutput::None, None)
+        }
+    }
+
+    /// Merges an array of results into a single displayable output.
+    ///
+    /// For `Array<Geometry>`: creates a CSG union of all shapes (like the `union` node).
+    /// For `Array<Geometry2D>`: creates a 2D CSG union (like the `union_2d` node).
+    /// For `Array<Atomic>`: merges all atomic structures (like the `atom_union` node).
+    /// Other element types or empty arrays return `NodeOutput::None`.
+    #[allow(clippy::too_many_arguments)]
+    fn convert_array_to_node_output<'a>(
+        &mut self,
+        elements: Vec<NetworkResult>,
+        inner_type: &DataType,
+        from_selected_node: bool,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
+        geometry_visualization_preferences: &GeometryVisualizationPreferences,
+    ) -> (NodeOutput, Option<GeoNode>) {
+        if elements.is_empty() {
+            return (NodeOutput::None, None);
+        }
+
+        match inner_type {
+            DataType::Geometry => {
+                let mut shapes: Vec<GeoNode> = Vec::new();
+                let mut frame_translation = DVec3::ZERO;
+                let mut first_unit_cell = None;
+                for element in elements {
+                    if let NetworkResult::Geometry(geo) = element {
+                        if first_unit_cell.is_none() {
+                            first_unit_cell = Some(geo.unit_cell.clone());
+                        }
+                        frame_translation += geo.frame_transform.translation;
+                        shapes.push(geo.geo_tree_root);
+                    }
+                }
+                if shapes.is_empty() {
+                    return (NodeOutput::None, None);
+                }
+                let count = shapes.len() as f64;
+                frame_translation /= count;
+                let merged = NetworkResult::Geometry(GeometrySummary {
+                    unit_cell: first_unit_cell.unwrap(),
+                    frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
+                    geo_tree_root: GeoNode::union_3d(shapes),
+                });
+                self.convert_result_to_node_output(
+                    merged,
+                    &DataType::Geometry,
+                    from_selected_node,
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    geometry_visualization_preferences,
+                )
+            }
+            DataType::Geometry2D => {
+                let mut shapes: Vec<GeoNode> = Vec::new();
+                let mut frame_translation = DVec2::ZERO;
+                let mut first_drawing_plane = None;
+                for element in elements {
+                    if let NetworkResult::Geometry2D(geo) = element {
+                        if first_drawing_plane.is_none() {
+                            first_drawing_plane = Some(geo.drawing_plane.clone());
+                        }
+                        frame_translation += geo.frame_transform.translation;
+                        shapes.push(geo.geo_tree_root);
+                    }
+                }
+                if shapes.is_empty() {
+                    return (NodeOutput::None, None);
+                }
+                let count = shapes.len() as f64;
+                frame_translation /= count;
+                let merged = NetworkResult::Geometry2D(GeometrySummary2D {
+                    drawing_plane: first_drawing_plane.unwrap(),
+                    frame_transform: Transform2D::new(frame_translation, 0.0),
+                    geo_tree_root: GeoNode::union_2d(shapes),
+                });
+                self.convert_result_to_node_output(
+                    merged,
+                    &DataType::Geometry2D,
+                    from_selected_node,
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    geometry_visualization_preferences,
+                )
+            }
+            DataType::Atomic => {
+                let mut structures: Vec<AtomicStructure> = Vec::new();
+                let mut frame_translation_sum = DVec3::ZERO;
+                for element in elements {
+                    if let NetworkResult::Atomic(structure) = element {
+                        frame_translation_sum += structure.frame_transform().translation;
+                        structures.push(structure);
+                    }
+                }
+                if structures.is_empty() {
+                    return (NodeOutput::None, None);
+                }
+                let count = structures.len() as f64;
+                let mut result = structures.remove(0);
+                for other in &structures {
+                    result.add_atomic_structure(other);
+                }
+                let avg_translation = frame_translation_sum / count;
+                result.set_frame_transform(Transform::new(avg_translation, DQuat::IDENTITY));
+                result.decorator_mut().from_selected_node = from_selected_node;
+                (NodeOutput::Atomic(result), None)
+            }
+            _ => (NodeOutput::None, None),
         }
     }
 
