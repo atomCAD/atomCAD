@@ -136,8 +136,6 @@ impl AtomEditData {
     // --- Recording methods ---
 
     /// Start recording diff mutations for undo/redo.
-    /// Also snapshots the current hybridization override maps so that changes
-    /// can be captured as a `HybridizationDelta` when recording ends.
     pub fn begin_recording(&mut self) {
         self.recorder = Some(DiffRecorder::default());
     }
