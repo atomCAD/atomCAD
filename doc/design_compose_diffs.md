@@ -51,11 +51,13 @@ diff2 matches against this result by position. We can resolve matches between di
 compose_two_diffs(diff1, diff2, tolerance) -> composed_diff
 ```
 
+**ID assignment invariant:** Atoms in the composed diff must be assigned IDs such that all atoms originating from diff1 have lower IDs than all atoms originating from diff2. This ensures correct greedy matching when the composed diff is later applied via `apply_diff` (e.g., a diff1 delete marker and a diff2 addition at the same position — the delete marker must claim the base atom first).
+
 **Step 1: Match diff2 atoms against diff1 atoms by position.**
 
 For each diff2 atom, compute its match position (anchor if present, else atom position). Search diff1's non-delete-marker atoms within tolerance. Use the same greedy nearest-first matching as `apply_diff`.
 
-Note: diff2 atoms should only match diff1 atoms that would be present in the result of `apply_diff(_, diff1)`. Delete markers in diff1 produce no atoms in the result, so they should be excluded from matching. Unchanged markers in diff1 reference base atoms — from diff2's perspective, the result atom at that position is the base atom, which the composed diff should reference directly.
+Note: diff2 atoms should only match diff1 atoms that would be present in the result of `apply_diff(_, diff1)`. Delete markers in diff1 produce no atoms in the result, so they should be excluded from matching. Unchanged markers in diff1 are matchable — they represent base atoms that passed through at their original position. When diff2 matches an unchanged marker, the composed result must anchor back to the base atom's position (the unchanged marker's position).
 
 **Step 2: Classify each diff2 atom and produce composed atoms.**
 
@@ -71,7 +73,7 @@ For each **matched pair** (diff1_atom, diff2_atom):
 | Pure addition (no anchor) | Unchanged | **diff1 atom as-is** (copy to composed) | diff2 only references it for bonds |
 | Unchanged marker | Modified/Replace | Atom at **diff2.position**, anchor = **diff1.match_pos** | diff1 didn't change the base atom, but diff2 does; anchor points to base position |
 | Unchanged marker | Delete marker | **Delete marker** with anchor = **diff1.match_pos** | diff1 didn't touch base atom, diff2 deletes it |
-| Unchanged marker | Unchanged | **Omit** (double no-op) | Neither diff touches the atom; no need to reference in composed |
+| Unchanged marker | Unchanged | **Unchanged marker** at **diff1.match_pos** | Neither diff touches the atom itself, but the marker must be kept as a potential bond endpoint; the extra marker is harmless (`apply_diff` just increments `unchanged_references`) |
 
 For each **unmatched diff1 atom** (not matched by any diff2 atom):
 - Copy to composed diff as-is (diff2 doesn't affect it).
@@ -129,9 +131,7 @@ Atom flags (frozen, hybridization override, hydrogen passivation) follow last-wr
 composed = fold(diffs, |acc, next| compose_two_diffs(acc, next, tolerance))
 ```
 
-This works because composition is **associative**: `compose(compose(d1, d2), d3)` produces the same diff as `compose(d1, compose(d2, d3))` — both produce a diff equivalent to applying d1, d2, d3 in sequence.
-
-The fold must be left-to-right to maintain the sequential application order.
+The left fold directly mirrors sequential application: `compose(d1, d2)` produces a diff equivalent to "apply d1 then d2", so folding left-to-right builds up the cumulative effect in application order. The fold must be left-to-right.
 
 ---
 
@@ -143,7 +143,9 @@ The unchanged marker (atomic_number = -1) deserves special attention. In a singl
 
 **When diff2 matches it:** diff2 sees an atom at position P in the result (the actual base atom, not the marker). If diff2 wants to modify it, the composed diff needs to track back to the base atom. Since the unchanged marker matched by position (the match_pos = anchor or position of the unchanged atom), we use that position as the anchor in the composed diff.
 
-**When diff2 doesn't match it:** The unchanged marker in diff1 was only needed for bond resolution between diff1 and the base. In the composed diff, we need to check: do any composed bonds reference this atom? If so, we need an unchanged marker at the same position. If not, it can be omitted. For simplicity, **always carry through** diff1's unchanged markers that aren't matched by diff2 — the extra marker is harmless (it just produces an `unchanged_references` stat when applied).
+**When diff2 matches it with another unchanged marker:** Neither diff modifies the atom itself. The composed diff emits an unchanged marker at the same position. This is essential because bonds from either diff may reference this atom as an endpoint — omitting it would orphan those bonds. The extra marker is harmless (`apply_diff` just increments `unchanged_references`).
+
+**When diff2 doesn't match it:** The unchanged marker in diff1 passes through to the composed diff as-is. It may be needed as a bond endpoint for diff1's bonds that survive into the composed diff.
 
 ---
 
@@ -202,7 +204,7 @@ pub fn compose_diffs(
 - When matching diff2 against diff1, **exclude diff1 delete markers** from the searchable set (they produce no atoms in the result).
 - For unchanged markers in diff1: their match position is `anchor_position.unwrap_or(atom.position)`, same as any diff atom.
 - The composed diff's `is_diff` flag must be `true`.
-- Atom IDs in the composed diff are freshly assigned (start from 1). A mapping from diff1/diff2 IDs to composed IDs is needed for bond resolution.
+- **ID ordering invariant:** Atom IDs in the composed diff are freshly assigned. All diff1-origin atoms must receive lower IDs than diff2-origin atoms (e.g., diff1 atoms get IDs 1..N, diff2 atoms get N+1..M). This ensures correct greedy matching when the composed diff is applied — see the algorithm overview for rationale. A mapping from diff1/diff2 IDs to composed IDs is needed for bond resolution.
 
 ---
 
@@ -722,18 +724,11 @@ diff2: unchanged at (0,0,0), N at (0,2,0) [add], bond(0-N, single)
        (diff2 adds a bond from C1 to a new N)
 
 diff2's unchanged at (0,0,0) matches diff1's unchanged at (0,0,0).
-Both unchanged → omit (double no-op on the atom itself).
+Both unchanged → emit unchanged marker at (0,0,0) (needed as bond endpoint).
 
-BUT: we need to carry bonds through. diff1 has BOND_DELETED between (0,0,0) and (1.54,0,0).
-diff2 has a new bond from (0,0,0) to N.
-
-For the bond deletion: diff1's unchanged at (1.54,0,0) is unmatched by diff2 → passes through.
+diff1's unchanged at (1.54,0,0) is unmatched by diff2 → passes through.
 diff1's BOND_DELETED between the two unchanged markers passes through.
-diff2's bond between unchanged and N: unchanged was omitted (double no-op), BUT the
-bond needs to reference the base atom. We need an unchanged marker for bond endpoints.
-
-Revised: the unchanged+unchanged → omit rule only omits if no bonds reference the atom.
-If bonds reference it, keep ONE unchanged marker.
+diff2's bond between unchanged(0,0,0) and N maps to composed unchanged→N bond.
 
 composed: unchanged at (0,0,0), unchanged at (1.54,0,0),
           N at (0,2,0) [add],
@@ -1136,17 +1131,9 @@ addition (to add new N). When applied, the delete marker matches C and removes i
 N is added as a pure addition (no anchor). The greedy matching ensures the delete marker
 claims C first.
 
-But wait: will the delete marker and N both try to match C? The delete marker is at (0,0,0)
-and N is at (0,0,0). In apply_diff, the greedy matching would have both candidates at
-distance 0 from base C. Which one claims it?
-
-This depends on atom ID ordering in the composed diff. The delete marker should be processed
-first (smaller ID if we add diff1 atoms first). After it claims C, N is unmatched → added
-as a pure addition. This is correct.
-
-Important: atom ordering in the composed diff matters for greedy matching. diff1 atoms
-should generally get lower IDs than diff2 atoms to ensure delete markers from diff1 match
-base atoms before diff2 additions at the same position.
+Both the delete marker and N are at (0,0,0), both at distance 0 from base C. The ID
+ordering invariant (diff1 atoms get lower IDs) ensures the delete marker is processed
+first in greedy matching. It claims C. N is then unmatched → added as a pure addition.
 ```
 
 ---
