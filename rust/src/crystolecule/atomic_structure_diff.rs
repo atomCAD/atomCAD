@@ -9,6 +9,7 @@
 
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
+use crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER;
 use rustc_hash::FxHashMap;
 
 /// Result of applying a diff to a base structure.
@@ -503,6 +504,381 @@ pub fn enrich_diff_with_base_bonds(
 
     for (a, b, order) in bonds_to_add {
         diff.add_bond(a, b, order);
+    }
+}
+
+// ============================================================================
+// Diff Composition
+// ============================================================================
+
+/// Result of composing two diffs.
+#[derive(Debug, Clone)]
+pub struct DiffCompositionResult {
+    /// The composed diff (is_diff = true).
+    pub composed: AtomicStructure,
+    /// Statistics about the composition.
+    pub stats: DiffCompositionStats,
+}
+
+/// Statistics about a diff composition operation.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DiffCompositionStats {
+    /// diff1 atoms carried through (not touched by diff2).
+    pub diff1_passthrough: u32,
+    /// diff2 atoms carried through (not matching any diff1 atom).
+    pub diff2_passthrough: u32,
+    /// Matched pairs where effects were composed.
+    pub composed_pairs: u32,
+    /// Cancellations (diff1 add + diff2 delete).
+    pub cancellations: u32,
+}
+
+/// Composes two diffs into a single diff.
+///
+/// The composed diff, when applied to any base, produces the same result
+/// as applying diff1 then diff2:
+///   apply_diff(apply_diff(base, diff1), diff2) == apply_diff(base, composed)
+///
+/// Both inputs must have is_diff = true.
+pub fn compose_two_diffs(
+    diff1: &AtomicStructure,
+    diff2: &AtomicStructure,
+    tolerance: f64,
+) -> DiffCompositionResult {
+    let tolerance_sq = tolerance * tolerance;
+    let mut stats = DiffCompositionStats::default();
+
+    // Step 1: Match diff2 atoms against diff1 non-delete-marker atoms.
+    // Build a temporary structure from diff1's matchable atoms (non-delete-markers)
+    // so we can use spatial grid matching.
+    let mut diff1_matchable = AtomicStructure::new();
+    // Maps: matchable_id → original diff1_id
+    let mut matchable_to_diff1: FxHashMap<u32, u32> = FxHashMap::default();
+
+    for (_, atom) in diff1.iter_atoms() {
+        if atom.is_delete_marker() {
+            continue; // Delete markers are excluded from matching
+        }
+        // Use atom.position — this is where the atom appears in the result of apply_diff(_, diff1).
+        // For modified atoms: position is the new (moved) position.
+        // For pure additions: position is where it was added.
+        // For unchanged markers: position matches the base atom's position.
+        let matchable_id = diff1_matchable.add_atom(atom.atomic_number, atom.position);
+        matchable_to_diff1.insert(matchable_id, atom.id);
+    }
+
+    // Match diff2 atoms against the matchable diff1 atoms
+    let (matches, unmatched_diff2_ids) =
+        match_diff_atoms(&diff1_matchable, diff2, tolerance_sq);
+
+    // Build lookup: diff1_id → diff2_id and diff2_id → diff1_id
+    let mut diff1_to_diff2: FxHashMap<u32, u32> = FxHashMap::default();
+    let mut diff2_to_diff1: FxHashMap<u32, u32> = FxHashMap::default();
+
+    for m in &matches {
+        let diff1_id = matchable_to_diff1[&m.base_id];
+        diff1_to_diff2.insert(diff1_id, m.diff_id);
+        diff2_to_diff1.insert(m.diff_id, diff1_id);
+    }
+
+    // Track cancelled diff1 atom IDs (pure addition + delete)
+    let mut cancelled_diff1_ids: rustc_hash::FxHashSet<u32> = rustc_hash::FxHashSet::default();
+    let mut cancelled_diff2_ids: rustc_hash::FxHashSet<u32> = rustc_hash::FxHashSet::default();
+
+    // Step 2: Build the composed diff.
+    // ID ordering invariant: diff1-origin atoms get lower IDs, diff2-origin atoms get higher IDs.
+    let mut composed = AtomicStructure::new_diff();
+
+    // Maps from original diff IDs to composed IDs (needed for bond resolution)
+    let mut diff1_to_composed: FxHashMap<u32, u32> = FxHashMap::default();
+    let mut diff2_to_composed: FxHashMap<u32, u32> = FxHashMap::default();
+
+    // --- Pass 1: diff1-origin atoms (lower IDs) ---
+
+    // Process matched pairs (diff1 side)
+    for (_, diff1_atom) in diff1.iter_atoms() {
+        if let Some(&diff2_id) = diff1_to_diff2.get(&diff1_atom.id) {
+            let diff2_atom = diff2.get_atom(diff2_id).unwrap();
+            let diff1_is_delete = diff1_atom.is_delete_marker();
+            let diff1_is_unchanged = diff1_atom.is_unchanged_marker();
+            let diff1_has_anchor = diff1.has_anchor_position(diff1_atom.id);
+            let diff1_is_pure_addition = !diff1_has_anchor && !diff1_is_delete && !diff1_is_unchanged;
+            let diff2_is_delete = diff2_atom.is_delete_marker();
+            let diff2_is_unchanged = diff2_atom.is_unchanged_marker();
+            let diff2_is_modify = !diff2_is_delete && !diff2_is_unchanged;
+
+            // diff1 delete markers are excluded from matching, so diff1_is_delete should not
+            // occur here. But handle defensively:
+            if diff1_is_delete {
+                // Should not happen since delete markers are excluded from matching
+                let cid = composed.add_atom(diff1_atom.atomic_number, diff1_atom.position);
+                if let Some(&anchor) = diff1.anchor_position(diff1_atom.id) {
+                    composed.set_anchor_position(cid, anchor);
+                }
+                diff1_to_composed.insert(diff1_atom.id, cid);
+                stats.diff1_passthrough += 1;
+                continue;
+            }
+
+            if diff1_is_unchanged {
+                // diff1 unchanged marker: match_pos is anchor or position
+                let match_pos = diff1
+                    .anchor_position(diff1_atom.id)
+                    .copied()
+                    .unwrap_or(diff1_atom.position);
+
+                if diff2_is_modify {
+                    // Unchanged + modify → atom at diff2 position, anchor = diff1 match_pos
+                    let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
+                    composed.copy_atom_metadata(cid, diff2_atom);
+                    composed.set_anchor_position(cid, match_pos);
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                } else if diff2_is_delete {
+                    // Unchanged + delete → delete marker with anchor at match_pos
+                    let cid = composed.add_atom(
+                        crate::crystolecule::atomic_structure::DELETED_SITE_ATOMIC_NUMBER,
+                        match_pos,
+                    );
+                    composed.set_anchor_position(cid, match_pos);
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                } else {
+                    // Unchanged + unchanged → unchanged marker at match_pos
+                    let cid = composed.add_atom(UNCHANGED_ATOMIC_NUMBER, match_pos);
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                }
+            } else if diff1_is_pure_addition {
+                if diff2_is_modify {
+                    // Pure addition + modify → pure addition at diff2 position, diff2 element/flags
+                    let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
+                    composed.copy_atom_metadata(cid, diff2_atom);
+                    // No anchor (still a pure addition)
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                } else if diff2_is_delete {
+                    // Pure addition + delete → CANCELLATION
+                    cancelled_diff1_ids.insert(diff1_atom.id);
+                    cancelled_diff2_ids.insert(diff2_id);
+                    stats.cancellations += 1;
+                } else {
+                    // Pure addition + unchanged → diff1 atom as-is
+                    let cid = composed.add_atom(diff1_atom.atomic_number, diff1_atom.position);
+                    composed.copy_atom_metadata(cid, diff1_atom);
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                }
+            } else {
+                // diff1 is modified (has anchor)
+                let diff1_anchor = diff1.anchor_position(diff1_atom.id).copied().unwrap();
+
+                if diff2_is_modify {
+                    // Modified + modify → diff2 position, diff1 anchor, diff2 element/flags
+                    let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
+                    composed.copy_atom_metadata(cid, diff2_atom);
+                    composed.set_anchor_position(cid, diff1_anchor);
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                } else if diff2_is_delete {
+                    // Modified + delete → delete marker with diff1's anchor
+                    let cid = composed.add_atom(
+                        crate::crystolecule::atomic_structure::DELETED_SITE_ATOMIC_NUMBER,
+                        diff1_anchor,
+                    );
+                    composed.set_anchor_position(cid, diff1_anchor);
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                } else {
+                    // Modified + unchanged → diff1 atom as-is
+                    let cid = composed.add_atom(diff1_atom.atomic_number, diff1_atom.position);
+                    composed.copy_atom_metadata(cid, diff1_atom);
+                    composed.set_anchor_position(cid, diff1_anchor);
+                    diff1_to_composed.insert(diff1_atom.id, cid);
+                    diff2_to_composed.insert(diff2_id, cid);
+                    stats.composed_pairs += 1;
+                }
+            }
+        } else {
+            // Unmatched diff1 atom → copy as-is
+            let cid = composed.add_atom(diff1_atom.atomic_number, diff1_atom.position);
+            composed.copy_atom_metadata(cid, diff1_atom);
+            if let Some(&anchor) = diff1.anchor_position(diff1_atom.id) {
+                composed.set_anchor_position(cid, anchor);
+            }
+            diff1_to_composed.insert(diff1_atom.id, cid);
+            stats.diff1_passthrough += 1;
+        }
+    }
+
+    // --- Pass 2: diff2-origin atoms (higher IDs) ---
+    for &diff2_id in &unmatched_diff2_ids {
+        let diff2_atom = diff2.get_atom(diff2_id).unwrap();
+        let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
+        composed.copy_atom_metadata(cid, diff2_atom);
+        if let Some(&anchor) = diff2.anchor_position(diff2_id) {
+            composed.set_anchor_position(cid, anchor);
+        }
+        diff2_to_composed.insert(diff2_id, cid);
+        stats.diff2_passthrough += 1;
+    }
+
+    // Step 3: Compose bonds.
+    compose_bonds(
+        diff1,
+        diff2,
+        &mut composed,
+        &diff1_to_composed,
+        &diff2_to_composed,
+        &diff1_to_diff2,
+        &diff2_to_diff1,
+        &cancelled_diff1_ids,
+        &cancelled_diff2_ids,
+    );
+
+    DiffCompositionResult { composed, stats }
+}
+
+/// Compose bonds from diff1 and diff2 into the composed diff.
+///
+/// Pass A: diff1 bonds — check if diff2 overrides.
+/// Pass B: diff2 bonds not yet processed — add to composed.
+#[allow(clippy::too_many_arguments)]
+fn compose_bonds(
+    diff1: &AtomicStructure,
+    diff2: &AtomicStructure,
+    composed: &mut AtomicStructure,
+    diff1_to_composed: &FxHashMap<u32, u32>,
+    diff2_to_composed: &FxHashMap<u32, u32>,
+    diff1_to_diff2: &FxHashMap<u32, u32>,
+    _diff2_to_diff1: &FxHashMap<u32, u32>,
+    cancelled_diff1_ids: &rustc_hash::FxHashSet<u32>,
+    cancelled_diff2_ids: &rustc_hash::FxHashSet<u32>,
+) {
+    let mut processed_diff2_bond_pairs: rustc_hash::FxHashSet<(u32, u32)> =
+        rustc_hash::FxHashSet::default();
+
+    // Pass A: diff1 bonds
+    for (_, diff1_atom) in diff1.iter_atoms() {
+        for bond in &diff1_atom.bonds {
+            let diff1_b_id = bond.other_atom_id();
+
+            // Only process each bond once
+            if diff1_atom.id >= diff1_b_id {
+                continue;
+            }
+
+            // If either endpoint was cancelled, skip the bond
+            if cancelled_diff1_ids.contains(&diff1_atom.id)
+                || cancelled_diff1_ids.contains(&diff1_b_id)
+            {
+                continue;
+            }
+
+            // Map to composed IDs
+            let composed_a = diff1_to_composed.get(&diff1_atom.id);
+            let composed_b = diff1_to_composed.get(&diff1_b_id);
+
+            let (Some(&composed_a_id), Some(&composed_b_id)) = (composed_a, composed_b) else {
+                continue;
+            };
+
+            // Check if both endpoints are matched by diff2 atoms
+            let diff2_a = diff1_to_diff2.get(&diff1_atom.id);
+            let diff2_b = diff1_to_diff2.get(&diff1_b_id);
+
+            match (diff2_a, diff2_b) {
+                (Some(&diff2_a_id), Some(&diff2_b_id)) => {
+                    // Both matched — check if diff2 has a bond between them
+                    let diff2_bond = find_bond_between(diff2, diff2_a_id, diff2_b_id);
+                    let canonical = canonical_pair(diff2_a_id, diff2_b_id);
+                    processed_diff2_bond_pairs.insert(canonical);
+
+                    match diff2_bond {
+                        Some(order) => {
+                            // diff2 overrides (including BOND_DELETED)
+                            composed.add_bond(composed_a_id, composed_b_id, order);
+                        }
+                        None => {
+                            // No diff2 bond → diff1 bond survives
+                            composed.add_bond(composed_a_id, composed_b_id, bond.bond_order());
+                        }
+                    }
+                }
+                _ => {
+                    // At most one matched → diff1 bond survives
+                    composed.add_bond(composed_a_id, composed_b_id, bond.bond_order());
+                }
+            }
+        }
+    }
+
+    // Pass B: diff2 bonds not yet processed
+    for (_, diff2_atom) in diff2.iter_atoms() {
+        for bond in &diff2_atom.bonds {
+            let diff2_b_id = bond.other_atom_id();
+
+            if diff2_atom.id >= diff2_b_id {
+                continue;
+            }
+
+            let canonical = canonical_pair(diff2_atom.id, diff2_b_id);
+            if processed_diff2_bond_pairs.contains(&canonical) {
+                continue;
+            }
+
+            // If either endpoint was cancelled, skip
+            if cancelled_diff2_ids.contains(&diff2_atom.id)
+                || cancelled_diff2_ids.contains(&diff2_b_id)
+            {
+                continue;
+            }
+
+            // Map to composed IDs
+            let composed_a = diff2_to_composed.get(&diff2_atom.id);
+            let composed_b = diff2_to_composed.get(&diff2_b_id);
+
+            if let (Some(&composed_a_id), Some(&composed_b_id)) = (composed_a, composed_b) {
+                composed.add_bond(composed_a_id, composed_b_id, bond.bond_order());
+            }
+            // If either endpoint missing from composed, skip (orphaned)
+        }
+    }
+}
+
+/// Composes a sequence of diffs (left fold of compose_two_diffs).
+///
+/// Returns None if the slice is empty. Returns a clone of the single diff
+/// if the slice has length 1.
+pub fn compose_diffs(
+    diffs: &[&AtomicStructure],
+    tolerance: f64,
+) -> Option<DiffCompositionResult> {
+    match diffs.len() {
+        0 => None,
+        1 => {
+            Some(DiffCompositionResult {
+                composed: diffs[0].clone(),
+                stats: DiffCompositionStats {
+                    diff1_passthrough: diffs[0].get_num_of_atoms() as u32,
+                    ..Default::default()
+                },
+            })
+        }
+        _ => {
+            let mut result = compose_two_diffs(diffs[0], diffs[1], tolerance);
+            for diff in &diffs[2..] {
+                result = compose_two_diffs(&result.composed, diff, tolerance);
+            }
+            Some(result)
+        }
     }
 }
 
