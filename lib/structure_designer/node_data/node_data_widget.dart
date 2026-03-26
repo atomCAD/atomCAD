@@ -25,6 +25,7 @@ import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/sequence_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec3_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/vec3_editor.dart';
@@ -398,6 +399,13 @@ class NodeDataWidget extends StatelessWidget {
         return MapEditor(
           nodeId: selectedNode.id,
           data: mapData,
+          model: model,
+        );
+      case 'sequence':
+        final sequenceData = model.getSequenceData(selectedNode.id);
+        return SequenceEditor(
+          nodeId: selectedNode.id,
+          data: sequenceData,
           model: model,
         );
       case 'ivec3':

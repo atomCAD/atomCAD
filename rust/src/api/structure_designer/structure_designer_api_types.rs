@@ -675,6 +675,11 @@ pub struct APIMapData {
     pub output_type: APIDataType,
 }
 
+pub struct APISequenceData {
+    pub element_type: APIDataType,
+    pub input_count: i32,
+}
+
 pub struct APIUnitCellData {
     pub cell_length_a: f64,
     pub cell_length_b: f64,

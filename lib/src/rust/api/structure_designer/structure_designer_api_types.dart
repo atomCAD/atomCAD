@@ -1536,6 +1536,27 @@ class APIRotationalSymmetry {
           nFold == other.nFold;
 }
 
+class APISequenceData {
+  final APIDataType elementType;
+  final int inputCount;
+
+  const APISequenceData({
+    required this.elementType,
+    required this.inputCount,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode ^ inputCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISequenceData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType &&
+          inputCount == other.inputCount;
+}
+
 class APISphereData {
   final APIIVec3 center;
   final int radius;

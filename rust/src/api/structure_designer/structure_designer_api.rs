@@ -11,6 +11,7 @@ use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIMapData;
+use super::structure_designer_api_types::APISequenceData;
 use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APINodeEvaluationResult;
@@ -109,6 +110,7 @@ use crate::structure_designer::nodes::lattice_move::LatticeMoveData;
 use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::map::MapData;
+use crate::structure_designer::nodes::sequence::SequenceData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::range::RangeData;
@@ -2799,6 +2801,26 @@ pub fn get_map_data(node_id: u64) -> Option<APIMapData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_sequence_data(node_id: u64) -> Option<APISequenceData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let seq_data = node_data.as_any_ref().downcast_ref::<SequenceData>()?;
+
+                Some(APISequenceData {
+                    element_type: data_type_to_api_data_type(&seq_data.element_type),
+                    input_count: seq_data.input_count as i32,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_motif_data(node_id: u64) -> Option<APIMotifData> {
     unsafe {
         with_cad_instance_or(
@@ -3359,6 +3381,30 @@ pub fn set_map_data(node_id: u64, data: APIMapData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, map_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sequence_data(node_id: u64, data: APISequenceData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let element_type = match api_data_type_to_data_type(&data.element_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            let input_count = (data.input_count as usize).max(1);
+
+            let seq_data = Box::new(SequenceData {
+                element_type,
+                input_count,
+            });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, seq_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

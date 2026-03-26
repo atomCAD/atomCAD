@@ -211,6 +211,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRotationalSymmetry dco_decode_api_rotational_symmetry(dynamic raw);
 
   @protected
+  APISequenceData dco_decode_api_sequence_data(dynamic raw);
+
+  @protected
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
@@ -393,6 +396,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRegPolyData dco_decode_box_autoadd_api_reg_poly_data(dynamic raw);
+
+  @protected
+  APISequenceData dco_decode_box_autoadd_api_sequence_data(dynamic raw);
 
   @protected
   APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw);
@@ -721,6 +727,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRegPolyData? dco_decode_opt_box_autoadd_api_reg_poly_data(dynamic raw);
+
+  @protected
+  APISequenceData? dco_decode_opt_box_autoadd_api_sequence_data(dynamic raw);
 
   @protected
   APISphereData? dco_decode_opt_box_autoadd_api_sphere_data(dynamic raw);
@@ -1056,6 +1065,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APISequenceData sse_decode_api_sequence_data(SseDeserializer deserializer);
+
+  @protected
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
@@ -1275,6 +1287,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRegPolyData sse_decode_box_autoadd_api_reg_poly_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APISequenceData sse_decode_box_autoadd_api_sequence_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1671,6 +1687,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APISequenceData? sse_decode_opt_box_autoadd_api_sequence_data(
+      SseDeserializer deserializer);
+
+  @protected
   APISphereData? sse_decode_opt_box_autoadd_api_sphere_data(
       SseDeserializer deserializer);
 
@@ -2049,6 +2069,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRotationalSymmetry self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_sequence_data(
+      APISequenceData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
@@ -2274,6 +2298,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_reg_poly_data(
       APIRegPolyData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_sequence_data(
+      APISequenceData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_sphere_data(
@@ -2674,6 +2702,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_reg_poly_data(
       APIRegPolyData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_sequence_data(
+      APISequenceData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_sphere_data(

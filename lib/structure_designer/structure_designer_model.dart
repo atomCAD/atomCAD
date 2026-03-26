@@ -927,7 +927,6 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-
   void toggleAtomEditShowAnchorArrows() {
     atom_edit_api.atomEditToggleShowAnchorArrows();
     refreshFromKernel();
@@ -1249,6 +1248,15 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMApData(BigInt nodeId, APIMapData data) {
     structure_designer_api.setMapData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APISequenceData? getSequenceData(BigInt nodeId) {
+    return structure_designer_api.getSequenceData(nodeId: nodeId);
+  }
+
+  void setSequenceData(BigInt nodeId, APISequenceData data) {
+    structure_designer_api.setSequenceData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

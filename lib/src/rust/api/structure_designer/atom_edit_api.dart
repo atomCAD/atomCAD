@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `toggle_atom_edit_flag`
+// These functions are ignored because they are not marked as `pub`: `gather_selected_base_promotion_info`, `toggle_atom_edit_flag`
 
 bool atomEditSelectByRay(
         {required APIVec3 rayStart,
@@ -269,6 +269,7 @@ double? atomEditGetDefaultAngle() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditGetDefaultAngle();
 
 /// Sets the frozen flag on all currently selected atoms (additive).
+/// Base atoms are promoted to diff first.
 void atomEditSelectionToFrozen() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditSelectionToFrozen();
 
@@ -276,20 +277,21 @@ void atomEditSelectionToFrozen() => RustLib.instance.api
 void atomEditSelectionToUnfrozen() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditSelectionToUnfrozen();
 
-/// Replaces the current selection with the set of frozen atoms.
+/// Replaces the current selection with the set of frozen diff atoms.
 void atomEditFrozenToSelection() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditFrozenToSelection();
 
-/// Clears the frozen flag from all atoms.
+/// Clears the frozen flag from all diff atoms.
 void atomEditClearFrozen() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditClearFrozen();
 
-/// Returns true if any atom has the frozen flag set.
+/// Returns true if any diff atom has the frozen flag set.
 bool atomEditHasFrozenAtoms() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditHasFrozenAtoms();
 
 /// Sets the hybridization override on all currently selected atoms.
 /// `Auto` removes the override (restoring bond-based inference).
+/// Base atoms are promoted to diff first.
 void atomEditSetHybridizationOverride(
         {required APIHybridization hybridization}) =>
     RustLib.instance.api

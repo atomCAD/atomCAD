@@ -476,6 +476,11 @@ APIExprData? getExprData({required BigInt nodeId}) => RustLib.instance.api
 APIMapData? getMapData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetMapData(nodeId: nodeId);
 
+APISequenceData? getSequenceData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetSequenceData(
+            nodeId: nodeId);
+
 APIMotifData? getMotifData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetMotifData(nodeId: nodeId);
 
@@ -643,6 +648,11 @@ void setParameterData(
 void setMapData({required BigInt nodeId, required APIMapData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMapData(
+            nodeId: nodeId, data: data);
+
+void setSequenceData({required BigInt nodeId, required APISequenceData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetSequenceData(
             nodeId: nodeId, data: data);
 
 APIResult setExprData({required BigInt nodeId, required APIExprData data}) =>
