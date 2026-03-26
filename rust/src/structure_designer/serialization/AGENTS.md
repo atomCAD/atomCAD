@@ -7,7 +7,8 @@ JSON-based persistence for `.cnnd` project files.
 | File | Purpose |
 |------|---------|
 | `node_networks_serialization.rs` | Save/load entire projects (.cnnd files) |
-| `edit_atom_data_serialization.rs` | Save/load EditAtom node command history |
+| `atom_edit_data_serialization.rs` | Save/load atom_edit node diff data (inline flags + backward-compat migration) |
+| `edit_atom_data_serialization.rs` | Save/load EditAtom node command history (legacy) |
 
 ## .cnnd File Format
 
@@ -35,7 +36,15 @@ Key entry points:
 - **`displayed_node_ids`** is always written (backward compat with old readers). On save, split from `displayed_nodes`.
 - **atom_edit `output_diff` migration:** On load, `output_diff: true` → `displayed_pins: {1}`. No longer written on save.
 
-## EditAtom Data
+## atom_edit Data (`atom_edit_data_serialization.rs`)
+
+Serializes `AtomEditData` for the `atom_edit` node (non-destructive diff-based editor):
+- **`SerializableAtom`** includes `flags: u16` — per-atom metadata (frozen, hybridization, H passivation) stored inline. Selection bit stripped on save.
+- **Inline flags** are the canonical format. Old external map fields (`frozen_base_atoms`, `frozen_diff_atoms`, `hybridization_override_base_atoms`, `hybridization_override_diff_atoms`) are kept on `SerializableAtomEditData` for backward-compat deserialization but are always written empty on save (skipped via `skip_serializing_if`).
+- **Backward-compat migration:** On load, if old map fields are present, diff-provenance entries are applied to diff atom flags. Base-provenance entries are ignored (promotion requires the base structure, unavailable at load time).
+- Tests: `rust/tests/integration/inline_metadata_migration_test.rs`
+
+## EditAtom Data (Legacy)
 
 `EditAtomData` has its own serialization for the command history:
 - Commands serialized with type tag + JSON data

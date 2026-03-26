@@ -1,6 +1,6 @@
 # Design: Inline Atom Metadata in Diff
 
-**Status:** Proposed
+**Status:** Implemented (Phases 1-4)
 **Author:** Claude (with user direction)
 **Date:** 2025-03-25
 

@@ -106,7 +106,7 @@ atom_edit bypasses the generic `SetNodeData` command and uses incremental delta-
 ### Recorded Mutation Methods
 
 Two layers of mutation methods exist:
-- **Recording methods** (on `AtomEditData`): `add_atom_to_diff`, `remove_from_diff`, `move_in_diff`, `add_bond_in_diff`, `set_atomic_number_recorded`, `set_anchor_recorded`, `add_atom_recorded`, `add_bond_recorded`, `set_position_recorded`, `delete_bond_recorded`. Called during user actions.
+- **Recording methods** (on `AtomEditData`): `add_atom_to_diff`, `remove_from_diff`, `move_in_diff`, `add_bond_in_diff`, `set_atomic_number_recorded`, `set_anchor_recorded`, `add_atom_recorded`, `add_bond_recorded`, `set_position_recorded`, `delete_bond_recorded`, `set_frozen_recorded`, `set_hybridization_override_recorded`, `set_flags_recorded`. Called during user actions.
 - **Non-recording methods** (on `AtomicStructure`/diff directly): `diff.add_atom_with_id`, `diff.delete_atom`, `diff.set_atom_position`, etc. Called by undo/redo execution only.
 
 When adding new diff mutations, use the recording variants. If mutating `self.diff` directly, add a `*_recorded` wrapper.
