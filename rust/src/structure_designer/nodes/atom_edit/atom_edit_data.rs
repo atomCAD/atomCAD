@@ -188,6 +188,7 @@ impl AtomEditData {
             if let Some(atom) = self.diff.get_atom(atom_id) {
                 let old_an = atom.atomic_number;
                 let pos = atom.position;
+                let flags = atom.flags;
                 let anchor = self.diff.anchor_position(atom_id).copied();
                 if old_an != atomic_number {
                     rec.atom_deltas.push(AtomDelta {
@@ -196,11 +197,13 @@ impl AtomEditData {
                             atomic_number: old_an,
                             position: pos,
                             anchor,
+                            flags,
                         }),
                         after: Some(AtomState {
                             atomic_number,
                             position: pos,
                             anchor,
+                            flags,
                         }),
                     });
                 }
@@ -221,11 +224,13 @@ impl AtomEditData {
                             atomic_number: atom.atomic_number,
                             position: atom.position,
                             anchor: old_anchor,
+                            flags: atom.flags,
                         }),
                         after: Some(AtomState {
                             atomic_number: atom.atomic_number,
                             position: atom.position,
                             anchor: Some(anchor),
+                            flags: atom.flags,
                         }),
                     });
                 }
@@ -246,6 +251,7 @@ impl AtomEditData {
                     atomic_number,
                     position,
                     anchor: None,
+                    flags: 0,
                 }),
             });
         }
@@ -313,16 +319,122 @@ impl AtomEditData {
                         atomic_number: atom.atomic_number,
                         position: atom.position,
                         anchor,
+                        flags: atom.flags,
                     }),
                     after: Some(AtomState {
                         atomic_number: atom.atomic_number,
                         position: new_position,
                         anchor,
+                        flags: atom.flags,
                     }),
                 });
             }
         }
         self.diff.set_atom_position(atom_id, new_position);
+    }
+
+    /// Set all non-selection flags on a diff atom with recording.
+    /// Used by `promote_base_atom_metadata` (future Phase 2) to copy base atom flags
+    /// to the new diff atom within a recording session.
+    pub fn set_flags_recorded(&mut self, atom_id: u32, flags: u16) {
+        if let Some(ref mut rec) = self.recorder {
+            if let Some(atom) = self.diff.get_atom(atom_id) {
+                let old_flags = atom.flags;
+                // Compare non-selection bits only
+                if (old_flags & !0x1) != (flags & !0x1) {
+                    let anchor = self.diff.anchor_position(atom_id).copied();
+                    rec.atom_deltas.push(AtomDelta {
+                        atom_id,
+                        before: Some(AtomState {
+                            atomic_number: atom.atomic_number,
+                            position: atom.position,
+                            anchor,
+                            flags: old_flags,
+                        }),
+                        after: Some(AtomState {
+                            atomic_number: atom.atomic_number,
+                            position: atom.position,
+                            anchor,
+                            flags: (old_flags & 0x1) | (flags & !0x1),
+                        }),
+                    });
+                }
+            }
+        }
+        // Apply: preserve selection bit, set everything else
+        if let Some(atom) = self.diff.get_atom(atom_id) {
+            let selected = atom.flags & 0x1;
+            let new_flags = selected | (flags & !0x1);
+            // Use per-flag setters since get_atom_mut is private
+            self.diff.set_atom_frozen(atom_id, (new_flags & (1 << 2)) != 0);
+            self.diff
+                .set_atom_hydrogen_passivation(atom_id, (new_flags & (1 << 1)) != 0);
+            self.diff
+                .set_atom_hybridization_override(atom_id, ((new_flags >> 3) & 0b11) as u8);
+        }
+    }
+
+    /// Set the frozen flag on a diff atom with recording.
+    pub fn set_frozen_recorded(&mut self, atom_id: u32, frozen: bool) {
+        if let Some(ref mut rec) = self.recorder {
+            if let Some(atom) = self.diff.get_atom(atom_id) {
+                if atom.is_frozen() != frozen {
+                    let anchor = self.diff.anchor_position(atom_id).copied();
+                    let mut new_flags = atom.flags;
+                    if frozen {
+                        new_flags |= 1 << 2;
+                    } else {
+                        new_flags &= !(1 << 2);
+                    }
+                    rec.atom_deltas.push(AtomDelta {
+                        atom_id,
+                        before: Some(AtomState {
+                            atomic_number: atom.atomic_number,
+                            position: atom.position,
+                            anchor,
+                            flags: atom.flags,
+                        }),
+                        after: Some(AtomState {
+                            atomic_number: atom.atomic_number,
+                            position: atom.position,
+                            anchor,
+                            flags: new_flags,
+                        }),
+                    });
+                }
+            }
+        }
+        self.diff.set_atom_frozen(atom_id, frozen);
+    }
+
+    /// Set the hybridization override on a diff atom with recording.
+    pub fn set_hybridization_override_recorded(&mut self, atom_id: u32, hybridization: u8) {
+        if let Some(ref mut rec) = self.recorder {
+            if let Some(atom) = self.diff.get_atom(atom_id) {
+                if atom.hybridization_override() != hybridization {
+                    let anchor = self.diff.anchor_position(atom_id).copied();
+                    let mut new_flags = atom.flags;
+                    // Clear hybridization bits and set new value
+                    new_flags = (new_flags & !(0b11 << 3)) | (((hybridization as u16) & 0b11) << 3);
+                    rec.atom_deltas.push(AtomDelta {
+                        atom_id,
+                        before: Some(AtomState {
+                            atomic_number: atom.atomic_number,
+                            position: atom.position,
+                            anchor,
+                            flags: atom.flags,
+                        }),
+                        after: Some(AtomState {
+                            atomic_number: atom.atomic_number,
+                            position: atom.position,
+                            anchor,
+                            flags: new_flags,
+                        }),
+                    });
+                }
+            }
+        }
+        self.diff.set_atom_hybridization_override(atom_id, hybridization);
     }
 
     // --- Bulk merge ---
@@ -390,6 +502,7 @@ impl AtomEditData {
                     atomic_number,
                     position,
                     anchor: None,
+                    flags: 0,
                 }),
             });
         }
@@ -410,6 +523,7 @@ impl AtomEditData {
                     atomic_number,
                     position: match_position,
                     anchor: None,
+                    flags: 0,
                 }),
             });
         }
@@ -429,6 +543,7 @@ impl AtomEditData {
                     atomic_number: new_atomic_number,
                     position: match_position,
                     anchor: None,
+                    flags: 0,
                 }),
             });
         }
@@ -450,6 +565,7 @@ impl AtomEditData {
                 atomic_number: a.atomic_number,
                 position: a.position,
                 anchor: self.diff.anchor_position(atom_id).copied(),
+                flags: a.flags,
             })
         } else {
             None
@@ -560,6 +676,7 @@ impl AtomEditData {
                         atomic_number: a.atomic_number,
                         position: a.position,
                         anchor,
+                        flags: a.flags,
                     },
                     bonds,
                 )

@@ -1,4 +1,4 @@
-use crate::crystolecule::atomic_structure::BondReference;
+use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::nodes::atom_edit::diff_recorder::{AtomDelta, BondDelta};
 use crate::structure_designer::undo::commands::atom_edit_hybridization_change::HybridizationDelta;
@@ -114,6 +114,7 @@ fn apply_undo(
                 if let Some(anchor) = state.anchor {
                     data.diff.set_anchor_position(delta.atom_id, anchor);
                 }
+                restore_flags(&mut data.diff, delta.atom_id, state.flags);
             }
             (Some(before), Some(_after)) => {
                 // Atom was modified → restore before state
@@ -124,6 +125,7 @@ fn apply_undo(
                     Some(anchor) => data.diff.set_anchor_position(delta.atom_id, anchor),
                     None => data.diff.remove_anchor_position(delta.atom_id),
                 }
+                restore_flags(&mut data.diff, delta.atom_id, before.flags);
             }
             (None, None) => {}
         }
@@ -181,6 +183,7 @@ fn apply_redo(
                 if let Some(anchor) = state.anchor {
                     data.diff.set_anchor_position(delta.atom_id, anchor);
                 }
+                restore_flags(&mut data.diff, delta.atom_id, state.flags);
             }
             (Some(_), None) => {
                 // Atom was removed → delete it
@@ -196,6 +199,7 @@ fn apply_redo(
                     Some(anchor) => data.diff.set_anchor_position(delta.atom_id, anchor),
                     None => data.diff.remove_anchor_position(delta.atom_id),
                 }
+                restore_flags(&mut data.diff, delta.atom_id, after.flags);
             }
             (None, None) => {}
         }
@@ -211,4 +215,15 @@ fn apply_redo(
 
     data.selection.clear();
     data.clear_input_cache();
+}
+
+/// Restore atom flags (frozen, hybridization, passivation) from a saved state.
+/// Uses the public per-flag setters on AtomicStructure.
+fn restore_flags(diff: &mut AtomicStructure, atom_id: u32, flags: u16) {
+    let frozen = (flags & (1 << 2)) != 0;
+    let h_passivation = (flags & (1 << 1)) != 0;
+    let hybridization = ((flags >> 3) & 0b11) as u8;
+    diff.set_atom_frozen(atom_id, frozen);
+    diff.set_atom_hydrogen_passivation(atom_id, h_passivation);
+    diff.set_atom_hybridization_override(atom_id, hybridization);
 }

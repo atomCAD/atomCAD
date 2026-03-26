@@ -8,6 +8,7 @@ pub struct AtomState {
     pub atomic_number: i16,
     pub position: DVec3,
     pub anchor: Option<DVec3>,
+    pub flags: u16,
 }
 
 /// A change to a single atom in the diff.

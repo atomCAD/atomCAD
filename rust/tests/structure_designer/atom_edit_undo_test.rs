@@ -131,11 +131,13 @@ fn coalesce_modified_modified() {
             atomic_number: 6,
             position: DVec3::ZERO,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -144,11 +146,13 @@ fn coalesce_modified_modified() {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::Y,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.coalesce();
@@ -172,6 +176,7 @@ fn coalesce_added_modified() {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -180,11 +185,13 @@ fn coalesce_added_modified() {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::Y,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.coalesce();
@@ -207,11 +214,13 @@ fn coalesce_modified_removed() {
             atomic_number: 6,
             position: DVec3::ZERO,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -220,6 +229,7 @@ fn coalesce_modified_removed() {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
         after: None,
     });
@@ -243,11 +253,13 @@ fn coalesce_different_atoms_not_merged() {
             atomic_number: 6,
             position: DVec3::ZERO,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -256,11 +268,13 @@ fn coalesce_different_atoms_not_merged() {
             atomic_number: 7,
             position: DVec3::Y,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 7,
             position: DVec3::Z,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.coalesce();
@@ -281,11 +295,13 @@ fn coalesce_non_consecutive_not_merged() {
             atomic_number: 6,
             position: DVec3::ZERO,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -294,11 +310,13 @@ fn coalesce_non_consecutive_not_merged() {
             atomic_number: 7,
             position: DVec3::Y,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 7,
             position: DVec3::Z,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -307,16 +325,120 @@ fn coalesce_non_consecutive_not_merged() {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
+            flags: 0,
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::Y,
             anchor: None,
+            flags: 0,
         }),
     });
     rec.coalesce();
     // Non-consecutive same-atom deltas are NOT merged
     assert_eq!(rec.atom_deltas.len(), 3);
+}
+
+// =============================================================================
+// Phase 1 (inline metadata): flag recording and coalescing
+// =============================================================================
+
+#[test]
+fn recording_set_flags_produces_delta() {
+    let mut data = AtomEditData::new();
+    let id = data.add_atom_to_diff(6, DVec3::ZERO);
+    data.begin_recording();
+    data.set_frozen_recorded(id, true);
+    let rec = data.end_recording().unwrap();
+    assert_eq!(rec.atom_deltas.len(), 1);
+    let delta = &rec.atom_deltas[0];
+    assert_eq!(delta.atom_id, id);
+    let before = delta.before.as_ref().unwrap();
+    let after = delta.after.as_ref().unwrap();
+    // Position and atomic_number unchanged
+    assert_eq!(before.atomic_number, 6);
+    assert_eq!(after.atomic_number, 6);
+    assert!((before.position - DVec3::ZERO).length() < 1e-10);
+    assert!((after.position - DVec3::ZERO).length() < 1e-10);
+    // Flags changed: before has no frozen, after has frozen (bit 2)
+    assert_eq!(before.flags & (1 << 2), 0);
+    assert_ne!(after.flags & (1 << 2), 0);
+}
+
+#[test]
+fn undo_atom_edit_flag_change() {
+    let mut designer = setup_atom_edit();
+    // Add an atom to diff
+    let atom_id = {
+        let data = get_data_mut(&mut designer);
+        data.add_atom_to_diff(6, DVec3::ZERO)
+    };
+    // Set frozen via recorded method inside with_atom_edit_undo
+    with_atom_edit_undo(&mut designer, "Freeze atom", |sd| {
+        get_data_mut(sd).set_frozen_recorded(atom_id, true);
+    });
+    // Verify frozen
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(atom_id).unwrap();
+        assert!(atom.is_frozen());
+    }
+    // Undo
+    designer.undo();
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(atom_id).unwrap();
+        assert!(!atom.is_frozen());
+    }
+    // Redo
+    designer.redo();
+    {
+        let data = get_data_mut(&mut designer);
+        let atom = data.diff.get_atom(atom_id).unwrap();
+        assert!(atom.is_frozen());
+    }
+}
+
+#[test]
+fn coalesce_added_then_flag_modified() {
+    use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::diff_recorder::{
+        AtomDelta, AtomState,
+    };
+
+    // Simulate: add_atom_recorded (Added delta with flags=0) followed by
+    // set_flags_recorded (Modified delta changing flags). Coalescing should
+    // merge into a single Added with the final flags.
+    let mut rec = DiffRecorder::default();
+    rec.atom_deltas.push(AtomDelta {
+        atom_id: 1,
+        before: None,
+        after: Some(AtomState {
+            atomic_number: 6,
+            position: DVec3::ZERO,
+            anchor: None,
+            flags: 0,
+        }),
+    });
+    rec.atom_deltas.push(AtomDelta {
+        atom_id: 1,
+        before: Some(AtomState {
+            atomic_number: 6,
+            position: DVec3::ZERO,
+            anchor: None,
+            flags: 0,
+        }),
+        after: Some(AtomState {
+            atomic_number: 6,
+            position: DVec3::ZERO,
+            anchor: None,
+            flags: 1 << 2, // frozen bit
+        }),
+    });
+    rec.coalesce();
+    assert_eq!(rec.atom_deltas.len(), 1);
+    let d = &rec.atom_deltas[0];
+    assert!(d.before.is_none()); // Still an Add
+    assert_eq!(d.after.as_ref().unwrap().flags, 1 << 2); // Has the frozen flag
 }
 
 // =============================================================================
