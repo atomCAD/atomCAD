@@ -126,3 +126,6 @@ mod relax_node_atom_limit_test;
 
 #[path = "structure_designer/multi_output_unit_test.rs"]
 mod multi_output_unit_test;
+
+#[path = "structure_designer/sequence_node_test.rs"]
+mod sequence_node_test;

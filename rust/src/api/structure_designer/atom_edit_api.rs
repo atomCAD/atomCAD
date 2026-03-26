@@ -18,8 +18,8 @@ use crate::api::structure_designer::structure_designer_api_types::PointerMoveRes
 use crate::api::structure_designer::structure_designer_api_types::PointerUpResult;
 use crate::structure_designer::nodes::atom_edit::atom_edit;
 use crate::structure_designer::nodes::atom_edit::atom_edit::{AtomEditData, MinimizeFreezeMode};
-use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::nodes::atom_edit::operations::BaseAtomPromotionInfo;
+use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::undo::commands::atom_edit_toggle_flag::{
     AtomEditFlag, AtomEditToggleFlagCommand,
 };
@@ -309,7 +309,6 @@ fn toggle_atom_edit_flag(
         });
     }
 }
-
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_toggle_show_anchor_arrows() -> bool {

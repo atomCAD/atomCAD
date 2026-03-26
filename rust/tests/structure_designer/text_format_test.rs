@@ -2840,8 +2840,7 @@ mod multi_output_text_format_tests {
     #[test]
     fn test_parse_explicit_result_pin() {
         // `some_node { input: atom_edit.result }` explicitly references pin 0
-        let stmts =
-            Parser::parse("some_node = apply_diff { diff: atom_edit.result }").unwrap();
+        let stmts = Parser::parse("some_node = apply_diff { diff: atom_edit.result }").unwrap();
 
         if let Statement::Assignment { properties, .. } = &stmts[0] {
             match &properties[0].1 {
@@ -3011,11 +3010,7 @@ mod multi_output_text_format_tests {
 
         let ad_node = network.nodes.get(&ad_id).unwrap();
         let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
-        assert_eq!(
-            pin_index,
-            Some(&0),
-            "Explicit .result should wire to pin 0"
-        );
+        assert_eq!(pin_index, Some(&0), "Explicit .result should wire to pin 0");
     }
 
     #[test]
@@ -3126,7 +3121,11 @@ mod multi_output_text_format_tests {
         "#;
 
         let result = edit_designer_network(&mut designer, "test_net", code, true);
-        assert!(result.success, "First edit should succeed: {:?}", result.errors);
+        assert!(
+            result.success,
+            "First edit should succeed: {:?}",
+            result.errors
+        );
 
         // Serialize
         let network = designer

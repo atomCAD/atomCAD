@@ -6,8 +6,8 @@
 // 3. Atom flags persist in diff structure: bare serializable atom flags round-trip.
 
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
     atom_edit_data_to_serializable, serializable_to_atom_edit_data,
 };
@@ -118,8 +118,8 @@ fn flags_roundtrip_serialization() {
         atom_edit_data_to_serializable(&data).expect("Failed to serialize atom_edit_data");
 
     // Deserialize
-    let restored =
-        serializable_to_atom_edit_data(&serializable).expect("Failed to deserialize atom_edit_data");
+    let restored = serializable_to_atom_edit_data(&serializable)
+        .expect("Failed to deserialize atom_edit_data");
 
     // Verify flags survived the roundtrip
     let atom1 = restored.diff.get_atom(id1).expect("Atom 1 missing");
@@ -176,10 +176,8 @@ fn atom_flags_persist_in_diff_structure() {
     data.diff.set_atom_hybridization_override(id4, 2); // Sp2
 
     // Roundtrip through serialization
-    let serializable =
-        atom_edit_data_to_serializable(&data).expect("Failed to serialize");
-    let restored =
-        serializable_to_atom_edit_data(&serializable).expect("Failed to deserialize");
+    let serializable = atom_edit_data_to_serializable(&data).expect("Failed to serialize");
+    let restored = serializable_to_atom_edit_data(&serializable).expect("Failed to deserialize");
 
     // Verify all flag combinations survived
     let a1 = restored.diff.get_atom(id1).unwrap();

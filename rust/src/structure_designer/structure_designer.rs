@@ -3087,10 +3087,8 @@ impl StructureDesigner {
                         BAS_STICK_RADIUS,
                     ) {
                         crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
-                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(
-                            _,
-                            distance,
-                        ) => {
+                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) =>
+                        {
                             // Update minimum distance if this hit is closer
                             min_distance = match min_distance {
                                 None => Some(distance),
@@ -3280,10 +3278,8 @@ impl StructureDesigner {
                         BAS_STICK_RADIUS,
                     ) {
                         crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
-                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(
-                            _,
-                            distance,
-                        ) => {
+                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) =>
+                        {
                             min_distance = match min_distance {
                                 None => Some(distance),
                                 Some(current_min) if distance < current_min => Some(distance),

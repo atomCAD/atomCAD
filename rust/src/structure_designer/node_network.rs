@@ -648,13 +648,13 @@ impl NodeNetwork {
         if displayed {
             // Add pin — create the display entry if the node isn't currently displayed
             if self.nodes.contains_key(&node_id) {
-                let state = self
-                    .displayed_nodes
-                    .entry(node_id)
-                    .or_insert_with(|| NodeDisplayState {
-                        display_type: NodeDisplayType::Normal,
-                        displayed_pins: HashSet::new(),
-                    });
+                let state =
+                    self.displayed_nodes
+                        .entry(node_id)
+                        .or_insert_with(|| NodeDisplayState {
+                            display_type: NodeDisplayType::Normal,
+                            displayed_pins: HashSet::new(),
+                        });
                 state.displayed_pins.insert(pin_index);
             }
         } else if let Some(state) = self.displayed_nodes.get_mut(&node_id) {

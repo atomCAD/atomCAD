@@ -161,7 +161,9 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
             && total_delta.length_squared() > 1e-15
         {
             let mut converted = self.converted_positions.borrow_mut();
-            for &(base_id, atomic_number, position, existing_diff_id, base_flags) in &self.base_atoms_info {
+            for &(base_id, atomic_number, position, existing_diff_id, base_flags) in
+                &self.base_atoms_info
+            {
                 let target = position + total_delta;
                 let diff_id = if let Some(existing_id) = existing_diff_id {
                     // Reuse existing diff entry (e.g., UNCHANGED marker from bond tool).

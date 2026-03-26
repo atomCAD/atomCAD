@@ -2204,7 +2204,6 @@ fn undo_atom_edit_toggle_pin_display_double_toggle() {
 // Phase E: Frozen Change Undo/Redo
 // =============================================================================
 
-
 // =============================================================================
 // Phase E: Sequence / Integration Tests
 // =============================================================================
@@ -2259,7 +2258,13 @@ fn undo_atom_edit_frozen_interleaved_with_mutations() {
         let data = get_data_mut(sd);
         data.set_frozen_recorded(1, true);
     });
-    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 
     with_atom_edit_undo(&mut designer, "Delete atom", |sd| {
         let data = get_data_mut(sd);
@@ -2273,7 +2278,13 @@ fn undo_atom_edit_frozen_interleaved_with_mutations() {
 
     // Undo freeze → atom still there but not frozen
     assert!(designer.undo());
-    assert!(!get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        !get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
     assert_eq!(diff_atom_count(&mut designer), 1);
 
     // Undo add → atom gone
@@ -2317,7 +2328,13 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     // Verify current state
     assert_eq!(diff_atom_count(&mut designer), 2);
     assert_eq!(is_in_diff_view(&designer), initial_diff_view);
-    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 
     // Undo all 7 operations (was 5, now 7 because pin toggles are 2 commands each)
     for _ in 0..7 {
@@ -2339,7 +2356,13 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     // Back to post-all-operations state
     assert_eq!(diff_atom_count(&mut designer), 2);
     assert_eq!(is_in_diff_view(&designer), initial_diff_view);
-    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 }
 
 // =============================================================================
@@ -2709,7 +2732,6 @@ fn test_merge_atomic_structure_empty() {
     assert_eq!(data.diff.get_num_of_atoms(), 0);
 }
 
-
 // =============================================================================
 // Hybridization override: diff view evaluation
 // =============================================================================
@@ -2775,7 +2797,9 @@ fn hybridization_override_appears_on_diff_view_output_atoms() {
 
     // Evaluate the node — in diff view, the output should carry the override
     let output = evaluate_atom_edit_output(&designer);
-    let atom = output.get_atom(1).expect("diff atom 1 should exist in output");
+    let atom = output
+        .get_atom(1)
+        .expect("diff atom 1 should exist in output");
     assert_eq!(
         atom.hybridization_override(),
         HYBRIDIZATION_SP2,
@@ -2803,7 +2827,9 @@ fn hybridization_override_appears_on_pin1_diff_output() {
 
     // Evaluate pin 1 (diff) directly — no output_diff flag needed
     let output = evaluate_atom_edit_pin(&designer, 1);
-    let atom = output.get_atom(1).expect("diff atom 1 should exist in pin 1 output");
+    let atom = output
+        .get_atom(1)
+        .expect("diff atom 1 should exist in pin 1 output");
     assert_eq!(
         atom.hybridization_override(),
         HYBRIDIZATION_SP2,
@@ -2990,11 +3016,15 @@ fn frozen_diff_atom_appears_on_pin1_output() {
     });
     diff_id = 1; // first atom added to diff gets id 1
 
-    get_data_mut(&mut designer).diff.set_atom_frozen(diff_id, true);
+    get_data_mut(&mut designer)
+        .diff
+        .set_atom_frozen(diff_id, true);
 
     // Evaluate pin 1 — the frozen flag should be on the atom
     let diff_output = evaluate_atom_edit_pin(&designer, 1);
-    let atom = diff_output.get_atom(diff_id).expect("diff atom should exist");
+    let atom = diff_output
+        .get_atom(diff_id)
+        .expect("diff atom should exist");
     assert!(
         atom.is_frozen(),
         "Frozen diff atom should have frozen flag set in pin 1 output"
@@ -3228,15 +3258,33 @@ fn undo_freeze_via_mutation_command() {
         let data = get_data_mut(sd);
         data.set_frozen_recorded(1, true);
     });
-    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 
     // Undo freeze
     assert!(designer.undo());
-    assert!(!get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        !get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 
     // Redo freeze
     assert!(designer.redo());
-    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 }
 
 /// Set hybridization via recorded method + undo wrapper. Undo. Verify restored.
@@ -3303,7 +3351,13 @@ fn undo_promotion_for_override() {
         data.set_frozen_recorded(diff_id, true);
     });
     assert_eq!(diff_atom_count(&mut designer), 1);
-    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 
     // Undo — diff atom should be removed entirely
     assert!(designer.undo());
@@ -3312,7 +3366,13 @@ fn undo_promotion_for_override() {
     // Redo — diff atom should be back with frozen flag
     assert!(designer.redo());
     assert_eq!(diff_atom_count(&mut designer), 1);
-    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+    assert!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .is_frozen()
+    );
 }
 
 /// Full undo→redo cycle for a flag-only operation. Verify flags match after redo.

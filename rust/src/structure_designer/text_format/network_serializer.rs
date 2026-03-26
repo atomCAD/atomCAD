@@ -223,11 +223,7 @@ impl<'a> NetworkSerializer<'a> {
                             .iter()
                             .filter_map(|(source_id, pin_index)| {
                                 let source_name = self.get_node_name(**source_id)?;
-                                Some(self.format_reference(
-                                    source_name,
-                                    **pin_index,
-                                    **source_id,
-                                ))
+                                Some(self.format_reference(source_name, **pin_index, **source_id))
                             })
                             .collect();
                         properties.push((param_name.clone(), format!("[{}]", refs.join(", "))));
@@ -281,12 +277,7 @@ impl<'a> NetworkSerializer<'a> {
 
     /// Format a node reference, handling function pin references with @ prefix
     /// and multi-output pin references with `.pinname` suffix.
-    fn format_reference(
-        &self,
-        source_name: &str,
-        pin_index: i32,
-        source_node_id: u64,
-    ) -> String {
+    fn format_reference(&self, source_name: &str, pin_index: i32, source_node_id: u64) -> String {
         if pin_index == -1 {
             // Function pin reference
             format!("@{}", source_name)

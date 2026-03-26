@@ -229,7 +229,10 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
         let base_info: Vec<BaseAtomPromotionInfo> = if is_diff_view {
             Vec::new()
         } else {
-            gather_base_atom_promotion_info(structure_designer, &atom_edit_data.selection.selected_base_atoms)
+            gather_base_atom_promotion_info(
+                structure_designer,
+                &atom_edit_data.selection.selected_base_atoms,
+            )
         };
 
         (current_transform, base_info)
@@ -338,7 +341,10 @@ pub fn drag_selected_by_delta(
             (Vec::new(), 0)
         } else {
             // gather_base_atom_promotion_info filters out frozen atoms via result atom flags
-            let info = gather_base_atom_promotion_info(structure_designer, &atom_edit_data.selection.selected_base_atoms);
+            let info = gather_base_atom_promotion_info(
+                structure_designer,
+                &atom_edit_data.selection.selected_base_atoms,
+            );
             let frozen_count = total_base - info.len();
             (info, frozen_count)
         }
@@ -355,7 +361,12 @@ pub fn drag_selected_by_delta(
         .selection
         .selected_diff_atoms
         .iter()
-        .filter(|id| !atom_edit_data.diff.get_atom(**id).map_or(false, |a| a.is_frozen()))
+        .filter(|id| {
+            !atom_edit_data
+                .diff
+                .get_atom(**id)
+                .map_or(false, |a| a.is_frozen())
+        })
         .copied()
         .collect();
     let frozen_diff_count = atom_edit_data.selection.selected_diff_atoms.len() - diff_ids.len();

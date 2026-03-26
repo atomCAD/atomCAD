@@ -648,11 +648,7 @@ impl<'a> NetworkEditor<'a> {
     }
 
     /// Resolve an output pin name to its index on a source node.
-    fn resolve_output_pin_index(
-        &self,
-        source_node_id: u64,
-        pin_name: &str,
-    ) -> Result<i32, String> {
+    fn resolve_output_pin_index(&self, source_node_id: u64, pin_name: &str) -> Result<i32, String> {
         let source_node = self
             .network
             .nodes

@@ -338,7 +338,8 @@ impl AtomEditData {
             let selected = atom.flags & 0x1;
             let new_flags = selected | (flags & !0x1);
             // Use per-flag setters since get_atom_mut is private
-            self.diff.set_atom_frozen(atom_id, (new_flags & (1 << 2)) != 0);
+            self.diff
+                .set_atom_frozen(atom_id, (new_flags & (1 << 2)) != 0);
             self.diff
                 .set_atom_hydrogen_passivation(atom_id, (new_flags & (1 << 1)) != 0);
             self.diff
@@ -406,7 +407,8 @@ impl AtomEditData {
                 }
             }
         }
-        self.diff.set_atom_hybridization_override(atom_id, hybridization);
+        self.diff
+            .set_atom_hybridization_override(atom_id, hybridization);
     }
 
     // --- Bulk merge ---

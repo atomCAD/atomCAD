@@ -589,7 +589,14 @@ fn evaluate_pin(
         node_network: network,
         node_id: 0,
     }];
-    evaluator.evaluate(&network_stack, node_id, pin_index, registry, false, &mut context)
+    evaluator.evaluate(
+        &network_stack,
+        node_id,
+        pin_index,
+        registry,
+        false,
+        &mut context,
+    )
 }
 
 /// Custom network with a multi-output return node propagates all output pins to the custom node type.
@@ -788,7 +795,10 @@ fn test_custom_network_wire_from_pin1() {
         .node_networks
         .get("outer")
         .unwrap();
-    assert!(network.valid, "Network should be valid with wire from pin 1");
+    assert!(
+        network.valid,
+        "Network should be valid with wire from pin 1"
+    );
 
     // The wire should still exist
     let apply_diff_node = network.nodes.get(&apply_diff_id).unwrap();
@@ -797,8 +807,7 @@ fn test_custom_network_wire_from_pin1() {
         "Wire from pin 1 should be preserved"
     );
     assert_eq!(
-        apply_diff_node.arguments[0].argument_output_pins[&inner_node_id],
-        1,
+        apply_diff_node.arguments[0].argument_output_pins[&inner_node_id], 1,
         "Wire should reference pin index 1"
     );
 }
