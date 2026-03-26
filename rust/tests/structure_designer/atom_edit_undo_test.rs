@@ -14,12 +14,6 @@ use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::diff_recorder::DiffRecorder;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_frozen_change::{
-    AtomEditFrozenChangeCommand, FrozenDelta, FrozenProvenance,
-};
-use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_hybridization_change::{
-    AtomEditHybridizationChangeCommand, HybridizationDelta, HybridizationProvenance,
-};
 use rust_lib_flutter_cad::structure_designer::undo::commands::atom_edit_toggle_flag::{
     AtomEditFlag, AtomEditToggleFlagCommand,
 };
@@ -2210,193 +2204,6 @@ fn undo_atom_edit_toggle_pin_display_double_toggle() {
 // Phase E: Frozen Change Undo/Redo
 // =============================================================================
 
-/// Helper to push an AtomEditFrozenChangeCommand that freezes specific atoms.
-fn push_freeze_command(designer: &mut StructureDesigner, base_ids: &[u32], diff_ids: &[u32]) {
-    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
-    let mut delta = FrozenDelta {
-        added: Vec::new(),
-        removed: Vec::new(),
-    };
-    let data = get_data_mut(designer);
-    for &id in base_ids {
-        if data.frozen_base_atoms.insert(id) {
-            delta.added.push((FrozenProvenance::Base, id));
-        }
-    }
-    for &id in diff_ids {
-        if data.frozen_diff_atoms.insert(id) {
-            delta.added.push((FrozenProvenance::Diff, id));
-        }
-    }
-    if !delta.added.is_empty() || !delta.removed.is_empty() {
-        designer.push_command(AtomEditFrozenChangeCommand {
-            description: "Freeze selection".to_string(),
-            network_name,
-            node_id,
-            delta,
-        });
-    }
-}
-
-/// Helper to push an AtomEditFrozenChangeCommand that unfreezes specific atoms.
-fn push_unfreeze_command(designer: &mut StructureDesigner, base_ids: &[u32], diff_ids: &[u32]) {
-    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
-    let mut delta = FrozenDelta {
-        added: Vec::new(),
-        removed: Vec::new(),
-    };
-    let data = get_data_mut(designer);
-    for &id in base_ids {
-        if data.frozen_base_atoms.remove(&id) {
-            delta.removed.push((FrozenProvenance::Base, id));
-        }
-    }
-    for &id in diff_ids {
-        if data.frozen_diff_atoms.remove(&id) {
-            delta.removed.push((FrozenProvenance::Diff, id));
-        }
-    }
-    if !delta.added.is_empty() || !delta.removed.is_empty() {
-        designer.push_command(AtomEditFrozenChangeCommand {
-            description: "Unfreeze selection".to_string(),
-            network_name,
-            node_id,
-            delta,
-        });
-    }
-}
-
-/// Helper to push an AtomEditFrozenChangeCommand that clears all frozen atoms.
-fn push_clear_frozen_command(designer: &mut StructureDesigner) {
-    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
-    let mut delta = FrozenDelta {
-        added: Vec::new(),
-        removed: Vec::new(),
-    };
-    let data = get_data_mut(designer);
-    for &id in &data.frozen_base_atoms {
-        delta.removed.push((FrozenProvenance::Base, id));
-    }
-    for &id in &data.frozen_diff_atoms {
-        delta.removed.push((FrozenProvenance::Diff, id));
-    }
-    data.frozen_base_atoms.clear();
-    data.frozen_diff_atoms.clear();
-    if !delta.removed.is_empty() {
-        designer.push_command(AtomEditFrozenChangeCommand {
-            description: "Clear frozen atoms".to_string(),
-            network_name,
-            node_id,
-            delta,
-        });
-    }
-}
-
-#[test]
-fn undo_atom_edit_freeze_diff_atoms() {
-    let mut designer = setup_atom_edit();
-
-    // Add two diff atoms
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(6, DVec3::ZERO);
-    });
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(7, DVec3::X);
-    });
-
-    // Freeze diff atom 1
-    push_freeze_command(&mut designer, &[], &[1]);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&2));
-
-    // Undo freeze
-    assert!(designer.undo());
-    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-
-    // Redo freeze
-    assert!(designer.redo());
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-}
-
-#[test]
-fn undo_atom_edit_unfreeze_atoms() {
-    let mut designer = setup_atom_edit();
-
-    // Add a diff atom and freeze it
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(6, DVec3::ZERO);
-    });
-    push_freeze_command(&mut designer, &[], &[1]);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-
-    // Unfreeze it
-    push_unfreeze_command(&mut designer, &[], &[1]);
-    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-
-    // Undo unfreeze → frozen again
-    assert!(designer.undo());
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-
-    // Redo unfreeze → unfrozen again
-    assert!(designer.redo());
-    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-}
-
-#[test]
-fn undo_atom_edit_clear_frozen() {
-    let mut designer = setup_atom_edit();
-
-    // Add diff atoms and freeze both
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(6, DVec3::ZERO);
-    });
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(7, DVec3::X);
-    });
-    push_freeze_command(&mut designer, &[], &[1, 2]);
-    assert_eq!(get_data_mut(&mut designer).frozen_diff_atoms.len(), 2);
-
-    // Clear all frozen
-    push_clear_frozen_command(&mut designer);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.is_empty());
-
-    // Undo clear → both restored
-    assert!(designer.undo());
-    assert_eq!(get_data_mut(&mut designer).frozen_diff_atoms.len(), 2);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&2));
-
-    // Redo clear
-    assert!(designer.redo());
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.is_empty());
-}
-
-#[test]
-fn undo_atom_edit_freeze_already_frozen_is_noop() {
-    let mut designer = setup_atom_edit();
-
-    // Add diff atom and freeze it
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(6, DVec3::ZERO);
-    });
-    push_freeze_command(&mut designer, &[], &[1]);
-
-    // Try to freeze again — delta is empty so no command is pushed.
-    // Undo the freeze, then verify no extra undo step was added.
-    push_freeze_command(&mut designer, &[], &[1]);
-    // Undo: we should undo the first freeze (not a second one)
-    assert!(designer.undo());
-    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
-    // Next undo should be the add atom, not another freeze
-    assert!(designer.undo());
-    assert_eq!(diff_atom_count(&mut designer), 0);
-}
 
 // =============================================================================
 // Phase E: Sequence / Integration Tests
@@ -2448,8 +2255,11 @@ fn undo_atom_edit_frozen_interleaved_with_mutations() {
     });
     assert_eq!(diff_atom_count(&mut designer), 1);
 
-    push_freeze_command(&mut designer, &[], &[1]);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    with_atom_edit_undo(&mut designer, "Freeze atom", |sd| {
+        let data = get_data_mut(sd);
+        data.set_frozen_recorded(1, true);
+    });
+    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
 
     with_atom_edit_undo(&mut designer, "Delete atom", |sd| {
         let data = get_data_mut(sd);
@@ -2463,7 +2273,7 @@ fn undo_atom_edit_frozen_interleaved_with_mutations() {
 
     // Undo freeze → atom still there but not frozen
     assert!(designer.undo());
-    assert!(!get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    assert!(!get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
     assert_eq!(diff_atom_count(&mut designer), 1);
 
     // Undo add → atom gone
@@ -2489,7 +2299,10 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     toggle_pin_display(&mut designer, 0);
 
     // 3. Freeze atom 1
-    push_freeze_command(&mut designer, &[], &[1]);
+    with_atom_edit_undo(&mut designer, "Freeze atom", |sd| {
+        let data = get_data_mut(sd);
+        data.set_frozen_recorded(1, true);
+    });
 
     // 4. Add another atom
     with_atom_edit_undo(&mut designer, "Add atom 2", |sd| {
@@ -2504,7 +2317,7 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     // Verify current state
     assert_eq!(diff_atom_count(&mut designer), 2);
     assert_eq!(is_in_diff_view(&designer), initial_diff_view);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
 
     // Undo all 7 operations (was 5, now 7 because pin toggles are 2 commands each)
     for _ in 0..7 {
@@ -2514,7 +2327,6 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     // Should be back to initial state
     assert_eq!(diff_atom_count(&mut designer), 0);
     assert_eq!(is_in_diff_view(&designer), initial_diff_view);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.is_empty());
 
     // Cannot undo further
     assert!(!designer.undo());
@@ -2527,7 +2339,7 @@ fn undo_atom_edit_sequence_restores_initial_state() {
     // Back to post-all-operations state
     assert_eq!(diff_atom_count(&mut designer), 2);
     assert_eq!(is_in_diff_view(&designer), initial_diff_view);
-    assert!(get_data_mut(&mut designer).frozen_diff_atoms.contains(&1));
+    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
 }
 
 // =============================================================================
@@ -2552,7 +2364,7 @@ fn drag_frozen_diff_atom_not_moved() {
         data.selection.selected_diff_atoms.insert(1);
         data.selection.selected_diff_atoms.insert(2);
         // Freeze atom 1
-        data.frozen_diff_atoms.insert(1);
+        data.diff.set_atom_frozen(1, true);
     }
 
     begin_atom_edit_drag(&mut designer);
@@ -2580,7 +2392,7 @@ fn drag_all_frozen_returns_all_frozen() {
         let data = get_data_mut(&mut designer);
         data.add_atom_recorded(6, DVec3::new(0.0, 0.0, 0.0));
         data.selection.selected_diff_atoms.insert(1);
-        data.frozen_diff_atoms.insert(1);
+        data.diff.set_atom_frozen(1, true);
     }
 
     begin_atom_edit_drag(&mut designer);
@@ -2642,7 +2454,7 @@ fn transform_selected_frozen_diff_atom_not_moved() {
             glam::f64::DQuat::IDENTITY,
         ));
         // Freeze atom 1
-        data.frozen_diff_atoms.insert(1);
+        data.diff.set_atom_frozen(1, true);
     }
 
     // Apply a transform that moves to (2, 0, 0) absolute — delta = +1 x
@@ -2684,8 +2496,8 @@ fn transform_selected_all_frozen_diff_atoms_not_moved() {
             glam::f64::DQuat::IDENTITY,
         ));
         // Freeze both atoms
-        data.frozen_diff_atoms.insert(1);
-        data.frozen_diff_atoms.insert(2);
+        data.diff.set_atom_frozen(1, true);
+        data.diff.set_atom_frozen(2, true);
     }
 
     let abs_transform = Transform::new(DVec3::new(5.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
@@ -2716,7 +2528,6 @@ fn drag_frozen_base_atom_returns_all_frozen() {
     {
         let data = get_data_mut(&mut designer);
         data.selection.selected_base_atoms.insert(42);
-        data.frozen_base_atoms.insert(42);
     }
 
     begin_atom_edit_drag(&mut designer);
@@ -2898,325 +2709,6 @@ fn test_merge_atomic_structure_empty() {
     assert_eq!(data.diff.get_num_of_atoms(), 0);
 }
 
-// =============================================================================
-// Hybridization override undo tests (Phase D)
-// =============================================================================
-
-/// Helper to push an AtomEditHybridizationChangeCommand that sets hybridization
-/// on specified diff atoms.
-fn push_set_hybridization_command(
-    designer: &mut StructureDesigner,
-    diff_atom_ids: &[u32],
-    value: u8,
-) {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_AUTO;
-
-    let (network_name, node_id) = get_atom_edit_node_info_pub(designer).unwrap();
-    let mut delta = HybridizationDelta::default();
-    let data = get_data_mut(designer);
-    for &diff_id in diff_atom_ids {
-        let old = data
-            .hybridization_override_diff_atoms
-            .get(&diff_id)
-            .copied();
-        if value == HYBRIDIZATION_AUTO {
-            if let Some(old_val) = old {
-                data.hybridization_override_diff_atoms.remove(&diff_id);
-                delta
-                    .removed
-                    .push((HybridizationProvenance::Diff, diff_id, old_val));
-            }
-        } else if let Some(old_val) = old {
-            if old_val != value {
-                data.hybridization_override_diff_atoms
-                    .insert(diff_id, value);
-                delta
-                    .changed
-                    .push((HybridizationProvenance::Diff, diff_id, old_val, value));
-            }
-        } else {
-            data.hybridization_override_diff_atoms
-                .insert(diff_id, value);
-            delta
-                .added
-                .push((HybridizationProvenance::Diff, diff_id, value));
-        }
-    }
-    if !delta.is_empty() {
-        designer.push_command(AtomEditHybridizationChangeCommand {
-            description: "Set hybridization".to_string(),
-            network_name,
-            node_id,
-            delta,
-        });
-    }
-}
-
-#[test]
-fn undo_atom_edit_set_hybridization_override_diff_atoms() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
-
-    let mut designer = setup_atom_edit();
-
-    // Add two diff atoms
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(7, DVec3::ZERO); // Nitrogen
-    });
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(7, DVec3::X); // Nitrogen
-    });
-
-    // Set sp2 override on diff atom 1
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP2)
-    );
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&2),
-        None
-    );
-
-    // Undo
-    assert!(designer.undo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        None
-    );
-
-    // Redo
-    assert!(designer.redo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP2)
-    );
-}
-
-#[test]
-fn undo_atom_edit_change_hybridization_override() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
-        HYBRIDIZATION_SP1, HYBRIDIZATION_SP2,
-    };
-
-    let mut designer = setup_atom_edit();
-
-    // Add a diff atom
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(7, DVec3::ZERO);
-    });
-
-    // Set sp2
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP2)
-    );
-
-    // Change to sp1
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP1);
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP1)
-    );
-
-    // Undo → back to sp2
-    assert!(designer.undo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP2)
-    );
-
-    // Undo again → no override
-    assert!(designer.undo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        None
-    );
-
-    // Redo → sp2
-    assert!(designer.redo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP2)
-    );
-
-    // Redo → sp1
-    assert!(designer.redo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP1)
-    );
-}
-
-#[test]
-fn undo_atom_edit_remove_hybridization_override() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
-        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP3,
-    };
-
-    let mut designer = setup_atom_edit();
-
-    // Add a diff atom and set sp3 override
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(6, DVec3::ZERO);
-    });
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP3);
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP3)
-    );
-
-    // Set to Auto (removes override)
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_AUTO);
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        None
-    );
-
-    // Undo → sp3 restored
-    assert!(designer.undo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        Some(&HYBRIDIZATION_SP3)
-    );
-
-    // Redo → removed again
-    assert!(designer.redo());
-    assert_eq!(
-        get_data_mut(&mut designer)
-            .hybridization_override_diff_atoms
-            .get(&1),
-        None
-    );
-}
-
-#[test]
-fn undo_atom_edit_set_hybridization_already_same_is_noop() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
-
-    let mut designer = setup_atom_edit();
-
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(7, DVec3::ZERO);
-    });
-
-    // Set sp2
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
-
-    // Remember the current undo description
-    let desc_before = designer
-        .undo_stack
-        .undo_description()
-        .map(|s| s.to_string());
-
-    // Set sp2 again — should be a no-op (no command pushed)
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
-
-    // Undo description should be unchanged (no new command was pushed)
-    assert_eq!(
-        designer
-            .undo_stack
-            .undo_description()
-            .map(|s| s.to_string()),
-        desc_before
-    );
-}
-
-#[test]
-fn undo_atom_edit_hybridization_multiple_atoms() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
-        HYBRIDIZATION_SP1, HYBRIDIZATION_SP2,
-    };
-
-    let mut designer = setup_atom_edit();
-
-    // Add three diff atoms
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(6, DVec3::ZERO);
-    });
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(7, DVec3::X);
-    });
-    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
-        let data = get_data_mut(sd);
-        data.add_atom_to_diff(8, DVec3::Y);
-    });
-
-    // Set sp2 on atom 1, sp1 on atom 2
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
-    push_set_hybridization_command(&mut designer, &[2], HYBRIDIZATION_SP1);
-
-    // Set sp2 on both atoms 2 and 3 in one command
-    push_set_hybridization_command(&mut designer, &[2, 3], HYBRIDIZATION_SP2);
-
-    let data = get_data_mut(&mut designer);
-    assert_eq!(
-        data.hybridization_override_diff_atoms.get(&1),
-        Some(&HYBRIDIZATION_SP2)
-    );
-    assert_eq!(
-        data.hybridization_override_diff_atoms.get(&2),
-        Some(&HYBRIDIZATION_SP2)
-    );
-    assert_eq!(
-        data.hybridization_override_diff_atoms.get(&3),
-        Some(&HYBRIDIZATION_SP2)
-    );
-
-    // Undo the batch → atom 2 back to sp1, atom 3 removed
-    assert!(designer.undo());
-    let data = get_data_mut(&mut designer);
-    assert_eq!(
-        data.hybridization_override_diff_atoms.get(&2),
-        Some(&HYBRIDIZATION_SP1)
-    );
-    assert_eq!(data.hybridization_override_diff_atoms.get(&3), None);
-
-    // Redo
-    assert!(designer.redo());
-    let data = get_data_mut(&mut designer);
-    assert_eq!(
-        data.hybridization_override_diff_atoms.get(&2),
-        Some(&HYBRIDIZATION_SP2)
-    );
-    assert_eq!(
-        data.hybridization_override_diff_atoms.get(&3),
-        Some(&HYBRIDIZATION_SP2)
-    );
-}
 
 // =============================================================================
 // Hybridization override: diff view evaluation
@@ -3273,7 +2765,10 @@ fn hybridization_override_appears_on_diff_view_output_atoms() {
     });
 
     // Set sp2 override on diff atom 1
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+    with_atom_edit_undo(&mut designer, "Set hybridization", |sd| {
+        let data = get_data_mut(sd);
+        data.set_hybridization_override_recorded(1, HYBRIDIZATION_SP2);
+    });
 
     // Enable output_diff mode
     get_data_mut(&mut designer).output_diff = true;
@@ -3301,7 +2796,10 @@ fn hybridization_override_appears_on_pin1_diff_output() {
     });
 
     // Set sp2 override on diff atom 1
-    push_set_hybridization_command(&mut designer, &[1], HYBRIDIZATION_SP2);
+    with_atom_edit_undo(&mut designer, "Set hybridization", |sd| {
+        let data = get_data_mut(sd);
+        data.set_hybridization_override_recorded(1, HYBRIDIZATION_SP2);
+    });
 
     // Evaluate pin 1 (diff) directly — no output_diff flag needed
     let output = evaluate_atom_edit_pin(&designer, 1);
@@ -3314,17 +2812,18 @@ fn hybridization_override_appears_on_pin1_diff_output() {
 }
 
 /// Regression test: when a hybridization override is set on a base atom and then
-/// the atom is promoted (moved into diff), the override must migrate from
-/// `hybridization_override_base_atoms` to `hybridization_override_diff_atoms`.
+/// the atom is promoted (moved into diff), the override must migrate via the
+/// `flags` field on `BaseAtomPromotionInfo`.
 #[test]
 fn hybridization_override_migrated_on_base_atom_promotion() {
     use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
     use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 
-    // Create a base structure with one carbon atom at origin
+    // Create a base structure with one carbon atom at origin, with sp2 hybridization
     let mut base = AtomicStructure::new();
     let base_atom_id = base.add_atom(6, DVec3::ZERO);
+    base.set_atom_hybridization_override(base_atom_id, HYBRIDIZATION_SP2);
 
     // Set up designer with atom_edit wired to the base structure
     let mut designer = StructureDesigner::new();
@@ -3349,19 +2848,8 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
     designer.refresh(&changes);
     designer.undo_stack.clear();
 
-    // Set hybridization override on the base atom BEFORE moving it
-    {
-        let data = get_data_mut(&mut designer);
-        data.hybridization_override_base_atoms
-            .insert(base_atom_id, HYBRIDIZATION_SP2);
-    }
-
-    // Verify it's in the base map
-    assert!(get_data_mut(&mut designer)
-        .hybridization_override_base_atoms
-        .contains_key(&base_atom_id));
-
-    // Promote the base atom via apply_transform (simulates a user drag)
+    // Promote the base atom via apply_transform (simulates a user drag).
+    // The flags field carries the hybridization override from the base atom.
     {
         use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::BaseAtomPromotionInfo;
         use rust_lib_flutter_cad::util::transform::Transform;
@@ -3371,29 +2859,20 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
             base_id: base_atom_id,
             atomic_number: 6,
             position: DVec3::ZERO,
+            flags: (HYBRIDIZATION_SP2 as u16) << 3, // hybridization bits in atom flags
             existing_diff_id: None,
         }];
         let transform = Transform::new(DVec3::new(0.5, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
         data.apply_transform(&transform, &base_atoms);
     }
 
-    // After promotion: override should have migrated from base to diff
+    // After promotion: the diff atom should carry the sp2 hybridization override
     let data = get_data_mut(&mut designer);
-    assert!(
-        data.hybridization_override_base_atoms.is_empty(),
-        "Override should be removed from base map after promotion"
-    );
+    let diff_atom = data.diff.iter_atoms().next().unwrap();
     assert_eq!(
-        data.hybridization_override_diff_atoms.len(),
-        1,
-        "Override should be in diff map after promotion"
-    );
-
-    // The diff atom should have the sp2 override
-    let diff_hyb = data.hybridization_override_diff_atoms.values().next().unwrap();
-    assert_eq!(
-        *diff_hyb, HYBRIDIZATION_SP2,
-        "Migrated override should be sp2"
+        diff_atom.1.hybridization_override(),
+        HYBRIDIZATION_SP2,
+        "Promoted diff atom should have sp2 hybridization override from base atom flags"
     );
 
     // Evaluate pin 1 (diff) — the promoted atom should carry the override
@@ -3413,13 +2892,16 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
 }
 
 /// Same as above but for frozen flag migration during promotion.
+/// Under inline metadata, frozen state is carried via `BaseAtomPromotionInfo.flags`.
 #[test]
 fn frozen_flag_migrated_on_base_atom_promotion() {
     use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 
+    // Create a base structure with one carbon atom at origin, frozen
     let mut base = AtomicStructure::new();
     let base_atom_id = base.add_atom(6, DVec3::ZERO);
+    base.set_atom_frozen(base_atom_id, true);
 
     let mut designer = StructureDesigner::new();
     designer.add_node_network("test");
@@ -3443,16 +2925,7 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
     designer.refresh(&changes);
     designer.undo_stack.clear();
 
-    // Freeze the base atom BEFORE promoting
-    {
-        let data = get_data_mut(&mut designer);
-        data.frozen_base_atoms.insert(base_atom_id);
-    }
-    assert!(get_data_mut(&mut designer)
-        .frozen_base_atoms
-        .contains(&base_atom_id));
-
-    // Promote via apply_transform
+    // Promote via apply_transform with frozen flag in BaseAtomPromotionInfo
     {
         use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::BaseAtomPromotionInfo;
         use rust_lib_flutter_cad::util::transform::Transform;
@@ -3462,21 +2935,19 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
             base_id: base_atom_id,
             atomic_number: 6,
             position: DVec3::ZERO,
+            flags: 1 << 2, // ATOM_FLAG_FROZEN
             existing_diff_id: None,
         }];
         let transform = Transform::new(DVec3::new(0.5, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
         data.apply_transform(&transform, &base_atoms);
     }
 
+    // After promotion: the diff atom should have the frozen flag
     let data = get_data_mut(&mut designer);
+    let diff_atom = data.diff.iter_atoms().next().unwrap();
     assert!(
-        data.frozen_base_atoms.is_empty(),
-        "Frozen flag should be removed from base set after promotion"
-    );
-    assert_eq!(
-        data.frozen_diff_atoms.len(),
-        1,
-        "Frozen flag should be in diff set after promotion"
+        diff_atom.1.is_frozen(),
+        "Promoted diff atom should have frozen flag from base atom"
     );
 }
 
@@ -3519,7 +2990,7 @@ fn frozen_diff_atom_appears_on_pin1_output() {
     });
     diff_id = 1; // first atom added to diff gets id 1
 
-    get_data_mut(&mut designer).frozen_diff_atoms.insert(diff_id);
+    get_data_mut(&mut designer).diff.set_atom_frozen(diff_id, true);
 
     // Evaluate pin 1 — the frozen flag should be on the atom
     let diff_output = evaluate_atom_edit_pin(&designer, 1);
@@ -3528,4 +2999,354 @@ fn frozen_diff_atom_appears_on_pin1_output() {
         atom.is_frozen(),
         "Frozen diff atom should have frozen flag set in pin 1 output"
     );
+}
+
+// =============================================================================
+// Phase 2: copy_not_merge tests — validate new semantics
+// =============================================================================
+
+/// Helper: sets up a designer with a base structure wired to an atom_edit node.
+fn setup_atom_edit_with_base(base: AtomicStructure) -> StructureDesigner {
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("test")
+        .unwrap();
+    let value_data = Box::new(ValueData {
+        value: NetworkResult::Atomic(base),
+    });
+    let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
+
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+    designer.select_node(atom_edit_id);
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
+    designer.undo_stack.clear();
+
+    designer
+}
+
+/// Base atom has frozen=true. User unfreezes in diff (diff atom has frozen=false).
+/// Evaluate pin 0. Verify result atom is NOT frozen.
+/// (This is the bug that OR-merge silently reintroduced.)
+#[test]
+fn copy_not_merge_unfreezes_base_atom() {
+    let mut base = AtomicStructure::new();
+    let base_id = base.add_atom(6, DVec3::ZERO);
+    base.set_atom_frozen(base_id, true);
+
+    let mut designer = setup_atom_edit_with_base(base);
+
+    // Promote the base atom to diff (simulating a user override)
+    with_atom_edit_undo(&mut designer, "Promote and unfreeze", |sd| {
+        let data = get_data_mut(sd);
+        // Add diff atom at same position with anchor (replacement)
+        let diff_id = data.add_atom_recorded(6, DVec3::ZERO);
+        data.set_anchor_recorded(diff_id, DVec3::ZERO);
+        // Explicitly NOT frozen (default flags=0)
+    });
+
+    // Evaluate pin 0 — result atom should NOT be frozen
+    let output = evaluate_atom_edit_output(&designer);
+    let result_atom = output.atoms_values().next().unwrap();
+    assert!(
+        !result_atom.is_frozen(),
+        "Unfreezing in diff should override base frozen flag (copy, not merge)"
+    );
+}
+
+/// Base atom has Sp3. User sets Sp2 in diff. Evaluate pin 0. Verify result is Sp2,
+/// not Sp1 (which OR-merge would produce: 01 | 10 = 11).
+#[test]
+fn copy_not_merge_hybridization_no_corruption() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
+    };
+
+    let mut base = AtomicStructure::new();
+    let base_id = base.add_atom(6, DVec3::ZERO);
+    base.set_atom_hybridization_override(base_id, HYBRIDIZATION_SP3);
+
+    let mut designer = setup_atom_edit_with_base(base);
+
+    // Promote and set Sp2
+    with_atom_edit_undo(&mut designer, "Set Sp2", |sd| {
+        let data = get_data_mut(sd);
+        let diff_id = data.add_atom_recorded(6, DVec3::ZERO);
+        data.set_anchor_recorded(diff_id, DVec3::ZERO);
+        data.set_hybridization_override_recorded(diff_id, HYBRIDIZATION_SP2);
+    });
+
+    let output = evaluate_atom_edit_output(&designer);
+    let result_atom = output.atoms_values().next().unwrap();
+    assert_eq!(
+        result_atom.hybridization_override(),
+        HYBRIDIZATION_SP2,
+        "Diff Sp2 should override base Sp3 cleanly (copy, not OR-merge)"
+    );
+}
+
+/// Base atom has Sp3. User clears to Auto in diff. Evaluate. Verify result is Auto.
+/// (Impossible under OR-merge.)
+#[test]
+fn clearing_hybridization_to_auto_works() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP3,
+    };
+
+    let mut base = AtomicStructure::new();
+    let base_id = base.add_atom(6, DVec3::ZERO);
+    base.set_atom_hybridization_override(base_id, HYBRIDIZATION_SP3);
+
+    let mut designer = setup_atom_edit_with_base(base);
+
+    // Promote with default flags (hybridization=Auto)
+    with_atom_edit_undo(&mut designer, "Clear to Auto", |sd| {
+        let data = get_data_mut(sd);
+        let diff_id = data.add_atom_recorded(6, DVec3::ZERO);
+        data.set_anchor_recorded(diff_id, DVec3::ZERO);
+        // Default flags have hybridization=Auto
+    });
+
+    let output = evaluate_atom_edit_output(&designer);
+    let result_atom = output.atoms_values().next().unwrap();
+    assert_eq!(
+        result_atom.hybridization_override(),
+        HYBRIDIZATION_AUTO,
+        "Clearing hybridization to Auto in diff should override base Sp3"
+    );
+}
+
+/// Call set_hybridization_override on a diff atom that already exists.
+/// Verify no new diff atom is created; existing atom's flags are updated.
+#[test]
+fn override_on_existing_diff_atom_no_promotion() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+
+    let mut designer = setup_atom_edit();
+
+    // Add a diff atom
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::ZERO);
+    });
+    assert_eq!(diff_atom_count(&mut designer), 1);
+
+    // Set hybridization on existing diff atom
+    with_atom_edit_undo(&mut designer, "Set hybridization", |sd| {
+        let data = get_data_mut(sd);
+        data.set_hybridization_override_recorded(1, HYBRIDIZATION_SP2);
+    });
+
+    // No new atom created
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    // Flag updated
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .hybridization_override(),
+        HYBRIDIZATION_SP2
+    );
+}
+
+/// Set frozen + hybridization on a diff atom. Evaluate pin 0 (result view).
+/// Verify both flags appear on the result atom.
+#[test]
+fn eval_pin0_flags_flow_through() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+
+    let mut designer = setup_atom_edit();
+
+    with_atom_edit_undo(&mut designer, "Add and flag", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.set_frozen_recorded(1, true);
+        data.set_hybridization_override_recorded(1, HYBRIDIZATION_SP2);
+    });
+
+    let output = evaluate_atom_edit_output(&designer);
+    let atom = output.atoms_values().next().unwrap();
+    assert!(atom.is_frozen(), "Pin 0 result should have frozen flag");
+    assert_eq!(
+        atom.hybridization_override(),
+        HYBRIDIZATION_SP2,
+        "Pin 0 result should have Sp2 hybridization"
+    );
+}
+
+/// Set frozen + hybridization on a diff atom. Evaluate pin 1 (diff view).
+/// Flags should already be on the cloned diff atoms.
+#[test]
+fn eval_pin1_flags_flow_through() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+
+    let mut designer = setup_atom_edit();
+
+    with_atom_edit_undo(&mut designer, "Add and flag", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+        data.set_frozen_recorded(1, true);
+        data.set_hybridization_override_recorded(1, HYBRIDIZATION_SP2);
+    });
+
+    let output = evaluate_atom_edit_pin(&designer, 1);
+    let atom = output.get_atom(1).expect("diff atom should exist in pin 1");
+    assert!(atom.is_frozen(), "Pin 1 diff should have frozen flag");
+    assert_eq!(
+        atom.hybridization_override(),
+        HYBRIDIZATION_SP2,
+        "Pin 1 diff should have Sp2 hybridization"
+    );
+}
+
+// =============================================================================
+// Phase 3: Undo via unified mutation command
+// =============================================================================
+
+/// Freeze a diff atom using recorded method + undo wrapper. Undo. Verify unfrozen.
+#[test]
+fn undo_freeze_via_mutation_command() {
+    let mut designer = setup_atom_edit();
+
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+
+    with_atom_edit_undo(&mut designer, "Freeze", |sd| {
+        let data = get_data_mut(sd);
+        data.set_frozen_recorded(1, true);
+    });
+    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+
+    // Undo freeze
+    assert!(designer.undo());
+    assert!(!get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+
+    // Redo freeze
+    assert!(designer.redo());
+    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+}
+
+/// Set hybridization via recorded method + undo wrapper. Undo. Verify restored.
+#[test]
+fn undo_hybridization_via_mutation_command() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP2,
+    };
+
+    let mut designer = setup_atom_edit();
+
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(7, DVec3::ZERO);
+    });
+
+    with_atom_edit_undo(&mut designer, "Set Sp2", |sd| {
+        let data = get_data_mut(sd);
+        data.set_hybridization_override_recorded(1, HYBRIDIZATION_SP2);
+    });
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .hybridization_override(),
+        HYBRIDIZATION_SP2
+    );
+
+    // Undo
+    assert!(designer.undo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .hybridization_override(),
+        HYBRIDIZATION_AUTO
+    );
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(
+        get_data_mut(&mut designer)
+            .diff
+            .get_atom(1)
+            .unwrap()
+            .hybridization_override(),
+        HYBRIDIZATION_SP2
+    );
+}
+
+/// Set override on a base atom (triggers promotion via add_atom_recorded + set_anchor),
+/// undo. Verify the diff atom is removed entirely.
+#[test]
+fn undo_promotion_for_override() {
+    let mut designer = setup_atom_edit();
+
+    // Simulate promoting a base atom and setting frozen
+    with_atom_edit_undo(&mut designer, "Promote and freeze", |sd| {
+        let data = get_data_mut(sd);
+        let diff_id = data.add_atom_recorded(6, DVec3::ZERO);
+        data.set_anchor_recorded(diff_id, DVec3::ZERO);
+        data.set_frozen_recorded(diff_id, true);
+    });
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+
+    // Undo — diff atom should be removed entirely
+    assert!(designer.undo());
+    assert_eq!(diff_atom_count(&mut designer), 0);
+
+    // Redo — diff atom should be back with frozen flag
+    assert!(designer.redo());
+    assert_eq!(diff_atom_count(&mut designer), 1);
+    assert!(get_data_mut(&mut designer).diff.get_atom(1).unwrap().is_frozen());
+}
+
+/// Full undo→redo cycle for a flag-only operation. Verify flags match after redo.
+#[test]
+fn redo_flag_override_after_undo() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP3;
+
+    let mut designer = setup_atom_edit();
+
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_data_mut(sd);
+        data.add_atom_to_diff(6, DVec3::ZERO);
+    });
+
+    // Set both frozen and hybridization
+    with_atom_edit_undo(&mut designer, "Set flags", |sd| {
+        let data = get_data_mut(sd);
+        data.set_frozen_recorded(1, true);
+        data.set_hybridization_override_recorded(1, HYBRIDIZATION_SP3);
+    });
+
+    let check_flags = |d: &mut StructureDesigner, frozen: bool, hyb: u8| {
+        let atom = get_data_mut(d).diff.get_atom(1).unwrap();
+        assert_eq!(atom.is_frozen(), frozen);
+        assert_eq!(atom.hybridization_override(), hyb);
+    };
+
+    check_flags(&mut designer, true, HYBRIDIZATION_SP3);
+
+    // Undo flags
+    assert!(designer.undo());
+    check_flags(&mut designer, false, 0); // HYBRIDIZATION_AUTO = 0
+
+    // Redo flags
+    assert!(designer.redo());
+    check_flags(&mut designer, true, HYBRIDIZATION_SP3);
 }

@@ -1641,12 +1641,24 @@ fn frozen_flag_from_base_preserved_on_matched_replacement() {
     let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
     assert_eq!(result.result.get_num_of_atoms(), 1);
 
-    // The result atom should be frozen (inherited from base OR diff)
-    // At minimum, if either source is frozen, the result should be frozen.
+    // Under copy_atom_metadata semantics, the diff atom is the source of truth.
+    // The diff atom is not frozen, so the result should not be frozen.
     let result_atom = result.result.atoms_values().next().unwrap();
     assert!(
-        result_atom.is_frozen(),
-        "Frozen flag from base should be preserved on matched replacement"
+        !result_atom.is_frozen(),
+        "Diff atom is source of truth — unfrozen diff replaces frozen base"
+    );
+
+    // If the diff atom IS frozen, the result should be frozen
+    let mut diff2 = AtomicStructure::new_diff();
+    let d1 = diff2.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    diff2.set_atom_frozen(d1, true);
+
+    let result2 = apply_diff(&base, &diff2, DEFAULT_TOLERANCE);
+    let result_atom2 = result2.result.atoms_values().next().unwrap();
+    assert!(
+        result_atom2.is_frozen(),
+        "Frozen diff atom should produce frozen result"
     );
 }
 
@@ -1751,13 +1763,14 @@ fn hydrogen_passivation_metadata_unchanged_marker() {
 
 #[test]
 fn hydrogen_passivation_metadata_replacement() {
-    // Case 2: Matched replacement should merge hydrogen_passivation with OR semantics
+    // Case 2: Matched replacement — diff atom is source of truth for flags.
+    // If diff atom doesn't have H passivation, result shouldn't either.
     let mut base = AtomicStructure::new();
     let c1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
     base.set_atom_hydrogen_passivation(c1, true);
 
     let mut diff = AtomicStructure::new_diff();
-    diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0)); // Replace C with N
+    diff.add_atom(7, DVec3::new(0.0, 0.0, 0.0)); // Replace C with N, no H passivation
 
     let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
     assert_eq!(result.result.get_num_of_atoms(), 1);
@@ -1765,8 +1778,20 @@ fn hydrogen_passivation_metadata_replacement() {
     let result_atom = result.result.atoms_values().next().unwrap();
     assert_eq!(result_atom.atomic_number, 7, "Should be nitrogen");
     assert!(
-        result_atom.is_hydrogen_passivation(),
-        "Replacement should preserve hydrogen_passivation from base via OR merge"
+        !result_atom.is_hydrogen_passivation(),
+        "Diff atom is source of truth — no H passivation on diff means none on result"
+    );
+
+    // If the diff atom HAS H passivation, the result should too
+    let mut diff2 = AtomicStructure::new_diff();
+    let d1 = diff2.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    diff2.set_atom_hydrogen_passivation(d1, true);
+
+    let result2 = apply_diff(&base, &diff2, DEFAULT_TOLERANCE);
+    let result_atom2 = result2.result.atoms_values().next().unwrap();
+    assert!(
+        result_atom2.is_hydrogen_passivation(),
+        "H passivation on diff atom should appear on result"
     );
 }
 

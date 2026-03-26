@@ -42,10 +42,10 @@ atom_edit/
 ## Core Data (`atom_edit_data.rs`)
 
 `AtomEditData` implements `NodeData` and contains:
-- **Persistent state** (serialized): `diff`, `output_diff`, `tolerance`, `frozen_*_atoms`, `hybridization_override_*_atoms`, etc.
+- **Persistent state** (serialized): `diff`, `output_diff`, `tolerance`, `show_anchor_arrows`, `include_base_bonds_in_diff`, `error_on_stale_entries`
 - **Transient state** (not serialized): `selection`, `active_tool`, `last_stats`
 
-Per-atom metadata maps (frozen, hybridization override) use the same pattern: separate `HashMap`/`HashSet` for base and diff atoms. During evaluation, these maps are applied to result atoms via provenance maps (`base_to_result`/`diff_to_result`), setting `Atom.flags` bits on the result `AtomicStructure`. Downstream consumers (UFF typer, hydrogen passivation) read overrides from `Atom.flags`.
+Per-atom metadata (frozen flags, hybridization overrides) is stored **inline on `Atom.flags`** of diff atoms. When a base atom needs an override, it is promoted to a real diff atom and the flag is set directly. During evaluation, `apply_diff()` copies flags from diff atoms to result atoms via `copy_atom_metadata()`. No external maps needed. Downstream consumers (UFF typer, hydrogen passivation) read overrides from `Atom.flags`.
 
 Key methods:
 - Diff mutations: `add_atom_to_diff`, `mark_for_deletion`, `move_in_diff`, etc.
@@ -122,10 +122,8 @@ Drag operations use `begin_atom_edit_drag()`/`end_atom_edit_drag()` for coalesci
 
 ### Commands
 
-- `AtomEditMutationCommand` — incremental atom/bond deltas (all diff mutations). Also captures `HybridizationDelta` when guided placement sets an override on the anchor atom.
+- `AtomEditMutationCommand` — incremental atom/bond deltas (all diff mutations, including flag changes like frozen and hybridization override via `set_frozen_recorded` / `set_hybridization_override_recorded`)
 - `AtomEditToggleFlagCommand` — boolean flag toggles (output_diff, show_anchor_arrows, etc.)
-- `AtomEditFrozenChangeCommand` — freeze/unfreeze operations
-- `AtomEditHybridizationChangeCommand` — per-atom hybridization override changes (standalone, for Default tool)
 
 ## Adding Features
 

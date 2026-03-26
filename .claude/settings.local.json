@@ -131,7 +131,9 @@
       "Bash(while read:*)",
       "Bash(do sed:*)",
       "Bash(/tmp/count_removals.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(sort -t: -k1,1 -k2,2n)",
+      "Bash(sort -t: -k2,2n)"
     ]
   }
 }

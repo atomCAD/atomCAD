@@ -357,32 +357,20 @@ fn frozen_atoms_remain_fixed_during_continuous_minimize() {
         .simulation_preferences
         .continuous_minimization_settle_steps = 50;
 
-    // Get C2's base atom ID and position, then freeze it via frozen_base_atoms
+    // Get C2's position, then freeze it by promoting to diff with frozen flag
     let result = get_selected_atomic_structure(&designer);
     let atom_ids: Vec<u32> = result.atom_ids().copied().collect();
     let c2_result_id = atom_ids[1]; // Second atom is C2
     let c2_pos_before = result.get_atom(c2_result_id).unwrap().position;
 
-    // Freeze C2 via the atom_edit frozen_base_atoms set
+    // Freeze C2 by promoting the base atom to diff and setting its frozen flag.
+    // Under the inline metadata design, frozen state lives on diff atoms.
     {
-        use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::AtomSource;
-        use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
-
-        // Find the base ID for C2
-        let base_id = {
-            let eval_cache = designer
-                .get_selected_node_eval_cache()
-                .unwrap()
-                .downcast_ref::<AtomEditEvalCache>()
-                .unwrap();
-            match eval_cache.provenance.sources.get(&c2_result_id) {
-                Some(AtomSource::BasePassthrough(bid)) => *bid,
-                _ => panic!("C2 should be a BasePassthrough atom"),
-            }
-        };
-
         let data = get_selected_atom_edit_data_mut(&mut designer).unwrap();
-        data.frozen_base_atoms.insert(base_id);
+        // Promote base atom to diff: add with same element (C=6) and position, set anchor
+        let diff_id = data.add_atom_to_diff(6, c2_pos_before);
+        data.diff.set_anchor_position(diff_id, c2_pos_before);
+        data.diff.set_atom_frozen(diff_id, true);
     }
     do_full_refresh(&mut designer);
 

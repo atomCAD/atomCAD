@@ -83,9 +83,7 @@ pub fn add_atom_by_ray(
     // Store hybridization override on the new atom if toolbar was not Auto.
     let hyb_flag = hybridization_to_flag(hybridization_override);
     if hyb_flag != HYBRIDIZATION_AUTO {
-        atom_edit_data
-            .hybridization_override_diff_atoms
-            .insert(new_atom_id, hyb_flag);
+        atom_edit_data.set_hybridization_override_recorded(new_atom_id, hyb_flag);
     }
 }
 
@@ -522,9 +520,7 @@ pub fn place_guided_atom(
     // Store hybridization override on the anchor atom (if toolbar was not Auto).
     // The anchor is the atom whose geometry the user is controlling via the toolbar.
     if toolbar_hybridization != HYBRIDIZATION_AUTO {
-        atom_edit_data
-            .hybridization_override_diff_atoms
-            .insert(anchor_atom_id, toolbar_hybridization);
+        atom_edit_data.set_hybridization_override_recorded(anchor_atom_id, toolbar_hybridization);
     }
 
     // Transition back to Idle

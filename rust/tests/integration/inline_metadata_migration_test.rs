@@ -13,8 +13,8 @@ use rust_lib_flutter_cad::structure_designer::serialization::node_networks_seria
 
 const FIXTURE_DIR: &str = "tests/fixtures/inline_metadata_migration";
 
-/// Load the old-format fixture and verify that all 4 external metadata maps
-/// are populated correctly.
+/// Load the old-format fixture and verify that the backward-compat migration
+/// applies old map entries to inline diff atom flags.
 ///
 /// Fixture contents:
 ///   - frozen_base_atoms: [5]
@@ -56,33 +56,36 @@ fn load_old_format_metadata_maps() {
     // Verify the diff has 3 atoms
     assert_eq!(data.diff.get_num_of_atoms(), 3, "Expected 3 diff atoms");
 
-    // Verify frozen_base_atoms: base atom 5 is frozen
+    // Backward-compat migration applies old map entries to inline diff atom flags.
+    // Base-atom overrides (frozen_base_atoms, hybridization_override_base_atoms) are
+    // ignored during migration because promotion requires the base structure which is
+    // unavailable at load time.
+
+    // Verify frozen_diff_atoms: diff atom 2 (N addition) has frozen flag set inline
     assert!(
-        data.frozen_base_atoms.contains(&5),
-        "Base atom 5 should be frozen"
+        data.diff.get_atom(2).unwrap().is_frozen(),
+        "Diff atom 2 should be frozen (migrated from frozen_diff_atoms)"
     );
-    assert_eq!(data.frozen_base_atoms.len(), 1);
-
-    // Verify frozen_diff_atoms: diff atom 2 (N addition) is frozen
+    // Diff atoms 1 and 3 should NOT be frozen
     assert!(
-        data.frozen_diff_atoms.contains(&2),
-        "Diff atom 2 should be frozen"
+        !data.diff.get_atom(1).unwrap().is_frozen(),
+        "Diff atom 1 should not be frozen"
     );
-    assert_eq!(data.frozen_diff_atoms.len(), 1);
+    assert!(
+        !data.diff.get_atom(3).unwrap().is_frozen(),
+        "Diff atom 3 should not be frozen"
+    );
 
-    // Verify hybridization_override_base_atoms: base atom 10 has Sp2 (value 2)
+    // Verify hybridization_override_diff_atoms: diff atom 1 has Sp3 (value 1) inline
     assert_eq!(
-        data.hybridization_override_base_atoms.get(&10),
-        Some(&2),
-        "Base atom 10 should have Sp2 hybridization override"
+        data.diff.get_atom(1).unwrap().hybridization_override(),
+        1,
+        "Diff atom 1 should have Sp3 hybridization override (migrated from hybridization_override_diff_atoms)"
     );
-    assert_eq!(data.hybridization_override_base_atoms.len(), 1);
-
-    // Verify hybridization_override_diff_atoms: diff atom 1 has Sp3 (value 1)
+    // Diff atom 2 should have no hybridization override
     assert_eq!(
-        data.hybridization_override_diff_atoms.get(&1),
-        Some(&1),
-        "Diff atom 1 should have Sp3 hybridization override"
+        data.diff.get_atom(2).unwrap().hybridization_override(),
+        0,
+        "Diff atom 2 should have no hybridization override"
     );
-    assert_eq!(data.hybridization_override_diff_atoms.len(), 1);
 }

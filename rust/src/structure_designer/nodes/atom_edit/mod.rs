@@ -7,7 +7,7 @@ mod hydrogen_passivation;
 pub mod measurement;
 mod minimization;
 mod modify_measurement;
-mod operations;
+pub mod operations;
 mod selection;
 mod types;
 

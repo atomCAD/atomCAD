@@ -19,12 +19,7 @@ use crate::api::structure_designer::structure_designer_api_types::PointerUpResul
 use crate::structure_designer::nodes::atom_edit::atom_edit;
 use crate::structure_designer::nodes::atom_edit::atom_edit::{AtomEditData, MinimizeFreezeMode};
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::undo::commands::atom_edit_frozen_change::{
-    AtomEditFrozenChangeCommand, FrozenDelta, FrozenProvenance,
-};
-use crate::structure_designer::undo::commands::atom_edit_hybridization_change::{
-    AtomEditHybridizationChangeCommand, HybridizationDelta, HybridizationProvenance,
-};
+use crate::structure_designer::nodes::atom_edit::operations::BaseAtomPromotionInfo;
 use crate::structure_designer::undo::commands::atom_edit_toggle_flag::{
     AtomEditFlag, AtomEditToggleFlagCommand,
 };
@@ -992,39 +987,53 @@ pub fn atom_edit_get_default_angle() -> Option<f64> {
 
 // --- Frozen atom API ---
 
+/// Gather promotion info for selected base atoms (Phase 1 of borrow split).
+fn gather_selected_base_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPromotionInfo> {
+    use crate::structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info;
+    let data = match atom_edit::get_active_atom_edit_data(sd) {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+    if data.selection.selected_base_atoms.is_empty() || sd.is_selected_node_in_diff_view() {
+        return Vec::new();
+    }
+    gather_base_atom_promotion_info(sd, &data.selection.selected_base_atoms)
+}
+
 /// Sets the frozen flag on all currently selected atoms (additive).
+/// Base atoms are promoted to diff first.
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_selection_to_frozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let sd = &mut cad_instance.structure_designer;
-            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
-                // Gather the delta: which atoms are actually newly added to frozen
-                let mut delta = FrozenDelta {
-                    added: Vec::new(),
-                    removed: Vec::new(),
-                };
+            // Phase 1: gather base atom promotion info (immutable borrow)
+            let base_info = gather_selected_base_promotion_info(sd);
+            // Phase 2: promote and set flags (mutable borrow via with_atom_edit_undo)
+            atom_edit::with_atom_edit_undo(sd, "Freeze selection", |sd| {
                 if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
-                    for &base_id in &data.selection.selected_base_atoms.clone() {
-                        if data.frozen_base_atoms.insert(base_id) {
-                            delta.added.push((FrozenProvenance::Base, base_id));
-                        }
+                    // Promote base atoms to diff
+                    for info in &base_info {
+                        let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                            data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                            data.set_anchor_recorded(existing_id, info.position);
+                            existing_id
+                        } else {
+                            let new_id = data.add_atom_recorded(info.atomic_number, info.position);
+                            data.set_anchor_recorded(new_id, info.position);
+                            new_id
+                        };
+                        data.promote_base_atom_metadata(info.flags, diff_id);
+                        data.selection.selected_base_atoms.remove(&info.base_id);
+                        data.selection.selected_diff_atoms.insert(diff_id);
+                        data.set_frozen_recorded(diff_id, true);
                     }
+                    // Set frozen on already-diff atoms
                     for &diff_id in &data.selection.selected_diff_atoms.clone() {
-                        if data.frozen_diff_atoms.insert(diff_id) {
-                            delta.added.push((FrozenProvenance::Diff, diff_id));
-                        }
+                        data.set_frozen_recorded(diff_id, true);
                     }
                 }
-                if !delta.added.is_empty() || !delta.removed.is_empty() {
-                    sd.push_command(AtomEditFrozenChangeCommand {
-                        description: "Freeze selection".to_string(),
-                        network_name,
-                        node_id,
-                        delta,
-                    });
-                }
-            }
+            });
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -1036,38 +1045,20 @@ pub fn atom_edit_selection_to_unfrozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let sd = &mut cad_instance.structure_designer;
-            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
-                let mut delta = FrozenDelta {
-                    added: Vec::new(),
-                    removed: Vec::new(),
-                };
+            atom_edit::with_atom_edit_undo(sd, "Unfreeze selection", |sd| {
                 if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
-                    for &base_id in &data.selection.selected_base_atoms.clone() {
-                        if data.frozen_base_atoms.remove(&base_id) {
-                            delta.removed.push((FrozenProvenance::Base, base_id));
-                        }
-                    }
+                    // Only diff atoms can have frozen flag set (base atoms were promoted)
                     for &diff_id in &data.selection.selected_diff_atoms.clone() {
-                        if data.frozen_diff_atoms.remove(&diff_id) {
-                            delta.removed.push((FrozenProvenance::Diff, diff_id));
-                        }
+                        data.set_frozen_recorded(diff_id, false);
                     }
                 }
-                if !delta.added.is_empty() || !delta.removed.is_empty() {
-                    sd.push_command(AtomEditFrozenChangeCommand {
-                        description: "Unfreeze selection".to_string(),
-                        network_name,
-                        node_id,
-                        delta,
-                    });
-                }
-            }
+            });
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
-/// Replaces the current selection with the set of frozen atoms.
+/// Replaces the current selection with the set of frozen diff atoms.
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_frozen_to_selection() {
     unsafe {
@@ -1075,10 +1066,15 @@ pub fn atom_edit_frozen_to_selection() {
             if let Some(atom_edit_data) =
                 atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
             {
-                atom_edit_data.selection.selected_base_atoms =
-                    atom_edit_data.frozen_base_atoms.clone();
-                atom_edit_data.selection.selected_diff_atoms =
-                    atom_edit_data.frozen_diff_atoms.clone();
+                // Frozen atoms are now always diff atoms (promoted on freeze)
+                let frozen_diff: std::collections::HashSet<u32> = atom_edit_data
+                    .diff
+                    .iter_atoms()
+                    .filter(|(_, a)| a.is_frozen())
+                    .map(|(_, a)| a.id)
+                    .collect();
+                atom_edit_data.selection.selected_base_atoms.clear();
+                atom_edit_data.selection.selected_diff_atoms = frozen_diff;
                 atom_edit_data.selection.selected_bonds.clear();
                 atom_edit_data.selection.selection_transform = None;
                 refresh_structure_designer_auto(cad_instance);
@@ -1087,42 +1083,31 @@ pub fn atom_edit_frozen_to_selection() {
     }
 }
 
-/// Clears the frozen flag from all atoms.
+/// Clears the frozen flag from all diff atoms.
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_clear_frozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let sd = &mut cad_instance.structure_designer;
-            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
-                let mut delta = FrozenDelta {
-                    added: Vec::new(),
-                    removed: Vec::new(),
-                };
+            atom_edit::with_atom_edit_undo(sd, "Clear frozen atoms", |sd| {
                 if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
-                    for &base_id in &data.frozen_base_atoms {
-                        delta.removed.push((FrozenProvenance::Base, base_id));
+                    let frozen_ids: Vec<u32> = data
+                        .diff
+                        .iter_atoms()
+                        .filter(|(_, a)| a.is_frozen())
+                        .map(|(_, a)| a.id)
+                        .collect();
+                    for diff_id in frozen_ids {
+                        data.set_frozen_recorded(diff_id, false);
                     }
-                    for &diff_id in &data.frozen_diff_atoms {
-                        delta.removed.push((FrozenProvenance::Diff, diff_id));
-                    }
-                    data.frozen_base_atoms.clear();
-                    data.frozen_diff_atoms.clear();
                 }
-                if !delta.removed.is_empty() {
-                    sd.push_command(AtomEditFrozenChangeCommand {
-                        description: "Clear frozen atoms".to_string(),
-                        network_name,
-                        node_id,
-                        delta,
-                    });
-                }
-            }
+            });
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
-/// Returns true if any atom has the frozen flag set.
+/// Returns true if any diff atom has the frozen flag set.
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_has_frozen_atoms() -> bool {
     use crate::api::api_common::with_cad_instance_or;
@@ -1131,9 +1116,7 @@ pub fn atom_edit_has_frozen_atoms() -> bool {
             |cad_instance| match atom_edit::get_active_atom_edit_data(
                 &cad_instance.structure_designer,
             ) {
-                Some(data) => {
-                    !data.frozen_base_atoms.is_empty() || !data.frozen_diff_atoms.is_empty()
-                }
+                Some(data) => data.diff.iter_atoms().any(|(_, a)| a.is_frozen()),
                 None => false,
             },
             false,
@@ -1145,6 +1128,7 @@ pub fn atom_edit_has_frozen_atoms() -> bool {
 
 /// Sets the hybridization override on all currently selected atoms.
 /// `Auto` removes the override (restoring bond-based inference).
+/// Base atoms are promoted to diff first.
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_set_hybridization_override(
     hybridization: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
@@ -1164,88 +1148,38 @@ pub fn atom_edit_set_hybridization_override(
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let sd = &mut cad_instance.structure_designer;
-            if let Some((network_name, node_id)) = atom_edit::get_atom_edit_node_info_pub(sd) {
-                let mut delta = HybridizationDelta::default();
-                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
-                    // Process selected base atoms
-                    for &base_id in &data.selection.selected_base_atoms.clone() {
-                        let old = data
-                            .hybridization_override_base_atoms
-                            .get(&base_id)
-                            .copied();
-                        if value == HYBRIDIZATION_AUTO {
-                            // Remove override if present
-                            if let Some(old_val) = old {
-                                data.hybridization_override_base_atoms.remove(&base_id);
-                                delta.removed.push((
-                                    HybridizationProvenance::Base,
-                                    base_id,
-                                    old_val,
-                                ));
-                            }
-                        } else if let Some(old_val) = old {
-                            if old_val != value {
-                                data.hybridization_override_base_atoms
-                                    .insert(base_id, value);
-                                delta.changed.push((
-                                    HybridizationProvenance::Base,
-                                    base_id,
-                                    old_val,
-                                    value,
-                                ));
-                            }
-                        } else {
-                            data.hybridization_override_base_atoms
-                                .insert(base_id, value);
-                            delta
-                                .added
-                                .push((HybridizationProvenance::Base, base_id, value));
+            // Phase 1: gather base atom promotion info
+            let base_info = gather_selected_base_promotion_info(sd);
+            // Phase 2: promote and set hybridization
+            atom_edit::with_atom_edit_undo(
+                sd,
+                &format!("Set hybridization to {:?}", hybridization),
+                |sd| {
+                    if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                        // Promote base atoms to diff
+                        for info in &base_info {
+                            let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                                data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                                data.set_anchor_recorded(existing_id, info.position);
+                                existing_id
+                            } else {
+                                let new_id =
+                                    data.add_atom_recorded(info.atomic_number, info.position);
+                                data.set_anchor_recorded(new_id, info.position);
+                                new_id
+                            };
+                            data.promote_base_atom_metadata(info.flags, diff_id);
+                            data.selection.selected_base_atoms.remove(&info.base_id);
+                            data.selection.selected_diff_atoms.insert(diff_id);
+                            data.set_hybridization_override_recorded(diff_id, value);
+                        }
+                        // Set hybridization on already-diff atoms
+                        for &diff_id in &data.selection.selected_diff_atoms.clone() {
+                            data.set_hybridization_override_recorded(diff_id, value);
                         }
                     }
-                    // Process selected diff atoms
-                    for &diff_id in &data.selection.selected_diff_atoms.clone() {
-                        let old = data
-                            .hybridization_override_diff_atoms
-                            .get(&diff_id)
-                            .copied();
-                        if value == HYBRIDIZATION_AUTO {
-                            if let Some(old_val) = old {
-                                data.hybridization_override_diff_atoms.remove(&diff_id);
-                                delta.removed.push((
-                                    HybridizationProvenance::Diff,
-                                    diff_id,
-                                    old_val,
-                                ));
-                            }
-                        } else if let Some(old_val) = old {
-                            if old_val != value {
-                                data.hybridization_override_diff_atoms
-                                    .insert(diff_id, value);
-                                delta.changed.push((
-                                    HybridizationProvenance::Diff,
-                                    diff_id,
-                                    old_val,
-                                    value,
-                                ));
-                            }
-                        } else {
-                            data.hybridization_override_diff_atoms
-                                .insert(diff_id, value);
-                            delta
-                                .added
-                                .push((HybridizationProvenance::Diff, diff_id, value));
-                        }
-                    }
-                }
-                if !delta.is_empty() {
-                    sd.push_command(AtomEditHybridizationChangeCommand {
-                        description: format!("Set hybridization to {:?}", hybridization),
-                        network_name,
-                        node_id,
-                        delta,
-                    });
-                }
-            }
+                },
+            );
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -1269,8 +1203,9 @@ pub fn atom_edit_get_selected_hybridization() -> i8 {
                         None => return -1,
                     };
 
-                let base_selected = &data.selection.selected_base_atoms;
                 let diff_selected = &data.selection.selected_diff_atoms;
+                // Base atoms without a diff entry have Auto hybridization (not overridden)
+                let base_selected = &data.selection.selected_base_atoms;
 
                 if base_selected.is_empty() && diff_selected.is_empty() {
                     return -1;
@@ -1278,25 +1213,20 @@ pub fn atom_edit_get_selected_hybridization() -> i8 {
 
                 let mut common: Option<u8> = None;
 
-                for &base_id in base_selected {
-                    let val = data
-                        .hybridization_override_base_atoms
-                        .get(&base_id)
-                        .copied()
-                        .unwrap_or(HYBRIDIZATION_AUTO);
+                // Base atoms: Auto hybridization (overrides require promotion to diff)
+                for &_base_id in base_selected {
                     match common {
-                        None => common = Some(val),
-                        Some(c) if c != val => return -2,
+                        None => common = Some(HYBRIDIZATION_AUTO),
+                        Some(c) if c != HYBRIDIZATION_AUTO => return -2,
                         _ => {}
                     }
                 }
 
                 for &diff_id in diff_selected {
                     let val = data
-                        .hybridization_override_diff_atoms
-                        .get(&diff_id)
-                        .copied()
-                        .unwrap_or(HYBRIDIZATION_AUTO);
+                        .diff
+                        .get_atom(diff_id)
+                        .map_or(HYBRIDIZATION_AUTO, |a| a.hybridization_override());
                     match common {
                         None => common = Some(val),
                         Some(c) if c != val => return -2,

@@ -229,15 +229,7 @@ pub fn transform_selected(structure_designer: &mut StructureDesigner, abs_transf
         let base_info: Vec<BaseAtomPromotionInfo> = if is_diff_view {
             Vec::new()
         } else {
-            // Filter out frozen base atoms so they are not moved by the transform.
-            let non_frozen_base: std::collections::HashSet<u32> = atom_edit_data
-                .selection
-                .selected_base_atoms
-                .iter()
-                .filter(|id| !atom_edit_data.frozen_base_atoms.contains(id))
-                .copied()
-                .collect();
-            gather_base_atom_promotion_info(structure_designer, &non_frozen_base)
+            gather_base_atom_promotion_info(structure_designer, &atom_edit_data.selection.selected_base_atoms)
         };
 
         (current_transform, base_info)
@@ -263,11 +255,13 @@ pub struct BaseAtomPromotionInfo {
     pub atomic_number: i16,
     pub position: DVec3,
     pub existing_diff_id: Option<u32>,
+    /// Base atom flags (frozen, hybridization, passivation) to copy to the diff atom on promotion.
+    pub flags: u16,
 }
 
 /// Gather promotion info for selected base atoms. Checks provenance to detect
 /// base atoms that already have diff entries (e.g., UNCHANGED markers from bond tools).
-fn gather_base_atom_promotion_info(
+pub fn gather_base_atom_promotion_info(
     structure_designer: &StructureDesigner,
     selected_base_atoms: &std::collections::HashSet<u32>,
 ) -> Vec<BaseAtomPromotionInfo> {
@@ -288,6 +282,10 @@ fn gather_base_atom_promotion_info(
     for &base_id in selected_base_atoms {
         if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
             if let Some(atom) = result_structure.get_atom(result_id) {
+                // Skip frozen atoms — they should not be moved/promoted
+                if atom.is_frozen() {
+                    continue;
+                }
                 // Check if this base atom already has a diff entry
                 let existing_diff_id =
                     if let Some(source) = eval_cache.provenance.sources.get(&result_id) {
@@ -303,6 +301,7 @@ fn gather_base_atom_promotion_info(
                     atomic_number: atom.atomic_number,
                     position: atom.position,
                     existing_diff_id,
+                    flags: atom.flags,
                 });
             }
         }
@@ -338,16 +337,9 @@ pub fn drag_selected_by_delta(
         if is_diff_view {
             (Vec::new(), 0)
         } else {
-            // Filter out frozen base atoms
-            let non_frozen_base: std::collections::HashSet<u32> = atom_edit_data
-                .selection
-                .selected_base_atoms
-                .iter()
-                .filter(|id| !atom_edit_data.frozen_base_atoms.contains(id))
-                .copied()
-                .collect();
-            let frozen_count = total_base - non_frozen_base.len();
-            let info = gather_base_atom_promotion_info(structure_designer, &non_frozen_base);
+            // gather_base_atom_promotion_info filters out frozen atoms via result atom flags
+            let info = gather_base_atom_promotion_info(structure_designer, &atom_edit_data.selection.selected_base_atoms);
+            let frozen_count = total_base - info.len();
             (info, frozen_count)
         }
     };
@@ -363,7 +355,7 @@ pub fn drag_selected_by_delta(
         .selection
         .selected_diff_atoms
         .iter()
-        .filter(|id| !atom_edit_data.frozen_diff_atoms.contains(id))
+        .filter(|id| !atom_edit_data.diff.get_atom(**id).map_or(false, |a| a.is_frozen()))
         .copied()
         .collect();
     let frozen_diff_count = atom_edit_data.selection.selected_diff_atoms.len() - diff_ids.len();
@@ -404,7 +396,7 @@ pub fn drag_selected_by_delta(
             SelectionProvenance::Diff,
             diff_id,
         );
-        atom_edit_data.promote_base_atom_metadata(info.base_id, diff_id);
+        atom_edit_data.promote_base_atom_metadata(info.flags, diff_id);
     }
 
     // Update selection transform to reflect the displacement (only if something moved)

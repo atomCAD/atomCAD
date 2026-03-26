@@ -12,6 +12,13 @@ pub struct SerializableAtom {
     pub atomic_number: i16,
     #[serde(with = "dvec3_serializer")]
     pub position: DVec3,
+    /// Atom flags (frozen, hybridization, passivation). Absent in old files → defaults to 0.
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub flags: u16,
+}
+
+fn is_zero_u16(v: &u16) -> bool {
+    *v == 0
 }
 
 /// Serializable representation of a bond in a diff structure.
@@ -93,6 +100,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
             id: atom.id,
             atomic_number: atom.atomic_number,
             position: atom.position,
+            flags: atom.flags & !0x1, // strip selection bit
         });
     }
     // Sort by ID for deterministic output
@@ -122,31 +130,8 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         .collect();
     anchor_positions.sort_by_key(|a| a.atom_id);
 
-    let mut frozen_base: Vec<u32> = data.frozen_base_atoms.iter().copied().collect();
-    frozen_base.sort();
-    let mut frozen_diff: Vec<u32> = data.frozen_diff_atoms.iter().copied().collect();
-    frozen_diff.sort();
-
-    let mut hyb_base: Vec<HybridizationOverrideEntry> = data
-        .hybridization_override_base_atoms
-        .iter()
-        .map(|(&atom_id, &hybridization)| HybridizationOverrideEntry {
-            atom_id,
-            hybridization,
-        })
-        .collect();
-    hyb_base.sort_by_key(|e| e.atom_id);
-
-    let mut hyb_diff: Vec<HybridizationOverrideEntry> = data
-        .hybridization_override_diff_atoms
-        .iter()
-        .map(|(&atom_id, &hybridization)| HybridizationOverrideEntry {
-            atom_id,
-            hybridization,
-        })
-        .collect();
-    hyb_diff.sort_by_key(|e| e.atom_id);
-
+    // Frozen/hybridization data is now stored inline on diff atom flags.
+    // Old map fields are written empty for forward compatibility with old readers.
     Ok(SerializableAtomEditData {
         diff: SerializableDiff {
             atoms,
@@ -159,10 +144,10 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         tolerance: data.tolerance,
         error_on_stale_entries: data.error_on_stale_entries,
         continuous_minimization: data.continuous_minimization,
-        frozen_base_atoms: frozen_base,
-        frozen_diff_atoms: frozen_diff,
-        hybridization_override_base_atoms: hyb_base,
-        hybridization_override_diff_atoms: hyb_diff,
+        frozen_base_atoms: Vec::new(),
+        frozen_diff_atoms: Vec::new(),
+        hybridization_override_base_atoms: Vec::new(),
+        hybridization_override_diff_atoms: Vec::new(),
     })
 }
 
@@ -202,6 +187,13 @@ pub fn serializable_to_atom_edit_data(
                 ),
             ));
         }
+        // Restore inline flags (frozen, hybridization, passivation) from serialized data
+        if atom.flags != 0 {
+            let flags = atom.flags & !0x1; // strip selection bit just in case
+            diff.set_atom_frozen(actual_id, (flags & (1 << 2)) != 0);
+            diff.set_atom_hydrogen_passivation(actual_id, (flags & (1 << 1)) != 0);
+            diff.set_atom_hybridization_override(actual_id, ((flags >> 3) & 0b11) as u8);
+        }
     }
 
     // Restore bonds (use add_bond_checked to silently deduplicate any legacy duplicates)
@@ -214,16 +206,16 @@ pub fn serializable_to_atom_edit_data(
         diff.set_anchor_position(anchor.atom_id, anchor.position);
     }
 
-    let hyb_base: std::collections::HashMap<u32, u8> = serializable
-        .hybridization_override_base_atoms
-        .iter()
-        .map(|e| (e.atom_id, e.hybridization))
-        .collect();
-    let hyb_diff: std::collections::HashMap<u32, u8> = serializable
-        .hybridization_override_diff_atoms
-        .iter()
-        .map(|e| (e.atom_id, e.hybridization))
-        .collect();
+    // Backward-compat migration: apply old-format frozen/hybridization map entries
+    // onto diff atoms. Base-provenance entries are ignored (they would need promotion
+    // which requires the base structure, unavailable at load time — these are rare in
+    // practice since overrides on base atoms were uncommon).
+    for &diff_id in &serializable.frozen_diff_atoms {
+        diff.set_atom_frozen(diff_id, true);
+    }
+    for entry in &serializable.hybridization_override_diff_atoms {
+        diff.set_atom_hybridization_override(entry.atom_id, entry.hybridization);
+    }
 
     Ok(AtomEditData::from_deserialized(
         diff,
@@ -233,9 +225,5 @@ pub fn serializable_to_atom_edit_data(
         serializable.tolerance,
         serializable.error_on_stale_entries,
         serializable.continuous_minimization,
-        serializable.frozen_base_atoms.iter().copied().collect(),
-        serializable.frozen_diff_atoms.iter().copied().collect(),
-        hyb_base,
-        hyb_diff,
     ))
 }

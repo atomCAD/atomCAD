@@ -33,8 +33,8 @@ pub struct AtomEditSelectionGadget {
     pub start_drag_center: DVec3,
     /// Snapshot of selected diff atom positions at gadget creation: (diff_id, position).
     diff_atom_positions: Vec<(u32, DVec3)>,
-    /// Base atoms to convert on first sync: (base_id, atomic_number, position, existing_diff_id).
-    base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>)>,
+    /// Base atoms to convert on first sync: (base_id, atomic_number, position, existing_diff_id, flags).
+    base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>, u16)>,
     /// Whether base atoms have been converted to diff atoms.
     base_converted: Cell<bool>,
     /// Diff atom positions added after base conversion: (new_diff_id, original_position).
@@ -45,7 +45,7 @@ impl AtomEditSelectionGadget {
     pub fn new(
         center: DVec3,
         diff_atom_positions: Vec<(u32, DVec3)>,
-        base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>)>,
+        base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>, u16)>,
     ) -> Self {
         Self {
             center,
@@ -161,7 +161,7 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
             && total_delta.length_squared() > 1e-15
         {
             let mut converted = self.converted_positions.borrow_mut();
-            for &(base_id, atomic_number, position, existing_diff_id) in &self.base_atoms_info {
+            for &(base_id, atomic_number, position, existing_diff_id, base_flags) in &self.base_atoms_info {
                 let target = position + total_delta;
                 let diff_id = if let Some(existing_id) = existing_diff_id {
                     // Reuse existing diff entry (e.g., UNCHANGED marker from bond tool).
@@ -180,7 +180,7 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
                     .selected_base_atoms
                     .remove(&base_id);
                 atom_edit_data.selection.selected_diff_atoms.insert(diff_id);
-                atom_edit_data.promote_base_atom_metadata(base_id, diff_id);
+                atom_edit_data.promote_base_atom_metadata(base_flags, diff_id);
                 converted.push((diff_id, position));
             }
             self.base_converted.set(true);

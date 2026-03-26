@@ -16,10 +16,8 @@ undo/
     ├── duplicate_node.rs, paste_nodes.rs
     ├── add_network.rs, delete_network.rs, rename_network.rs
     ├── text_edit_network.rs, factor_selection.rs
-    ├── atom_edit_mutation.rs      # Incremental diff deltas
-    ├── atom_edit_toggle_flag.rs   # Boolean flag toggles
-    ├── atom_edit_frozen_change.rs # Freeze/unfreeze operations
-    └── atom_edit_hybridization_change.rs # Per-atom hybridization override changes
+    ├── atom_edit_mutation.rs      # Incremental diff deltas (includes flag changes)
+    └── atom_edit_toggle_flag.rs   # Boolean flag toggles
 ```
 
 ## Architecture

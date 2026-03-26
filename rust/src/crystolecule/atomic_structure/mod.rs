@@ -227,18 +227,6 @@ impl AtomicStructure {
         }
     }
 
-    /// Merges metadata from two source atoms into a target atom using OR semantics
-    /// for flags (except selected) and taking in_crystal_depth from the primary source.
-    ///
-    /// Used when a diff atom replaces/moves a base atom: if either source has a flag
-    /// set (e.g. frozen), the result inherits it.
-    pub(crate) fn merge_atom_metadata(&mut self, target_id: u32, primary: &Atom, secondary: &Atom) {
-        if let Some(target) = self.get_atom_mut(target_id) {
-            target.flags = (primary.flags | secondary.flags) & !0x1;
-            target.in_crystal_depth = primary.in_crystal_depth;
-        }
-    }
-
     pub fn has_selected_atoms(&self) -> bool {
         self.atoms
             .iter()

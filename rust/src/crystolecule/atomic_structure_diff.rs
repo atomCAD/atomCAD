@@ -139,7 +139,7 @@ pub fn apply_diff(
             // Matched normal atom → replacement/move
             // Use the diff atom's position (which may differ from base for moves)
             let result_id = result.add_atom(diff_atom.atomic_number, diff_atom.position);
-            result.merge_atom_metadata(result_id, diff_atom, base_atom);
+            result.copy_atom_metadata(result_id, diff_atom);
             provenance.sources.insert(
                 result_id,
                 AtomSource::DiffMatchedBase {

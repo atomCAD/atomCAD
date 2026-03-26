@@ -1,15 +1,12 @@
 use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::nodes::atom_edit::diff_recorder::{AtomDelta, BondDelta};
-use crate::structure_designer::undo::commands::atom_edit_hybridization_change::HybridizationDelta;
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
 /// Command for undoing/redoing atom_edit diff mutations.
 ///
 /// Stores the ordered list of atom and bond deltas produced by a recording session.
-/// Optionally includes a `HybridizationDelta` for hybridization override map changes
-/// that occurred alongside the structural mutation (e.g., guided placement setting
-/// an override on the anchor atom).
+/// Hybridization overrides are now captured as atom flag changes in AtomDelta.
 ///
 /// Undo reverses them; redo re-applies them. Both use non-recording AtomicStructure
 /// methods directly to avoid producing new deltas.
@@ -20,8 +17,6 @@ pub struct AtomEditMutationCommand {
     pub node_id: u64,
     pub atom_deltas: Vec<AtomDelta>,
     pub bond_deltas: Vec<BondDelta>,
-    /// Optional hybridization override changes captured during the same recording session.
-    pub hybridization_delta: Option<HybridizationDelta>,
 }
 
 impl UndoCommand for AtomEditMutationCommand {
@@ -32,24 +27,12 @@ impl UndoCommand for AtomEditMutationCommand {
     fn undo(&self, ctx: &mut UndoContext) {
         if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
             apply_undo(data, &self.atom_deltas, &self.bond_deltas);
-            if let Some(ref hyb_delta) = self.hybridization_delta {
-                hyb_delta.apply_undo(
-                    &mut data.hybridization_override_base_atoms,
-                    &mut data.hybridization_override_diff_atoms,
-                );
-            }
         }
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
         if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
             apply_redo(data, &self.atom_deltas, &self.bond_deltas);
-            if let Some(ref hyb_delta) = self.hybridization_delta {
-                hyb_delta.apply_redo(
-                    &mut data.hybridization_override_base_atoms,
-                    &mut data.hybridization_override_diff_atoms,
-                );
-            }
         }
     }
 

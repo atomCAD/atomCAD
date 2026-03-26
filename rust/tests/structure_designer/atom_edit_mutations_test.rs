@@ -366,6 +366,7 @@ fn test_replace_base_atoms() {
             atomic_number: 6,
             position: pos,
             existing_diff_id: None,
+            flags: 0,
         }],
     );
 
@@ -427,6 +428,7 @@ fn test_transform_base_atoms_creates_anchors() {
             atomic_number: 6,
             position: DVec3::new(1.0, 0.0, 0.0),
             existing_diff_id: None,
+            flags: 0,
         }],
     );
 
@@ -519,7 +521,7 @@ fn test_apply_transform_skips_frozen_diff_atom() {
     ));
 
     // Freeze atom 1
-    data.frozen_diff_atoms.insert(frozen_id);
+    data.diff.set_atom_frozen(frozen_id, true);
 
     // Apply a +1 x translation
     let relative = Transform::new(DVec3::new(1.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
@@ -557,8 +559,8 @@ fn test_apply_transform_all_frozen_diff_atoms_not_moved() {
     ));
 
     // Freeze both atoms
-    data.frozen_diff_atoms.insert(id1);
-    data.frozen_diff_atoms.insert(id2);
+    data.diff.set_atom_frozen(id1, true);
+    data.diff.set_atom_frozen(id2, true);
 
     let relative = Transform::new(DVec3::new(5.0, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
     data.apply_transform(&relative, &[]);
