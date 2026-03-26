@@ -69,7 +69,7 @@ pub struct SequenceData {
 impl Default for SequenceData {
     fn default() -> Self {
         Self {
-            element_type: DataType::Geometry,
+            element_type: DataType::Atomic,
             input_count: 2,
         }
     }
@@ -85,14 +85,14 @@ and names are just stringified indices (`"0"`, `"1"`, ...). No need for per-pin 
 // In node_type_registry.rs
 
 NodeType {
-    name: "sequence",
-    display_name: "Sequence",
-    description: "Collects inputs into an ordered array.",
-    category: NodeTypeCategory::Utility,
+    name: "sequence".to_string(),
+    description: "Collects inputs into an ordered array.".to_string(),
+    summary: Some("Ordered array from numbered pins".to_string()),
+    category: NodeTypeCategory::OtherBuiltin,
     parameters: vec![],  // overridden by calculate_custom_node_type
     output_pins: OutputPinDefinition::single(DataType::Array(Box::new(DataType::None))),
     node_data_creator: || Box::new(SequenceData::default()),
-    node_data_saver: sequence_data_saver,
+    node_data_saver: generic_node_data_saver::<SequenceData>,
     node_data_loader: sequence_data_loader,
     public: true,
 }
@@ -163,18 +163,20 @@ fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<
 ### Evaluation
 
 ```rust
-fn eval(
+fn eval<'a>(
     &self,
     network_evaluator: &NetworkEvaluator,
-    network_stack: &[NetworkStackEntry],
-    node: &Node,
-    _output_pin_index: i32,
+    network_stack: &[NetworkStackElement<'a>],
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    _decorate: bool,
+    context: &mut NetworkEvaluationContext,
 ) -> EvalOutput {
     let mut items = Vec::new();
 
     for i in 0..self.input_count {
         let val = network_evaluator.evaluate_arg(
-            network_stack, node, i, /*required=*/ false,
+            network_stack, node_id, registry, context, i,
         );
         match val {
             NetworkResult::None => {} // unconnected pin — skip
@@ -192,10 +194,7 @@ lets users leave gaps while building the graph.
 ### Serialization
 
 ```rust
-pub fn sequence_data_saver(data: &dyn NodeData) -> Option<Value> {
-    let seq = data.downcast_ref::<SequenceData>()?;
-    Some(serde_json::to_value(seq).ok()?)
-}
+// Saver: use generic_node_data_saver::<SequenceData> (registered in NodeType above)
 
 pub fn sequence_data_loader(
     value: &Value,
@@ -266,15 +265,11 @@ Since pin names are `"0"`, `"1"`, etc., no parser changes are needed.
 2. Test: change count, undo → pin count and wires restored
 3. Test: change type, undo → type and output restored
 
-## Open Questions
+## Resolved Questions
 
-1. **Default element type:** `Geometry` (matches `union` usage) or `None` (force user to
-   pick)? Current design uses `Geometry` as the default since it's the most common array
-   use case.
+1. **Default element type:** `Atomic` — the primary use case is composing atomic diffs
+   sequentially (for the planned `atom_composediff` node).
 
-2. **Maximum pin count:** Should there be a hard cap? The `expr` node has no cap. A
-   reasonable soft limit of 32 could be enforced in `set_text_properties` validation.
+2. **Maximum pin count:** No cap. Matches `expr` node behavior.
 
-3. **Pin removal UX:** When removing a pin, should it always remove the last pin, or
-   should the user be able to remove a specific pin by index? Removing the last is simpler;
-   removing by index requires the Flutter UI to have per-pin delete buttons.
+3. **Pin removal UX:** Removing the last pin only (decrement count). No per-pin delete buttons.
