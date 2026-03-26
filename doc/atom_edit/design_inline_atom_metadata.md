@@ -59,15 +59,72 @@ When the user sets an override on any atom (base or diff), the atom is promoted 
 
 If the user sets an override on a **base atom** (one not yet in the diff):
 
-1. Create an UNCHANGED marker in the diff for that base atom (same pattern as `add_bond_tool.rs::resolve_atom_to_diff_id`).
-2. Set the flag on the new diff atom's `flags`.
-3. Migrate selection from base to diff (same as existing promotion).
+1. Create a **real diff atom** with the base atom's `atomic_number`, `position`, and `anchor=position` (same pattern as drag/transform promotion).
+2. Copy base atom's flags via `promote_base_atom_metadata`.
+3. Set the override flag on the new diff atom's `flags`.
+4. Migrate selection from base to diff (same as existing promotion).
+
+This uses a real diff atom (not an UNCHANGED marker) because UNCHANGED markers mean "bond endpoint reference — do not modify the atom." A flag override *is* a modification. Using a real diff atom with `anchor=position` creates a Replacement entry where the atomic number and position are identical to the base but flags differ. `apply_diff`'s matched-normal-atom path handles this correctly via `copy_atom_metadata(result_id, diff_atom)`.
 
 This is consistent with the existing principle: any edit to a base atom creates a diff entry.
 
+### Promotion Must Copy Base Flags
+
+When a base atom is promoted to diff (drag, transform, minimization, gadget, etc.), the promotion code creates a new diff atom via `add_atom(atomic_number, position)` — which initializes `flags: 0`. Today this is fine because metadata lives in external maps migrated by `promote_base_atom_metadata()`. Under this design, `promote_base_atom_metadata()` must be **reimplemented** (not deleted) to copy `Atom.flags` (except selection bit 0) from the base atom to the new diff atom:
+
+```rust
+// Before (current): migrates external maps
+pub fn promote_base_atom_metadata(&mut self, base_id: u32, diff_id: u32) {
+    if let Some(hyb) = self.hybridization_override_base_atoms.remove(&base_id) {
+        self.hybridization_override_diff_atoms.insert(diff_id, hyb);
+    }
+    if self.frozen_base_atoms.remove(&base_id) {
+        self.frozen_diff_atoms.insert(diff_id);
+    }
+}
+
+// After (proposed): copies flags from base atom to diff atom via recorded method
+pub fn promote_base_atom_metadata(&mut self, base_atom: &Atom, diff_id: u32) {
+    let flags = (base_atom.flags & !0x1); // all flags except selected
+    self.set_flags_recorded(diff_id, flags);
+}
+```
+
+**Critical:** This must use a recorded method (`set_flags_recorded`), not a direct mutation on `self.diff.get_atom_mut()`. Promotion happens inside recording sessions (drag, transform, etc.). If the flag copy is unrecorded, the `AtomDelta::Added` captures `flags=0`, and on redo the base atom's flags are lost. Using a recorded method generates a `Modified` delta, which the `DiffRecorder::coalesce()` merges with the preceding `Added` into a single `Added` with the correct final flags.
+
+This ensures the diff atom inherits the base atom's frozen/hybridization/passivation state at promotion time. Any subsequent override then modifies the diff atom's flags directly. The 6 existing call sites keep calling `promote_base_atom_metadata` — only the signature and body change.
+
 ### Eval Changes
 
-**Pin 0 (result):** `apply_diff` already calls `merge_atom_metadata(target_id, diff_atom, base_atom)` which ORs flags from both sources (line 237 of `atomic_structure/mod.rs`). If the override is on the diff atom's flags, it automatically appears on the result atom. **No manual provenance-mapping loop needed.**
+#### `merge_atom_metadata` Must Be Replaced, Not Reused
+
+The existing `merge_atom_metadata` uses OR semantics for flags:
+
+```rust
+target.flags = (primary.flags | secondary.flags) & !0x1;
+```
+
+This is **wrong** for the proposed design in two ways:
+
+1. **Cannot clear a flag.** If a base atom has `frozen=true` and the user unfreezes it in the diff, the diff atom has `frozen=0`, but OR re-applies `frozen=1` from the base. The user's unfreeze is silently ignored.
+
+2. **Corrupts multi-bit fields.** Hybridization uses bits 3-4 as a 2-bit value (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1). OR merges individual bits: `Sp3(01) | Sp2(10) = Sp1(11)`. Setting Sp2 on an Sp3 atom produces Sp1. Clearing back to Auto is impossible.
+
+Today these bugs are latent because frozen/hybridization flags are never set on atoms — they live in external maps. Moving them onto atoms activates the bugs.
+
+**Fix:** In `apply_diff`, the matched-atom path (diff atom replaces/moves a base atom) should use `copy_atom_metadata(result_id, diff_atom)` instead of `merge_atom_metadata(result_id, diff_atom, base_atom)`. The diff atom is the single source of truth — it already carries forward any base flags from promotion, plus any user overrides applied on top. This is consistent with how `atomic_number` and `position` already work: they come from the diff atom, not merged with the base.
+
+```rust
+// Before (apply_diff matched-atom path):
+result.merge_atom_metadata(result_id, diff_atom, base_atom);
+
+// After:
+result.copy_atom_metadata(result_id, diff_atom);
+```
+
+Then delete `merge_atom_metadata` entirely — no callers remain.
+
+**Pin 0 (result):** `apply_diff` uses `copy_atom_metadata(result_id, diff_atom)` for matched atoms. The diff atom's flags (inherited from base at promotion + any overrides) flow through automatically. **No manual provenance-mapping loop needed.**
 
 **Pin 1 (diff):** The diff clone is `self.diff.clone()`. Flags are already on the atoms. **No manual application loop needed.**
 
@@ -84,9 +141,12 @@ pub hybridization_override_diff_atoms: HashMap<u32, u8>,
 // - The 4 provenance-mapping loops (pin 0: frozen base/diff, hyb base/diff)
 // - The 2 direct-application loops (pin 1: frozen diff, hyb diff)
 
-// DELETE:
-// - promote_base_atom_metadata() helper
-// - All promote_base_atom_metadata() call sites in 4 promotion functions
+// DELETE from atomic_structure/mod.rs:
+// - merge_atom_metadata() — replaced by copy_atom_metadata() from diff atom
+
+// REIMPLEMENT (same name, new body):
+// - promote_base_atom_metadata() — changes from map migration to flag copying
+// - All 6 call sites remain, signature changes to take &Atom instead of base_id
 
 // DELETE or SIMPLIFY:
 // - AtomEditFrozenChangeCommand (frozen changes become regular diff mutations)
@@ -161,7 +221,7 @@ Currently `drag_selected_by_delta` and `apply_transform` check `frozen_diff_atom
 
 ### Hover / UI
 
-The hover tooltip reads `atom.hybridization_override()` and `atom.is_frozen()` from the evaluated output structure. Since flags flow through `apply_diff` → `merge_atom_metadata` automatically, the hover works without any special handling. Same for both pin 0 and pin 1.
+The hover tooltip reads `atom.hybridization_override()` and `atom.is_frozen()` from the evaluated output structure. Since flags flow through `apply_diff` → `copy_atom_metadata` automatically, the hover works without any special handling. Same for both pin 0 and pin 1.
 
 ## Implementation Plan
 
@@ -169,14 +229,15 @@ The hover tooltip reads `atom.hybridization_override()` and `atom.is_frozen()` f
 
 - Add `flags: u16` to `AtomState` in `diff_recorder.rs`.
 - Update `AtomEditMutationCommand` undo/redo to restore flags.
-- Add recording wrappers: `set_frozen_recorded`, `set_hybridization_override_recorded`.
+- Add recording wrappers: `set_flags_recorded`, `set_frozen_recorded`, `set_hybridization_override_recorded`.
 
 ### Phase 2: Move overrides onto diff atoms
 
 - Change `atom_edit_set_hybridization_override` and `atom_edit_toggle_frozen` to promote base atoms and set flags on diff atoms.
 - Remove `hybridization_override_base_atoms`, `hybridization_override_diff_atoms`, `frozen_base_atoms`, `frozen_diff_atoms` from `AtomEditData`.
 - Remove the 6 manual application loops from `eval()`.
-- Remove `promote_base_atom_metadata()` and its 4 call sites.
+- Reimplement `promote_base_atom_metadata()`: change from map migration to flag copying (see "Promotion Must Copy Base Flags" section). Update signature at all 6 call sites.
+- In `apply_diff` matched-atom path: replace `merge_atom_metadata(result_id, diff_atom, base_atom)` with `copy_atom_metadata(result_id, diff_atom)`. Delete `merge_atom_metadata` from `atomic_structure/mod.rs`. The UNCHANGED path is unchanged — it still copies from the base atom.
 - Update `drag_selected_by_delta`, `apply_transform` frozen checks to read from atom.
 
 ### Phase 3: Remove old undo commands
@@ -200,13 +261,31 @@ The hover tooltip reads `atom.hybridization_override()` and `atom.is_frozen()` f
 ## Benefits
 
 - **Adding a new per-atom property:** Add a bit to `Atom.flags`, add a setter. Done. No maps, no provenance loops, no separate undo commands, no serialization fields.
-- **No promotion bugs:** There's nothing to forget to migrate — the flag lives on the atom that gets promoted.
-- **No eval bugs:** `merge_atom_metadata` already ORs flags. No manual loops to miss.
+- **No promotion bugs:** `promote_base_atom_metadata` copies all flags at promotion time — nothing to forget.
+- **No eval bugs:** `copy_atom_metadata` from the diff atom is the single code path. No manual loops to miss.
 - **Simpler undo:** One command type handles all diff mutations including flag changes.
 - **Less code:** ~200-300 lines of map management, undo commands, and provenance loops removed.
 
+## Other `Atom.flags` Bits
+
+### Hydrogen Passivation (bit 1) — Already Inline
+
+The H passivation flag marks hydrogen atoms that were added by the passivation operation (so they can be identified and stripped later). It is **already set directly on diff atoms** at creation time (`hydrogen_passivation.rs` calls `set_atom_hydrogen_passivation(h_id, true)` on the diff atom). There are no external `hydrogen_passivation_base_atoms` / `hydrogen_passivation_diff_atoms` maps on `AtomEditData`. This flag already follows the proposed pattern — **no changes needed**.
+
+### Selection (bit 0) — Intentional Exception
+
+Selection must **not** be moved onto diff atoms. It remains in the external `AtomEditSelection` (with separate `selected_base_atoms` and `selected_diff_atoms` sets). Reasons:
+
+1. **Transient UI state, not persistent data.** `copy_atom_metadata` already strips bit 0 (`& !0x1`) when copying flags through `apply_diff`. Selection is never serialized and never flows through evaluation.
+
+2. **Must not trigger promotion.** Users select base atoms constantly (click, marquee, measure) without intending to edit them. Promoting on selection would pollute the diff with UNCHANGED markers from ordinary navigation.
+
+3. **Precursor to edits, not an edit.** The design's rule is "promote when the user sets an override." Selection is the step *before* an override — it would be circular to require promotion at selection time.
+
+4. **Different lifecycle.** Selection changes on every click, potentially hundreds of times per session. Creating diff entries on every selection change would create unnecessary churn and confuse diff semantics.
+
 ## Risks
 
-- **UNCHANGED markers:** Setting an override on a base atom creates an UNCHANGED diff entry. This slightly inflates the diff, but the same pattern is already used by `add_bond_tool` and `hydrogen_passivation` — it's an established pattern, not a new concern.
+- **Flag-only overrides create Replacement entries:** Setting an override on a base atom creates a real diff atom (not an UNCHANGED marker) with `anchor=position` and the same `atomic_number`. This is a Replacement where nothing changed except flags — semantically correct but slightly inflates the diff and increments `stats.atoms_modified`. The same pattern is already used by drag/transform promotion, so this is established behavior.
 - **Serialization backward compat:** Needs a migration path for existing `.cnnd` files with the old map format. Straightforward — apply maps to diff atoms on load.
 - **Flag bits exhaustion:** `Atom.flags` is `u16` with 5 bits used (selected, H passivation, frozen, 2 for hybridization). 11 bits remain. If many more per-atom properties are needed, consider a side-table per `AtomicStructure` (not per `AtomEditData`). But 11 bits is plenty for foreseeable needs.

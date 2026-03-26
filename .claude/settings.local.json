@@ -129,7 +129,9 @@
       "Read(//c/machine_phase_systems/flutter_cad/rust/**)",
       "Bash(done)",
       "Bash(while read:*)",
-      "Bash(do sed:*)"
+      "Bash(do sed:*)",
+      "Bash(/tmp/count_removals.txt:*)",
+      "Read(//tmp/**)"
     ]
   }
 }
