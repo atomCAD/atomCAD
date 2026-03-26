@@ -1,0 +1,194 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 4,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "None"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "cuboid",
+            "custom_name": "geom",
+            "position": [
+              100.0,
+              155.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                2,
+                2,
+                2
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "atom_edit",
+            "custom_name": "edited",
+            "position": [
+              520.0,
+              155.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              }
+            ],
+            "data_type": "atom_edit",
+            "data": {
+              "continuous_minimization": false,
+              "diff": {
+                "anchor_positions": [
+                  {
+                    "atom_id": 1,
+                    "position": [
+                      0.89175,
+                      2.67525,
+                      2.67525
+                    ]
+                  }
+                ],
+                "atoms": [
+                  {
+                    "atomic_number": 6,
+                    "id": 1,
+                    "position": [
+                      0.89175,
+                      2.67525,
+                      2.67525
+                    ]
+                  },
+                  {
+                    "atomic_number": 7,
+                    "id": 2,
+                    "position": [
+                      5.0,
+                      5.0,
+                      5.0
+                    ]
+                  },
+                  {
+                    "atomic_number": 8,
+                    "id": 3,
+                    "position": [
+                      6.0,
+                      6.0,
+                      6.0
+                    ]
+                  }
+                ],
+                "bonds": [
+                  {
+                    "atom_id1": 2,
+                    "atom_id2": 3,
+                    "bond_order": 1
+                  }
+                ]
+              },
+              "error_on_stale_entries": false,
+              "frozen_base_atoms": [5],
+              "frozen_diff_atoms": [2],
+              "hybridization_override_base_atoms": [
+                { "atom_id": 10, "hybridization": 2 }
+              ],
+              "hybridization_override_diff_atoms": [
+                { "atom_id": 1, "hybridization": 1 }
+              ],
+              "include_base_bonds_in_diff": true,
+              "output_diff": false,
+              "show_anchor_arrows": true,
+              "tolerance": 0.1
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "atom_fill",
+            "custom_name": "atoms",
+            "position": [
+              310.0,
+              155.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "invert_phase": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": "",
+              "remove_single_bond_atoms_before_passivation": true,
+              "surface_reconstruction": false
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            3,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

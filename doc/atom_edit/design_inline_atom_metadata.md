@@ -223,15 +223,35 @@ Currently `drag_selected_by_delta` and `apply_transform` check `frozen_diff_atom
 
 The hover tooltip reads `atom.hybridization_override()` and `atom.is_frozen()` from the evaluated output structure. Since flags flow through `apply_diff` → `copy_atom_metadata` automatically, the hover works without any special handling. Same for both pin 0 and pin 1.
 
+## Pre-Implementation: Save Backward-Compat Fixture
+
+Before starting any implementation, save a `.cnnd` file that exercises the old format: frozen overrides on both base and diff atoms, hybridization overrides on both base and diff atoms. Place in `rust/tests/fixtures/inline_metadata_migration/`. This becomes the Phase 4 migration test fixture.
+
 ## Implementation Plan
 
+Tests are integrated into each phase — written as soon as their prerequisites compile.
+
 ### Phase 1: Extend DiffRecorder to capture flags
+
+**Code:**
 
 - Add `flags: u16` to `AtomState` in `diff_recorder.rs`.
 - Update `AtomEditMutationCommand` undo/redo to restore flags.
 - Add recording wrappers: `set_flags_recorded`, `set_frozen_recorded`, `set_hybridization_override_recorded`.
 
+**Tests — modify:**
+
+- Tests that construct or assert on `AtomState` (e.g., `coalesce_added_modified`, `coalesce_modified_modified`, `coalesce_modified_removed`) must include the new `flags` field.
+
+**Tests — introduce:**
+
+- `recording_set_flags_produces_delta` — `set_flags_recorded` generates a `Modified` delta with correct before/after flags.
+- `undo_atom_edit_flag_change` — Record a flag change via `set_frozen_recorded`, undo, verify atom flags are restored.
+- `coalesce_added_then_flag_modified` — Record `add_atom_recorded` followed by `set_flags_recorded` on the same atom. Verify `coalesce()` merges them into a single `Added` with the final flags. (This validates the critical pitfall: unrecorded flag copies at promotion would produce `flags=0` in the `Added` delta.)
+
 ### Phase 2: Move overrides onto diff atoms
+
+**Code:**
 
 - Change `atom_edit_set_hybridization_override` and `atom_edit_toggle_frozen` to promote base atoms and set flags on diff atoms.
 - Remove `hybridization_override_base_atoms`, `hybridization_override_diff_atoms`, `frozen_base_atoms`, `frozen_diff_atoms` from `AtomEditData`.
@@ -240,23 +260,84 @@ The hover tooltip reads `atom.hybridization_override()` and `atom.is_frozen()` f
 - In `apply_diff` matched-atom path: replace `merge_atom_metadata(result_id, diff_atom, base_atom)` with `copy_atom_metadata(result_id, diff_atom)`. Delete `merge_atom_metadata` from `atomic_structure/mod.rs`. The UNCHANGED path is unchanged — it still copies from the base atom.
 - Update `drag_selected_by_delta`, `apply_transform` frozen checks to read from atom.
 
+**Tests — delete (replaced by new tests below, not just removed):**
+
+These tests use `AtomEditFrozenChangeCommand`/`AtomEditHybridizationChangeCommand` + external maps. They are replaced by equivalent tests using the new inline-flag approach:
+
+- `undo_atom_edit_change_hybridization_override`
+- `undo_atom_edit_set_hybridization_override_diff_atoms`
+- `undo_atom_edit_remove_hybridization_override`
+- `undo_atom_edit_hybridization_multiple_atoms`
+- `undo_atom_edit_freeze_diff_atoms`
+- `undo_atom_edit_unfreeze_atoms`
+- `undo_atom_edit_clear_frozen`
+- `undo_atom_edit_freeze_already_frozen_is_noop`
+- `undo_atom_edit_set_hybridization_already_same_is_noop`
+
+**Tests — modify (external map references → atom flag reads):**
+
+In `atom_edit_undo_test.rs`:
+- `drag_frozen_base_atom_returns_all_frozen` — promote base atom + set frozen flag on diff atom (was: `frozen_base_atoms.insert()`).
+- `drag_frozen_diff_atom_not_moved` — set frozen flag on diff atom directly (was: `frozen_diff_atoms.insert()`).
+- `drag_all_frozen_returns_all_frozen` — same pattern.
+- `drag_no_frozen_returns_none_frozen` — verify no stale map references.
+- `frozen_flag_migrated_on_base_atom_promotion` — verify `promote_base_atom_metadata` copies `Atom.flags` from base to diff (was: verify map entry migration).
+- `hybridization_override_migrated_on_base_atom_promotion` — same: verify flags copy, not map migration.
+- `frozen_diff_atom_appears_on_pin1_output` — set frozen flag on diff atom directly (was: `frozen_diff_atoms.insert()`), same eval assertion.
+- `hybridization_override_appears_on_diff_view_output_atoms` — set hybridization via flag (was: `hybridization_override_diff_atoms.insert()`), same eval assertion.
+- `hybridization_override_appears_on_pin1_diff_output` — same pattern.
+- `undo_atom_edit_frozen_interleaved_with_mutations` — rewrite to use recorded flag methods instead of separate `AtomEditFrozenChangeCommand`.
+- `test_merge_atomic_structure_*` (basic/empty/incremental/undo/with_existing_edits) — update if they reference external maps in setup.
+
+In `atom_edit_mutations_test.rs`:
+- `test_apply_transform_skips_frozen_diff_atom` — change from `data.frozen_diff_atoms.insert(id)` to setting frozen flag on the atom.
+- `test_apply_transform_all_frozen_diff_atoms_not_moved` — same.
+
+In `continuous_minimization_test.rs`:
+- `frozen_atoms_remain_fixed_during_continuous_minimize` — change from `data.frozen_base_atoms.insert(base_id)` to promoting the base atom and setting frozen flag on the diff atom.
+
+**Tests — introduce (validate new semantics):**
+
+- `copy_not_merge_unfreezes_base_atom` — Base atom has `frozen=true`. User unfreezes in diff (diff atom has `frozen=false`). Evaluate pin 0. Verify result atom is NOT frozen. (This is the bug that OR-merge silently reintroduced — validates the `copy_atom_metadata` fix.)
+- `copy_not_merge_hybridization_no_corruption` — Base atom has `Sp3`. User sets `Sp2` in diff. Evaluate pin 0. Verify result atom is `Sp2`, not `Sp1` (which OR-merge produces: `01 | 10 = 11`).
+- `clearing_hybridization_to_auto_works` — Base atom has `Sp3`. User clears to `Auto` in diff. Evaluate. Verify result atom is `Auto`. (Impossible under OR-merge.)
+- `override_on_base_atom_triggers_promotion` — Call `atom_edit_set_hybridization_override` targeting a base atom. Verify a real diff atom (not UNCHANGED) is created with `anchor=position`, same `atomic_number`, and the correct hybridization flag.
+- `override_on_existing_diff_atom_no_promotion` — Call `atom_edit_toggle_frozen` on an already-promoted diff atom. Verify no new diff atom is created; existing atom's flags are updated in place.
+- `eval_pin0_flags_flow_through` — Set frozen + hybridization on a diff atom. Evaluate pin 0 (result view). Verify both flags appear on the result atom.
+- `eval_pin1_flags_flow_through` — Same for pin 1 (diff view). Flags should already be on the cloned diff atoms with no manual application.
+
 ### Phase 3: Remove old undo commands
+
+**Code:**
 
 - Remove `AtomEditFrozenChangeCommand`, `AtomEditHybridizationChangeCommand`.
 - Remove `FrozenDelta`, `HybridizationDelta`, `FrozenProvenance`, `HybridizationProvenance` types.
 - Update API functions to use `with_atom_edit_undo` instead of pushing separate commands.
 
+**Tests — delete:**
+
+- Remove any remaining test helpers that construct `FrozenDelta`, `HybridizationDelta`, `FrozenProvenance`, `HybridizationProvenance`, `AtomEditFrozenChangeCommand`, `AtomEditHybridizationChangeCommand`. (Most tests using these were already rewritten in Phase 2.)
+
+**Tests — introduce (undo via unified mutation command):**
+
+- `undo_freeze_via_mutation_command` — Freeze a diff atom using the new API (which uses `with_atom_edit_undo`), undo, verify atom is unfrozen.
+- `undo_hybridization_via_mutation_command` — Same for hybridization.
+- `undo_promotion_for_override` — Set override on a base atom (triggers promotion), undo. Verify the diff atom is removed entirely (the `Added` delta is reversed).
+- `redo_flag_override_after_undo` — Full undo→redo cycle for a flag-only operation. Verify flags match the post-override state after redo.
+
 ### Phase 4: Serialization migration
+
+**Code:**
 
 - Remove the 4 map fields from `SerializableAtomEditData`.
 - Ensure `Atom.flags` are persisted in the diff's serialized atoms (may already be the case — verify).
 - Add backward-compat migration in the loader: read old map fields if present, apply to diff atoms.
 
-### Phase 5: Tests
+**Tests — introduce:**
 
-- Update existing tests that directly manipulate the external maps.
-- Verify that the existing `atom_edit_undo_test.rs` tests still pass (most should need only import/setup changes).
-- Remove tests for deleted command types.
+- `flags_roundtrip_serialization` — Create an atom_edit with frozen + hybridization flags on diff atoms. Serialize to `.cnnd`, deserialize. Verify flags survived on the correct atoms.
+- `backward_compat_migration_from_external_maps` — Load the fixture saved in the pre-implementation step (old format with `frozen_base_atoms`, `hybridization_override_diff_atoms` maps). Verify the loader applies them to diff atoms correctly. Check both base-provenance overrides (should promote to diff) and diff-provenance overrides (should set flags on existing diff atoms).
+- `atom_flags_persist_in_diff_structure` — Serialize/deserialize a bare `AtomicStructure` with non-zero flags. Verify flags round-trip. (Guards against `Atom.flags` being silently dropped by the structure serializer.)
 
 ## Benefits
 
