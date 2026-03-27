@@ -120,7 +120,9 @@ impl NodeData for AtomComposeDiffData {
                     // Cancellations aren't errors per se, but stale entries could be flagged
                     // For now, error_on_stale is reserved for future use
                 }
-                EvalOutput::single(NetworkResult::Atomic(result.composed))
+                let mut composed = result.composed;
+                composed.decorator_mut().show_anchor_arrows = true;
+                EvalOutput::single(NetworkResult::Atomic(composed))
             }
             None => EvalOutput::single(NetworkResult::Error(
                 "atom_composediff: composition failed".to_string(),

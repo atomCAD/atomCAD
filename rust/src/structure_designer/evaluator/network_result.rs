@@ -741,6 +741,9 @@ fn format_atomic_display_string(atomic: &AtomicStructure) -> String {
     }
 
     let mut lines = Vec::new();
+    if atomic.is_diff() {
+        lines.push("diff".to_string());
+    }
     lines.push(format!("{} atoms, {} bonds", num_atoms, num_bonds));
     if !formula.is_empty() {
         lines.push(formula);

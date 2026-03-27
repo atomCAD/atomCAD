@@ -68,7 +68,7 @@ pub struct NodeView {
     pub displayed: bool,
     pub return_node: bool,
     pub error: Option<String>,
-    pub output_string: Option<String>,
+    pub output_pin_strings: Vec<String>,
     pub subtitle: Option<String>,
     // Comment node specific fields (only populated for Comment nodes)
     pub comment_label: Option<String>,
@@ -661,6 +661,11 @@ pub struct APICommentData {
 }
 
 pub struct APIApplyDiffData {
+    pub tolerance: f64,
+    pub error_on_stale: bool,
+}
+
+pub struct APIAtomComposeDiffData {
     pub tolerance: f64,
     pub error_on_stale: bool,
 }

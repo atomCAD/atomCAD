@@ -505,10 +505,13 @@ impl AtomEditData {
     }
 
     /// Add/update an atom in the diff with a new atomic number at the given position.
+    /// Sets an anchor at match_position so that apply_diff (and compose_two_diffs)
+    /// correctly identifies this as a base-atom modification rather than a pure addition.
     /// Returns the atom's ID in the diff.
     pub fn replace_in_diff(&mut self, match_position: DVec3, new_atomic_number: i16) -> u32 {
         self.selection.clear_bonds();
         let id = self.diff.add_atom(new_atomic_number, match_position);
+        self.diff.set_anchor_position(id, match_position);
         if let Some(ref mut rec) = self.recorder {
             rec.atom_deltas.push(AtomDelta {
                 atom_id: id,
@@ -516,7 +519,7 @@ impl AtomEditData {
                 after: Some(AtomState {
                     atomic_number: new_atomic_number,
                     position: match_position,
-                    anchor: None,
+                    anchor: Some(match_position),
                     flags: 0,
                 }),
             });

@@ -51,6 +51,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIApplyDiffData dco_decode_api_apply_diff_data(dynamic raw);
 
   @protected
+  APIAtomComposeDiffData dco_decode_api_atom_compose_diff_data(dynamic raw);
+
+  @protected
   APIAtomCutData dco_decode_api_atom_cut_data(dynamic raw);
 
   @protected
@@ -280,6 +283,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIApplyDiffData dco_decode_box_autoadd_api_apply_diff_data(dynamic raw);
+
+  @protected
+  APIAtomComposeDiffData dco_decode_box_autoadd_api_atom_compose_diff_data(
+      dynamic raw);
 
   @protected
   APIAtomCutData dco_decode_box_autoadd_api_atom_cut_data(dynamic raw);
@@ -612,6 +619,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIApplyDiffData? dco_decode_opt_box_autoadd_api_apply_diff_data(dynamic raw);
 
   @protected
+  APIAtomComposeDiffData? dco_decode_opt_box_autoadd_api_atom_compose_diff_data(
+      dynamic raw);
+
+  @protected
   APIAtomCutData? dco_decode_opt_box_autoadd_api_atom_cut_data(dynamic raw);
 
   @protected
@@ -893,6 +904,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIApplyDiffData sse_decode_api_apply_diff_data(SseDeserializer deserializer);
 
   @protected
+  APIAtomComposeDiffData sse_decode_api_atom_compose_diff_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIAtomCutData sse_decode_api_atom_cut_data(SseDeserializer deserializer);
 
   @protected
@@ -1139,6 +1154,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIApplyDiffData sse_decode_box_autoadd_api_apply_diff_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIAtomComposeDiffData sse_decode_box_autoadd_api_atom_compose_diff_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1539,6 +1558,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIAtomComposeDiffData? sse_decode_opt_box_autoadd_api_atom_compose_diff_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIAtomCutData? sse_decode_opt_box_autoadd_api_atom_cut_data(
       SseDeserializer deserializer);
 
@@ -1873,6 +1896,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIApplyDiffData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_atom_compose_diff_data(
+      APIAtomComposeDiffData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_atom_cut_data(
       APIAtomCutData self, SseSerializer serializer);
 
@@ -2146,6 +2173,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_apply_diff_data(
       APIApplyDiffData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_atom_compose_diff_data(
+      APIAtomComposeDiffData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_atom_cut_data(
@@ -2554,6 +2585,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_apply_diff_data(
       APIApplyDiffData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_atom_compose_diff_data(
+      APIAtomComposeDiffData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_atom_cut_data(

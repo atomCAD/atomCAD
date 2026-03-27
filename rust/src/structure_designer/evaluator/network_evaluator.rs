@@ -68,7 +68,7 @@ pub struct NodeInvocationId {
 
 pub struct NetworkEvaluationContext {
     pub node_errors: HashMap<u64, String>,
-    pub node_output_strings: HashMap<u64, String>,
+    pub node_output_strings: HashMap<u64, Vec<String>>,
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
     pub top_level_parameters: HashMap<String, NetworkResult>,
     /// Whether to use spatial grid cutoff for vdW interactions during minimization.
@@ -826,14 +826,18 @@ impl NetworkEvaluator {
             )))
         };
 
-        // Record error/display string from primary (pin 0) result
+        // Record error from primary (pin 0) result
         let primary = eval_output.primary();
         if let NetworkResult::Error(error_message) = primary {
             context.node_errors.insert(node_id, error_message.clone());
         }
-        context
-            .node_output_strings
-            .insert(node_id, primary.to_display_string());
+        // Record per-pin display strings
+        let pin_strings: Vec<String> = eval_output
+            .results
+            .iter()
+            .map(|r| r.to_display_string())
+            .collect();
+        context.node_output_strings.insert(node_id, pin_strings);
 
         eval_output
     }
@@ -925,9 +929,22 @@ impl NetworkEvaluator {
             context.node_errors.insert(node_id, error_message.clone());
         }
 
-        context
+        // Record per-pin display string (single-pin evaluation overwrites)
+        let display_string = result.to_display_string();
+        let pin_index = if output_pin_index < 0 {
+            0
+        } else {
+            output_pin_index as usize
+        };
+        let entry = context
             .node_output_strings
-            .insert(node_id, result.to_display_string());
+            .entry(node_id)
+            .or_insert_with(Vec::new);
+        // Grow the vec if needed
+        if entry.len() <= pin_index {
+            entry.resize(pin_index + 1, String::new());
+        }
+        entry[pin_index] = display_string;
 
         result
     }

@@ -1322,6 +1322,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setAtomComposeDiffData(BigInt nodeId, APIAtomComposeDiffData data) {
+    structure_designer_api.setAtomComposediffData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setAtomCutData(BigInt nodeId, APIAtomCutData data) {
     structure_designer_api.setAtomCutData(nodeId: nodeId, data: data);
     refreshFromKernel();

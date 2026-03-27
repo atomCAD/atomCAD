@@ -106,6 +106,27 @@ class APIApplyDiffData {
           errorOnStale == other.errorOnStale;
 }
 
+class APIAtomComposeDiffData {
+  final double tolerance;
+  final bool errorOnStale;
+
+  const APIAtomComposeDiffData({
+    required this.tolerance,
+    required this.errorOnStale,
+  });
+
+  @override
+  int get hashCode => tolerance.hashCode ^ errorOnStale.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomComposeDiffData &&
+          runtimeType == other.runtimeType &&
+          tolerance == other.tolerance &&
+          errorOnStale == other.errorOnStale;
+}
+
 class APIAtomCutData {
   final double cutSdfValue;
   final double unitCellSize;
@@ -2076,7 +2097,7 @@ class NodeView {
   final bool displayed;
   final bool returnNode;
   final String? error;
-  final String? outputString;
+  final List<String> outputPinStrings;
   final String? subtitle;
   final String? commentLabel;
   final String? commentText;
@@ -2098,7 +2119,7 @@ class NodeView {
     required this.displayed,
     required this.returnNode,
     this.error,
-    this.outputString,
+    required this.outputPinStrings,
     this.subtitle,
     this.commentLabel,
     this.commentText,
@@ -2122,7 +2143,7 @@ class NodeView {
       displayed.hashCode ^
       returnNode.hashCode ^
       error.hashCode ^
-      outputString.hashCode ^
+      outputPinStrings.hashCode ^
       subtitle.hashCode ^
       commentLabel.hashCode ^
       commentText.hashCode ^
@@ -2148,7 +2169,7 @@ class NodeView {
           displayed == other.displayed &&
           returnNode == other.returnNode &&
           error == other.error &&
-          outputString == other.outputString &&
+          outputPinStrings == other.outputPinStrings &&
           subtitle == other.subtitle &&
           commentLabel == other.commentLabel &&
           commentText == other.commentText &&

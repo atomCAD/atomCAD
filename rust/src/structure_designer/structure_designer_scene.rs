@@ -63,8 +63,8 @@ pub struct NodeSceneData {
     pub node_errors: HashMap<u64, String>,
 
     /// Output strings collected during evaluation of this node and its dependencies
-    /// Maps node_id -> output_string for all nodes in the evaluation chain
-    pub node_output_strings: HashMap<u64, String>,
+    /// Maps node_id -> per-pin output strings for all nodes in the evaluation chain
+    pub node_output_strings: HashMap<u64, Vec<String>>,
 
     /// Unit cell associated with this node's output (if applicable)
     pub unit_cell: Option<UnitCellStruct>,
@@ -187,7 +187,7 @@ impl StructureDesignerScene {
     }
 
     /// Helper to get all output strings from all nodes
-    pub fn get_all_node_output_strings(&self) -> HashMap<u64, String> {
+    pub fn get_all_node_output_strings(&self) -> HashMap<u64, Vec<String>> {
         let mut all_strings = HashMap::new();
         for node_data in self.node_data.values() {
             all_strings.extend(node_data.node_output_strings.clone());
@@ -305,8 +305,13 @@ impl MemorySizeEstimator for NodeSceneData {
         let node_output_strings_size = self
             .node_output_strings
             .values()
-            .map(|value| {
-                std::mem::size_of::<u64>() + std::mem::size_of::<String>() + value.capacity()
+            .map(|strings| {
+                std::mem::size_of::<u64>()
+                    + std::mem::size_of::<Vec<String>>()
+                    + strings
+                        .iter()
+                        .map(|s| std::mem::size_of::<String>() + s.capacity())
+                        .sum::<usize>()
             })
             .sum::<usize>();
 

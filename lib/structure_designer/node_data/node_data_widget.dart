@@ -41,6 +41,7 @@ import 'package:flutter_cad/structure_designer/node_data/atom_fill_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
@@ -562,6 +563,16 @@ class NodeDataWidget extends StatelessWidget {
         return ApplyDiffEditor(
           nodeId: selectedNode.id,
           data: applyDiffData,
+          model: model,
+        );
+      case 'atom_composediff':
+        final composeDiffData = getAtomComposediffData(
+          nodeId: selectedNode.id,
+        );
+
+        return AtomComposeDiffEditor(
+          nodeId: selectedNode.id,
+          data: composeDiffData,
           model: model,
         );
       case 'atom_cut':

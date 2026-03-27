@@ -1242,6 +1242,89 @@ fn composed_stats_are_accurate() {
 }
 
 // ============================================================================
+// Regression: replace-in-place + move composition
+// ============================================================================
+
+/// When diff1 replaces a base atom in-place (atom at position X with anchor X,
+/// as created by the fixed `replace_in_diff`), and diff2 moves the atom from X
+/// to Y, the composed diff must correctly consume the base atom at X.
+///
+/// Regression test: before the fix, replace_in_diff omitted the anchor, causing
+/// the composition to treat the replacement as a "pure addition" and lose the
+/// connection to the base atom.
+#[test]
+fn compose_replace_then_move() {
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // Carbon at origin
+
+    // diff1: replace C with N at same position (anchor = position, as replace_in_diff now creates)
+    let mut diff1 = AtomicStructure::new_diff();
+    let a1 = diff1.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    diff1.set_anchor_position(a1, DVec3::new(0.0, 0.0, 0.0));
+
+    // diff2: move the atom (now N) from origin to (1,0,0)
+    let mut diff2 = AtomicStructure::new_diff();
+    let a2 = diff2.add_atom(7, DVec3::new(1.0, 0.0, 0.0));
+    diff2.set_anchor_position(a2, DVec3::new(0.0, 0.0, 0.0));
+
+    let result = compose_two_diffs(&diff1, &diff2, TOL);
+    // Composed: N at (1,0,0) with anchor (0,0,0) — traces back to the original base atom
+    let atom = result.composed.atoms_values().next().unwrap();
+    assert_eq!(atom.position, DVec3::new(1.0, 0.0, 0.0));
+    assert_eq!(atom.atomic_number, 7);
+    assert_eq!(
+        result.composed.anchor_position(atom.id).copied(),
+        Some(DVec3::new(0.0, 0.0, 0.0))
+    );
+
+    assert_compose_equivalence(&base, &[&diff1, &diff2], TOL);
+}
+
+/// Same as above but with an element that matches the base (position-only anchor).
+#[test]
+fn compose_same_element_replace_then_move() {
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // diff1: "replace" C with C (same element, anchor = position)
+    let mut diff1 = AtomicStructure::new_diff();
+    let a1 = diff1.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    diff1.set_anchor_position(a1, DVec3::new(0.0, 0.0, 0.0));
+
+    // diff2: move from origin to (1,0,0)
+    let mut diff2 = AtomicStructure::new_diff();
+    let a2 = diff2.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    diff2.set_anchor_position(a2, DVec3::new(0.0, 0.0, 0.0));
+
+    assert_compose_equivalence(&base, &[&diff1, &diff2], TOL);
+}
+
+/// Three-diff chain: replace, then move, then further modify.
+#[test]
+fn compose_replace_then_move_then_modify() {
+    let mut base = AtomicStructure::new();
+    base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    base.add_atom(6, DVec3::new(5.0, 0.0, 0.0));
+
+    // diff1: replace C at origin with N (anchor = position)
+    let mut diff1 = AtomicStructure::new_diff();
+    let a1 = diff1.add_atom(7, DVec3::new(0.0, 0.0, 0.0));
+    diff1.set_anchor_position(a1, DVec3::new(0.0, 0.0, 0.0));
+
+    // diff2: move N from origin to (1,0,0)
+    let mut diff2 = AtomicStructure::new_diff();
+    let a2 = diff2.add_atom(7, DVec3::new(1.0, 0.0, 0.0));
+    diff2.set_anchor_position(a2, DVec3::new(0.0, 0.0, 0.0));
+
+    // diff3: change element from N to O at (1,0,0)
+    let mut diff3 = AtomicStructure::new_diff();
+    let a3 = diff3.add_atom(8, DVec3::new(1.0, 0.0, 0.0));
+    diff3.set_anchor_position(a3, DVec3::new(1.0, 0.0, 0.0));
+
+    assert_compose_equivalence(&base, &[&diff1, &diff2, &diff3], TOL);
+}
+
+// ============================================================================
 // compose_diffs (N-ary) edge cases
 // ============================================================================
 

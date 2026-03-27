@@ -41,7 +41,8 @@ const double PIN_HIT_AREA_HEIGHT = 22.0;
 // Node appearance constants
 const Color NODE_BACKGROUND_COLOR = Color(0xFF212121); // Colors.grey[900]
 const Color NODE_COLOR_ACTIVE = Color(0xFFD84315); // Active node border & title
-const Color NODE_COLOR_SELECTED = Color(0xFFE08000); // Selected node border & title
+const Color NODE_COLOR_SELECTED =
+    Color(0xFFE08000); // Selected node border & title
 const Color NODE_BORDER_COLOR_NORMAL = Colors.blueAccent;
 const Color NODE_BORDER_COLOR_ERROR = Colors.red;
 const double NODE_BORDER_WIDTH_ACTIVE = 3.0;
@@ -74,10 +75,7 @@ class PinViewWidget extends StatelessWidget {
 
     String tooltipMessage = '';
     if (pinName != null && pinName!.isNotEmpty) {
-      tooltipMessage = pinName!;
-    }
-    if (tooltipMessage.isNotEmpty) {
-      tooltipMessage = '$tooltipMessage\n$dataType';
+      tooltipMessage = '── $pinName ──  $dataType';
     } else {
       tooltipMessage = dataType;
     }
@@ -420,8 +418,8 @@ class NodeWidget extends StatelessWidget {
         GestureDetector(
           key: NodeWidgetKeys.outputPinVisibility(node.id, pin.index),
           onTap: () {
-            final model = Provider.of<StructureDesignerModel>(context,
-                listen: false);
+            final model =
+                Provider.of<StructureDesignerModel>(context, listen: false);
             model.toggleOutputPinDisplay(node.id, pin.index);
           },
           child: Icon(
@@ -435,7 +433,9 @@ class NodeWidget extends StatelessWidget {
           pinReference:
               PinReference(node.id, PinType.output, pin.index, pin.dataType),
           multi: false,
-          outputString: pin.index == 0 ? node.outputString : null,
+          outputString: pin.index < node.outputPinStrings.length
+              ? node.outputPinStrings[pin.index]
+              : null,
           pinName: node.outputPins.length > 1 ? pin.name : null,
         ),
       ],
@@ -500,7 +500,8 @@ class NodeWidget extends StatelessWidget {
       borderWidth = NODE_BORDER_WIDTH_SELECTED;
       boxShadow = [
         BoxShadow(
-            color: NODE_COLOR_SELECTED.withValues(alpha: WIRE_GLOW_OPACITY * 0.5),
+            color:
+                NODE_COLOR_SELECTED.withValues(alpha: WIRE_GLOW_OPACITY * 0.5),
             blurRadius: WIRE_GLOW_BLUR_RADIUS * 0.7,
             spreadRadius: WIRE_GLOW_SPREAD_RADIUS * 0.5)
       ];
