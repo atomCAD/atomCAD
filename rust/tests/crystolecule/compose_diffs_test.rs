@@ -118,11 +118,7 @@ fn assert_structures_equal(a: &AtomicStructure, b: &AtomicStructure, tolerance: 
 
 /// Verifies the core correctness invariant:
 ///   apply_diff(apply_diff(base, diff1), diff2) == apply_diff(base, compose(diffs))
-fn assert_compose_equivalence(
-    base: &AtomicStructure,
-    diffs: &[&AtomicStructure],
-    tolerance: f64,
-) {
+fn assert_compose_equivalence(base: &AtomicStructure, diffs: &[&AtomicStructure], tolerance: f64) {
     // Sequential application
     let mut sequential = base.clone();
     for diff in diffs {

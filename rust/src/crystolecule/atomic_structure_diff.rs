@@ -8,8 +8,8 @@
 //! operation on atomic structures, not specific to any particular node type.
 
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
 use crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER;
+use crate::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
 use rustc_hash::FxHashMap;
 
 /// Result of applying a diff to a base structure.
@@ -568,8 +568,7 @@ pub fn compose_two_diffs(
     }
 
     // Match diff2 atoms against the matchable diff1 atoms
-    let (matches, unmatched_diff2_ids) =
-        match_diff_atoms(&diff1_matchable, diff2, tolerance_sq);
+    let (matches, unmatched_diff2_ids) = match_diff_atoms(&diff1_matchable, diff2, tolerance_sq);
 
     // Build lookup: diff1_id → diff2_id and diff2_id → diff1_id
     let mut diff1_to_diff2: FxHashMap<u32, u32> = FxHashMap::default();
@@ -602,7 +601,8 @@ pub fn compose_two_diffs(
             let diff1_is_delete = diff1_atom.is_delete_marker();
             let diff1_is_unchanged = diff1_atom.is_unchanged_marker();
             let diff1_has_anchor = diff1.has_anchor_position(diff1_atom.id);
-            let diff1_is_pure_addition = !diff1_has_anchor && !diff1_is_delete && !diff1_is_unchanged;
+            let diff1_is_pure_addition =
+                !diff1_has_anchor && !diff1_is_delete && !diff1_is_unchanged;
             let diff2_is_delete = diff2_atom.is_delete_marker();
             let diff2_is_unchanged = diff2_atom.is_unchanged_marker();
             let diff2_is_modify = !diff2_is_delete && !diff2_is_unchanged;
@@ -857,21 +857,16 @@ fn compose_bonds(
 ///
 /// Returns None if the slice is empty. Returns a clone of the single diff
 /// if the slice has length 1.
-pub fn compose_diffs(
-    diffs: &[&AtomicStructure],
-    tolerance: f64,
-) -> Option<DiffCompositionResult> {
+pub fn compose_diffs(diffs: &[&AtomicStructure], tolerance: f64) -> Option<DiffCompositionResult> {
     match diffs.len() {
         0 => None,
-        1 => {
-            Some(DiffCompositionResult {
-                composed: diffs[0].clone(),
-                stats: DiffCompositionStats {
-                    diff1_passthrough: diffs[0].get_num_of_atoms() as u32,
-                    ..Default::default()
-                },
-            })
-        }
+        1 => Some(DiffCompositionResult {
+            composed: diffs[0].clone(),
+            stats: DiffCompositionStats {
+                diff1_passthrough: diffs[0].get_num_of_atoms() as u32,
+                ..Default::default()
+            },
+        }),
         _ => {
             let mut result = compose_two_diffs(diffs[0], diffs[1], tolerance);
             for diff in &diffs[2..] {

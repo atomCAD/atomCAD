@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
+use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::csg_cache::CsgConversionCache;
 use crate::structure_designer::data_type::DataType;
@@ -24,12 +24,12 @@ use crate::structure_designer::structure_designer_scene::{
 };
 
 use super::network_result::Closure;
-use super::network_result::{GeometrySummary, GeometrySummary2D};
 use super::network_result::input_missing_error;
+use super::network_result::{GeometrySummary, GeometrySummary2D};
 use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
-use glam::f64::{DQuat, DVec3};
 use glam::f64::DVec2;
+use glam::f64::{DQuat, DVec3};
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {

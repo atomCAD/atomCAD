@@ -1,5 +1,6 @@
 pub mod add_hydrogen;
 pub mod apply_diff;
+pub mod atom_composediff;
 pub mod atom_cut;
 pub mod atom_edit;
 pub mod atom_fill;

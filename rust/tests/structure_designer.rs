@@ -91,6 +91,9 @@ mod atom_edit_move_in_diff_test;
 #[path = "structure_designer/apply_diff_node_test.rs"]
 mod apply_diff_node_test;
 
+#[path = "structure_designer/atom_composediff_test.rs"]
+mod atom_composediff_test;
+
 #[path = "structure_designer/atom_lattice_transform_test.rs"]
 mod atom_lattice_transform_test;
 
