@@ -358,9 +358,9 @@ fn get_bond_color_inline(
         BOND_AROMATIC, BOND_DATIVE, BOND_METALLIC,
     };
     let base_color = match bond_order {
-        BOND_AROMATIC => Vec3::new(0.9, 0.7, 0.1), // Amber for aromatic bonds
+        BOND_AROMATIC => Vec3::new(0.7, 0.3, 0.7), // Purple for aromatic bonds
         BOND_DATIVE => Vec3::new(0.2, 0.8, 0.7),   // Teal for dative bonds
-        BOND_METALLIC => Vec3::new(0.8, 0.5, 0.2), // Copper/bronze for metallic bonds
+        BOND_METALLIC => Vec3::new(0.5, 0.6, 0.8), // Steel blue for metallic bonds
         _ => Vec3::new(0.8, 0.8, 0.8),             // Grey for regular bonds
     };
     let bond_ref = BondReference { atom_id1, atom_id2 };
