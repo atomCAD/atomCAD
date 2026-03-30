@@ -3410,3 +3410,85 @@ fn redo_flag_override_after_undo() {
     assert!(designer.redo());
     check_flags(&mut designer, true, HYBRIDIZATION_SP3);
 }
+
+// =============================================================================
+// Downstream unfreeze bug: frozen base atoms from upstream can't be unfrozen
+// =============================================================================
+
+/// Regression test: a frozen atom from an upstream node appears as a frozen
+/// base atom in the downstream atom_edit. The user selects it and clicks
+/// "unfreeze selected". The atom should become unfrozen in the result.
+///
+/// This test chains: value(frozen atom) → atom_edit → evaluate result.
+/// It simulates what `atom_edit_selection_to_unfrozen` does:
+/// the current (buggy) version only iterates selected_diff_atoms,
+/// ignoring selected_base_atoms entirely. This means frozen base atoms
+/// from upstream nodes can never be unfrozen.
+#[test]
+fn unfreeze_frozen_base_atom_downstream() {
+    // Create upstream output: one carbon atom that is frozen
+    let mut base = AtomicStructure::new();
+    let base_atom_id = base.add_atom(6, DVec3::ZERO);
+    base.set_atom_frozen(base_atom_id, true);
+
+    // Set up downstream atom_edit node receiving this as input
+    let mut designer = setup_atom_edit_with_base(base);
+
+    // Verify the base atom is indeed frozen in the evaluated result
+    {
+        let output = evaluate_atom_edit_output(&designer);
+        let result_atom = output.atoms_values().next().unwrap();
+        assert!(
+            result_atom.is_frozen(),
+            "Precondition: base atom should be frozen in result"
+        );
+    }
+
+    // Simulate user selecting the base atom
+    {
+        let data = get_data_mut(&mut designer);
+        data.selection.selected_base_atoms.insert(base_atom_id);
+    }
+
+    // Simulate what atom_edit_selection_to_unfrozen does (after the fix):
+    // Phase 1: gather base promotion info INCLUDING frozen atoms
+    let base_info = {
+        use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info_including_frozen;
+        let data = get_data_mut(&mut designer);
+        let selected_base = data.selection.selected_base_atoms.clone();
+        gather_base_atom_promotion_info_including_frozen(&designer, &selected_base)
+    };
+
+    // Phase 2: promote base atoms and unfreeze, then unfreeze existing diff atoms
+    with_atom_edit_undo(&mut designer, "Unfreeze selection", |sd| {
+        let data = get_data_mut(sd);
+        // Promote base atoms to diff (mirrors freeze function pattern)
+        for info in &base_info {
+            let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                data.set_anchor_recorded(existing_id, info.position);
+                existing_id
+            } else {
+                let new_id = data.add_atom_recorded(info.atomic_number, info.position);
+                data.set_anchor_recorded(new_id, info.position);
+                new_id
+            };
+            data.promote_base_atom_metadata(info.flags, diff_id);
+            data.selection.selected_base_atoms.remove(&info.base_id);
+            data.selection.selected_diff_atoms.insert(diff_id);
+            data.set_frozen_recorded(diff_id, false);
+        }
+        // Unfreeze already-diff atoms
+        for &diff_id in &data.selection.selected_diff_atoms.clone() {
+            data.set_frozen_recorded(diff_id, false);
+        }
+    });
+
+    // Evaluate: the result atom should now be NOT frozen
+    let output = evaluate_atom_edit_output(&designer);
+    let result_atom = output.atoms_values().next().unwrap();
+    assert!(
+        !result_atom.is_frozen(),
+        "After unfreezing a frozen base atom from upstream, the result should not be frozen"
+    );
+}

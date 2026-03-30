@@ -1075,6 +1075,7 @@ pub fn atom_edit_get_default_angle() -> Option<f64> {
 // --- Frozen atom API ---
 
 /// Gather promotion info for selected base atoms (Phase 1 of borrow split).
+/// Skips frozen atoms (for freeze/drag/transform operations).
 fn gather_selected_base_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPromotionInfo> {
     use crate::structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info;
     let data = match atom_edit::get_active_atom_edit_data(sd) {
@@ -1085,6 +1086,118 @@ fn gather_selected_base_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPr
         return Vec::new();
     }
     gather_base_atom_promotion_info(sd, &data.selection.selected_base_atoms)
+}
+
+/// Gather promotion info for selected base atoms, including frozen ones.
+/// Used by unfreeze operations that need to promote frozen base atoms.
+fn gather_selected_base_promotion_info_including_frozen(
+    sd: &StructureDesigner,
+) -> Vec<BaseAtomPromotionInfo> {
+    use crate::structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info_including_frozen;
+    let data = match atom_edit::get_active_atom_edit_data(sd) {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+    if data.selection.selected_base_atoms.is_empty() || sd.is_selected_node_in_diff_view() {
+        return Vec::new();
+    }
+    gather_base_atom_promotion_info_including_frozen(sd, &data.selection.selected_base_atoms)
+}
+
+/// Gather promotion info for ALL frozen base atoms (not just selected ones).
+/// Used by `atom_edit_clear_frozen` and `atom_edit_frozen_to_selection`.
+fn gather_frozen_base_atoms_promotion_info(
+    sd: &StructureDesigner,
+) -> Vec<BaseAtomPromotionInfo> {
+    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
+    use crate::crystolecule::atomic_structure_diff::AtomSource;
+
+    if sd.is_selected_node_in_diff_view() {
+        return Vec::new();
+    }
+    let eval_cache = match sd.get_selected_node_eval_cache() {
+        Some(cache) => cache,
+        None => return Vec::new(),
+    };
+    let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
+        Some(cache) => cache,
+        None => return Vec::new(),
+    };
+    let result_structure = match sd.get_atomic_structure_from_selected_node() {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
+
+    let mut info = Vec::new();
+    for (&base_id, &result_id) in &eval_cache.provenance.base_to_result {
+        if let Some(atom) = result_structure.get_atom(result_id) {
+            if !atom.is_frozen() {
+                continue;
+            }
+            // Check if already has a diff entry
+            let existing_diff_id =
+                if let Some(source) = eval_cache.provenance.sources.get(&result_id) {
+                    match source {
+                        AtomSource::DiffMatchedBase { diff_id, .. } => Some(*diff_id),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+            // Only include if the frozen flag comes from the base (not already a diff atom)
+            // If existing_diff_id is Some, the diff atom already handles this
+            if existing_diff_id.is_some() {
+                continue; // already a diff atom — handled by the diff scan
+            }
+            info.push(BaseAtomPromotionInfo {
+                base_id,
+                atomic_number: atom.atomic_number,
+                position: atom.position,
+                existing_diff_id: None,
+                flags: atom.flags,
+            });
+        }
+    }
+    info
+}
+
+/// Collect base atom IDs that are frozen in the result (for frozen_to_selection).
+fn collect_frozen_base_atom_ids(sd: &StructureDesigner) -> std::collections::HashSet<u32> {
+    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
+    use crate::crystolecule::atomic_structure_diff::AtomSource;
+
+    let mut result = std::collections::HashSet::new();
+    if sd.is_selected_node_in_diff_view() {
+        return result;
+    }
+    let eval_cache = match sd.get_selected_node_eval_cache() {
+        Some(cache) => cache,
+        None => return result,
+    };
+    let eval_cache = match eval_cache.downcast_ref::<AtomEditEvalCache>() {
+        Some(cache) => cache,
+        None => return result,
+    };
+    let result_structure = match sd.get_atomic_structure_from_selected_node() {
+        Some(s) => s,
+        None => return result,
+    };
+
+    for (&base_id, &result_id) in &eval_cache.provenance.base_to_result {
+        if let Some(atom) = result_structure.get_atom(result_id) {
+            if !atom.is_frozen() {
+                continue;
+            }
+            // Only include pure base atoms (not ones already covered by diff)
+            if let Some(source) = eval_cache.provenance.sources.get(&result_id) {
+                if matches!(source, AtomSource::DiffMatchedBase { .. }) {
+                    continue;
+                }
+            }
+            result.insert(base_id);
+        }
+    }
+    result
 }
 
 /// Sets the frozen flag on all currently selected atoms (additive).
@@ -1127,14 +1240,34 @@ pub fn atom_edit_selection_to_frozen() {
 }
 
 /// Clears the frozen flag on all currently selected atoms.
+/// Base atoms (e.g., frozen atoms from upstream nodes) are promoted to diff first.
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_selection_to_unfrozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let sd = &mut cad_instance.structure_designer;
+            // Phase 1: gather base atom promotion info including frozen atoms
+            let base_info = gather_selected_base_promotion_info_including_frozen(sd);
+            // Phase 2: promote base atoms and unfreeze all selected atoms
             atom_edit::with_atom_edit_undo(sd, "Unfreeze selection", |sd| {
                 if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
-                    // Only diff atoms can have frozen flag set (base atoms were promoted)
+                    // Promote frozen base atoms to diff
+                    for info in &base_info {
+                        let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                            data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                            data.set_anchor_recorded(existing_id, info.position);
+                            existing_id
+                        } else {
+                            let new_id = data.add_atom_recorded(info.atomic_number, info.position);
+                            data.set_anchor_recorded(new_id, info.position);
+                            new_id
+                        };
+                        data.promote_base_atom_metadata(info.flags, diff_id);
+                        data.selection.selected_base_atoms.remove(&info.base_id);
+                        data.selection.selected_diff_atoms.insert(diff_id);
+                        data.set_frozen_recorded(diff_id, false);
+                    }
+                    // Unfreeze already-diff atoms
                     for &diff_id in &data.selection.selected_diff_atoms.clone() {
                         data.set_frozen_recorded(diff_id, false);
                     }
@@ -1145,22 +1278,22 @@ pub fn atom_edit_selection_to_unfrozen() {
     }
 }
 
-/// Replaces the current selection with the set of frozen diff atoms.
+/// Replaces the current selection with the set of frozen atoms (diff and base).
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_frozen_to_selection() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(atom_edit_data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
-                // Frozen atoms are now always diff atoms (promoted on freeze)
+            let sd = &mut cad_instance.structure_designer;
+            // Collect frozen base atom IDs before mutable borrow
+            let frozen_base = collect_frozen_base_atom_ids(sd);
+            if let Some(atom_edit_data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
                 let frozen_diff: std::collections::HashSet<u32> = atom_edit_data
                     .diff
                     .iter_atoms()
                     .filter(|(_, a)| a.is_frozen())
                     .map(|(_, a)| a.id)
                     .collect();
-                atom_edit_data.selection.selected_base_atoms.clear();
+                atom_edit_data.selection.selected_base_atoms = frozen_base;
                 atom_edit_data.selection.selected_diff_atoms = frozen_diff;
                 atom_edit_data.selection.selected_bonds.clear();
                 atom_edit_data.selection.selection_transform = None;
@@ -1170,14 +1303,32 @@ pub fn atom_edit_frozen_to_selection() {
     }
 }
 
-/// Clears the frozen flag from all diff atoms.
+/// Clears the frozen flag from all atoms (diff and frozen base atoms from upstream).
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_clear_frozen() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let sd = &mut cad_instance.structure_designer;
+            // Phase 1: gather all frozen base atoms for promotion
+            let base_info = gather_frozen_base_atoms_promotion_info(sd);
+            // Phase 2: promote frozen base atoms and clear frozen on all diff atoms
             atom_edit::with_atom_edit_undo(sd, "Clear frozen atoms", |sd| {
                 if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    // Promote frozen base atoms to diff
+                    for info in &base_info {
+                        let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                            data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                            data.set_anchor_recorded(existing_id, info.position);
+                            existing_id
+                        } else {
+                            let new_id = data.add_atom_recorded(info.atomic_number, info.position);
+                            data.set_anchor_recorded(new_id, info.position);
+                            new_id
+                        };
+                        data.promote_base_atom_metadata(info.flags, diff_id);
+                        data.set_frozen_recorded(diff_id, false);
+                    }
+                    // Clear frozen on existing diff atoms
                     let frozen_ids: Vec<u32> = data
                         .diff
                         .iter_atoms()
@@ -1194,17 +1345,28 @@ pub fn atom_edit_clear_frozen() {
     }
 }
 
-/// Returns true if any diff atom has the frozen flag set.
+/// Returns true if any atom (diff or base from upstream) has the frozen flag set.
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_has_frozen_atoms() -> bool {
     use crate::api::api_common::with_cad_instance_or;
     unsafe {
         with_cad_instance_or(
-            |cad_instance| match atom_edit::get_active_atom_edit_data(
-                &cad_instance.structure_designer,
-            ) {
-                Some(data) => data.diff.iter_atoms().any(|(_, a)| a.is_frozen()),
-                None => false,
+            |cad_instance| {
+                let sd = &cad_instance.structure_designer;
+                // Check diff atoms
+                let has_frozen_diff =
+                    match atom_edit::get_active_atom_edit_data(sd) {
+                        Some(data) => data.diff.iter_atoms().any(|(_, a)| a.is_frozen()),
+                        None => return false,
+                    };
+                if has_frozen_diff {
+                    return true;
+                }
+                // Check result structure for frozen base atoms from upstream
+                match sd.get_atomic_structure_from_selected_node() {
+                    Some(s) => s.iter_atoms().any(|(_, a)| a.is_frozen()),
+                    None => false,
+                }
             },
             false,
         )

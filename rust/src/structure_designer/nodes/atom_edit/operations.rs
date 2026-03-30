@@ -264,9 +264,28 @@ pub struct BaseAtomPromotionInfo {
 
 /// Gather promotion info for selected base atoms. Checks provenance to detect
 /// base atoms that already have diff entries (e.g., UNCHANGED markers from bond tools).
+/// Frozen atoms are skipped — they should not be moved/promoted for drag/transform.
 pub fn gather_base_atom_promotion_info(
     structure_designer: &StructureDesigner,
     selected_base_atoms: &std::collections::HashSet<u32>,
+) -> Vec<BaseAtomPromotionInfo> {
+    gather_base_atom_promotion_info_impl(structure_designer, selected_base_atoms, false)
+}
+
+/// Like `gather_base_atom_promotion_info`, but includes frozen atoms.
+/// Used by unfreeze operations that need to promote frozen base atoms to diff
+/// in order to clear their frozen flag.
+pub fn gather_base_atom_promotion_info_including_frozen(
+    structure_designer: &StructureDesigner,
+    selected_base_atoms: &std::collections::HashSet<u32>,
+) -> Vec<BaseAtomPromotionInfo> {
+    gather_base_atom_promotion_info_impl(structure_designer, selected_base_atoms, true)
+}
+
+fn gather_base_atom_promotion_info_impl(
+    structure_designer: &StructureDesigner,
+    selected_base_atoms: &std::collections::HashSet<u32>,
+    include_frozen: bool,
 ) -> Vec<BaseAtomPromotionInfo> {
     let eval_cache = match structure_designer.get_selected_node_eval_cache() {
         Some(cache) => cache,
@@ -285,8 +304,8 @@ pub fn gather_base_atom_promotion_info(
     for &base_id in selected_base_atoms {
         if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
             if let Some(atom) = result_structure.get_atom(result_id) {
-                // Skip frozen atoms — they should not be moved/promoted
-                if atom.is_frozen() {
+                // Skip frozen atoms unless explicitly included
+                if !include_frozen && atom.is_frozen() {
                     continue;
                 }
                 // Check if this base atom already has a diff entry
