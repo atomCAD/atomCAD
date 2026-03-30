@@ -8,7 +8,7 @@ use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_ra
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DMat4, DVec2, DVec3, DVec4};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::crystolecule::atomic_structure::BondReference;
 
@@ -396,7 +396,7 @@ pub(super) fn select_atoms_in_screen_rect(
     }
 
     // Phase 1: Gather atom projections and provenance (immutable borrows)
-    let (atoms_to_select, position_map, is_diff_view) = {
+    let (atoms_to_select, bonds_to_select, position_map, is_diff_view) = {
         let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
             Some(s) => s,
             None => return false,
@@ -405,6 +405,7 @@ pub(super) fn select_atoms_in_screen_rect(
 
         // Collect result atom IDs whose projections are inside the rectangle
         let mut inside_atom_ids: Vec<u32> = Vec::new();
+        let mut inside_atom_id_set: HashSet<u32> = HashSet::new();
         let mut pos_map: HashMap<(bool, u32), DVec3> = HashMap::new();
 
         for (&atom_id, atom) in result_structure.iter_atoms() {
@@ -417,6 +418,24 @@ pub(super) fn select_atoms_in_screen_rect(
                     && screen_pos.y <= screen_max.y
                 {
                     inside_atom_ids.push(atom_id);
+                    inside_atom_id_set.insert(atom_id);
+                }
+            }
+        }
+
+        // Collect bonds where both endpoints are inside the rectangle
+        let mut bonds: Vec<BondReference> = Vec::new();
+        for &atom_id in &inside_atom_ids {
+            if let Some(atom) = result_structure.get_atom(atom_id) {
+                for bond in &atom.bonds {
+                    let other_id = bond.other_atom_id();
+                    // Only collect each bond once (when atom_id < other_id)
+                    if other_id > atom_id && inside_atom_id_set.contains(&other_id) {
+                        bonds.push(BondReference {
+                            atom_id1: atom_id,
+                            atom_id2: other_id,
+                        });
+                    }
                 }
             }
         }
@@ -466,7 +485,7 @@ pub(super) fn select_atoms_in_screen_rect(
             SelectTarget::Base(id) | SelectTarget::Diff(id) => *id,
         });
 
-        (targets, pos_map, is_diff)
+        (targets, bonds, pos_map, is_diff)
     };
 
     // Phase 2: Mutate selection
@@ -554,6 +573,30 @@ pub(super) fn select_atoms_in_screen_rect(
         }
     }
 
+    // Select bonds where both endpoints are inside the rectangle
+    for bond_ref in &bonds_to_select {
+        match select_modifier {
+            SelectModifier::Replace | SelectModifier::Expand => {
+                atom_edit_data
+                    .selection
+                    .selected_bonds
+                    .insert(bond_ref.clone());
+            }
+            SelectModifier::Toggle => {
+                if !atom_edit_data
+                    .selection
+                    .selected_bonds
+                    .remove(bond_ref)
+                {
+                    atom_edit_data
+                        .selection
+                        .selected_bonds
+                        .insert(bond_ref.clone());
+                }
+            }
+        }
+    }
+
     // Recalculate selection transform from positions
     let positions: Vec<DVec3> = atom_edit_data
         .selection
@@ -571,6 +614,8 @@ pub(super) fn select_atoms_in_screen_rect(
 
     atom_edit_data.selection.selection_transform = calc_transform_from_positions(&positions);
 
-    // Selection changed if we had atoms to select or if we cleared (Replace with empty rect)
-    !atoms_to_select.is_empty() || (was_empty_before != atom_edit_data.selection.is_empty())
+    // Selection changed if we had atoms/bonds to select or if we cleared (Replace with empty rect)
+    !atoms_to_select.is_empty()
+        || !bonds_to_select.is_empty()
+        || (was_empty_before != atom_edit_data.selection.is_empty())
 }
