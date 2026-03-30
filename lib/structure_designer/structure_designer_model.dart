@@ -906,6 +906,16 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void atomEditAddAtomAtPosition(int atomicNumber, APIVec3 position) {
+    if (nodeNetworkView == null) return;
+    atom_edit_api.atomEditAddAtomAtPosition(
+      atomicNumber: atomicNumber,
+      position: position,
+      hybridizationOverride: _hybridizationOverride,
+    );
+    refreshFromKernel();
+  }
+
   // Note: atomEditDrawBondByRay removed — replaced by drag-to-bond interaction
   // in _AtomEditAddBondDelegate (structure_designer_viewport.dart).
 

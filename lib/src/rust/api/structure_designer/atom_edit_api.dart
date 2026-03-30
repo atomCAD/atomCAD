@@ -32,6 +32,17 @@ void atomEditAddAtomByRay(
             rayDir: rayDir,
             hybridizationOverride: hybridizationOverride);
 
+/// Add an atom at an exact position (typed in by the user).
+void atomEditAddAtomAtPosition(
+        {required int atomicNumber,
+        required APIVec3 position,
+        required APIHybridization hybridizationOverride}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditAddAtomAtPosition(
+            atomicNumber: atomicNumber,
+            position: position,
+            hybridizationOverride: hybridizationOverride);
+
 /// Pointer down in AddBond tool. Returns whether an atom was hit.
 /// Triggers one refresh if an atom is hit (to show source atom highlight).
 bool addBondPointerDown(

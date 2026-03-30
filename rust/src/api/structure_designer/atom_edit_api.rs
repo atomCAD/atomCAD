@@ -90,6 +90,56 @@ pub fn atom_edit_add_atom_by_ray(
     }
 }
 
+/// Add an atom at an exact position (typed in by the user).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_add_atom_at_position(
+    atomic_number: i16,
+    position: APIVec3,
+    hybridization_override: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
+) {
+    use crate::api::structure_designer::structure_designer_api_types::APIHybridization;
+    use crate::crystolecule::atomic_structure::atom::{
+        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
+    };
+    use crate::crystolecule::guided_placement::Hybridization;
+
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let pos = from_api_vec3(&position);
+            let hyb_override = match hybridization_override {
+                APIHybridization::Auto => None,
+                APIHybridization::Sp3 => Some(Hybridization::Sp3),
+                APIHybridization::Sp2 => Some(Hybridization::Sp2),
+                APIHybridization::Sp1 => Some(Hybridization::Sp1),
+            };
+            atom_edit::with_atom_edit_undo(
+                &mut cad_instance.structure_designer,
+                "Add atom at position",
+                |sd| {
+                    let atom_edit_data =
+                        match atom_edit::get_selected_atom_edit_data_mut(sd) {
+                            Some(data) => data,
+                            None => return,
+                        };
+                    let new_atom_id =
+                        atom_edit_data.add_atom_to_diff(atomic_number, pos);
+                    let hyb_flag = match hyb_override {
+                        None => HYBRIDIZATION_AUTO,
+                        Some(Hybridization::Sp3) => HYBRIDIZATION_SP3,
+                        Some(Hybridization::Sp2) => HYBRIDIZATION_SP2,
+                        Some(Hybridization::Sp1) => HYBRIDIZATION_SP1,
+                    };
+                    if hyb_flag != HYBRIDIZATION_AUTO {
+                        atom_edit_data
+                            .set_hybridization_override_recorded(new_atom_id, hyb_flag);
+                    }
+                },
+            );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
 // --- AddBond tool pointer event API ---
 
 /// Pointer down in AddBond tool. Returns whether an atom was hit.

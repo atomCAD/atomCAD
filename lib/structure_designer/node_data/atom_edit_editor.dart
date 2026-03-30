@@ -7,6 +7,7 @@ import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
 import 'package:flutter_cad/common/select_element_widget.dart';
+import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/common/transform_control_widget.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 
@@ -32,6 +33,7 @@ class AtomEditEditor extends StatefulWidget {
 class _AtomEditEditorState extends State<AtomEditEditor> {
   APIAtomEditData? _stagedData;
   int? _selectedAtomicNumber;
+  APIVec3 _addAtomPosition = APIVec3(x: 0, y: 0, z: 0);
 
   bool get _hasDiffChanges {
     final stats = _stagedData?.diffStats;
@@ -432,6 +434,31 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             Text(
               'Type element symbol in the viewport: C, N, O, Si...',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Vec3Input(
+              label: 'Position (\u00C5)',
+              value: _addAtomPosition,
+              onChanged: (value) {
+                setState(() {
+                  _addAtomPosition = value;
+                });
+              },
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _selectedAtomicNumber != null
+                    ? () {
+                        widget.model.atomEditAddAtomAtPosition(
+                          _selectedAtomicNumber!,
+                          _addAtomPosition,
+                        );
+                      }
+                    : null,
+                child: const Text('Add atom at position'),
+              ),
             ),
             const SizedBox(height: AppSpacing.medium),
             Row(
