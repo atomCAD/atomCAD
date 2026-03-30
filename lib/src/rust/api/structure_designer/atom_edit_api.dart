@@ -109,6 +109,9 @@ bool atomEditToggleErrorOnStaleEntries() => RustLib.instance.api
 bool atomEditToggleContinuousMinimization() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditToggleContinuousMinimization();
 
+bool atomEditSetTolerance({required double value}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditSetTolerance(value: value);
+
 APIAtomEditTool? getActiveAtomEditTool() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiGetActiveAtomEditTool();
 

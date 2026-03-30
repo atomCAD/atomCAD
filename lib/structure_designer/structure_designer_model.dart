@@ -952,6 +952,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setAtomEditTolerance(double value) {
+    atom_edit_api.atomEditSetTolerance(value: value);
+    refreshFromKernel();
+  }
+
   void toggleAtomEditErrorOnStaleEntries() {
     atom_edit_api.atomEditToggleErrorOnStaleEntries();
     refreshFromKernel();

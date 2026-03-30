@@ -2484,6 +2484,7 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                         .is_selected_node_in_diff_view(),
                     show_anchor_arrows: atom_edit_data.show_anchor_arrows,
                     include_base_bonds_in_diff: atom_edit_data.include_base_bonds_in_diff,
+                    tolerance: atom_edit_data.tolerance,
                     error_on_stale_entries: atom_edit_data.error_on_stale_entries,
                     show_gadget: match &atom_edit_data.active_tool {
                         AtomEditTool::Default(state) => state.show_gadget,

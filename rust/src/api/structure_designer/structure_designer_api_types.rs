@@ -400,6 +400,7 @@ pub struct APIAtomEditData {
     pub output_diff: bool,
     pub show_anchor_arrows: bool,
     pub include_base_bonds_in_diff: bool,
+    pub tolerance: f64,
     pub error_on_stale_entries: bool,
     pub show_gadget: bool,
     pub diff_stats: APIDiffStats,

@@ -462,6 +462,44 @@ pub fn atom_edit_toggle_continuous_minimization() -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_set_tolerance(value: f64) -> bool {
+    use crate::structure_designer::undo::commands::atom_edit_set_tolerance::AtomEditSetToleranceCommand;
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let (network_name, node_id) =
+                    match atom_edit::get_atom_edit_node_info_pub(&cad_instance.structure_designer) {
+                        Some(info) => info,
+                        None => return false,
+                    };
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(
+                    &mut cad_instance.structure_designer,
+                ) {
+                    let old_value = data.tolerance;
+                    if (old_value - value).abs() < f64::EPSILON {
+                        return true; // No change
+                    }
+                    data.tolerance = value;
+                    cad_instance
+                        .structure_designer
+                        .push_command(AtomEditSetToleranceCommand {
+                            network_name,
+                            node_id,
+                            old_value,
+                            new_value: value,
+                        });
+                    refresh_structure_designer_auto(cad_instance);
+                    true
+                } else {
+                    false
+                }
+            },
+            false,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_active_atom_edit_tool() -> Option<APIAtomEditTool> {
     unsafe {
         with_mut_cad_instance_or(

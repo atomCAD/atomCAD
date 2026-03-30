@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
     as atom_edit_api;
+import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -150,7 +151,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               _buildCollapsibleTransformSection(),
             ],
           ],
-          // Error on stale entries checkbox (only in result view, hidden in direct editing mode)
+          // Error on stale entries + tolerance (only in result view, hidden in direct editing mode)
           if (!widget.directEditingMode && !_stagedData!.outputDiff) ...[
             const SizedBox(height: AppSpacing.large),
             Row(
@@ -168,6 +169,14 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                 const SizedBox(width: 8),
                 Text('Error on stale entries'),
               ],
+            ),
+            const SizedBox(height: AppSpacing.small),
+            FloatInput(
+              label: 'Tolerance',
+              value: _stagedData!.tolerance,
+              onChanged: (newValue) {
+                widget.model.setAtomEditTolerance(newValue);
+              },
             ),
           ],
         ],

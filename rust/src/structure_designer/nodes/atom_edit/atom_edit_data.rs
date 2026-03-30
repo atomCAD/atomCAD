@@ -1214,8 +1214,22 @@ impl NodeData for AtomEditData {
             structure
         };
 
+        // Get tolerance from pin 1 or property
+        let tolerance = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.tolerance,
+            NetworkResult::extract_float,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
         // Apply the diff to the input
-        let diff_result = apply_diff(&input_structure, &self.diff, self.tolerance);
+        let diff_result = apply_diff(&input_structure, &self.diff, tolerance);
 
         // Error on stale entries: if enabled and any diagnostics are non-zero, return error
         if self.error_on_stale_entries {
@@ -1260,7 +1274,7 @@ impl NodeData for AtomEditData {
         // --- Pin 1 (diff): build diff output with inherent decorations ---
         let mut diff_clone = self.diff.clone();
         if self.include_base_bonds_in_diff {
-            enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, self.tolerance);
+            enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, tolerance);
         }
         // Flags are already on diff atoms — no manual application needed.
         diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows;
@@ -1407,9 +1421,9 @@ impl NodeData for AtomEditData {
         }
     }
 
-    fn get_subtitle(&self, _connected_input_pins: &HashSet<String>) -> Option<String> {
+    fn get_subtitle(&self, connected_input_pins: &HashSet<String>) -> Option<String> {
         // Use last known stats if available (updated during eval)
-        if let Some(stats) = &self.last_stats {
+        let stats_part = if let Some(stats) = &self.last_stats {
             let mut parts = Vec::new();
             if stats.atoms_added > 0 {
                 parts.push(format!("+{}", stats.atoms_added));
@@ -1429,6 +1443,17 @@ impl NodeData for AtomEditData {
             Some(format!("diff: {} atoms", self.diff.get_num_of_atoms()))
         } else {
             None
+        };
+
+        // Append tolerance when tolerance pin is not connected
+        if !connected_input_pins.contains("tolerance") {
+            let tol_part = format!("tol={:.3}", self.tolerance);
+            match stats_part {
+                Some(s) => Some(format!("{s}, {tol_part}")),
+                None => Some(tol_part),
+            }
+        } else {
+            stats_part
         }
     }
 
@@ -1487,6 +1512,7 @@ impl NodeData for AtomEditData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("molecule".to_string(), (false, None)); // optional: allows creating from scratch
+        m.insert("tolerance".to_string(), (false, None)); // optional: overrides property
         m
     }
 }
@@ -1522,11 +1548,18 @@ pub fn get_node_type() -> NodeType {
             .to_string(),
         summary: Some("Edit atoms via diff".to_string()),
         category: NodeTypeCategory::AtomicStructure,
-        parameters: vec![Parameter {
-            id: None,
-            name: "molecule".to_string(),
-            data_type: DataType::Atomic,
-        }],
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "molecule".to_string(),
+                data_type: DataType::Atomic,
+            },
+            Parameter {
+                id: None,
+                name: "tolerance".to_string(),
+                data_type: DataType::Float,
+            },
+        ],
         output_pins: vec![
             OutputPinDefinition {
                 name: "result".to_string(),

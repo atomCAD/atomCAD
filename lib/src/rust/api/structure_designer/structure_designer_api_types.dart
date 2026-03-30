@@ -165,6 +165,7 @@ class APIAtomEditData {
   final bool outputDiff;
   final bool showAnchorArrows;
   final bool includeBaseBondsInDiff;
+  final double tolerance;
   final bool errorOnStaleEntries;
   final bool showGadget;
   final APIDiffStats diffStats;
@@ -194,6 +195,7 @@ class APIAtomEditData {
     required this.outputDiff,
     required this.showAnchorArrows,
     required this.includeBaseBondsInDiff,
+    required this.tolerance,
     required this.errorOnStaleEntries,
     required this.showGadget,
     required this.diffStats,
@@ -219,6 +221,7 @@ class APIAtomEditData {
       outputDiff.hashCode ^
       showAnchorArrows.hashCode ^
       includeBaseBondsInDiff.hashCode ^
+      tolerance.hashCode ^
       errorOnStaleEntries.hashCode ^
       showGadget.hashCode ^
       diffStats.hashCode ^
@@ -246,6 +249,7 @@ class APIAtomEditData {
           outputDiff == other.outputDiff &&
           showAnchorArrows == other.showAnchorArrows &&
           includeBaseBondsInDiff == other.includeBaseBondsInDiff &&
+          tolerance == other.tolerance &&
           errorOnStaleEntries == other.errorOnStaleEntries &&
           showGadget == other.showGadget &&
           diffStats == other.diffStats &&
