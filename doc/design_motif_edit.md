@@ -116,9 +116,25 @@ When the user creates a bond from a primary cell atom to a ghost atom:
 1. Identify which primary cell atom the ghost corresponds to (by matching position modulo unit cell translation)
 2. Compute the `relative_cell` IVec3 offset from the ghost's cell position
 3. Store the bond in the diff AtomicStructure (between the two primary-cell atom IDs)
-4. Store the `relative_cell` metadata in `cross_cell_bonds: HashMap<BondReference, IVec3>`
+4. Store the `relative_cell` metadata in `cross_cell_bonds: HashMap<BondReference, IVec3>`, normalized per the convention below
 
-**Symmetric ghost bonds:** When the user creates a cross-cell bond (e.g., from A in cell (0,0,0) to ghost of B in cell (+1,0,0)), the system also creates the symmetric counterpart visible from the other direction: a bond from B in the primary cell to the ghost of A in cell (-1,0,0). Both are visual representations of the same physical bond. Internally, only one canonical entry is stored in `cross_cell_bonds`; the display layer generates the symmetric rendering. This way the user sees the bond from whichever direction they're looking, and the bond can be created from either side.
+**Offset normalization convention:** `BondReference` is order-insensitive (`(A,B) == (B,A)`), so the stored IVec3 needs a canonical direction. The convention is: **the IVec3 is the cell offset of `max(atom_id1, atom_id2)` relative to `min(atom_id1, atom_id2)`**. At insertion time, if the user draws from atom `from` to ghost of atom `to` in cell `offset`:
+
+```rust
+let normalized = if from < to { offset } else { -offset };
+map.insert(BondReference::new(from, to), normalized);
+```
+
+At motif conversion time, adjust for actual site order:
+
+```rust
+let raw_offset = cross_cell_bonds.get(&bond_ref).copied().unwrap_or(IVec3::ZERO);
+let site_2_offset = if atom_a < atom_b { raw_offset } else { -raw_offset };
+```
+
+This is deterministic regardless of which direction the user draws the bond, composes with `BondReference`'s existing semantics, and requires no new types.
+
+**Symmetric ghost bonds:** When the user creates a cross-cell bond (e.g., from A in cell (0,0,0) to ghost of B in cell (+1,0,0)), the system also creates the symmetric counterpart visible from the other direction: a bond from B in the primary cell to the ghost of A in cell (-1,0,0). Both are visual representations of the same physical bond. Internally, only one canonical entry is stored in `cross_cell_bonds`; the display layer generates the symmetric rendering by negating the stored offset. This way the user sees the bond from whichever direction they're looking, and the bond can be created from either side.
 
 #### Wireframe Bounding Box
 
@@ -1324,7 +1340,7 @@ Add `neighbor_depth` to `SerializableAtomEditData` with `#[serde(default = "defa
 
 #### 6.1 AtomEditData changes
 
-Add `cross_cell_bonds: HashMap<BondReference, IVec3>` to `AtomEditData`. A `BondReference` identifies a bond in the diff (e.g., by the two atom IDs). Bonds not in this map are same-cell (`IVec3::ZERO`).
+Add `cross_cell_bonds: HashMap<BondReference, IVec3>` to `AtomEditData`. A `BondReference` identifies a bond in the diff (by the two atom IDs). Bonds not in this map are same-cell (`IVec3::ZERO`). The stored IVec3 follows the normalization convention from section 4: offset of `max(id1, id2)` relative to `min(id1, id2)`.
 
 #### 6.2 Ghost atom selectability for bond tool
 
@@ -1338,18 +1354,29 @@ Make ghost atoms selectable **only** when the Add Bond tool is active. This requ
 
 When creating a bond from atom A (primary) to ghost of atom B in cell `(dx, dy, dz)`:
 1. Create a normal bond between A and B in the diff AtomicStructure
-2. Store `(A_id, B_id) → IVec3(dx, dy, dz)` in `cross_cell_bonds`
-3. The symmetric rendering (B→ghost_of_A in cell `(-dx, -dy, -dz)`) is generated automatically in the display layer
+2. Normalize the offset: `normalized = if A < B { (dx,dy,dz) } else { (-dx,-dy,-dz) }`
+3. Store `BondReference(A, B) → normalized` in `cross_cell_bonds`
+4. The symmetric rendering is generated automatically in the display layer by negating the stored offset
 
 #### 6.4 Update atomic_structure_to_motif()
 
-When converting bonds, look up `cross_cell_bonds` to set `relative_cell` on `SiteSpecifier::site_2`. Bonds not in the map get `IVec3::ZERO`.
+When converting bonds, look up `cross_cell_bonds` and adjust for site order:
+
+```rust
+let raw_offset = cross_cell_bonds.get(&BondReference::new(atom_a, atom_b))
+    .copied().unwrap_or(IVec3::ZERO);
+// raw_offset is "max_id relative to min_id" — adjust for actual site_1/site_2 order
+let site_2_offset = if atom_a < atom_b { raw_offset } else { -raw_offset };
+```
+
+Bonds not in the map get `IVec3::ZERO` (same-cell).
 
 #### 6.5 Symmetric ghost bond rendering
 
-In the display visualization, for each cross-cell bond `(A, B, offset)`:
-- Render bond from A's position to ghost_of_B's position (A→ghost direction)
-- Render bond from B's position to ghost_of_A's position (B→ghost direction, i.e., the mirrored view)
+In the display visualization, for each cross-cell bond with stored offset `raw` (max relative to min):
+- Compute A's perspective: `offset_of_B = if A < B { raw } else { -raw }`
+- Render bond from A's position to ghost_of_B's position (translated by `offset_of_B * unit_cell`)
+- Render bond from B's position to ghost_of_A's position (translated by `-offset_of_B * unit_cell`)
 - Optionally use dashed lines or a different color for cross-cell bonds
 
 #### 6.6 Serialization
@@ -1359,11 +1386,13 @@ Add `cross_cell_bonds` to `SerializableAtomEditData` with `#[serde(default)]`. T
 #### 6.7 Testing
 
 **Automated tests:**
-1. **`test_cross_cell_bond_to_motif`**: Create structure with two atoms and a bond marked as cross-cell `(1,0,0)`. Convert to motif. Verify `site_2.relative_cell = IVec3(1,0,0)`.
-2. **`test_cross_cell_bond_same_cell_default`**: Bond NOT in `cross_cell_bonds` → `relative_cell = IVec3::ZERO`.
-3. **`test_cross_cell_bond_serialization`**: Roundtrip `cross_cell_bonds` through serialization.
-4. **`test_symmetric_ghost_bond_positions`**: Given a cross-cell bond `(A, B, (1,0,0))`, verify that the display structure contains bond segments in both directions (A→ghost_B and B→ghost_A).
-5. **`test_cross_cell_bond_undo`**: Create cross-cell bond, undo, verify `cross_cell_bonds` entry is removed.
+1. **`test_cross_cell_bond_to_motif`**: Create structure with atoms A (id=1) and B (id=2) and a bond marked as cross-cell. Store normalized offset `(1,0,0)` (offset of max=2 relative to min=1). Convert to motif with site_1=A, site_2=B. Verify `site_2.relative_cell = IVec3(1,0,0)`.
+2. **`test_cross_cell_bond_to_motif_reversed_order`**: Same setup but with site_1=B, site_2=A. Verify `site_2.relative_cell = IVec3(-1,0,0)` (negated because site_2 is the lower ID).
+3. **`test_cross_cell_bond_normalization`**: Create bond from A (id=5) to ghost of B (id=3) with raw offset `(1,0,0)`. Verify stored normalized offset is `(-1,0,0)` (negated because `from > to`). Create same bond from B to ghost of A with raw offset `(-1,0,0)`. Verify same normalized result.
+4. **`test_cross_cell_bond_same_cell_default`**: Bond NOT in `cross_cell_bonds` → `relative_cell = IVec3::ZERO`.
+5. **`test_cross_cell_bond_serialization`**: Roundtrip `cross_cell_bonds` through serialization.
+6. **`test_symmetric_ghost_bond_positions`**: Given a cross-cell bond, verify that the display structure contains bond segments in both directions (A→ghost_B and B→ghost_A) with correct positions.
+7. **`test_cross_cell_bond_undo`**: Create cross-cell bond, undo, verify `cross_cell_bonds` entry is removed.
 
 **Manual verification:**
 1. Create motif_edit with a unit cell, place two atoms near opposite cell faces
