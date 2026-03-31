@@ -16,6 +16,10 @@ use std::collections::{HashMap, HashSet};
 #[derive(Clone)]
 pub struct EvalOutput {
     pub results: Vec<NetworkResult>,
+    /// Optional per-pin display overrides. When present for a pin index,
+    /// the scene generator uses this value for viewport rendering instead
+    /// of results[index]. Downstream wire evaluation always uses results[index].
+    pub display_results: HashMap<usize, NetworkResult>,
 }
 
 impl EvalOutput {
@@ -23,15 +27,19 @@ impl EvalOutput {
     pub fn single(result: NetworkResult) -> Self {
         EvalOutput {
             results: vec![result],
+            display_results: HashMap::new(),
         }
     }
 
     /// Multi-output constructor.
     pub fn multi(results: Vec<NetworkResult>) -> Self {
-        EvalOutput { results }
+        EvalOutput {
+            results,
+            display_results: HashMap::new(),
+        }
     }
 
-    /// Get result for a given output pin index.
+    /// Get result for a given output pin index (wire value for downstream nodes).
     pub fn get(&self, output_pin_index: i32) -> NetworkResult {
         self.results
             .get(output_pin_index as usize)
@@ -42,6 +50,19 @@ impl EvalOutput {
     /// Get the primary (pin 0) result.
     pub fn primary(&self) -> &NetworkResult {
         &self.results[0]
+    }
+
+    /// Set a display override for a specific output pin.
+    pub fn set_display_override(&mut self, pin_index: usize, result: NetworkResult) {
+        self.display_results.insert(pin_index, result);
+    }
+
+    /// Get the display result for a pin, falling back to the wire result.
+    pub fn get_display(&self, pin_index: usize) -> NetworkResult {
+        self.display_results
+            .get(&pin_index)
+            .cloned()
+            .unwrap_or_else(|| self.get(pin_index as i32))
     }
 }
 

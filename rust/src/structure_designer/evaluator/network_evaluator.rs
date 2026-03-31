@@ -188,12 +188,22 @@ impl NetworkEvaluator {
         // Get the unit cell from the primary (pin 0) result
         let unit_cell = eval_output.primary().get_unit_cell();
 
-        // Convert primary result (pin 0) to NodeOutput for backward compat
-        let result = eval_output.get(0);
+        // Convert primary result (pin 0) to NodeOutput for backward compat.
+        // Use display override if present (e.g., motif_edit shows Atomic in viewport
+        // while the wire carries Motif).
         let node_type = registry.get_node_type_for_node(node).unwrap();
+        let (display_result_0, display_type_0) =
+            if let Some(dr) = eval_output.display_results.get(&0) {
+                let dt = dr
+                    .infer_data_type()
+                    .unwrap_or_else(|| node_type.output_type().clone());
+                (dr.clone(), dt)
+            } else {
+                (eval_output.get(0), node_type.output_type().clone())
+            };
         let (output, geo_tree) = self.convert_result_to_node_output(
-            result,
-            node_type.output_type(),
+            display_result_0,
+            &display_type_0,
             from_selected_node,
             &network_stack,
             node_id,
@@ -219,8 +229,15 @@ impl NetworkEvaluator {
                 });
                 continue;
             }
-            let pin_result = eval_output.get(pin_index);
-            let pin_data_type = node_type.get_output_pin_type(pin_index);
+            let (pin_result, pin_data_type) =
+                if let Some(dr) = eval_output.display_results.get(&pin_index_usize) {
+                    let dt = dr
+                        .infer_data_type()
+                        .unwrap_or_else(|| node_type.get_output_pin_type(pin_index));
+                    (dr.clone(), dt)
+                } else {
+                    (eval_output.get(pin_index), node_type.get_output_pin_type(pin_index))
+                };
             let (pin_output, pin_geo_tree) = self.convert_result_to_node_output(
                 pin_result,
                 &pin_data_type,
@@ -807,6 +824,7 @@ impl NetworkEvaluator {
                 context,
             );
             // Wrap errors with the custom network name for better diagnostics
+            let child_display_results = eval_output.display_results;
             let results: Vec<NetworkResult> = eval_output
                 .results
                 .into_iter()
@@ -818,7 +836,9 @@ impl NetworkEvaluator {
                     }
                 })
                 .collect();
-            EvalOutput::multi(results)
+            let mut output = EvalOutput::multi(results);
+            output.display_results = child_display_results;
+            output
         } else {
             EvalOutput::single(NetworkResult::Error(format!(
                 "Unknown node type: {}",

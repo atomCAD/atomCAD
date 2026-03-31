@@ -194,6 +194,28 @@ pub enum NetworkResult {
 }
 
 impl NetworkResult {
+    /// Returns the DataType corresponding to this result's variant,
+    /// or None for variants without a clear single type (None, Error, Function, Array).
+    pub fn infer_data_type(&self) -> Option<DataType> {
+        match self {
+            NetworkResult::Bool(_) => Some(DataType::Bool),
+            NetworkResult::String(_) => Some(DataType::String),
+            NetworkResult::Int(_) => Some(DataType::Int),
+            NetworkResult::Float(_) => Some(DataType::Float),
+            NetworkResult::Vec2(_) => Some(DataType::Vec2),
+            NetworkResult::Vec3(_) => Some(DataType::Vec3),
+            NetworkResult::IVec2(_) => Some(DataType::IVec2),
+            NetworkResult::IVec3(_) => Some(DataType::IVec3),
+            NetworkResult::UnitCell(_) => Some(DataType::UnitCell),
+            NetworkResult::DrawingPlane(_) => Some(DataType::DrawingPlane),
+            NetworkResult::Geometry2D(_) => Some(DataType::Geometry2D),
+            NetworkResult::Geometry(_) => Some(DataType::Geometry),
+            NetworkResult::Atomic(_) => Some(DataType::Atomic),
+            NetworkResult::Motif(_) => Some(DataType::Motif),
+            _ => None,
+        }
+    }
+
     /// Returns true if this NetworkResult is an Error variant
     pub fn is_error(&self) -> bool {
         matches!(self, NetworkResult::Error(_))

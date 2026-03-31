@@ -1,6 +1,11 @@
-// Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6).
+// Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6)
+// and EvalOutput display overrides.
 
 use glam::DVec2;
+use glam::f64::DVec3;
+use glam::i32::IVec3;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::motif::Motif;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -855,5 +860,126 @@ fn test_custom_network_shrink_output_pins_disconnects_wires() {
     assert!(
         node.arguments[0].argument_output_pins.is_empty(),
         "Wire to pin 1 should be disconnected after inner shrinks to single output"
+    );
+}
+
+// ===== EvalOutput display override tests =====
+
+#[test]
+fn test_eval_output_display_override_basic() {
+    // Pin 0 wire = Motif, display override = Atomic
+    let motif = Motif {
+        parameters: vec![],
+        sites: vec![],
+        bonds: vec![],
+        bonds_by_site1_index: vec![],
+        bonds_by_site2_index: vec![],
+    };
+    let viz = AtomicStructure::new();
+
+    let mut output = EvalOutput::multi(vec![
+        NetworkResult::Motif(motif),
+        NetworkResult::Atomic(AtomicStructure::new()),
+    ]);
+    output.set_display_override(0, NetworkResult::Atomic(viz));
+
+    // Wire value: get(0) returns Motif
+    assert!(matches!(output.get(0), NetworkResult::Motif(_)));
+
+    // Display value: get_display(0) returns Atomic (the override)
+    assert!(matches!(output.get_display(0), NetworkResult::Atomic(_)));
+
+    // Pin 1 has no override: get_display(1) falls back to wire value
+    assert!(matches!(output.get_display(1), NetworkResult::Atomic(_)));
+}
+
+#[test]
+fn test_eval_output_display_override_fallback() {
+    let output = EvalOutput::single(NetworkResult::Float(42.0));
+
+    // No display overrides set — get_display falls back to wire result
+    assert!(matches!(output.get_display(0), NetworkResult::Float(v) if v == 42.0));
+}
+
+#[test]
+fn test_eval_output_display_results_default_empty() {
+    let single = EvalOutput::single(NetworkResult::Int(1));
+    assert!(single.display_results.is_empty());
+
+    let multi = EvalOutput::multi(vec![NetworkResult::Int(1), NetworkResult::Int(2)]);
+    assert!(multi.display_results.is_empty());
+}
+
+// ===== NetworkResult::infer_data_type() tests =====
+
+#[test]
+fn test_infer_data_type_primitives() {
+    assert_eq!(
+        NetworkResult::Bool(true).infer_data_type(),
+        Some(DataType::Bool)
+    );
+    assert_eq!(
+        NetworkResult::String("hi".into()).infer_data_type(),
+        Some(DataType::String)
+    );
+    assert_eq!(
+        NetworkResult::Int(1).infer_data_type(),
+        Some(DataType::Int)
+    );
+    assert_eq!(
+        NetworkResult::Float(1.0).infer_data_type(),
+        Some(DataType::Float)
+    );
+}
+
+#[test]
+fn test_infer_data_type_vectors() {
+    assert_eq!(
+        NetworkResult::Vec2(DVec2::ZERO).infer_data_type(),
+        Some(DataType::Vec2)
+    );
+    assert_eq!(
+        NetworkResult::Vec3(DVec3::ZERO).infer_data_type(),
+        Some(DataType::Vec3)
+    );
+    assert_eq!(
+        NetworkResult::IVec2(glam::IVec2::ZERO).infer_data_type(),
+        Some(DataType::IVec2)
+    );
+    assert_eq!(
+        NetworkResult::IVec3(IVec3::ZERO).infer_data_type(),
+        Some(DataType::IVec3)
+    );
+}
+
+#[test]
+fn test_infer_data_type_complex() {
+    assert_eq!(
+        NetworkResult::Atomic(AtomicStructure::new()).infer_data_type(),
+        Some(DataType::Atomic)
+    );
+    let motif = Motif {
+        parameters: vec![],
+        sites: vec![],
+        bonds: vec![],
+        bonds_by_site1_index: vec![],
+        bonds_by_site2_index: vec![],
+    };
+    assert_eq!(
+        NetworkResult::Motif(motif).infer_data_type(),
+        Some(DataType::Motif)
+    );
+}
+
+#[test]
+fn test_infer_data_type_none_variants() {
+    assert_eq!(NetworkResult::None.infer_data_type(), None);
+    assert_eq!(
+        NetworkResult::Error("err".into()).infer_data_type(),
+        None
+    );
+    assert_eq!(
+        NetworkResult::Array(vec![]).infer_data_type(),
+        None
     );
 }
