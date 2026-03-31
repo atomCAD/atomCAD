@@ -115,8 +115,8 @@ For each atom in each neighboring cell, compute its fractional distance from the
 When the user creates a bond from a primary cell atom to a ghost atom:
 1. Identify which primary cell atom the ghost corresponds to (by matching position modulo unit cell translation)
 2. Compute the `relative_cell` IVec3 offset from the ghost's cell position
-3. Store the bond in the diff AtomicStructure (between the two primary-cell atom IDs)
-4. Store the `relative_cell` metadata in `cross_cell_bonds: HashMap<BondReference, IVec3>`, normalized per the convention below
+3. Store the bond in the diff AtomicStructure between the two **diff** atom IDs. If either atom originates from the base molecule input (i.e., has `BasePassthrough` provenance), `resolve_to_diff_id()` automatically promotes it to an UNCHANGED marker in the diff, giving it a stable diff atom ID. This is the same mechanism used by the existing Add Bond tool in atom_edit — no new code needed for this case.
+4. Store the `relative_cell` metadata in `cross_cell_bonds: HashMap<BondReference, IVec3>` using those same diff atom IDs, normalized per the convention below
 
 **Offset normalization convention:** `BondReference` is order-insensitive (`(A,B) == (B,A)`), so the stored IVec3 needs a canonical direction. The convention is: **the IVec3 is the cell offset of `max(atom_id1, atom_id2)` relative to `min(atom_id1, atom_id2)`**. At insertion time, if the user draws from atom `from` to ghost of atom `to` in cell `offset`:
 
@@ -265,7 +265,7 @@ fn eval_motif_mode(&self, input: AtomicStructure, unit_cell: UnitCellStruct,
 
 When no molecule input is connected, the diff itself is the full content (apply_diff with an empty base produces the diff's additions as the result).
 
-### 7. Node Registration
+### 8. Node Registration
 
 ```rust
 // In atom_edit_data.rs:
