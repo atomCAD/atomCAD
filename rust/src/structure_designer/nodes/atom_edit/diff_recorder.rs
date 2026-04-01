@@ -1,3 +1,5 @@
+use crate::crystolecule::atomic_structure::BondReference;
+use glam::IVec3;
 use glam::f64::DVec3;
 
 /// State of an atom in the diff at a point in time.
@@ -35,6 +37,16 @@ pub struct BondDelta {
     pub new_order: Option<u8>,
 }
 
+/// A change to a cross-cell bond metadata entry.
+#[derive(Debug, Clone)]
+pub struct CrossCellBondDelta {
+    pub bond_ref: BondReference,
+    /// None if entry didn't exist before.
+    pub old_offset: Option<IVec3>,
+    /// None if entry doesn't exist after.
+    pub new_offset: Option<IVec3>,
+}
+
 /// Captures diff deltas during a recording session.
 ///
 /// Hybridization overrides are now stored as atom flags and captured in AtomDelta.
@@ -42,6 +54,7 @@ pub struct BondDelta {
 pub struct DiffRecorder {
     pub atom_deltas: Vec<AtomDelta>,
     pub bond_deltas: Vec<BondDelta>,
+    pub cross_cell_bond_deltas: Vec<CrossCellBondDelta>,
 }
 
 impl DiffRecorder {

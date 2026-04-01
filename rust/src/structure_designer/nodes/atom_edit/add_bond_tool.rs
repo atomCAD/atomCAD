@@ -373,36 +373,96 @@ pub fn add_bond_pointer_up(
         _ => return false, // Released on empty, bond, or same atom → cancel
     };
 
-    // Resolve target to diff ID
-    let target_atom_info = {
-        let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
-            Some(s) => s,
+    // Check if the target is a ghost atom (motif_edit cross-cell bond).
+    // Ghost metadata is stored in the display structure's decorator.
+    let ghost_info: Option<(u32, glam::IVec3)> = {
+        let result_structure = structure_designer.get_atomic_structure_from_selected_node();
+        result_structure.and_then(|s| {
+            s.decorator()
+                .ghost_atom_metadata
+                .get(&target_result_id)
+                .copied()
+        })
+    };
+
+    if let Some((primary_atom_id, cell_offset)) = ghost_info {
+        // Cross-cell bond: target is a ghost atom.
+        // Resolve primary atom to diff ID, then create the bond with cross-cell metadata.
+        let primary_atom_info = {
+            let result_structure =
+                match structure_designer.get_atomic_structure_from_selected_node() {
+                    Some(s) => s,
+                    None => return false,
+                };
+            match result_structure.get_atom(primary_atom_id) {
+                Some(a) => (a.atomic_number, a.position),
+                None => return false,
+            }
+        };
+
+        let target_diff_id = match resolve_to_diff_id(
+            structure_designer,
+            primary_atom_id,
+            primary_atom_info,
+            is_diff_view,
+        ) {
+            Some(id) => id,
             None => return false,
         };
-        match result_structure.get_atom(target_result_id) {
-            Some(a) => (a.atomic_number, a.position),
+
+        let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+            Some(data) => data,
             None => return false,
-        }
-    };
+        };
 
-    let target_diff_id = match resolve_to_diff_id(
-        structure_designer,
-        target_result_id,
-        target_atom_info,
-        is_diff_view,
-    ) {
-        Some(id) => id,
-        None => return false,
-    };
+        // Create the bond in the diff
+        atom_edit_data.add_bond_in_diff(source_atom_id, target_diff_id, bond_order);
 
-    // Create the bond
-    let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
-        Some(data) => data,
-        None => return false,
-    };
-    atom_edit_data.add_bond_in_diff(source_atom_id, target_diff_id, bond_order);
+        // Normalize offset: stored as offset of max(id1,id2) relative to min(id1,id2)
+        let normalized_offset = if source_atom_id < target_diff_id {
+            cell_offset
+        } else {
+            -cell_offset
+        };
+        let bond_ref = crate::crystolecule::atomic_structure::BondReference {
+            atom_id1: source_atom_id,
+            atom_id2: target_diff_id,
+        };
+        atom_edit_data.set_cross_cell_bond_recorded(bond_ref, normalized_offset);
 
-    true
+        true
+    } else {
+        // Normal same-cell bond
+        let target_atom_info = {
+            let result_structure =
+                match structure_designer.get_atomic_structure_from_selected_node() {
+                    Some(s) => s,
+                    None => return false,
+                };
+            match result_structure.get_atom(target_result_id) {
+                Some(a) => (a.atomic_number, a.position),
+                None => return false,
+            }
+        };
+
+        let target_diff_id = match resolve_to_diff_id(
+            structure_designer,
+            target_result_id,
+            target_atom_info,
+            is_diff_view,
+        ) {
+            Some(id) => id,
+            None => return false,
+        };
+
+        let atom_edit_data = match get_selected_atom_edit_data_mut(structure_designer) {
+            Some(data) => data,
+            None => return false,
+        };
+        atom_edit_data.add_bond_in_diff(source_atom_id, target_diff_id, bond_order);
+
+        true
+    }
 }
 
 // =============================================================================

@@ -1,6 +1,7 @@
 use crate::crystolecule::atomic_structure::bond_reference::BondReference;
 use crate::crystolecule::guided_placement::GuideDot;
 use crate::util::transform::Transform;
+use glam::IVec3;
 use glam::f64::DVec3;
 use rustc_hash::FxHashMap;
 
@@ -59,6 +60,10 @@ pub struct AtomicStructureDecorator {
     /// and other UI consumers use these instead of the standard element names.
     /// Used by motif_edit to label parameter element atoms with user-defined names.
     pub element_name_overrides: FxHashMap<i16, String>,
+    /// Ghost atom metadata: maps ghost atom ID → (primary_atom_id, cell_offset).
+    /// Used by motif_edit to resolve ghost atom hits back to primary atoms
+    /// for cross-cell bond creation.
+    pub ghost_atom_metadata: FxHashMap<u32, (u32, IVec3)>,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -77,6 +82,7 @@ impl AtomicStructureDecorator {
             show_anchor_arrows: false,
             guide_placement_visuals: None,
             element_name_overrides: FxHashMap::default(),
+            ghost_atom_metadata: FxHashMap::default(),
         }
     }
 

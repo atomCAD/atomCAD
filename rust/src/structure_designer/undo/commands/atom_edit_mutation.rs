@@ -1,6 +1,8 @@
 use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::structure_designer::node_data::NodeData;
-use crate::structure_designer::nodes::atom_edit::diff_recorder::{AtomDelta, BondDelta};
+use crate::structure_designer::nodes::atom_edit::diff_recorder::{
+    AtomDelta, BondDelta, CrossCellBondDelta,
+};
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
 /// Command for undoing/redoing atom_edit diff mutations.
@@ -17,6 +19,7 @@ pub struct AtomEditMutationCommand {
     pub node_id: u64,
     pub atom_deltas: Vec<AtomDelta>,
     pub bond_deltas: Vec<BondDelta>,
+    pub cross_cell_bond_deltas: Vec<CrossCellBondDelta>,
 }
 
 impl UndoCommand for AtomEditMutationCommand {
@@ -27,12 +30,14 @@ impl UndoCommand for AtomEditMutationCommand {
     fn undo(&self, ctx: &mut UndoContext) {
         if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
             apply_undo(data, &self.atom_deltas, &self.bond_deltas);
+            apply_cross_cell_bond_undo(data, &self.cross_cell_bond_deltas);
         }
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
         if let Some(data) = get_atom_edit_data_mut(ctx, &self.network_name, self.node_id) {
             apply_redo(data, &self.atom_deltas, &self.bond_deltas);
+            apply_cross_cell_bond_redo(data, &self.cross_cell_bond_deltas);
         }
     }
 
@@ -209,4 +214,38 @@ fn restore_flags(diff: &mut AtomicStructure, atom_id: u32, flags: u16) {
     diff.set_atom_frozen(atom_id, frozen);
     diff.set_atom_hydrogen_passivation(atom_id, h_passivation);
     diff.set_atom_hybridization_override(atom_id, hybridization);
+}
+
+/// Undo cross-cell bond metadata changes: restore old_offset for each delta.
+fn apply_cross_cell_bond_undo(
+    data: &mut crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData,
+    deltas: &[CrossCellBondDelta],
+) {
+    for delta in deltas.iter().rev() {
+        match delta.old_offset {
+            Some(offset) => {
+                data.cross_cell_bonds.insert(delta.bond_ref.clone(), offset);
+            }
+            None => {
+                data.cross_cell_bonds.remove(&delta.bond_ref);
+            }
+        }
+    }
+}
+
+/// Redo cross-cell bond metadata changes: apply new_offset for each delta.
+fn apply_cross_cell_bond_redo(
+    data: &mut crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData,
+    deltas: &[CrossCellBondDelta],
+) {
+    for delta in deltas.iter() {
+        match delta.new_offset {
+            Some(offset) => {
+                data.cross_cell_bonds.insert(delta.bond_ref.clone(), offset);
+            }
+            None => {
+                data.cross_cell_bonds.remove(&delta.bond_ref);
+            }
+        }
+    }
 }

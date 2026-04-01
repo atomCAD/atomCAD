@@ -1,8 +1,10 @@
-use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::structure_designer::nodes::atom_edit::atom_edit::{AtomEditData, DEFAULT_TOLERANCE};
 use crate::util::serialization_utils::dvec3_serializer;
+use glam::IVec3;
 use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io;
 
 /// Serializable representation of an atom in a diff structure.
@@ -85,12 +87,23 @@ pub struct SerializableAtomEditData {
     pub parameter_elements: Vec<SerializableParameterElement>,
     #[serde(default = "default_neighbor_depth")]
     pub neighbor_depth: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cross_cell_bonds: Vec<SerializableCrossCellBond>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SerializableParameterElement {
     pub name: String,
     pub default_atomic_number: i16,
+}
+
+/// Serializable representation of a cross-cell bond metadata entry.
+#[derive(Serialize, Deserialize)]
+pub struct SerializableCrossCellBond {
+    pub atom_id_1: u32,
+    pub atom_id_2: u32,
+    /// Relative cell offset [dx, dy, dz]. Convention: offset of max(id1,id2) relative to min(id1,id2).
+    pub relative_cell: [i32; 3],
 }
 
 fn default_include_base_bonds_in_diff() -> bool {
@@ -174,6 +187,26 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
             })
             .collect(),
         neighbor_depth: data.neighbor_depth,
+        cross_cell_bonds: {
+            let mut ccb: Vec<SerializableCrossCellBond> = data
+                .cross_cell_bonds
+                .iter()
+                .map(|(bond_ref, offset)| {
+                    let (a, b) = if bond_ref.atom_id1 < bond_ref.atom_id2 {
+                        (bond_ref.atom_id1, bond_ref.atom_id2)
+                    } else {
+                        (bond_ref.atom_id2, bond_ref.atom_id1)
+                    };
+                    SerializableCrossCellBond {
+                        atom_id_1: a,
+                        atom_id_2: b,
+                        relative_cell: [offset.x, offset.y, offset.z],
+                    }
+                })
+                .collect();
+            ccb.sort_by(|a, b| (a.atom_id_1, a.atom_id_2).cmp(&(b.atom_id_1, b.atom_id_2)));
+            ccb
+        },
     })
 }
 
@@ -249,6 +282,24 @@ pub fn serializable_to_atom_edit_data(
         .map(|pe| (pe.name.clone(), pe.default_atomic_number))
         .collect();
 
+    let cross_cell_bonds: HashMap<BondReference, IVec3> = serializable
+        .cross_cell_bonds
+        .iter()
+        .map(|ccb| {
+            (
+                BondReference {
+                    atom_id1: ccb.atom_id_1,
+                    atom_id2: ccb.atom_id_2,
+                },
+                IVec3::new(
+                    ccb.relative_cell[0],
+                    ccb.relative_cell[1],
+                    ccb.relative_cell[2],
+                ),
+            )
+        })
+        .collect();
+
     Ok(AtomEditData::from_deserialized(
         diff,
         serializable.output_diff,
@@ -260,5 +311,6 @@ pub fn serializable_to_atom_edit_data(
         serializable.is_motif_mode,
         parameter_elements,
         serializable.neighbor_depth,
+        cross_cell_bonds,
     ))
 }
