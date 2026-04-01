@@ -49,6 +49,8 @@ pub struct BackgroundPreferences {
 
     pub drawing_plane_grid_color: [u8; 3],
     pub drawing_plane_grid_strong_color: [u8; 3],
+
+    pub unit_cell_wireframe_color: [u8; 3],
 }
 
 #[derive(Clone, Debug)]

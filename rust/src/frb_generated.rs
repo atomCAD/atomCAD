@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -9663,7 +9663,9 @@ impl SseDecode
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_drawingPlaneGridStrongColor =
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences{background_color: var_backgroundColor, show_axes: var_showAxes, show_grid: var_showGrid, grid_size: var_gridSize, grid_color: var_gridColor, grid_strong_color: var_gridStrongColor, show_lattice_axes: var_showLatticeAxes, show_lattice_grid: var_showLatticeGrid, lattice_grid_color: var_latticeGridColor, lattice_grid_strong_color: var_latticeGridStrongColor, drawing_plane_grid_color: var_drawingPlaneGridColor, drawing_plane_grid_strong_color: var_drawingPlaneGridStrongColor};
+        let mut var_unitCellWireframeColor =
+            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences{background_color: var_backgroundColor, show_axes: var_showAxes, show_grid: var_showGrid, grid_size: var_gridSize, grid_color: var_gridColor, grid_strong_color: var_gridStrongColor, show_lattice_axes: var_showLatticeAxes, show_lattice_grid: var_showLatticeGrid, lattice_grid_color: var_latticeGridColor, lattice_grid_strong_color: var_latticeGridStrongColor, drawing_plane_grid_color: var_drawingPlaneGridColor, drawing_plane_grid_strong_color: var_drawingPlaneGridStrongColor, unit_cell_wireframe_color: var_unitCellWireframeColor};
     }
 }
 
@@ -13856,6 +13858,7 @@ impl flutter_rust_bridge::IntoDart
             self.drawing_plane_grid_strong_color
                 .into_into_dart()
                 .into_dart(),
+            self.unit_cell_wireframe_color.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15671,6 +15674,10 @@ impl SseEncode
             self.drawing_plane_grid_strong_color,
             serializer,
         );
+        <crate::api::common_api_types::APIIVec3>::sse_encode(
+            self.unit_cell_wireframe_color,
+            serializer,
+        );
     }
 }
 
@@ -17160,7 +17167,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -17184,7 +17191,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

@@ -8,6 +8,7 @@ use crate::display::poly_mesh_tessellator::{
 };
 use crate::display::preferences::{AtomicRenderingMethod, DisplayPreferences};
 use crate::display::surface_point_tessellator;
+use crate::display::unit_cell_wireframe_tessellator;
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::renderer::camera::Camera;
@@ -277,6 +278,23 @@ fn tessellate_non_lightweight_content(
                 NodeOutput::None => {
                     // No renderable output for this pin
                 }
+            }
+        }
+
+        // Render unit cell wireframe for motif_edit nodes (active node only)
+        if is_active && node_data.show_unit_cell_wireframe {
+            if let Some(ref uc) = node_data.unit_cell {
+                let color = preferences.background.unit_cell_wireframe_color;
+                let color_f32 = [
+                    color[0] as f32 / 255.0,
+                    color[1] as f32 / 255.0,
+                    color[2] as f32 / 255.0,
+                ];
+                unit_cell_wireframe_tessellator::tessellate_unit_cell_wireframe_with_color(
+                    &mut wireframe_mesh,
+                    uc,
+                    &color_f32,
+                );
             }
         }
     }

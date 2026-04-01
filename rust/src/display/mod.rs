@@ -9,3 +9,4 @@ pub mod preferences;
 pub mod scene_tessellator;
 pub mod surface_point_cloud;
 pub mod surface_point_tessellator;
+pub mod unit_cell_wireframe_tessellator;

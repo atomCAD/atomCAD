@@ -345,6 +345,7 @@ impl AtomEditData {
             NetworkResult::Atomic(diff_clone), // pin 1
         ]);
         output.set_display_override(0, NetworkResult::Atomic(result)); // pin 0 display
+        output.unit_cell_override = Some(unit_cell);
 
         output
     }

@@ -10442,8 +10442,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BackgroundPreferences dco_decode_background_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return BackgroundPreferences(
       backgroundColor: dco_decode_apii_vec_3(arr[0]),
       showAxes: dco_decode_bool(arr[1]),
@@ -10457,6 +10457,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       latticeGridStrongColor: dco_decode_apii_vec_3(arr[9]),
       drawingPlaneGridColor: dco_decode_apii_vec_3(arr[10]),
       drawingPlaneGridStrongColor: dco_decode_apii_vec_3(arr[11]),
+      unitCellWireframeColor: dco_decode_apii_vec_3(arr[12]),
     );
   }
 
@@ -12976,6 +12977,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_latticeGridStrongColor = sse_decode_apii_vec_3(deserializer);
     var var_drawingPlaneGridColor = sse_decode_apii_vec_3(deserializer);
     var var_drawingPlaneGridStrongColor = sse_decode_apii_vec_3(deserializer);
+    var var_unitCellWireframeColor = sse_decode_apii_vec_3(deserializer);
     return BackgroundPreferences(
         backgroundColor: var_backgroundColor,
         showAxes: var_showAxes,
@@ -12988,7 +12990,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         latticeGridColor: var_latticeGridColor,
         latticeGridStrongColor: var_latticeGridStrongColor,
         drawingPlaneGridColor: var_drawingPlaneGridColor,
-        drawingPlaneGridStrongColor: var_drawingPlaneGridStrongColor);
+        drawingPlaneGridStrongColor: var_drawingPlaneGridStrongColor,
+        unitCellWireframeColor: var_unitCellWireframeColor);
   }
 
   @protected
@@ -15780,6 +15783,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_apii_vec_3(self.latticeGridStrongColor, serializer);
     sse_encode_apii_vec_3(self.drawingPlaneGridColor, serializer);
     sse_encode_apii_vec_3(self.drawingPlaneGridStrongColor, serializer);
+    sse_encode_apii_vec_3(self.unitCellWireframeColor, serializer);
   }
 
   @protected

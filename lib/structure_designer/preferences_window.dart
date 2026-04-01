@@ -54,6 +54,8 @@ class PreferencesKeys {
       Key('pref_drawing_plane_grid_color_input');
   static const Key drawingPlaneGridStrongColorInput =
       Key('pref_drawing_plane_grid_strong_color_input');
+  static const Key unitCellWireframeColorInput =
+      Key('pref_unit_cell_wireframe_color_input');
 
   // Layout settings
   static const Key layoutAlgorithmDropdown =
@@ -1036,6 +1038,26 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               setState(() {
                                 _preferences.backgroundPreferences
                                     .drawingPlaneGridStrongColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Unit cell wireframe color
+                          IVec3Input(
+                            key: PreferencesKeys
+                                .unitCellWireframeColorInput,
+                            label: 'Unit cell wireframe color (RGB)',
+                            value: _preferences.backgroundPreferences
+                                .unitCellWireframeColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.backgroundPreferences
+                                    .unitCellWireframeColor = value;
                               });
                               _applyPreferences();
                             },

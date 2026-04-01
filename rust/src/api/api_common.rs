@@ -154,6 +154,20 @@ pub fn to_display_preferences(
                     .drawing_plane_grid_strong_color
                     .z as u8,
             ],
+            unit_cell_wireframe_color: [
+                preferences
+                    .background_preferences
+                    .unit_cell_wireframe_color
+                    .x as u8,
+                preferences
+                    .background_preferences
+                    .unit_cell_wireframe_color
+                    .y as u8,
+                preferences
+                    .background_preferences
+                    .unit_cell_wireframe_color
+                    .z as u8,
+            ],
         },
     }
 }

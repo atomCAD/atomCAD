@@ -1,3 +1,4 @@
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -20,6 +21,10 @@ pub struct EvalOutput {
     /// the scene generator uses this value for viewport rendering instead
     /// of results[index]. Downstream wire evaluation always uses results[index].
     pub display_results: HashMap<usize, NetworkResult>,
+    /// Explicit unit cell override. When set, the scene generator uses this
+    /// instead of extracting from the primary result. Used by motif_edit where
+    /// the wire value is Motif (which doesn't carry a UnitCellStruct).
+    pub unit_cell_override: Option<UnitCellStruct>,
 }
 
 impl EvalOutput {
@@ -28,6 +33,7 @@ impl EvalOutput {
         EvalOutput {
             results: vec![result],
             display_results: HashMap::new(),
+            unit_cell_override: None,
         }
     }
 
@@ -36,6 +42,7 @@ impl EvalOutput {
         EvalOutput {
             results,
             display_results: HashMap::new(),
+            unit_cell_override: None,
         }
     }
 

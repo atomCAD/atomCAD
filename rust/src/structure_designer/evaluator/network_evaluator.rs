@@ -185,8 +185,11 @@ impl NetworkEvaluator {
             )
         };
 
-        // Get the unit cell from the primary (pin 0) result
-        let unit_cell = eval_output.primary().get_unit_cell();
+        // Get the unit cell: prefer explicit override (e.g. motif_edit), else extract from primary
+        let unit_cell = eval_output
+            .unit_cell_override
+            .clone()
+            .or_else(|| eval_output.primary().get_unit_cell());
 
         // Convert primary result (pin 0) to NodeOutput for backward compat.
         // Use display override if present (e.g., motif_edit shows Atomic in viewport
@@ -264,6 +267,10 @@ impl NetworkEvaluator {
             .cloned()
             .unwrap_or_else(|| HashSet::from([0]));
 
+        // Show unit cell wireframe when eval explicitly provided a unit cell
+        // (motif_edit sets unit_cell_override; other nodes don't)
+        let show_unit_cell_wireframe = eval_output.unit_cell_override.is_some();
+
         // Build NodeSceneData
         NodeSceneData {
             output,
@@ -273,6 +280,7 @@ impl NetworkEvaluator {
             node_errors: context.node_errors.clone(),
             node_output_strings: context.node_output_strings.clone(),
             unit_cell,
+            show_unit_cell_wireframe,
             selected_node_eval_cache: context.selected_node_eval_cache,
         }
     }

@@ -135,3 +135,6 @@ mod sequence_node_test;
 
 #[path = "structure_designer/motif_edit_test.rs"]
 mod motif_edit_test;
+
+#[path = "structure_designer/unit_cell_wireframe_test.rs"]
+mod unit_cell_wireframe_test;

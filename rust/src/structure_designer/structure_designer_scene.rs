@@ -69,6 +69,9 @@ pub struct NodeSceneData {
     /// Unit cell associated with this node's output (if applicable)
     pub unit_cell: Option<UnitCellStruct>,
 
+    /// Whether to render a unit cell wireframe for this node (motif_edit only)
+    pub show_unit_cell_wireframe: bool,
+
     /// Eval cache for this node (used for gadget creation if this is the selected node)
     /// Contains node-specific data needed to reconstruct gadgets across refresh cycles
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
@@ -84,6 +87,7 @@ impl NodeSceneData {
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
             unit_cell: None,
+            show_unit_cell_wireframe: false,
             selected_node_eval_cache: None,
         }
     }

@@ -342,6 +342,11 @@ fn test_non_default_values_roundtrip() {
                 y: 90,
                 z: 130,
             },
+            unit_cell_wireframe_color: APIIVec3 {
+                x: 0,
+                y: 200,
+                z: 200,
+            },
         },
         layout_preferences: LayoutPreferences {
             layout_algorithm: LayoutAlgorithmPreference::TopologicalGrid,

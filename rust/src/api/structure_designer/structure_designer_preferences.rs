@@ -188,6 +188,9 @@ pub struct BackgroundPreferences {
     #[frb(non_final)]
     #[serde(default = "default_drawing_plane_grid_strong_color")]
     pub drawing_plane_grid_strong_color: APIIVec3,
+    #[frb(non_final)]
+    #[serde(default = "default_unit_cell_wireframe_color")]
+    pub unit_cell_wireframe_color: APIIVec3,
 }
 
 fn default_background_color() -> APIIVec3 {
@@ -247,6 +250,13 @@ fn default_drawing_plane_grid_strong_color() -> APIIVec3 {
         z: 160,
     }
 }
+fn default_unit_cell_wireframe_color() -> APIIVec3 {
+    APIIVec3 {
+        x: 0,
+        y: 200,
+        z: 200,
+    }
+}
 
 impl Default for BackgroundPreferences {
     fn default() -> Self {
@@ -263,6 +273,7 @@ impl Default for BackgroundPreferences {
             lattice_grid_strong_color: default_lattice_grid_strong_color(),
             drawing_plane_grid_color: default_drawing_plane_grid_color(),
             drawing_plane_grid_strong_color: default_drawing_plane_grid_strong_color(),
+            unit_cell_wireframe_color: default_unit_cell_wireframe_color(),
         }
     }
 }
