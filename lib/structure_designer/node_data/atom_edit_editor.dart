@@ -791,18 +791,10 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             flex: 2,
             child: SizedBox(
               height: 32,
-              child: TextFormField(
+              child: _ParameterNameField(
                 initialValue: param.name,
-                style: const TextStyle(fontSize: 12),
-                decoration: const InputDecoration(
-                  isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  border: OutlineInputBorder(),
-                  hintText: 'Name',
-                ),
-                onFieldSubmitted: (value) {
-                  if (value.isNotEmpty) {
+                onCommit: (value) {
+                  if (value.isNotEmpty && value != param.name) {
                     atom_edit_api.motifEditUpdateParameterElement(
                       index: BigInt.from(index),
                       name: value,
@@ -1928,6 +1920,68 @@ class BondOrderSelector extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A text field for parameter element names that commits on both Enter and focus loss.
+class _ParameterNameField extends StatefulWidget {
+  final String initialValue;
+  final ValueChanged<String> onCommit;
+
+  const _ParameterNameField({
+    required this.initialValue,
+    required this.onCommit,
+  });
+
+  @override
+  State<_ParameterNameField> createState() => _ParameterNameFieldState();
+}
+
+class _ParameterNameFieldState extends State<_ParameterNameField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void didUpdateWidget(_ParameterNameField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue != widget.initialValue) {
+      _controller.text = widget.initialValue;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    widget.onCommit(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (hasFocus) {
+        if (!hasFocus) _commit();
+      },
+      child: TextFormField(
+        controller: _controller,
+        style: const TextStyle(fontSize: 12),
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          border: OutlineInputBorder(),
+          hintText: 'Name',
+        ),
+        onFieldSubmitted: (_) => _commit(),
+      ),
     );
   }
 }

@@ -248,6 +248,17 @@ impl AtomEditData {
         // 3. Convert AtomicStructure → Motif
         let motif = atomic_structure_to_motif(&result, &unit_cell, &self.parameter_elements);
 
+        // 3b. Populate element name overrides on the display result so hover
+        //     tooltips show user-defined parameter names (e.g., "PRIMARY")
+        //     instead of "Unknown".
+        for (i, (name, _)) in self.parameter_elements.iter().enumerate() {
+            let reserved_z = super::types::param_index_to_atomic_number(i);
+            result
+                .decorator_mut()
+                .element_name_overrides
+                .insert(reserved_z, name.clone());
+        }
+
         // 4. Build diff output (pin 1) — same as atom_edit
         let mut diff_clone = self.diff.clone();
         if self.include_base_bonds_in_diff {

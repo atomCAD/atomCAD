@@ -4741,9 +4741,33 @@ pub fn query_hovered_atom_info(
                     .hit_test_all_atomic_structures_with_node_id(&ray_origin, &ray_direction)?;
 
                 let atom = structure.get_atom(atom_id)?;
-                let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
-                    .get(&(atom.atomic_number as i32))
-                    .unwrap_or(&crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
+
+                // Resolve element identity. Check decorator's name overrides first
+                // (set by motif_edit for parameter elements), then fall back to
+                // the standard element database.
+                let (symbol, element_name, display_atomic_number) =
+                    if let Some(name) = structure
+                        .decorator()
+                        .element_name_overrides
+                        .get(&atom.atomic_number)
+                    {
+                        use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+                        let sym = param_atomic_number_to_index(atom.atomic_number)
+                            .map(|idx| format!("P{}", idx + 1))
+                            .unwrap_or_else(|| "?".to_string());
+                        (sym, name.clone(), atom.atomic_number as i32)
+                    } else {
+                        let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
+                            .get(&(atom.atomic_number as i32))
+                            .unwrap_or(
+                                &crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO,
+                            );
+                        (
+                            atom_info.symbol.clone(),
+                            atom_info.element_name.clone(),
+                            atom_info.atomic_number,
+                        )
+                    };
 
                 let bond_count = atom.bonds.len() as u32;
 
@@ -4787,9 +4811,9 @@ pub fn query_hovered_atom_info(
                 };
 
                 Some(APIHoveredAtomInfo {
-                    symbol: atom_info.symbol.clone(),
-                    element_name: atom_info.element_name.clone(),
-                    atomic_number: atom_info.atomic_number,
+                    symbol,
+                    element_name,
+                    atomic_number: display_atomic_number,
                     x: atom.position.x,
                     y: atom.position.y,
                     z: atom.position.z,

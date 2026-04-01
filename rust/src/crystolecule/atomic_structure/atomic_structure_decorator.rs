@@ -55,6 +55,10 @@ pub struct AtomicStructureDecorator {
     pub show_anchor_arrows: bool,
     /// Transient rendering hint: guide placement visuals for the Add Atom tool
     pub guide_placement_visuals: Option<GuidePlacementVisuals>,
+    /// Display name overrides by atomic number. When present, hover tooltips
+    /// and other UI consumers use these instead of the standard element names.
+    /// Used by motif_edit to label parameter element atoms with user-defined names.
+    pub element_name_overrides: FxHashMap<i16, String>,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -72,6 +76,7 @@ impl AtomicStructureDecorator {
             selection_transform: None,
             show_anchor_arrows: false,
             guide_placement_visuals: None,
+            element_name_overrides: FxHashMap::default(),
         }
     }
 
