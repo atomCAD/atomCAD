@@ -2175,12 +2175,11 @@ pub fn generate_ghost_atoms(
         }
     }
 
-    // Generate symmetric cross-cell bonds between primary atoms and ghosts.
-    // For each cross-cell bond (A, B, offset), render:
-    //   - A (primary) → ghost of B in cell `offset_of_B`
-    //   - B (primary) → ghost of A in cell `-offset_of_B`
-    // The ghost atoms were already created above; we just need to find them
-    // in the ghost_atom_metadata and create the bond segments.
+    // Generate cross-cell bond segments between primary atoms, ghosts, and
+    // ghost↔ghost pairs. For each cross-cell bond (A, B, offset), render:
+    //   - A (primary) → ghost of B in cell `offset`
+    //   - B (primary) → ghost of A in cell `-offset`
+    //   - ghost of A in cell C → ghost of B in cell C+offset (for all ghost cells C)
     if !cross_cell_bonds.is_empty() {
         // Build a lookup: (primary_id, cell_offset) → ghost_id
         let ghost_lookup: HashMap<(u32, glam::IVec3), u32> = viz
@@ -2197,16 +2196,25 @@ pub fn generate_ghost_atoms(
             let raw_offset = info.offset;
             let bond_order = info.bond_order;
 
-            // Direction A→B: B is in cell raw_offset relative to A
-            // Render bond from primary A to ghost of B in cell raw_offset
+            // Primary A → ghost of B in cell `offset`
             if let Some(&ghost_b) = ghost_lookup.get(&(atom_b, raw_offset)) {
                 viz.add_bond(atom_a, ghost_b, bond_order);
             }
 
-            // Direction B→A: A is in cell -raw_offset relative to B
-            // Render bond from primary B to ghost of A in cell -raw_offset
+            // Primary B → ghost of A in cell `-offset`
             if let Some(&ghost_a) = ghost_lookup.get(&(atom_a, -raw_offset)) {
                 viz.add_bond(atom_b, ghost_a, bond_order);
+            }
+
+            // Ghost↔ghost: for each ghost of A at cell C, bond to ghost of B
+            // at cell C+offset (if that ghost exists).
+            for (&(primary_id, cell_offset), &ghost_a_id) in &ghost_lookup {
+                if primary_id == atom_a {
+                    let expected_cell_b = cell_offset + raw_offset;
+                    if let Some(&ghost_b_id) = ghost_lookup.get(&(atom_b, expected_cell_b)) {
+                        viz.add_bond(ghost_a_id, ghost_b_id, bond_order);
+                    }
+                }
             }
         }
     }
