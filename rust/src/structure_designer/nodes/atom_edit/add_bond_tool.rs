@@ -179,6 +179,22 @@ pub fn add_bond_pointer_down(
         }
     };
 
+    // Ghost atoms cannot be bond sources — they are display-only copies of
+    // primary cell atoms. Skip if the hit atom is a ghost.
+    {
+        let result_structure = match structure_designer.get_atomic_structure_from_selected_node() {
+            Some(s) => s,
+            None => return false,
+        };
+        if result_structure
+            .get_atom(result_atom_id)
+            .is_some_and(|a| a.is_ghost())
+        {
+            set_add_bond_interaction_state(structure_designer, AddBondInteractionState::Idle);
+            return false;
+        }
+    }
+
     // Phase 2: Resolve to diff atom ID for provenance handling.
     // We need the atom's info for potential identity entry promotion.
     let atom_info = {
@@ -387,7 +403,10 @@ pub fn add_bond_pointer_up(
 
     if let Some((primary_atom_id, cell_offset)) = ghost_info {
         // Cross-cell bond: target is a ghost atom.
-        // Resolve primary atom to diff ID, then create the bond with cross-cell metadata.
+        // Resolve primary atom to diff ID for the BondReference key.
+        // Cross-cell bonds are NOT stored in the diff AtomicStructure;
+        // they live only in the cross_cell_bonds map with their offset and
+        // bond order. The display layer generates ghost bond segments from this.
         let primary_atom_info = {
             let result_structure =
                 match structure_designer.get_atomic_structure_from_selected_node() {
@@ -415,9 +434,6 @@ pub fn add_bond_pointer_up(
             None => return false,
         };
 
-        // Create the bond in the diff
-        atom_edit_data.add_bond_in_diff(source_atom_id, target_diff_id, bond_order);
-
         // Normalize offset: stored as offset of max(id1,id2) relative to min(id1,id2)
         let normalized_offset = if source_atom_id < target_diff_id {
             cell_offset
@@ -428,7 +444,13 @@ pub fn add_bond_pointer_up(
             atom_id1: source_atom_id,
             atom_id2: target_diff_id,
         };
-        atom_edit_data.set_cross_cell_bond_recorded(bond_ref, normalized_offset);
+        atom_edit_data.set_cross_cell_bond_recorded(
+            bond_ref,
+            CrossCellBondInfo {
+                offset: normalized_offset,
+                bond_order,
+            },
+        );
 
         true
     } else {

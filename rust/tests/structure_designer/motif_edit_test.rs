@@ -10,8 +10,9 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Network
 use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
-    AtomEditData, PARAM_ELEMENT_BASE, generate_ghost_atoms, get_node_type_motif_edit,
-    is_atom_edit_family, is_param_element, min_distance_to_unit_cube, param_atomic_number_to_index,
+    AtomEditData, CrossCellBondInfo, PARAM_ELEMENT_BASE, generate_ghost_atoms,
+    get_node_type_motif_edit, is_atom_edit_family, is_param_element,
+    min_distance_to_unit_cube, param_atomic_number_to_index,
     param_atomic_number_to_motif, param_index_to_atomic_number,
 };
 use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
@@ -698,14 +699,18 @@ fn test_cross_cell_bond_to_motif_basic() {
     let atom_a = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // id=1
     let atom_b = data.diff.add_atom(14, DVec3::new(2.0, 2.0, 2.0)); // id=2
 
-    data.diff.add_bond(atom_a, atom_b, 1);
-
-    // Store cross-cell bond: offset of max(1,2)=2 relative to min(1,2)=1 is (1,0,0)
+    // Cross-cell bonds are NOT stored in the diff — only in the cross_cell_bonds map.
     let bond_ref = BondReference {
         atom_id1: atom_a,
         atom_id2: atom_b,
     };
-    data.cross_cell_bonds.insert(bond_ref, IVec3::new(1, 0, 0));
+    data.cross_cell_bonds.insert(
+        bond_ref,
+        CrossCellBondInfo {
+            offset: IVec3::new(1, 0, 0),
+            bond_order: 1,
+        },
+    );
 
     // Build the result structure by just using the diff directly
     let result = data.diff.clone();
@@ -734,7 +739,7 @@ fn test_cross_cell_bond_same_cell_default() {
     let b = structure.add_atom(6, DVec3::new(1.0, 1.0, 1.0));
     structure.add_bond(a, b, 1);
 
-    let empty_ccb: HashMap<BondReference, IVec3> = HashMap::new();
+    let empty_ccb: HashMap<BondReference, CrossCellBondInfo> = HashMap::new();
     let motif = rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::atomic_structure_to_motif(
         &structure, &uc, &[], &empty_ccb,
     );
@@ -782,14 +787,18 @@ fn test_cross_cell_bond_serialization_roundtrip() {
     let mut data = AtomEditData::new_motif_mode();
     let a = data.diff.add_atom(6, DVec3::ZERO);
     let b = data.diff.add_atom(14, DVec3::new(1.0, 1.0, 1.0));
-    data.diff.add_bond(a, b, 1);
 
     let bond_ref = BondReference {
         atom_id1: a,
         atom_id2: b,
     };
-    data.cross_cell_bonds
-        .insert(bond_ref.clone(), IVec3::new(1, 0, 0));
+    data.cross_cell_bonds.insert(
+        bond_ref.clone(),
+        CrossCellBondInfo {
+            offset: IVec3::new(1, 0, 0),
+            bond_order: 1,
+        },
+    );
 
     // Serialize
     let serializable = atom_edit_data_to_serializable(&data).unwrap();
@@ -803,8 +812,9 @@ fn test_cross_cell_bond_serialization_roundtrip() {
     assert!(restored.is_motif_mode);
     assert_eq!(restored.cross_cell_bonds.len(), 1);
 
-    let restored_offset = restored.cross_cell_bonds.get(&bond_ref).unwrap();
-    assert_eq!(*restored_offset, IVec3::new(1, 0, 0));
+    let restored_info = restored.cross_cell_bonds.get(&bond_ref).unwrap();
+    assert_eq!(restored_info.offset, IVec3::new(1, 0, 0));
+    assert_eq!(restored_info.bond_order, 1);
 }
 
 #[test]
@@ -836,15 +846,18 @@ fn test_symmetric_ghost_bond_rendering() {
     let mut structure = AtomicStructure::new();
     let a = structure.add_atom(6, DVec3::new(0.2, 2.0, 2.0)); // frac (0.05, 0.5, 0.5)
     let b = structure.add_atom(6, DVec3::new(3.8, 2.0, 2.0)); // frac (0.95, 0.5, 0.5)
-    structure.add_bond(a, b, 1);
+    // No same-cell bond: cross-cell bonds are stored only in the map.
 
-    let mut ccb: HashMap<BondReference, IVec3> = HashMap::new();
+    let mut ccb: HashMap<BondReference, CrossCellBondInfo> = HashMap::new();
     ccb.insert(
         BondReference {
             atom_id1: a,
             atom_id2: b,
         },
-        IVec3::new(1, 0, 0), // offset of max(1,2)=b relative to min(1,2)=a
+        CrossCellBondInfo {
+            offset: IVec3::new(1, 0, 0), // offset of max(1,2)=b relative to min(1,2)=a
+            bond_order: 1,
+        },
     );
 
     // Generate ghosts with depth=1.0 to ensure ghosts exist for cross-cell bond targets
@@ -940,10 +953,14 @@ fn test_cross_cell_bond_recording() {
     data.begin_recording();
 
     // Add cross-cell bond
-    data.set_cross_cell_bond_recorded(bond_ref.clone(), IVec3::new(1, 0, 0));
+    let info = CrossCellBondInfo {
+        offset: IVec3::new(1, 0, 0),
+        bond_order: 1,
+    };
+    data.set_cross_cell_bond_recorded(bond_ref.clone(), info);
     assert_eq!(
         *data.cross_cell_bonds.get(&bond_ref).unwrap(),
-        IVec3::new(1, 0, 0)
+        info
     );
 
     // Remove it
@@ -954,13 +971,13 @@ fn test_cross_cell_bond_recording() {
     let recorder = data.end_recording().unwrap();
     assert_eq!(recorder.cross_cell_bond_deltas.len(), 2);
 
-    // First delta: None → Some(1,0,0)
+    // First delta: None → Some(info)
     let d0 = &recorder.cross_cell_bond_deltas[0];
-    assert!(d0.old_offset.is_none());
-    assert_eq!(d0.new_offset, Some(IVec3::new(1, 0, 0)));
+    assert!(d0.old_value.is_none());
+    assert_eq!(d0.new_value, Some(info));
 
-    // Second delta: Some(1,0,0) → None
+    // Second delta: Some(info) → None
     let d1 = &recorder.cross_cell_bond_deltas[1];
-    assert_eq!(d1.old_offset, Some(IVec3::new(1, 0, 0)));
-    assert!(d1.new_offset.is_none());
+    assert_eq!(d1.old_value, Some(info));
+    assert!(d1.new_value.is_none());
 }

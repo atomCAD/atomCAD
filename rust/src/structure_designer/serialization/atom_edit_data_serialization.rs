@@ -1,5 +1,7 @@
 use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
-use crate::structure_designer::nodes::atom_edit::atom_edit::{AtomEditData, DEFAULT_TOLERANCE};
+use crate::structure_designer::nodes::atom_edit::atom_edit::{
+    AtomEditData, CrossCellBondInfo, DEFAULT_TOLERANCE,
+};
 use crate::util::serialization_utils::dvec3_serializer;
 use glam::IVec3;
 use glam::f64::DVec3;
@@ -104,6 +106,13 @@ pub struct SerializableCrossCellBond {
     pub atom_id_2: u32,
     /// Relative cell offset [dx, dy, dz]. Convention: offset of max(id1,id2) relative to min(id1,id2).
     pub relative_cell: [i32; 3],
+    /// Bond order (1-7). Defaults to 1 for backward compatibility.
+    #[serde(default = "default_cross_cell_bond_order")]
+    pub bond_order: u8,
+}
+
+fn default_cross_cell_bond_order() -> u8 {
+    1
 }
 
 fn default_include_base_bonds_in_diff() -> bool {
@@ -191,7 +200,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
             let mut ccb: Vec<SerializableCrossCellBond> = data
                 .cross_cell_bonds
                 .iter()
-                .map(|(bond_ref, offset)| {
+                .map(|(bond_ref, info)| {
                     let (a, b) = if bond_ref.atom_id1 < bond_ref.atom_id2 {
                         (bond_ref.atom_id1, bond_ref.atom_id2)
                     } else {
@@ -200,7 +209,8 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
                     SerializableCrossCellBond {
                         atom_id_1: a,
                         atom_id_2: b,
-                        relative_cell: [offset.x, offset.y, offset.z],
+                        relative_cell: [info.offset.x, info.offset.y, info.offset.z],
+                        bond_order: info.bond_order,
                     }
                 })
                 .collect();
@@ -282,7 +292,7 @@ pub fn serializable_to_atom_edit_data(
         .map(|pe| (pe.name.clone(), pe.default_atomic_number))
         .collect();
 
-    let cross_cell_bonds: HashMap<BondReference, IVec3> = serializable
+    let cross_cell_bonds: HashMap<BondReference, CrossCellBondInfo> = serializable
         .cross_cell_bonds
         .iter()
         .map(|ccb| {
@@ -291,11 +301,14 @@ pub fn serializable_to_atom_edit_data(
                     atom_id1: ccb.atom_id_1,
                     atom_id2: ccb.atom_id_2,
                 },
-                IVec3::new(
-                    ccb.relative_cell[0],
-                    ccb.relative_cell[1],
-                    ccb.relative_cell[2],
-                ),
+                CrossCellBondInfo {
+                    offset: IVec3::new(
+                        ccb.relative_cell[0],
+                        ccb.relative_cell[1],
+                        ccb.relative_cell[2],
+                    ),
+                    bond_order: ccb.bond_order,
+                },
             )
         })
         .collect();

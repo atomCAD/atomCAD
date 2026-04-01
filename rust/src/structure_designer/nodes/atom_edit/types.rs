@@ -54,6 +54,20 @@ pub fn is_param_element(atomic_number: i16) -> bool {
     param_atomic_number_to_index(atomic_number).is_some()
 }
 
+// =============================================================================
+// Cross-cell bond info
+// =============================================================================
+
+/// Metadata for a cross-cell bond: the cell offset and bond order.
+/// Stored in `AtomEditData.cross_cell_bonds` keyed by `BondReference`.
+/// The offset follows the normalization convention: IVec3 is the cell offset
+/// of max(id1,id2) relative to min(id1,id2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CrossCellBondInfo {
+    pub offset: glam::IVec3,
+    pub bond_order: u8,
+}
+
 /// Pixel threshold (logical pixels) distinguishing click from drag.
 pub(super) const DRAG_THRESHOLD: f64 = 5.0;
 

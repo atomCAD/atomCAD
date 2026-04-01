@@ -1,5 +1,5 @@
+use super::types::CrossCellBondInfo;
 use crate::crystolecule::atomic_structure::BondReference;
-use glam::IVec3;
 use glam::f64::DVec3;
 
 /// State of an atom in the diff at a point in time.
@@ -42,9 +42,9 @@ pub struct BondDelta {
 pub struct CrossCellBondDelta {
     pub bond_ref: BondReference,
     /// None if entry didn't exist before.
-    pub old_offset: Option<IVec3>,
+    pub old_value: Option<CrossCellBondInfo>,
     /// None if entry doesn't exist after.
-    pub new_offset: Option<IVec3>,
+    pub new_value: Option<CrossCellBondInfo>,
 }
 
 /// Captures diff deltas during a recording session.

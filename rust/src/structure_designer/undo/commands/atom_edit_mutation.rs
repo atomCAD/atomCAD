@@ -216,15 +216,15 @@ fn restore_flags(diff: &mut AtomicStructure, atom_id: u32, flags: u16) {
     diff.set_atom_hybridization_override(atom_id, hybridization);
 }
 
-/// Undo cross-cell bond metadata changes: restore old_offset for each delta.
+/// Undo cross-cell bond metadata changes: restore old_value for each delta.
 fn apply_cross_cell_bond_undo(
     data: &mut crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData,
     deltas: &[CrossCellBondDelta],
 ) {
     for delta in deltas.iter().rev() {
-        match delta.old_offset {
-            Some(offset) => {
-                data.cross_cell_bonds.insert(delta.bond_ref.clone(), offset);
+        match delta.old_value {
+            Some(info) => {
+                data.cross_cell_bonds.insert(delta.bond_ref.clone(), info);
             }
             None => {
                 data.cross_cell_bonds.remove(&delta.bond_ref);
@@ -233,15 +233,15 @@ fn apply_cross_cell_bond_undo(
     }
 }
 
-/// Redo cross-cell bond metadata changes: apply new_offset for each delta.
+/// Redo cross-cell bond metadata changes: apply new_value for each delta.
 fn apply_cross_cell_bond_redo(
     data: &mut crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData,
     deltas: &[CrossCellBondDelta],
 ) {
     for delta in deltas.iter() {
-        match delta.new_offset {
-            Some(offset) => {
-                data.cross_cell_bonds.insert(delta.bond_ref.clone(), offset);
+        match delta.new_value {
+            Some(info) => {
+                data.cross_cell_bonds.insert(delta.bond_ref.clone(), info);
             }
             None => {
                 data.cross_cell_bonds.remove(&delta.bond_ref);

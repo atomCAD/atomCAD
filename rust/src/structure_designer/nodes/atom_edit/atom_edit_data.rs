@@ -20,7 +20,6 @@ use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parame
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::transform::Transform;
-use glam::IVec3;
 use glam::f64::{DQuat, DVec3};
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -87,12 +86,11 @@ pub struct AtomEditData {
     /// Default: 0.3 (covers diamond-family cross-cell bonding).
     /// Only used when is_motif_mode = true.
     pub neighbor_depth: f64,
-    /// Cross-cell bond metadata: maps a bond (in the diff AtomicStructure)
-    /// to the relative_cell offset. The stored IVec3 is the offset of
-    /// max(atom_id1, atom_id2) relative to min(atom_id1, atom_id2).
-    /// Bonds not in this map are same-cell (relative_cell = IVec3::ZERO).
+    /// Cross-cell bond metadata: maps a bond to its cell offset and bond order.
+    /// Cross-cell bonds are NOT stored as bonds in the diff AtomicStructure;
+    /// they exist only in this map and are rendered via ghost bond segments.
     /// Only used when is_motif_mode = true.
-    pub cross_cell_bonds: HashMap<BondReference, IVec3>,
+    pub cross_cell_bonds: HashMap<BondReference, CrossCellBondInfo>,
     /// Cached unit cell for interactive editing (avoids re-evaluating upstream).
     /// Populated during eval(), read by tools during interaction.
     /// Transient — not serialized.
@@ -153,7 +151,7 @@ impl AtomEditData {
         is_motif_mode: bool,
         parameter_elements: Vec<(String, i16)>,
         neighbor_depth: f64,
-        cross_cell_bonds: HashMap<BondReference, IVec3>,
+        cross_cell_bonds: HashMap<BondReference, CrossCellBondInfo>,
     ) -> Self {
         Self {
             diff,
@@ -666,15 +664,15 @@ impl AtomEditData {
     /// Record a cross-cell bond entry being set. The offset follows the
     /// normalization convention: IVec3 is the cell offset of max(id1,id2)
     /// relative to min(id1,id2).
-    pub fn set_cross_cell_bond_recorded(&mut self, bond_ref: BondReference, offset: IVec3) {
+    pub fn set_cross_cell_bond_recorded(&mut self, bond_ref: BondReference, info: CrossCellBondInfo) {
         use super::diff_recorder::CrossCellBondDelta;
-        let old_offset = self.cross_cell_bonds.get(&bond_ref).copied();
-        self.cross_cell_bonds.insert(bond_ref.clone(), offset);
+        let old_value = self.cross_cell_bonds.get(&bond_ref).copied();
+        self.cross_cell_bonds.insert(bond_ref.clone(), info);
         if let Some(ref mut rec) = self.recorder {
             rec.cross_cell_bond_deltas.push(CrossCellBondDelta {
                 bond_ref,
-                old_offset,
-                new_offset: Some(offset),
+                old_value,
+                new_value: Some(info),
             });
         }
     }
@@ -682,13 +680,13 @@ impl AtomEditData {
     /// Remove a cross-cell bond entry with recording.
     pub fn remove_cross_cell_bond_recorded(&mut self, bond_ref: &BondReference) {
         use super::diff_recorder::CrossCellBondDelta;
-        let old_offset = self.cross_cell_bonds.remove(bond_ref);
+        let old_value = self.cross_cell_bonds.remove(bond_ref);
         if let Some(ref mut rec) = self.recorder {
-            if let Some(offset) = old_offset {
+            if let Some(info) = old_value {
                 rec.cross_cell_bond_deltas.push(CrossCellBondDelta {
                     bond_ref: bond_ref.clone(),
-                    old_offset: Some(offset),
-                    new_offset: None,
+                    old_value: Some(info),
+                    new_value: None,
                 });
             }
         }
@@ -1976,7 +1974,7 @@ pub fn atomic_structure_to_motif(
     structure: &AtomicStructure,
     unit_cell: &UnitCellStruct,
     parameter_elements: &[(String, i16)],
-    cross_cell_bonds: &HashMap<BondReference, glam::IVec3>,
+    cross_cell_bonds: &HashMap<BondReference, CrossCellBondInfo>,
 ) -> Motif {
     use super::types::{is_param_element, param_atomic_number_to_motif};
     use crate::crystolecule::motif::ParameterElement;
@@ -2010,8 +2008,9 @@ pub fn atomic_structure_to_motif(
         atom_id_to_site_index.insert(atom.id, idx);
     }
 
-    // Convert bonds — look up cross_cell_bonds for relative_cell offsets.
-    // Each bond is stored on both atoms; only process where atom_id < other_id.
+    // Convert same-cell bonds from the structure. Cross-cell bonds are NOT
+    // stored in the structure; they live only in cross_cell_bonds and are
+    // added separately below.
     let mut bonds = Vec::new();
     for (_, atom) in structure.iter_atoms() {
         for bond in &atom.bonds {
@@ -2021,21 +2020,6 @@ pub fn atomic_structure_to_motif(
                     atom_id_to_site_index.get(&atom.id),
                     atom_id_to_site_index.get(&other_id),
                 ) {
-                    // Look up cross-cell offset. The stored offset is
-                    // "max(id1,id2) relative to min(id1,id2)".
-                    // Since we iterate with atom.id < other_id, max=other_id.
-                    // site_1 always gets ZERO; site_2 gets the raw offset.
-                    let bond_ref = BondReference {
-                        atom_id1: atom.id,
-                        atom_id2: other_id,
-                    };
-                    let raw_offset = cross_cell_bonds
-                        .get(&bond_ref)
-                        .copied()
-                        .unwrap_or(glam::IVec3::ZERO);
-
-                    // raw_offset is offset of max(id1,id2)=other_id relative to min=atom.id.
-                    // In the motif, site_1 is at ZERO, site_2 gets the offset.
                     bonds.push(MotifBond {
                         site_1: SiteSpecifier {
                             site_index: idx1,
@@ -2043,12 +2027,38 @@ pub fn atomic_structure_to_motif(
                         },
                         site_2: SiteSpecifier {
                             site_index: idx2,
-                            relative_cell: raw_offset,
+                            relative_cell: glam::IVec3::ZERO,
                         },
                         multiplicity: bond.bond_order() as i32,
                     });
                 }
             }
+        }
+    }
+
+    // Add cross-cell bonds from the cross_cell_bonds map.
+    // These bonds are not in the structure; their offset and bond order
+    // are stored in CrossCellBondInfo.
+    for (bond_ref, info) in cross_cell_bonds {
+        let atom_a = bond_ref.atom_id1.min(bond_ref.atom_id2);
+        let atom_b = bond_ref.atom_id1.max(bond_ref.atom_id2);
+        if let (Some(&idx1), Some(&idx2)) = (
+            atom_id_to_site_index.get(&atom_a),
+            atom_id_to_site_index.get(&atom_b),
+        ) {
+            // info.offset is offset of max(id1,id2)=atom_b relative to min=atom_a.
+            // site_1 (lower id) always gets ZERO; site_2 (higher id) gets the offset.
+            bonds.push(MotifBond {
+                site_1: SiteSpecifier {
+                    site_index: idx1,
+                    relative_cell: glam::IVec3::ZERO,
+                },
+                site_2: SiteSpecifier {
+                    site_index: idx2,
+                    relative_cell: info.offset,
+                },
+                multiplicity: info.bond_order as i32,
+            });
         }
     }
 
@@ -2083,7 +2093,7 @@ pub fn generate_ghost_atoms(
     viz: &mut AtomicStructure,
     unit_cell: &UnitCellStruct,
     neighbor_depth: f64,
-    cross_cell_bonds: &HashMap<BondReference, glam::IVec3>,
+    cross_cell_bonds: &HashMap<BondReference, CrossCellBondInfo>,
 ) {
     // Collect primary atom data first to avoid borrow conflict.
     // Store (original_id, atomic_number, position, bonds_to_other_primary_ids).
@@ -2180,21 +2190,12 @@ pub fn generate_ghost_atoms(
             .map(|(&ghost_id, &(primary_id, offset))| ((primary_id, offset), ghost_id))
             .collect();
 
-        for (bond_ref, &raw_offset) in cross_cell_bonds {
+        for (bond_ref, info) in cross_cell_bonds {
             let atom_a = bond_ref.atom_id1.min(bond_ref.atom_id2);
             let atom_b = bond_ref.atom_id1.max(bond_ref.atom_id2);
-            // raw_offset = offset of max(a,b)=atom_b relative to min(a,b)=atom_a
-
-            // Look up bond order from the diff structure
-            let bond_order = viz
-                .get_atom(atom_a)
-                .and_then(|a| {
-                    a.bonds
-                        .iter()
-                        .find(|b| b.other_atom_id() == atom_b)
-                        .map(|b| b.bond_order())
-                })
-                .unwrap_or(1);
+            // info.offset = offset of max(a,b)=atom_b relative to min(a,b)=atom_a
+            let raw_offset = info.offset;
+            let bond_order = info.bond_order;
 
             // Direction A→B: B is in cell raw_offset relative to A
             // Render bond from primary A to ghost of B in cell raw_offset
