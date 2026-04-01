@@ -3,6 +3,7 @@ use crate::crystolecule::atomic_structure::{
     Atom, AtomDisplayState, AtomicStructure, BondReference,
 };
 use crate::renderer::tessellator::tessellator::{self, OccluderSphere};
+use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
 // Scene trait removed - is_atom_marked was deprecated and always returned false
 use crate::display::preferences::{
     AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
@@ -71,6 +72,19 @@ const DELETE_MARKER_IMPOSTOR_ALBEDO: Vec3 = Vec3::new(0.0, 0.0, 0.0);
 const ANCHOR_SPHERE_RADIUS: f64 = 0.3;
 // radius for anchor arrow cylinders (Angstroms)
 const ANCHOR_ARROW_RADIUS: f64 = 0.05;
+
+// Distinct colors for parameter elements in motif_edit mode (PARAM_1, PARAM_2, ...)
+const PARAM_ELEMENT_COLORS: &[Vec3] = &[
+    Vec3::new(0.9, 0.4, 0.9), // Purple-pink (PARAM_1)
+    Vec3::new(0.2, 0.8, 0.6), // Teal-green (PARAM_2)
+    Vec3::new(0.9, 0.7, 0.2), // Gold (PARAM_3)
+    Vec3::new(0.3, 0.5, 0.9), // Blue (PARAM_4)
+    Vec3::new(0.9, 0.5, 0.3), // Coral (PARAM_5)
+    Vec3::new(0.5, 0.9, 0.4), // Lime (PARAM_6)
+];
+// Default radius for parameter element atoms (carbon-like, Angstroms)
+const PARAM_ELEMENT_COVALENT_RADIUS: f64 = 0.77;
+const PARAM_ELEMENT_VDW_RADIUS: f64 = 1.7;
 
 /// Helper function to determine if an atom should be culled based on depth
 fn should_cull_atom(
@@ -267,6 +281,18 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
         return UNCHANGED_MARKER_RADIUS;
     }
 
+    // Parameter elements use carbon-like radii
+    if param_atomic_number_to_index(atom.atomic_number).is_some() {
+        return match visualization {
+            AtomicStructureVisualization::BallAndStick => {
+                let vdw_radius = PARAM_ELEMENT_VDW_RADIUS * BAS_VDW_FACTOR;
+                let max_radius = PARAM_ELEMENT_COVALENT_RADIUS * BAS_COVALENT_CAP;
+                vdw_radius.min(max_radius)
+            }
+            AtomicStructureVisualization::SpaceFilling => PARAM_ELEMENT_VDW_RADIUS,
+        };
+    }
+
     let atom_info = ATOM_INFO
         .get(&(atom.atomic_number as i32))
         .unwrap_or(&DEFAULT_ATOM_INFO);
@@ -326,6 +352,18 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
         } else {
             UNCHANGED_MARKER_ROUGHNESS
         };
+        return (color, roughness, 0.0);
+    }
+
+    // Parameter elements use distinct colors from the palette
+    if let Some(idx) = param_atomic_number_to_index(atom.atomic_number) {
+        let base_color = PARAM_ELEMENT_COLORS[idx % PARAM_ELEMENT_COLORS.len()];
+        let color = if atom.is_selected() {
+            to_selected_color(&base_color)
+        } else {
+            base_color
+        };
+        let roughness = if atom.is_selected() { 0.15 } else { 0.25 };
         return (color, roughness, 0.0);
     }
 
@@ -877,6 +915,9 @@ fn get_atom_impostor_appearance(
         (DELETE_MARKER_IMPOSTOR_ALBEDO, DELETE_MARKER_ROUGHNESS, 0.0)
     } else if atom.is_unchanged_marker() {
         (UNCHANGED_MARKER_COLOR, UNCHANGED_MARKER_ROUGHNESS, 0.0)
+    } else if let Some(idx) = param_atomic_number_to_index(atom.atomic_number) {
+        let base_color = PARAM_ELEMENT_COLORS[idx % PARAM_ELEMENT_COLORS.len()];
+        (base_color, 0.25, 0.0)
     } else {
         let atom_info = ATOM_INFO
             .get(&(atom.atomic_number as i32))

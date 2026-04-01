@@ -14,6 +14,46 @@ pub const DEFAULT_TOLERANCE: f64 = 0.1;
 /// Set to 1.5× hydrogen covalent radius (0.31 Å) for generous matching.
 pub const MERGE_TOLERANCE: f64 = 0.465;
 
+// =============================================================================
+// Parameter element constants (motif_edit mode)
+// =============================================================================
+
+/// First reserved atomic number for parameter elements.
+/// PARAM_1 = -100, PARAM_2 = -101, etc.
+pub const PARAM_ELEMENT_BASE: i16 = -100;
+
+/// Maximum number of parameter elements supported.
+pub const MAX_PARAM_ELEMENTS: usize = 100; // -100 to -199
+
+/// Convert an internal parameter atomic number (-100, -101, ...)
+/// to a motif parameter index (0, 1, ...).
+pub fn param_atomic_number_to_index(atomic_number: i16) -> Option<usize> {
+    if atomic_number <= PARAM_ELEMENT_BASE
+        && atomic_number > PARAM_ELEMENT_BASE - MAX_PARAM_ELEMENTS as i16
+    {
+        Some((PARAM_ELEMENT_BASE - atomic_number) as usize)
+    } else {
+        None
+    }
+}
+
+/// Convert a motif parameter index (0, 1, ...) to an internal
+/// reserved atomic number (-100, -101, ...).
+pub fn param_index_to_atomic_number(index: usize) -> i16 {
+    PARAM_ELEMENT_BASE - index as i16
+}
+
+/// Convert an internal reserved atomic number to the motif's
+/// negative atomic number convention (-1, -2, ...).
+pub fn param_atomic_number_to_motif(atomic_number: i16) -> i16 {
+    -(param_atomic_number_to_index(atomic_number).unwrap() as i16 + 1)
+}
+
+/// Returns true if the atomic number is a parameter element.
+pub fn is_param_element(atomic_number: i16) -> bool {
+    param_atomic_number_to_index(atomic_number).is_some()
+}
+
 /// Pixel threshold (logical pixels) distinguishing click from drag.
 pub(super) const DRAG_THRESHOLD: f64 = 5.0;
 

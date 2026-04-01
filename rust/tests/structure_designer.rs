@@ -132,3 +132,6 @@ mod multi_output_unit_test;
 
 #[path = "structure_designer/sequence_node_test.rs"]
 mod sequence_node_test;
+
+#[path = "structure_designer/motif_edit_test.rs"]
+mod motif_edit_test;

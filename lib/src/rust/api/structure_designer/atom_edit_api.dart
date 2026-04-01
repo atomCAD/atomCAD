@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `gather_selected_base_promotion_info`, `toggle_atom_edit_flag`
+// These functions are ignored because they are not marked as `pub`: `collect_frozen_base_atom_ids`, `gather_frozen_base_atoms_promotion_info`, `gather_selected_base_promotion_info_including_frozen`, `gather_selected_base_promotion_info`, `toggle_atom_edit_flag`
 
 bool atomEditSelectByRay(
         {required APIVec3 rayStart,
@@ -123,6 +123,28 @@ void setAtomEditSelectedElement({required int atomicNumber}) => RustLib
     .instance.api
     .crateApiStructureDesignerAtomEditApiSetAtomEditSelectedElement(
         atomicNumber: atomicNumber);
+
+/// Add a new parameter element to the active motif_edit node.
+void motifEditAddParameterElement(
+        {required String name, required int defaultAtomicNumber}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiMotifEditAddParameterElement(
+            name: name, defaultAtomicNumber: defaultAtomicNumber);
+
+/// Remove a parameter element by index from the active motif_edit node.
+void motifEditRemoveParameterElement({required BigInt index}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiMotifEditRemoveParameterElement(
+            index: index);
+
+/// Update a parameter element's name and default at the given index.
+void motifEditUpdateParameterElement(
+        {required BigInt index,
+        required String name,
+        required int defaultAtomicNumber}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiMotifEditUpdateParameterElement(
+            index: index, name: name, defaultAtomicNumber: defaultAtomicNumber);
 
 String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
     RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditMinimize(
@@ -288,18 +310,19 @@ void atomEditSelectionToFrozen() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditSelectionToFrozen();
 
 /// Clears the frozen flag on all currently selected atoms.
+/// Base atoms (e.g., frozen atoms from upstream nodes) are promoted to diff first.
 void atomEditSelectionToUnfrozen() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditSelectionToUnfrozen();
 
-/// Replaces the current selection with the set of frozen diff atoms.
+/// Replaces the current selection with the set of frozen atoms (diff and base).
 void atomEditFrozenToSelection() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditFrozenToSelection();
 
-/// Clears the frozen flag from all diff atoms.
+/// Clears the frozen flag from all atoms (diff and frozen base atoms from upstream).
 void atomEditClearFrozen() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditClearFrozen();
 
-/// Returns true if any diff atom has the frozen flag set.
+/// Returns true if any atom (diff or base from upstream) has the frozen flag set.
 bool atomEditHasFrozenAtoms() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditHasFrozenAtoms();
 

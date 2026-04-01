@@ -180,6 +180,12 @@ class APIAtomEditData {
   /// Whether continuous minimization is enabled on this atom_edit node.
   final bool continuousMinimization;
 
+  /// True if the active node is motif_edit (not atom_edit).
+  final bool isMotifMode;
+
+  /// Parameter element definitions (motif_edit only).
+  final List<APIParameterElement> parameterElements;
+
   const APIAtomEditData({
     required this.activeTool,
     this.bondToolLastAtomId,
@@ -203,6 +209,8 @@ class APIAtomEditData {
     this.lastSelectedResultAtomId,
     required this.hasFrozenAtoms,
     required this.continuousMinimization,
+    required this.isMotifMode,
+    required this.parameterElements,
   });
 
   @override
@@ -228,7 +236,9 @@ class APIAtomEditData {
       measurement.hashCode ^
       lastSelectedResultAtomId.hashCode ^
       hasFrozenAtoms.hashCode ^
-      continuousMinimization.hashCode;
+      continuousMinimization.hashCode ^
+      isMotifMode.hashCode ^
+      parameterElements.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -256,7 +266,9 @@ class APIAtomEditData {
           measurement == other.measurement &&
           lastSelectedResultAtomId == other.lastSelectedResultAtomId &&
           hasFrozenAtoms == other.hasFrozenAtoms &&
-          continuousMinimization == other.continuousMinimization;
+          continuousMinimization == other.continuousMinimization &&
+          isMotifMode == other.isMotifMode &&
+          parameterElements == other.parameterElements;
 }
 
 enum APIAtomEditTool {
@@ -1472,6 +1484,45 @@ class APIParameterData {
           dataType == other.dataType &&
           sortOrder == other.sortOrder &&
           error == other.error;
+}
+
+/// A parameter element definition for motif_edit nodes.
+class APIParameterElement {
+  /// User-defined name (e.g., "PRIMARY").
+  final String name;
+
+  /// Default atomic number (e.g., 6 for Carbon).
+  final int defaultAtomicNumber;
+
+  /// Reserved atomic number used internally (-100, -101, ...).
+  final int reservedAtomicNumber;
+
+  /// Display color as 0xRRGGBB.
+  final int color;
+
+  const APIParameterElement({
+    required this.name,
+    required this.defaultAtomicNumber,
+    required this.reservedAtomicNumber,
+    required this.color,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      defaultAtomicNumber.hashCode ^
+      reservedAtomicNumber.hashCode ^
+      color.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIParameterElement &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          defaultAtomicNumber == other.defaultAtomicNumber &&
+          reservedAtomicNumber == other.reservedAtomicNumber &&
+          color == other.color;
 }
 
 class APIRangeData {

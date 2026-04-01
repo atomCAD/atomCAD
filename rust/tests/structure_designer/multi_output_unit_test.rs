@@ -922,10 +922,7 @@ fn test_infer_data_type_primitives() {
         NetworkResult::String("hi".into()).infer_data_type(),
         Some(DataType::String)
     );
-    assert_eq!(
-        NetworkResult::Int(1).infer_data_type(),
-        Some(DataType::Int)
-    );
+    assert_eq!(NetworkResult::Int(1).infer_data_type(), Some(DataType::Int));
     assert_eq!(
         NetworkResult::Float(1.0).infer_data_type(),
         Some(DataType::Float)
@@ -974,12 +971,6 @@ fn test_infer_data_type_complex() {
 #[test]
 fn test_infer_data_type_none_variants() {
     assert_eq!(NetworkResult::None.infer_data_type(), None);
-    assert_eq!(
-        NetworkResult::Error("err".into()).infer_data_type(),
-        None
-    );
-    assert_eq!(
-        NetworkResult::Array(vec![]).infer_data_type(),
-        None
-    );
+    assert_eq!(NetworkResult::Error("err".into()).infer_data_type(), None);
+    assert_eq!(NetworkResult::Array(vec![]).infer_data_type(), None);
 }

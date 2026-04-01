@@ -197,6 +197,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIParameterData dco_decode_api_parameter_data(dynamic raw);
 
   @protected
+  APIParameterElement dco_decode_api_parameter_element(dynamic raw);
+
+  @protected
   APIRangeData dco_decode_api_range_data(dynamic raw);
 
   @protected
@@ -547,6 +550,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeTypeView> dco_decode_list_api_node_type_view(dynamic raw);
+
+  @protected
+  List<APIParameterElement> dco_decode_list_api_parameter_element(dynamic raw);
 
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
@@ -1062,6 +1068,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIParameterData sse_decode_api_parameter_data(SseDeserializer deserializer);
 
   @protected
+  APIParameterElement sse_decode_api_parameter_element(
+      SseDeserializer deserializer);
+
+  @protected
   APIRangeData sse_decode_api_range_data(SseDeserializer deserializer);
 
   @protected
@@ -1474,6 +1484,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APINodeTypeView> sse_decode_list_api_node_type_view(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIParameterElement> sse_decode_list_api_parameter_element(
       SseDeserializer deserializer);
 
   @protected
@@ -2077,6 +2091,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIParameterData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_parameter_element(
+      APIParameterElement self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_range_data(APIRangeData self, SseSerializer serializer);
 
   @protected
@@ -2499,6 +2517,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_node_type_view(
       List<APINodeTypeView> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_parameter_element(
+      List<APIParameterElement> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_rotational_symmetry(

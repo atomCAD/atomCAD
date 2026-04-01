@@ -79,6 +79,16 @@ pub struct SerializableAtomEditData {
     pub hybridization_override_base_atoms: Vec<HybridizationOverrideEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hybridization_override_diff_atoms: Vec<HybridizationOverrideEntry>,
+    #[serde(default)]
+    pub is_motif_mode: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parameter_elements: Vec<SerializableParameterElement>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SerializableParameterElement {
+    pub name: String,
+    pub default_atomic_number: i16,
 }
 
 fn default_include_base_bonds_in_diff() -> bool {
@@ -148,6 +158,15 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
         frozen_diff_atoms: Vec::new(),
         hybridization_override_base_atoms: Vec::new(),
         hybridization_override_diff_atoms: Vec::new(),
+        is_motif_mode: data.is_motif_mode,
+        parameter_elements: data
+            .parameter_elements
+            .iter()
+            .map(|(name, default_z)| SerializableParameterElement {
+                name: name.clone(),
+                default_atomic_number: *default_z,
+            })
+            .collect(),
     })
 }
 
@@ -217,6 +236,12 @@ pub fn serializable_to_atom_edit_data(
         diff.set_atom_hybridization_override(entry.atom_id, entry.hybridization);
     }
 
+    let parameter_elements: Vec<(String, i16)> = serializable
+        .parameter_elements
+        .iter()
+        .map(|pe| (pe.name.clone(), pe.default_atomic_number))
+        .collect();
+
     Ok(AtomEditData::from_deserialized(
         diff,
         serializable.output_diff,
@@ -225,5 +250,7 @@ pub fn serializable_to_atom_edit_data(
         serializable.tolerance,
         serializable.error_on_stale_entries,
         serializable.continuous_minimization,
+        serializable.is_motif_mode,
+        parameter_elements,
     ))
 }

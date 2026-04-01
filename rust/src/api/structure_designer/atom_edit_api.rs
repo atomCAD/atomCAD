@@ -116,13 +116,11 @@ pub fn atom_edit_add_atom_at_position(
                 &mut cad_instance.structure_designer,
                 "Add atom at position",
                 |sd| {
-                    let atom_edit_data =
-                        match atom_edit::get_selected_atom_edit_data_mut(sd) {
-                            Some(data) => data,
-                            None => return,
-                        };
-                    let new_atom_id =
-                        atom_edit_data.add_atom_to_diff(atomic_number, pos);
+                    let atom_edit_data = match atom_edit::get_selected_atom_edit_data_mut(sd) {
+                        Some(data) => data,
+                        None => return,
+                    };
+                    let new_atom_id = atom_edit_data.add_atom_to_diff(atomic_number, pos);
                     let hyb_flag = match hyb_override {
                         None => HYBRIDIZATION_AUTO,
                         Some(Hybridization::Sp3) => HYBRIDIZATION_SP3,
@@ -130,8 +128,7 @@ pub fn atom_edit_add_atom_at_position(
                         Some(Hybridization::Sp1) => HYBRIDIZATION_SP1,
                     };
                     if hyb_flag != HYBRIDIZATION_AUTO {
-                        atom_edit_data
-                            .set_hybridization_override_recorded(new_atom_id, hyb_flag);
+                        atom_edit_data.set_hybridization_override_recorded(new_atom_id, hyb_flag);
                     }
                 },
             );
@@ -467,14 +464,15 @@ pub fn atom_edit_set_tolerance(value: f64) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let (network_name, node_id) =
-                    match atom_edit::get_atom_edit_node_info_pub(&cad_instance.structure_designer) {
-                        Some(info) => info,
-                        None => return false,
-                    };
-                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(
-                    &mut cad_instance.structure_designer,
+                let (network_name, node_id) = match atom_edit::get_atom_edit_node_info_pub(
+                    &cad_instance.structure_designer,
                 ) {
+                    Some(info) => info,
+                    None => return false,
+                };
+                if let Some(data) =
+                    atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+                {
                     let old_value = data.tolerance;
                     if (old_value - value).abs() < f64::EPSILON {
                         return true; // No change
@@ -543,6 +541,63 @@ pub fn set_atom_edit_selected_element(atomic_number: i16) {
             {
                 atom_edit_data.set_selected_element(atomic_number);
                 refresh_structure_designer_auto(cad_instance);
+            }
+        });
+    }
+}
+
+// =============================================================================
+// Parameter element management (motif_edit only)
+// =============================================================================
+
+/// Add a new parameter element to the active motif_edit node.
+#[flutter_rust_bridge::frb(sync)]
+pub fn motif_edit_add_parameter_element(name: String, default_atomic_number: i16) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                if atom_edit_data.is_motif_mode {
+                    atom_edit_data
+                        .parameter_elements
+                        .push((name, default_atomic_number));
+                    refresh_structure_designer_auto(cad_instance);
+                }
+            }
+        });
+    }
+}
+
+/// Remove a parameter element by index from the active motif_edit node.
+#[flutter_rust_bridge::frb(sync)]
+pub fn motif_edit_remove_parameter_element(index: usize) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                if atom_edit_data.is_motif_mode && index < atom_edit_data.parameter_elements.len() {
+                    atom_edit_data.parameter_elements.remove(index);
+                    refresh_structure_designer_auto(cad_instance);
+                }
+            }
+        });
+    }
+}
+
+/// Update a parameter element's name and default at the given index.
+#[flutter_rust_bridge::frb(sync)]
+pub fn motif_edit_update_parameter_element(index: usize, name: String, default_atomic_number: i16) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(atom_edit_data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                if atom_edit_data.is_motif_mode && index < atom_edit_data.parameter_elements.len() {
+                    atom_edit_data.parameter_elements[index] = (name, default_atomic_number);
+                    refresh_structure_designer_auto(cad_instance);
+                }
             }
         });
     }
@@ -1106,11 +1161,9 @@ fn gather_selected_base_promotion_info_including_frozen(
 
 /// Gather promotion info for ALL frozen base atoms (not just selected ones).
 /// Used by `atom_edit_clear_frozen` and `atom_edit_frozen_to_selection`.
-fn gather_frozen_base_atoms_promotion_info(
-    sd: &StructureDesigner,
-) -> Vec<BaseAtomPromotionInfo> {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
+fn gather_frozen_base_atoms_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPromotionInfo> {
     use crate::crystolecule::atomic_structure_diff::AtomSource;
+    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 
     if sd.is_selected_node_in_diff_view() {
         return Vec::new();
@@ -1163,8 +1216,8 @@ fn gather_frozen_base_atoms_promotion_info(
 
 /// Collect base atom IDs that are frozen in the result (for frozen_to_selection).
 fn collect_frozen_base_atom_ids(sd: &StructureDesigner) -> std::collections::HashSet<u32> {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
     use crate::crystolecule::atomic_structure_diff::AtomSource;
+    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 
     let mut result = std::collections::HashSet::new();
     if sd.is_selected_node_in_diff_view() {
@@ -1354,11 +1407,10 @@ pub fn atom_edit_has_frozen_atoms() -> bool {
             |cad_instance| {
                 let sd = &cad_instance.structure_designer;
                 // Check diff atoms
-                let has_frozen_diff =
-                    match atom_edit::get_active_atom_edit_data(sd) {
-                        Some(data) => data.diff.iter_atoms().any(|(_, a)| a.is_frozen()),
-                        None => return false,
-                    };
+                let has_frozen_diff = match atom_edit::get_active_atom_edit_data(sd) {
+                    Some(data) => data.diff.iter_atoms().any(|(_, a)| a.is_frozen()),
+                    None => return false,
+                };
                 if has_frozen_diff {
                     return true;
                 }

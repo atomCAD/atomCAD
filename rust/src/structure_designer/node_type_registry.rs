@@ -4,6 +4,7 @@ use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
 use super::nodes::atom_composediff::get_node_type as atom_composediff_get_node_type;
 use super::nodes::atom_cut::get_node_type as atom_cut_get_node_type;
 use super::nodes::atom_edit::atom_edit::get_node_type as atom_edit_get_node_type;
+use super::nodes::atom_edit::atom_edit::get_node_type_motif_edit as motif_edit_get_node_type;
 use super::nodes::atom_fill::get_node_type as atom_fill_get_node_type;
 use super::nodes::atom_move::get_node_type as atom_move_get_node_type;
 use super::nodes::atom_rot::get_node_type as atom_rot_get_node_type;
@@ -133,6 +134,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(atom_fill_get_node_type());
         ret.add_node_type(edit_atom_get_node_type());
         ret.add_node_type(atom_edit_get_node_type());
+        ret.add_node_type(motif_edit_get_node_type());
         ret.add_node_type(atom_move_get_node_type());
         ret.add_node_type(atom_rot_get_node_type());
         ret.add_node_type(atom_trans_get_node_type());

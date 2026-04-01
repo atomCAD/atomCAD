@@ -236,7 +236,10 @@ impl NetworkEvaluator {
                         .unwrap_or_else(|| node_type.get_output_pin_type(pin_index));
                     (dr.clone(), dt)
                 } else {
-                    (eval_output.get(pin_index), node_type.get_output_pin_type(pin_index))
+                    (
+                        eval_output.get(pin_index),
+                        node_type.get_output_pin_type(pin_index),
+                    )
                 };
             let (pin_output, pin_geo_tree) = self.convert_result_to_node_output(
                 pin_result,

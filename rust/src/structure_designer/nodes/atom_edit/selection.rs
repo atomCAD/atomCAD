@@ -583,11 +583,7 @@ pub(super) fn select_atoms_in_screen_rect(
                     .insert(bond_ref.clone());
             }
             SelectModifier::Toggle => {
-                if !atom_edit_data
-                    .selection
-                    .selected_bonds
-                    .remove(bond_ref)
-                {
+                if !atom_edit_data.selection.selected_bonds.remove(bond_ref) {
                     atom_edit_data
                         .selection
                         .selected_bonds

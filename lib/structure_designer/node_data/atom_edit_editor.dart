@@ -36,6 +36,12 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   int? _selectedAtomicNumber;
   APIVec3 _addAtomPosition = APIVec3(x: 0, y: 0, z: 0);
 
+  /// Parameter elements for the active motif_edit node (empty for atom_edit).
+  List<APIParameterElement>? get _motifParams =>
+      (_stagedData?.isMotifMode ?? false)
+          ? _stagedData?.parameterElements
+          : null;
+
   bool get _hasDiffChanges {
     final stats = _stagedData?.diffStats;
     if (stats == null) return false;
@@ -88,10 +94,12 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           if (!widget.directEditingMode) ...[
             Row(
               children: [
-                Text('Atom Edit',
+                Text(_stagedData!.isMotifMode ? 'Motif Edit' : 'Atom Edit',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(width: 8),
-                const NodeDescriptionButton(nodeTypeName: 'atom_edit'),
+                NodeDescriptionButton(
+                    nodeTypeName:
+                        _stagedData!.isMotifMode ? 'motif_edit' : 'atom_edit'),
               ],
             ),
             // Diff options and stats (only when there's content)
@@ -140,6 +148,11 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           if (_stagedData!.measurement != null) ...[
             const SizedBox(height: AppSpacing.large),
             _buildMeasurementDisplay(_stagedData!.measurement!),
+          ],
+          // Parameter elements section (motif_edit only)
+          if (_stagedData!.isMotifMode) ...[
+            const SizedBox(height: AppSpacing.large),
+            _buildParameterElementsSection(),
           ],
           if (_stagedData!.activeTool == APIAtomEditTool.default_) ...[
             const SizedBox(height: AppSpacing.large),
@@ -346,6 +359,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                     label: 'Replace selected atoms with',
                     hint: 'Select an element',
                     required: true,
+                    parameterElements: _motifParams,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -439,6 +453,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
               label: 'Element to add:',
               hint: 'Select an element',
               required: true,
+              parameterElements: _motifParams,
             ),
             Text(
               'Type element symbol in the viewport: C, N, O, Si...',
@@ -610,9 +625,9 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         value = '$bondCount bond${bondCount == 1 ? '' : 's'}';
         icon = Icons.science_outlined;
         canModify = false;
-        final hybLabel = _hybridizationLabel(hybridizationOverride, inferredHybridization);
-        subtitle =
-            'Hybridization: $hybLabel\n'
+        final hybLabel =
+            _hybridizationLabel(hybridizationOverride, inferredHybridization);
+        subtitle = 'Hybridization: $hybLabel\n'
             'Pos: (${x.toStringAsFixed(3)}, ${y.toStringAsFixed(3)}, ${z.toStringAsFixed(3)}) \u00C5';
     }
 
@@ -691,6 +706,150 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         measurement: measurement,
         model: widget.model,
         lastSelectedResultAtomId: _stagedData?.lastSelectedResultAtomId,
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Parameter elements (motif_edit only)
+  // ===========================================================================
+
+  Widget _buildParameterElementsSection() {
+    final params = _stagedData!.parameterElements;
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.medium),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('Parameter Elements',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.add, size: 18),
+                  tooltip: 'Add parameter element',
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    final index = params.length;
+                    final name = 'PARAM_${index + 1}';
+                    atom_edit_api.motifEditAddParameterElement(
+                      name: name,
+                      defaultAtomicNumber: 6, // Carbon default
+                    );
+                    widget.model.refreshFromKernel();
+                  },
+                ),
+              ],
+            ),
+            if (params.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(
+                  'No parameters defined. Add one to use variable elements.',
+                  style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic),
+                ),
+              ),
+            for (int i = 0; i < params.length; i++)
+              _buildParameterElementRow(i, params[i]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildParameterElementRow(int index, APIParameterElement param) {
+    final color = Color(param.color | 0xFF000000);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          // Color indicator
+          Container(
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.grey[400]!),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Name
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 32,
+              child: TextFormField(
+                initialValue: param.name,
+                style: const TextStyle(fontSize: 12),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  border: OutlineInputBorder(),
+                  hintText: 'Name',
+                ),
+                onFieldSubmitted: (value) {
+                  if (value.isNotEmpty) {
+                    atom_edit_api.motifEditUpdateParameterElement(
+                      index: BigInt.from(index),
+                      name: value,
+                      defaultAtomicNumber: param.defaultAtomicNumber,
+                    );
+                    widget.model.refreshFromKernel();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Default element selector
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 32,
+              child: SelectElementWidget(
+                value: param.defaultAtomicNumber,
+                onChanged: (int? newValue) {
+                  if (newValue != null) {
+                    atom_edit_api.motifEditUpdateParameterElement(
+                      index: BigInt.from(index),
+                      name: param.name,
+                      defaultAtomicNumber: newValue,
+                    );
+                    widget.model.refreshFromKernel();
+                  }
+                },
+                required: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Delete button
+          IconButton(
+            icon: const Icon(Icons.close, size: 16),
+            tooltip: 'Remove parameter',
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            padding: EdgeInsets.zero,
+            onPressed: () {
+              atom_edit_api.motifEditRemoveParameterElement(
+                  index: BigInt.from(index));
+              widget.model.refreshFromKernel();
+            },
+          ),
+        ],
       ),
     );
   }
@@ -819,8 +978,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       message: tooltip,
       child: Material(
         color: Colors.transparent,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
         child: InkWell(
           borderRadius: BorderRadius.circular(4.0),
           onTap: onPressed,
@@ -1070,10 +1228,12 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     if (raw == -1) return const SizedBox.shrink();
 
     final isMixed = raw == -2;
-    final selected = isMixed ? <APIHybridization>{} : {_hybridizationFromRaw(raw)!};
+    final selected =
+        isMixed ? <APIHybridization>{} : {_hybridizationFromRaw(raw)!};
 
     // Query inferred hybridization for subtitle when Auto is selected.
-    final inferredRaw = atom_edit_api.atomEditGetSelectedInferredHybridization();
+    final inferredRaw =
+        atom_edit_api.atomEditGetSelectedInferredHybridization();
     final showInferred = !isMixed && raw == 0 && inferredRaw > 0;
     final inferredLabel = _inferredHybridizationLabel(inferredRaw);
 

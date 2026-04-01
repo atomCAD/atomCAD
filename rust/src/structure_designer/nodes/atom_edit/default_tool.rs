@@ -91,7 +91,9 @@ pub fn default_tool_reset_interaction(structure_designer: &mut StructureDesigner
     // then mark node data changed so the next refresh commits the positions.
     if was_dragging {
         end_atom_edit_drag(structure_designer);
-        if let Some(node_id) = structure_designer.get_selected_node_id_with_type("atom_edit") {
+        if let Some(node_id) =
+            super::atom_edit_data::get_selected_atom_edit_family_node_id(structure_designer)
+        {
             structure_designer.mark_node_data_changed(node_id);
         }
     }

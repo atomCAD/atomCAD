@@ -1759,7 +1759,10 @@ impl StructureDesigner {
 
         // Capture before-state for undo (skip for deprecated edit_atom and atom_edit nodes;
         // atom_edit has its own incremental undo commands)
-        let old_data_json = if node_type_name != "edit_atom" && node_type_name != "atom_edit" {
+        let old_data_json = if node_type_name != "edit_atom"
+            && !crate::structure_designer::nodes::atom_edit::atom_edit::is_atom_edit_family(
+                &node_type_name,
+            ) {
             self.snapshot_node_data(&network_name, node_id)
         } else {
             None
@@ -2095,10 +2098,11 @@ impl StructureDesigner {
             .displayed_nodes
             .keys()
             .filter(|&&id| {
-                network
-                    .nodes
-                    .get(&id)
-                    .is_some_and(|node| node.node_type_name == "atom_edit")
+                network.nodes.get(&id).is_some_and(|node| {
+                    crate::structure_designer::nodes::atom_edit::atom_edit::is_atom_edit_family(
+                        &node.node_type_name,
+                    )
+                })
             })
             .copied()
             .collect();
@@ -2155,10 +2159,10 @@ impl StructureDesigner {
         let atomic_structure =
             load_xyz(file_path, true).map_err(|e| format!("Failed to load XYZ file: {}", e))?;
 
-        // Get the selected atom_edit node and merge the structure into its diff
-        let selected_node_id = self
-            .get_selected_node_id_with_type("atom_edit")
-            .ok_or("No atom_edit node selected")?;
+        // Get the selected atom_edit/motif_edit node and merge the structure into its diff
+        let selected_node_id =
+            crate::structure_designer::nodes::atom_edit::atom_edit::get_selected_atom_edit_family_node_id(self)
+                .ok_or("No atom_edit/motif_edit node selected")?;
         self.mark_node_data_changed(selected_node_id);
 
         let node_data = self
@@ -3510,8 +3514,10 @@ impl StructureDesigner {
                 None => return,
             };
 
-        // atom_edit has its own undo mechanism via begin/end_atom_edit_drag
-        if node_type_name == "atom_edit" {
+        // atom_edit/motif_edit have their own undo mechanism via begin/end_atom_edit_drag
+        if crate::structure_designer::nodes::atom_edit::atom_edit::is_atom_edit_family(
+            &node_type_name,
+        ) {
             return;
         }
 

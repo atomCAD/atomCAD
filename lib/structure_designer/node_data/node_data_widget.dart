@@ -300,6 +300,7 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'atom_edit':
+      case 'motif_edit':
         final atomEditData = getAtomEditData(
           nodeId: selectedNode.id,
         );

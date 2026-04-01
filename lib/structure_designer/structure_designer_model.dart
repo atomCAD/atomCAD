@@ -150,6 +150,11 @@ class StructureDesignerModel extends ChangeNotifier {
     return structure_designer_api.isNodeTypeActive(nodeType: nodeType);
   }
 
+  /// Returns true if the active interactive node is atom_edit or motif_edit
+  /// (both share AtomEditData via dual-registration).
+  bool get isAtomEditLikeActive =>
+      isNodeTypeActive('atom_edit') || isNodeTypeActive('motif_edit');
+
   List<APINodeCategoryView>? getCompatibleNodeTypes(
       String sourceType, bool draggingFromOutput) {
     return structure_designer_api.getCompatibleNodeTypes(

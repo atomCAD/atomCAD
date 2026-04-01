@@ -437,7 +437,7 @@ class _StructureDesignerViewportState
   }
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
-    if (!widget.graphModel.isNodeTypeActive("atom_edit")) {
+    if (!widget.graphModel.isAtomEditLikeActive) {
       return KeyEventResult.ignored;
     }
 
@@ -687,7 +687,7 @@ class _StructureDesignerViewportState
     _hoverDebounceTimer?.cancel();
 
     // Suppress while AddAtom tool is active (it has its own cursor label)
-    if (widget.graphModel.isNodeTypeActive('atom_edit') &&
+    if (widget.graphModel.isAtomEditLikeActive &&
         widget.graphModel.activeAtomEditTool == APIAtomEditTool.addAtom) {
       return;
     }
@@ -857,7 +857,7 @@ class _StructureDesignerViewportState
 
   @override
   PrimaryPointerDelegate? get primaryPointerDelegate {
-    if (!widget.graphModel.isNodeTypeActive("atom_edit")) {
+    if (!widget.graphModel.isAtomEditLikeActive) {
       _atomEditDefaultDelegate = null;
       _atomEditAddBondDelegate = null;
       return null;
@@ -883,7 +883,7 @@ class _StructureDesignerViewportState
   void onDefaultClick(Offset pointerPos) {
     if (widget.graphModel.isNodeTypeActive("facet_shell")) {
       onFacetShellClick(pointerPos);
-    } else if (widget.graphModel.isNodeTypeActive("atom_edit")) {
+    } else if (widget.graphModel.isAtomEditLikeActive) {
       onAtomEditClick(pointerPos);
     } else if (widget.graphModel.isNodeTypeActive("edit_atom")) {
       onEditAtomClick(pointerPos);
@@ -1094,7 +1094,7 @@ class _StructureDesignerViewportState
     // Build element symbol cursor overlay for AddAtom tool
     Widget? elementSymbolOverlay;
     if (_cursorPosition != null &&
-        widget.graphModel.isNodeTypeActive('atom_edit') &&
+        widget.graphModel.isAtomEditLikeActive &&
         widget.graphModel.activeAtomEditTool == APIAtomEditTool.addAtom) {
       final elementNumber = widget.graphModel.atomEditSelectedElement;
       final symbol =

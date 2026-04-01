@@ -43,7 +43,6 @@ use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomComposeDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
-use crate::api::structure_designer::structure_designer_api_types::APIAtomEditData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomMoveData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
@@ -67,6 +66,9 @@ use crate::api::structure_designer::structure_designer_api_types::APIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
 use crate::api::structure_designer::structure_designer_api_types::NodeView;
 use crate::api::structure_designer::structure_designer_api_types::WireView;
+use crate::api::structure_designer::structure_designer_api_types::{
+    APIAtomEditData, APIParameterElement,
+};
 use crate::api::structure_designer::structure_designer_api_types::{
     APIDataTypeBase, APINetworkWithValidationErrors, APINodeCategoryView, NodeNetworkView,
 };
@@ -2495,6 +2497,21 @@ pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
                     last_selected_result_atom_id,
                     has_frozen_atoms: atom_edit_data.diff.iter_atoms().any(|(_, a)| a.is_frozen()),
                     continuous_minimization: atom_edit_data.continuous_minimization,
+                    is_motif_mode: atom_edit_data.is_motif_mode,
+                    parameter_elements: atom_edit_data
+                        .parameter_elements
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (name, default_z))| {
+                            use crate::structure_designer::nodes::atom_edit::atom_edit::param_index_to_atomic_number;
+                            APIParameterElement {
+                                name: name.clone(),
+                                default_atomic_number: *default_z,
+                                reserved_atomic_number: param_index_to_atomic_number(i),
+                                color: param_element_color_u32(i),
+                            }
+                        })
+                        .collect(),
                 })
             },
             None,
@@ -2508,11 +2525,35 @@ fn atom_symbol(
     result_id: u32,
 ) -> String {
     use crate::crystolecule::atomic_constants::ATOM_INFO;
+    use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
     structure
         .get_atom(result_id)
-        .and_then(|a| ATOM_INFO.get(&(a.atomic_number as i32)))
-        .map(|info| info.symbol.clone())
+        .map(|a| {
+            if let Some(idx) = param_atomic_number_to_index(a.atomic_number) {
+                format!("P{}", idx + 1)
+            } else {
+                ATOM_INFO
+                    .get(&(a.atomic_number as i32))
+                    .map(|info| info.symbol.clone())
+                    .unwrap_or_else(|| "?".to_string())
+            }
+        })
         .unwrap_or_else(|| "?".to_string())
+}
+
+/// Convert a parameter element index to a 0xRRGGBB color value.
+/// Must match the PARAM_ELEMENT_COLORS array in atomic_tessellator.rs.
+fn param_element_color_u32(index: usize) -> u32 {
+    const COLORS: &[(u8, u8, u8)] = &[
+        (230, 102, 230), // Purple-pink (PARAM_1)
+        (51, 204, 153),  // Teal-green (PARAM_2)
+        (230, 179, 51),  // Gold (PARAM_3)
+        (77, 128, 230),  // Blue (PARAM_4)
+        (230, 128, 77),  // Coral (PARAM_5)
+        (128, 230, 102), // Lime (PARAM_6)
+    ];
+    let (r, g, b) = COLORS[index % COLORS.len()];
+    ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
 }
 
 /// Resolve selected atom positions and compute measurement.

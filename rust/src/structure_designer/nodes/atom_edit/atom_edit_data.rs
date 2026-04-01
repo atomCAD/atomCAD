@@ -8,6 +8,8 @@ use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::crystolecule::atomic_structure_diff::{
     AtomSource, DiffProvenance, apply_diff, enrich_diff_with_base_bonds,
 };
+use crate::crystolecule::motif::{Motif, MotifBond, Site, SiteSpecifier};
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -70,6 +72,19 @@ pub struct AtomEditData {
     pub measurement_marked_atom_id: Option<u32>,
     /// Active recorder. When Some, mutations are recorded for undo/redo.
     pub(super) recorder: Option<DiffRecorder>,
+
+    // --- Motif mode fields (dual-registration pattern) ---
+    /// True for motif_edit nodes, false for atom_edit nodes.
+    /// Controls eval output type and display override behavior.
+    pub is_motif_mode: bool,
+    /// Parameter element definitions: (name, default_atomic_number).
+    /// e.g., [("PRIMARY", 6), ("SECONDARY", 14)]
+    /// Only meaningful when is_motif_mode = true.
+    pub parameter_elements: Vec<(String, i16)>,
+    /// Cached unit cell for interactive editing (avoids re-evaluating upstream).
+    /// Populated during eval(), read by tools during interaction.
+    /// Transient — not serialized.
+    pub cached_unit_cell: Mutex<Option<UnitCellStruct>>,
 }
 
 impl Default for AtomEditData {
@@ -98,7 +113,17 @@ impl AtomEditData {
             cached_input: Mutex::new(None),
             measurement_marked_atom_id: None,
             recorder: None,
+            is_motif_mode: false,
+            parameter_elements: Vec::new(),
+            cached_unit_cell: Mutex::new(None),
         }
+    }
+
+    /// Creates a new AtomEditData configured for motif_edit mode.
+    pub fn new_motif_mode() -> Self {
+        let mut data = Self::new();
+        data.is_motif_mode = true;
+        data
     }
 
     /// Creates an AtomEditData from deserialized data.
@@ -111,6 +136,8 @@ impl AtomEditData {
         tolerance: f64,
         error_on_stale_entries: bool,
         continuous_minimization: bool,
+        is_motif_mode: bool,
+        parameter_elements: Vec<(String, i16)>,
     ) -> Self {
         Self {
             diff,
@@ -130,7 +157,185 @@ impl AtomEditData {
             last_stats: None,
             cached_input: Mutex::new(None),
             recorder: None,
+            is_motif_mode,
+            parameter_elements,
+            cached_unit_cell: Mutex::new(None),
         }
+    }
+
+    /// Returns the pin index for the tolerance input.
+    /// atom_edit: pin 1; motif_edit: pin 2 (unit_cell is pin 1).
+    fn tolerance_pin_index(&self) -> usize {
+        if self.is_motif_mode { 2 } else { 1 }
+    }
+
+    /// Motif-mode evaluation path. Produces a Motif on pin 0 (wire) with an
+    /// Atomic display override for the viewport, and Atomic diff on pin 1.
+    fn eval_motif_mode<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &crate::structure_designer::node_type_registry::NodeTypeRegistry,
+        decorate: bool,
+        context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
+        input_structure: AtomicStructure,
+        tolerance: f64,
+    ) -> EvalOutput {
+        // 1. Get unit cell from pin 1
+        let unit_cell_val =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
+        let unit_cell = match unit_cell_val {
+            NetworkResult::UnitCell(uc) => uc,
+            NetworkResult::None => {
+                return EvalOutput::single(NetworkResult::Error(
+                    "unit_cell input required".to_string(),
+                ));
+            }
+            NetworkResult::Error(e) => return EvalOutput::single(NetworkResult::Error(e)),
+            _ => {
+                return EvalOutput::single(NetworkResult::Error(
+                    "unit_cell: wrong type".to_string(),
+                ));
+            }
+        };
+
+        // Cache unit cell for interactive tools
+        if let Ok(mut guard) = self.cached_unit_cell.lock() {
+            *guard = Some(unit_cell.clone());
+        }
+
+        // 2. Apply diff (identical to atom_edit)
+        let diff_result = apply_diff(&input_structure, &self.diff, tolerance);
+
+        // Error on stale entries check (same as atom_edit)
+        if self.error_on_stale_entries {
+            let s = &diff_result.stats;
+            if s.orphaned_tracked_atoms > 0
+                || s.unmatched_delete_markers > 0
+                || s.orphaned_bonds > 0
+            {
+                let mut parts = Vec::new();
+                if s.orphaned_tracked_atoms > 0 {
+                    parts.push(format!(
+                        "{} orphaned tracked atom(s)",
+                        s.orphaned_tracked_atoms
+                    ));
+                }
+                if s.unmatched_delete_markers > 0 {
+                    parts.push(format!(
+                        "{} unmatched delete marker(s)",
+                        s.unmatched_delete_markers
+                    ));
+                }
+                if s.orphaned_bonds > 0 {
+                    parts.push(format!("{} orphaned bond(s)", s.orphaned_bonds));
+                }
+                let error_msg = format!("Stale entries: {}", parts.join(", "));
+                if network_stack.len() == 1 {
+                    let eval_cache = AtomEditEvalCache {
+                        provenance: diff_result.provenance,
+                        stats: diff_result.stats,
+                    };
+                    context.selected_node_eval_cache = Some(Box::new(eval_cache));
+                }
+                return EvalOutput::single(NetworkResult::Error(error_msg));
+            }
+        }
+
+        let mut result = diff_result.result;
+
+        // 3. Convert AtomicStructure → Motif
+        let motif = atomic_structure_to_motif(&result, &unit_cell, &self.parameter_elements);
+
+        // 4. Build diff output (pin 1) — same as atom_edit
+        let mut diff_clone = self.diff.clone();
+        if self.include_base_bonds_in_diff {
+            enrich_diff_with_base_bonds(&mut diff_clone, &input_structure, tolerance);
+        }
+        diff_clone.decorator_mut().show_anchor_arrows = self.show_anchor_arrows;
+        if decorate {
+            diff_clone.decorator_mut().from_selected_node = true;
+            for &diff_id in &self.selection.selected_diff_atoms {
+                diff_clone.set_atom_selected(diff_id, true);
+            }
+            for bond_ref in &self.selection.selected_bonds {
+                diff_clone.decorator_mut().select_bond(bond_ref);
+            }
+            if let Some(ref transform) = self.selection.selection_transform {
+                diff_clone.decorator_mut().selection_transform = Some(transform.clone());
+            }
+            if let Some(mark_id) = self.measurement_marked_atom_id {
+                diff_clone.decorator_mut().set_atom_display_state(
+                    mark_id,
+                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                );
+            }
+            self.apply_guided_placement_decoration(&mut diff_clone, None);
+        }
+
+        // 5. Build display visualization (pin 0 display override)
+        if decorate {
+            result.decorator_mut().from_selected_node = true;
+            for &base_id in &self.selection.selected_base_atoms {
+                if let Some(&result_id) = diff_result.provenance.base_to_result.get(&base_id) {
+                    result.set_atom_selected(result_id, true);
+                }
+            }
+            for &diff_id in &self.selection.selected_diff_atoms {
+                if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+                    result.set_atom_selected(result_id, true);
+                }
+            }
+            for bond_ref in &self.selection.selected_bonds {
+                result.decorator_mut().select_bond(bond_ref);
+            }
+            if let Some(ref transform) = self.selection.selection_transform {
+                result.decorator_mut().selection_transform = Some(transform.clone());
+            }
+            if let AtomEditTool::AddBond(state) = &self.active_tool {
+                let mark_diff_id = match &state.interaction_state {
+                    AddBondInteractionState::Pending { hit_atom_id, .. } => Some(*hit_atom_id),
+                    AddBondInteractionState::Dragging { source_atom_id, .. } => {
+                        Some(*source_atom_id)
+                    }
+                    AddBondInteractionState::Idle => state.last_atom_id,
+                };
+                if let Some(diff_id) = mark_diff_id {
+                    if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
+                        result.decorator_mut().set_atom_display_state(
+                            result_id,
+                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                        );
+                    }
+                }
+            }
+            if let Some(mark_id) = self.measurement_marked_atom_id {
+                result.decorator_mut().set_atom_display_state(
+                    mark_id,
+                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                );
+            }
+            self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
+        }
+
+        // 6. Store eval cache
+        if network_stack.len() == 1 {
+            let eval_cache = AtomEditEvalCache {
+                provenance: diff_result.provenance,
+                stats: diff_result.stats,
+            };
+            context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+
+        // 7. Build EvalOutput with display override
+        let mut output = EvalOutput::multi(vec![
+            NetworkResult::Motif(motif),       // pin 0 wire value
+            NetworkResult::Atomic(diff_clone), // pin 1
+        ]);
+        output.set_display_override(0, NetworkResult::Atomic(result)); // pin 0 display
+
+        output
     }
 
     // --- Recording methods ---
@@ -1214,19 +1419,33 @@ impl NodeData for AtomEditData {
             structure
         };
 
-        // Get tolerance from pin 1 or property
+        // Get tolerance from tolerance pin or property
         let tolerance = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
-            1,
+            self.tolerance_pin_index(),
             self.tolerance,
             NetworkResult::extract_float,
         ) {
             Ok(value) => value,
             Err(error) => return EvalOutput::single(error),
         };
+
+        // Dispatch to motif mode if applicable
+        if self.is_motif_mode {
+            return self.eval_motif_mode(
+                network_evaluator,
+                network_stack,
+                node_id,
+                registry,
+                decorate,
+                context,
+                input_structure,
+                tolerance,
+            );
+        }
 
         // Apply the diff to the input
         let diff_result = apply_diff(&input_structure, &self.diff, tolerance);
@@ -1412,6 +1631,9 @@ impl NodeData for AtomEditData {
             cached_input: Mutex::new(None),
             measurement_marked_atom_id: self.measurement_marked_atom_id,
             recorder: None, // Never clone an active recorder
+            is_motif_mode: self.is_motif_mode,
+            parameter_elements: self.parameter_elements.clone(),
+            cached_unit_cell: Mutex::new(None),
         })
     }
 
@@ -1512,6 +1734,9 @@ impl NodeData for AtomEditData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("molecule".to_string(), (false, None)); // optional: allows creating from scratch
+        if self.is_motif_mode {
+            m.insert("unit_cell".to_string(), (false, None)); // optional but needed for motif output
+        }
         m.insert("tolerance".to_string(), (false, None)); // optional: overrides property
         m
     }
@@ -1592,13 +1817,178 @@ pub fn get_node_type() -> NodeType {
     }
 }
 
+pub fn get_node_type_motif_edit() -> NodeType {
+    NodeType {
+        name: "motif_edit".to_string(),
+        description: "Interactive motif editor. Places atoms in Cartesian space; \
+            outputs a Motif with fractional coordinates computed from the unit cell. \
+            Backed by the same diff-based architecture as atom_edit.\n\
+            \n\
+            Connect a unit_cell to define the basis vectors for coordinate conversion. \
+            Pin 0 (result) outputs a Motif for use with atom_fill. \
+            Pin 1 (diff) outputs the raw Atomic diff for inspection."
+            .to_string(),
+        summary: Some("Visual motif editor".to_string()),
+        category: NodeTypeCategory::AtomicStructure,
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "molecule".to_string(),
+                data_type: DataType::Atomic,
+            },
+            Parameter {
+                id: None,
+                name: "unit_cell".to_string(),
+                data_type: DataType::UnitCell,
+            },
+            Parameter {
+                id: None,
+                name: "tolerance".to_string(),
+                data_type: DataType::Float,
+            },
+        ],
+        output_pins: vec![
+            OutputPinDefinition {
+                name: "result".to_string(),
+                data_type: DataType::Motif,
+            },
+            OutputPinDefinition {
+                name: "diff".to_string(),
+                data_type: DataType::Atomic,
+            },
+        ],
+        public: true,
+        node_data_creator: || Box::new(AtomEditData::new_motif_mode()),
+        node_data_saver: |node_data, _design_dir| {
+            if let Some(data) = node_data.as_any_mut().downcast_ref::<AtomEditData>() {
+                let serializable = atom_edit_data_to_serializable(data)?;
+                serde_json::to_value(serializable)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Data type mismatch for motif_edit",
+                ))
+            }
+        },
+        node_data_loader: |value, _design_dir| {
+            let serializable: SerializableAtomEditData = serde_json::from_value(value.clone())
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            Ok(Box::new(serializable_to_atom_edit_data(&serializable)?))
+        },
+    }
+}
+
+// =============================================================================
+// Cartesian → Motif conversion
+// =============================================================================
+
+/// Converts an AtomicStructure (Cartesian coordinates) to a Motif (fractional coordinates).
+/// Maps parameter element reserved atomic numbers (-100, -101, ...) to motif convention (-1, -2, ...).
+fn atomic_structure_to_motif(
+    structure: &AtomicStructure,
+    unit_cell: &UnitCellStruct,
+    parameter_elements: &[(String, i16)],
+) -> Motif {
+    use super::types::{is_param_element, param_atomic_number_to_motif};
+    use crate::crystolecule::motif::ParameterElement;
+
+    // Build parameters list
+    let parameters: Vec<ParameterElement> = parameter_elements
+        .iter()
+        .map(|(name, default_z)| ParameterElement {
+            name: name.clone(),
+            default_atomic_number: *default_z,
+        })
+        .collect();
+
+    let mut sites = Vec::new();
+    let mut atom_id_to_site_index: HashMap<u32, usize> = HashMap::new();
+
+    for (idx, (_, atom)) in structure.iter_atoms().enumerate() {
+        let frac_pos = unit_cell.real_to_dvec3_lattice(&atom.position);
+
+        // Map atomic number: parameter reserved range → motif convention
+        let motif_z = if is_param_element(atom.atomic_number) {
+            param_atomic_number_to_motif(atom.atomic_number)
+        } else {
+            atom.atomic_number
+        };
+
+        sites.push(Site {
+            atomic_number: motif_z,
+            position: frac_pos,
+        });
+        atom_id_to_site_index.insert(atom.id, idx);
+    }
+
+    // Convert bonds — all same-cell (relative_cell = IVec3::ZERO) until cross-cell bonds phase
+    // Each bond is stored on both atoms; only process where atom_id < other_id
+    let mut bonds = Vec::new();
+    for (_, atom) in structure.iter_atoms() {
+        for bond in &atom.bonds {
+            let other_id = bond.other_atom_id();
+            if atom.id < other_id {
+                if let (Some(&idx1), Some(&idx2)) = (
+                    atom_id_to_site_index.get(&atom.id),
+                    atom_id_to_site_index.get(&other_id),
+                ) {
+                    bonds.push(MotifBond {
+                        site_1: SiteSpecifier {
+                            site_index: idx1,
+                            relative_cell: glam::IVec3::ZERO,
+                        },
+                        site_2: SiteSpecifier {
+                            site_index: idx2,
+                            relative_cell: glam::IVec3::ZERO,
+                        },
+                        multiplicity: bond.bond_order() as i32,
+                    });
+                }
+            }
+        }
+    }
+
+    // Build precomputed bond index maps
+    let site_count = sites.len();
+    let mut bonds_by_site1_index = vec![Vec::new(); site_count];
+    let mut bonds_by_site2_index = vec![Vec::new(); site_count];
+    for (bond_idx, bond) in bonds.iter().enumerate() {
+        bonds_by_site1_index[bond.site_1.site_index].push(bond_idx);
+        bonds_by_site2_index[bond.site_2.site_index].push(bond_idx);
+    }
+
+    Motif {
+        parameters,
+        sites,
+        bonds,
+        bonds_by_site1_index,
+        bonds_by_site2_index,
+    }
+}
+
 // =============================================================================
 // Helper accessors
 // =============================================================================
 
-/// Gets the AtomEditData for the currently active atom_edit node (immutable)
+/// Check if a node type name belongs to the atom_edit family
+/// (atom_edit or motif_edit — both backed by AtomEditData).
+pub fn is_atom_edit_family(name: &str) -> bool {
+    name == "atom_edit" || name == "motif_edit"
+}
+
+/// Get the selected node ID for any atom_edit family node (atom_edit or motif_edit).
+pub(crate) fn get_selected_atom_edit_family_node_id(
+    structure_designer: &StructureDesigner,
+) -> Option<u64> {
+    structure_designer
+        .get_selected_node_id_with_type("atom_edit")
+        .or_else(|| structure_designer.get_selected_node_id_with_type("motif_edit"))
+}
+
+/// Gets the AtomEditData for the currently active atom_edit/motif_edit node (immutable)
 pub fn get_active_atom_edit_data(structure_designer: &StructureDesigner) -> Option<&AtomEditData> {
-    let selected_node_id = structure_designer.get_selected_node_id_with_type("atom_edit")?;
+    let selected_node_id = get_selected_atom_edit_family_node_id(structure_designer)?;
     let node_data = structure_designer.get_node_network_data(selected_node_id)?;
     node_data.as_any_ref().downcast_ref::<AtomEditData>()
 }
@@ -1608,7 +1998,7 @@ pub fn get_active_atom_edit_data(structure_designer: &StructureDesigner) -> Opti
 pub(super) fn get_atom_edit_data_mut_transient(
     structure_designer: &mut StructureDesigner,
 ) -> Option<&mut AtomEditData> {
-    let selected_node_id = structure_designer.get_selected_node_id_with_type("atom_edit")?;
+    let selected_node_id = get_selected_atom_edit_family_node_id(structure_designer)?;
     let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;
     node_data.as_any_mut().downcast_mut::<AtomEditData>()
 }
@@ -1619,7 +2009,7 @@ pub(super) fn get_atom_edit_data_mut_transient(
 pub fn get_selected_atom_edit_data_mut(
     structure_designer: &mut StructureDesigner,
 ) -> Option<&mut AtomEditData> {
-    let selected_node_id = structure_designer.get_selected_node_id_with_type("atom_edit")?;
+    let selected_node_id = get_selected_atom_edit_family_node_id(structure_designer)?;
     structure_designer.mark_node_data_changed(selected_node_id);
     let node_data = structure_designer.get_node_network_data_mut(selected_node_id)?;
     node_data.as_any_mut().downcast_mut::<AtomEditData>()
@@ -1738,13 +2128,13 @@ pub fn get_atom_edit_node_info_pub(
     get_atom_edit_node_info(structure_designer)
 }
 
-/// Get the network_name and node_id for the currently selected atom_edit node.
+/// Get the network_name and node_id for the currently selected atom_edit/motif_edit node.
 fn get_atom_edit_node_info(structure_designer: &StructureDesigner) -> Option<(String, u64)> {
     let network_name = structure_designer
         .active_node_network_name
         .as_ref()?
         .clone();
-    let node_id = structure_designer.get_selected_node_id_with_type("atom_edit")?;
+    let node_id = get_selected_atom_edit_family_node_id(structure_designer)?;
     Some((network_name, node_id))
 }
 
@@ -1754,7 +2144,7 @@ fn get_atom_edit_data_for_recording(
     structure_designer: &mut StructureDesigner,
 ) -> Option<&mut AtomEditData> {
     let network_name = structure_designer.active_node_network_name.as_ref()?;
-    let selected_node_id = structure_designer.get_selected_node_id_with_type("atom_edit")?;
+    let selected_node_id = get_selected_atom_edit_family_node_id(structure_designer)?;
     let network = structure_designer
         .node_type_registry
         .node_networks

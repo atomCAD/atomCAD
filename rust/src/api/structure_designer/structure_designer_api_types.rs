@@ -411,6 +411,22 @@ pub struct APIAtomEditData {
     pub has_frozen_atoms: bool,
     /// Whether continuous minimization is enabled on this atom_edit node.
     pub continuous_minimization: bool,
+    /// True if the active node is motif_edit (not atom_edit).
+    pub is_motif_mode: bool,
+    /// Parameter element definitions (motif_edit only).
+    pub parameter_elements: Vec<APIParameterElement>,
+}
+
+/// A parameter element definition for motif_edit nodes.
+pub struct APIParameterElement {
+    /// User-defined name (e.g., "PRIMARY").
+    pub name: String,
+    /// Default atomic number (e.g., 6 for Carbon).
+    pub default_atomic_number: i16,
+    /// Reserved atomic number used internally (-100, -101, ...).
+    pub reserved_atomic_number: i16,
+    /// Display color as 0xRRGGBB.
+    pub color: u32,
 }
 
 /// Measurement computed from selected atoms (2-4 atoms).
