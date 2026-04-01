@@ -604,6 +604,37 @@ pub fn motif_edit_update_parameter_element(index: usize, name: String, default_a
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn motif_edit_get_neighbor_depth() -> f64 {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| match atom_edit::get_active_atom_edit_data(
+                &cad_instance.structure_designer,
+            ) {
+                Some(data) if data.is_motif_mode => data.neighbor_depth,
+                _ => 0.3,
+            },
+            0.3,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn motif_edit_set_neighbor_depth(value: f64) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                if data.is_motif_mode {
+                    data.neighbor_depth = value.clamp(0.0, 1.0);
+                    refresh_structure_designer_auto(cad_instance);
+                }
+            }
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_minimize(freeze_mode: APIMinimizeFreezeMode) -> String {
     unsafe {
         with_mut_cad_instance_or(

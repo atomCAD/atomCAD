@@ -73,6 +73,11 @@ const ANCHOR_SPHERE_RADIUS: f64 = 0.3;
 // radius for anchor arrow cylinders (Angstroms)
 const ANCHOR_ARROW_RADIUS: f64 = 0.05;
 
+// Ghost atom rendering: dimmed/desaturated for neighboring cell copies
+const GHOST_DESATURATION: f32 = 0.5; // Blend 50% toward gray
+const GHOST_GRAY: Vec3 = Vec3::new(0.5, 0.5, 0.5);
+const GHOST_ROUGHNESS: f32 = 0.6; // More matte than normal atoms
+
 // Distinct colors for parameter elements in motif_edit mode (PARAM_1, PARAM_2, ...)
 const PARAM_ELEMENT_COLORS: &[Vec3] = &[
     Vec3::new(0.9, 0.4, 0.9), // Purple-pink (PARAM_1)
@@ -355,32 +360,36 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
         return (color, roughness, 0.0);
     }
 
-    // Parameter elements use distinct colors from the palette
-    if let Some(idx) = param_atomic_number_to_index(atom.atomic_number) {
-        let base_color = PARAM_ELEMENT_COLORS[idx % PARAM_ELEMENT_COLORS.len()];
-        let color = if atom.is_selected() {
-            to_selected_color(&base_color)
+    // Determine base color from element or parameter element
+    let (base_color, base_roughness) =
+        if let Some(idx) = param_atomic_number_to_index(atom.atomic_number) {
+            let color = PARAM_ELEMENT_COLORS[idx % PARAM_ELEMENT_COLORS.len()];
+            (color, 0.25)
         } else {
-            base_color
+            let atom_info = ATOM_INFO
+                .get(&(atom.atomic_number as i32))
+                .unwrap_or(&DEFAULT_ATOM_INFO);
+            (atom_info.color, 0.25)
         };
-        let roughness = if atom.is_selected() { 0.15 } else { 0.25 };
-        return (color, roughness, 0.0);
-    }
-
-    let atom_info = ATOM_INFO
-        .get(&(atom.atomic_number as i32))
-        .unwrap_or(&DEFAULT_ATOM_INFO);
 
     let atom_color = if atom.is_selected() {
-        to_selected_color(&atom_info.color)
+        to_selected_color(&base_color)
     } else {
-        atom_info.color
+        base_color
     };
 
-    let roughness = if atom.is_selected() { 0.15 } else { 0.25 };
-    let metallic = 0.0;
+    let roughness = if atom.is_selected() {
+        0.15
+    } else {
+        base_roughness
+    };
 
-    (atom_color, roughness, metallic)
+    // Apply ghost desaturation for neighboring cell copies
+    if atom.is_ghost() {
+        return (desaturate_ghost_color(&atom_color), GHOST_ROUGHNESS, 0.0);
+    }
+
+    (atom_color, roughness, 0.0)
 }
 
 /// Get bond color based on bond type and selection state from decorator.
@@ -402,10 +411,22 @@ fn get_bond_color_inline(
         _ => Vec3::new(0.8, 0.8, 0.8),             // Grey for regular bonds
     };
     let bond_ref = BondReference { atom_id1, atom_id2 };
-    if atomic_structure.decorator().is_bond_selected(&bond_ref) {
+    let color = if atomic_structure.decorator().is_bond_selected(&bond_ref) {
         to_selected_color(&base_color)
     } else {
         base_color
+    };
+    // Desaturate bonds between ghost atoms
+    let is_ghost_bond = atomic_structure
+        .get_atom(atom_id1)
+        .is_some_and(|a| a.is_ghost())
+        || atomic_structure
+            .get_atom(atom_id2)
+            .is_some_and(|a| a.is_ghost());
+    if is_ghost_bond {
+        desaturate_ghost_color(&color)
+    } else {
+        color
     }
 }
 
@@ -579,6 +600,11 @@ pub(crate) fn tessellate_atom(
 
 fn to_selected_color(_color: &Vec3) -> Vec3 {
     Vec3::new(0.9, 0.5, 0.0) // Selection orange (matches node network selection)
+}
+
+/// Desaturate a color for ghost atom rendering by blending toward gray.
+fn desaturate_ghost_color(color: &Vec3) -> Vec3 {
+    color.lerp(GHOST_GRAY, GHOST_DESATURATION)
 }
 
 /// Compute a unit vector perpendicular to the bond axis between two atoms.
@@ -945,7 +971,14 @@ fn get_atom_impostor_appearance(
         NO_RIM
     };
 
-    (base_color, base_roughness, base_metallic, rim_color)
+    // Apply ghost desaturation if this is a ghost atom
+    let (color, roughness) = if atom.is_ghost() {
+        (desaturate_ghost_color(&base_color), GHOST_ROUGHNESS)
+    } else {
+        (base_color, base_roughness)
+    };
+
+    (color, roughness, base_metallic, rim_color)
 }
 
 /// Tessellate a single atom as an impostor (4 vertices, 6 indices)

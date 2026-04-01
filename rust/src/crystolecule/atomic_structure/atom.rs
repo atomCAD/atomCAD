@@ -17,6 +17,7 @@ const ATOM_FLAG_HYDROGEN_PASSIVATION: u16 = 1 << 1;
 const ATOM_FLAG_FROZEN: u16 = 1 << 2;
 const ATOM_FLAG_HYBRIDIZATION_MASK: u16 = 0b11 << 3;
 const ATOM_FLAG_HYBRIDIZATION_SHIFT: u16 = 3;
+const ATOM_FLAG_GHOST: u16 = 1 << 5;
 
 pub const HYBRIDIZATION_AUTO: u8 = 0;
 pub const HYBRIDIZATION_SP3: u8 = 1;
@@ -97,5 +98,21 @@ impl Atom {
     pub fn set_hybridization_override(&mut self, hybridization: u8) {
         self.flags = (self.flags & !ATOM_FLAG_HYBRIDIZATION_MASK)
             | (((hybridization as u16) & 0b11) << ATOM_FLAG_HYBRIDIZATION_SHIFT);
+    }
+
+    /// Returns true if this atom is a ghost copy from a neighboring unit cell.
+    /// Ghost atoms are generated for display only in motif_edit mode.
+    #[inline]
+    pub fn is_ghost(&self) -> bool {
+        (self.flags & ATOM_FLAG_GHOST) != 0
+    }
+
+    #[inline]
+    pub fn set_ghost(&mut self, ghost: bool) {
+        if ghost {
+            self.flags |= ATOM_FLAG_GHOST;
+        } else {
+            self.flags &= !ATOM_FLAG_GHOST;
+        }
     }
 }

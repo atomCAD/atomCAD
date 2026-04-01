@@ -203,6 +203,12 @@ impl AtomicStructure {
         }
     }
 
+    pub fn set_atom_ghost(&mut self, atom_id: u32, ghost: bool) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.set_ghost(ghost);
+        }
+    }
+
     pub fn set_atom_hybridization_override(&mut self, atom_id: u32, hybridization: u8) {
         if let Some(atom) = self.get_atom_mut(atom_id) {
             atom.set_hybridization_override(hybridization);

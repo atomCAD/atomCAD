@@ -153,6 +153,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           if (_stagedData!.isMotifMode) ...[
             const SizedBox(height: AppSpacing.large),
             _buildParameterElementsSection(),
+            const SizedBox(height: AppSpacing.medium),
+            _buildNeighborDepthSlider(),
           ],
           if (_stagedData!.activeTool == APIAtomEditTool.default_) ...[
             const SizedBox(height: AppSpacing.large),
@@ -707,6 +709,39 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         model: widget.model,
         lastSelectedResultAtomId: _stagedData?.lastSelectedResultAtomId,
       ),
+    );
+  }
+
+  // ===========================================================================
+  // Neighbor depth slider (motif_edit only)
+  // ===========================================================================
+
+  Widget _buildNeighborDepthSlider() {
+    return Row(
+      children: [
+        const Text('Ghost Depth'),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Slider(
+            value: _stagedData!.neighborDepth,
+            min: 0.0,
+            max: 1.0,
+            divisions: 100,
+            label: _stagedData!.neighborDepth.toStringAsFixed(2),
+            onChanged: (value) {
+              atom_edit_api.motifEditSetNeighborDepth(value: value);
+              widget.model.refreshFromKernel();
+            },
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            _stagedData!.neighborDepth.toStringAsFixed(2),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
     );
   }
 

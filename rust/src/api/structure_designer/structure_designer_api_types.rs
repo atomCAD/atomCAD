@@ -415,6 +415,8 @@ pub struct APIAtomEditData {
     pub is_motif_mode: bool,
     /// Parameter element definitions (motif_edit only).
     pub parameter_elements: Vec<APIParameterElement>,
+    /// Ghost atom neighbor depth (0.0–1.0, motif_edit only).
+    pub neighbor_depth: f64,
 }
 
 /// A parameter element definition for motif_edit nodes.

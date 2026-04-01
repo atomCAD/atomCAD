@@ -146,6 +146,13 @@ void motifEditUpdateParameterElement(
         .crateApiStructureDesignerAtomEditApiMotifEditUpdateParameterElement(
             index: index, name: name, defaultAtomicNumber: defaultAtomicNumber);
 
+double motifEditGetNeighborDepth() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiMotifEditGetNeighborDepth();
+
+void motifEditSetNeighborDepth({required double value}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiMotifEditSetNeighborDepth(
+        value: value);
+
 String atomEditMinimize({required APIMinimizeFreezeMode freezeMode}) =>
     RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditMinimize(
         freezeMode: freezeMode);

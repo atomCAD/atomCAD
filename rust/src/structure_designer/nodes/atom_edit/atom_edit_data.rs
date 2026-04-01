@@ -81,6 +81,11 @@ pub struct AtomEditData {
     /// e.g., [("PRIMARY", 6), ("SECONDARY", 14)]
     /// Only meaningful when is_motif_mode = true.
     pub parameter_elements: Vec<(String, i16)>,
+    /// How far into neighboring cells to show ghost atoms (0.0–1.0).
+    /// 0.0 = no ghosts, 1.0 = full neighboring cells.
+    /// Default: 0.3 (covers diamond-family cross-cell bonding).
+    /// Only used when is_motif_mode = true.
+    pub neighbor_depth: f64,
     /// Cached unit cell for interactive editing (avoids re-evaluating upstream).
     /// Populated during eval(), read by tools during interaction.
     /// Transient — not serialized.
@@ -115,6 +120,7 @@ impl AtomEditData {
             recorder: None,
             is_motif_mode: false,
             parameter_elements: Vec::new(),
+            neighbor_depth: 0.3,
             cached_unit_cell: Mutex::new(None),
         }
     }
@@ -138,6 +144,7 @@ impl AtomEditData {
         continuous_minimization: bool,
         is_motif_mode: bool,
         parameter_elements: Vec<(String, i16)>,
+        neighbor_depth: f64,
     ) -> Self {
         Self {
             diff,
@@ -159,6 +166,7 @@ impl AtomEditData {
             recorder: None,
             is_motif_mode,
             parameter_elements,
+            neighbor_depth,
             cached_unit_cell: Mutex::new(None),
         }
     }
@@ -328,6 +336,11 @@ impl AtomEditData {
                 );
             }
             self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
+        }
+
+        // 5b. Generate ghost atoms for neighboring cells
+        if self.neighbor_depth > 0.0 {
+            generate_ghost_atoms(&mut result, &unit_cell, self.neighbor_depth);
         }
 
         // 6. Store eval cache
@@ -1645,6 +1658,7 @@ impl NodeData for AtomEditData {
             recorder: None, // Never clone an active recorder
             is_motif_mode: self.is_motif_mode,
             parameter_elements: self.parameter_elements.clone(),
+            neighbor_depth: self.neighbor_depth,
             cached_unit_cell: Mutex::new(None),
         })
     }
@@ -1976,6 +1990,138 @@ fn atomic_structure_to_motif(
         bonds,
         bonds_by_site1_index,
         bonds_by_site2_index,
+    }
+}
+
+/// Generates ghost atoms from neighboring unit cells and adds them to the display
+/// structure. For each of the 26 neighboring cells, copies atoms whose fractional
+/// distance from the primary cell is less than `neighbor_depth`, translates them by
+/// the cell offset, and flags them with ATOM_FLAG_GHOST.
+///
+/// Ghost atoms are display-only — they are never included in the wire result.
+pub fn generate_ghost_atoms(
+    viz: &mut AtomicStructure,
+    unit_cell: &UnitCellStruct,
+    neighbor_depth: f64,
+) {
+    // Collect primary atom data first to avoid borrow conflict.
+    // Store (original_id, atomic_number, position, bonds_to_other_primary_ids).
+    let primary_atoms: Vec<(u32, i16, DVec3, Vec<(u32, u8)>)> = viz
+        .iter_atoms()
+        .map(|(_, atom)| {
+            let bonds: Vec<(u32, u8)> = atom
+                .bonds
+                .iter()
+                .map(|b| (b.other_atom_id(), b.bond_order()))
+                .collect();
+            (atom.id, atom.atomic_number, atom.position, bonds)
+        })
+        .collect();
+
+    // Build original_id → index map for bond resolution
+    let id_to_idx: HashMap<u32, usize> = primary_atoms
+        .iter()
+        .enumerate()
+        .map(|(idx, (id, _, _, _))| (*id, idx))
+        .collect();
+
+    // Precompute fractional positions for all primary atoms
+    let frac_positions: Vec<DVec3> = primary_atoms
+        .iter()
+        .map(|(_, _, pos, _)| unit_cell.real_to_dvec3_lattice(pos))
+        .collect();
+
+    // For each of the 26 neighboring cells
+    for dx in -1..=1i32 {
+        for dy in -1..=1i32 {
+            for dz in -1..=1i32 {
+                if dx == 0 && dy == 0 && dz == 0 {
+                    continue;
+                }
+
+                let cell_offset = DVec3::new(dx as f64, dy as f64, dz as f64);
+                let translation = unit_cell.dvec3_lattice_to_real(&cell_offset);
+
+                // Map from primary atom index → ghost atom ID (for bond creation)
+                let mut primary_idx_to_ghost: HashMap<usize, u32> = HashMap::new();
+
+                for (atom_idx, frac) in frac_positions.iter().enumerate() {
+                    // Fractional position of this atom in the neighboring cell
+                    let ghost_frac = *frac + cell_offset;
+
+                    // Compute minimum distance from ghost to nearest face of [0,1]^3
+                    let dist = min_distance_to_unit_cube(&ghost_frac);
+
+                    if dist < neighbor_depth {
+                        let (_, atomic_number, position, _) = &primary_atoms[atom_idx];
+                        let ghost_pos = *position + translation;
+                        let ghost_id = viz.add_atom(*atomic_number, ghost_pos);
+                        viz.set_atom_ghost(ghost_id, true);
+                        primary_idx_to_ghost.insert(atom_idx, ghost_id);
+                    }
+                }
+
+                // Create bonds between ghost atoms that both exist in this cell
+                for (&atom_idx, &ghost_id) in &primary_idx_to_ghost {
+                    let (_, _, _, ref bonds) = primary_atoms[atom_idx];
+                    for &(other_primary_id, bond_order) in bonds {
+                        if let Some(&other_idx) = id_to_idx.get(&other_primary_id) {
+                            if let Some(&other_ghost_id) = primary_idx_to_ghost.get(&other_idx) {
+                                // Only add each bond once (lower ghost ID first)
+                                if ghost_id < other_ghost_id {
+                                    viz.add_bond(ghost_id, other_ghost_id, bond_order);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Computes the fractional distance from a ghost atom to the nearest face of
+/// the primary cell [0,1]^3.
+///
+/// For an atom outside the cell (ghost), this is the perpendicular distance
+/// from the cell boundary along the axis(es) that were crossed. When multiple
+/// axes are crossed (corner/edge ghosts), returns the maximum per-axis distance
+/// — the atom must be within `neighbor_depth` on every crossed axis.
+///
+/// For an atom inside the cell, returns the distance to the nearest face.
+pub fn min_distance_to_unit_cube(frac: &DVec3) -> f64 {
+    let dist_x = if frac.x < 0.0 {
+        -frac.x
+    } else if frac.x > 1.0 {
+        frac.x - 1.0
+    } else {
+        0.0
+    };
+    let dist_y = if frac.y < 0.0 {
+        -frac.y
+    } else if frac.y > 1.0 {
+        frac.y - 1.0
+    } else {
+        0.0
+    };
+    let dist_z = if frac.z < 0.0 {
+        -frac.z
+    } else if frac.z > 1.0 {
+        frac.z - 1.0
+    } else {
+        0.0
+    };
+
+    let outside = dist_x > 0.0 || dist_y > 0.0 || dist_z > 0.0;
+    if outside {
+        // Ghost atom outside the cell: max per-axis overshoot
+        dist_x.max(dist_y).max(dist_z)
+    } else {
+        // Inside the cell: min distance to nearest face
+        let dx = frac.x.min(1.0 - frac.x);
+        let dy = frac.y.min(1.0 - frac.y);
+        let dz = frac.z.min(1.0 - frac.z);
+        dx.min(dy).min(dz)
     }
 }
 

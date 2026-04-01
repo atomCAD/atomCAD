@@ -83,6 +83,8 @@ pub struct SerializableAtomEditData {
     pub is_motif_mode: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parameter_elements: Vec<SerializableParameterElement>,
+    #[serde(default = "default_neighbor_depth")]
+    pub neighbor_depth: f64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -97,6 +99,10 @@ fn default_include_base_bonds_in_diff() -> bool {
 
 fn default_tolerance() -> f64 {
     DEFAULT_TOLERANCE
+}
+
+fn default_neighbor_depth() -> f64 {
+    0.3
 }
 
 /// Converts an AtomEditData to its serializable representation.
@@ -167,6 +173,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
                 default_atomic_number: *default_z,
             })
             .collect(),
+        neighbor_depth: data.neighbor_depth,
     })
 }
 
@@ -252,5 +259,6 @@ pub fn serializable_to_atom_edit_data(
         serializable.continuous_minimization,
         serializable.is_motif_mode,
         parameter_elements,
+        serializable.neighbor_depth,
     ))
 }

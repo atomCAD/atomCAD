@@ -30,7 +30,10 @@ fn round_pos(p: [f32; 3]) -> [i32; 3] {
 
 /// Helper: collect all unique vertex positions (rounded) from a LineMesh.
 fn collect_unique_vertices(mesh: &LineMesh) -> HashSet<[i32; 3]> {
-    mesh.vertices.iter().map(|v| round_pos(v.position)).collect()
+    mesh.vertices
+        .iter()
+        .map(|v| round_pos(v.position))
+        .collect()
 }
 
 // ===== test_wireframe_vertices =====
@@ -48,7 +51,11 @@ fn test_wireframe_vertices_cubic() {
     tessellate_unit_cell_wireframe(&mut mesh, &uc);
 
     // Should have exactly 12 line segments
-    assert_eq!(mesh.indices.len(), 24, "Expected 12 line segments (24 indices)");
+    assert_eq!(
+        mesh.indices.len(),
+        24,
+        "Expected 12 line segments (24 indices)"
+    );
 
     // Verify the 8 expected vertices exist
     let vertices = collect_unique_vertices(&mesh);
@@ -139,22 +146,22 @@ fn test_wireframe_non_orthogonal() {
     let a = DVec3::new(4.0, 0.0, 0.0);
     let b = DVec3::new(1.0, 3.0, 0.0);
     let c = DVec3::new(0.5, 0.5, 5.0);
-    let expected_dvec = [
-        DVec3::ZERO,
-        a,
-        b,
-        c,
-        a + b,
-        a + c,
-        b + c,
-        a + b + c,
-    ];
+    let expected_dvec = [DVec3::ZERO, a, b, c, a + b, a + c, b + c, a + b + c];
     let expected: HashSet<[i32; 3]> = expected_dvec
         .iter()
-        .map(|v| [(v.x as f32 * 1000.0).round() as i32, (v.y as f32 * 1000.0).round() as i32, (v.z as f32 * 1000.0).round() as i32])
+        .map(|v| {
+            [
+                (v.x as f32 * 1000.0).round() as i32,
+                (v.y as f32 * 1000.0).round() as i32,
+                (v.z as f32 * 1000.0).round() as i32,
+            ]
+        })
         .collect();
 
-    assert_eq!(vertices, expected, "Expected 8 vertices of the triclinic parallelepiped");
+    assert_eq!(
+        vertices, expected,
+        "Expected 8 vertices of the triclinic parallelepiped"
+    );
 }
 
 // ===== test_wireframe_not_generated_without_unit_cell =====

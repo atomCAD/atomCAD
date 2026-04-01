@@ -186,6 +186,9 @@ class APIAtomEditData {
   /// Parameter element definitions (motif_edit only).
   final List<APIParameterElement> parameterElements;
 
+  /// Ghost atom neighbor depth (0.0–1.0, motif_edit only).
+  final double neighborDepth;
+
   const APIAtomEditData({
     required this.activeTool,
     this.bondToolLastAtomId,
@@ -211,6 +214,7 @@ class APIAtomEditData {
     required this.continuousMinimization,
     required this.isMotifMode,
     required this.parameterElements,
+    required this.neighborDepth,
   });
 
   @override
@@ -238,7 +242,8 @@ class APIAtomEditData {
       hasFrozenAtoms.hashCode ^
       continuousMinimization.hashCode ^
       isMotifMode.hashCode ^
-      parameterElements.hashCode;
+      parameterElements.hashCode ^
+      neighborDepth.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -268,7 +273,8 @@ class APIAtomEditData {
           hasFrozenAtoms == other.hasFrozenAtoms &&
           continuousMinimization == other.continuousMinimization &&
           isMotifMode == other.isMotifMode &&
-          parameterElements == other.parameterElements;
+          parameterElements == other.parameterElements &&
+          neighborDepth == other.neighborDepth;
 }
 
 enum APIAtomEditTool {
