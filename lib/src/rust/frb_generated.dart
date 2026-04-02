@@ -9581,8 +9581,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIAtomFillData dco_decode_api_atom_fill_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return APIAtomFillData(
       parameterElementValueDefinition: dco_decode_String(arr[0]),
       motifOffset: dco_decode_api_vec_3(arr[1]),
@@ -9591,6 +9591,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       surfaceReconstruction: dco_decode_bool(arr[4]),
       invertPhase: dco_decode_bool(arr[5]),
       error: dco_decode_opt_String(arr[6]),
+      availableParameters: dco_decode_list_api_motif_parameter_info(arr[7]),
     );
   }
 
@@ -10109,6 +10110,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       definition: dco_decode_String(arr[0]),
       name: dco_decode_opt_String(arr[1]),
       error: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
+  APIMotifParameterInfo dco_decode_api_motif_parameter_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return APIMotifParameterInfo(
+      name: dco_decode_String(arr[0]),
+      defaultAtomicNumber: dco_decode_i_16(arr[1]),
+      defaultElementSymbol: dco_decode_String(arr[2]),
     );
   }
 
@@ -10952,11 +10966,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ElementSummary dco_decode_element_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return ElementSummary(
       atomicNumber: dco_decode_i_16(arr[0]),
-      elementName: dco_decode_String(arr[1]),
+      symbol: dco_decode_String(arr[1]),
+      elementName: dco_decode_String(arr[2]),
     );
   }
 
@@ -11121,6 +11136,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<APIFacet> dco_decode_list_api_facet(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_api_facet).toList();
+  }
+
+  @protected
+  List<APIMotifParameterInfo> dco_decode_list_api_motif_parameter_info(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_api_motif_parameter_info)
+        .toList();
   }
 
   @protected
@@ -12145,6 +12169,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_surfaceReconstruction = sse_decode_bool(deserializer);
     var var_invertPhase = sse_decode_bool(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
+    var var_availableParameters =
+        sse_decode_list_api_motif_parameter_info(deserializer);
     return APIAtomFillData(
         parameterElementValueDefinition: var_parameterElementValueDefinition,
         motifOffset: var_motifOffset,
@@ -12153,7 +12179,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             var_removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: var_surfaceReconstruction,
         invertPhase: var_invertPhase,
-        error: var_error);
+        error: var_error,
+        availableParameters: var_availableParameters);
   }
 
   @protected
@@ -12689,6 +12716,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_error = sse_decode_opt_String(deserializer);
     return APIMotifData(
         definition: var_definition, name: var_name, error: var_error);
+  }
+
+  @protected
+  APIMotifParameterInfo sse_decode_api_motif_parameter_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_defaultAtomicNumber = sse_decode_i_16(deserializer);
+    var var_defaultElementSymbol = sse_decode_String(deserializer);
+    return APIMotifParameterInfo(
+        name: var_name,
+        defaultAtomicNumber: var_defaultAtomicNumber,
+        defaultElementSymbol: var_defaultElementSymbol);
   }
 
   @protected
@@ -13531,9 +13571,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ElementSummary sse_decode_element_summary(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_atomicNumber = sse_decode_i_16(deserializer);
+    var var_symbol = sse_decode_String(deserializer);
     var var_elementName = sse_decode_String(deserializer);
     return ElementSummary(
-        atomicNumber: var_atomicNumber, elementName: var_elementName);
+        atomicNumber: var_atomicNumber,
+        symbol: var_symbol,
+        elementName: var_elementName);
   }
 
   @protected
@@ -13726,6 +13769,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <APIFacet>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_api_facet(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<APIMotifParameterInfo> sse_decode_list_api_motif_parameter_info(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIMotifParameterInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_motif_parameter_info(deserializer));
     }
     return ans_;
   }
@@ -15145,6 +15201,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.surfaceReconstruction, serializer);
     sse_encode_bool(self.invertPhase, serializer);
     sse_encode_opt_String(self.error, serializer);
+    sse_encode_list_api_motif_parameter_info(
+        self.availableParameters, serializer);
   }
 
   @protected
@@ -15567,6 +15625,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.definition, serializer);
     sse_encode_opt_String(self.name, serializer);
     sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_api_motif_parameter_info(
+      APIMotifParameterInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_i_16(self.defaultAtomicNumber, serializer);
+    sse_encode_String(self.defaultElementSymbol, serializer);
   }
 
   @protected
@@ -16328,6 +16395,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ElementSummary self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_16(self.atomicNumber, serializer);
+    sse_encode_String(self.symbol, serializer);
     sse_encode_String(self.elementName, serializer);
   }
 
@@ -16484,6 +16552,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_facet(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_motif_parameter_info(
+      List<APIMotifParameterInfo> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_motif_parameter_info(item, serializer);
     }
   }
 

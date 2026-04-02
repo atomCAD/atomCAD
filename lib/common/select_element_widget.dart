@@ -30,6 +30,9 @@ class SelectElementWidget extends StatefulWidget {
   /// Each entry appears before the real elements, separated by a divider.
   final List<APIParameterElement>? parameterElements;
 
+  /// Custom label for the null/none option (default: "None")
+  final String? nullLabel;
+
   const SelectElementWidget({
     super.key,
     this.value,
@@ -38,6 +41,7 @@ class SelectElementWidget extends StatefulWidget {
     this.label,
     this.required = false,
     this.parameterElements,
+    this.nullLabel,
   });
 
   @override
@@ -145,7 +149,8 @@ class _SelectElementWidgetState extends State<SelectElementWidget> {
     if (!widget.required) {
       items.add(DropdownMenuItem<int?>(
         value: null,
-        child: Text('None', style: TextStyle(color: Colors.black87)),
+        child: Text(widget.nullLabel ?? 'None',
+            style: TextStyle(color: Colors.black87)),
       ));
     }
 

@@ -183,6 +183,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMotifData dco_decode_api_motif_data(dynamic raw);
 
   @protected
+  APIMotifParameterInfo dco_decode_api_motif_parameter_info(dynamic raw);
+
+  @protected
   APINetworkWithValidationErrors dco_decode_api_network_with_validation_errors(
       dynamic raw);
 
@@ -542,6 +545,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIFacet> dco_decode_list_api_facet(dynamic raw);
+
+  @protected
+  List<APIMotifParameterInfo> dco_decode_list_api_motif_parameter_info(
+      dynamic raw);
 
   @protected
   List<APINetworkWithValidationErrors>
@@ -1052,6 +1059,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMotifData sse_decode_api_motif_data(SseDeserializer deserializer);
 
   @protected
+  APIMotifParameterInfo sse_decode_api_motif_parameter_info(
+      SseDeserializer deserializer);
+
+  @protected
   APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
       SseDeserializer deserializer);
 
@@ -1474,6 +1485,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIFacet> sse_decode_list_api_facet(SseDeserializer deserializer);
+
+  @protected
+  List<APIMotifParameterInfo> sse_decode_list_api_motif_parameter_info(
+      SseDeserializer deserializer);
 
   @protected
   List<APINetworkWithValidationErrors>
@@ -2073,6 +2088,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_motif_data(APIMotifData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_motif_parameter_info(
+      APIMotifParameterInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_network_with_validation_errors(
       APINetworkWithValidationErrors self, SseSerializer serializer);
 
@@ -2507,6 +2526,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_api_facet(List<APIFacet> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_motif_parameter_info(
+      List<APIMotifParameterInfo> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_network_with_validation_errors(

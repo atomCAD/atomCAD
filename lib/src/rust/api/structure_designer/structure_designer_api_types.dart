@@ -292,6 +292,7 @@ class APIAtomFillData {
   final bool surfaceReconstruction;
   final bool invertPhase;
   final String? error;
+  final List<APIMotifParameterInfo> availableParameters;
 
   const APIAtomFillData({
     required this.parameterElementValueDefinition,
@@ -301,6 +302,7 @@ class APIAtomFillData {
     required this.surfaceReconstruction,
     required this.invertPhase,
     this.error,
+    required this.availableParameters,
   });
 
   @override
@@ -311,7 +313,8 @@ class APIAtomFillData {
       removeSingleBondAtomsBeforePassivation.hashCode ^
       surfaceReconstruction.hashCode ^
       invertPhase.hashCode ^
-      error.hashCode;
+      error.hashCode ^
+      availableParameters.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -326,7 +329,8 @@ class APIAtomFillData {
               other.removeSingleBondAtomsBeforePassivation &&
           surfaceReconstruction == other.surfaceReconstruction &&
           invertPhase == other.invertPhase &&
-          error == other.error;
+          error == other.error &&
+          availableParameters == other.availableParameters;
 }
 
 class APIAtomMoveData {
@@ -1326,6 +1330,34 @@ class APIMotifData {
           definition == other.definition &&
           name == other.name &&
           error == other.error;
+}
+
+/// Info about a motif parameter element available for override
+class APIMotifParameterInfo {
+  final String name;
+  final int defaultAtomicNumber;
+  final String defaultElementSymbol;
+
+  const APIMotifParameterInfo({
+    required this.name,
+    required this.defaultAtomicNumber,
+    required this.defaultElementSymbol,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      defaultAtomicNumber.hashCode ^
+      defaultElementSymbol.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMotifParameterInfo &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          defaultAtomicNumber == other.defaultAtomicNumber &&
+          defaultElementSymbol == other.defaultElementSymbol;
 }
 
 class APINetworkWithValidationErrors {

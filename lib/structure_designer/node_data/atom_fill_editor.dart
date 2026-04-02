@@ -4,8 +4,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
-import 'package:code_text_field/code_text_field.dart';
-import 'package:flutter_highlight/themes/github.dart';
+import 'package:flutter_cad/common/parameter_element_override_editor.dart';
 
 /// Editor widget for atom_fill nodes
 class AtomFillEditor extends StatefulWidget {
@@ -25,44 +24,12 @@ class AtomFillEditor extends StatefulWidget {
 }
 
 class _AtomFillEditorState extends State<AtomFillEditor> {
-  late CodeController _definitionController;
-  late FocusNode _definitionFocusNode;
+  late String _parameterElementValueDefinition;
   late APIVec3 _motifOffset;
   late bool _hydrogenPassivation;
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
   late bool _invertPhase;
-  bool _definitionDirty = false;
-
-  bool _hasPendingChanges() {
-    if (widget.data == null) {
-      return false;
-    }
-
-    if (_definitionDirty) {
-      return true;
-    }
-
-    final data = widget.data!;
-    if (_motifOffset != data.motifOffset) {
-      return true;
-    }
-    if (_hydrogenPassivation != data.hydrogenPassivation) {
-      return true;
-    }
-    if (_removeSingleBondAtomsBeforePassivation !=
-        data.removeSingleBondAtomsBeforePassivation) {
-      return true;
-    }
-    if (_surfaceReconstruction != data.surfaceReconstruction) {
-      return true;
-    }
-    if (_invertPhase != data.invertPhase) {
-      return true;
-    }
-
-    return false;
-  }
 
   void _commitChanges() {
     if (widget.data == null) {
@@ -72,14 +39,15 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     widget.model.setAtomFillData(
       widget.nodeId,
       APIAtomFillData(
-        parameterElementValueDefinition: _definitionController.text,
+        parameterElementValueDefinition: _parameterElementValueDefinition,
         motifOffset: _motifOffset,
         hydrogenPassivation: _hydrogenPassivation,
         removeSingleBondAtomsBeforePassivation:
             _removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: _surfaceReconstruction,
         invertPhase: _invertPhase,
-        error: null, // This will be set by the backend after parsing
+        error: null,
+        availableParameters: const [],
       ),
     );
   }
@@ -87,38 +55,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   @override
   void initState() {
     super.initState();
-    _definitionController = CodeController(
-      text: widget.data?.parameterElementValueDefinition ?? '',
-      // No language specified - will use plain text by default
-    );
-    _definitionController.addListener(() {
-      final committed = widget.data?.parameterElementValueDefinition ?? '';
-      final dirty = _definitionController.text != committed;
-      if (dirty == _definitionDirty) {
-        return;
-      }
-      setState(() {
-        _definitionDirty = dirty;
-      });
-    });
-    _definitionFocusNode = FocusNode();
-    _definitionFocusNode.addListener(() {
-      if (_definitionFocusNode.hasFocus) {
-        return;
-      }
-
-      if (!_definitionDirty) {
-        return;
-      }
-
-      _commitChanges();
-
-      if (_definitionDirty) {
-        setState(() {
-          _definitionDirty = false;
-        });
-      }
-    });
+    _parameterElementValueDefinition =
+        widget.data?.parameterElementValueDefinition ?? '';
     _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
     _removeSingleBondAtomsBeforePassivation =
@@ -132,18 +70,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data?.parameterElementValueDefinition !=
         widget.data?.parameterElementValueDefinition) {
-      if (!_definitionFocusNode.hasFocus) {
-        _definitionController.text =
-            widget.data?.parameterElementValueDefinition ?? '';
-      }
-
-      final dirty = _definitionController.text !=
-          (widget.data?.parameterElementValueDefinition ?? '');
-      if (dirty != _definitionDirty) {
-        setState(() {
-          _definitionDirty = dirty;
-        });
-      }
+      _parameterElementValueDefinition =
+          widget.data?.parameterElementValueDefinition ?? '';
     }
     if (oldWidget.data?.motifOffset != widget.data?.motifOffset) {
       _motifOffset =
@@ -168,16 +96,6 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   }
 
   @override
-  void dispose() {
-    if (_hasPendingChanges()) {
-      _commitChanges();
-    }
-    _definitionController.dispose();
-    _definitionFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
@@ -194,86 +112,16 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
           ),
           const SizedBox(height: 8),
 
-          // Parameter Element Value Definition text area with line numbers
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).colorScheme.outline),
-              borderRadius: BorderRadius.circular(4.0),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Label
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(4.0),
-                      topRight: Radius.circular(4.0),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Parameter Element Value Definition',
-                          style:
-                              Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Tooltip(
-                        message: 'Apply definition',
-                        child: TextButton.icon(
-                          onPressed: _definitionDirty
-                              ? () {
-                                  _commitChanges();
-                                  setState(() {
-                                    _definitionDirty = false;
-                                  });
-                                }
-                              : null,
-                          icon: const Icon(Icons.check, size: 16),
-                          label: const Text('Apply'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Code field
-                SizedBox(
-                  height: 200,
-                  child: CodeTheme(
-                    data: CodeThemeData(styles: githubTheme),
-                    child: SingleChildScrollView(
-                      child: CodeField(
-                        controller: _definitionController,
-                        focusNode: _definitionFocusNode,
-                        textStyle: const TextStyle(
-                          fontFamily: 'Courier New',
-                          fontFamilyFallback: [
-                            'Consolas',
-                            'Monaco',
-                            'Menlo',
-                            'monospace'
-                          ],
-                          fontSize: 14.0,
-                        ),
-                        expands: false,
-                        wrap: false,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          // Parameter Element Override Editor (WYSIWYG)
+          ParameterElementOverrideEditor(
+            availableParameters: widget.data!.availableParameters,
+            currentDefinitionText: _parameterElementValueDefinition,
+            onChanged: (newText) {
+              setState(() {
+                _parameterElementValueDefinition = newText;
+              });
+              _commitChanges();
+            },
           ),
 
           const SizedBox(height: 8),
@@ -313,7 +161,7 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
           // Surface Reconstruction checkbox
           CheckboxListTile(
             title: const Text('Surface Reconstruction'),
-            subtitle: const Text('Apply (100) 2×1 dimer reconstruction'),
+            subtitle: const Text('Apply (100) 2x1 dimer reconstruction'),
             value: _surfaceReconstruction,
             onChanged: (value) {
               final newValue = value ?? false;

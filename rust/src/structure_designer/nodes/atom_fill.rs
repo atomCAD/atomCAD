@@ -25,6 +25,7 @@ use crate::util::serialization_utils::dvec3_serializer;
 use glam::f64::DVec3;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 // Import the lattice fill algorithm
@@ -46,6 +47,9 @@ pub struct AtomFillData {
     pub error: Option<String>,
     #[serde(skip)]
     pub parameter_element_values: HashMap<String, i16>,
+    /// Cached motif parameter list from last evaluation (name, default_atomic_number)
+    #[serde(skip)]
+    pub available_parameters: RefCell<Vec<(String, i16)>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -79,6 +83,7 @@ impl<'de> Deserialize<'de> for AtomFillData {
             invert_phase: de.invert_phase,
             error: None,
             parameter_element_values: HashMap::new(),
+            available_parameters: RefCell::new(Vec::new()),
         };
 
         if !data.parameter_element_value_definition.trim().is_empty() {
@@ -172,6 +177,13 @@ impl NodeData for AtomFillData {
             Ok(value) => value,
             Err(error) => return EvalOutput::single(error),
         };
+
+        // Cache motif parameters for UI display
+        *self.available_parameters.borrow_mut() = motif
+            .parameters
+            .iter()
+            .map(|p| (p.name.clone(), p.default_atomic_number))
+            .collect();
 
         // Evaluate m_offset input (with default)
         let motif_offset = match network_evaluator.evaluate_or_default(
@@ -426,6 +438,7 @@ pub fn get_node_type() -> NodeType {
         invert_phase: false,
         error: None,
         parameter_element_values: HashMap::new(),
+        available_parameters: RefCell::new(Vec::new()),
       }),
       node_data_saver: generic_node_data_saver::<AtomFillData>,
       node_data_loader: generic_node_data_loader::<AtomFillData>,

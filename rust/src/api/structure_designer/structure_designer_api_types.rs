@@ -723,6 +723,14 @@ pub struct APIMotifData {
     pub error: Option<String>, // Optional error message from parsing
 }
 
+/// Info about a motif parameter element available for override
+#[flutter_rust_bridge::frb]
+pub struct APIMotifParameterInfo {
+    pub name: String,                   // e.g., "PRIMARY"
+    pub default_atomic_number: i16,     // e.g., 6
+    pub default_element_symbol: String, // e.g., "C"
+}
+
 #[flutter_rust_bridge::frb]
 pub struct APIAtomFillData {
     pub parameter_element_value_definition: String, // The parameter element value definition text
@@ -732,6 +740,7 @@ pub struct APIAtomFillData {
     pub surface_reconstruction: bool, // Whether to apply surface reconstruction
     pub invert_phase: bool,
     pub error: Option<String>, // Optional error message from parsing
+    pub available_parameters: Vec<APIMotifParameterInfo>, // Parameters from the connected motif (populated after eval)
 }
 
 /// Configuration for single CLI run

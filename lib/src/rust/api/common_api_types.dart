@@ -208,15 +208,18 @@ class APIIVec3 {
 
 class ElementSummary {
   final int atomicNumber;
+  final String symbol;
   final String elementName;
 
   const ElementSummary({
     required this.atomicNumber,
+    required this.symbol,
     required this.elementName,
   });
 
   @override
-  int get hashCode => atomicNumber.hashCode ^ elementName.hashCode;
+  int get hashCode =>
+      atomicNumber.hashCode ^ symbol.hashCode ^ elementName.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -224,6 +227,7 @@ class ElementSummary {
       other is ElementSummary &&
           runtimeType == other.runtimeType &&
           atomicNumber == other.atomicNumber &&
+          symbol == other.symbol &&
           elementName == other.elementName;
 }
 

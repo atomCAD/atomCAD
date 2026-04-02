@@ -1,4 +1,5 @@
 use super::structure_designer_api_types::APIAtomFillData;
+use super::structure_designer_api_types::APIMotifParameterInfo;
 use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
@@ -3671,6 +3672,25 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
                     .get_node_network_data(node_id)?;
                 let atom_fill_data = node_data.as_any_ref().downcast_ref::<AtomFillData>()?;
 
+                use crate::crystolecule::atomic_constants::ATOM_INFO;
+
+                let available_parameters = atom_fill_data
+                    .available_parameters
+                    .borrow()
+                    .iter()
+                    .map(|(name, atomic_number)| {
+                        let symbol = ATOM_INFO
+                            .get(&(*atomic_number as i32))
+                            .map(|info| info.symbol.clone())
+                            .unwrap_or_else(|| format!("Z{}", atomic_number));
+                        APIMotifParameterInfo {
+                            name: name.clone(),
+                            default_atomic_number: *atomic_number,
+                            default_element_symbol: symbol,
+                        }
+                    })
+                    .collect();
+
                 Some(APIAtomFillData {
                     parameter_element_value_definition: atom_fill_data
                         .parameter_element_value_definition
@@ -3682,6 +3702,7 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
                     surface_reconstruction: atom_fill_data.surface_reconstruction,
                     invert_phase: atom_fill_data.invert_phase,
                     error: atom_fill_data.error.clone(),
+                    available_parameters,
                 })
             },
             None,
@@ -3704,6 +3725,7 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                     invert_phase: data.invert_phase,
                     error: None,
                     parameter_element_values: HashMap::new(),
+                    available_parameters: std::cell::RefCell::new(Vec::new()),
                 });
                 atom_fill_data.parse_and_validate(node_id);
                 cad_instance

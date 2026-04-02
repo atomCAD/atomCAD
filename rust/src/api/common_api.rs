@@ -486,6 +486,7 @@ pub fn get_all_elements() -> Vec<ElementSummary> {
         .values()
         .map(|atom_info| ElementSummary {
             atomic_number: atom_info.atomic_number as i16,
+            symbol: atom_info.symbol.clone(),
             element_name: atom_info.element_name.clone(),
         })
         .collect();

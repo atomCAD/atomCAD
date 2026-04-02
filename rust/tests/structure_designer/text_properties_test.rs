@@ -1001,6 +1001,7 @@ fn test_atom_fill_roundtrip() {
         invert_phase: false,
         error: None,
         parameter_element_values: HashMap::new(),
+        available_parameters: std::cell::RefCell::new(Vec::new()),
     });
     test_roundtrip(&AtomFillData {
         parameter_element_value_definition: "".to_string(),
@@ -1011,6 +1012,7 @@ fn test_atom_fill_roundtrip() {
         invert_phase: true,
         error: None,
         parameter_element_values: HashMap::new(),
+        available_parameters: std::cell::RefCell::new(Vec::new()),
     });
 }
 

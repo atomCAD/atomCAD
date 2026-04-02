@@ -8587,6 +8587,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_surfaceReconstruction = <bool>::sse_decode(deserializer);
         let mut var_invertPhase = <bool>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
+        let mut var_availableParameters = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIAtomFillData {
             parameter_element_value_definition: var_parameterElementValueDefinition,
             motif_offset: var_motifOffset,
@@ -8595,6 +8598,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             surface_reconstruction: var_surfaceReconstruction,
             invert_phase: var_invertPhase,
             error: var_error,
+            available_parameters: var_availableParameters,
         };
     }
 }
@@ -9287,6 +9291,18 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 }
 
 impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_defaultAtomicNumber = <i16>::sse_decode(deserializer);
+        let mut var_defaultElementSymbol = <String>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo{name: var_name, default_atomic_number: var_defaultAtomicNumber, default_element_symbol: var_defaultElementSymbol};
+    }
+}
+
+impl SseDecode
     for crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9791,9 +9807,11 @@ impl SseDecode for crate::api::common_api_types::ElementSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_atomicNumber = <i16>::sse_decode(deserializer);
+        let mut var_symbol = <String>::sse_decode(deserializer);
         let mut var_elementName = <String>::sse_decode(deserializer);
         return crate::api::common_api_types::ElementSummary {
             atomic_number: var_atomicNumber,
+            symbol: var_symbol,
             element_name: var_elementName,
         };
     }
@@ -10009,6 +10027,20 @@ impl SseDecode for Vec<crate::api::structure_designer::structure_designer_api_ty
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIFacet>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -12001,6 +12033,7 @@ impl flutter_rust_bridge::IntoDart
             self.surface_reconstruction.into_into_dart().into_dart(),
             self.invert_phase.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
+            self.available_parameters.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -13151,6 +13184,34 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.default_atomic_number.into_into_dart().into_dart(),
+            self.default_element_symbol.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo,
+    > for crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -14040,6 +14101,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::common_api_types::ElementSumm
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.atomic_number.into_into_dart().into_dart(),
+            self.symbol.into_into_dart().into_dart(),
             self.element_name.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -14962,6 +15024,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <bool>::sse_encode(self.surface_reconstruction, serializer);
         <bool>::sse_encode(self.invert_phase, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo>>::sse_encode(self.available_parameters, serializer);
     }
 }
 
@@ -15432,6 +15495,17 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 }
 
 impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <i16>::sse_encode(self.default_atomic_number, serializer);
+        <String>::sse_encode(self.default_element_symbol, serializer);
+    }
+}
+
+impl SseEncode
     for crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -15795,6 +15869,7 @@ impl SseEncode for crate::api::common_api_types::ElementSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i16>::sse_encode(self.atomic_number, serializer);
+        <String>::sse_encode(self.symbol, serializer);
         <String>::sse_encode(self.element_name, serializer);
     }
 }
@@ -15969,6 +16044,18 @@ impl SseEncode for Vec<crate::api::structure_designer::structure_designer_api_ty
             <crate::api::structure_designer::structure_designer_api_types::APIFacet>::sse_encode(
                 item, serializer,
             );
+        }
+    }
+}
+
+impl SseEncode
+    for Vec<crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo>::sse_encode(item, serializer);
         }
     }
 }

@@ -61,6 +61,7 @@ pub enum SelectModifier {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ElementSummary {
     pub atomic_number: i16,
+    pub symbol: String,
     pub element_name: String,
 }
 
