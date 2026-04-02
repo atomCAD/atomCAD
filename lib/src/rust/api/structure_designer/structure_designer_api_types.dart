@@ -1360,6 +1360,34 @@ class APIMotifParameterInfo {
           defaultElementSymbol == other.defaultElementSymbol;
 }
 
+class APIMotifSubData {
+  final String parameterElementValueDefinition;
+  final String? error;
+  final List<APIMotifParameterInfo> availableParameters;
+
+  const APIMotifSubData({
+    required this.parameterElementValueDefinition,
+    this.error,
+    required this.availableParameters,
+  });
+
+  @override
+  int get hashCode =>
+      parameterElementValueDefinition.hashCode ^
+      error.hashCode ^
+      availableParameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMotifSubData &&
+          runtimeType == other.runtimeType &&
+          parameterElementValueDefinition ==
+              other.parameterElementValueDefinition &&
+          error == other.error &&
+          availableParameters == other.availableParameters;
+}
+
 class APINetworkWithValidationErrors {
   final String name;
   final String? validationErrors;

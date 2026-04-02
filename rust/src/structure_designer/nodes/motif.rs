@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF_TEXT;
 use crate::crystolecule::motif::Motif;
 use crate::crystolecule::motif_parser::parse_motif;
 use crate::structure_designer::data_type::DataType;
@@ -193,12 +194,16 @@ Lines starting with `#` are comments.".to_string(),
       parameters: vec![],
       output_pins: OutputPinDefinition::single(DataType::Motif),
       public: true,
-      node_data_creator: || Box::new(MotifData {
-        definition: "".to_string(),
-        name: None,
-        motif: None,
-        error: None,
-      }),
+      node_data_creator: || {
+        let definition = DEFAULT_ZINCBLENDE_MOTIF_TEXT.trim().to_string();
+        let motif = parse_motif(&definition).ok();
+        Box::new(MotifData {
+          definition,
+          name: Some("cubic zincblende".to_string()),
+          motif,
+          error: None,
+        })
+      },
       node_data_saver: generic_node_data_saver::<MotifData>,
       node_data_loader: motif_data_loader,
     }

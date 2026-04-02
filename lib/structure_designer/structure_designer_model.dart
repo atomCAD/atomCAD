@@ -1305,6 +1305,15 @@ class StructureDesignerModel extends ChangeNotifier {
     return structure_designer_api.getAtomFillData(nodeId: nodeId);
   }
 
+  void setMotifSubData(BigInt nodeId, APIMotifSubData data) {
+    structure_designer_api.setMotifSubData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APIMotifSubData? getMotifSubData(BigInt nodeId) {
+    return structure_designer_api.getMotifSubData(nodeId: nodeId);
+  }
+
   APIParameterData? getParameterData(BigInt nodeId) {
     return structure_designer_api.getParameterData(nodeId: nodeId);
   }

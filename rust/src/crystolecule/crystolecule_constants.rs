@@ -15,11 +15,7 @@ pub const ZINCBLENDE_SITE_INTERIOR2: usize = 5;
 pub const ZINCBLENDE_SITE_INTERIOR3: usize = 6;
 pub const ZINCBLENDE_SITE_INTERIOR4: usize = 7;
 
-lazy_static! {
-    /// Default cubic zincblende motif used when no motif is connected to atom_fill node
-    pub static ref DEFAULT_ZINCBLENDE_MOTIF: Motif = {
-
-        let motif_text = r#"
+pub const DEFAULT_ZINCBLENDE_MOTIF_TEXT: &str = r#"
 # cubic zincblende motif
 
 PARAM PRIMARY C
@@ -58,6 +54,9 @@ BOND INTERIOR4 +..FACE_X
 
 "#;
 
-        parse_motif(motif_text).expect("Failed to parse default zincblende motif")
+lazy_static! {
+    /// Default cubic zincblende motif used when no motif is connected to atom_fill node
+    pub static ref DEFAULT_ZINCBLENDE_MOTIF: Motif = {
+        parse_motif(DEFAULT_ZINCBLENDE_MOTIF_TEXT).expect("Failed to parse default zincblende motif")
     };
 }

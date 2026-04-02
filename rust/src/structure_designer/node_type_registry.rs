@@ -39,6 +39,7 @@ use super::nodes::lattice_rot::get_node_type_lattice_rot as lattice_rot_get_node
 use super::nodes::lattice_symop::get_node_type as lattice_symop_get_node_type;
 use super::nodes::map::get_node_type as map_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
+use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
 use super::nodes::polygon::get_node_type as polygon_get_node_type;
 use super::nodes::range::get_node_type as range_get_node_type;
@@ -131,6 +132,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(atom_lmove_get_node_type());
         ret.add_node_type(atom_lrot_get_node_type());
         ret.add_node_type(motif_get_node_type());
+        ret.add_node_type(motif_sub_get_node_type());
         ret.add_node_type(atom_fill_get_node_type());
         ret.add_node_type(edit_atom_get_node_type());
         ret.add_node_type(atom_edit_get_node_type());

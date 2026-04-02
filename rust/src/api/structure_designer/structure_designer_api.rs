@@ -1,5 +1,6 @@
 use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APIMotifParameterInfo;
+use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
@@ -89,6 +90,7 @@ use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
 use crate::structure_designer::nodes::atom_fill::AtomFillData;
+use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::atom_move::AtomMoveData;
 use crate::structure_designer::nodes::atom_rot::AtomRotData;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -3731,6 +3733,78 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                 cad_instance
                     .structure_designer
                     .set_node_network_data(node_id, atom_fill_data);
+                refresh_structure_designer_auto(cad_instance);
+
+                APIResult {
+                    success: true,
+                    error_message: String::new(),
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_motif_sub_data(node_id: u64) -> Option<APIMotifSubData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let data = node_data.as_any_ref().downcast_ref::<MotifSubData>()?;
+
+                use crate::crystolecule::atomic_constants::ATOM_INFO;
+
+                let available_parameters = data
+                    .available_parameters
+                    .borrow()
+                    .iter()
+                    .map(|(name, atomic_number)| {
+                        let symbol = ATOM_INFO
+                            .get(&(*atomic_number as i32))
+                            .map(|info| info.symbol.clone())
+                            .unwrap_or_else(|| format!("Z{}", atomic_number));
+                        APIMotifParameterInfo {
+                            name: name.clone(),
+                            default_atomic_number: *atomic_number,
+                            default_element_symbol: symbol,
+                        }
+                    })
+                    .collect();
+
+                Some(APIMotifSubData {
+                    parameter_element_value_definition: data
+                        .parameter_element_value_definition
+                        .clone(),
+                    error: data.error.clone(),
+                    available_parameters,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_motif_sub_data(node_id: u64, data: APIMotifSubData) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let mut motif_sub_data = Box::new(MotifSubData {
+                    parameter_element_value_definition: data.parameter_element_value_definition,
+                    error: None,
+                    parameter_element_values: HashMap::new(),
+                    available_parameters: std::cell::RefCell::new(Vec::new()),
+                });
+                motif_sub_data.parse_and_validate(node_id);
+                cad_instance
+                    .structure_designer
+                    .set_node_network_data(node_id, motif_sub_data);
                 refresh_structure_designer_auto(cad_instance);
 
                 APIResult {

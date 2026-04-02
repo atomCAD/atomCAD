@@ -723,6 +723,13 @@ pub struct APIMotifData {
     pub error: Option<String>, // Optional error message from parsing
 }
 
+#[flutter_rust_bridge::frb]
+pub struct APIMotifSubData {
+    pub parameter_element_value_definition: String,
+    pub error: Option<String>,
+    pub available_parameters: Vec<APIMotifParameterInfo>,
+}
+
 /// Info about a motif parameter element available for override
 #[flutter_rust_bridge::frb]
 pub struct APIMotifParameterInfo {

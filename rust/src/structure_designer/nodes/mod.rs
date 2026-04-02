@@ -35,6 +35,7 @@ pub mod lattice_rot;
 pub mod lattice_symop;
 pub mod map;
 pub mod motif;
+pub mod motif_sub;
 pub mod parameter;
 pub mod polygon;
 pub mod range;
