@@ -539,7 +539,7 @@ impl NetworkResult {
             NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
             NetworkResult::Geometry(_) => "Geometry".to_string(),
             NetworkResult::Atomic(atomic) => format_atomic_display_string(atomic),
-            NetworkResult::Motif(_) => "Motif".to_string(),
+            NetworkResult::Motif(motif) => motif.to_text_format(),
             NetworkResult::Error(_) => "Error".to_string(),
         }
     }

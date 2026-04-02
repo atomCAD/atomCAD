@@ -117,6 +117,58 @@ impl Motif {
         true
     }
 
+    /// Returns a textual representation similar to the motif text format.
+    /// Site names are synthetic (S0, S1, ...) since original names are lost during parsing.
+    pub fn to_text_format(&self) -> String {
+        use crate::crystolecule::atomic_constants::ATOM_INFO;
+
+        let mut lines = Vec::new();
+
+        // Parameter lines
+        for param in &self.parameters {
+            let element_symbol = ATOM_INFO
+                .get(&(param.default_atomic_number as i32))
+                .map(|info| info.symbol.as_str())
+                .unwrap_or("?");
+            lines.push(format!("param {} {}", param.name, element_symbol));
+        }
+
+        // Site lines
+        for (i, site) in self.sites.iter().enumerate() {
+            let element_name = if site.atomic_number < 0 {
+                // Parameter element reference: -1 → index 0, -2 → index 1, etc.
+                let param_index = (-site.atomic_number - 1) as usize;
+                self.parameters
+                    .get(param_index)
+                    .map(|p| p.name.as_str())
+                    .unwrap_or("?")
+                    .to_string()
+            } else {
+                ATOM_INFO
+                    .get(&(site.atomic_number as i32))
+                    .map(|info| info.symbol.clone())
+                    .unwrap_or_else(|| "?".to_string())
+            };
+            lines.push(format!(
+                "site S{} {} {} {} {}",
+                i, element_name, site.position.x, site.position.y, site.position.z
+            ));
+        }
+
+        // Bond lines
+        for bond in &self.bonds {
+            let spec1 = format_site_specifier(&bond.site_1);
+            let spec2 = format_site_specifier(&bond.site_2);
+            if bond.multiplicity != 1 {
+                lines.push(format!("bond {} {} {}", spec1, spec2, bond.multiplicity));
+            } else {
+                lines.push(format!("bond {} {}", spec1, spec2));
+            }
+        }
+
+        lines.join("\n")
+    }
+
     /// Returns a detailed string representation for snapshot testing.
     pub fn to_detailed_string(&self) -> String {
         let mut lines = Vec::new();
@@ -175,5 +227,28 @@ impl Motif {
         }
 
         lines.join("\n")
+    }
+}
+
+fn int_to_cell_char(v: i32) -> char {
+    match v {
+        1 => '+',
+        -1 => '-',
+        _ => '.',
+    }
+}
+
+fn format_site_specifier(spec: &SiteSpecifier) -> String {
+    let cell = spec.relative_cell;
+    if cell.x == 0 && cell.y == 0 && cell.z == 0 {
+        format!("S{}", spec.site_index)
+    } else {
+        format!(
+            "{}{}{}S{}",
+            int_to_cell_char(cell.x),
+            int_to_cell_char(cell.y),
+            int_to_cell_char(cell.z),
+            spec.site_index
+        )
     }
 }
