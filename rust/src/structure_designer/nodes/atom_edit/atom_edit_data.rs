@@ -21,6 +21,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::transform::Transform;
 use glam::f64::{DQuat, DVec3};
+use rustc_hash::FxHashMap;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::sync::Mutex;
@@ -256,6 +257,18 @@ impl AtomEditData {
         }
 
         let mut result = diff_result.result;
+
+        // 2b. Populate effective atomic numbers so parameter elements resolve
+        //     to real elements for minimization, guided placement, passivation, etc.
+        if !self.parameter_elements.is_empty() {
+            let overrides: FxHashMap<i16, i16> = self
+                .parameter_elements
+                .iter()
+                .enumerate()
+                .map(|(i, (_, default_z))| (super::types::param_index_to_atomic_number(i), *default_z))
+                .collect();
+            result.set_effective_atomic_numbers(overrides);
+        }
 
         // 3. Convert AtomicStructure → Motif
         let motif = atomic_structure_to_motif(

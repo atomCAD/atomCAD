@@ -142,7 +142,7 @@ impl MolecularTopology {
             let idx = atom_ids.len();
             id_to_idx.insert(atom.id, idx);
             atom_ids.push(atom.id);
-            atomic_numbers.push(atom.atomic_number);
+            atomic_numbers.push(structure.effective_atomic_number(atom));
             hybridization_overrides.push(atom.hybridization_override());
             positions.push(atom.position.x);
             positions.push(atom.position.y);

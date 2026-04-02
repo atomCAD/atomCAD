@@ -91,6 +91,11 @@ pub struct AtomicStructure {
     is_diff: bool,
     /// For diff structures: maps diff atom IDs to base match positions (for moved atoms)
     anchor_positions: FxHashMap<u32, DVec3>,
+    /// Maps non-physical atomic numbers to real ones for force field evaluation,
+    /// guided placement, hydrogen passivation, etc.
+    /// Used by motif_edit to let parameter elements (e.g. -100) behave as their
+    /// default real element (e.g. 6 for Carbon) in all chemistry-aware subsystems.
+    effective_atomic_numbers: FxHashMap<i16, i16>,
 }
 
 impl Default for AtomicStructure {
@@ -145,6 +150,22 @@ impl AtomicStructure {
 
     pub fn anchor_positions(&self) -> &FxHashMap<u32, DVec3> {
         &self.anchor_positions
+    }
+
+    // Effective atomic number overrides (for parameter elements in motif_edit)
+
+    /// Returns the effective atomic number for an atom, resolving any override.
+    /// For parameter elements (e.g. -100), returns the mapped real element.
+    /// For normal atoms, returns the atom's own atomic number unchanged.
+    pub fn effective_atomic_number(&self, atom: &Atom) -> i16 {
+        self.effective_atomic_numbers
+            .get(&atom.atomic_number)
+            .copied()
+            .unwrap_or(atom.atomic_number)
+    }
+
+    pub fn set_effective_atomic_numbers(&mut self, overrides: FxHashMap<i16, i16>) {
+        self.effective_atomic_numbers = overrides;
     }
 
     // Atom access methods
@@ -255,6 +276,7 @@ impl AtomicStructure {
             decorator: AtomicStructureDecorator::new(),
             is_diff: false,
             anchor_positions: FxHashMap::default(),
+            effective_atomic_numbers: FxHashMap::default(),
         }
     }
 
@@ -269,6 +291,7 @@ impl AtomicStructure {
             decorator: AtomicStructureDecorator::new(),
             is_diff: true,
             anchor_positions: FxHashMap::default(),
+            effective_atomic_numbers: FxHashMap::default(),
         }
     }
 
@@ -892,8 +915,10 @@ impl MemorySizeEstimator for AtomicStructure {
                 * (std::mem::size_of::<u32>() + std::mem::size_of::<AtomDisplayState>());
         let anchor_size = self.anchor_positions.len()
             * (std::mem::size_of::<u32>() + std::mem::size_of::<DVec3>());
+        let effective_z_size = self.effective_atomic_numbers.len()
+            * (std::mem::size_of::<i16>() + std::mem::size_of::<i16>());
 
-        base_size + atoms_size + grid_size + decorator_size + anchor_size
+        base_size + atoms_size + grid_size + decorator_size + anchor_size + effective_z_size
     }
 }
 
