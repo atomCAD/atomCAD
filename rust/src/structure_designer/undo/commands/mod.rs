@@ -10,6 +10,7 @@ pub mod delete_nodes;
 pub mod delete_wires;
 pub mod duplicate_node;
 pub mod factor_selection;
+pub mod motif_edit_property;
 pub mod move_nodes;
 pub mod paste_nodes;
 pub mod rename_helpers;

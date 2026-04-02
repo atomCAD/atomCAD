@@ -1,4 +1,4 @@
-// Tests for the motif_edit node (Phase 2 + Phase 3: parameter elements + Phase 5: ghost atoms + Phase 6: cross-cell bonds)
+// Tests for the motif_edit node (Phase 2 + Phase 3: parameter elements + Phase 5: ghost atoms + Phase 6: cross-cell bonds + Phase 7: undo)
 
 use glam::IVec3;
 use glam::f64::{DVec2, DVec3};
@@ -18,7 +18,11 @@ use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
 use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
     atom_edit_data_to_serializable, serializable_to_atom_edit_data,
 };
+use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use rust_lib_flutter_cad::structure_designer::undo::commands::motif_edit_property::{
+    MotifEditSetNeighborDepthCommand, MotifEditSetParameterElementsCommand,
+};
 use std::collections::HashMap;
 
 // ===== is_atom_edit_family tests =====
@@ -980,4 +984,343 @@ fn test_cross_cell_bond_recording() {
     let d1 = &recorder.cross_cell_bond_deltas[1];
     assert_eq!(d1.old_value, Some(info));
     assert!(d1.new_value.is_none());
+}
+
+// =============================================================================
+// Phase 7: Undo integration tests
+// =============================================================================
+
+fn setup_motif_edit() -> StructureDesigner {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+    let node_id = designer.add_node("motif_edit", DVec2::ZERO);
+    designer.select_node(node_id);
+    designer.undo_stack.clear();
+    designer
+}
+
+fn get_motif_data_mut(designer: &mut StructureDesigner) -> &mut AtomEditData {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("test")
+        .unwrap();
+    let node_id = network.active_node_id.unwrap();
+    let data = network.get_node_network_data_mut(node_id).unwrap();
+    data.as_any_mut().downcast_mut::<AtomEditData>().unwrap()
+}
+
+fn get_motif_node_info(designer: &StructureDesigner) -> (String, u64) {
+    let network_name = designer.active_node_network_name.as_ref().unwrap().clone();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get(&network_name)
+        .unwrap();
+    let node_id = network.active_node_id.unwrap();
+    (network_name, node_id)
+}
+
+// ===== Parameter element undo tests =====
+
+#[test]
+fn test_undo_add_parameter_element() {
+    let mut designer = setup_motif_edit();
+    let (network_name, node_id) = get_motif_node_info(&designer);
+
+    // Add a parameter element via command
+    {
+        let data = get_motif_data_mut(&mut designer);
+        let old_value = data.parameter_elements.clone();
+        data.parameter_elements.push(("PRIMARY".to_string(), 6));
+        let new_value = data.parameter_elements.clone();
+        designer.push_command(MotifEditSetParameterElementsCommand {
+            description: "Add parameter element".to_string(),
+            network_name: network_name.clone(),
+            node_id,
+            old_value,
+            new_value,
+        });
+    }
+
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[0],
+        ("PRIMARY".to_string(), 6)
+    );
+
+    // Undo
+    assert!(designer.undo());
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 0);
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[0],
+        ("PRIMARY".to_string(), 6)
+    );
+}
+
+#[test]
+fn test_undo_remove_parameter_element() {
+    let mut designer = setup_motif_edit();
+    let (network_name, node_id) = get_motif_node_info(&designer);
+
+    // Set up initial state with two elements
+    get_motif_data_mut(&mut designer).parameter_elements =
+        vec![("PRIMARY".to_string(), 6), ("SECONDARY".to_string(), 14)];
+
+    // Remove the first element via command
+    {
+        let data = get_motif_data_mut(&mut designer);
+        let old_value = data.parameter_elements.clone();
+        data.parameter_elements.remove(0);
+        let new_value = data.parameter_elements.clone();
+        designer.push_command(MotifEditSetParameterElementsCommand {
+            description: "Remove parameter element".to_string(),
+            network_name: network_name.clone(),
+            node_id,
+            old_value,
+            new_value,
+        });
+    }
+
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[0],
+        ("SECONDARY".to_string(), 14)
+    );
+
+    // Undo — both elements restored
+    assert!(designer.undo());
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 2);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[0],
+        ("PRIMARY".to_string(), 6)
+    );
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[1],
+        ("SECONDARY".to_string(), 14)
+    );
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+}
+
+#[test]
+fn test_undo_update_parameter_element() {
+    let mut designer = setup_motif_edit();
+    let (network_name, node_id) = get_motif_node_info(&designer);
+
+    // Set up initial state
+    get_motif_data_mut(&mut designer).parameter_elements =
+        vec![("PRIMARY".to_string(), 6)];
+
+    // Update the element
+    {
+        let data = get_motif_data_mut(&mut designer);
+        let old_value = data.parameter_elements.clone();
+        data.parameter_elements[0] = ("CATION".to_string(), 14);
+        let new_value = data.parameter_elements.clone();
+        designer.push_command(MotifEditSetParameterElementsCommand {
+            description: "Update parameter element".to_string(),
+            network_name: network_name.clone(),
+            node_id,
+            old_value,
+            new_value,
+        });
+    }
+
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[0],
+        ("CATION".to_string(), 14)
+    );
+
+    // Undo
+    assert!(designer.undo());
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[0],
+        ("PRIMARY".to_string(), 6)
+    );
+
+    // Redo
+    assert!(designer.redo());
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements[0],
+        ("CATION".to_string(), 14)
+    );
+}
+
+// ===== Neighbor depth undo tests =====
+
+#[test]
+fn test_undo_neighbor_depth() {
+    let mut designer = setup_motif_edit();
+    let (network_name, node_id) = get_motif_node_info(&designer);
+
+    let old_depth = get_motif_data_mut(&mut designer).neighbor_depth;
+    assert!((old_depth - 0.3).abs() < f64::EPSILON); // default
+
+    // Change neighbor depth
+    {
+        let data = get_motif_data_mut(&mut designer);
+        data.neighbor_depth = 0.7;
+        designer.push_command(MotifEditSetNeighborDepthCommand {
+            network_name: network_name.clone(),
+            node_id,
+            old_value: old_depth,
+            new_value: 0.7,
+        });
+    }
+
+    assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.7).abs() < f64::EPSILON);
+
+    // Undo
+    assert!(designer.undo());
+    assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.3).abs() < f64::EPSILON);
+
+    // Redo
+    assert!(designer.redo());
+    assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.7).abs() < f64::EPSILON);
+}
+
+// ===== Cross-cell bond undo tests =====
+
+#[test]
+fn test_undo_cross_cell_bond() {
+    let mut designer = setup_motif_edit();
+
+    // Add two atoms to the diff
+    {
+        let data = get_motif_data_mut(&mut designer);
+        data.diff.add_atom(6, DVec3::ZERO);       // id 1
+        data.diff.add_atom(6, DVec3::X);           // id 2
+    }
+
+    // Add a bond with cross-cell metadata using with_atom_edit_undo
+    with_atom_edit_undo(
+        &mut designer,
+        "Add cross-cell bond",
+        |sd| {
+            let data = get_motif_data_mut(sd);
+            data.add_bond_recorded(1, 2, 1);
+            let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
+            let info = CrossCellBondInfo {
+                offset: IVec3::new(1, 0, 0),
+                bond_order: 1,
+            };
+            data.set_cross_cell_bond_recorded(bond_ref, info);
+        },
+    );
+
+    // Verify state after
+    {
+        let data = get_motif_data_mut(&mut designer);
+        assert_eq!(data.diff.get_num_of_bonds(), 1);
+        let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
+        assert!(data.cross_cell_bonds.contains_key(&bond_ref));
+        assert_eq!(
+            data.cross_cell_bonds[&bond_ref].offset,
+            IVec3::new(1, 0, 0)
+        );
+    }
+
+    // Undo — both bond and cross_cell_bonds entry removed
+    assert!(designer.undo());
+    {
+        let data = get_motif_data_mut(&mut designer);
+        assert_eq!(data.diff.get_num_of_bonds(), 0);
+        let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
+        assert!(!data.cross_cell_bonds.contains_key(&bond_ref));
+    }
+
+    // Redo — both restored
+    assert!(designer.redo());
+    {
+        let data = get_motif_data_mut(&mut designer);
+        assert_eq!(data.diff.get_num_of_bonds(), 1);
+        let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
+        assert!(data.cross_cell_bonds.contains_key(&bond_ref));
+        assert_eq!(
+            data.cross_cell_bonds[&bond_ref].offset,
+            IVec3::new(1, 0, 0)
+        );
+    }
+}
+
+// ===== Interleaved operations undo test =====
+
+#[test]
+fn test_undo_interleaved_motif_operations() {
+    let mut designer = setup_motif_edit();
+    let (network_name, node_id) = get_motif_node_info(&designer);
+
+    // Step 1: Add an atom via undo wrapper
+    with_atom_edit_undo(
+        &mut designer,
+        "Add atom",
+        |sd| {
+            let data = get_motif_data_mut(sd);
+            data.add_atom_recorded(6, DVec3::ZERO);
+        },
+    );
+    assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
+
+    // Step 2: Add a parameter element
+    {
+        let data = get_motif_data_mut(&mut designer);
+        let old_value = data.parameter_elements.clone();
+        data.parameter_elements.push(("PRIMARY".to_string(), 6));
+        let new_value = data.parameter_elements.clone();
+        designer.push_command(MotifEditSetParameterElementsCommand {
+            description: "Add parameter element".to_string(),
+            network_name: network_name.clone(),
+            node_id,
+            old_value,
+            new_value,
+        });
+    }
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+
+    // Step 3: Change neighbor depth
+    {
+        let data = get_motif_data_mut(&mut designer);
+        let old = data.neighbor_depth;
+        data.neighbor_depth = 0.5;
+        designer.push_command(MotifEditSetNeighborDepthCommand {
+            network_name: network_name.clone(),
+            node_id,
+            old_value: old,
+            new_value: 0.5,
+        });
+    }
+    assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.5).abs() < f64::EPSILON);
+
+    // Undo step 3: neighbor depth reverts
+    assert!(designer.undo());
+    assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.3).abs() < f64::EPSILON);
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
+
+    // Undo step 2: parameter element reverts
+    assert!(designer.undo());
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 0);
+    assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
+
+    // Undo step 1: atom reverts
+    assert!(designer.undo());
+    assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 0);
+
+    // Redo all three in order
+    assert!(designer.redo()); // atom
+    assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
+
+    assert!(designer.redo()); // parameter element
+    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+
+    assert!(designer.redo()); // neighbor depth
+    assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.5).abs() < f64::EPSILON);
 }

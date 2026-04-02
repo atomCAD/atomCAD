@@ -23,6 +23,9 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::undo::commands::atom_edit_toggle_flag::{
     AtomEditFlag, AtomEditToggleFlagCommand,
 };
+use crate::structure_designer::undo::commands::motif_edit_property::{
+    MotifEditSetNeighborDepthCommand, MotifEditSetParameterElementsCommand,
+};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_select_by_ray(
@@ -330,6 +333,35 @@ pub fn atom_edit_transform_selected(abs_transform: APITransform) {
     }
 }
 
+/// Helper: mutate parameter_elements on the active motif_edit node with undo.
+/// Snapshots the full vec before/after and pushes a command if changed.
+fn mutate_parameter_elements<F>(sd: &mut StructureDesigner, description: &str, mutation: F)
+where
+    F: FnOnce(&mut Vec<(String, i16)>),
+{
+    let (network_name, node_id) = match atom_edit::get_atom_edit_node_info_pub(sd) {
+        Some(info) => info,
+        None => return,
+    };
+    if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+        if !data.is_motif_mode {
+            return;
+        }
+        let old_value = data.parameter_elements.clone();
+        mutation(&mut data.parameter_elements);
+        let new_value = data.parameter_elements.clone();
+        if old_value != new_value {
+            sd.push_command(MotifEditSetParameterElementsCommand {
+                description: description.to_string(),
+                network_name,
+                node_id,
+                old_value,
+                new_value,
+            });
+        }
+    }
+}
+
 /// Helper: toggle a boolean flag on AtomEditData and push an undo command.
 fn toggle_atom_edit_flag(
     sd: &mut StructureDesigner,
@@ -555,16 +587,14 @@ pub fn set_atom_edit_selected_element(atomic_number: i16) {
 pub fn motif_edit_add_parameter_element(name: String, default_atomic_number: i16) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(atom_edit_data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
-                if atom_edit_data.is_motif_mode {
-                    atom_edit_data
-                        .parameter_elements
-                        .push((name, default_atomic_number));
-                    refresh_structure_designer_auto(cad_instance);
-                }
-            }
+            mutate_parameter_elements(
+                &mut cad_instance.structure_designer,
+                "Add parameter element",
+                |elems| {
+                    elems.push((name, default_atomic_number));
+                },
+            );
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }
@@ -574,14 +604,16 @@ pub fn motif_edit_add_parameter_element(name: String, default_atomic_number: i16
 pub fn motif_edit_remove_parameter_element(index: usize) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(atom_edit_data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
-                if atom_edit_data.is_motif_mode && index < atom_edit_data.parameter_elements.len() {
-                    atom_edit_data.parameter_elements.remove(index);
-                    refresh_structure_designer_auto(cad_instance);
-                }
-            }
+            mutate_parameter_elements(
+                &mut cad_instance.structure_designer,
+                "Remove parameter element",
+                |elems| {
+                    if index < elems.len() {
+                        elems.remove(index);
+                    }
+                },
+            );
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }
@@ -591,14 +623,16 @@ pub fn motif_edit_remove_parameter_element(index: usize) {
 pub fn motif_edit_update_parameter_element(index: usize, name: String, default_atomic_number: i16) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(atom_edit_data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
-                if atom_edit_data.is_motif_mode && index < atom_edit_data.parameter_elements.len() {
-                    atom_edit_data.parameter_elements[index] = (name, default_atomic_number);
-                    refresh_structure_designer_auto(cad_instance);
-                }
-            }
+            mutate_parameter_elements(
+                &mut cad_instance.structure_designer,
+                "Update parameter element",
+                |elems| {
+                    if index < elems.len() {
+                        elems[index] = (name, default_atomic_number);
+                    }
+                },
+            );
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }
@@ -622,14 +656,27 @@ pub fn motif_edit_get_neighbor_depth() -> f64 {
 pub fn motif_edit_set_neighbor_depth(value: f64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(data) =
-                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
-            {
+            let sd = &mut cad_instance.structure_designer;
+            let (network_name, node_id) = match atom_edit::get_atom_edit_node_info_pub(sd) {
+                Some(info) => info,
+                None => return,
+            };
+            if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
                 if data.is_motif_mode {
-                    data.neighbor_depth = value.clamp(0.0, 1.0);
-                    refresh_structure_designer_auto(cad_instance);
+                    let old_value = data.neighbor_depth;
+                    let new_value = value.clamp(0.0, 1.0);
+                    if (old_value - new_value).abs() > f64::EPSILON {
+                        data.neighbor_depth = new_value;
+                        sd.push_command(MotifEditSetNeighborDepthCommand {
+                            network_name,
+                            node_id,
+                            old_value,
+                            new_value,
+                        });
+                    }
                 }
             }
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }
