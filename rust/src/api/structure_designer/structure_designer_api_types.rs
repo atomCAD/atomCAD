@@ -499,6 +499,9 @@ pub struct APIHoveredAtomInfo {
     pub symbol: String,
     pub element_name: String,
     pub atomic_number: i32,
+    /// For parameter elements: the resolved real element (e.g. "C (Carbon)").
+    /// Empty string when the atom is a normal element with no override.
+    pub effective_element: String,
 
     // Position (world-space Angstroms — used both for display and
     // for Flutter to project the tooltip anchor to screen space)

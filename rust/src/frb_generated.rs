@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -9054,6 +9054,7 @@ impl SseDecode
         let mut var_symbol = <String>::sse_decode(deserializer);
         let mut var_elementName = <String>::sse_decode(deserializer);
         let mut var_atomicNumber = <i32>::sse_decode(deserializer);
+        let mut var_effectiveElement = <String>::sse_decode(deserializer);
         let mut var_x = <f64>::sse_decode(deserializer);
         let mut var_y = <f64>::sse_decode(deserializer);
         let mut var_z = <f64>::sse_decode(deserializer);
@@ -9067,6 +9068,7 @@ impl SseDecode
             symbol: var_symbol,
             element_name: var_elementName,
             atomic_number: var_atomicNumber,
+            effective_element: var_effectiveElement,
             x: var_x,
             y: var_y,
             z: var_z,
@@ -12815,6 +12817,7 @@ impl flutter_rust_bridge::IntoDart
             self.symbol.into_into_dart().into_dart(),
             self.element_name.into_into_dart().into_dart(),
             self.atomic_number.into_into_dart().into_dart(),
+            self.effective_element.into_into_dart().into_dart(),
             self.x.into_into_dart().into_dart(),
             self.y.into_into_dart().into_dart(),
             self.z.into_into_dart().into_dart(),
@@ -15279,6 +15282,7 @@ impl SseEncode
         <String>::sse_encode(self.symbol, serializer);
         <String>::sse_encode(self.element_name, serializer);
         <i32>::sse_encode(self.atomic_number, serializer);
+        <String>::sse_encode(self.effective_element, serializer);
         <f64>::sse_encode(self.x, serializer);
         <f64>::sse_encode(self.y, serializer);
         <f64>::sse_encode(self.z, serializer);
@@ -17238,7 +17242,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -17262,7 +17266,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

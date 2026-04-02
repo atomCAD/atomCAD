@@ -982,6 +982,10 @@ class APIHoveredAtomInfo {
   final String symbol;
   final String elementName;
   final int atomicNumber;
+
+  /// For parameter elements: the resolved real element (e.g. "C (Carbon)").
+  /// Empty string when the atom is a normal element with no override.
+  final String effectiveElement;
   final double x;
   final double y;
   final double z;
@@ -996,6 +1000,7 @@ class APIHoveredAtomInfo {
     required this.symbol,
     required this.elementName,
     required this.atomicNumber,
+    required this.effectiveElement,
     required this.x,
     required this.y,
     required this.z,
@@ -1012,6 +1017,7 @@ class APIHoveredAtomInfo {
       symbol.hashCode ^
       elementName.hashCode ^
       atomicNumber.hashCode ^
+      effectiveElement.hashCode ^
       x.hashCode ^
       y.hashCode ^
       z.hashCode ^
@@ -1030,6 +1036,7 @@ class APIHoveredAtomInfo {
           symbol == other.symbol &&
           elementName == other.elementName &&
           atomicNumber == other.atomicNumber &&
+          effectiveElement == other.effectiveElement &&
           x == other.x &&
           y == other.y &&
           z == other.z &&

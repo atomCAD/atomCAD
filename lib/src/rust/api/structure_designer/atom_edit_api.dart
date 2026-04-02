@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `collect_frozen_base_atom_ids`, `gather_frozen_base_atoms_promotion_info`, `gather_selected_base_promotion_info_including_frozen`, `gather_selected_base_promotion_info`, `toggle_atom_edit_flag`
+// These functions are ignored because they are not marked as `pub`: `collect_frozen_base_atom_ids`, `gather_frozen_base_atoms_promotion_info`, `gather_selected_base_promotion_info_including_frozen`, `gather_selected_base_promotion_info`, `mutate_parameter_elements`, `toggle_atom_edit_flag`
 
 bool atomEditSelectByRay(
         {required APIVec3 rayStart,

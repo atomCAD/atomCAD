@@ -327,11 +327,14 @@ pub fn add_hydrogens(
             None => continue,
         };
 
+        // Use effective atomic number to resolve parameter elements
+        let atomic_number = structure.effective_atomic_number(atom);
+
         // Skip atoms that should not be passivated
-        if atom.atomic_number <= 0 {
-            continue; // delete markers, parameters
+        if atomic_number <= 0 {
+            continue; // delete markers, unresolved parameters
         }
-        if atom.atomic_number == 1 {
+        if atomic_number == 1 {
             continue; // don't passivate H itself
         }
         if options.selected_only && !atom.is_selected() {
@@ -340,8 +343,6 @@ pub fn add_hydrogens(
         if options.skip_already_passivated && atom.is_hydrogen_passivation() {
             continue;
         }
-
-        let atomic_number = atom.atomic_number;
         let position = atom.position;
 
         // Read the atom's hybridization override from flags (set by atom_edit evaluation).

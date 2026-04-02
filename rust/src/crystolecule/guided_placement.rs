@@ -243,7 +243,7 @@ pub fn detect_hybridization(
         return Hybridization::Sp3;
     }
 
-    match assign_uff_type(atom.atomic_number, &atom.bonds) {
+    match assign_uff_type(structure.effective_atomic_number(atom), &atom.bonds) {
         Ok(label) => {
             let hyb = hybridization_from_label(label);
             match hyb {
@@ -474,7 +474,7 @@ pub fn remaining_slots(
         Some(a) => a,
         None => return 0,
     };
-    let max = effective_max_neighbors(atom.atomic_number, hybridization, bond_mode);
+    let max = effective_max_neighbors(structure.effective_atomic_number(atom), hybridization, bond_mode);
     let current = count_active_neighbors(structure, atom_id);
     max.saturating_sub(current)
 }
@@ -1195,7 +1195,7 @@ pub fn compute_guided_placement(
 
     let anchor_atom = structure.get_atom(anchor_atom_id).unwrap();
     let anchor_pos = anchor_atom.position;
-    let anchor_atomic_number = anchor_atom.atomic_number;
+    let anchor_atomic_number = structure.effective_atomic_number(anchor_atom);
 
     // Compute remaining slots
     let covalent_max = covalent_max_neighbors(anchor_atomic_number, hybridization);

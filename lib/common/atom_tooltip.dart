@@ -57,6 +57,17 @@ class AtomTooltip extends StatelessWidget {
               decoration: TextDecoration.none,
             ),
           ),
+          // Effective element (only for parameter elements with an override)
+          if (info.effectiveElement.isNotEmpty)
+            Text(
+              'Effective element: ${info.effectiveElement}',
+              style: const TextStyle(
+                color: Color(0xCCFFFFFF),
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+                decoration: TextDecoration.none,
+              ),
+            ),
           const SizedBox(height: 2),
           // Line 2: bond count
           Text(

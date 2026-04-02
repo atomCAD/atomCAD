@@ -9940,21 +9940,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIHoveredAtomInfo dco_decode_api_hovered_atom_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return APIHoveredAtomInfo(
       symbol: dco_decode_String(arr[0]),
       elementName: dco_decode_String(arr[1]),
       atomicNumber: dco_decode_i_32(arr[2]),
-      x: dco_decode_f_64(arr[3]),
-      y: dco_decode_f_64(arr[4]),
-      z: dco_decode_f_64(arr[5]),
-      bondCount: dco_decode_u_32(arr[6]),
-      isFrozen: dco_decode_bool(arr[7]),
-      hybridizationOverride: dco_decode_u_8(arr[8]),
-      inferredHybridization: dco_decode_u_8(arr[9]),
-      nodeName: dco_decode_String(arr[10]),
-      overlappingNodeNames: dco_decode_list_String(arr[11]),
+      effectiveElement: dco_decode_String(arr[3]),
+      x: dco_decode_f_64(arr[4]),
+      y: dco_decode_f_64(arr[5]),
+      z: dco_decode_f_64(arr[6]),
+      bondCount: dco_decode_u_32(arr[7]),
+      isFrozen: dco_decode_bool(arr[8]),
+      hybridizationOverride: dco_decode_u_8(arr[9]),
+      inferredHybridization: dco_decode_u_8(arr[10]),
+      nodeName: dco_decode_String(arr[11]),
+      overlappingNodeNames: dco_decode_list_String(arr[12]),
     );
   }
 
@@ -12488,6 +12489,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_symbol = sse_decode_String(deserializer);
     var var_elementName = sse_decode_String(deserializer);
     var var_atomicNumber = sse_decode_i_32(deserializer);
+    var var_effectiveElement = sse_decode_String(deserializer);
     var var_x = sse_decode_f_64(deserializer);
     var var_y = sse_decode_f_64(deserializer);
     var var_z = sse_decode_f_64(deserializer);
@@ -12501,6 +12503,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         symbol: var_symbol,
         elementName: var_elementName,
         atomicNumber: var_atomicNumber,
+        effectiveElement: var_effectiveElement,
         x: var_x,
         y: var_y,
         z: var_z,
@@ -15399,6 +15402,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.symbol, serializer);
     sse_encode_String(self.elementName, serializer);
     sse_encode_i_32(self.atomicNumber, serializer);
+    sse_encode_String(self.effectiveElement, serializer);
     sse_encode_f_64(self.x, serializer);
     sse_encode_f_64(self.y, serializer);
     sse_encode_f_64(self.z, serializer);
