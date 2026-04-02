@@ -16,7 +16,10 @@ use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     param_atomic_number_to_motif, param_index_to_atomic_number,
 };
 use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
-    atom_edit_data_to_serializable, serializable_to_atom_edit_data,
+    SerializableAtomEditData, atom_edit_data_to_serializable, serializable_to_atom_edit_data,
+};
+use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+    load_node_networks_from_file, save_node_networks_to_file,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -185,19 +188,22 @@ fn test_motif_edit_eval_creates_motif_output() {
 }
 
 #[test]
-fn test_motif_edit_eval_no_unit_cell_returns_error() {
+fn test_motif_edit_eval_no_unit_cell_uses_default() {
     let mut designer = StructureDesigner::new();
     designer.add_node_network("test");
     designer.set_active_node_network_name(Some("test".to_string()));
 
-    // Create motif_edit node without wiring unit_cell
+    // Create motif_edit node without wiring unit_cell — should use cubic diamond default
     let me_id = designer.add_node("motif_edit", DVec2::ZERO);
 
     let result = designer.evaluate_node_for_cli(me_id, false);
     assert!(result.is_ok());
     let result = result.unwrap();
-    assert!(!result.success);
-    assert!(result.error_message.is_some());
+    assert!(
+        result.success,
+        "Should succeed with default unit cell: {:?}",
+        result.error_message
+    );
 }
 
 // ===== Display override tests =====
@@ -1323,4 +1329,243 @@ fn test_undo_interleaved_motif_operations() {
 
     assert!(designer.redo()); // neighbor depth
     assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.5).abs() < f64::EPSILON);
+}
+
+// ===== Phase 8: Serialization tests =====
+
+#[test]
+fn test_motif_edit_full_serialization_roundtrip() {
+    // Create AtomEditData in motif mode with all motif-specific fields populated
+    let mut data = AtomEditData::new_motif_mode();
+
+    // Add atoms
+    let id1 = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0)); // Carbon at origin
+    let id2 = data.diff.add_atom(6, DVec3::new(1.78, 1.78, 1.78)); // Carbon at 1/4,1/4,1/4
+
+    // Add a same-cell bond
+    data.diff.add_bond(id1, id2, 1);
+
+    // Add parameter elements
+    data.parameter_elements = vec![
+        ("PRIMARY".to_string(), 6i16),   // Carbon default
+        ("SECONDARY".to_string(), 14i16), // Silicon default
+    ];
+
+    // Set custom neighbor depth
+    data.neighbor_depth = 0.45;
+
+    // Add cross-cell bonds
+    let bond_ref = BondReference {
+        atom_id1: id1,
+        atom_id2: id2,
+    };
+    data.cross_cell_bonds.insert(
+        bond_ref.clone(),
+        CrossCellBondInfo {
+            offset: IVec3::new(1, 0, 0),
+            bond_order: 1,
+        },
+    );
+    let bond_ref2 = BondReference {
+        atom_id1: id1,
+        atom_id2: id2 + 100, // hypothetical atom
+    };
+    data.cross_cell_bonds.insert(
+        bond_ref2.clone(),
+        CrossCellBondInfo {
+            offset: IVec3::new(0, 1, -1),
+            bond_order: 2,
+        },
+    );
+
+    // Serialize
+    let serializable = atom_edit_data_to_serializable(&data).unwrap();
+
+    // Verify serializable fields
+    assert!(serializable.is_motif_mode);
+    assert_eq!(serializable.parameter_elements.len(), 2);
+    assert_eq!(serializable.parameter_elements[0].name, "PRIMARY");
+    assert_eq!(serializable.parameter_elements[0].default_atomic_number, 6);
+    assert_eq!(serializable.parameter_elements[1].name, "SECONDARY");
+    assert_eq!(
+        serializable.parameter_elements[1].default_atomic_number,
+        14
+    );
+    assert!((serializable.neighbor_depth - 0.45).abs() < f64::EPSILON);
+    assert_eq!(serializable.cross_cell_bonds.len(), 2);
+
+    // Roundtrip through JSON
+    let json = serde_json::to_string(&serializable).unwrap();
+    let deserialized: SerializableAtomEditData = serde_json::from_str(&json).unwrap();
+
+    // Restore
+    let restored = serializable_to_atom_edit_data(&deserialized).unwrap();
+
+    // Verify all fields match
+    assert!(restored.is_motif_mode);
+    assert_eq!(restored.parameter_elements.len(), 2);
+    assert_eq!(restored.parameter_elements[0].0, "PRIMARY");
+    assert_eq!(restored.parameter_elements[0].1, 6);
+    assert_eq!(restored.parameter_elements[1].0, "SECONDARY");
+    assert_eq!(restored.parameter_elements[1].1, 14);
+    assert!((restored.neighbor_depth - 0.45).abs() < f64::EPSILON);
+    assert_eq!(restored.cross_cell_bonds.len(), 2);
+    assert_eq!(restored.diff.get_num_of_atoms(), 2);
+
+    // Verify cross-cell bond data survived
+    let restored_ccb = restored.cross_cell_bonds.get(&bond_ref).unwrap();
+    assert_eq!(restored_ccb.offset, IVec3::new(1, 0, 0));
+    assert_eq!(restored_ccb.bond_order, 1);
+    let restored_ccb2 = restored.cross_cell_bonds.get(&bond_ref2).unwrap();
+    assert_eq!(restored_ccb2.offset, IVec3::new(0, 1, -1));
+    assert_eq!(restored_ccb2.bond_order, 2);
+}
+
+#[test]
+fn test_motif_edit_backward_compat_no_motif_fields() {
+    // Simulate loading old JSON with NO motif-specific fields
+    let json = serde_json::json!({
+        "diff": {
+            "atoms": [
+                { "id": 1, "atomic_number": 6, "position": [0.0, 0.0, 0.0], "flags": 0 }
+            ],
+            "bonds": [],
+            "anchor_positions": []
+        }
+    });
+    let serializable: SerializableAtomEditData = serde_json::from_value(json).unwrap();
+
+    // Verify all defaults
+    assert!(!serializable.is_motif_mode);
+    assert!(serializable.parameter_elements.is_empty());
+    assert!((serializable.neighbor_depth - 0.3).abs() < f64::EPSILON);
+    assert!(serializable.cross_cell_bonds.is_empty());
+
+    // Restore and verify runtime defaults
+    let restored = serializable_to_atom_edit_data(&serializable).unwrap();
+    assert!(!restored.is_motif_mode);
+    assert!(restored.parameter_elements.is_empty());
+    assert!((restored.neighbor_depth - 0.3).abs() < f64::EPSILON);
+    assert!(restored.cross_cell_bonds.is_empty());
+    assert_eq!(restored.diff.get_num_of_atoms(), 1);
+}
+
+#[test]
+fn test_motif_edit_cnnd_roundtrip() {
+    // Build a network with a motif_edit node, save to .cnnd, reload, verify state
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+
+    // Add motif_edit node
+    let me_id = designer.add_node("motif_edit", DVec2::new(200.0, 0.0));
+
+    // Populate motif_edit data
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test")
+            .unwrap();
+        let node = network.nodes.get_mut(&me_id).unwrap();
+        let data = node
+            .data
+            .as_any_mut()
+            .downcast_mut::<AtomEditData>()
+            .unwrap();
+
+        data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+        data.diff.add_atom(14, DVec3::new(1.0, 1.0, 1.0));
+        data.parameter_elements = vec![("PARAM_1".to_string(), 6i16)];
+        data.neighbor_depth = 0.5;
+
+        let bond_ref = BondReference {
+            atom_id1: 1,
+            atom_id2: 2,
+        };
+        data.cross_cell_bonds.insert(
+            bond_ref,
+            CrossCellBondInfo {
+                offset: IVec3::new(1, 0, 0),
+                bond_order: 1,
+            },
+        );
+    }
+
+    // Save to temp file
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path().join("motif_roundtrip.cnnd");
+
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_path,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("Failed to save CNND");
+
+    // Reload
+    let mut registry2 = NodeTypeRegistry::new();
+    let _load_result =
+        load_node_networks_from_file(&mut registry2, temp_path.to_str().unwrap())
+            .expect("Failed to reload CNND");
+
+    // Verify the motif_edit node state survived
+    let network2 = registry2.node_networks.get("test").unwrap();
+    let node2 = network2.nodes.values().find(|n| n.node_type_name == "motif_edit").unwrap();
+    let data2 = node2
+        .data
+        .as_any_ref()
+        .downcast_ref::<AtomEditData>()
+        .unwrap();
+
+    assert!(data2.is_motif_mode);
+    assert_eq!(data2.diff.get_num_of_atoms(), 2);
+    assert_eq!(data2.parameter_elements.len(), 1);
+    assert_eq!(data2.parameter_elements[0].0, "PARAM_1");
+    assert_eq!(data2.parameter_elements[0].1, 6);
+    assert!((data2.neighbor_depth - 0.5).abs() < f64::EPSILON);
+    assert_eq!(data2.cross_cell_bonds.len(), 1);
+
+    let bond_ref = BondReference {
+        atom_id1: 1,
+        atom_id2: 2,
+    };
+    let ccb = data2.cross_cell_bonds.get(&bond_ref).unwrap();
+    assert_eq!(ccb.offset, IVec3::new(1, 0, 0));
+    assert_eq!(ccb.bond_order, 1);
+}
+
+#[test]
+fn test_motif_edit_partial_fields() {
+    // JSON with only some motif fields present (is_motif_mode but no cross_cell_bonds)
+    let json = serde_json::json!({
+        "diff": {
+            "atoms": [],
+            "bonds": [],
+            "anchor_positions": []
+        },
+        "is_motif_mode": true,
+        "parameter_elements": [
+            { "name": "DOPANT", "default_atomic_number": 7 }
+        ]
+        // neighbor_depth and cross_cell_bonds omitted
+    });
+    let serializable: SerializableAtomEditData = serde_json::from_value(json).unwrap();
+
+    assert!(serializable.is_motif_mode);
+    assert_eq!(serializable.parameter_elements.len(), 1);
+    assert_eq!(serializable.parameter_elements[0].name, "DOPANT");
+    assert_eq!(serializable.parameter_elements[0].default_atomic_number, 7);
+    assert!((serializable.neighbor_depth - 0.3).abs() < f64::EPSILON); // default
+    assert!(serializable.cross_cell_bonds.is_empty()); // default
+
+    // Restore and verify
+    let restored = serializable_to_atom_edit_data(&serializable).unwrap();
+    assert!(restored.is_motif_mode);
+    assert_eq!(restored.parameter_elements.len(), 1);
+    assert_eq!(restored.parameter_elements[0].0, "DOPANT");
+    assert_eq!(restored.parameter_elements[0].1, 7);
+    assert!((restored.neighbor_depth - 0.3).abs() < f64::EPSILON);
+    assert!(restored.cross_cell_bonds.is_empty());
 }

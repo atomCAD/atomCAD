@@ -2,6 +2,8 @@
 
 Non-destructive atom editing node with diff-based architecture. Edits are represented as a single `AtomicStructure` diff applied to the input structure via `apply_diff()`.
 
+This module implements both the `atom_edit` and `motif_edit` node types. `motif_edit` is a mode of `AtomEditData` (`is_motif_mode = true`) that outputs a `Motif` instead of `Atomic`. It adds: fractional coordinate conversion via a unit_cell input (defaults to cubic diamond), parameter elements, cross-cell bonds, and ghost atom generation for neighboring cells. See `doc/design_motif_edit.md`.
+
 ## Module Structure
 
 ```

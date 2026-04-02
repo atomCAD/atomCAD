@@ -198,22 +198,18 @@ impl AtomEditData {
         input_structure: AtomicStructure,
         tolerance: f64,
     ) -> EvalOutput {
-        // 1. Get unit cell from pin 1
-        let unit_cell_val =
-            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
-        let unit_cell = match unit_cell_val {
-            NetworkResult::UnitCell(uc) => uc,
-            NetworkResult::None => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "unit_cell input required".to_string(),
-                ));
-            }
-            NetworkResult::Error(e) => return EvalOutput::single(NetworkResult::Error(e)),
-            _ => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "unit_cell: wrong type".to_string(),
-                ));
-            }
+        // 1. Get unit cell from pin 1 (defaults to cubic diamond if not connected)
+        let unit_cell = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            UnitCellStruct::cubic_diamond(),
+            NetworkResult::extract_unit_cell,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
         };
 
         // Cache unit cell for interactive tools
@@ -1817,7 +1813,10 @@ impl NodeData for AtomEditData {
         let mut m = HashMap::new();
         m.insert("molecule".to_string(), (false, None)); // optional: allows creating from scratch
         if self.is_motif_mode {
-            m.insert("unit_cell".to_string(), (false, None)); // optional but needed for motif output
+            m.insert(
+                "unit_cell".to_string(),
+                (false, Some("cubic diamond".to_string())),
+            );
         }
         m.insert("tolerance".to_string(), (false, None)); // optional: overrides property
         m
