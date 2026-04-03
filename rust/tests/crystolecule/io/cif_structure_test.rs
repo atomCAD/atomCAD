@@ -1,14 +1,10 @@
 use rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif;
 use rust_lib_flutter_cad::crystolecule::io::cif::structure::{
-    extract_crystal_data, parse_symmetry_code, ParsedSymmetryCode,
+    ParsedSymmetryCode, extract_crystal_data, parse_symmetry_code,
 };
 
 fn fixture_path(name: &str) -> String {
-    format!(
-        "{}/tests/fixtures/cif/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        name
-    )
+    format!("{}/tests/fixtures/cif/{}", env!("CARGO_MANIFEST_DIR"), name)
 }
 
 fn load_fixture(name: &str) -> String {
@@ -143,23 +139,24 @@ fn with_bonds_atom_sites_skip_dummy() {
     // The with_bonds.cif has real atoms (O, C, H) plus DUM atoms that should be skipped
     // Real atoms: 5 O + 21 C + 18 H = 44
     let element_counts: std::collections::HashMap<&str, usize> =
-        data.asymmetric_atoms.iter().fold(
-            std::collections::HashMap::new(),
-            |mut acc, atom| {
+        data.asymmetric_atoms
+            .iter()
+            .fold(std::collections::HashMap::new(), |mut acc, atom| {
                 *acc.entry(atom.element.as_str()).or_insert(0) += 1;
                 acc
-            },
-        );
+            });
 
     assert_eq!(element_counts.get("O"), Some(&5));
     assert_eq!(element_counts.get("C"), Some(&21));
     assert_eq!(element_counts.get("H"), Some(&18));
 
     // No dummy atoms should be present
-    assert!(!data
-        .asymmetric_atoms
-        .iter()
-        .any(|a| a.label.starts_with("DUM")));
+    assert!(
+        !data
+            .asymmetric_atoms
+            .iter()
+            .any(|a| a.label.starts_with("DUM"))
+    );
 }
 
 // --- Symmetry operations ---
@@ -198,9 +195,11 @@ fn new_tag_name_used_for_diamond_symops() {
     let block = &doc.data_blocks[0];
 
     // Verify the new-style tag is present
-    assert!(block
-        .find_loop("_space_group_symop_operation_xyz")
-        .is_some());
+    assert!(
+        block
+            .find_loop("_space_group_symop_operation_xyz")
+            .is_some()
+    );
 
     // extract_crystal_data should still work
     let data = extract_crystal_data(block).unwrap();
@@ -214,9 +213,7 @@ fn old_tag_name_used_for_nacl_symops() {
     let block = &doc.data_blocks[0];
 
     // Verify the old-style tag is present
-    assert!(block
-        .find_loop("_symmetry_equiv_pos_as_xyz")
-        .is_some());
+    assert!(block.find_loop("_symmetry_equiv_pos_as_xyz").is_some());
 
     // extract_crystal_data should still work
     let data = extract_crystal_data(block).unwrap();

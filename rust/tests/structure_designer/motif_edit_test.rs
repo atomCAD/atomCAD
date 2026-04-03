@@ -9,11 +9,11 @@ use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AtomEditData, CrossCellBondInfo, PARAM_ELEMENT_BASE, generate_ghost_atoms,
-    get_node_type_motif_edit, is_atom_edit_family, is_param_element,
-    min_distance_to_unit_cube, param_atomic_number_to_index,
-    param_atomic_number_to_motif, param_index_to_atomic_number,
+    get_node_type_motif_edit, is_atom_edit_family, is_param_element, min_distance_to_unit_cube,
+    param_atomic_number_to_index, param_atomic_number_to_motif, param_index_to_atomic_number,
 };
 use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
     SerializableAtomEditData, atom_edit_data_to_serializable, serializable_to_atom_edit_data,
@@ -21,7 +21,6 @@ use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_seri
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
-use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::undo::commands::motif_edit_property::{
     MotifEditSetNeighborDepthCommand, MotifEditSetParameterElementsCommand,
@@ -968,10 +967,7 @@ fn test_cross_cell_bond_recording() {
         bond_order: 1,
     };
     data.set_cross_cell_bond_recorded(bond_ref.clone(), info);
-    assert_eq!(
-        *data.cross_cell_bonds.get(&bond_ref).unwrap(),
-        info
-    );
+    assert_eq!(*data.cross_cell_bonds.get(&bond_ref).unwrap(), info);
 
     // Remove it
     data.remove_cross_cell_bond_recorded(&bond_ref);
@@ -1050,7 +1046,10 @@ fn test_undo_add_parameter_element() {
         });
     }
 
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        1
+    );
     assert_eq!(
         get_motif_data_mut(&mut designer).parameter_elements[0],
         ("PRIMARY".to_string(), 6)
@@ -1058,11 +1057,17 @@ fn test_undo_add_parameter_element() {
 
     // Undo
     assert!(designer.undo());
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 0);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        0
+    );
 
     // Redo
     assert!(designer.redo());
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        1
+    );
     assert_eq!(
         get_motif_data_mut(&mut designer).parameter_elements[0],
         ("PRIMARY".to_string(), 6)
@@ -1093,7 +1098,10 @@ fn test_undo_remove_parameter_element() {
         });
     }
 
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        1
+    );
     assert_eq!(
         get_motif_data_mut(&mut designer).parameter_elements[0],
         ("SECONDARY".to_string(), 14)
@@ -1101,7 +1109,10 @@ fn test_undo_remove_parameter_element() {
 
     // Undo — both elements restored
     assert!(designer.undo());
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 2);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        2
+    );
     assert_eq!(
         get_motif_data_mut(&mut designer).parameter_elements[0],
         ("PRIMARY".to_string(), 6)
@@ -1113,7 +1124,10 @@ fn test_undo_remove_parameter_element() {
 
     // Redo
     assert!(designer.redo());
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        1
+    );
 }
 
 #[test]
@@ -1122,8 +1136,7 @@ fn test_undo_update_parameter_element() {
     let (network_name, node_id) = get_motif_node_info(&designer);
 
     // Set up initial state
-    get_motif_data_mut(&mut designer).parameter_elements =
-        vec![("PRIMARY".to_string(), 6)];
+    get_motif_data_mut(&mut designer).parameter_elements = vec![("PRIMARY".to_string(), 6)];
 
     // Update the element
     {
@@ -1202,36 +1215,35 @@ fn test_undo_cross_cell_bond() {
     // Add two atoms to the diff
     {
         let data = get_motif_data_mut(&mut designer);
-        data.diff.add_atom(6, DVec3::ZERO);       // id 1
-        data.diff.add_atom(6, DVec3::X);           // id 2
+        data.diff.add_atom(6, DVec3::ZERO); // id 1
+        data.diff.add_atom(6, DVec3::X); // id 2
     }
 
     // Add a bond with cross-cell metadata using with_atom_edit_undo
-    with_atom_edit_undo(
-        &mut designer,
-        "Add cross-cell bond",
-        |sd| {
-            let data = get_motif_data_mut(sd);
-            data.add_bond_recorded(1, 2, 1);
-            let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
-            let info = CrossCellBondInfo {
-                offset: IVec3::new(1, 0, 0),
-                bond_order: 1,
-            };
-            data.set_cross_cell_bond_recorded(bond_ref, info);
-        },
-    );
+    with_atom_edit_undo(&mut designer, "Add cross-cell bond", |sd| {
+        let data = get_motif_data_mut(sd);
+        data.add_bond_recorded(1, 2, 1);
+        let bond_ref = BondReference {
+            atom_id1: 1,
+            atom_id2: 2,
+        };
+        let info = CrossCellBondInfo {
+            offset: IVec3::new(1, 0, 0),
+            bond_order: 1,
+        };
+        data.set_cross_cell_bond_recorded(bond_ref, info);
+    });
 
     // Verify state after
     {
         let data = get_motif_data_mut(&mut designer);
         assert_eq!(data.diff.get_num_of_bonds(), 1);
-        let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
+        let bond_ref = BondReference {
+            atom_id1: 1,
+            atom_id2: 2,
+        };
         assert!(data.cross_cell_bonds.contains_key(&bond_ref));
-        assert_eq!(
-            data.cross_cell_bonds[&bond_ref].offset,
-            IVec3::new(1, 0, 0)
-        );
+        assert_eq!(data.cross_cell_bonds[&bond_ref].offset, IVec3::new(1, 0, 0));
     }
 
     // Undo — both bond and cross_cell_bonds entry removed
@@ -1239,7 +1251,10 @@ fn test_undo_cross_cell_bond() {
     {
         let data = get_motif_data_mut(&mut designer);
         assert_eq!(data.diff.get_num_of_bonds(), 0);
-        let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
+        let bond_ref = BondReference {
+            atom_id1: 1,
+            atom_id2: 2,
+        };
         assert!(!data.cross_cell_bonds.contains_key(&bond_ref));
     }
 
@@ -1248,12 +1263,12 @@ fn test_undo_cross_cell_bond() {
     {
         let data = get_motif_data_mut(&mut designer);
         assert_eq!(data.diff.get_num_of_bonds(), 1);
-        let bond_ref = BondReference { atom_id1: 1, atom_id2: 2 };
+        let bond_ref = BondReference {
+            atom_id1: 1,
+            atom_id2: 2,
+        };
         assert!(data.cross_cell_bonds.contains_key(&bond_ref));
-        assert_eq!(
-            data.cross_cell_bonds[&bond_ref].offset,
-            IVec3::new(1, 0, 0)
-        );
+        assert_eq!(data.cross_cell_bonds[&bond_ref].offset, IVec3::new(1, 0, 0));
     }
 }
 
@@ -1265,14 +1280,10 @@ fn test_undo_interleaved_motif_operations() {
     let (network_name, node_id) = get_motif_node_info(&designer);
 
     // Step 1: Add an atom via undo wrapper
-    with_atom_edit_undo(
-        &mut designer,
-        "Add atom",
-        |sd| {
-            let data = get_motif_data_mut(sd);
-            data.add_atom_recorded(6, DVec3::ZERO);
-        },
-    );
+    with_atom_edit_undo(&mut designer, "Add atom", |sd| {
+        let data = get_motif_data_mut(sd);
+        data.add_atom_recorded(6, DVec3::ZERO);
+    });
     assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
 
     // Step 2: Add a parameter element
@@ -1289,7 +1300,10 @@ fn test_undo_interleaved_motif_operations() {
             new_value,
         });
     }
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        1
+    );
 
     // Step 3: Change neighbor depth
     {
@@ -1308,12 +1322,18 @@ fn test_undo_interleaved_motif_operations() {
     // Undo step 3: neighbor depth reverts
     assert!(designer.undo());
     assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.3).abs() < f64::EPSILON);
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        1
+    );
     assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
 
     // Undo step 2: parameter element reverts
     assert!(designer.undo());
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 0);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        0
+    );
     assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
 
     // Undo step 1: atom reverts
@@ -1325,7 +1345,10 @@ fn test_undo_interleaved_motif_operations() {
     assert_eq!(get_motif_data_mut(&mut designer).diff.get_num_of_atoms(), 1);
 
     assert!(designer.redo()); // parameter element
-    assert_eq!(get_motif_data_mut(&mut designer).parameter_elements.len(), 1);
+    assert_eq!(
+        get_motif_data_mut(&mut designer).parameter_elements.len(),
+        1
+    );
 
     assert!(designer.redo()); // neighbor depth
     assert!((get_motif_data_mut(&mut designer).neighbor_depth - 0.5).abs() < f64::EPSILON);
@@ -1347,7 +1370,7 @@ fn test_motif_edit_full_serialization_roundtrip() {
 
     // Add parameter elements
     data.parameter_elements = vec![
-        ("PRIMARY".to_string(), 6i16),   // Carbon default
+        ("PRIMARY".to_string(), 6i16),    // Carbon default
         ("SECONDARY".to_string(), 14i16), // Silicon default
     ];
 
@@ -1387,10 +1410,7 @@ fn test_motif_edit_full_serialization_roundtrip() {
     assert_eq!(serializable.parameter_elements[0].name, "PRIMARY");
     assert_eq!(serializable.parameter_elements[0].default_atomic_number, 6);
     assert_eq!(serializable.parameter_elements[1].name, "SECONDARY");
-    assert_eq!(
-        serializable.parameter_elements[1].default_atomic_number,
-        14
-    );
+    assert_eq!(serializable.parameter_elements[1].default_atomic_number, 14);
     assert!((serializable.neighbor_depth - 0.45).abs() < f64::EPSILON);
     assert_eq!(serializable.cross_cell_bonds.len(), 2);
 
@@ -1506,13 +1526,16 @@ fn test_motif_edit_cnnd_roundtrip() {
 
     // Reload
     let mut registry2 = NodeTypeRegistry::new();
-    let _load_result =
-        load_node_networks_from_file(&mut registry2, temp_path.to_str().unwrap())
-            .expect("Failed to reload CNND");
+    let _load_result = load_node_networks_from_file(&mut registry2, temp_path.to_str().unwrap())
+        .expect("Failed to reload CNND");
 
     // Verify the motif_edit node state survived
     let network2 = registry2.node_networks.get("test").unwrap();
-    let node2 = network2.nodes.values().find(|n| n.node_type_name == "motif_edit").unwrap();
+    let node2 = network2
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "motif_edit")
+        .unwrap();
     let data2 = node2
         .data
         .as_any_ref()
@@ -1602,8 +1625,8 @@ fn test_effective_atomic_numbers_with_overrides() {
 
 #[test]
 fn test_effective_atomic_numbers_flow_through_topology() {
-    use rustc_hash::FxHashMap;
     use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
+    use rustc_hash::FxHashMap;
 
     let mut s = AtomicStructure::new();
     let id1 = s.add_atom(-100, DVec3::ZERO); // PARAM_1
@@ -1675,9 +1698,9 @@ fn test_motif_edit_eval_populates_effective_atomic_numbers() {
     // The pin 0 wire value is a Motif, but the display override is AtomicStructure
     // We can't easily access the display override from CLI eval, so instead
     // verify by building a topology from a structure with the same overrides
-    use rustc_hash::FxHashMap;
     use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
     use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
+    use rustc_hash::FxHashMap;
 
     let mut s = AtomicStructure::new();
     let a1 = s.add_atom(-100, DVec3::new(0.0, 0.0, 0.0));

@@ -11,7 +11,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 use self::parser::CifParseError;
 use self::structure::CifError as CifStructureError;
-use self::symmetry::expand_asymmetric_unit;
+use self::symmetry::{CifAtomSite, SymmetryOperation, expand_asymmetric_unit};
 
 /// Unified error type for CIF loading.
 #[derive(Debug, Error)]
@@ -64,6 +64,90 @@ pub fn load_cif(file_path: &str, block_name: Option<&str>) -> Result<CifLoadResu
     load_cif_from_str(&content, block_name)
 }
 
+/// Extended result of loading a CIF file, including data needed for bond processing.
+#[derive(Debug, Clone)]
+pub struct CifLoadResultExtended {
+    pub unit_cell: UnitCellStruct,
+    /// Full conventional cell atoms in fractional coordinates.
+    pub atoms: Vec<ExpandedAtomSite>,
+    /// Bonds from `_geom_bond_*` loop, if present in the CIF file.
+    pub cif_bonds: Vec<structure::CifBond>,
+    /// Asymmetric unit atoms (for resolving bond atom labels).
+    pub asymmetric_atoms: Vec<CifAtomSite>,
+    /// Symmetry operations (for resolving bond symmetry codes).
+    pub symmetry_operations: Vec<SymmetryOperation>,
+}
+
+/// Load and process a CIF file, returning extended data including bond info.
+pub fn load_cif_extended(
+    file_path: &str,
+    block_name: Option<&str>,
+) -> Result<CifLoadResultExtended, CifLoadError> {
+    let content = fs::read_to_string(file_path)?;
+    load_cif_extended_from_str(&content, block_name)
+}
+
+/// Extended load from string.
+pub fn load_cif_extended_from_str(
+    content: &str,
+    block_name: Option<&str>,
+) -> Result<CifLoadResultExtended, CifLoadError> {
+    let document = parser::parse_cif(content)?;
+
+    if document.data_blocks.is_empty() {
+        return Err(CifLoadError::NoDataBlocks);
+    }
+
+    let block = if let Some(name) = block_name {
+        document
+            .data_blocks
+            .iter()
+            .find(|b| b.name.eq_ignore_ascii_case(name))
+            .ok_or_else(|| {
+                let available = document
+                    .data_blocks
+                    .iter()
+                    .map(|b| b.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                CifLoadError::BlockNotFound {
+                    requested: name.to_string(),
+                    available,
+                }
+            })?
+    } else {
+        &document.data_blocks[0]
+    };
+
+    let crystal_data = self::structure::extract_crystal_data(block)?;
+
+    let expanded_atoms = expand_asymmetric_unit(
+        &crystal_data.asymmetric_atoms,
+        &crystal_data.symmetry_operations,
+        0.01,
+    );
+
+    let atoms = expanded_atoms
+        .into_iter()
+        .map(|site| {
+            let atomic_number = CHEMICAL_ELEMENTS.get(&site.element).copied().unwrap_or(0) as i16;
+            ExpandedAtomSite {
+                label: site.label,
+                atomic_number,
+                fract: site.fract,
+            }
+        })
+        .collect();
+
+    Ok(CifLoadResultExtended {
+        unit_cell: crystal_data.unit_cell,
+        atoms,
+        cif_bonds: crystal_data.bonds,
+        asymmetric_atoms: crystal_data.asymmetric_atoms,
+        symmetry_operations: crystal_data.symmetry_operations,
+    })
+}
+
 /// Load and process CIF data from a string. Same as `load_cif` but takes
 /// the file content directly (useful for testing without file I/O).
 pub fn load_cif_from_str(
@@ -112,10 +196,7 @@ pub fn load_cif_from_str(
     let atoms = expanded_atoms
         .into_iter()
         .map(|site| {
-            let atomic_number = CHEMICAL_ELEMENTS
-                .get(&site.element)
-                .copied()
-                .unwrap_or(0) as i16;
+            let atomic_number = CHEMICAL_ELEMENTS.get(&site.element).copied().unwrap_or(0) as i16;
             ExpandedAtomSite {
                 label: site.label,
                 atomic_number,

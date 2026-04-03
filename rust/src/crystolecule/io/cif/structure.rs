@@ -3,7 +3,9 @@ use std::collections::HashMap;
 
 use crate::crystolecule::atomic_constants::CHEMICAL_ELEMENTS;
 use crate::crystolecule::io::cif::parser::CifDataBlock;
-use crate::crystolecule::io::cif::symmetry::{CifAtomSite, SymmetryOperation, parse_symmetry_operation};
+use crate::crystolecule::io::cif::symmetry::{
+    CifAtomSite, SymmetryOperation, parse_symmetry_operation,
+};
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 
 use thiserror::Error;
@@ -128,9 +130,7 @@ fn extract_atom_sites(block: &CifDataBlock) -> Result<Vec<CifAtomSite>, CifError
             }
         }
 
-        let label = label_idx
-            .map(|i| row[i].clone())
-            .unwrap_or_default();
+        let label = label_idx.map(|i| row[i].clone()).unwrap_or_default();
 
         // Skip dummy atoms based on type_symbol being "."
         if let Some(idx) = type_symbol_idx {
@@ -148,21 +148,18 @@ fn extract_atom_sites(block: &CifDataBlock) -> Result<Vec<CifAtomSite>, CifError
 
         let element = element.ok_or_else(|| CifError::UnknownElement(label.clone()))?;
 
-        let x: f64 = parse_cif_float(&row[fx])
-            .ok_or_else(|| CifError::InvalidNumber {
-                tag: "_atom_site_fract_x".to_string(),
-                value: row[fx].clone(),
-            })?;
-        let y: f64 = parse_cif_float(&row[fy])
-            .ok_or_else(|| CifError::InvalidNumber {
-                tag: "_atom_site_fract_y".to_string(),
-                value: row[fy].clone(),
-            })?;
-        let z: f64 = parse_cif_float(&row[fz])
-            .ok_or_else(|| CifError::InvalidNumber {
-                tag: "_atom_site_fract_z".to_string(),
-                value: row[fz].clone(),
-            })?;
+        let x: f64 = parse_cif_float(&row[fx]).ok_or_else(|| CifError::InvalidNumber {
+            tag: "_atom_site_fract_x".to_string(),
+            value: row[fx].clone(),
+        })?;
+        let y: f64 = parse_cif_float(&row[fy]).ok_or_else(|| CifError::InvalidNumber {
+            tag: "_atom_site_fract_y".to_string(),
+            value: row[fy].clone(),
+        })?;
+        let z: f64 = parse_cif_float(&row[fz]).ok_or_else(|| CifError::InvalidNumber {
+            tag: "_atom_site_fract_z".to_string(),
+            value: row[fz].clone(),
+        })?;
 
         let occupancy = occupancy_idx
             .and_then(|i| parse_cif_float(&row[i]))
@@ -187,9 +184,7 @@ fn extract_atom_sites(block: &CifDataBlock) -> Result<Vec<CifAtomSite>, CifError
 ///
 /// Tries new-style `_space_group_symop_operation_xyz` first, then falls back
 /// to old-style `_symmetry_equiv_pos_as_xyz`.
-fn extract_symmetry_operations(
-    block: &CifDataBlock,
-) -> Result<Vec<SymmetryOperation>, CifError> {
+fn extract_symmetry_operations(block: &CifDataBlock) -> Result<Vec<SymmetryOperation>, CifError> {
     // Try to find explicit symmetry operations in a loop
     let symop_loop = block
         .find_loop("_space_group_symop_operation_xyz")

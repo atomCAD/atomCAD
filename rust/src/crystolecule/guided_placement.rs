@@ -474,7 +474,11 @@ pub fn remaining_slots(
         Some(a) => a,
         None => return 0,
     };
-    let max = effective_max_neighbors(structure.effective_atomic_number(atom), hybridization, bond_mode);
+    let max = effective_max_neighbors(
+        structure.effective_atomic_number(atom),
+        hybridization,
+        bond_mode,
+    );
     let current = count_active_neighbors(structure, atom_id);
     max.saturating_sub(current)
 }

@@ -24,6 +24,7 @@ pub mod float;
 pub mod geo_trans;
 pub mod half_plane;
 pub mod half_space;
+pub mod import_cif;
 pub mod import_xyz;
 pub mod int;
 pub mod intersect;

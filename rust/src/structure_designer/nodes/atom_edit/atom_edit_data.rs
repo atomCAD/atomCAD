@@ -265,7 +265,9 @@ impl AtomEditData {
                 .parameter_elements
                 .iter()
                 .enumerate()
-                .map(|(i, (_, default_z))| (super::types::param_index_to_atomic_number(i), *default_z))
+                .map(|(i, (_, default_z))| {
+                    (super::types::param_index_to_atomic_number(i), *default_z)
+                })
                 .collect();
             result.set_effective_atomic_numbers(overrides);
         }
@@ -673,7 +675,11 @@ impl AtomEditData {
     /// Record a cross-cell bond entry being set. The offset follows the
     /// normalization convention: IVec3 is the cell offset of max(id1,id2)
     /// relative to min(id1,id2).
-    pub fn set_cross_cell_bond_recorded(&mut self, bond_ref: BondReference, info: CrossCellBondInfo) {
+    pub fn set_cross_cell_bond_recorded(
+        &mut self,
+        bond_ref: BondReference,
+        info: CrossCellBondInfo,
+    ) {
         use super::diff_recorder::CrossCellBondDelta;
         let old_value = self.cross_cell_bonds.get(&bond_ref).copied();
         self.cross_cell_bonds.insert(bond_ref.clone(), info);

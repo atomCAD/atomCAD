@@ -1,6 +1,4 @@
 use super::structure_designer_api_types::APIAtomFillData;
-use super::structure_designer_api_types::APIMotifParameterInfo;
-use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
@@ -15,6 +13,8 @@ use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
+use super::structure_designer_api_types::APIMotifParameterInfo;
+use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIRectData;
@@ -90,7 +90,6 @@ use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
 use crate::structure_designer::nodes::atom_fill::AtomFillData;
-use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::atom_move::AtomMoveData;
 use crate::structure_designer::nodes::atom_rot::AtomRotData;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
@@ -118,6 +117,7 @@ use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEv
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::map::MapData;
 use crate::structure_designer::nodes::motif::MotifData;
+use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::range::RangeData;
 use crate::structure_designer::nodes::rect::RectData;
@@ -4842,42 +4842,42 @@ pub fn query_hovered_atom_info(
                 // Resolve element identity. Check decorator's name overrides first
                 // (set by motif_edit for parameter elements), then fall back to
                 // the standard element database.
-                let (symbol, element_name, display_atomic_number, effective_element) =
-                    if let Some(name) = structure
+                let (symbol, element_name, display_atomic_number, effective_element) = if let Some(
+                    name,
+                ) =
+                    structure
                         .decorator()
                         .element_name_overrides
                         .get(&atom.atomic_number)
-                    {
-                        use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
-                        let sym = param_atomic_number_to_index(atom.atomic_number)
-                            .map(|idx| format!("P{}", idx + 1))
-                            .unwrap_or_else(|| "?".to_string());
+                {
+                    use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+                    let sym = param_atomic_number_to_index(atom.atomic_number)
+                        .map(|idx| format!("P{}", idx + 1))
+                        .unwrap_or_else(|| "?".to_string());
 
-                        // Resolve effective element for display
-                        let eff_z = structure.effective_atomic_number(atom);
-                        let eff_str = if eff_z != atom.atomic_number {
-                            let eff_info = crate::crystolecule::atomic_constants::ATOM_INFO
-                                .get(&(eff_z as i32))
-                                .unwrap_or(
-                                    &crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO,
-                                );
-                            format!("{} ({})", eff_info.symbol, eff_info.element_name)
-                        } else {
-                            String::new()
-                        };
-
-                        (sym, name.clone(), atom.atomic_number as i32, eff_str)
-                    } else {
-                        let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
-                            .get(&(atom.atomic_number as i32))
+                    // Resolve effective element for display
+                    let eff_z = structure.effective_atomic_number(atom);
+                    let eff_str = if eff_z != atom.atomic_number {
+                        let eff_info = crate::crystolecule::atomic_constants::ATOM_INFO
+                            .get(&(eff_z as i32))
                             .unwrap_or(&crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
-                        (
-                            atom_info.symbol.clone(),
-                            atom_info.element_name.clone(),
-                            atom_info.atomic_number,
-                            String::new(),
-                        )
+                        format!("{} ({})", eff_info.symbol, eff_info.element_name)
+                    } else {
+                        String::new()
                     };
+
+                    (sym, name.clone(), atom.atomic_number as i32, eff_str)
+                } else {
+                    let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
+                        .get(&(atom.atomic_number as i32))
+                        .unwrap_or(&crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
+                    (
+                        atom_info.symbol.clone(),
+                        atom_info.element_name.clone(),
+                        atom_info.atomic_number,
+                        String::new(),
+                    )
+                };
 
                 let bond_count = atom.bonds.len() as u32;
 

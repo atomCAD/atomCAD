@@ -26,6 +26,7 @@ use super::nodes::float::get_node_type as float_get_node_type;
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
 use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
 use super::nodes::half_space::get_node_type as half_space_get_node_type;
+use super::nodes::import_cif::get_node_type as import_cif_get_node_type;
 use super::nodes::import_xyz::get_node_type as import_xyz_get_node_type;
 use super::nodes::int::get_node_type as int_get_node_type;
 use super::nodes::intersect::get_node_type as intersect_get_node_type;
@@ -144,6 +145,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(apply_diff_get_node_type());
         ret.add_node_type(atom_composediff_get_node_type());
         ret.add_node_type(import_xyz_get_node_type());
+        ret.add_node_type(import_cif_get_node_type());
         ret.add_node_type(export_xyz_get_node_type());
         ret.add_node_type(atom_cut_get_node_type());
         ret.add_node_type(relax_get_node_type());

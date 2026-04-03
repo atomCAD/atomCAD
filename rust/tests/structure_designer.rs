@@ -138,3 +138,6 @@ mod motif_edit_test;
 
 #[path = "structure_designer/unit_cell_wireframe_test.rs"]
 mod unit_cell_wireframe_test;
+
+#[path = "structure_designer/import_cif_test.rs"]
+mod import_cif_test;

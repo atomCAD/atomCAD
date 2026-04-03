@@ -491,9 +491,7 @@ fn parse_with_bonds_fixture() {
     assert!(atom_loop.rows.len() > 20); // 21 heavy atoms + hydrogens + dummies
 
     // Should have bond data
-    let bond_loop = block
-        .find_loop("_geom_bond_atom_site_label_1")
-        .unwrap();
+    let bond_loop = block.find_loop("_geom_bond_atom_site_label_1").unwrap();
     assert!(bond_loop.rows.len() > 30);
 
     // Verify uncertainty stripped from fractional coords in atom loop
@@ -502,9 +500,7 @@ fn parse_with_bonds_fixture() {
     assert_eq!(first_x, "1.02958"); // was 1.02958(6)
 
     // Verify uncertainty stripped from bond distances
-    let dist_idx = bond_loop
-        .column_index("_geom_bond_distance")
-        .unwrap();
+    let dist_idx = bond_loop.column_index("_geom_bond_distance").unwrap();
     let first_dist = &bond_loop.rows[0][dist_idx];
     assert_eq!(first_dist, "1.3431"); // was 1.3431(8)
 }

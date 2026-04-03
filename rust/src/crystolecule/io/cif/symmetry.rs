@@ -62,7 +62,10 @@ fn wrap_fract(v: f64) -> f64 {
 /// translation constant. Variables a, b, c are treated as x, y, z.
 pub fn parse_symmetry_operation(s: &str) -> Result<SymmetryOperation, CifError> {
     // Strip whitespace and underscores
-    let cleaned: String = s.chars().filter(|c| !c.is_whitespace() && *c != '_').collect();
+    let cleaned: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '_')
+        .collect();
 
     let parts: Vec<&str> = cleaned.split(',').collect();
     if parts.len() != 3 {
@@ -154,10 +157,7 @@ fn parse_expression(expr: &str) -> Result<[f64; 4], String> {
                         pos += 1;
                         row[var_idx] += sign * value;
                     } else {
-                        return Err(format!(
-                            "Expected variable after '*' at position {}",
-                            pos
-                        ));
+                        return Err(format!("Expected variable after '*' at position {}", pos));
                     }
                 } else {
                     return Err("Trailing '*' with no variable".to_string());
@@ -204,10 +204,7 @@ fn parse_number_at(expr: &str, pos: usize) -> Result<(f64, usize), String> {
     }
 
     if p == start {
-        return Err(format!(
-            "Expected number at position {} in '{}'",
-            pos, expr
-        ));
+        return Err(format!("Expected number at position {} in '{}'", pos, expr));
     }
 
     let num_str = &expr[start..p];
@@ -244,7 +241,8 @@ pub fn expand_asymmetric_unit(
 
             // Check for duplicate
             let is_duplicate = expanded.iter().any(|existing| {
-                existing.element == atom.element && fract_distance(existing.fract, new_fract) < tolerance
+                existing.element == atom.element
+                    && fract_distance(existing.fract, new_fract) < tolerance
             });
 
             if !is_duplicate {
@@ -275,9 +273,5 @@ fn fract_distance(a: DVec3, b: DVec3) -> f64 {
 /// accounting for periodic boundary at 0 and 1.
 fn min_fract_diff(a: f64, b: f64) -> f64 {
     let d = (a - b).abs();
-    if d > 0.5 {
-        1.0 - d
-    } else {
-        d
-    }
+    if d > 0.5 { 1.0 - d } else { d }
 }

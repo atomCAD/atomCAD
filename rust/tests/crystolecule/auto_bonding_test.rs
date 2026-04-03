@@ -1,8 +1,8 @@
+use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure_utils::{
     auto_create_bonds, auto_create_bonds_with_tolerance,
 };
-use glam::f64::DVec3;
 
 /// Helper: create a simple two-carbon structure at a given distance.
 fn two_carbons(distance: f64) -> AtomicStructure {
@@ -34,12 +34,20 @@ fn higher_tolerance_creates_more_bonds() {
     // Place two carbons at 1.8 Å — just beyond default 1.771 Å threshold
     let mut structure = two_carbons(1.8);
     auto_create_bonds_with_tolerance(&mut structure, 1.15);
-    assert_eq!(structure.get_num_of_bonds(), 0, "default tolerance should NOT bond at 1.8 Å");
+    assert_eq!(
+        structure.get_num_of_bonds(),
+        0,
+        "default tolerance should NOT bond at 1.8 Å"
+    );
 
     let mut structure = two_carbons(1.8);
     auto_create_bonds_with_tolerance(&mut structure, 1.20);
     // 1.54 * 1.20 = 1.848 → 1.8 < 1.848, bond should form
-    assert_eq!(structure.get_num_of_bonds(), 1, "higher tolerance should bond at 1.8 Å");
+    assert_eq!(
+        structure.get_num_of_bonds(),
+        1,
+        "higher tolerance should bond at 1.8 Å"
+    );
 }
 
 #[test]
@@ -47,12 +55,20 @@ fn lower_tolerance_creates_fewer_bonds() {
     // Place two carbons at 1.5 Å — within default but outside 0.95x
     let mut structure = two_carbons(1.5);
     auto_create_bonds_with_tolerance(&mut structure, 1.15);
-    assert_eq!(structure.get_num_of_bonds(), 1, "default tolerance should bond at 1.5 Å");
+    assert_eq!(
+        structure.get_num_of_bonds(),
+        1,
+        "default tolerance should bond at 1.5 Å"
+    );
 
     let mut structure = two_carbons(1.5);
     auto_create_bonds_with_tolerance(&mut structure, 0.95);
     // 1.54 * 0.95 = 1.463 → 1.5 > 1.463, bond should NOT form
-    assert_eq!(structure.get_num_of_bonds(), 0, "lower tolerance should NOT bond at 1.5 Å");
+    assert_eq!(
+        structure.get_num_of_bonds(),
+        0,
+        "lower tolerance should NOT bond at 1.5 Å"
+    );
 }
 
 #[test]

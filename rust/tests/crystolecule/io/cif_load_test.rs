@@ -1,12 +1,8 @@
-use rust_lib_flutter_cad::crystolecule::io::cif::{load_cif, load_cif_from_str, CifLoadError};
 use glam::DVec3;
+use rust_lib_flutter_cad::crystolecule::io::cif::{CifLoadError, load_cif, load_cif_from_str};
 
 fn fixture_path(name: &str) -> String {
-    format!(
-        "{}/tests/fixtures/cif/{}",
-        env!("CARGO_MANIFEST_DIR"),
-        name
-    )
+    format!("{}/tests/fixtures/cif/{}", env!("CARGO_MANIFEST_DIR"), name)
 }
 
 /// Helper: check that a fractional coordinate matches expected within tolerance.
@@ -27,8 +23,15 @@ fn assert_fract_near(actual: DVec3, expected: DVec3, tol: f64, label: &str) {
 }
 
 /// Helper: count atoms of a given atomic number.
-fn count_element(result: &rust_lib_flutter_cad::crystolecule::io::cif::CifLoadResult, atomic_number: i16) -> usize {
-    result.atoms.iter().filter(|a| a.atomic_number == atomic_number).count()
+fn count_element(
+    result: &rust_lib_flutter_cad::crystolecule::io::cif::CifLoadResult,
+    atomic_number: i16,
+) -> usize {
+    result
+        .atoms
+        .iter()
+        .filter(|a| a.atomic_number == atomic_number)
+        .count()
 }
 
 /// Helper: check that a site with the given element exists near the expected position.
@@ -52,7 +55,11 @@ fn has_site_near(
 fn load_diamond_cif_atom_count() {
     let result = load_cif(&fixture_path("diamond.cif"), None).unwrap();
     // Diamond Fd-3m: 1 asymmetric atom → 8 in conventional cell
-    assert_eq!(result.atoms.len(), 8, "Diamond should have 8 atoms in the conventional cell");
+    assert_eq!(
+        result.atoms.len(),
+        8,
+        "Diamond should have 8 atoms in the conventional cell"
+    );
 }
 
 #[test]
@@ -80,16 +87,40 @@ fn load_diamond_cif_expected_positions() {
     let tol = 0.02;
 
     // FCC corner/face positions
-    assert!(has_site_near(&result, 6, DVec3::new(0.0, 0.0, 0.0), tol), "Missing (0,0,0)");
-    assert!(has_site_near(&result, 6, DVec3::new(0.5, 0.5, 0.0), tol), "Missing (0.5,0.5,0)");
-    assert!(has_site_near(&result, 6, DVec3::new(0.5, 0.0, 0.5), tol), "Missing (0.5,0,0.5)");
-    assert!(has_site_near(&result, 6, DVec3::new(0.0, 0.5, 0.5), tol), "Missing (0,0.5,0.5)");
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.0, 0.0, 0.0), tol),
+        "Missing (0,0,0)"
+    );
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.5, 0.5, 0.0), tol),
+        "Missing (0.5,0.5,0)"
+    );
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.5, 0.0, 0.5), tol),
+        "Missing (0.5,0,0.5)"
+    );
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.0, 0.5, 0.5), tol),
+        "Missing (0,0.5,0.5)"
+    );
 
     // Interior (tetrahedral) positions
-    assert!(has_site_near(&result, 6, DVec3::new(0.25, 0.25, 0.25), tol), "Missing (0.25,0.25,0.25)");
-    assert!(has_site_near(&result, 6, DVec3::new(0.25, 0.75, 0.75), tol), "Missing (0.25,0.75,0.75)");
-    assert!(has_site_near(&result, 6, DVec3::new(0.75, 0.25, 0.75), tol), "Missing (0.75,0.25,0.75)");
-    assert!(has_site_near(&result, 6, DVec3::new(0.75, 0.75, 0.25), tol), "Missing (0.75,0.75,0.25)");
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.25, 0.25, 0.25), tol),
+        "Missing (0.25,0.25,0.25)"
+    );
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.25, 0.75, 0.75), tol),
+        "Missing (0.25,0.75,0.75)"
+    );
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.75, 0.25, 0.75), tol),
+        "Missing (0.75,0.25,0.75)"
+    );
+    assert!(
+        has_site_near(&result, 6, DVec3::new(0.75, 0.75, 0.25), tol),
+        "Missing (0.75,0.75,0.25)"
+    );
 }
 
 // --- NaCl tests ---
@@ -98,7 +129,12 @@ fn load_diamond_cif_expected_positions() {
 fn load_nacl_cif_atom_count() {
     let result = load_cif(&fixture_path("nacl.cif"), None).unwrap();
     // NaCl Fm-3m: 2 asymmetric atoms → 8 in conventional cell (4 Na + 4 Cl)
-    assert_eq!(result.atoms.len(), 8, "NaCl should have 8 atoms; got {}", result.atoms.len());
+    assert_eq!(
+        result.atoms.len(),
+        8,
+        "NaCl should have 8 atoms; got {}",
+        result.atoms.len()
+    );
 }
 
 #[test]
@@ -140,7 +176,12 @@ fn load_nacl_cif_expected_positions() {
 fn load_hexagonal_cif_atom_count() {
     let result = load_cif(&fixture_path("hexagonal.cif"), None).unwrap();
     // Wurtzite P63mc: 2 asymmetric atoms → 4 in unit cell (2 Zn + 2 S)
-    assert_eq!(result.atoms.len(), 4, "Wurtzite should have 4 atoms; got {}", result.atoms.len());
+    assert_eq!(
+        result.atoms.len(),
+        4,
+        "Wurtzite should have 4 atoms; got {}",
+        result.atoms.len()
+    );
 }
 
 #[test]
@@ -175,12 +216,32 @@ fn load_hexagonal_cif_expected_positions() {
     let tol = 0.02;
 
     // Zn positions in wurtzite
-    assert!(has_site_near(&result, 30, DVec3::new(1.0 / 3.0, 2.0 / 3.0, 0.0), tol));
-    assert!(has_site_near(&result, 30, DVec3::new(2.0 / 3.0, 1.0 / 3.0, 0.5), tol));
+    assert!(has_site_near(
+        &result,
+        30,
+        DVec3::new(1.0 / 3.0, 2.0 / 3.0, 0.0),
+        tol
+    ));
+    assert!(has_site_near(
+        &result,
+        30,
+        DVec3::new(2.0 / 3.0, 1.0 / 3.0, 0.5),
+        tol
+    ));
 
     // S positions in wurtzite
-    assert!(has_site_near(&result, 16, DVec3::new(1.0 / 3.0, 2.0 / 3.0, 0.385), tol));
-    assert!(has_site_near(&result, 16, DVec3::new(2.0 / 3.0, 1.0 / 3.0, 0.885), tol));
+    assert!(has_site_near(
+        &result,
+        16,
+        DVec3::new(1.0 / 3.0, 2.0 / 3.0, 0.385),
+        tol
+    ));
+    assert!(has_site_near(
+        &result,
+        16,
+        DVec3::new(2.0 / 3.0, 1.0 / 3.0, 0.885),
+        tol
+    ));
 }
 
 // --- Block selection tests ---
@@ -206,9 +267,16 @@ fn load_multi_block_select_by_name() {
 fn load_multi_block_unknown_name_error() {
     let err = load_cif(&fixture_path("multi_block.cif"), Some("nonexistent")).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("nonexistent"), "Error should mention the requested name: {}", msg);
-    assert!(msg.contains("diamond") || msg.contains("nacl"),
-        "Error should list available blocks: {}", msg);
+    assert!(
+        msg.contains("nonexistent"),
+        "Error should mention the requested name: {}",
+        msg
+    );
+    assert!(
+        msg.contains("diamond") || msg.contains("nacl"),
+        "Error should list available blocks: {}",
+        msg
+    );
 }
 
 // --- Error handling tests ---
@@ -250,5 +318,10 @@ C1 C 0.0 0.0 0.0
     let result = load_cif_from_str(cif, None).unwrap();
     assert_eq!(result.atoms.len(), 1);
     assert_eq!(result.atoms[0].atomic_number, 6);
-    assert_fract_near(result.atoms[0].fract, DVec3::new(0.0, 0.0, 0.0), 0.001, "C1");
+    assert_fract_near(
+        result.atoms[0].fract,
+        DVec3::new(0.0, 0.0, 0.0),
+        0.001,
+        "C1",
+    );
 }

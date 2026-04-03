@@ -15,14 +15,38 @@ fn diamond_unit_cell() -> UnitCellStruct {
 /// (CORNER, FACE_Z, FACE_Y, FACE_X, INTERIOR1-4), all carbon (Z=6).
 fn diamond_sites() -> Vec<Site> {
     vec![
-        Site { atomic_number: 6, position: DVec3::new(0.0, 0.0, 0.0) },       // CORNER
-        Site { atomic_number: 6, position: DVec3::new(0.5, 0.5, 0.0) },       // FACE_Z
-        Site { atomic_number: 6, position: DVec3::new(0.5, 0.0, 0.5) },       // FACE_Y
-        Site { atomic_number: 6, position: DVec3::new(0.0, 0.5, 0.5) },       // FACE_X
-        Site { atomic_number: 6, position: DVec3::new(0.25, 0.25, 0.25) },    // INTERIOR1
-        Site { atomic_number: 6, position: DVec3::new(0.25, 0.75, 0.75) },    // INTERIOR2
-        Site { atomic_number: 6, position: DVec3::new(0.75, 0.25, 0.75) },    // INTERIOR3
-        Site { atomic_number: 6, position: DVec3::new(0.75, 0.75, 0.25) },    // INTERIOR4
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.0, 0.0, 0.0),
+        }, // CORNER
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.5, 0.5, 0.0),
+        }, // FACE_Z
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.5, 0.0, 0.5),
+        }, // FACE_Y
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.0, 0.5, 0.5),
+        }, // FACE_X
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.25, 0.25, 0.25),
+        }, // INTERIOR1
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.25, 0.75, 0.75),
+        }, // INTERIOR2
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.75, 0.25, 0.75),
+        }, // INTERIOR3
+        Site {
+            atomic_number: 6,
+            position: DVec3::new(0.75, 0.75, 0.25),
+        }, // INTERIOR4
     ]
 }
 
@@ -30,15 +54,39 @@ fn diamond_sites() -> Vec<Site> {
 fn nacl_sites() -> Vec<Site> {
     vec![
         // Na sublattice (FCC at origin)
-        Site { atomic_number: 11, position: DVec3::new(0.0, 0.0, 0.0) },
-        Site { atomic_number: 11, position: DVec3::new(0.0, 0.5, 0.5) },
-        Site { atomic_number: 11, position: DVec3::new(0.5, 0.0, 0.5) },
-        Site { atomic_number: 11, position: DVec3::new(0.5, 0.5, 0.0) },
+        Site {
+            atomic_number: 11,
+            position: DVec3::new(0.0, 0.0, 0.0),
+        },
+        Site {
+            atomic_number: 11,
+            position: DVec3::new(0.0, 0.5, 0.5),
+        },
+        Site {
+            atomic_number: 11,
+            position: DVec3::new(0.5, 0.0, 0.5),
+        },
+        Site {
+            atomic_number: 11,
+            position: DVec3::new(0.5, 0.5, 0.0),
+        },
         // Cl sublattice (FCC at 0.5,0.5,0.5)
-        Site { atomic_number: 17, position: DVec3::new(0.5, 0.5, 0.5) },
-        Site { atomic_number: 17, position: DVec3::new(0.5, 0.0, 0.0) },
-        Site { atomic_number: 17, position: DVec3::new(0.0, 0.5, 0.0) },
-        Site { atomic_number: 17, position: DVec3::new(0.0, 0.0, 0.5) },
+        Site {
+            atomic_number: 17,
+            position: DVec3::new(0.5, 0.5, 0.5),
+        },
+        Site {
+            atomic_number: 17,
+            position: DVec3::new(0.5, 0.0, 0.0),
+        },
+        Site {
+            atomic_number: 17,
+            position: DVec3::new(0.0, 0.5, 0.0),
+        },
+        Site {
+            atomic_number: 17,
+            position: DVec3::new(0.0, 0.0, 0.5),
+        },
     ]
 }
 
@@ -79,7 +127,12 @@ fn diamond_infer_bonds_count() {
     let sites = diamond_sites();
     let uc = diamond_unit_cell();
     let bonds = infer_motif_bonds(&sites, &[], &uc, 1.15);
-    assert_eq!(bonds.len(), 16, "Diamond should have 16 bonds; got {}", bonds.len());
+    assert_eq!(
+        bonds.len(),
+        16,
+        "Diamond should have 16 bonds; got {}",
+        bonds.len()
+    );
 }
 
 #[test]
@@ -105,7 +158,11 @@ fn diamond_infer_bonds_match_zincblende_motif() {
         assert!(
             inferred_keys.contains(key),
             "Missing expected bond: site {} → site {} at offset ({},{},{})",
-            key.0, key.1, key.2, key.3, key.4
+            key.0,
+            key.1,
+            key.2,
+            key.3,
+            key.4
         );
     }
 
@@ -113,7 +170,11 @@ fn diamond_infer_bonds_match_zincblende_motif() {
         assert!(
             expected_keys.contains(key),
             "Unexpected inferred bond: site {} → site {} at offset ({},{},{})",
-            key.0, key.1, key.2, key.3, key.4
+            key.0,
+            key.1,
+            key.2,
+            key.3,
+            key.4
         );
     }
 }
@@ -124,7 +185,10 @@ fn diamond_infer_bonds_all_single_multiplicity() {
     let uc = diamond_unit_cell();
     let bonds = infer_motif_bonds(&sites, &[], &uc, 1.15);
     for bond in &bonds {
-        assert_eq!(bond.multiplicity, 1, "All diamond bonds should be single bonds");
+        assert_eq!(
+            bond.multiplicity, 1,
+            "All diamond bonds should be single bonds"
+        );
     }
 }
 
@@ -180,7 +244,11 @@ fn diamond_serialize_motif_text() {
 
     // Verify the text contains the expected number of bond lines
     let bond_lines: Vec<&str> = text.lines().filter(|l| l.starts_with("bond ")).collect();
-    assert_eq!(bond_lines.len(), 16, "Should have 16 bond lines in serialized text");
+    assert_eq!(
+        bond_lines.len(),
+        16,
+        "Should have 16 bond lines in serialized text"
+    );
 
     // Verify all 8 site lines are present
     let site_lines: Vec<&str> = text.lines().filter(|l| l.starts_with("site ")).collect();
@@ -200,7 +268,12 @@ fn nacl_infer_bonds_count() {
     // Actually: 4 Na × 6 bonds each = 24, but each bond is shared → 24 unique bonds.
     // Wait: each Na has 6 nearest Cl neighbors. 4 Na × 6 = 24 total bond endpoints from Na side.
     // Each bond connects one Na to one Cl, so 24 unique bonds.
-    assert_eq!(bonds.len(), 24, "NaCl should have 24 bonds (6 per ion); got {}", bonds.len());
+    assert_eq!(
+        bonds.len(),
+        24,
+        "NaCl should have 24 bonds (6 per ion); got {}",
+        bonds.len()
+    );
 }
 
 #[test]
@@ -216,9 +289,11 @@ fn nacl_each_na_bonds_to_six_cl() {
             .filter(|b| b.site_1.site_index == na_idx || b.site_2.site_index == na_idx)
             .collect();
         assert_eq!(
-            neighbors.len(), 6,
+            neighbors.len(),
+            6,
             "Na site {} should have 6 bonds; got {}",
-            na_idx, neighbors.len()
+            na_idx,
+            neighbors.len()
         );
 
         // All neighbors should be Cl (indices 4-7)
@@ -231,7 +306,8 @@ fn nacl_each_na_bonds_to_six_cl() {
             assert!(
                 (4..8).contains(&other),
                 "Na site {} bonded to non-Cl site {}",
-                na_idx, other
+                na_idx,
+                other
             );
         }
     }
@@ -336,7 +412,12 @@ fn parameter_elements_resolved_for_bond_inference() {
 
     let uc = diamond_unit_cell();
     let bonds = infer_motif_bonds(&sites, &parameters, &uc, 1.15);
-    assert_eq!(bonds.len(), 16, "Parameter elements should resolve to carbon; got {} bonds", bonds.len());
+    assert_eq!(
+        bonds.len(),
+        16,
+        "Parameter elements should resolve to carbon; got {} bonds",
+        bonds.len()
+    );
 }
 
 // --- End-to-end CIF + bond inference tests ---
@@ -362,7 +443,12 @@ fn diamond_cif_end_to_end_bond_inference() {
     assert_eq!(sites.len(), 8, "Diamond should have 8 expanded sites");
 
     let bonds = infer_motif_bonds(&sites, &[], &result.unit_cell, 1.15);
-    assert_eq!(bonds.len(), 16, "Diamond CIF should produce 16 bonds; got {}", bonds.len());
+    assert_eq!(
+        bonds.len(),
+        16,
+        "Diamond CIF should produce 16 bonds; got {}",
+        bonds.len()
+    );
 
     // Each atom in diamond has exactly 4 bonds (sp3 tetrahedral)
     for site_idx in 0..8 {
@@ -394,7 +480,12 @@ fn nacl_cif_end_to_end_bond_inference() {
     assert_eq!(sites.len(), 8);
 
     let bonds = infer_motif_bonds(&sites, &[], &result.unit_cell, 1.15);
-    assert_eq!(bonds.len(), 24, "NaCl CIF should produce 24 bonds; got {}", bonds.len());
+    assert_eq!(
+        bonds.len(),
+        24,
+        "NaCl CIF should produce 24 bonds; got {}",
+        bonds.len()
+    );
 
     // Each ion should have 6 nearest neighbors of opposite type
     for site_idx in 0..8 {

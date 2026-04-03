@@ -36,6 +36,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
 use rust_lib_flutter_cad::structure_designer::nodes::unit_cell::UnitCellData;
 // I/O nodes
 use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;
+use rust_lib_flutter_cad::structure_designer::nodes::import_cif::ImportCifData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_xyz::ImportXYZData;
 // Programming nodes
 use rust_lib_flutter_cad::structure_designer::nodes::comment::CommentData;
@@ -1038,6 +1039,20 @@ fn test_import_xyz_roundtrip() {
         file_name: None,
         atomic_structure: None,
     });
+}
+
+#[test]
+fn test_import_cif_roundtrip() {
+    test_roundtrip(&ImportCifData {
+        file_name: Some("test_input.cif".to_string()),
+        block_name: Some("diamond".to_string()),
+        use_cif_bonds: false,
+        infer_bonds: false,
+        bond_tolerance: 1.3,
+        cached_result: None,
+    });
+    // Test with defaults
+    test_roundtrip(&ImportCifData::new());
 }
 
 // ============================================================================

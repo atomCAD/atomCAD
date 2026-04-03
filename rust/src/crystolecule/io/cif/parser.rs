@@ -66,10 +66,10 @@ pub fn parse_cif(input: &str) -> Result<CifDocument, CifParseError> {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Token {
-    DataBlock(String),   // data_blockname
-    Loop,                // loop_
-    Tag(String),         // _tag_name (lowercase)
-    Value(String),       // a value (quoted or unquoted, uncertainties stripped)
+    DataBlock(String), // data_blockname
+    Loop,              // loop_
+    Tag(String),       // _tag_name (lowercase)
+    Value(String),     // a value (quoted or unquoted, uncertainties stripped)
 }
 
 struct TokenWithLine {
@@ -85,10 +85,7 @@ struct Tokenizer<'a> {
 impl<'a> Tokenizer<'a> {
     fn new(input: &'a str) -> Self {
         let lines: Vec<&str> = input.lines().collect();
-        Self {
-            lines,
-            line_idx: 0,
-        }
+        Self { lines, line_idx: 0 }
     }
 
     fn tokenize(&mut self) -> Result<Vec<TokenWithLine>, CifParseError> {

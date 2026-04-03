@@ -106,7 +106,13 @@ pub fn infer_motif_bonds(
 }
 
 /// Compute canonical key for bond deduplication.
-fn canonical_bond_key(i: usize, j: usize, dx: i32, dy: i32, dz: i32) -> (usize, usize, i32, i32, i32) {
+fn canonical_bond_key(
+    i: usize,
+    j: usize,
+    dx: i32,
+    dy: i32,
+    dz: i32,
+) -> (usize, usize, i32, i32, i32) {
     if i < j {
         (i, j, dx, dy, dz)
     } else if i > j {

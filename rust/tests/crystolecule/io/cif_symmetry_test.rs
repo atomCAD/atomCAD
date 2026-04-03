@@ -1,6 +1,6 @@
 use glam::DVec3;
 use rust_lib_flutter_cad::crystolecule::io::cif::symmetry::{
-    expand_asymmetric_unit, parse_symmetry_operation, CifAtomSite,
+    CifAtomSite, expand_asymmetric_unit, parse_symmetry_operation,
 };
 
 // --- Parsing individual symmetry operation strings ---
@@ -153,7 +153,11 @@ fn parse_error_wrong_component_count() {
 fn parse_error_empty_string() {
     let err = parse_symmetry_operation("").unwrap_err();
     let msg = format!("{}", err);
-    assert!(msg.contains("3 comma-separated") || msg.contains("Empty"), "Got: {}", msg);
+    assert!(
+        msg.contains("3 comma-separated") || msg.contains("Empty"),
+        "Got: {}",
+        msg
+    );
 }
 
 // --- apply() tests ---
@@ -186,8 +190,7 @@ fn apply_wraps_over_one() {
 #[test]
 fn expand_diamond_2_to_8_atoms() {
     let diamond_cif = std::fs::read_to_string("tests/fixtures/cif/diamond.cif").unwrap();
-    let doc =
-        rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&diamond_cif).unwrap();
+    let doc = rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&diamond_cif).unwrap();
     let block = &doc.data_blocks[0];
 
     // Parse symmetry operations
@@ -252,8 +255,7 @@ fn expand_diamond_2_to_8_atoms() {
 #[test]
 fn expand_nacl_2_to_8_atoms() {
     let nacl_cif = std::fs::read_to_string("tests/fixtures/cif/nacl.cif").unwrap();
-    let doc =
-        rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&nacl_cif).unwrap();
+    let doc = rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&nacl_cif).unwrap();
     let block = &doc.data_blocks[0];
 
     let sym_loop = block.find_loop("_symmetry_equiv_pos_as_xyz").unwrap();
@@ -377,7 +379,11 @@ fn wrapping_exact_one() {
     // x+1/2 applied to 0.5 → 1.0 → 0.0
     let op = parse_symmetry_operation("x+1/2,y,z").unwrap();
     let result = op.apply(DVec3::new(0.5, 0.0, 0.0));
-    assert!(result.x < 0.001 || result.x > 0.999, "1.0 should wrap to ~0.0, got {}", result.x);
+    assert!(
+        result.x < 0.001 || result.x > 0.999,
+        "1.0 should wrap to ~0.0, got {}",
+        result.x
+    );
 }
 
 // --- Wurtzite expansion ---
@@ -385,8 +391,7 @@ fn wrapping_exact_one() {
 #[test]
 fn expand_wurtzite_zns() {
     let cif = std::fs::read_to_string("tests/fixtures/cif/hexagonal.cif").unwrap();
-    let doc =
-        rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
+    let doc = rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
     let block = &doc.data_blocks[0];
 
     let sym_loop = block.find_loop("_space_group_symop_operation_xyz").unwrap();
@@ -428,8 +433,7 @@ fn expand_wurtzite_zns() {
 #[test]
 fn parse_all_diamond_symmetry_operations() {
     let cif = std::fs::read_to_string("tests/fixtures/cif/diamond.cif").unwrap();
-    let doc =
-        rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
+    let doc = rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
     let block = &doc.data_blocks[0];
 
     let sym_loop = block.find_loop("_space_group_symop_operation_xyz").unwrap();
@@ -454,8 +458,7 @@ fn parse_all_diamond_symmetry_operations() {
 #[test]
 fn parse_all_nacl_symmetry_operations() {
     let cif = std::fs::read_to_string("tests/fixtures/cif/nacl.cif").unwrap();
-    let doc =
-        rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
+    let doc = rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
     let block = &doc.data_blocks[0];
 
     let sym_loop = block.find_loop("_symmetry_equiv_pos_as_xyz").unwrap();
@@ -480,8 +483,7 @@ fn parse_all_nacl_symmetry_operations() {
 #[test]
 fn parse_all_wurtzite_symmetry_operations() {
     let cif = std::fs::read_to_string("tests/fixtures/cif/hexagonal.cif").unwrap();
-    let doc =
-        rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
+    let doc = rust_lib_flutter_cad::crystolecule::io::cif::parser::parse_cif(&cif).unwrap();
     let block = &doc.data_blocks[0];
 
     let sym_loop = block.find_loop("_space_group_symop_operation_xyz").unwrap();
@@ -543,9 +545,5 @@ fn fract_close(a: DVec3, b: DVec3, tol: f64) -> bool {
 
 fn min_fract_diff(a: f64, b: f64) -> f64 {
     let d = (a - b).abs();
-    if d > 0.5 {
-        1.0 - d
-    } else {
-        d
-    }
+    if d > 0.5 { 1.0 - d } else { d }
 }
