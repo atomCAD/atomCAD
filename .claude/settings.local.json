@@ -133,7 +133,18 @@
       "Bash(/tmp/count_removals.txt:*)",
       "Read(//tmp/**)",
       "Bash(sort -t: -k1,1 -k2,2n)",
-      "Bash(sort -t: -k2,2n)"
+      "Bash(sort -t: -k2,2n)",
+      "WebFetch(domain:atomsk.univ-lille.fr)",
+      "WebFetch(domain:gemmi.readthedocs.io)",
+      "WebFetch(domain:www.compmatphys.org)",
+      "WebFetch(domain:lampz.tugraz.at)",
+      "WebFetch(domain:lipelopesoliveira.github.io)",
+      "WebFetch(domain:www.iucr.org)",
+      "WebFetch(domain:daniloroccatano.blog)",
+      "WebFetch(domain:rheedium.readthedocs.io)",
+      "WebFetch(domain:www.crystallography.net)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:scipython.com)"
     ]
   }
 }
