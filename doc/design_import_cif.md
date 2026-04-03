@@ -401,11 +401,83 @@ pub fn expand_asymmetric_unit(
 ) -> Vec<CifAtomSite>;
 ```
 
-Symmetry operation string parsing:
-- Each string contains 3 comma-separated expressions.
-- Each expression is a linear combination of x, y, z with optional constant (fraction).
-- Examples: `x,y,z` → identity; `-x+1/2,-y,z+1/2` → rotation + translation.
-- Fractions like `1/2`, `1/4`, `3/4` are common.
+#### Symmetry Operation String Syntax
+
+Symmetry operations use Jones' faithful notation (coordinate triplets). Each string contains
+3 comma-separated expressions, one per output coordinate. Each expression is a linear
+combination of input coordinates with an optional translation constant.
+
+**Grammar (informal):**
+
+```
+triplet    := expr ',' expr ',' expr
+expr       := term (('+' | '-') term)*
+term       := [sign] variable
+            | [sign] fraction
+            | [sign] fraction '*' variable
+            | [sign] variable '/' integer
+variable   := 'x' | 'y' | 'z'     (case-insensitive; also accept 'a','b','c')
+fraction   := integer '/' integer   (e.g., 1/2, 3/4)
+            | decimal               (e.g., 0.5, 0.333)
+            | integer               (e.g., 1)
+```
+
+**Accepted syntax variants** (all of these appear in real CIF files):
+
+| Variant | Example | Notes |
+|---------|---------|-------|
+| Vulgar fractions | `-x+1/2` | Most common |
+| Decimal fractions | `-x+0.5` | Equivalent to above |
+| Translation before variable | `1/2+x` | Same as `x+1/2` |
+| Uppercase variables | `X, Y, Z` | Normalize to lowercase |
+| Alternate variable names | `a, b, c` | Treat as x, y, z respectively |
+| Underscore as whitespace | `x,_y,_z` | Strip underscores |
+| Explicit coefficient | `2*x` or `x/3` | Rare; standard ops use only -1, 0, +1 |
+| Spaces around operators | `-x + 1/2, y, -z + 1/2` | Strip all whitespace |
+
+**Implementation notes:**
+- Strip whitespace and underscores before parsing each component.
+- Normalize variable names to lowercase; map `a`→`x`, `b`→`y`, `c`→`z`.
+- In standard crystallographic operations, coefficients on variables are always -1, 0, or
+  +1. Supporting general coefficients (`2*x`, `x/3`) adds minimal complexity and handles
+  edge cases robustly.
+- Translations are typically multiples of 1/12 (common values: 0, 1/6, 1/4, 1/3, 1/2,
+  2/3, 3/4, 5/6). Using `f64` arithmetic avoids any need for fixed-point constraints.
+
+#### Parsing to a 3×4 Matrix
+
+Crystallographic symmetry operations are by definition affine transformations on fractional
+coordinates. The Jones notation is a direct human-readable encoding of a 3×4 matrix (3×3
+rotation + 3×1 translation). There are no products of variables, no nonlinear terms — every
+term is either `coefficient × variable` (rotation part) or a `constant` (translation part).
+
+The matrix falls out directly from the parse with no intermediate AST or additional
+transformation step. For each of the 3 comma-separated expressions, accumulate one row:
+
+```rust
+// Per component (one row of the 3×4 matrix):
+let mut row = [0.0_f64; 4]; // [c_x, c_y, c_z, translation]
+
+for term in parsed_terms {
+    match term {
+        Variable(v, sign) => row[v.index()] += sign,  // x→0, y→1, z→2
+        Constant(val)     => row[3] += val,
+        CoeffVar(c, v)    => row[v.index()] += c,      // handles 2*x, x/3 etc.
+    }
+}
+```
+
+Three rows → complete `SymmetryOperation`. Applying the operation to a fractional position
+`(fx, fy, fz)` is a matrix-vector multiply followed by wrapping into [0, 1) via modulo.
+
+**Examples:**
+
+| String | Row 0 (x') | Row 1 (y') | Row 2 (z') |
+|--------|-----------|-----------|-----------|
+| `x,y,z` | `[1, 0, 0, 0]` | `[0, 1, 0, 0]` | `[0, 0, 1, 0]` |
+| `-x+1/2,-y,z+1/2` | `[-1, 0, 0, 0.5]` | `[0, -1, 0, 0]` | `[0, 0, 1, 0.5]` |
+| `1/4+y,1/4-x,3/4+z` | `[0, 1, 0, 0.25]` | `[-1, 0, 0, 0.25]` | `[0, 0, 1, 0.75]` |
+
 - After applying an operation, wrap fractional coordinates into [0, 1) via modulo.
 
 Deduplication:

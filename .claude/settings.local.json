@@ -144,7 +144,13 @@
       "WebFetch(domain:rheedium.readthedocs.io)",
       "WebFetch(domain:www.crystallography.net)",
       "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:scipython.com)"
+      "WebFetch(domain:scipython.com)",
+      "WebFetch(domain:pymatgen.org)",
+      "WebFetch(domain:www.cryst.ehu.es)",
+      "WebFetch(domain:dictionary.iucr.org)",
+      "WebFetch(domain:onlinelibrary.wiley.com)",
+      "WebFetch(domain:docs.mantidproject.org)",
+      "WebFetch(domain:cci.lbl.gov)"
     ]
   }
 }
