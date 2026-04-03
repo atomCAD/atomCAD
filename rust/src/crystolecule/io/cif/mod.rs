@@ -1,4 +1,5 @@
 pub mod parser;
+pub mod space_groups;
 pub mod structure;
 pub mod symmetry;
 

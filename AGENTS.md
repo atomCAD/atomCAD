@@ -122,6 +122,7 @@ See `doc/testing.md` for test coverage details.
 - `.cnnd` - atomCAD project files (JSON-based)
 - `.mol` - V3000 molecular format (export)
 - `.xyz` - XYZ format (import/export)
+- `.cif` - Crystallographic Information File (import)
 
 ## Documentation
 

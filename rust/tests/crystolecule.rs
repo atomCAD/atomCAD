@@ -34,6 +34,9 @@ mod cif_structure_test;
 #[path = "crystolecule/io/cif_load_test.rs"]
 mod cif_load_test;
 
+#[path = "crystolecule/io/cif_space_groups_test.rs"]
+mod cif_space_groups_test;
+
 #[path = "crystolecule/io/mol_exporter_test.rs"]
 mod mol_exporter_test;
 

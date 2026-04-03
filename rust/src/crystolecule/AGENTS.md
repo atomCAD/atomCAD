@@ -28,10 +28,17 @@ crystolecule/
 │   ├── bond_reference.rs           # Order-insensitive bond pair ID
 │   ├── inline_bond.rs              # 4-byte compact bond (29-bit id + 3-bit order)
 │   └── atomic_structure_decorator.rs  # Display/selection metadata
+├── motif_bond_inference.rs          # Bond inference on motif fractional coords (cross-cell)
 ├── io/
 │   ├── mol_exporter.rs             # MOL V3000 export
 │   ├── xyz_loader.rs               # XYZ import
-│   └── xyz_saver.rs                # XYZ export
+│   ├── xyz_saver.rs                # XYZ export
+│   └── cif/
+│       ├── mod.rs                  # Public API: load_cif() → CifLoadResult
+│       ├── parser.rs               # CIF text format parser (data blocks, tags, loops)
+│       ├── structure.rs            # Extract crystallographic data from parsed CIF
+│       ├── symmetry.rs             # Symmetry operation parsing and expansion
+│       └── space_groups.rs         # Lookup table for 230 space groups (symmetry ops)
 ├── lattice_fill/
 │   ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
 │   ├── fill_algorithm.rs           # Recursive lattice filling (SDF sampling)
@@ -69,6 +76,15 @@ crystolecule/
 | `Hybridization` | `guided_placement.rs` | Sp3 / Sp2 / Sp1 orbital hybridization |
 | `BondMode` | `guided_placement.rs` | Covalent (element-specific max) vs Dative (geometric max) |
 | `BondLengthMode` | `guided_placement.rs` | Crystal (lattice-derived table) vs Uff (force field formula) |
+| `CifDocument` | `io/cif/parser.rs` | Parsed CIF file: list of data blocks |
+| `CifDataBlock` | `io/cif/parser.rs` | Single data block with tags and loops |
+| `CifLoop` | `io/cif/parser.rs` | Loop section: column headers + rows |
+| `SymmetryOperation` | `io/cif/symmetry.rs` | Parsed affine transform (3×4 matrix) from Jones notation |
+| `CifAtomSite` | `io/cif/symmetry.rs` | Atom label, element, fractional coords, occupancy |
+| `CifCrystalData` | `io/cif/structure.rs` | Extracted unit cell, atoms, symmetry ops, bonds from CIF block |
+| `CifBond` | `io/cif/structure.rs` | Explicit bond from `_geom_bond_*` with symmetry codes |
+| `CifLoadResult` | `io/cif/mod.rs` | Unit cell + expanded atom sites (fractional coords) |
+| `ExpandedAtomSite` | `io/cif/mod.rs` | Label, atomic number, fractional position |
 
 ## Core Concepts
 
@@ -95,6 +111,9 @@ crystolecule/
 - `XyzError` (io/xyz_loader) — Io / Parse / FloatParse variants
 - `XyzSaveError` (io/xyz_saver) — Io / ElementNotFound variants
 - `MolSaveError` (io/mol_exporter) — Io / ElementNotFound variants
+- `CifParseError` (io/cif/parser) — syntax errors in CIF text
+- `CifError` (io/cif/symmetry, structure) — symmetry operation or crystal data extraction errors
+- `CifLoadError` (io/cif/mod) — top-level load errors (wraps parse/extraction/IO)
 
 All use `thiserror` derive macros.
 
@@ -105,7 +124,9 @@ lattice_fill  →  AtomicStructure, UnitCellStruct, Motif, GeoNode (from geo_tre
 drawing_plane →  UnitCellStruct
 motif_parser  →  Motif, atomic_constants
 atomic_structure_utils → AtomicStructure, atomic_constants
+io/cif/*      →  UnitCellStruct, Motif, AtomicStructure, atomic_constants
 io/*          →  AtomicStructure, atomic_constants
+motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
 ```
@@ -128,9 +149,15 @@ tests/crystolecule/
 ├── unit_cell_symmetries_test.rs   # All 7 crystal systems, symmetry preservation
 ├── hydrogen_passivation_test.rs   # General-purpose H passivation tests
 ├── motif_parser_test.rs           # Tokenization, all commands, error cases
+├── motif_bond_inference_test.rs   # Bond inference on fractional coords, cross-cell bonds
 ├── io/
 │   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
-│   └── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
+│   ├── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
+│   ├── cif_parser_test.rs         # CIF syntax: tags, loops, quotes, uncertainties
+│   ├── cif_symmetry_test.rs       # Symmetry operation parsing, expansion, dedup
+│   ├── cif_structure_test.rs      # Crystal data extraction, old/new tags, bonds
+│   ├── cif_load_test.rs           # End-to-end load_cif() with fixture files
+│   └── cif_space_groups_test.rs   # Space group lookup table tests
 └── simulation/                    # Energy minimization tests (~300+ tests)
     ├── uff_params_test.rs         # Parameter table spot-checks
     ├── uff_energy_test.rs         # Bond stretch energy + gradient
@@ -154,7 +181,9 @@ tests/crystolecule/
 
 **Adding an element property**: Update `atomic_constants.rs` lazy-static maps (`ATOM_INFO`, `CHEMICAL_ELEMENTS`).
 
-**Adding a new I/O format**: Create `io/format_name.rs`, add `pub mod` in `io/mod.rs`, define an error type with `thiserror`.
+**Adding a new I/O format**: Create `io/format_name.rs`, add `pub mod` in `io/mod.rs`, define an error type with `thiserror`. For complex formats, use a subdirectory (see `io/cif/` as an example).
+
+**CIF-related changes**: The CIF parser (`io/cif/parser.rs`) is a generic STAR/CIF parser. Symmetry operations are in `io/cif/symmetry.rs`, crystal data extraction in `io/cif/structure.rs`, and the 230 space group lookup table in `io/cif/space_groups.rs`. Test fixtures are in `rust/tests/fixtures/cif/` (diamond, nacl, hexagonal, multi_block, with_bonds).
 
 **Changing the motif format**: Update `motif_parser.rs` parse functions and `motif.rs` structs. Update `DEFAULT_ZINCBLENDE_MOTIF` if the syntax changes.
 

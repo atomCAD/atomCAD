@@ -150,7 +150,8 @@
       "WebFetch(domain:dictionary.iucr.org)",
       "WebFetch(domain:onlinelibrary.wiley.com)",
       "WebFetch(domain:docs.mantidproject.org)",
-      "WebFetch(domain:cci.lbl.gov)"
+      "WebFetch(domain:cci.lbl.gov)",
+      "Bash(gh search:*)"
     ]
   }
 }

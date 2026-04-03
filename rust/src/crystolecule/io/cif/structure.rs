@@ -208,8 +208,25 @@ fn extract_symmetry_operations(block: &CifDataBlock) -> Result<Vec<SymmetryOpera
         }
     }
 
-    // No explicit operations found — future phases will add space group lookup.
-    // For now, return an error.
+    // No explicit operations found — try space group lookup by number or name.
+    // Try IT number first (most reliable)
+    if let Some(number) = block
+        .get_tag("_space_group_it_number")
+        .or_else(|| block.get_tag("_symmetry_int_tables_number"))
+    {
+        if let Ok(n) = number.parse::<u16>() {
+            return super::space_groups::lookup_symmetry_operations_by_number(n);
+        }
+    }
+
+    // Try Hermann-Mauguin symbol
+    if let Some(hm) = block
+        .get_tag("_space_group_name_h-m_alt")
+        .or_else(|| block.get_tag("_symmetry_space_group_name_h-m"))
+    {
+        return super::space_groups::lookup_symmetry_operations_by_hm(hm);
+    }
+
     Err(CifError::NoSymmetryInfo)
 }
 
