@@ -25,6 +25,9 @@ mod cif_symmetry_test;
 #[path = "crystolecule/io/cif_structure_test.rs"]
 mod cif_structure_test;
 
+#[path = "crystolecule/io/cif_load_test.rs"]
+mod cif_load_test;
+
 #[path = "crystolecule/io/mol_exporter_test.rs"]
 mod mol_exporter_test;
 
