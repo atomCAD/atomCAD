@@ -10,6 +10,9 @@ mod auto_bonding_test;
 #[path = "crystolecule/drawing_plane_test.rs"]
 mod drawing_plane_test;
 
+#[path = "crystolecule/motif_bond_inference_test.rs"]
+mod motif_bond_inference_test;
+
 #[path = "crystolecule/motif_parser_test.rs"]
 mod motif_parser_test;
 
