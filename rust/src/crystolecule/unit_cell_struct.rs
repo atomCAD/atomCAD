@@ -103,6 +103,59 @@ impl UnitCellStruct {
         }
     }
 
+    /// Creates a UnitCellStruct from the 6 crystallographic parameters.
+    ///
+    /// Computes basis vectors using the standard crystallographic convention:
+    /// - **a** lies along the x-axis
+    /// - **b** lies in the xy-plane
+    /// - **c** is determined by all three angles
+    ///
+    /// # Arguments
+    /// * `len_a`, `len_b`, `len_c` - Lattice vector lengths in Angstroms
+    /// * `alpha`, `beta`, `gamma` - Angles between vectors in degrees
+    ///   (alpha = b∠c, beta = a∠c, gamma = a∠b)
+    pub fn from_parameters(
+        len_a: f64,
+        len_b: f64,
+        len_c: f64,
+        alpha: f64,
+        beta: f64,
+        gamma: f64,
+    ) -> Self {
+        let alpha_rad = alpha.to_radians();
+        let beta_rad = beta.to_radians();
+        let gamma_rad = gamma.to_radians();
+
+        let cos_alpha = alpha_rad.cos();
+        let cos_beta = beta_rad.cos();
+        let cos_gamma = gamma_rad.cos();
+        let sin_gamma = gamma_rad.sin();
+
+        // a along x-axis
+        let a = DVec3::new(len_a, 0.0, 0.0);
+
+        // b in the xy-plane
+        let b = DVec3::new(len_b * cos_gamma, len_b * sin_gamma, 0.0);
+
+        // c determined by all three angles
+        let cx = len_c * cos_beta;
+        let cy = len_c * (cos_alpha - cos_beta * cos_gamma) / sin_gamma;
+        let cz = (len_c * len_c - cx * cx - cy * cy).sqrt();
+        let c = DVec3::new(cx, cy, cz);
+
+        UnitCellStruct {
+            a,
+            b,
+            c,
+            cell_length_a: len_a,
+            cell_length_b: len_b,
+            cell_length_c: len_c,
+            cell_angle_alpha: alpha,
+            cell_angle_beta: beta,
+            cell_angle_gamma: gamma,
+        }
+    }
+
     /// Compares two unit cells with tolerance for small calculation errors.
     ///
     /// This method checks if the basis vectors of two unit cells are approximately equal
