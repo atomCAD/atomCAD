@@ -147,8 +147,10 @@ Public:      true
 | Index | Name | Type | Description |
 |-------|------|------|-------------|
 | 0 | `file_name` | String | Path to the .cif file |
-| 1 | `create_bonds` | Bool | Whether to infer bonds from covalent radii (default: true) |
-| 2 | `bond_tolerance` | Float | Multiplier on covalent radii sum for bond detection (default: 1.15) |
+| 1 | `block_name` | String | Data block name to use (default: empty = first block) |
+| 2 | `use_cif_bonds` | Bool | Use explicit bond data from the CIF file if present (default: true) |
+| 3 | `infer_bonds` | Bool | Infer bonds from covalent radii distances (default: true) |
+| 4 | `bond_tolerance` | Float | Multiplier on covalent radii sum for bond detection (default: 1.15) |
 
 ### Output Pins
 
@@ -156,7 +158,7 @@ Public:      true
 |-------|------|------|-------------|
 | 0 | `unit_cell` | UnitCell | Unit cell from the 6 crystallographic parameters |
 | 1 | `atoms` | Atomic | All atoms in the conventional unit cell (Cartesian coordinates, symmetry-expanded) |
-| 2 | `motif` | Motif | All sites in fractional coordinates with inferred bonds (including cross-cell bonds) |
+| 2 | `motif` | Motif | All sites in fractional coordinates with bonds (including cross-cell bonds) |
 
 ### Node Data
 
@@ -164,8 +166,10 @@ Public:      true
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportCifData {
     pub file_name: Option<String>,
-    pub create_bonds: bool,       // default: true
-    pub bond_tolerance: f64,      // default: 1.15
+    pub block_name: Option<String>,  // default: None (use first block)
+    pub use_cif_bonds: bool,         // default: true
+    pub infer_bonds: bool,           // default: true
+    pub bond_tolerance: f64,         // default: 1.15
 
     #[serde(skip)]
     pub cached_result: Option<CifImportResult>,
@@ -193,13 +197,19 @@ pub struct CifImportResult {
 5. Apply symmetry expansion → list of `(element, fract_x, fract_y, fract_z)` for the full
    conventional cell.
 6. Check for explicit bond data (`_geom_bond_*` loop).
-7. Build the `Motif` from fractional coordinates. For bonds:
-   - If explicit bond data exists in the CIF, use it (cross-referencing atom labels).
-   - Else if `create_bonds` is true, infer bonds using covalent radii with the
-     `bond_tolerance` multiplier (see bond inference section).
-8. Build the `AtomicStructure` by converting fractional → Cartesian using the unit cell.
-   For bonds: same priority as step 7 — explicit CIF bonds first, then distance inference.
-9. Cache the result; return the requested output pin.
+7. Determine bond source:
+
+   | `use_cif_bonds` | CIF has bonds? | `infer_bonds` | Result |
+   |---|---|---|---|
+   | true | yes | (ignored) | Use CIF bonds |
+   | true | no | true | Infer bonds |
+   | true | no | false | No bonds |
+   | false | — | true | Infer bonds |
+   | false | — | false | No bonds |
+8. Build the `Motif` from fractional coordinates with bonds from step 7.
+9. Build the `AtomicStructure` by converting fractional → Cartesian using the unit cell.
+   Apply the same bond source as step 7.
+10. Cache the result; return the requested output pin.
 
 ### Persistence
 
@@ -207,8 +217,8 @@ Follow the same pattern as `import_xyz`:
 
 - **Saver:** Convert absolute file paths to relative paths before serialization.
 - **Loader:** Resolve file path back to absolute, pre-load and parse the CIF file.
-- Only the `file_name`, `create_bonds`, and `bond_tolerance` are serialized — the parsed
-  data is reconstructed from the file on load.
+- Only `file_name`, `block_name`, `use_cif_bonds`, `infer_bonds`, and `bond_tolerance`
+  are serialized — the parsed data is reconstructed from the file on load.
 
 ---
 
@@ -492,7 +502,7 @@ The top-level function composes the above:
 
 ```rust
 /// Result of loading a CIF file.
-pub struct CifImportResult {
+pub struct CifLoadResult {
     pub unit_cell: UnitCellStruct,
     pub atoms: Vec<ExpandedAtomSite>,   // Full conventional cell, fractional coords
 }
@@ -506,11 +516,16 @@ pub struct ExpandedAtomSite {
 /// Load and process a CIF file. Returns unit cell and expanded atom sites.
 /// The caller is responsible for converting to AtomicStructure/Motif and
 /// for bond inference.
-pub fn load_cif(file_path: &str) -> Result<CifImportResult, CifError>;
+///
+/// `block_name`: if Some, selects the data block by name; if None, uses the
+/// first block. Returns an error listing available block names if the
+/// requested name is not found.
+pub fn load_cif(file_path: &str, block_name: Option<&str>) -> Result<CifLoadResult, CifError>;
 ```
 
-The conversion from `CifImportResult` to `AtomicStructure` and `Motif` happens in the node
-evaluation code, since it depends on node parameters (bond_tolerance, create_bonds). This
+The conversion from `CifLoadResult` to `AtomicStructure` and `Motif` happens in the node
+evaluation code, since it depends on node parameters (use_cif_bonds, infer_bonds,
+bond_tolerance). This
 keeps the CIF parser focused on crystallographic data extraction.
 
 ---
@@ -549,29 +564,32 @@ Follows the same patterns as `import_xyz.rs`:
 
 ### `get_node_type()`
 
-Registers the node with 3 parameters and 3 output pins as specified above.
+Registers the node with 5 parameters and 3 output pins as specified above.
 
 ### `eval()`
 
 ```
 fn eval(pin_index: i32, ...) -> NetworkResult:
     1. Get file_name from parameter 0 (or use cached file_name).
-    2. Get create_bonds from parameter 1 (default true).
-    3. Get bond_tolerance from parameter 2 (default 1.15).
-    4. If cached_result is valid (same file, same parameters), use it.
-    5. Otherwise:
+    2. Get block_name from parameter 1 (default empty = None).
+    3. Get use_cif_bonds from parameter 2 (default true).
+    4. Get infer_bonds from parameter 3 (default true).
+    5. Get bond_tolerance from parameter 4 (default 1.15).
+    6. If cached_result is valid (same file, same block, same parameters), use it.
+    7. Otherwise:
        a. Resolve file path (relative → absolute, same as import_xyz).
-       b. Call load_cif(&resolved_path) → CifImportResult.
-       c. Build UnitCellStruct from CifImportResult.unit_cell.
-       d. Build Motif:
+       b. Call load_cif(&resolved_path, block_name) → CifLoadResult.
+       c. Build UnitCellStruct from CifLoadResult.unit_cell.
+       d. Determine bond source (see Evaluation Logic step 7).
+       e. Build Motif:
           - Create Site entries from expanded atom positions (fractional coords).
-          - If create_bonds: run motif bond inference with bond_tolerance.
-       e. Build AtomicStructure:
+          - Add bonds from the determined bond source.
+       f. Build AtomicStructure:
           - Convert each expanded atom from fractional → Cartesian using unit cell.
           - Add atoms to AtomicStructure.
-          - If create_bonds: call auto_create_bonds_with_tolerance(bond_tolerance).
-       f. Cache the result.
-    6. Return the appropriate output based on pin_index:
+          - Add bonds from the determined bond source.
+       g. Cache the result.
+    8. Return the appropriate output based on pin_index:
        - 0 → NetworkResult::UnitCell(unit_cell)
        - 1 → NetworkResult::Atomic(atomic_structure)
        - 2 → NetworkResult::Motif(motif)
@@ -632,11 +650,11 @@ extraction from `with_bonds.cif` fixture including symmetry code parsing.
 Wire together parser → structure extraction → symmetry expansion into the public
 `load_cif()` function.
 
-**Tests:** End-to-end: load a diamond CIF, verify 8 atoms at expected fractional positions
-and correct unit cell parameters. Load NaCl CIF, verify 8 atoms. Load a hexagonal structure
-to test non-orthogonal unit cells. Use the motif text serialization approach (see Test
-Strategy) — serialize the resulting motif and compare against known-good output. For diamond,
-the motif text should match `DEFAULT_ZINCBLENDE_MOTIF_TEXT` (with both params set to C).
+**Tests:** End-to-end: load a diamond CIF, verify 8 expanded atom sites at expected
+fractional positions with correct elements and correct unit cell parameters. Load NaCl CIF,
+verify 8 atoms. Load a hexagonal structure to test non-orthogonal unit cells. These tests
+verify `load_cif()` output only (unit cell + expanded atoms) — motif construction and bond
+inference are tested in Phase 6 and Phase 7 respectively.
 
 ### Phase 5: Bond Tolerance Refactor (`crystolecule/atomic_structure_utils.rs`)
 
@@ -663,7 +681,8 @@ Implement the node: data struct, eval, persistence, registration. Multi-output p
 **Tests:** Node evaluation returns correct types on each pin. File path resolution (relative
 and absolute). Snapshot tests: load fixture CIF → serialize each output (motif text, XYZ,
 unit cell parameters) → compare against verified snapshots. Round-trip serialization of node
-data (save + load preserves file_name, create_bonds, bond_tolerance).
+data (save + load preserves file_name, block_name, use_cif_bonds, infer_bonds,
+bond_tolerance).
 
 ### Phase 8 (Later): Space Group Lookup Table
 
@@ -736,12 +755,14 @@ The Atomic output (pin 1) serves two purposes:
 
 ### Why bond inference in the node rather than a separate node?
 
-Bond inference in the import node is a convenience for the common case — most users will want
-bonds immediately after import. A separate, standalone bond inference node is also planned for
-use cases where bonds need to be added or recalculated independently (e.g., after transforming
-an atomic structure, or on structures from sources other than CIF). The `create_bonds` flag
-allows disabling the built-in inference when the user prefers to use the standalone node
-instead.
+Bond handling in the import node is a convenience for the common case — most users will want
+bonds immediately after import. Two separate parameters give fine-grained control:
+`use_cif_bonds` prefers explicit bond data from the CIF file (more reliable, experimentally
+determined), while `infer_bonds` falls back to distance-based inference. A separate,
+standalone bond inference node is also planned for use cases where bonds need to be added or
+recalculated independently (e.g., after transforming an atomic structure, or on structures
+from sources other than CIF). Setting both flags to false disables all bond creation when the
+user prefers to use the standalone node instead.
 
 ### Bond information from CIF files
 
@@ -761,12 +782,13 @@ extension `_ccdc_geom_bond_type` provides order (S/D/T/A). The `_chemical_conn_b
 tag (part of the IUCr core dictionary, supports `sing`/`doub`/`trip`/`arom`/etc.) exists
 but is almost never populated in deposited files.
 
-**Implementation:** When `_geom_bond_*` data is present, parse it and use the explicit
-connectivity instead of distance-based inference. Bonds from CIF data are more reliable
-than distance inference since they represent experimentally determined connectivity. Bond
-order defaults to single (1) unless `_ccdc_geom_bond_type` or `_chemical_conn_bond_type`
-is available. When `_geom_bond_*` data is absent, fall back to distance-based inference
-(controlled by `create_bonds` and `bond_tolerance` parameters).
+**Implementation:** When `use_cif_bonds` is true and `_geom_bond_*` data is present, parse
+it and use the explicit connectivity — skipping distance-based inference entirely. Bonds from
+CIF data are more reliable than distance inference since they represent experimentally
+determined connectivity. Bond order defaults to single (1) unless `_ccdc_geom_bond_type` or
+`_chemical_conn_bond_type` is available. When `use_cif_bonds` is false or `_geom_bond_*` data
+is absent, fall back to distance-based inference if `infer_bonds` is true (using the
+`bond_tolerance` multiplier).
 
 This is easy to implement since `_geom_bond_*` is a standard CIF loop — the existing
 parser handles it. The atom labels are cross-referenced against `_atom_site_label` to
