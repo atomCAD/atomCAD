@@ -9,7 +9,16 @@ use std::collections::HashSet;
 // Bond distance multiplier - slightly larger than 1.0 to account for variations in bond distances
 const BOND_DISTANCE_MULTIPLIER: f64 = 1.15;
 
+/// Auto-create bonds using the default 1.15x covalent radius multiplier.
 pub fn auto_create_bonds(structure: &mut AtomicStructure) {
+    auto_create_bonds_with_tolerance(structure, BOND_DISTANCE_MULTIPLIER);
+}
+
+/// Auto-create bonds with a custom covalent radius multiplier.
+pub fn auto_create_bonds_with_tolerance(
+    structure: &mut AtomicStructure,
+    tolerance_multiplier: f64,
+) {
     // Track bonds we've already created to avoid duplicates
     let mut processed_pairs: HashSet<(u32, u32)> = HashSet::new();
 
@@ -37,10 +46,10 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
                 .unwrap_or(&DEFAULT_ATOM_INFO)
                 .covalent_radius;
 
-            // MAke the maximum possible bond distance for this atom the search radius.
+            // Make the maximum possible bond distance for this atom the search radius.
             // We need to use the max atom radius
             // since we don't know the radius of the other atom here
-            let search_radius = (atom_radius + max_atom_radius + 0.01) * BOND_DISTANCE_MULTIPLIER;
+            let search_radius = (atom_radius + max_atom_radius + 0.01) * tolerance_multiplier;
 
             let nearby_atoms = structure.get_atoms_in_radius(&atom_pos, search_radius);
 
@@ -72,7 +81,7 @@ pub fn auto_create_bonds(structure: &mut AtomicStructure) {
 
                     let distance = DVec3::distance(atom_pos, nearby_atom.position);
                     let max_bond_distance =
-                        (atom_radius + nearby_atom_radius) * BOND_DISTANCE_MULTIPLIER;
+                        (atom_radius + nearby_atom_radius) * tolerance_multiplier;
 
                     // If the atoms are close enough, create a single bond
                     if distance <= max_bond_distance {
