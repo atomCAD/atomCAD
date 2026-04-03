@@ -510,6 +510,56 @@ fn import_cif_with_bonds_file_uses_cif_bonds() {
     }
 }
 
+/// Regression test: CIF bonds for atoms with fractional coordinates outside [0,1)
+/// must not produce long-distance motif bonds. The with_bonds.cif file has atoms
+/// like O(1) at x=1.02958 and C(21) at x=-0.00758 — after symmetry expansion
+/// these wrap into [0,1), and the motif bond relative_cell must account for this.
+#[test]
+fn import_cif_with_bonds_no_spurious_long_bonds() {
+    use rust_lib_flutter_cad::crystolecule::io::cif::load_cif_extended;
+    use rust_lib_flutter_cad::structure_designer::nodes::import_cif::build_cif_import_result;
+
+    let cif_result = load_cif_extended(&fixture_path("with_bonds.cif"), None).unwrap();
+
+    let count_long_bonds =
+        |import: &rust_lib_flutter_cad::structure_designer::nodes::import_cif::CifImportResult| {
+            import
+                .motif
+                .bonds
+                .iter()
+                .filter(|b| {
+                    let s1 = &import.motif.sites[b.site_1.site_index];
+                    let s2 = &import.motif.sites[b.site_2.site_index];
+                    let pos1 = import.unit_cell.dvec3_lattice_to_real(&s1.position);
+                    let f2 = glam::DVec3::new(
+                        s2.position.x + b.site_2.relative_cell.x as f64,
+                        s2.position.y + b.site_2.relative_cell.y as f64,
+                        s2.position.z + b.site_2.relative_cell.z as f64,
+                    );
+                    let pos2 = import.unit_cell.dvec3_lattice_to_real(&f2);
+                    glam::DVec3::distance(pos1, pos2) > 3.0
+                })
+                .count()
+        };
+
+    // CIF bonds path
+    let import_cif = build_cif_import_result(&cif_result, true, false, 1.15).unwrap();
+    assert_eq!(import_cif.motif.bonds.len(), 46);
+    assert_eq!(
+        count_long_bonds(&import_cif),
+        0,
+        "CIF bonds should have no long bonds"
+    );
+
+    // Inferred bonds path
+    let import_inferred = build_cif_import_result(&cif_result, false, true, 1.15).unwrap();
+    assert_eq!(
+        count_long_bonds(&import_inferred),
+        0,
+        "Inferred bonds should have no long bonds"
+    );
+}
+
 // ============================================================================
 // Subtitle test
 // ============================================================================

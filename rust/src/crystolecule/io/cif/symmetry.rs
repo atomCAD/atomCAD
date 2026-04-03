@@ -23,6 +23,13 @@ impl SymmetryOperation {
     /// Apply this symmetry operation to a fractional coordinate position.
     /// The result is wrapped into [0, 1) via modulo.
     pub fn apply(&self, fract: DVec3) -> DVec3 {
+        let raw = self.apply_unwrapped(fract);
+        DVec3::new(wrap_fract(raw.x), wrap_fract(raw.y), wrap_fract(raw.z))
+    }
+
+    /// Apply this symmetry operation without wrapping the result.
+    /// Returns the raw fractional coordinates which may be outside [0, 1).
+    pub fn apply_unwrapped(&self, fract: DVec3) -> DVec3 {
         let x = self.rows[0][0] * fract.x
             + self.rows[0][1] * fract.y
             + self.rows[0][2] * fract.z
@@ -35,7 +42,7 @@ impl SymmetryOperation {
             + self.rows[2][1] * fract.y
             + self.rows[2][2] * fract.z
             + self.rows[2][3];
-        DVec3::new(wrap_fract(x), wrap_fract(y), wrap_fract(z))
+        DVec3::new(x, y, z)
     }
 }
 

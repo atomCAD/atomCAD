@@ -435,11 +435,13 @@ fn resolve_cif_bond_atom(
     // Find the asymmetric atom with this label
     let asym_atom = asymmetric_atoms.iter().find(|a| a.label == label)?;
 
-    // Apply the symmetry operation to get the fractional position
+    // Apply the symmetry operation to get the fractional position.
+    // Use apply_unwrapped so we preserve the cell offset information for atoms
+    // whose asymmetric unit coordinates lie outside [0,1).
     let fract = if let Some(ref parsed_code) = parsed {
         if parsed_code.symop_index > 0 && parsed_code.symop_index <= symmetry_operations.len() {
             let op = &symmetry_operations[parsed_code.symop_index - 1]; // 1-based index
-            let base_fract = op.apply(asym_atom.fract);
+            let base_fract = op.apply_unwrapped(asym_atom.fract);
             // Add the translation from the symmetry code
             base_fract + parsed_code.translation.as_dvec3()
         } else {

@@ -80,7 +80,23 @@ class PinViewWidget extends StatelessWidget {
       tooltipMessage = dataType;
     }
     if (outputString != null && outputString!.isNotEmpty) {
-      tooltipMessage = '$tooltipMessage\n$outputString';
+      const maxLines = 15;
+      const maxChars = 500;
+      var preview = outputString!;
+      var truncated = false;
+      if (preview.length > maxChars) {
+        preview = preview.substring(0, maxChars);
+        truncated = true;
+      }
+      final lines = preview.split('\n');
+      if (lines.length > maxLines) {
+        preview = lines.take(maxLines).join('\n');
+        truncated = true;
+      }
+      if (truncated) {
+        preview = '$preview\n...';
+      }
+      tooltipMessage = '$tooltipMessage\n$preview';
     }
 
     return Tooltip(
