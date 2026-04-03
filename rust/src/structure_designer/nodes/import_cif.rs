@@ -271,7 +271,7 @@ fn build_eval_output(result: &CifImportResult) -> EvalOutput {
 }
 
 /// Build the full import result from CIF data: unit cell, atomic structure, and motif.
-fn build_cif_import_result(
+pub fn build_cif_import_result(
     cif_result: &CifLoadResultExtended,
     use_cif_bonds: bool,
     infer_bonds: bool,

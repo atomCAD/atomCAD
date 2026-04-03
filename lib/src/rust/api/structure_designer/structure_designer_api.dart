@@ -644,6 +644,17 @@ void setImportXyzData(
         .crateApiStructureDesignerStructureDesignerApiSetImportXyzData(
             nodeId: nodeId, data: data);
 
+APIImportCIFData? getImportCifData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetImportCifData(
+        nodeId: nodeId);
+
+void setImportCifData(
+        {required BigInt nodeId, required APIImportCIFData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImportCifData(
+            nodeId: nodeId, data: data);
+
 void setExportXyzData(
         {required BigInt nodeId, required APIExportXYZData data}) =>
     RustLib.instance.api

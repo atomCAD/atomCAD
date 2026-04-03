@@ -1069,6 +1069,41 @@ enum APIHybridization {
   ;
 }
 
+class APIImportCIFData {
+  final String? fileName;
+  final String? blockName;
+  final bool useCifBonds;
+  final bool inferBonds;
+  final double bondTolerance;
+
+  const APIImportCIFData({
+    this.fileName,
+    this.blockName,
+    required this.useCifBonds,
+    required this.inferBonds,
+    required this.bondTolerance,
+  });
+
+  @override
+  int get hashCode =>
+      fileName.hashCode ^
+      blockName.hashCode ^
+      useCifBonds.hashCode ^
+      inferBonds.hashCode ^
+      bondTolerance.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIImportCIFData &&
+          runtimeType == other.runtimeType &&
+          fileName == other.fileName &&
+          blockName == other.blockName &&
+          useCifBonds == other.useCifBonds &&
+          inferBonds == other.inferBonds &&
+          bondTolerance == other.bondTolerance;
+}
+
 class APIImportXYZData {
   final String? fileName;
 

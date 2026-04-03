@@ -671,6 +671,14 @@ pub struct APIImportXYZData {
     pub file_name: Option<String>,
 }
 
+pub struct APIImportCIFData {
+    pub file_name: Option<String>,
+    pub block_name: Option<String>,
+    pub use_cif_bonds: bool,
+    pub infer_bonds: bool,
+    pub bond_tolerance: f64,
+}
+
 pub struct APIExportXYZData {
     pub file_name: String,
 }

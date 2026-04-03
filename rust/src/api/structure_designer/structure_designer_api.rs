@@ -9,6 +9,7 @@ use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
+use super::structure_designer_api_types::APIImportCIFData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMeasurement;
@@ -108,6 +109,7 @@ use crate::structure_designer::nodes::float::FloatData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
+use crate::structure_designer::nodes::import_cif::ImportCifData;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::structure_designer::nodes::int::IntData;
 use crate::structure_designer::nodes::ivec2::IVec2Data;
@@ -3391,6 +3393,56 @@ pub fn set_import_xyz_data(node_id: u64, data: APIImportXYZData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, import_xyz_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_import_cif_data(node_id: u64) -> Option<APIImportCIFData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let import_cif_data =
+                    match node_data.as_any_ref().downcast_ref::<ImportCifData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
+                Some(APIImportCIFData {
+                    file_name: import_cif_data.file_name.clone(),
+                    block_name: import_cif_data.block_name.clone(),
+                    use_cif_bonds: import_cif_data.use_cif_bonds,
+                    infer_bonds: import_cif_data.infer_bonds,
+                    bond_tolerance: import_cif_data.bond_tolerance,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_import_cif_data(node_id: u64, data: APIImportCIFData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let import_cif_data = Box::new(ImportCifData {
+                file_name: data.file_name.clone(),
+                block_name: data.block_name.clone(),
+                use_cif_bonds: data.use_cif_bonds,
+                infer_bonds: data.infer_bonds,
+                bond_tolerance: data.bond_tolerance,
+                cached_result: None,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, import_cif_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

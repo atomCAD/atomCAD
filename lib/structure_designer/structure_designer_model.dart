@@ -14,6 +14,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/facet_shell_api.dart
     as facet_shell_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
     as import_xyz_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/import_cif_api.dart'
+    as import_cif_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_api.dart'
     as import_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
@@ -1342,6 +1344,21 @@ class StructureDesignerModel extends ChangeNotifier {
 
   APIResult importXyz(BigInt nodeId) {
     var result = import_xyz_api.importXyz(nodeId: nodeId);
+    refreshFromKernel();
+    return result;
+  }
+
+  void setImportCifData(BigInt nodeId, APIImportCIFData data) {
+    structure_designer_api.setImportCifData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APIImportCIFData? getImportCifData(BigInt nodeId) {
+    return structure_designer_api.getImportCifData(nodeId: nodeId);
+  }
+
+  APIResult importCif(BigInt nodeId) {
+    var result = import_cif_api.importCif(nodeId: nodeId);
     refreshFromKernel();
     return result;
   }
