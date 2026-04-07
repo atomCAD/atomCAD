@@ -312,6 +312,15 @@ impl AtomicStructure {
         self.atoms.get(index).and_then(|slot| slot.as_ref())
     }
 
+    pub fn clear_all_bonds(&mut self) {
+        for slot in self.atoms.iter_mut() {
+            if let Some(atom) = slot {
+                atom.bonds.clear();
+            }
+        }
+        self.num_bonds = 0;
+    }
+
     pub fn get_num_of_bonds(&self) -> usize {
         self.num_bonds
     }

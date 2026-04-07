@@ -655,6 +655,17 @@ void setImportCifData(
         .crateApiStructureDesignerStructureDesignerApiSetImportCifData(
             nodeId: nodeId, data: data);
 
+APIInferBondsData? getInferBondsData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetInferBondsData(
+            nodeId: nodeId);
+
+void setInferBondsData(
+        {required BigInt nodeId, required APIInferBondsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetInferBondsData(
+            nodeId: nodeId, data: data);
+
 void setExportXyzData(
         {required BigInt nodeId, required APIExportXYZData data}) =>
     RustLib.instance.api

@@ -11,6 +11,7 @@ use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIImportCIFData;
 use super::structure_designer_api_types::APIImportXYZData;
+use super::structure_designer_api_types::APIInferBondsData;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
@@ -111,6 +112,7 @@ use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
 use crate::structure_designer::nodes::import_cif::ImportCifData;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
+use crate::structure_designer::nodes::infer_bonds::InferBondsData;
 use crate::structure_designer::nodes::int::IntData;
 use crate::structure_designer::nodes::ivec2::IVec2Data;
 use crate::structure_designer::nodes::ivec3::IVec3Data;
@@ -3410,11 +3412,10 @@ pub fn get_import_cif_data(node_id: u64) -> Option<APIImportCIFData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let import_cif_data =
-                    match node_data.as_any_ref().downcast_ref::<ImportCifData>() {
-                        Some(data) => data,
-                        None => return None,
-                    };
+                let import_cif_data = match node_data.as_any_ref().downcast_ref::<ImportCifData>() {
+                    Some(data) => data,
+                    None => return None,
+                };
                 Some(APIImportCIFData {
                     file_name: import_cif_data.file_name.clone(),
                     block_name: import_cif_data.block_name.clone(),
@@ -3443,6 +3444,49 @@ pub fn set_import_cif_data(node_id: u64, data: APIImportCIFData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, import_cif_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_infer_bonds_data(node_id: u64) -> Option<APIInferBondsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let infer_bonds_data = match node_data.as_any_ref().downcast_ref::<InferBondsData>()
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                Some(APIInferBondsData {
+                    additive: infer_bonds_data.additive,
+                    bond_tolerance: infer_bonds_data.bond_tolerance,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_infer_bonds_data(node_id: u64, data: APIInferBondsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let infer_bonds_data = Box::new(InferBondsData {
+                additive: data.additive,
+                bond_tolerance: data.bond_tolerance,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, infer_bonds_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

@@ -1122,6 +1122,27 @@ class APIImportXYZData {
           fileName == other.fileName;
 }
 
+class APIInferBondsData {
+  final bool additive;
+  final double bondTolerance;
+
+  const APIInferBondsData({
+    required this.additive,
+    required this.bondTolerance,
+  });
+
+  @override
+  int get hashCode => additive.hashCode ^ bondTolerance.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIInferBondsData &&
+          runtimeType == other.runtimeType &&
+          additive == other.additive &&
+          bondTolerance == other.bondTolerance;
+}
+
 class APIIntData {
   final int value;
 

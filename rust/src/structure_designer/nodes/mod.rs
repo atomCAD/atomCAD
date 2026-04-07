@@ -26,6 +26,7 @@ pub mod half_plane;
 pub mod half_space;
 pub mod import_cif;
 pub mod import_xyz;
+pub mod infer_bonds;
 pub mod int;
 pub mod intersect;
 pub mod intersect_2d;

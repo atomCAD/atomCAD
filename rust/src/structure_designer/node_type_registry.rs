@@ -28,6 +28,7 @@ use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
 use super::nodes::half_space::get_node_type as half_space_get_node_type;
 use super::nodes::import_cif::get_node_type as import_cif_get_node_type;
 use super::nodes::import_xyz::get_node_type as import_xyz_get_node_type;
+use super::nodes::infer_bonds::get_node_type as infer_bonds_get_node_type;
 use super::nodes::int::get_node_type as int_get_node_type;
 use super::nodes::intersect::get_node_type as intersect_get_node_type;
 use super::nodes::intersect_2d::get_node_type as intersect_2d_get_node_type;
@@ -151,6 +152,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(relax_get_node_type());
         ret.add_node_type(add_hydrogen_get_node_type());
         ret.add_node_type(remove_hydrogen_get_node_type());
+        ret.add_node_type(infer_bonds_get_node_type());
 
         ret
     }

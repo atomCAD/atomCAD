@@ -679,6 +679,11 @@ pub struct APIImportCIFData {
     pub bond_tolerance: f64,
 }
 
+pub struct APIInferBondsData {
+    pub additive: bool,
+    pub bond_tolerance: f64,
+}
+
 pub struct APIExportXYZData {
     pub file_name: String,
 }

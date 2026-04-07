@@ -163,6 +163,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIImportXYZData dco_decode_api_import_xyz_data(dynamic raw);
 
   @protected
+  APIInferBondsData dco_decode_api_infer_bonds_data(dynamic raw);
+
+  @protected
   APIIntData dco_decode_api_int_data(dynamic raw);
 
   @protected
@@ -385,6 +388,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIImportXYZData dco_decode_box_autoadd_api_import_xyz_data(dynamic raw);
+
+  @protected
+  APIInferBondsData dco_decode_box_autoadd_api_infer_bonds_data(dynamic raw);
 
   @protected
   APIIntData dco_decode_box_autoadd_api_int_data(dynamic raw);
@@ -733,6 +739,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIImportXYZData? dco_decode_opt_box_autoadd_api_import_xyz_data(dynamic raw);
 
   @protected
+  APIInferBondsData? dco_decode_opt_box_autoadd_api_infer_bonds_data(
+      dynamic raw);
+
+  @protected
   APIIntData? dco_decode_opt_box_autoadd_api_int_data(dynamic raw);
 
   @protected
@@ -1053,6 +1063,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIImportXYZData sse_decode_api_import_xyz_data(SseDeserializer deserializer);
 
   @protected
+  APIInferBondsData sse_decode_api_infer_bonds_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIIntData sse_decode_api_int_data(SseDeserializer deserializer);
 
   @protected
@@ -1314,6 +1328,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIImportXYZData sse_decode_box_autoadd_api_import_xyz_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIInferBondsData sse_decode_box_autoadd_api_infer_bonds_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1732,6 +1750,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIInferBondsData? sse_decode_opt_box_autoadd_api_infer_bonds_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIIntData? sse_decode_opt_box_autoadd_api_int_data(
       SseDeserializer deserializer);
 
@@ -2104,6 +2126,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIImportXYZData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_infer_bonds_data(
+      APIInferBondsData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_int_data(APIIntData self, SseSerializer serializer);
 
   @protected
@@ -2375,6 +2401,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_import_xyz_data(
       APIImportXYZData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_infer_bonds_data(
+      APIInferBondsData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_int_data(
@@ -2799,6 +2829,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_import_xyz_data(
       APIImportXYZData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_infer_bonds_data(
+      APIInferBondsData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_int_data(

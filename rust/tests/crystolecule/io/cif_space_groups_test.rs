@@ -109,7 +109,11 @@ fn sg227_diamond_expansion() {
     ];
 
     let expanded = expand_asymmetric_unit(&asymmetric, &ops, 0.01);
-    assert_eq!(expanded.len(), 8, "Diamond should have 8 atoms in the conventional cell");
+    assert_eq!(
+        expanded.len(),
+        8,
+        "Diamond should have 8 atoms in the conventional cell"
+    );
 }
 
 #[test]
@@ -138,7 +142,11 @@ fn sg225_nacl_expansion() {
     ];
 
     let expanded = expand_asymmetric_unit(&asymmetric, &ops, 0.01);
-    assert_eq!(expanded.len(), 8, "NaCl should have 8 atoms in the conventional cell");
+    assert_eq!(
+        expanded.len(),
+        8,
+        "NaCl should have 8 atoms in the conventional cell"
+    );
 }
 
 // --- Integration: CIF file with only space group number (no explicit ops) ---
@@ -167,7 +175,11 @@ C2 C 0.25 0.25 0.25
 "#;
 
     let result = load_cif_from_str(cif, None).unwrap();
-    assert_eq!(result.atoms.len(), 8, "Should expand to 8 atoms via SG 227 lookup");
+    assert_eq!(
+        result.atoms.len(),
+        8,
+        "Should expand to 8 atoms via SG 227 lookup"
+    );
 }
 
 #[test]
@@ -194,7 +206,11 @@ Cl1 Cl 0.5 0.5 0.5
 "#;
 
     let result = load_cif_from_str(cif, None).unwrap();
-    assert_eq!(result.atoms.len(), 8, "Should expand to 8 atoms via HM lookup");
+    assert_eq!(
+        result.atoms.len(),
+        8,
+        "Should expand to 8 atoms via HM lookup"
+    );
 }
 
 #[test]

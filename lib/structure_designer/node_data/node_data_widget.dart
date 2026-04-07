@@ -41,6 +41,7 @@ import 'package:flutter_cad/structure_designer/node_data/motif_sub_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_fill_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_cif_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/infer_bonds_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor.dart';
@@ -561,6 +562,14 @@ class NodeDataWidget extends StatelessWidget {
         return ImportCifEditor(
           nodeId: selectedNode.id,
           data: importCifData,
+          model: model,
+        );
+      case 'infer_bonds':
+        final inferBondsData = model.getInferBondsData(selectedNode.id);
+
+        return InferBondsEditor(
+          nodeId: selectedNode.id,
+          data: inferBondsData,
           model: model,
         );
       case 'export_xyz':
