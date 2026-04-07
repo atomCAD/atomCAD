@@ -918,9 +918,19 @@ impl NetworkEvaluator {
                 .built_in_node_types
                 .contains_key(&node.node_type_name)
             {
-                node.data
-                    .eval(self, network_stack, node_id, registry, decorate, context)
-                    .get(output_pin_index)
+                let eval_output =
+                    node.data
+                        .eval(self, network_stack, node_id, registry, decorate, context);
+                // Record all pin strings now, since eval() already computed them all.
+                // This prevents partial overwrites when get_all_node_output_strings()
+                // aggregates across multiple generate_scene() contexts.
+                let pin_strings: Vec<String> = eval_output
+                    .results
+                    .iter()
+                    .map(|r| r.to_display_string())
+                    .collect();
+                context.node_output_strings.insert(node_id, pin_strings);
+                eval_output.get(output_pin_index)
             } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
                 // custom node — pass through the requested output pin index to the return node
                 if !child_network.valid {
