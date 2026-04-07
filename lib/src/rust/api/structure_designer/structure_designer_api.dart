@@ -666,6 +666,17 @@ void setInferBondsData(
         .crateApiStructureDesignerStructureDesignerApiSetInferBondsData(
             nodeId: nodeId, data: data);
 
+APIAtomReplaceData? getAtomReplaceData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetAtomReplaceData(
+            nodeId: nodeId);
+
+void setAtomReplaceData(
+        {required BigInt nodeId, required APIAtomReplaceData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetAtomReplaceData(
+            nodeId: nodeId, data: data);
+
 void setExportXyzData(
         {required BigInt nodeId, required APIExportXYZData data}) =>
     RustLib.instance.api

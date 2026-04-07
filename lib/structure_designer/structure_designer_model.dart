@@ -1372,6 +1372,15 @@ class StructureDesignerModel extends ChangeNotifier {
     return structure_designer_api.getInferBondsData(nodeId: nodeId);
   }
 
+  void setAtomReplaceData(BigInt nodeId, APIAtomReplaceData data) {
+    structure_designer_api.setAtomReplaceData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  APIAtomReplaceData? getAtomReplaceData(BigInt nodeId) {
+    return structure_designer_api.getAtomReplaceData(nodeId: nodeId);
+  }
+
   void setApplyDiffData(BigInt nodeId, APIApplyDiffData data) {
     structure_designer_api.setApplyDiffData(nodeId: nodeId, data: data);
     refreshFromKernel();

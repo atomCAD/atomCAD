@@ -684,6 +684,16 @@ pub struct APIInferBondsData {
     pub bond_tolerance: f64,
 }
 
+pub struct APIAtomReplaceData {
+    /// List of (from_atomic_number, to_atomic_number) replacement rules.
+    pub replacements: Vec<APIAtomReplaceRule>,
+}
+
+pub struct APIAtomReplaceRule {
+    pub from_atomic_number: i32,
+    pub to_atomic_number: i32,
+}
+
 pub struct APIExportXYZData {
     pub file_name: String,
 }

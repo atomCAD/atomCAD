@@ -351,6 +351,46 @@ class APIAtomMoveData {
           translation == other.translation;
 }
 
+class APIAtomReplaceData {
+  /// List of (from_atomic_number, to_atomic_number) replacement rules.
+  final List<APIAtomReplaceRule> replacements;
+
+  const APIAtomReplaceData({
+    required this.replacements,
+  });
+
+  @override
+  int get hashCode => replacements.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomReplaceData &&
+          runtimeType == other.runtimeType &&
+          replacements == other.replacements;
+}
+
+class APIAtomReplaceRule {
+  final int fromAtomicNumber;
+  final int toAtomicNumber;
+
+  const APIAtomReplaceRule({
+    required this.fromAtomicNumber,
+    required this.toAtomicNumber,
+  });
+
+  @override
+  int get hashCode => fromAtomicNumber.hashCode ^ toAtomicNumber.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomReplaceRule &&
+          runtimeType == other.runtimeType &&
+          fromAtomicNumber == other.fromAtomicNumber &&
+          toAtomicNumber == other.toAtomicNumber;
+}
+
 class APIAtomRotData {
   final double angle;
   final APIVec3 rotAxis;

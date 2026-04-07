@@ -1,3 +1,5 @@
+use super::structure_designer_api_types::APIAtomReplaceData;
+use super::structure_designer_api_types::APIAtomReplaceRule;
 use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
@@ -88,6 +90,7 @@ use crate::structure_designer::layout;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
+use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
@@ -3487,6 +3490,58 @@ pub fn set_infer_bonds_data(node_id: u64, data: APIInferBondsData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, infer_bonds_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_atom_replace_data(node_id: u64) -> Option<APIAtomReplaceData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let atom_replace_data =
+                    match node_data.as_any_ref().downcast_ref::<AtomReplaceData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
+                Some(APIAtomReplaceData {
+                    replacements: atom_replace_data
+                        .replacements
+                        .iter()
+                        .map(|(from, to)| APIAtomReplaceRule {
+                            from_atomic_number: *from as i32,
+                            to_atomic_number: *to as i32,
+                        })
+                        .collect(),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_atom_replace_data(node_id: u64, data: APIAtomReplaceData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let atom_replace_data = Box::new(AtomReplaceData {
+                replacements: data
+                    .replacements
+                    .iter()
+                    .map(|r| (r.from_atomic_number as i16, r.to_atomic_number as i16))
+                    .collect(),
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, atom_replace_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
