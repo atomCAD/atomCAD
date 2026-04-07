@@ -144,3 +144,6 @@ mod import_cif_test;
 
 #[path = "structure_designer/infer_bonds_test.rs"]
 mod infer_bonds_test;
+
+#[path = "structure_designer/atom_replace_test.rs"]
+mod atom_replace_test;
