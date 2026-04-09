@@ -77,36 +77,7 @@ This yields three symmetric "two-out-of-three" abstract types, each excluding ex
 
 Abstract types exist only as **pin constraints**. No runtime value is ever of an abstract type: every runtime value is concretely Blueprint, Crystal, or Molecule. Conversion is uniform — each concrete phase implicitly converts to any abstract type containing it, and there are no implicit downcasts from abstract to concrete.
 
-### Type-Preserving Output Pins
-
-An abstract input alone would lose concrete type information downstream. After `Crystal → atom_edit → ???`, the chain's type would collapse to `Atomic`, and a subsequent `lattice_move` (which needs Crystal) could no longer connect.
-
-To preserve concreteness, output pins are extended to allow mirroring an input pin:
-
-```rust
-pub enum PinOutputType {
-    Fixed(DataType),
-    SameAsInput(String),  // mirrors this input pin's resolved concrete type
-}
-```
-
-Polymorphic operations declare both input and output using the abstract type and `SameAsInput("input")`:
-
-```
-atom_edit:    Atomic       →  SameAsInput("input")
-lattice_move: LatticeBound →  SameAsInput("input")
-free_move:    Unanchored   →  SameAsInput("input")
-```
-
-During wire validation, the concrete type flowing into the input pin is resolved first; the output pin is then treated as that concrete type for all downstream validation. Thus `Crystal → atom_edit → lattice_move` validates cleanly as `Crystal → Crystal → Crystal`.
-
-At runtime nothing special happens: the node receives a concrete `NetworkResult::Crystal(..)` or `NetworkResult::Molecule(..)`, mutates the inner data, and returns the same variant. The wrapper passes through automatically.
-
-### Design Rationale
-
-The full extension is two enum additions — one `DataType` variant per abstract type, plus `PinOutputType::SameAsInput` — and a handful of conversion rules. Full static safety is preserved, no runtime downcasts are needed, and the evaluator is untouched. The existing `update_network_output_type()` machinery already propagates output types from inputs for custom networks, so the "computed output type" pattern has precedent.
-
-Richer alternatives (parametric polymorphism with type variables, row polymorphism with structural records) would work but add substantial machinery for little gain. Simpler alternatives (one merged type with runtime flags, or abstract types with runtime downcasts) sacrifice the static safety that motivates the three-phase model in the first place.
+Polymorphic operations declared over an abstract type **preserve the concrete input type at the output**: a Crystal fed into `atom_edit` comes out as a Crystal; a Molecule comes out as a Molecule. This is essential — without it, the chain `Crystal → atom_edit → lattice_move` would collapse to an abstract type partway through and the `lattice_move` (which needs Crystal) could no longer connect. See **Appendix A** for the implementation mechanism.
 
 ## Nodes
 
@@ -131,7 +102,7 @@ Richer alternatives (parametric polymorphism with type variables, row polymorphi
 
 ### Movement
 
-All four movement nodes are polymorphic via an abstract input and `SameAsInput("input")` output:
+All four movement nodes are polymorphic over an abstract input type; each preserves the concrete type at its output.
 
 | Node | Input | Blueprint | Crystal | Molecule |
 |---|---|---|---|---|
@@ -160,7 +131,7 @@ Blueprint ──────────→ Crystal ─────────�
 
 ### Atom Operations
 
-`atom_edit`, `apply_diff`, `atom_composediff`, `atom_replace`, `add_hydrogen`, `remove_hydrogen`, `relax`, `infer_bonds`, `passivate` — all declared as `Atomic → SameAsInput("input")`. Each preserves its concrete input type (Crystal stays Crystal, Molecule stays Molecule).
+`atom_edit`, `apply_diff`, `atom_composediff`, `atom_replace`, `add_hydrogen`, `remove_hydrogen`, `relax`, `infer_bonds`, `passivate` — all accept `Atomic` and preserve the concrete input type (Crystal stays Crystal, Molecule stays Molecule).
 
 ### Import / Export
 
@@ -221,7 +192,54 @@ diamond_lattice ─────────────────────�
 ## Open Questions
 
 - **Mismatch levels within lattice space** — three dissonance levels exist (fully space-group aligned, lattice aligned but space-group broken, fully lattice-broken); how should they be visually communicated?
-- **Boolean ops across incompatible lattices** — allow with `set_lattice` reconciliation, or hard-error?
 - **Passivation and surface reconstruction settings** — parameters on `materialize` or separate Blueprint modifier nodes?
-- **Implicit `materialize`** — can it eventually become implicit once the explicit phase model is in place?
 - **Migration path** ?
+
+---
+
+## Appendix A: Implementation of Type-Preserving Polymorphic Pins
+
+This appendix describes how the abstract-type polymorphism is implemented in the Rust backend. It is aimed at contributors working on the structure designer type system and evaluator. Nothing here affects the user-facing behavior described in the main document.
+
+### Type-Preserving Output Pins
+
+An abstract input type alone would lose concrete type information downstream: after `Crystal → atom_edit → ???`, the chain's type would collapse to `Atomic`, and a subsequent `lattice_move` (which needs Crystal) could no longer connect.
+
+To preserve concreteness, output pins are extended to allow mirroring an input pin:
+
+```rust
+pub enum PinOutputType {
+    Fixed(DataType),
+    SameAsInput(String),  // mirrors this input pin's resolved concrete type
+}
+```
+
+Polymorphic operations declare both input and output using the abstract type and `SameAsInput("input")`:
+
+```
+atom_edit:    Atomic       →  SameAsInput("input")
+lattice_move: LatticeBound →  SameAsInput("input")
+free_move:    Unanchored   →  SameAsInput("input")
+```
+
+During wire validation, the concrete type flowing into the input pin is resolved first; the output pin is then treated as that concrete type for all downstream validation. Thus `Crystal → atom_edit → lattice_move` validates cleanly as `Crystal → Crystal → Crystal`.
+
+At runtime nothing special happens: the node receives a concrete `NetworkResult::Crystal(..)` or `NetworkResult::Molecule(..)`, mutates the inner data, and returns the same variant. The wrapper passes through automatically.
+
+### Why This Implementation
+
+The full extension is two enum additions — one `DataType` variant per abstract type, plus `PinOutputType::SameAsInput` — and a handful of conversion rules in `can_be_converted_to`. Full static safety is preserved, no runtime downcasts are needed, and the evaluator is untouched. The existing `update_network_output_type()` machinery already propagates output types from inputs for custom networks, so the "computed output type" pattern has precedent in the codebase.
+
+### Alternatives Considered and Rejected
+
+- **Full parametric polymorphism** (`T where T: HasAtoms` with type variables and constraint solving) — more general but significantly more infrastructure; overkill for three abstract types.
+- **Row polymorphism** (structural types like `{has_atoms, has_lattice, has_geometry}`) — theoretically most elegant, but a paradigm shift from the current flat-enum `DataType`; too invasive.
+- **Merge Crystal and Molecule into a single runtime-tagged type** — simplest typing, but sacrifices static safety of `lattice_move` vs `free_move`, defeating the three-phase model.
+- **Plain abstract type with runtime downcast** (`Atomic → Crystal` allowed with runtime check) — breaks the "errors caught at wire time" guarantee, defers problems to evaluation.
+
+### Migration Notes
+
+- The existing `DataType::Atomic` variant can be redefined from "the concrete atomic-structure type" to "the abstract supertype of Crystal and Molecule" rather than renamed, easing migration.
+- Two new `DataType` variants are introduced: `Crystal` and `Molecule` (concrete), `LatticeBound` and `Unanchored` (abstract). The existing `Geometry` variant is renamed to `Blueprint`.
+- All current atom-operation node definitions need their input/output pin declarations updated to `Atomic` + `SameAsInput("input")`.
+- Existing `.cnnd` files using the old node set require format conversion — in particular, `atom_fill` nodes must be replaced with a `Lattice` source feeding into the primitive + a `materialize` node.
