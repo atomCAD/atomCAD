@@ -151,7 +151,9 @@
       "WebFetch(domain:onlinelibrary.wiley.com)",
       "WebFetch(domain:docs.mantidproject.org)",
       "WebFetch(domain:cci.lbl.gov)",
-      "Bash(gh search:*)"
+      "Bash(gh search:*)",
+      "Bash(cat)",
+      "Bash(bash /tmp/check_pins.sh)"
     ]
   }
 }
