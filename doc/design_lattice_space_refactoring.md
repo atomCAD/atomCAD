@@ -83,10 +83,15 @@ Polymorphic operations declared over an abstract type **preserve the concrete in
 
 ### Structure Construction and Manipulation
 
-- **`structure`** — Generic constructor. Inputs: `unit_cell`, `motif`, `motif_offset`. Output: `Structure`.
+- **`structure`** — Unified constructor / modifier node (copy-with pattern). All four inputs are optional:
+  - `structure` (Structure) — base structure to modify. If unconnected, constructs from scratch.
+  - `unit_cell` (UnitCell) — if connected, overrides the unit cell. Default: diamond unit cell.
+  - `motif` (Motif) — if connected, overrides the motif. Default: diamond motif.
+  - `motif_offset` (Vec3) — if connected, overrides the motif offset. Default: zero vector.
+
+  When `structure` is connected, unconnected fields pass through from the base. When `structure` is unconnected, unconnected fields use the defaults above. Output: `Structure`.
 - **Preset structures** — `diamond`, `lonsdaleite`, `silicon`, ... No inputs, output `Structure`.
 - **`get_structure`** — `StructureBound → Structure`. Extracts the structure from a Blueprint or Crystal.
-- **`set_motif`**, **`set_unit_cell`**, **`set_motif_offset`** — Modify one field of a `Structure`, returning a new `Structure`.
 
 ### Primitives
 
@@ -243,3 +248,25 @@ The full extension is two enum additions — one `DataType` variant per abstract
 - Two new `DataType` variants are introduced: `Crystal` and `Molecule` (concrete), `StructureBound` and `Unanchored` (abstract). The existing `Geometry` variant is renamed to `Blueprint`.
 - All current atom-operation node definitions need their input/output pin declarations updated to `Atomic` + `SameAsInput("input")`.
 - Existing `.cnnd` files using the old node set require format conversion — in particular, `atom_fill` nodes must be replaced with a `Structure` source feeding into the primitive + a `materialize` node.
+
+---
+
+## Implementation Strategy
+
+Work proceeds on a **feature branch**. There is no business requirement to release incrementally, and the changes are too deeply interconnected for gradual backward-compatible migration on main — adding a single `DataType` variant triggers exhaustive-match errors in ~15–20 locations, node renames would require maintaining parallel registrations, and the shim code for each intermediate step would be throwaway. A single `.cnnd` migration script is written at the end.
+
+### Phases
+
+Each phase is a natural stopping point where the code compiles and tests pass.
+
+1. **Rename Geometry → Blueprint.** Pure rename across all ~33 node files, evaluator dispatch, serialization, display system. Behavior is identical; only the type name changes.
+
+2. **Add Structure value type.** New `DataType::Structure` and `NetworkResult::Structure` variants. Constructor node (`structure`), preset nodes (`diamond`, `lonsdaleite`, `silicon`, ...), `get_structure` / `set_structure`.
+
+3. **Structure input on primitives.** Add optional `Structure` input to primitive nodes (cuboid, sphere, extrude, ...). If unconnected, a default (diamond) is used. Primitives now output `Blueprint` carrying the structure.
+
+4. **Split Atomic into Crystal / Molecule + abstract types.** Redefine `Atomic` as abstract (supertype of Crystal and Molecule). Introduce `StructureBound` and `Unanchored` abstract types, `can_be_converted_to` rules, and `PinOutputType::SameAsInput` so that polymorphic nodes preserve the concrete input type at the output. Update ~23 atom-operation nodes to use `Atomic` + `SameAsInput`. `atom_fill` now outputs `Crystal`.
+
+5. **Phase transitions and movement nodes.** `materialize` / `dematerialize` / `exit_structure` / `enter_structure`, `structure_move` / `structure_rot` / `free_move` / `free_rot`. Remove old duplicates (`atom_lmove`, `atom_lrot`, `atom_move`, `atom_rot`).
+
+6. **Migration script + Flutter API.** `.cnnd` file converter (rename DataType strings, rename node_type_name strings, restructure `atom_fill` into `structure` source + `materialize`). Update `APIDataTypeBase`, regenerate FRB bindings, update Dart UI.
