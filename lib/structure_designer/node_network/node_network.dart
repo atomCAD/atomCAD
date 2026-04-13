@@ -99,6 +99,7 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   // Crystal structure types (teal family - crystalline matter)
   'LatticeVecs': Color(0xFF26A69A), // Teal
   'Motif': Color(0xFF00ACC1), // Light blue-green (cyan)
+  'Structure': Color(0xFF00796B), // Deep teal (composite of lattice + motif)
 
   // Function types (amber family - computational operations)
   '->': Color(0xFFFFA726), // Amber

@@ -63,10 +63,10 @@ use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceDa
 use crate::api::structure_designer::structure_designer_api_types::APIIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIntData;
+use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIStringData;
-use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
 use crate::api::structure_designer::structure_designer_api_types::APIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
@@ -122,6 +122,7 @@ use crate::structure_designer::nodes::ivec3::IVec3Data;
 use crate::structure_designer::nodes::lattice_move::LatticeMoveData;
 use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
+use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use crate::structure_designer::nodes::map::MapData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
@@ -132,7 +133,6 @@ use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::sequence::SequenceData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::string::StringData;
-use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
 use std::collections::HashMap;
@@ -154,6 +154,7 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
         APIDataTypeBase::Blueprint => DataType::Blueprint,
         APIDataTypeBase::Atomic => DataType::Atomic,
         APIDataTypeBase::Motif => DataType::Motif,
+        APIDataTypeBase::Structure => DataType::Structure,
         APIDataTypeBase::Custom => {
             if let Some(custom_str) = &api_data_type.custom_data_type {
                 return DataType::from_string(custom_str);
@@ -193,6 +194,7 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::Blueprint => APIDataTypeBase::Blueprint,
         DataType::Atomic => APIDataTypeBase::Atomic,
         DataType::Motif => APIDataTypeBase::Motif,
+        DataType::Structure => APIDataTypeBase::Structure,
         _ => APIDataTypeBase::Custom, // All other types are considered custom
     };
 
@@ -4314,10 +4316,11 @@ pub fn get_lattice_vecs_data(node_id: u64) -> Option<APILatticeVecsData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let lattice_vecs_data = match node_data.as_any_ref().downcast_ref::<LatticeVecsData>() {
-                    Some(data) => data,
-                    None => return None,
-                };
+                let lattice_vecs_data =
+                    match node_data.as_any_ref().downcast_ref::<LatticeVecsData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
                 // Convert to UnitCellStruct and detect crystal system
                 let unit_cell_struct = lattice_vecs_data.to_unit_cell_struct();
                 let crystal_system = classify_crystal_system(&unit_cell_struct);

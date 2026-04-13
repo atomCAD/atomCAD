@@ -607,6 +607,7 @@ enum APIDataTypeBase {
   blueprint,
   atomic,
   motif,
+  structure,
   custom,
   ;
 }

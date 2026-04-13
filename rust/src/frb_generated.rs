@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -9058,7 +9058,8 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint,
 13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic,
 14 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif,
-15 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+15 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure,
+16 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
             _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
@@ -12847,7 +12848,8 @@ impl flutter_rust_bridge::IntoDart
             Self::Blueprint => 12.into_dart(),
             Self::Atomic => 13.into_dart(),
             Self::Motif => 14.into_dart(),
-            Self::Custom => 15.into_dart(),
+            Self::Structure => 15.into_dart(),
+            Self::Custom => 16.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -15709,7 +15711,8 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::G
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint => { 12 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic => { 13 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif => { 14 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 15 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure => { 15 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 16 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }
@@ -17950,7 +17953,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -17974,7 +17977,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

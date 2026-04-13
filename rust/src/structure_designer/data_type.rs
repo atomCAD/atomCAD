@@ -24,6 +24,7 @@ pub enum DataType {
     Blueprint,
     Atomic,
     Motif,
+    Structure,
     Array(Box<DataType>),
     Function(FunctionType),
 }
@@ -46,6 +47,7 @@ impl fmt::Display for DataType {
             DataType::Blueprint => write!(f, "Blueprint"),
             DataType::Atomic => write!(f, "Atomic"),
             DataType::Motif => write!(f, "Motif"),
+            DataType::Structure => write!(f, "Structure"),
             DataType::Array(element_type) => {
                 write!(f, "[{}]", element_type)
             }
@@ -257,6 +259,7 @@ impl DataTypeParser {
                     "Blueprint" => Ok(DataType::Blueprint),
                     "Atomic" => Ok(DataType::Atomic),
                     "Motif" => Ok(DataType::Motif),
+                    "Structure" => Ok(DataType::Structure),
                     _ => Err(format!("Unknown data type: {}", name)),
                 }
             }

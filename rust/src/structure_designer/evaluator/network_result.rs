@@ -5,6 +5,7 @@ use crate::crystolecule::atomic_structure::{
 };
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::motif::Motif;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
@@ -188,6 +189,7 @@ pub enum NetworkResult {
     Blueprint(GeometrySummary),
     Atomic(AtomicStructure),
     Motif(Motif),
+    Structure(Structure),
     Array(Vec<NetworkResult>),
     Function(Closure),
     Error(String),
@@ -212,6 +214,7 @@ impl NetworkResult {
             NetworkResult::Blueprint(_) => Some(DataType::Blueprint),
             NetworkResult::Atomic(_) => Some(DataType::Atomic),
             NetworkResult::Motif(_) => Some(DataType::Motif),
+            NetworkResult::Structure(_) => Some(DataType::Structure),
             _ => None,
         }
     }
@@ -255,6 +258,7 @@ impl NetworkResult {
             NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
             NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
             NetworkResult::Blueprint(geometry) => Some(geometry.unit_cell.clone()),
+            NetworkResult::Structure(structure) => Some(structure.lattice_vecs.clone()),
             _ => None,
         }
     }
@@ -359,6 +363,26 @@ impl NetworkResult {
     pub fn extract_motif(self) -> Option<Motif> {
         match self {
             NetworkResult::Motif(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Extracts a Structure value from the NetworkResult, returns None if not a Structure
+    pub fn extract_structure(self) -> Option<Structure> {
+        match self {
+            NetworkResult::Structure(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Extracts an optional Structure value from the NetworkResult.
+    /// Returns Some(None) if NetworkResult::None (no input connected),
+    /// Some(Some(structure)) if NetworkResult::Structure(...),
+    /// None otherwise.
+    pub fn extract_optional_structure(self) -> Option<Option<Structure>> {
+        match self {
+            NetworkResult::None => Some(None),
+            NetworkResult::Structure(value) => Some(Some(value)),
             _ => None,
         }
     }
@@ -540,6 +564,24 @@ impl NetworkResult {
             NetworkResult::Blueprint(_) => "Blueprint".to_string(),
             NetworkResult::Atomic(atomic) => format_atomic_display_string(atomic),
             NetworkResult::Motif(motif) => motif.to_text_format(),
+            NetworkResult::Structure(structure) => {
+                let uc = &structure.lattice_vecs;
+                format!(
+                    "Structure:\n  lattice_vecs: a=({:.6}, {:.6}, {:.6}) b=({:.6}, {:.6}, {:.6}) c=({:.6}, {:.6}, {:.6})\n  motif_offset: ({:.6}, {:.6}, {:.6})",
+                    uc.a.x,
+                    uc.a.y,
+                    uc.a.z,
+                    uc.b.x,
+                    uc.b.y,
+                    uc.b.z,
+                    uc.c.x,
+                    uc.c.y,
+                    uc.c.z,
+                    structure.motif_offset.x,
+                    structure.motif_offset.y,
+                    structure.motif_offset.z,
+                )
+            }
             NetworkResult::Error(_) => "Error".to_string(),
         }
     }
@@ -561,6 +603,24 @@ impl NetworkResult {
             }
             NetworkResult::Motif(motif) => {
                 format!("Motif:\n{}", motif.to_detailed_string())
+            }
+            NetworkResult::Structure(structure) => {
+                format!(
+                    "Structure:\n  lattice_vecs:\n    a: ({:.6}, {:.6}, {:.6})\n    b: ({:.6}, {:.6}, {:.6})\n    c: ({:.6}, {:.6}, {:.6})\n  motif_offset: ({:.6}, {:.6}, {:.6})\n  motif:\n{}",
+                    structure.lattice_vecs.a.x,
+                    structure.lattice_vecs.a.y,
+                    structure.lattice_vecs.a.z,
+                    structure.lattice_vecs.b.x,
+                    structure.lattice_vecs.b.y,
+                    structure.lattice_vecs.b.z,
+                    structure.lattice_vecs.c.x,
+                    structure.lattice_vecs.c.y,
+                    structure.lattice_vecs.c.z,
+                    structure.motif_offset.x,
+                    structure.motif_offset.y,
+                    structure.motif_offset.z,
+                    structure.motif.to_detailed_string(),
+                )
             }
             NetworkResult::Error(msg) => {
                 format!("Error: {}", msg)

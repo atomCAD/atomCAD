@@ -50,6 +50,7 @@ pub mod remove_hydrogen;
 pub mod sequence;
 pub mod sphere;
 pub mod string;
+pub mod structure;
 pub mod union;
 pub mod union_2d;
 pub mod value;

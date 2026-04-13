@@ -12,5 +12,6 @@ pub mod motif;
 pub mod motif_bond_inference;
 pub mod motif_parser;
 pub mod simulation;
+pub mod structure;
 pub mod unit_cell_struct;
 pub mod unit_cell_symmetries;

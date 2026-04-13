@@ -265,7 +265,7 @@ Each phase is a natural stopping point where the code compiles and tests pass.
 
 2. **Rename UnitCell → LatticeVecs.** Rename `DataType::UnitCell` to `LatticeVecs`, `NetworkResult::UnitCell` to `LatticeVecs`, and the `unit_cell` node to `lattice_vecs`. Pure rename, same pattern as phase 1.
 
-3. **Add Structure value type.** New `DataType::Structure` and `NetworkResult::Structure` variants. Constructor node (`structure`), preset nodes (`diamond`, `lonsdaleite`, `silicon`, ...), `get_structure` / `set_structure`.
+3. **Add Structure value type.** New `DataType::Structure` and `NetworkResult::Structure` variants. Constructor/modifier node (`structure`) only. Preset nodes (`diamond`, `lonsdaleite`, `silicon`, ...) are deferred — an empty `structure` node already defaults to diamond. `get_structure` and `set_structure` are also deferred: they are naturally typed over the `StructureBound` abstract type, which does not exist until phase 5.
 
 4. **Structure input on primitives.** Add optional `Structure` input to primitive nodes (cuboid, sphere, extrude, ...). If unconnected, a default (diamond) is used. Primitives now output `Blueprint` carrying the structure.
 

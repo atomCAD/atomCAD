@@ -30,6 +30,7 @@ pub enum APIDataTypeBase {
     Blueprint,
     Atomic,
     Motif,
+    Structure,
     Custom,
 }
 

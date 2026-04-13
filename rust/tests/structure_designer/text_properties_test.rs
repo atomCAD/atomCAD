@@ -32,8 +32,8 @@ use rust_lib_flutter_cad::structure_designer::nodes::lattice_symop::LatticeSymop
 use rust_lib_flutter_cad::structure_designer::nodes::atom_cut::AtomCutData;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_fill::AtomFillData;
 use rust_lib_flutter_cad::structure_designer::nodes::drawing_plane::DrawingPlaneData;
-use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
 use rust_lib_flutter_cad::structure_designer::nodes::lattice_vecs::LatticeVecsData;
+use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
 // I/O nodes
 use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_cif::ImportCifData;

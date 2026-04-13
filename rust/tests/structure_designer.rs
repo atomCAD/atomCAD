@@ -13,6 +13,9 @@ mod kernel_test;
 #[path = "structure_designer/nodes/node_snapshots_test.rs"]
 mod node_snapshots_test;
 
+#[path = "structure_designer/structure_node_test.rs"]
+mod structure_node_test;
+
 #[path = "structure_designer/network_validator_test.rs"]
 mod network_validator_test;
 
