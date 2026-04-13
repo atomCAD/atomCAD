@@ -80,7 +80,7 @@ impl NodeData for GeoTransData {
 
         if let NetworkResult::Error(_) = shape_val {
             EvalOutput::single(shape_val)
-        } else if let NetworkResult::Geometry(shape) = shape_val {
+        } else if let NetworkResult::Blueprint(shape) = shape_val {
             let translation = match network_evaluator.evaluate_or_default(
                 network_stack,
                 node_id,
@@ -150,7 +150,7 @@ impl NodeData for GeoTransData {
                 rot,
             );
 
-            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
                 unit_cell: shape.unit_cell,
                 frame_transform,
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
@@ -401,7 +401,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "shape".to_string(),
-                data_type: DataType::Geometry,
+                data_type: DataType::Blueprint,
             },
             Parameter {
                 id: None,
@@ -414,7 +414,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::IVec3,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: false,
         node_data_creator: || {
             Box::new(GeoTransData {

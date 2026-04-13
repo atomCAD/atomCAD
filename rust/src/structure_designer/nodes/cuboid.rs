@@ -103,7 +103,7 @@ impl NodeData for CuboidData {
 
         //println!("{}", geo_tree_root);
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
             unit_cell,
             frame_transform: Transform::new(center, DQuat::IDENTITY),
             geo_tree_root,
@@ -269,7 +269,7 @@ pub fn get_node_type() -> NodeType {
           data_type: DataType::UnitCell,
         },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Geometry),
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
       public: true,
       node_data_creator: || Box::new(CuboidData {
         min_corner: IVec3::new(0, 0, 0),

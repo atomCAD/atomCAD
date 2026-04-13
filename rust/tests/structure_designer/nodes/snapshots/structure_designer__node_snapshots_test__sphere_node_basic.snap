@@ -2,7 +2,7 @@
 source: tests/structure_designer/nodes/node_snapshots_test.rs
 expression: result.to_detailed_string()
 ---
-Geometry:
+Blueprint:
 unit_cell:
   a: (3.567000, 0.000000, 0.000000)
   b: (0.000000, 3.567000, 0.000000)

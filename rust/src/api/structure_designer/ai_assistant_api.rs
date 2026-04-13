@@ -501,7 +501,7 @@ fn format_node_type_list(
 ///   radius    : Int       [default: 1]
 ///   unit_cell : UnitCell  [no default - wire only]
 ///
-/// Output: Geometry
+/// Output: Blueprint
 /// ```
 #[flutter_rust_bridge::frb(sync)]
 pub fn ai_describe_node_type(node_type_name: String) -> String {

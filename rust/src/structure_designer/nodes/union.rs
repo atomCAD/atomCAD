@@ -75,7 +75,7 @@ impl NodeData for UnionData {
         // Extract geometries and check unit cell compatibility
         let mut geometries: Vec<GeometrySummary> = Vec::new();
         for shape_val in shape_results {
-            if let NetworkResult::Geometry(shape) = shape_val {
+            if let NetworkResult::Blueprint(shape) = shape_val {
                 geometries.push(shape);
             } else {
                 return EvalOutput::single(NetworkResult::Error(
@@ -99,7 +99,7 @@ impl NodeData for UnionData {
 
         frame_translation /= shape_count as f64;
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
             unit_cell: first_unit_cell,
             frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
             geo_tree_root: GeoNode::union_3d(shapes),
@@ -127,17 +127,17 @@ impl NodeData for UnionData {
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "union".to_string(),
-      description: "Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
+      description: "Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Blueprint` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
       summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
               id: None,
               name: "shapes".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry)),
+              data_type: DataType::Array(Box::new(DataType::Blueprint)),
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Geometry),
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
       public: true,
       node_data_creator: || Box::new(UnionData {}),
       node_data_saver: generic_node_data_saver::<UnionData>,

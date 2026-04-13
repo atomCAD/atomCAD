@@ -545,7 +545,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -905,7 +905,7 @@
         "next_node_id": 21,
         "node_type": {
           "name": "arrow_slit_wall_y",
-          "description": "A Y-aligned wall segment with a centered arrow slit. Outputs Geometry.",
+          "description": "A Y-aligned wall segment with a centered arrow slit. Outputs Blueprint.",
           "category": "Custom",
           "parameters": [
             {
@@ -933,7 +933,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -1434,7 +1434,7 @@
         "next_node_id": 21,
         "node_type": {
           "name": "arrow_slit_wall",
-          "description": "A wall segment with a centered arrow slit. Outputs Geometry.",
+          "description": "A wall segment with a centered arrow slit. Outputs Blueprint.",
           "category": "Custom",
           "parameters": [
             {
@@ -1462,7 +1462,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -1979,7 +1979,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {

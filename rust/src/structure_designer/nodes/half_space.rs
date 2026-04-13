@@ -162,7 +162,7 @@ impl NodeData for HalfSpaceData {
         let shift_distance = (shift as f64 / subdivision as f64) * plane_props.d_spacing;
         let shifted_center = center_pos + plane_props.normal * shift_distance;
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
             unit_cell: unit_cell.clone(),
             frame_transform: Transform::new(
                 center_pos,
@@ -485,7 +485,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Int,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || {
             Box::new(HalfSpaceData {

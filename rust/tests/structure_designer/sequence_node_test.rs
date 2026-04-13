@@ -206,19 +206,19 @@ fn test_sequence_element_type_changes_output() {
     assert_eq!(custom.parameters[0].data_type, DataType::Float);
     assert_eq!(custom.parameters[1].data_type, DataType::Float);
 
-    // Change to Geometry
+    // Change to Blueprint
     let data2 = SequenceData {
-        element_type: DataType::Geometry,
+        element_type: DataType::Blueprint,
         input_count: 3,
     };
     let custom2 = data2.calculate_custom_node_type(base_type).unwrap();
     assert_eq!(
         *custom2.output_type(),
-        DataType::Array(Box::new(DataType::Geometry))
+        DataType::Array(Box::new(DataType::Blueprint))
     );
     assert_eq!(custom2.parameters.len(), 3);
     for p in &custom2.parameters {
-        assert_eq!(p.data_type, DataType::Geometry);
+        assert_eq!(p.data_type, DataType::Blueprint);
     }
 }
 
@@ -277,7 +277,7 @@ fn test_sequence_changing_count_preserves_parameter_ids() {
 #[test]
 fn test_sequence_text_properties_roundtrip() {
     let original = SequenceData {
-        element_type: DataType::Geometry,
+        element_type: DataType::Blueprint,
         input_count: 5,
     };
 

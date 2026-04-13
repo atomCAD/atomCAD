@@ -106,7 +106,7 @@ impl NodeData for DiffData {
             frame_translation *= 0.5;
         }
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
             unit_cell: result_unit_cell,
             frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
             geo_tree_root: geometry.unwrap(),
@@ -171,7 +171,7 @@ fn helper_union<'a>(
     // Extract geometries and check unit cell compatibility
     let mut geometries: Vec<GeometrySummary> = Vec::new();
     for shape_val in shape_results {
-        if let NetworkResult::Geometry(shape) = shape_val {
+        if let NetworkResult::Blueprint(shape) = shape_val {
             geometries.push(shape);
         } else {
             return (None, DVec3::ZERO, None);
@@ -209,15 +209,15 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "base".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Geometry)), // If multiple shapes are given, they are unioned.
+                data_type: DataType::Array(Box::new(DataType::Blueprint)), // If multiple shapes are given, they are unioned.
             },
             Parameter {
                 id: None,
                 name: "sub".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Geometry)), // A set of shapes to subtract from base
+                data_type: DataType::Array(Box::new(DataType::Blueprint)), // A set of shapes to subtract from base
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || Box::new(DiffData {}),
         node_data_saver: generic_node_data_saver::<DiffData>,

@@ -7,7 +7,7 @@
         "node_type": {
           "name": "M",
           "parameters": [],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -178,7 +178,7 @@
         "node_type": {
           "name": "P",
           "parameters": [],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -664,7 +664,7 @@
         "node_type": {
           "name": "S",
           "parameters": [],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {

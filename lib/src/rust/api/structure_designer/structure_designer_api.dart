@@ -90,7 +90,7 @@ List<APINodeCategoryView>? getNodeTypeViews() => RustLib.instance.api
 
 /// Returns node types that have at least one pin compatible with the given type.
 ///
-/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Geometry", "Float")
+/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Blueprint", "Float")
 /// - `dragging_from_output`: true if dragging from output pin, false if from input pin
 ///
 /// When dragging from OUTPUT: find nodes with compatible INPUT pins

@@ -23,7 +23,7 @@ fn create_test_network() -> NodeNetwork {
         summary: None,
         category: NodeTypeCategory::Custom,
         parameters: vec![],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || {
             Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})

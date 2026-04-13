@@ -279,7 +279,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -718,7 +718,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -886,12 +886,12 @@
               "expression": "if flag then x else y",
               "parameters": [
                 {
-                  "data_type": "Geometry",
+                  "data_type": "Blueprint",
                   "data_type_str": null,
                   "name": "x"
                 },
                 {
-                  "data_type": "Geometry",
+                  "data_type": "Blueprint",
                   "data_type_str": null,
                   "name": "y"
                 },
@@ -1297,7 +1297,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -4935,7 +4935,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -5306,7 +5306,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -6446,7 +6446,7 @@
           "parameters": [
             {
               "name": "geometry",
-              "data_type": "Geometry"
+              "data_type": "Blueprint"
             },
             {
               "name": "motif",
@@ -6554,7 +6554,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Geometry",
+              "data_type": "Blueprint",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "geometry",
@@ -6826,7 +6826,7 @@
         "node_type": {
           "name": "slider",
           "parameters": [],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -7285,7 +7285,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -7904,12 +7904,12 @@
                   "name": "x"
                 },
                 {
-                  "data_type": "Geometry",
+                  "data_type": "Blueprint",
                   "data_type_str": null,
                   "name": "torender"
                 },
                 {
-                  "data_type": "Geometry",
+                  "data_type": "Blueprint",
                   "data_type_str": null,
                   "name": "cube"
                 }
@@ -7991,12 +7991,12 @@
                   "name": "x"
                 },
                 {
-                  "data_type": "Geometry",
+                  "data_type": "Blueprint",
                   "data_type_str": null,
                   "name": "torender"
                 },
                 {
-                  "data_type": "Geometry",
+                  "data_type": "Blueprint",
                   "data_type_str": null,
                   "name": "cube"
                 }
@@ -8234,7 +8234,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -8593,7 +8593,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -9047,7 +9047,7 @@
           "parameters": [
             {
               "name": "igeom_to_test",
-              "data_type": "Geometry"
+              "data_type": "Blueprint"
             },
             {
               "name": "radius",
@@ -9062,7 +9062,7 @@
               "data_type": "Motif"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -9298,7 +9298,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Geometry",
+              "data_type": "Blueprint",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "igeom_to_test",
@@ -9735,7 +9735,7 @@
               "data_type": "UnitCell"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -10390,7 +10390,7 @@
               "data_type": "IVec3"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -10908,7 +10908,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {

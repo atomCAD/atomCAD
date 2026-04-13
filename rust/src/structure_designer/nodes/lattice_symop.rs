@@ -81,7 +81,7 @@ impl NodeData for LatticeSymopData {
 
         if let NetworkResult::Error(_) = shape_val {
             EvalOutput::single(shape_val)
-        } else if let NetworkResult::Geometry(shape) = shape_val {
+        } else if let NetworkResult::Blueprint(shape) = shape_val {
             let translation = match network_evaluator.evaluate_or_default(
                 network_stack,
                 node_id,
@@ -239,7 +239,7 @@ impl NodeData for LatticeSymopData {
                 GeoNode::transform(tr, Box::new(geo_tree_root))
             };
 
-            return EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+            return EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
                 unit_cell,
                 frame_transform,
                 geo_tree_root: output_geo_tree_root,
@@ -538,7 +538,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "shape".to_string(),
-                data_type: DataType::Geometry,
+                data_type: DataType::Blueprint,
             },
             Parameter {
                 id: None,
@@ -561,7 +561,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: false,
         node_data_creator: || {
             Box::new(LatticeSymopData {

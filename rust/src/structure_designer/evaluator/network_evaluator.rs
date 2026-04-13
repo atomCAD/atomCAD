@@ -302,7 +302,7 @@ impl NetworkEvaluator {
             .is_node_selected(node_id);
 
         let poly_mesh = match &result {
-            NetworkResult::Geometry(geometry_summary) => {
+            NetworkResult::Blueprint(geometry_summary) => {
                 if let Some(csg_mesh) = geometry_summary
                     .geo_tree_root
                     .to_csg_mesh_cached(Some(&mut self.csg_conversion_cache))
@@ -360,7 +360,7 @@ impl NetworkEvaluator {
 
         // Extract geo_tree_root from the result based on its type
         let geo_tree = match result {
-            NetworkResult::Geometry(geometry_summary) => Some(geometry_summary.geo_tree_root),
+            NetworkResult::Blueprint(geometry_summary) => Some(geometry_summary.geo_tree_root),
             NetworkResult::Geometry2D(geometry_summary_2d) => {
                 Some(geometry_summary_2d.geo_tree_root)
             }
@@ -427,11 +427,11 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if *data_type == DataType::Geometry {
+        } else if *data_type == DataType::Blueprint {
             if geometry_visualization_preferences.geometry_visualization
                 == GeometryVisualization::SurfaceSplatting
             {
-                if let NetworkResult::Geometry(geometry_summary) = result {
+                if let NetworkResult::Blueprint(geometry_summary) = result {
                     let point_cloud = generate_point_cloud(
                         &geometry_summary.geo_tree_root,
                         context,
@@ -488,7 +488,7 @@ impl NetworkEvaluator {
 
     /// Merges an array of results into a single displayable output.
     ///
-    /// For `Array<Geometry>`: creates a CSG union of all shapes (like the `union` node).
+    /// For `Array<Blueprint>`: creates a CSG union of all shapes (like the `union` node).
     /// For `Array<Geometry2D>`: creates a 2D CSG union (like the `union_2d` node).
     /// For `Array<Atomic>`: merges all atomic structures (like the `atom_union` node).
     /// Other element types or empty arrays return `NodeOutput::None`.
@@ -509,12 +509,12 @@ impl NetworkEvaluator {
         }
 
         match inner_type {
-            DataType::Geometry => {
+            DataType::Blueprint => {
                 let mut shapes: Vec<GeoNode> = Vec::new();
                 let mut frame_translation = DVec3::ZERO;
                 let mut first_unit_cell = None;
                 for element in elements {
-                    if let NetworkResult::Geometry(geo) = element {
+                    if let NetworkResult::Blueprint(geo) = element {
                         if first_unit_cell.is_none() {
                             first_unit_cell = Some(geo.unit_cell.clone());
                         }
@@ -527,14 +527,14 @@ impl NetworkEvaluator {
                 }
                 let count = shapes.len() as f64;
                 frame_translation /= count;
-                let merged = NetworkResult::Geometry(GeometrySummary {
+                let merged = NetworkResult::Blueprint(GeometrySummary {
                     unit_cell: first_unit_cell.unwrap(),
                     frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
                     geo_tree_root: GeoNode::union_3d(shapes),
                 });
                 self.convert_result_to_node_output(
                     merged,
-                    &DataType::Geometry,
+                    &DataType::Blueprint,
                     from_selected_node,
                     network_stack,
                     node_id,

@@ -77,7 +77,7 @@ fn test_auto_connect_input_to_compatible_output() {
 fn test_auto_connect_geometry_output_to_geometry_input() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Create a Sphere node (outputs Geometry) and a Union node (inputs Geometry)
+    // Create a Sphere node (outputs Blueprint) and a Union node (inputs Blueprint)
     let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
     let union_id = designer.add_node("union", DVec2::new(100.0, 0.0));
 
@@ -86,7 +86,7 @@ fn test_auto_connect_geometry_output_to_geometry_input() {
 
     assert!(
         result,
-        "Should auto-connect Geometry output to Union's Geometry input"
+        "Should auto-connect Blueprint output to Union's Blueprint input"
     );
 
     let network = designer
@@ -185,16 +185,16 @@ fn test_auto_connect_incompatible_types_fails() {
 fn test_auto_connect_geometry_to_float_input_fails() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Geometry cannot be connected to Float input
+    // Blueprint cannot be connected to Float input
     let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
     let float_node_id = designer.add_node("float", DVec2::new(100.0, 0.0));
 
-    // Sphere outputs Geometry, Float node has no compatible inputs
+    // Sphere outputs Blueprint, Float node has no compatible inputs
     let result = designer.auto_connect_to_node(sphere_id, 0, true, float_node_id);
 
     assert!(
         !result,
-        "Geometry should not be connectable to Float node (no inputs)"
+        "Blueprint should not be connectable to Float node (no inputs)"
     );
 }
 
@@ -241,7 +241,7 @@ fn test_auto_connect_finds_first_compatible_input() {
     // Vec3 node outputs Vec3, Cuboid has multiple inputs
     // Cuboid inputs: min_corner (IVec3), extent (IVec3)
     // Vec3 should connect to first compatible - but IVec3 and Vec3 might not be compatible
-    // Let's use a node with clear first-match: geo_trans has Geometry first, then Vec3 offset
+    // Let's use a node with clear first-match: geo_trans has Blueprint first, then Vec3 offset
     let vec3_id = designer.add_node("vec3", DVec2::new(0.0, 0.0));
     let geo_trans_id = designer.add_node("geo_trans", DVec2::new(100.0, 0.0));
 
@@ -299,7 +299,7 @@ fn test_auto_connect_2d_to_3d_fails() {
 
     assert!(
         !result,
-        "Geometry2D should not connect to 3D Geometry input"
+        "Geometry2D should not connect to 3D Blueprint input"
     );
 }
 
@@ -335,14 +335,17 @@ fn test_auto_connect_from_input_to_compatible_output() {
 fn test_auto_connect_from_input_to_incompatible_output() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Sphere input expects Float, but Cuboid outputs Geometry
+    // Sphere input expects Float, but Cuboid outputs Blueprint
     let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
     let cuboid_id = designer.add_node("cuboid", DVec2::new(100.0, 0.0));
 
-    // Dragging from sphere's first input (Float type) to cuboid (Geometry output)
+    // Dragging from sphere's first input (Float type) to cuboid (Blueprint output)
     let result = designer.auto_connect_to_node(sphere_id, 0, false, cuboid_id);
 
-    assert!(!result, "Geometry output should not connect to Float input");
+    assert!(
+        !result,
+        "Blueprint output should not connect to Float input"
+    );
 }
 
 // ===== GET COMPATIBLE PINS FOR AUTO-CONNECT TESTS =====
@@ -373,15 +376,15 @@ fn test_get_compatible_pins_invalid_target_node() {
 fn test_get_compatible_pins_geometry_to_geometry_input() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Sphere outputs Geometry
+    // Sphere outputs Blueprint
     let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
     // Union has a single shapes array input
     let union_id = designer.add_node("union", DVec2::new(200.0, 0.0));
 
-    // Dragging from Sphere's output (Geometry) to Union
+    // Dragging from Sphere's output (Blueprint) to Union
     let pins = designer.get_compatible_pins_for_auto_connect(sphere_id, 0, true, union_id);
 
-    // Union has 1 Geometry array input (shapes)
+    // Union has 1 Blueprint array input (shapes)
     assert_eq!(
         pins.len(),
         1,
@@ -415,12 +418,12 @@ fn test_get_compatible_pins_single_compatible_input() {
 fn test_get_compatible_pins_from_input_to_output() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Sphere has Geometry output
+    // Sphere has Blueprint output
     let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
-    // Union has Geometry inputs
+    // Union has Blueprint inputs
     let union_id = designer.add_node("union", DVec2::new(200.0, 0.0));
 
-    // Dragging FROM Union's input (pin index 0, Geometry) to Sphere
+    // Dragging FROM Union's input (pin index 0, Blueprint) to Sphere
     // source_is_output = false means we're dragging from an input pin
     let pins = designer.get_compatible_pins_for_auto_connect(union_id, 0, false, sphere_id);
 
@@ -428,22 +431,22 @@ fn test_get_compatible_pins_from_input_to_output() {
     assert_eq!(pins.len(), 1, "Expected exactly 1 compatible pin (output)");
     assert_eq!(pins[0].0, 0, "Output pin should be index 0");
     assert_eq!(pins[0].1, "output", "Pin name should be 'output'");
-    assert_eq!(pins[0].2, "Geometry", "Data type should be Geometry");
+    assert_eq!(pins[0].2, "Blueprint", "Data type should be Blueprint");
 }
 
 #[test]
 fn test_get_compatible_pins_no_compatible_types() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Sphere outputs Geometry
+    // Sphere outputs Blueprint
     let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
-    // Float node has no Geometry inputs
+    // Float node has no Blueprint inputs
     let float_id = designer.add_node("float", DVec2::new(200.0, 0.0));
 
-    // Dragging from Sphere's Geometry output to Float (which has no Geometry inputs)
+    // Dragging from Sphere's Blueprint output to Float (which has no Blueprint inputs)
     let pins = designer.get_compatible_pins_for_auto_connect(sphere_id, 0, true, float_id);
 
-    // Float node has no Geometry inputs, so should return empty
+    // Float node has no Blueprint inputs, so should return empty
     assert!(
         pins.is_empty(),
         "Expected no compatible pins, got {}",

@@ -40,7 +40,7 @@ All possible node output values:
 
 ```
 Bool, Int, Float, Vec2, Vec3, IVec2, IVec3, String,
-Geometry(GeometrySummary), Atomic(AtomicStructure),
+Blueprint(GeometrySummary), Atomic(AtomicStructure),
 Array(Vec<NetworkResult>), Function(Closure), Error(String)
 ```
 

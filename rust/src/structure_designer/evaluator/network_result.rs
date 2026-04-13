@@ -185,7 +185,7 @@ pub enum NetworkResult {
     UnitCell(UnitCellStruct),
     DrawingPlane(DrawingPlane),
     Geometry2D(GeometrySummary2D),
-    Geometry(GeometrySummary),
+    Blueprint(GeometrySummary),
     Atomic(AtomicStructure),
     Motif(Motif),
     Array(Vec<NetworkResult>),
@@ -209,7 +209,7 @@ impl NetworkResult {
             NetworkResult::UnitCell(_) => Some(DataType::UnitCell),
             NetworkResult::DrawingPlane(_) => Some(DataType::DrawingPlane),
             NetworkResult::Geometry2D(_) => Some(DataType::Geometry2D),
-            NetworkResult::Geometry(_) => Some(DataType::Geometry),
+            NetworkResult::Blueprint(_) => Some(DataType::Blueprint),
             NetworkResult::Atomic(_) => Some(DataType::Atomic),
             NetworkResult::Motif(_) => Some(DataType::Motif),
             _ => None,
@@ -247,14 +247,14 @@ impl NetworkResult {
     }
 
     /// Returns the UnitCellStruct associated with this NetworkResult.
-    /// For UnitCell, DrawingPlane, Geometry2D, and Geometry variants, returns their unit cell.
+    /// For UnitCell, DrawingPlane, Geometry2D, and Blueprint variants, returns their unit cell.
     /// For all other variants, returns None.
     pub fn get_unit_cell(&self) -> Option<UnitCellStruct> {
         match self {
             NetworkResult::UnitCell(unit_cell) => Some(unit_cell.clone()),
             NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
             NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
-            NetworkResult::Geometry(geometry) => Some(geometry.unit_cell.clone()),
+            NetworkResult::Blueprint(geometry) => Some(geometry.unit_cell.clone()),
             _ => None,
         }
     }
@@ -486,7 +486,7 @@ impl NetworkResult {
     }
 
     /// Returns a user-readable string representation for all variants.
-    /// For complex variants like Geometry2D, Geometry, Atomic, and Error, returns the variant name.
+    /// For complex variants like Geometry2D, Blueprint, Atomic, and Error, returns the variant name.
     pub fn to_display_string(&self) -> String {
         match self {
             NetworkResult::None => "None".to_string(),
@@ -537,7 +537,7 @@ impl NetworkResult {
                 )
             }
             NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
-            NetworkResult::Geometry(_) => "Geometry".to_string(),
+            NetworkResult::Blueprint(_) => "Blueprint".to_string(),
             NetworkResult::Atomic(atomic) => format_atomic_display_string(atomic),
             NetworkResult::Motif(motif) => motif.to_text_format(),
             NetworkResult::Error(_) => "Error".to_string(),
@@ -545,13 +545,13 @@ impl NetworkResult {
     }
 
     /// Returns a detailed string representation including full contents for complex types.
-    /// For Geometry/Geometry2D, shows unit cell/drawing plane, frame transform, and geo tree.
+    /// For Blueprint/Geometry2D, shows unit cell/drawing plane, frame transform, and geo tree.
     /// For Atomic/Motif, shows counts plus first 10 atoms/sites/bonds.
     /// For other variants, delegates to to_display_string().
     pub fn to_detailed_string(&self) -> String {
         match self {
-            NetworkResult::Geometry(geometry) => {
-                format!("Geometry:\n{}", geometry.to_detailed_string())
+            NetworkResult::Blueprint(geometry) => {
+                format!("Blueprint:\n{}", geometry.to_detailed_string())
             }
             NetworkResult::Geometry2D(geometry) => {
                 format!("Geometry2D:\n{}", geometry.to_detailed_string())

@@ -121,8 +121,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'DrawingPlane';
       case APIDataTypeBase.geometry2D:
         return 'Geometry2D';
-      case APIDataTypeBase.geometry:
-        return 'Geometry';
+      case APIDataTypeBase.blueprint:
+        return 'Blueprint';
       case APIDataTypeBase.atomic:
         return 'Atomic';
       case APIDataTypeBase.motif:

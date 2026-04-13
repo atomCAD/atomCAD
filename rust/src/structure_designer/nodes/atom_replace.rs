@@ -131,9 +131,7 @@ impl NodeData for AtomReplaceData {
             .replacements
             .iter()
             .take(max_display)
-            .map(|(from, to)| {
-                format!("{}→{}", element_symbol(*from), element_symbol(*to))
-            })
+            .map(|(from, to)| format!("{}→{}", element_symbol(*from), element_symbol(*to)))
             .collect();
 
         let remaining = self.replacements.len().saturating_sub(max_display);
@@ -162,9 +160,7 @@ impl NodeData for AtomReplaceData {
                 self.replacements = items
                     .iter()
                     .map(|item| {
-                        let iv = item
-                            .as_ivec2()
-                            .ok_or("each replacement must be an IVec2")?;
+                        let iv = item.as_ivec2().ok_or("each replacement must be an IVec2")?;
                         Ok((iv.x as i16, iv.y as i16))
                     })
                     .collect::<Result<Vec<_>, String>>()?;

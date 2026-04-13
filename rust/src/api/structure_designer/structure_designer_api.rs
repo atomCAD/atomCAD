@@ -1,6 +1,6 @@
+use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
-use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
@@ -90,12 +90,12 @@ use crate::structure_designer::layout;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
-use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
 use crate::structure_designer::nodes::atom_fill::AtomFillData;
 use crate::structure_designer::nodes::atom_move::AtomMoveData;
+use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::atom_rot::AtomRotData;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::nodes::bool::BoolData;
@@ -151,7 +151,7 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
         APIDataTypeBase::UnitCell => DataType::UnitCell,
         APIDataTypeBase::DrawingPlane => DataType::DrawingPlane,
         APIDataTypeBase::Geometry2D => DataType::Geometry2D,
-        APIDataTypeBase::Geometry => DataType::Geometry,
+        APIDataTypeBase::Blueprint => DataType::Blueprint,
         APIDataTypeBase::Atomic => DataType::Atomic,
         APIDataTypeBase::Motif => DataType::Motif,
         APIDataTypeBase::Custom => {
@@ -190,7 +190,7 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::UnitCell => APIDataTypeBase::UnitCell,
         DataType::DrawingPlane => APIDataTypeBase::DrawingPlane,
         DataType::Geometry2D => APIDataTypeBase::Geometry2D,
-        DataType::Geometry => APIDataTypeBase::Geometry,
+        DataType::Blueprint => APIDataTypeBase::Blueprint,
         DataType::Atomic => APIDataTypeBase::Atomic,
         DataType::Motif => APIDataTypeBase::Motif,
         _ => APIDataTypeBase::Custom, // All other types are considered custom
@@ -568,7 +568,7 @@ pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
 
 /// Returns node types that have at least one pin compatible with the given type.
 ///
-/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Geometry", "Float")
+/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Blueprint", "Float")
 /// - `dragging_from_output`: true if dragging from output pin, false if from input pin
 ///
 /// When dragging from OUTPUT: find nodes with compatible INPUT pins

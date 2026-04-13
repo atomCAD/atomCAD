@@ -78,7 +78,7 @@ fn test_load_old_builtin_only() {
     );
 
     // Verify network output_type (from old serialized field)
-    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
+    assert_eq!(*network.node_type.output_type(), DataType::Blueprint);
 
     // Verify displayed_nodes loaded (old format, no per-pin info)
     assert_eq!(
@@ -133,7 +133,7 @@ fn test_roundtrip_old_builtin_only() {
 // ---------------------------------------------------------------------------
 // Fixture 2: old_custom_network.cnnd
 // Two networks: "my_shape" defines a custom node type (with old
-// `"output_type": "Geometry"` on its node_type), "Main" uses it as a node.
+// `"output_type": "Blueprint"` on its node_type), "Main" uses it as a node.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -161,8 +161,8 @@ fn test_load_old_custom_network() {
     let my_shape = registry.node_networks.get("my_shape").unwrap();
     assert_eq!(
         *my_shape.node_type.output_type(),
-        DataType::Geometry,
-        "Custom network output_type should be Geometry (migrated from old output_type string)"
+        DataType::Blueprint,
+        "Custom network output_type should be Blueprint (migrated from old output_type string)"
     );
 
     // Verify custom network has a parameter
@@ -185,7 +185,7 @@ fn test_load_old_custom_network() {
         custom_type.is_some(),
         "my_shape should be available as a node type in registry"
     );
-    assert_eq!(*custom_type.unwrap().output_type(), DataType::Geometry);
+    assert_eq!(*custom_type.unwrap().output_type(), DataType::Blueprint);
 }
 
 #[test]

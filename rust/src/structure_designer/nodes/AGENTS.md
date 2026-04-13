@@ -50,7 +50,7 @@ NodeType {
     parameters: vec![
         Parameter::new("input_name", DataType::Float),
     ],
-    output_pins: OutputPinDefinition::single(DataType::Geometry),  // single output
+    output_pins: OutputPinDefinition::single(DataType::Blueprint),  // single output
     // For multi-output: output_pins: vec![
     //     OutputPinDefinition { name: "result".into(), data_type: DataType::Atomic },
     //     OutputPinDefinition { name: "diff".into(), data_type: DataType::Atomic },
@@ -69,7 +69,7 @@ Access pin 0's type via `node_type.output_type()` accessor.
 `eval()` returns `EvalOutput`, not `NetworkResult` directly:
 1. Extract inputs: `evaluator.evaluate_arg(node, 0)?` or `evaluate_arg_required(node, 0)?`
 2. Convert types: `result.extract_float()`, `result.extract_geometry()`, etc.
-3. Return `EvalOutput::single(NetworkResult::Geometry(...))` for single-output, or `EvalOutput::multi(vec![...])` for multi-output
+3. Return `EvalOutput::single(NetworkResult::Blueprint(...))` for single-output, or `EvalOutput::multi(vec![...])` for multi-output
 
 ## edit_atom/ Subdirectory
 

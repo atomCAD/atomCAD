@@ -160,7 +160,7 @@ impl NodeData for AtomFillData {
         }
 
         let mesh = match shape_val {
-            NetworkResult::Geometry(mesh) => mesh,
+            NetworkResult::Blueprint(mesh) => mesh,
             _ => return EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new())),
         };
 
@@ -394,7 +394,7 @@ pub fn get_node_type() -> NodeType {
           Parameter {
               id: None,
               name: "shape".to_string(),
-              data_type: DataType::Geometry,
+              data_type: DataType::Blueprint,
           },
           Parameter {
               id: None,

@@ -167,7 +167,7 @@ impl NodeData for LatticeRotData {
             } else {
                 EvalOutput::single(runtime_type_error_in_input(0))
             }
-        } else if let NetworkResult::Geometry(shape) = input_val {
+        } else if let NetworkResult::Blueprint(shape) = input_val {
             // Get all available symmetry axes for this unit cell
             let symmetry_axes = analyze_unit_cell_symmetries(&shape.unit_cell);
 
@@ -187,7 +187,7 @@ impl NodeData for LatticeRotData {
             let pivot_real = shape.unit_cell.ivec3_lattice_to_real(&pivot_point);
             let tr = Transform::new_rotation_around_point(pivot_real, real_rotation_quat);
 
-            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
                 unit_cell: shape.unit_cell.clone(),
                 frame_transform: Transform::default(),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
@@ -444,7 +444,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
           Parameter {
               id: None,
               name: "shape".to_string(),
-              data_type: DataType::Geometry,
+              data_type: DataType::Blueprint,
           },
           Parameter {
             id: None,
@@ -462,7 +462,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
             data_type: DataType::IVec3,
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Geometry),
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
       public: true,
       node_data_creator: || Box::new(LatticeRotData {
         axis_index: None,

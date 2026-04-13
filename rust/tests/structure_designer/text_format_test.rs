@@ -468,7 +468,7 @@ mod network_serializer_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -664,7 +664,7 @@ mod network_editor_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -1621,7 +1621,7 @@ mod auto_layout_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -1939,7 +1939,7 @@ mod node_type_introspection_tests {
         assert!(result.contains("Int"));
 
         // Check output
-        assert!(result.contains("Output: Geometry"));
+        assert!(result.contains("Output: Blueprint"));
     }
 
     #[test]
@@ -2005,7 +2005,7 @@ mod node_type_introspection_tests {
         assert!(result.contains("Node: cuboid"));
         assert!(result.contains("min_corner"));
         assert!(result.contains("extent"));
-        assert!(result.contains("Output: Geometry"));
+        assert!(result.contains("Output: Blueprint"));
     }
 
     #[test]
@@ -2215,7 +2215,7 @@ mod custom_name_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})

@@ -604,7 +604,7 @@ enum APIDataTypeBase {
   unitCell,
   drawingPlane,
   geometry2D,
-  geometry,
+  blueprint,
   atomic,
   motif,
   custom,
@@ -1537,7 +1537,7 @@ class APINodeEvaluationResult {
   /// The custom name if assigned, otherwise None
   final String? customName;
 
-  /// The output data type name (e.g., "Geometry", "Atomic", "Float")
+  /// The output data type name (e.g., "Blueprint", "Atomic", "Float")
   final String outputType;
 
   /// Brief display string (from to_display_string())

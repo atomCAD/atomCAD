@@ -212,7 +212,7 @@ fn test_vec3_data_text_properties() {
 }
 
 // ============================================================================
-// Geometry Node Tests
+// Blueprint Node Tests
 // ============================================================================
 
 #[test]
@@ -338,11 +338,11 @@ fn test_map_data_text_properties() {
     );
     map.insert(
         "output_type".to_string(),
-        TextValue::DataType(DataType::Geometry),
+        TextValue::DataType(DataType::Blueprint),
     );
     data2.set_text_properties(&map).unwrap();
     assert_eq!(data2.input_type, DataType::Vec3);
-    assert_eq!(data2.output_type, DataType::Geometry);
+    assert_eq!(data2.output_type, DataType::Blueprint);
 }
 
 #[test]
@@ -762,7 +762,7 @@ fn test_vec2_roundtrip() {
 }
 
 // ============================================================================
-// 2D Geometry Node Roundtrip Tests
+// 2D Blueprint Node Roundtrip Tests
 // ============================================================================
 
 #[test]
@@ -815,7 +815,7 @@ fn test_half_plane_roundtrip() {
 }
 
 // ============================================================================
-// 3D Geometry Node Roundtrip Tests
+// 3D Blueprint Node Roundtrip Tests
 // ============================================================================
 
 #[test]

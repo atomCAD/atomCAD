@@ -27,7 +27,7 @@ pub enum APIDataTypeBase {
     UnitCell,
     DrawingPlane,
     Geometry2D,
-    Geometry,
+    Blueprint,
     Atomic,
     Motif,
     Custom,
@@ -632,8 +632,8 @@ impl NodeTypeCategory {
         match self {
             Self::Annotation => "Annotation",
             Self::MathAndProgramming => "Math and Programming",
-            Self::Geometry2D => "2D Geometry",
-            Self::Geometry3D => "3D Geometry",
+            Self::Geometry2D => "2D Blueprint",
+            Self::Geometry3D => "3D Blueprint",
             Self::AtomicStructure => "Atomic Structure",
             Self::OtherBuiltin => "Other",
             Self::Custom => "Custom",
@@ -797,7 +797,7 @@ pub struct APINodeEvaluationResult {
     pub node_type_name: String,
     /// The custom name if assigned, otherwise None
     pub custom_name: Option<String>,
-    /// The output data type name (e.g., "Geometry", "Atomic", "Float")
+    /// The output data type name (e.g., "Blueprint", "Atomic", "Float")
     pub output_type: String,
     /// Brief display string (from to_display_string())
     pub display_string: String,

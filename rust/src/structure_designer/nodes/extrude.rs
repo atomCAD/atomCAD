@@ -182,7 +182,7 @@ impl NodeData for ExtrudeData {
             );
 
             let s = shape.geo_tree_root;
-            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
                 unit_cell,
                 frame_transform,
                 geo_tree_root: GeoNode::extrude(
@@ -299,7 +299,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Int,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || {
             Box::new(ExtrudeData {

@@ -79,7 +79,7 @@ impl NodeData for AtomCutData {
             };
 
             for shape_val in shape_results {
-                if let NetworkResult::Geometry(shape) = shape_val {
+                if let NetworkResult::Blueprint(shape) = shape_val {
                     shapes.push(shape.geo_tree_root);
                 }
             }
@@ -203,7 +203,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "cutters".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Geometry)),
+                data_type: DataType::Array(Box::new(DataType::Blueprint)),
             },
         ],
         output_pins: OutputPinDefinition::single(DataType::Atomic),

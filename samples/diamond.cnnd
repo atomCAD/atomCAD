@@ -7,7 +7,7 @@
         "node_type": {
           "name": "sample",
           "parameters": [],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {

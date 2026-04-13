@@ -58,7 +58,7 @@ structure_designer/
 | `EvalOutput` | `node_data.rs` | Multi-output eval result (Vec of NetworkResult) |
 | `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
-| `DataType` | `data_type.rs` | Pin type system (Bool, Float, Vec3, Geometry, Atomic, etc.) |
+| `DataType` | `data_type.rs` | Pin type system (Bool, Float, Vec3, Blueprint, Atomic, etc.) |
 | `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types |
 | `NetworkResult` | `evaluator/network_result.rs` | Evaluated node output value |
 

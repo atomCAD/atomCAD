@@ -546,7 +546,7 @@ impl NodeData for FacetShellData {
             shapes.push(GeoNode::half_space(plane_props.normal, shifted_center));
         }
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
             unit_cell: unit_cell.clone(),
             frame_transform: Transform::new(
                 center_pos,
@@ -890,7 +890,7 @@ See the atomCAD reference guide for more details.".to_string(),
           data_type: DataType::IVec3,
         },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Geometry),
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
       public: true,
       node_data_creator: || Box::new(FacetShellData::default()),
       node_data_saver: generic_node_data_saver::<FacetShellData>,

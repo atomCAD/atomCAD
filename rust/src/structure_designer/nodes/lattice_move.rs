@@ -145,7 +145,7 @@ impl NodeData for LatticeMoveData {
             } else {
                 EvalOutput::single(runtime_type_error_in_input(0))
             }
-        } else if let NetworkResult::Geometry(shape) = input_val {
+        } else if let NetworkResult::Blueprint(shape) = input_val {
             let real_translation = shape
                 .unit_cell
                 .dvec3_lattice_to_real(&subdivided_translation);
@@ -158,7 +158,7 @@ impl NodeData for LatticeMoveData {
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+            EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
                 unit_cell: shape.unit_cell.clone(),
                 frame_transform: Transform::default(),
                 geo_tree_root: GeoNode::transform(
@@ -376,7 +376,7 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
           Parameter {
               id: None,
               name: "shape".to_string(),
-              data_type: DataType::Geometry,
+              data_type: DataType::Blueprint,
           },
           Parameter {
             id: None,
@@ -389,7 +389,7 @@ You can directly enter the translation vector or drag the axes of the gadget.".t
             data_type: DataType::Int,
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Geometry),
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
       public: true,
       node_data_creator: || Box::new(LatticeMoveData {
         translation: IVec3::new(0, 0, 0),

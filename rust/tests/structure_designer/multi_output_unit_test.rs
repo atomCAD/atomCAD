@@ -23,10 +23,10 @@ use std::collections::HashSet;
 
 #[test]
 fn test_output_pin_definition_single() {
-    let pins = OutputPinDefinition::single(DataType::Geometry);
+    let pins = OutputPinDefinition::single(DataType::Blueprint);
     assert_eq!(pins.len(), 1);
     assert_eq!(pins[0].name, "result");
-    assert_eq!(pins[0].data_type, DataType::Geometry);
+    assert_eq!(pins[0].data_type, DataType::Blueprint);
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn test_node_type_output_type_accessor() {
     let registry =
         rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
     let sphere_type = registry.get_node_type("sphere").unwrap();
-    assert_eq!(*sphere_type.output_type(), DataType::Geometry);
+    assert_eq!(*sphere_type.output_type(), DataType::Blueprint);
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn test_node_type_get_output_pin_type_pin0() {
     let registry =
         rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
     let sphere_type = registry.get_node_type("sphere").unwrap();
-    assert_eq!(sphere_type.get_output_pin_type(0), DataType::Geometry);
+    assert_eq!(sphere_type.get_output_pin_type(0), DataType::Blueprint);
 }
 
 #[test]
@@ -273,7 +273,7 @@ fn test_displayed_nodes_serialization_roundtrip_default_pins() {
             parameters: vec![],
             output_pins: vec![SerializableOutputPin {
                 name: "result".to_string(),
-                data_type: "Geometry".to_string(),
+                data_type: "Blueprint".to_string(),
             }],
             output_type: None,
         },
@@ -346,7 +346,7 @@ fn test_old_format_without_displayed_output_pins_loads_with_default_pin0() {
             "description": "",
             "category": "Custom",
             "parameters": [],
-            "output_pins": [{"name": "result", "data_type": "Geometry"}]
+            "output_pins": [{"name": "result", "data_type": "Blueprint"}]
         },
         "nodes": [],
         "return_node_id": null,
@@ -652,7 +652,7 @@ fn test_custom_network_single_output_return_node() {
 
     assert_eq!(network.node_type.output_pin_count(), 1);
     assert_eq!(network.node_type.output_pins[0].name, "result");
-    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
+    assert_eq!(*network.node_type.output_type(), DataType::Blueprint);
     assert!(!network.node_type.has_multi_output());
 }
 
@@ -682,7 +682,7 @@ fn test_custom_network_return_node_change_multi_to_single() {
         .get("inner")
         .unwrap();
     assert_eq!(network.node_type.output_pin_count(), 1);
-    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
+    assert_eq!(*network.node_type.output_type(), DataType::Blueprint);
 }
 
 /// Switching return node from single-output to multi-output updates output_pins.

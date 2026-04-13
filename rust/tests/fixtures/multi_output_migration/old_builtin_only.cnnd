@@ -10,7 +10,7 @@
           "summary": null,
           "category": "Custom",
           "parameters": [],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {

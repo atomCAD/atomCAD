@@ -92,7 +92,7 @@ impl NodeData for SphereData {
         let real_center = unit_cell.ivec3_lattice_to_real(&center);
         let real_radius = unit_cell.int_lattice_to_real(radius);
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
             unit_cell,
             frame_transform: Transform::new(real_center, DQuat::IDENTITY),
             geo_tree_root: GeoNode::sphere(real_center, real_radius),
@@ -179,7 +179,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::UnitCell,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || {
             Box::new(SphereData {

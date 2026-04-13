@@ -97,7 +97,7 @@ fn format_data_type_for_display(dt: &DataType) -> String {
 fn is_wire_only_type(data_type: &DataType) -> bool {
     matches!(
         data_type,
-        DataType::Geometry
+        DataType::Blueprint
             | DataType::Geometry2D
             | DataType::Atomic
             | DataType::Motif
@@ -118,7 +118,7 @@ fn is_wire_only_type(data_type: &DataType) -> bool {
 /// # Terminology
 ///
 /// - **wire-only**: This input can only be connected to another node's output.
-///   There is no text literal representation for this type (e.g., Geometry, Atomic, Motif).
+///   There is no text literal representation for this type (e.g., Blueprint, Atomic, Motif).
 /// - **literal-only**: This input can only be set as a literal value in the text format.
 ///   It has no input pin and cannot be connected to other nodes.
 /// - Inputs without either marker can be set as a literal OR wired to another node.
@@ -137,7 +137,7 @@ fn is_wire_only_type(data_type: &DataType) -> bool {
 /// Description: Converts a 3D geometry into an atomic structure...
 ///
 /// Inputs:
-///   shape          : Geometry  [required, wire-only]
+///   shape          : Blueprint  [required, wire-only]
 ///   motif          : Motif     [default: cubic zincblende, wire-only]
 ///   m_offset       : Vec3      [default: (0.0, 0.0, 0.0)]
 ///   passivate      : Bool      [default: true]
@@ -233,7 +233,7 @@ pub fn describe_node_type(node_type_name: &str, registry: &NodeTypeRegistry) -> 
         for param in &node_type.parameters {
             let type_str = format_data_type_for_display(&param.data_type);
             // A parameter is wire-only if:
-            // 1. Its data type has no literal representation (Geometry, Atomic, etc.), OR
+            // 1. Its data type has no literal representation (Blueprint, Atomic, etc.), OR
             // 2. It has no backing text property (no storage for literal values)
             // BUT: Custom nodes can accept literals for all parameters (via CustomNodeData)
             let wire_only = is_wire_only_type(&param.data_type)

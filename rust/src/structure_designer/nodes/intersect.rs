@@ -74,7 +74,7 @@ impl NodeData for IntersectData {
         // Extract geometries and check unit cell compatibility
         let mut geometries: Vec<GeometrySummary> = Vec::new();
         for shape_val in shape_results {
-            if let NetworkResult::Geometry(shape) = shape_val {
+            if let NetworkResult::Blueprint(shape) = shape_val {
                 geometries.push(shape);
             } else {
                 return EvalOutput::single(NetworkResult::Error(
@@ -98,7 +98,7 @@ impl NodeData for IntersectData {
 
         frame_translation /= shape_count as f64;
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
+        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
             unit_cell: first_unit_cell,
             frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
             geo_tree_root: GeoNode::intersection_3d(shapes),
@@ -126,17 +126,17 @@ impl NodeData for IntersectData {
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "intersect".to_string(),
-      description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values. Use this to cut geometries with a half-space.".to_string(),
+      description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Blueprint` values. Use this to cut geometries with a half-space.".to_string(),
       summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
               id: None,
               name: "shapes".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry)),
+              data_type: DataType::Array(Box::new(DataType::Blueprint)),
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Geometry),
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
       public: true,
       node_data_creator: || Box::new(IntersectData {}),
       node_data_saver: generic_node_data_saver::<IntersectData>,
