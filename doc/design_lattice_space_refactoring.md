@@ -253,6 +253,55 @@ The full extension is two enum additions — one `DataType` variant per abstract
 
 ---
 
+## Appendix B: Payload Struct Shapes
+
+The three concrete phase types are represented by parallel flat payload structs wrapped by `NetworkResult` variants:
+
+```rust
+pub struct BlueprintData {
+    pub structure: Structure,
+    pub geo_tree_root: GeoNode,
+}
+
+pub struct CrystalData {
+    pub structure: Structure,
+    pub atoms: AtomicStructure,
+    pub geo_tree_root: Option<GeoNode>,
+}
+
+pub struct MoleculeData {
+    pub atoms: AtomicStructure,
+    pub geo_tree_root: Option<GeoNode>,
+}
+
+pub enum NetworkResult {
+    // ...
+    Blueprint(BlueprintData),
+    Crystal(CrystalData),
+    Molecule(MoleculeData),
+    // ...
+}
+```
+
+Field-shape rules across the three:
+- `structure` is present on the two `StructureBound` types (Blueprint, Crystal), absent on Molecule.
+- `atoms` is present on the two `Atomic` types (Crystal, Molecule), absent on Blueprint.
+- `geo_tree_root` is non-optional on Blueprint (geometry is the whole point), optional on Crystal and Molecule (a Crystal/Molecule may or may not retain a geometry shell).
+
+### Removal of `frame_transform`
+
+The pre-refactoring `GeometrySummary` and `AtomicStructure` both carried a `frame_transform: Transform` field. **This field is removed entirely** as part of phase 4. Investigation showed it was vestigial:
+
+- The renderer (`atomic_tessellator.rs`) ignored it, drawing atoms directly from `atom.position`.
+- XYZ export (`xyz_saver.rs`) ignored it, writing raw atom coordinates.
+- Modern movement nodes (`atom_move`, `atom_rot`) bypassed it, transforming positions in-place.
+- Only deprecated nodes (`atom_trans`, `atom_lmove`/`atom_lrot` family) and `atom_union`'s translation-averaging consumed it — and the refactoring deletes those nodes anyway.
+- It was never serialized: `NetworkResult` has no Serialize/Deserialize derives, no `.cnnd` fixtures contain it, and no roundtrip tests assert on it. Two insta snapshots showed non-identity values via `to_detailed_string()` debug output; they are regenerated.
+
+The new movement nodes (`structure_move`, `structure_rot`, `free_move`, `free_rot`) bake transforms directly into atom positions and `geo_tree` transforms, matching how `atom_move` already works. No carried transform field is needed.
+
+---
+
 ## Implementation Strategy
 
 Work proceeds on a **feature branch**. There is no business requirement to release incrementally, and the changes are too deeply interconnected for gradual backward-compatible migration on main — adding a single `DataType` variant triggers exhaustive-match errors in ~15–20 locations, node renames would require maintaining parallel registrations, and the shim code for each intermediate step would be throwaway. A single `.cnnd` migration script is written at the end.
@@ -265,12 +314,17 @@ Each phase is a natural stopping point where the code compiles and tests pass.
 
 2. **Rename UnitCell → LatticeVecs.** Rename `DataType::UnitCell` to `LatticeVecs`, `NetworkResult::UnitCell` to `LatticeVecs`, and the `unit_cell` node to `lattice_vecs`. Pure rename, same pattern as phase 1.
 
-3. **Add Structure value type.** New `DataType::Structure` and `NetworkResult::Structure` variants. Constructor/modifier node (`structure`) only. Preset nodes (`diamond`, `lonsdaleite`, `silicon`, ...) are deferred — an empty `structure` node already defaults to diamond. `get_structure` and `set_structure` are also deferred: they are naturally typed over the `StructureBound` abstract type, which does not exist until phase 5.
+3. **Add Structure value type.** New `DataType::Structure` and `NetworkResult::Structure` variants. Constructor/modifier node (`structure`) only. Preset nodes (`diamond`, `lonsdaleite`, `silicon`, ...) are deferred — an empty `structure` node already defaults to diamond. `get_structure` and `set_structure` are also deferred: they are naturally typed over the `StructureBound` abstract type, which does not exist until phase 6.
 
-4. **Structure input on primitives.** Add optional `Structure` input to primitive nodes (cuboid, sphere, extrude, ...). If unconnected, a default (diamond) is used. Primitives now output `Blueprint` carrying the structure.
+4. **Payload-shape unification.** Structural cleanup with no semantic changes; sets up the parallel payload shapes Crystal/Molecule will need later.
+   - Rename `GeometrySummary` → `BlueprintData`. Replace its `unit_cell: UnitCellStruct` field with `structure: Structure`. (Primitives still take a `LatticeVecs` input at this phase — input swap moves to phase 5.)
+   - **Delete `frame_transform`** from `BlueprintData` and `AtomicStructure` (see Appendix B). Update the ~6 remaining consumers (`atom_trans`, `geo_trans`, `lattice_move`, `lattice_rot`, `lattice_symop`, `atom_union`) and evaluator averaging code (`network_evaluator.rs:521–598`); most are nodes the refactoring will delete anyway. `atom_union` loses its translation-averaging, which had no rendered consumer.
+   - Regenerate two insta snapshots (`halfspace_demo_evaluation.snap`, `rutile_motif_evaluation.snap`).
 
-5. **Split Atomic into Crystal / Molecule + abstract types.** Redefine `Atomic` as abstract (supertype of Crystal and Molecule). Introduce `StructureBound` and `Unanchored` abstract types, `can_be_converted_to` rules, and `PinOutputType::SameAsInput` so that polymorphic nodes preserve the concrete input type at the output. Update ~23 atom-operation nodes to use `Atomic` + `SameAsInput`. `atom_fill` now outputs `Crystal`.
+5. **Structure input on primitives.** **Replace** the `LatticeVecs` input on primitive nodes (cuboid, sphere, extrude, ...) with a `Structure` input. If unconnected, a default (diamond) is used. Primitives now output a `Blueprint` whose `BlueprintData.structure` field carries the connected (or default) structure. The `LatticeVecs` data type itself remains (used internally by the `structure` node and as a value type), only the primitive pin signature changes.
 
-6. **Phase transitions and movement nodes.** `materialize` / `dematerialize` / `exit_structure` / `enter_structure`, `structure_move` / `structure_rot` / `free_move` / `free_rot`. Remove old duplicates (`atom_lmove`, `atom_lrot`, `atom_move`, `atom_rot`).
+6. **Split Atomic into Crystal / Molecule + abstract types.** Redefine `Atomic` as abstract (supertype of Crystal and Molecule). Introduce `StructureBound` and `Unanchored` abstract types, `can_be_converted_to` rules, and `PinOutputType::SameAsInput` so that polymorphic nodes preserve the concrete input type at the output. Update ~23 atom-operation nodes to use `Atomic` + `SameAsInput`. Introduce `CrystalData` and `MoleculeData` payload structs (see Appendix B); both wrap `AtomicStructure`. `atom_fill` now outputs `Crystal`.
 
-7. **Migration script + Flutter API.** `.cnnd` file converter (rename DataType strings, rename node_type_name strings, restructure `atom_fill` into `structure` source + `materialize`). Update `APIDataTypeBase`, regenerate FRB bindings, update Dart UI.
+7. **Phase transitions and movement nodes.** `materialize` / `dematerialize` / `exit_structure` / `enter_structure`, `structure_move` / `structure_rot` / `free_move` / `free_rot`. New movement nodes bake transforms directly into atom positions and geo_tree transforms (no carried `frame_transform` to update). Remove old duplicates (`atom_lmove`, `atom_lrot`, `atom_move`, `atom_rot`, `atom_trans`).
+
+8. **Migration script + Flutter API.** `.cnnd` file converter (rename DataType strings, rename node_type_name strings, restructure `atom_fill` into `structure` source + `materialize`). Update `APIDataTypeBase`, regenerate FRB bindings, update Dart UI.

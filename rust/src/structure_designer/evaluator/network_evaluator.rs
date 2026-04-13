@@ -25,11 +25,10 @@ use crate::structure_designer::structure_designer_scene::{
 
 use super::network_result::Closure;
 use super::network_result::input_missing_error;
-use super::network_result::{GeometrySummary, GeometrySummary2D};
-use crate::util::transform::Transform;
+use super::network_result::{BlueprintData, GeometrySummary2D};
+use crate::crystolecule::structure::Structure;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
-use glam::f64::{DQuat, DVec3};
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -511,25 +510,20 @@ impl NetworkEvaluator {
         match inner_type {
             DataType::Blueprint => {
                 let mut shapes: Vec<GeoNode> = Vec::new();
-                let mut frame_translation = DVec3::ZERO;
-                let mut first_unit_cell = None;
+                let mut first_lattice_vecs = None;
                 for element in elements {
                     if let NetworkResult::Blueprint(geo) = element {
-                        if first_unit_cell.is_none() {
-                            first_unit_cell = Some(geo.unit_cell.clone());
+                        if first_lattice_vecs.is_none() {
+                            first_lattice_vecs = Some(geo.structure.lattice_vecs.clone());
                         }
-                        frame_translation += geo.frame_transform.translation;
                         shapes.push(geo.geo_tree_root);
                     }
                 }
                 if shapes.is_empty() {
                     return (NodeOutput::None, None);
                 }
-                let count = shapes.len() as f64;
-                frame_translation /= count;
-                let merged = NetworkResult::Blueprint(GeometrySummary {
-                    unit_cell: first_unit_cell.unwrap(),
-                    frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
+                let merged = NetworkResult::Blueprint(BlueprintData {
+                    structure: Structure::from_lattice_vecs(first_lattice_vecs.unwrap()),
                     geo_tree_root: GeoNode::union_3d(shapes),
                 });
                 self.convert_result_to_node_output(
@@ -579,23 +573,18 @@ impl NetworkEvaluator {
             }
             DataType::Atomic => {
                 let mut structures: Vec<AtomicStructure> = Vec::new();
-                let mut frame_translation_sum = DVec3::ZERO;
                 for element in elements {
                     if let NetworkResult::Atomic(structure) = element {
-                        frame_translation_sum += structure.frame_transform().translation;
                         structures.push(structure);
                     }
                 }
                 if structures.is_empty() {
                     return (NodeOutput::None, None);
                 }
-                let count = structures.len() as f64;
                 let mut result = structures.remove(0);
                 for other in &structures {
                     result.add_atomic_structure(other);
                 }
-                let avg_translation = frame_translation_sum / count;
-                result.set_frame_transform(Transform::new(avg_translation, DQuat::IDENTITY));
                 result.decorator_mut().from_selected_node = from_selected_node;
                 (NodeOutput::Atomic(result), None)
             }

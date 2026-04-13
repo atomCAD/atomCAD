@@ -12,8 +12,6 @@ use crate::structure_designer::node_type::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform;
-use glam::f64::{DQuat, DVec3};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,21 +55,16 @@ impl NodeData for AtomUnionData {
             ));
         };
 
-        let structure_count = structure_results.len();
-
-        if structure_count == 0 {
+        if structure_results.is_empty() {
             return EvalOutput::single(NetworkResult::Error(
                 "atom_union requires at least one input structure".to_string(),
             ));
         }
 
-        // Extract atomic structures and collect frame translations for averaging
         let mut atomic_structures: Vec<AtomicStructure> = Vec::new();
-        let mut frame_translation_sum = DVec3::ZERO;
 
         for structure_val in structure_results {
             if let NetworkResult::Atomic(structure) = structure_val {
-                frame_translation_sum += structure.frame_transform().translation;
                 atomic_structures.push(structure);
             } else {
                 return EvalOutput::single(NetworkResult::Error(
@@ -80,17 +73,11 @@ impl NodeData for AtomUnionData {
             }
         }
 
-        // Start with the first structure as base
         let mut result = atomic_structures.remove(0);
 
-        // Merge all subsequent structures into the result
         for other in &atomic_structures {
             result.add_atomic_structure(other);
         }
-
-        // Set the frame transform to the average translation with identity rotation
-        let avg_translation = frame_translation_sum / structure_count as f64;
-        result.set_frame_transform(Transform::new(avg_translation, DQuat::IDENTITY));
 
         EvalOutput::single(NetworkResult::Atomic(result))
     }

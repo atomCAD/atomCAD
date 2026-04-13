@@ -10,8 +10,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
+use crate::crystolecule::structure::Structure;
 use crate::structure_designer::evaluator::network_result::{
-    GeometrySummary, NetworkResult, runtime_type_error_in_input,
+    BlueprintData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -169,7 +170,7 @@ impl NodeData for LatticeRotData {
             }
         } else if let NetworkResult::Blueprint(shape) = input_val {
             // Get all available symmetry axes for this unit cell
-            let symmetry_axes = analyze_unit_cell_symmetries(&shape.unit_cell);
+            let symmetry_axes = analyze_unit_cell_symmetries(&shape.structure.lattice_vecs);
 
             // Calculate rotation quaternion using discrete symmetry approach
             let real_rotation_quat = compute_rotation_quat(axis_index, step, &symmetry_axes);
@@ -177,19 +178,21 @@ impl NodeData for LatticeRotData {
             // Store evaluation cache for root-level evaluations
             if network_stack.len() == 1 {
                 let eval_cache = LatticeRotEvalCache {
-                    unit_cell: shape.unit_cell.clone(),
+                    unit_cell: shape.structure.lattice_vecs.clone(),
                     pivot_point,
                 };
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
             // Transform geometry - rotation around pivot point
-            let pivot_real = shape.unit_cell.ivec3_lattice_to_real(&pivot_point);
+            let pivot_real = shape
+                .structure
+                .lattice_vecs
+                .ivec3_lattice_to_real(&pivot_point);
             let tr = Transform::new_rotation_around_point(pivot_real, real_rotation_quat);
 
-            EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
-                unit_cell: shape.unit_cell.clone(),
-                frame_transform: Transform::default(),
+            EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+                structure: Structure::from_lattice_vecs(shape.structure.lattice_vecs.clone()),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
             }))
         } else {

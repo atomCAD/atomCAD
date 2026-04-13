@@ -260,7 +260,7 @@ impl NodeData for AtomFillData {
 
         // Build configuration
         let config = LatticeFillConfig {
-            unit_cell: mesh.unit_cell,
+            unit_cell: mesh.structure.lattice_vecs,
             motif,
             parameter_element_values: effective_parameter_values,
             geometry: mesh.geo_tree_root,

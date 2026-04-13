@@ -9,8 +9,9 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
+use crate::crystolecule::structure::Structure;
 use crate::structure_designer::evaluator::network_result::{
-    GeometrySummary, NetworkResult, runtime_type_error_in_input,
+    BlueprintData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -147,20 +148,20 @@ impl NodeData for LatticeMoveData {
             }
         } else if let NetworkResult::Blueprint(shape) = input_val {
             let real_translation = shape
-                .unit_cell
+                .structure
+                .lattice_vecs
                 .dvec3_lattice_to_real(&subdivided_translation);
 
             // Store evaluation cache for root-level evaluations
             if network_stack.len() == 1 {
                 let eval_cache = LatticeMoveEvalCache {
-                    unit_cell: shape.unit_cell.clone(),
+                    unit_cell: shape.structure.lattice_vecs.clone(),
                 };
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
-                unit_cell: shape.unit_cell.clone(),
-                frame_transform: Transform::default(),
+            EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+                structure: Structure::from_lattice_vecs(shape.structure.lattice_vecs.clone()),
                 geo_tree_root: GeoNode::transform(
                     Transform::new(real_translation, DQuat::IDENTITY),
                     Box::new(shape.geo_tree_root),

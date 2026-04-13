@@ -1984,9 +1984,9 @@ mod node_type_introspection_tests {
         let registry = create_test_registry();
         let result = describe_node_type("sphere", &registry);
 
-        // unit_cell parameter has hardcoded default and is wire-only
+        // structure parameter has hardcoded default and is wire-only
         assert!(result.contains("wire-only"));
-        assert!(result.contains("default: cubic diamond"));
+        assert!(result.contains("default: diamond"));
     }
 
     #[test]

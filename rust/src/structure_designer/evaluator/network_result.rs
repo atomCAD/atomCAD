@@ -9,7 +9,6 @@ use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
-use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
@@ -92,75 +91,57 @@ impl GeometrySummary2D {
 }
 
 #[derive(Clone)]
-pub struct GeometrySummary {
-    pub unit_cell: UnitCellStruct,
-    pub frame_transform: Transform,
+pub struct BlueprintData {
+    pub structure: Structure,
     pub geo_tree_root: GeoNode,
 }
 
-impl GeometrySummary {
+impl BlueprintData {
     /// Returns a detailed string representation for snapshot testing.
     pub fn to_detailed_string(&self) -> String {
-        let uc = &self.unit_cell;
-        let t = &self.frame_transform;
+        let lv = &self.structure.lattice_vecs;
+        let mo = &self.structure.motif_offset;
         format!(
-            "unit_cell:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})\nframe_transform:\n  translation: ({:.6}, {:.6}, {:.6})\n  rotation: ({:.6}, {:.6}, {:.6}, {:.6})\ngeo_tree:\n{}",
-            uc.a.x,
-            uc.a.y,
-            uc.a.z,
-            uc.b.x,
-            uc.b.y,
-            uc.b.z,
-            uc.c.x,
-            uc.c.y,
-            uc.c.z,
-            t.translation.x,
-            t.translation.y,
-            t.translation.z,
-            t.rotation.x,
-            t.rotation.y,
-            t.rotation.z,
-            t.rotation.w,
+            "lattice_vecs:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})\nmotif_offset: ({:.6}, {:.6}, {:.6})\ngeo_tree:\n{}",
+            lv.a.x,
+            lv.a.y,
+            lv.a.z,
+            lv.b.x,
+            lv.b.y,
+            lv.b.z,
+            lv.c.x,
+            lv.c.y,
+            lv.c.z,
+            mo.x,
+            mo.y,
+            mo.z,
             self.geo_tree_root
         )
     }
 
-    /// Checks if this geometry's unit cell is compatible with another geometry's unit cell.
+    /// Checks if this blueprint's lattice vectors are compatible with another's.
     ///
-    /// This is useful for CSG operations where geometries must have compatible unit cells.
-    /// Uses approximate equality with tolerance for small calculation errors.
-    ///
-    /// # Arguments
-    /// * `other` - The other GeometrySummary to compare unit cells with
-    ///
-    /// # Returns
-    /// * `true` if the unit cells are approximately equal within tolerance
-    /// * `false` if they differ significantly
-    pub fn has_compatible_unit_cell(&self, other: &GeometrySummary) -> bool {
-        self.unit_cell.is_approximately_equal(&other.unit_cell)
+    /// Boolean CSG operations require compatible lattice vectors. Uses approximate
+    /// equality with tolerance for small calculation errors. Motif compatibility
+    /// is not required at this level.
+    pub fn has_compatible_lattice_vecs(&self, other: &BlueprintData) -> bool {
+        self.structure
+            .lattice_vecs
+            .is_approximately_equal(&other.structure.lattice_vecs)
     }
 
-    /// Checks if all geometries in a vector have approximately the same unit cells.
-    ///
-    /// Compares each geometry's unit cell to the first geometry's unit cell.
+    /// Checks if all blueprints in a vector have approximately the same lattice vectors.
     /// Returns true if the vector is empty or has only one element.
-    ///
-    /// # Arguments
-    /// * `geometries` - Vector of GeometrySummary objects to check
-    ///
-    /// # Returns
-    /// * `true` if all unit cells are approximately equal or vector has ≤1 elements
-    /// * `false` if any unit cell differs significantly from the first
-    pub fn all_have_compatible_unit_cells(geometries: &[GeometrySummary]) -> bool {
-        if geometries.len() <= 1 {
+    pub fn all_have_compatible_lattice_vecs(blueprints: &[BlueprintData]) -> bool {
+        if blueprints.len() <= 1 {
             return true;
         }
 
-        let first_unit_cell = &geometries[0].unit_cell;
-        geometries
+        let first = &blueprints[0].structure.lattice_vecs;
+        blueprints
             .iter()
             .skip(1)
-            .all(|geometry| first_unit_cell.is_approximately_equal(&geometry.unit_cell))
+            .all(|bp| first.is_approximately_equal(&bp.structure.lattice_vecs))
     }
 }
 
@@ -186,7 +167,7 @@ pub enum NetworkResult {
     LatticeVecs(UnitCellStruct),
     DrawingPlane(DrawingPlane),
     Geometry2D(GeometrySummary2D),
-    Blueprint(GeometrySummary),
+    Blueprint(BlueprintData),
     Atomic(AtomicStructure),
     Motif(Motif),
     Structure(Structure),
@@ -257,7 +238,7 @@ impl NetworkResult {
             NetworkResult::LatticeVecs(unit_cell) => Some(unit_cell.clone()),
             NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
             NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
-            NetworkResult::Blueprint(geometry) => Some(geometry.unit_cell.clone()),
+            NetworkResult::Blueprint(bp) => Some(bp.structure.lattice_vecs.clone()),
             NetworkResult::Structure(structure) => Some(structure.lattice_vecs.clone()),
             _ => None,
         }

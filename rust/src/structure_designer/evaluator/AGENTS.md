@@ -40,11 +40,11 @@ All possible node output values:
 
 ```
 Bool, Int, Float, Vec2, Vec3, IVec2, IVec3, String,
-Blueprint(GeometrySummary), Atomic(AtomicStructure),
+Blueprint(BlueprintData), Atomic(AtomicStructure),
 Array(Vec<NetworkResult>), Function(Closure), Error(String)
 ```
 
-- `GeometrySummary` wraps both 2D and 3D geometry with optional unit cell/drawing plane
+- `BlueprintData` carries a `Structure` (lattice_vecs + motif + motif_offset) and a `GeoNode`; `GeometrySummary2D` carries a `DrawingPlane` + `frame_transform` + `GeoNode`
 - `Closure` captures a function node's network for deferred evaluation
 - Type conversion via `convert_to(target_type)` follows `DataType` rules
 - Accessor methods: `extract_float()`, `extract_geometry()`, `extract_atomic()`, etc.

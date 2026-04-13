@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::Gadget;
 use crate::display::poly_mesh::PolyMesh;
@@ -9,7 +10,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -21,8 +22,6 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::utils::half_space_utils;
 use crate::util::serialization_utils::ivec3_serializer;
-use crate::util::transform::Transform;
-use glam::f64::DQuat;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
@@ -493,18 +492,19 @@ impl NodeData for FacetShellData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let unit_cell = match network_evaluator.evaluate_or_default(
+        let structure = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
             0,
-            UnitCellStruct::cubic_diamond(),
-            NetworkResult::extract_unit_cell,
+            Structure::diamond(),
+            NetworkResult::extract_structure,
         ) {
             Ok(value) => value,
             Err(error) => return EvalOutput::single(error),
         };
+        let unit_cell = structure.lattice_vecs.clone();
 
         let center = match network_evaluator.evaluate_or_default(
             network_stack,
@@ -546,12 +546,9 @@ impl NodeData for FacetShellData {
             shapes.push(GeoNode::half_space(plane_props.normal, shifted_center));
         }
 
-        EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
-            unit_cell: unit_cell.clone(),
-            frame_transform: Transform::new(
-                center_pos,
-                DQuat::IDENTITY, // Use identity quaternion as we don't need rotation
-            ),
+        let _ = center_pos;
+        EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+            structure,
             geo_tree_root: GeoNode::intersection_3d(shapes),
         }))
     }
@@ -654,8 +651,8 @@ impl NodeData for FacetShellData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert(
-            "unit_cell".to_string(),
-            (false, Some("cubic diamond".to_string())),
+            "structure".to_string(),
+            (false, Some("diamond".to_string())),
         );
         m
     }
@@ -881,8 +878,8 @@ See the atomCAD reference guide for more details.".to_string(),
       parameters: vec![
         Parameter {
           id: None,
-          name: "unit_cell".to_string(),
-          data_type: DataType::LatticeVecs,
+          name: "structure".to_string(),
+          data_type: DataType::Structure,
         },
         Parameter {
           id: None,

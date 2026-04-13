@@ -195,10 +195,12 @@ fn test_get_compatible_node_types_no_matches() {
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
         .collect();
 
-    // drawing_plane and atom_fill accept UnitCell
+    // structure, lattice_move, lattice_rot accept LatticeVecs as input
     assert!(
-        all_node_names.contains(&"drawing_plane") || all_node_names.contains(&"atom_fill"),
-        "Should find nodes that accept UnitCell"
+        all_node_names.contains(&"structure")
+            || all_node_names.contains(&"lattice_move")
+            || all_node_names.contains(&"lattice_rot"),
+        "Should find nodes that accept LatticeVecs"
     );
 }
 

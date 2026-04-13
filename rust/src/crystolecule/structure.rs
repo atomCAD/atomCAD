@@ -17,6 +17,18 @@ pub struct Structure {
 }
 
 impl Structure {
+    /// Constructs a structure from lattice vectors only, using the default
+    /// motif (zincblende) and zero offset. Used by primitive nodes in phase 4,
+    /// which still take a `LatticeVecs` input rather than a full `Structure`.
+    /// Phase 5 removes this usage when primitives gain a `Structure` input.
+    pub fn from_lattice_vecs(lattice_vecs: UnitCellStruct) -> Self {
+        Structure {
+            lattice_vecs,
+            motif: DEFAULT_ZINCBLENDE_MOTIF.clone(),
+            motif_offset: DVec3::ZERO,
+        }
+    }
+
     /// The default diamond structure: cubic diamond lattice + zincblende motif
     /// + zero offset. Used as the fallback when a `structure` node has no
     /// base and no per-field overrides.

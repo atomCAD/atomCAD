@@ -99,35 +99,18 @@ impl NodeData for AtomTransData {
             let rotation_quat =
                 DQuat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
 
-            let frame_transform = atomic_structure
-                .frame_transform()
-                .apply_lrot_gtrans_new(&Transform::new(translation, rotation_quat));
-
-            // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-            // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+            // Deprecated node (removed in phase 7). With frame_transform gone from
+            // AtomicStructure, we can no longer compose with a prior frame; apply the
+            // translation/rotation directly to atom positions.
             if network_stack.len() == 1 {
                 let eval_cache = AtomTransEvalCache {
-                    input_frame_transform: atomic_structure.frame_transform().clone(),
+                    input_frame_transform: Transform::default(),
                 };
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            // The input is already transformed by the input transform.
-            // So we need to do the inverse of the input transform so the structure is first transformed back
-            // to its local position.
-            // And then we apply the whole frame transform.
-
             let mut result_atomic_structure = atomic_structure.clone();
-
-            let inverse_input_transform = atomic_structure.frame_transform().inverse();
-
-            result_atomic_structure.transform(
-                &inverse_input_transform.rotation,
-                &inverse_input_transform.translation,
-            );
-            result_atomic_structure
-                .transform(&frame_transform.rotation, &frame_transform.translation);
-            result_atomic_structure.set_frame_transform(frame_transform);
+            result_atomic_structure.transform(&rotation_quat, &translation);
 
             EvalOutput::single(NetworkResult::Atomic(result_atomic_structure))
         } else {

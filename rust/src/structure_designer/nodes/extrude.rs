@@ -1,10 +1,11 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::runtime_type_error_in_input;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
@@ -16,9 +17,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::serialization_utils::ivec3_serializer;
-use crate::util::transform::Transform;
-use glam::DQuat;
-use glam::f64::DVec3;
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -174,17 +172,9 @@ impl NodeData for ExtrudeData {
             let world_to_plane_rotation = plane_to_world_transform.rotation.inverse();
             let local_direction = world_to_plane_rotation * world_direction;
 
-            let frame_translation_2d = shape.frame_transform.translation;
-
-            let frame_transform = Transform::new(
-                DVec3::new(frame_translation_2d.x, frame_translation_2d.y, 0.0),
-                DQuat::from_rotation_z(shape.frame_transform.rotation),
-            );
-
             let s = shape.geo_tree_root;
-            EvalOutput::single(NetworkResult::Blueprint(GeometrySummary {
-                unit_cell,
-                frame_transform,
+            EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+                structure: Structure::from_lattice_vecs(unit_cell),
                 geo_tree_root: GeoNode::extrude(
                     height_real,
                     local_direction,
@@ -254,8 +244,8 @@ impl NodeData for ExtrudeData {
         let mut m = HashMap::new();
         m.insert("shape".to_string(), (true, None)); // required
         m.insert(
-            "unit_cell".to_string(),
-            (false, Some("cubic diamond".to_string())),
+            "structure".to_string(),
+            (false, Some("diamond".to_string())),
         );
         m
     }
@@ -275,8 +265,8 @@ pub fn get_node_type() -> NodeType {
             },
             Parameter {
                 id: None,
-                name: "unit_cell".to_string(),
-                data_type: DataType::LatticeVecs,
+                name: "structure".to_string(),
+                data_type: DataType::Structure,
             },
             Parameter {
                 id: None,
