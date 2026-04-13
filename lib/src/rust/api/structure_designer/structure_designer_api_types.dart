@@ -601,7 +601,7 @@ enum APIDataTypeBase {
   vec3,
   iVec2,
   iVec3,
-  unitCell,
+  latticeVecs,
   drawingPlane,
   geometry2D,
   blueprint,
@@ -1296,6 +1296,49 @@ class APILatticeSymopData {
           crystalSystem == other.crystalSystem;
 }
 
+class APILatticeVecsData {
+  final double cellLengthA;
+  final double cellLengthB;
+  final double cellLengthC;
+  final double cellAngleAlpha;
+  final double cellAngleBeta;
+  final double cellAngleGamma;
+  final String crystalSystem;
+
+  const APILatticeVecsData({
+    required this.cellLengthA,
+    required this.cellLengthB,
+    required this.cellLengthC,
+    required this.cellAngleAlpha,
+    required this.cellAngleBeta,
+    required this.cellAngleGamma,
+    required this.crystalSystem,
+  });
+
+  @override
+  int get hashCode =>
+      cellLengthA.hashCode ^
+      cellLengthB.hashCode ^
+      cellLengthC.hashCode ^
+      cellAngleAlpha.hashCode ^
+      cellAngleBeta.hashCode ^
+      cellAngleGamma.hashCode ^
+      crystalSystem.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APILatticeVecsData &&
+          runtimeType == other.runtimeType &&
+          cellLengthA == other.cellLengthA &&
+          cellLengthB == other.cellLengthB &&
+          cellLengthC == other.cellLengthC &&
+          cellAngleAlpha == other.cellAngleAlpha &&
+          cellAngleBeta == other.cellAngleBeta &&
+          cellAngleGamma == other.cellAngleGamma &&
+          crystalSystem == other.crystalSystem;
+}
+
 class APIMapData {
   final APIDataType inputType;
   final APIDataType outputType;
@@ -1908,49 +1951,6 @@ class APITextError {
           message == other.message &&
           line == other.line &&
           column == other.column;
-}
-
-class APIUnitCellData {
-  final double cellLengthA;
-  final double cellLengthB;
-  final double cellLengthC;
-  final double cellAngleAlpha;
-  final double cellAngleBeta;
-  final double cellAngleGamma;
-  final String crystalSystem;
-
-  const APIUnitCellData({
-    required this.cellLengthA,
-    required this.cellLengthB,
-    required this.cellLengthC,
-    required this.cellAngleAlpha,
-    required this.cellAngleBeta,
-    required this.cellAngleGamma,
-    required this.crystalSystem,
-  });
-
-  @override
-  int get hashCode =>
-      cellLengthA.hashCode ^
-      cellLengthB.hashCode ^
-      cellLengthC.hashCode ^
-      cellAngleAlpha.hashCode ^
-      cellAngleBeta.hashCode ^
-      cellAngleGamma.hashCode ^
-      crystalSystem.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIUnitCellData &&
-          runtimeType == other.runtimeType &&
-          cellLengthA == other.cellLengthA &&
-          cellLengthB == other.cellLengthB &&
-          cellLengthC == other.cellLengthC &&
-          cellAngleAlpha == other.cellAngleAlpha &&
-          cellAngleBeta == other.cellAngleBeta &&
-          cellAngleGamma == other.cellAngleGamma &&
-          crystalSystem == other.crystalSystem;
 }
 
 class APIVec2Data {

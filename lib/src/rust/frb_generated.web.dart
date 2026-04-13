@@ -184,6 +184,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APILatticeSymopData dco_decode_api_lattice_symop_data(dynamic raw);
 
   @protected
+  APILatticeVecsData dco_decode_api_lattice_vecs_data(dynamic raw);
+
+  @protected
   APIMapData dco_decode_api_map_data(dynamic raw);
 
   @protected
@@ -252,9 +255,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform dco_decode_api_transform(dynamic raw);
-
-  @protected
-  APIUnitCellData dco_decode_api_unit_cell_data(dynamic raw);
 
   @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw);
@@ -415,6 +415,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APILatticeVecsData dco_decode_box_autoadd_api_lattice_vecs_data(dynamic raw);
+
+  @protected
   APIMapData dco_decode_box_autoadd_api_map_data(dynamic raw);
 
   @protected
@@ -449,9 +452,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform dco_decode_box_autoadd_api_transform(dynamic raw);
-
-  @protected
-  APIUnitCellData dco_decode_box_autoadd_api_unit_cell_data(dynamic raw);
 
   @protected
   APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
@@ -774,6 +774,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APILatticeVecsData? dco_decode_opt_box_autoadd_api_lattice_vecs_data(
+      dynamic raw);
+
+  @protected
   APIMapData? dco_decode_opt_box_autoadd_api_map_data(dynamic raw);
 
   @protected
@@ -808,9 +812,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
-
-  @protected
-  APIUnitCellData? dco_decode_opt_box_autoadd_api_unit_cell_data(dynamic raw);
 
   @protected
   APIVec2Data? dco_decode_opt_box_autoadd_api_vec_2_data(dynamic raw);
@@ -1106,6 +1107,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APILatticeVecsData sse_decode_api_lattice_vecs_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMapData sse_decode_api_map_data(SseDeserializer deserializer);
 
   @protected
@@ -1181,9 +1186,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform sse_decode_api_transform(SseDeserializer deserializer);
-
-  @protected
-  APIUnitCellData sse_decode_api_unit_cell_data(SseDeserializer deserializer);
 
   @protected
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
@@ -1378,6 +1380,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APILatticeVecsData sse_decode_box_autoadd_api_lattice_vecs_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMapData sse_decode_box_autoadd_api_map_data(SseDeserializer deserializer);
 
   @protected
@@ -1422,10 +1428,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform sse_decode_box_autoadd_api_transform(
-      SseDeserializer deserializer);
-
-  @protected
-  APIUnitCellData sse_decode_box_autoadd_api_unit_cell_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1806,6 +1808,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APILatticeVecsData? sse_decode_opt_box_autoadd_api_lattice_vecs_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMapData? sse_decode_opt_box_autoadd_api_map_data(
       SseDeserializer deserializer);
 
@@ -1851,10 +1857,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform? sse_decode_opt_box_autoadd_api_transform(
-      SseDeserializer deserializer);
-
-  @protected
-  APIUnitCellData? sse_decode_opt_box_autoadd_api_unit_cell_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2189,6 +2191,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APILatticeSymopData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_lattice_vecs_data(
+      APILatticeVecsData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_map_data(APIMapData self, SseSerializer serializer);
 
   @protected
@@ -2270,10 +2276,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_transform(APITransform self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_api_unit_cell_data(
-      APIUnitCellData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -2471,6 +2473,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APILatticeSymopData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_lattice_vecs_data(
+      APILatticeVecsData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_map_data(
       APIMapData self, SseSerializer serializer);
 
@@ -2517,10 +2523,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_transform(
       APITransform self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_api_unit_cell_data(
-      APIUnitCellData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -2907,6 +2909,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APILatticeSymopData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_lattice_vecs_data(
+      APILatticeVecsData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_map_data(
       APIMapData? self, SseSerializer serializer);
 
@@ -2953,10 +2959,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_transform(
       APITransform? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_api_unit_cell_data(
-      APIUnitCellData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_vec_2_data(

@@ -507,7 +507,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
           Parameter {
             id: None,
             name: "unit_cell".to_string(),
-            data_type: DataType::UnitCell,
+            data_type: DataType::LatticeVecs,
           },
       ],
       output_pins: OutputPinDefinition::single(DataType::Atomic),

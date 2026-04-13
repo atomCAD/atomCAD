@@ -276,7 +276,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "unit_cell".to_string(),
-                data_type: DataType::UnitCell,
+                data_type: DataType::LatticeVecs,
             },
             Parameter {
                 id: None,

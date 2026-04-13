@@ -126,7 +126,7 @@ String aiListNodeTypes({String? category, required bool verbose}) =>
 /// Parameters (input pins):
 ///   center    : IVec3     [default: (0, 0, 0)]
 ///   radius    : Int       [default: 1]
-///   unit_cell : UnitCell  [no default - wire only]
+///   unit_cell : LatticeVecs  [no default - wire only]
 ///
 /// Output: Blueprint
 /// ```

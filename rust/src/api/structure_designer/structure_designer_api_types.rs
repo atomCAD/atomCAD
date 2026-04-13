@@ -24,7 +24,7 @@ pub enum APIDataTypeBase {
     Vec3,
     IVec2,
     IVec3,
-    UnitCell,
+    LatticeVecs,
     DrawingPlane,
     Geometry2D,
     Blueprint,
@@ -730,7 +730,7 @@ pub struct APISequenceData {
     pub input_count: i32,
 }
 
-pub struct APIUnitCellData {
+pub struct APILatticeVecsData {
     pub cell_length_a: f64,
     pub cell_length_b: f64,
     pub cell_length_c: f64,

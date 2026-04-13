@@ -931,7 +931,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               124.5,
               51.700000000000045
@@ -947,7 +947,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -1077,7 +1077,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -1396,7 +1396,7 @@
           },
           {
             "id": 16,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               52.500030517578125,
               -33.30000000000001
@@ -1412,7 +1412,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -1438,7 +1438,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -1499,7 +1499,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             },
             {
               "name": "param3",
@@ -1735,7 +1735,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -1744,7 +1744,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -217.0,
               235.21159667968757
@@ -1760,7 +1760,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -2040,11 +2040,11 @@
           "parameters": [
             {
               "name": "hexagonal_unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             },
             {
               "name": "cubic_unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "None"
@@ -2160,12 +2160,12 @@
                   "name": "switch"
                 },
                 {
-                  "data_type": "UnitCell",
+                  "data_type": "LatticeVecs",
                   "data_type_str": null,
                   "name": "obverse"
                 },
                 {
-                  "data_type": "UnitCell",
+                  "data_type": "LatticeVecs",
                   "data_type_str": null,
                   "name": "reverse"
                 }
@@ -2188,7 +2188,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "hexagonal_unit_cell",
@@ -2835,7 +2835,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "cubic_unit_cell",
@@ -2969,12 +2969,12 @@
         "node_type": {
           "name": "unit-cell_Ge-germanium",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               133.33074951171875,
               89.207275390625
@@ -2990,7 +2990,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -3074,7 +3074,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -3200,7 +3200,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -3304,7 +3304,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -128.5,
               538.5000152587891
@@ -3320,7 +3320,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -3425,7 +3425,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -3503,7 +3503,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -188.0,
               610.2
@@ -3519,7 +3519,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -3698,7 +3698,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -3842,7 +3842,7 @@
         "node_type": {
           "name": "unit-cell_diamond",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -3894,7 +3894,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               97.452880859375,
               75.80549926757811
@@ -3910,7 +3910,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -3951,7 +3951,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -4100,7 +4100,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -14.0,
               -70.79999999999995
@@ -4116,7 +4116,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -4410,7 +4410,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 3,
               "param_name": "unit_cell",
@@ -4494,7 +4494,7 @@
             },
             {
               "name": "param0",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -4502,7 +4502,7 @@
         "nodes": [
           {
             "id": 10,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               754.0,
               669.3231933593751
@@ -4518,7 +4518,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -4652,7 +4652,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "param0",
@@ -4824,7 +4824,7 @@
         "node_type": {
           "name": "unit-cell_wurtzite_triple-hex-R1-reverse",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -4926,7 +4926,7 @@
         "node_type": {
           "name": "unit-cell_Si-silicon",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -4944,7 +4944,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               406.8307495117187,
               77.207275390625
@@ -4960,7 +4960,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -5031,7 +5031,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -5224,7 +5224,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -21.5,
               407.7
@@ -5240,7 +5240,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -5373,7 +5373,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -5482,7 +5482,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -5648,7 +5648,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -118.0,
               789.7
@@ -5664,7 +5664,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -5752,7 +5752,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 3,
               "param_name": "unit_cell",
@@ -6137,7 +6137,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -6186,7 +6186,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -6464,7 +6464,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -30.5,
               567.2
@@ -6480,7 +6480,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -6882,7 +6882,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               115.0,
               391.4000000000001
@@ -6898,7 +6898,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -6935,7 +6935,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               123.5,
               174.4000000000001
@@ -6951,7 +6951,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 120.0,
@@ -7832,7 +7832,7 @@
         "nodes": [
           {
             "id": 4,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               100.5,
               285.2
@@ -7848,7 +7848,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -8043,7 +8043,7 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             },
             {
               "name": "param1",
@@ -8350,7 +8350,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               54.5,
               20.309906005859375
@@ -8366,7 +8366,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -8658,7 +8658,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -8694,7 +8694,7 @@
         "node_type": {
           "name": "unit-cell_wurtzite_triple-hex-R1-obverse",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -8796,7 +8796,7 @@
         "node_type": {
           "name": "unit-cell_lonsdaleite_c-in-z",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -8835,7 +8835,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               101.5,
               46.700000000000045
@@ -8851,7 +8851,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -8878,7 +8878,7 @@
         "node_type": {
           "name": "unit-cell_lonsdaleite_c-in-y",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -8917,7 +8917,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               123.5,
               59.200000000000045
@@ -8933,7 +8933,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 120.0,
@@ -9201,7 +9201,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -9249,7 +9249,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -9371,7 +9371,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -20.0394287109375,
               372.39403076171874
@@ -9387,7 +9387,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -9698,7 +9698,7 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             },
             {
               "name": "rack_h_thickness",
@@ -10635,7 +10635,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -10730,7 +10730,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -473.5,
               203.63252563476567
@@ -10746,7 +10746,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -10932,7 +10932,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -11049,7 +11049,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -11081,7 +11081,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               197.5,
               569.4115966796876
@@ -11097,7 +11097,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -11266,7 +11266,7 @@
         "node_type": {
           "name": "unit-cell_lonsdaleite_triple-hex-R1-obverse",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -11984,7 +11984,7 @@
             },
             {
               "name": "param2",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -12076,7 +12076,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "param2",
@@ -12284,7 +12284,7 @@
           },
           {
             "id": 22,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -219.26010131835935,
               353.90000000000003
@@ -12300,7 +12300,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -13067,7 +13067,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -80.0,
               -109.79999999999995
@@ -13083,7 +13083,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -13575,7 +13575,7 @@
           },
           {
             "id": 11,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               0.5,
               429.2000000000001
@@ -13591,7 +13591,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -14199,7 +14199,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -14300,7 +14300,7 @@
           },
           {
             "id": 8,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               294.0,
               857.0
@@ -14316,7 +14316,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -14474,7 +14474,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -14666,7 +14666,7 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -14811,7 +14811,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -14892,7 +14892,7 @@
           },
           {
             "id": 2,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -158.5,
               749.7
@@ -14908,7 +14908,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -15055,7 +15055,7 @@
           "parameters": [
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -15063,7 +15063,7 @@
         "nodes": [
           {
             "id": 6,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -80.5,
               695.2
@@ -15079,7 +15079,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -15387,7 +15387,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "unit_cell",
@@ -15570,7 +15570,7 @@
         "node_type": {
           "name": "unit-cell_αSn-grey-tin",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -15622,7 +15622,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               236.33074951171875,
               78.207275390625
@@ -15638,7 +15638,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -15667,7 +15667,7 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -15689,7 +15689,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -16062,7 +16062,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -137.5,
               -151.29999999999995
@@ -16078,7 +16078,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -16118,7 +16118,7 @@
               "data_type": "Float"
             }
           ],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -16408,7 +16408,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               1077.5000610351562,
               351.2270080566406
@@ -16430,7 +16430,7 @@
                 }
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -16545,7 +16545,7 @@
         "node_type": {
           "name": "unit-cell_zinkblende",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -16584,7 +16584,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               82.452880859375,
               61.305499267578114
@@ -16600,7 +16600,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -16633,7 +16633,7 @@
             },
             {
               "name": "unit_cell_hexagonal",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -16852,7 +16852,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell_hexagonal",
@@ -17159,7 +17159,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -17208,7 +17208,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -17217,7 +17217,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -22.5,
               380.7
@@ -17233,7 +17233,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -17508,7 +17508,7 @@
         "node_type": {
           "name": "unit-cell_wurtzite_c-in-y",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -17547,7 +17547,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               139.33074951171875,
               87.207275390625
@@ -17563,7 +17563,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 120.0,
@@ -17818,7 +17818,7 @@
           "parameters": [
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -17826,7 +17826,7 @@
         "nodes": [
           {
             "id": 5,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -121.0,
               -25.299999999999955
@@ -17842,7 +17842,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -17985,7 +17985,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "unit_cell",
@@ -18344,7 +18344,7 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -18444,7 +18444,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -18518,7 +18518,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -113.0,
               -10.799999999999956
@@ -18534,7 +18534,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -18583,7 +18583,7 @@
         "node_type": {
           "name": "unit-cell_wurtzite_c-in-z",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -18622,7 +18622,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               134.33074951171875,
               79.707275390625
@@ -18638,7 +18638,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -18675,7 +18675,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -18892,7 +18892,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -18901,7 +18901,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -276.0,
               327.20000000000005
@@ -18917,7 +18917,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -18967,7 +18967,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -19147,7 +19147,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -19184,7 +19184,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -138.0,
               435.7115966796875
@@ -19200,7 +19200,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -19297,7 +19297,7 @@
         "node_type": {
           "name": "unit-cell_diamond_rotated+90°z",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -19465,7 +19465,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               431.7398986816406,
               148.70000000000005
@@ -19487,7 +19487,7 @@
                 }
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -20019,7 +20019,7 @@
           "parameters": [
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -20313,7 +20313,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "unit_cell",
@@ -20514,7 +20514,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               18.0,
               748.2
@@ -20530,7 +20530,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -20942,7 +20942,7 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -21009,7 +21009,7 @@
           },
           {
             "id": 14,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -175.0,
               594.0470336914063
@@ -21025,7 +21025,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -21051,7 +21051,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -21320,7 +21320,7 @@
               "data_type": "Float"
             }
           ],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
@@ -21377,7 +21377,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               378.9962768554687,
               -20.8238525390625
@@ -21399,7 +21399,7 @@
                 }
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -22514,7 +22514,7 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "UnitCell"
+              "data_type": "LatticeVecs"
             }
           ],
           "output_type": "Blueprint"
@@ -22693,7 +22693,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "UnitCell",
+              "data_type": "LatticeVecs",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -22788,7 +22788,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -113.0,
               571.7
@@ -22804,7 +22804,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -23758,7 +23758,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               -38.0,
               209.7
@@ -23774,7 +23774,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,

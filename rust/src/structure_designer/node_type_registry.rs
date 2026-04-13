@@ -40,6 +40,7 @@ use super::nodes::lattice_move::get_node_type_lattice_move as lattice_move_get_n
 use super::nodes::lattice_rot::get_node_type_atom_lrot as atom_lrot_get_node_type;
 use super::nodes::lattice_rot::get_node_type_lattice_rot as lattice_rot_get_node_type;
 use super::nodes::lattice_symop::get_node_type as lattice_symop_get_node_type;
+use super::nodes::lattice_vecs::get_node_type as lattice_vecs_get_node_type;
 use super::nodes::map::get_node_type as map_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
@@ -55,7 +56,6 @@ use super::nodes::sphere::get_node_type as sphere_get_node_type;
 use super::nodes::string::get_node_type as string_get_node_type;
 use super::nodes::union::get_node_type as union_get_node_type;
 use super::nodes::union_2d::get_node_type as union_2d_get_node_type;
-use super::nodes::unit_cell::get_node_type as unit_cell_get_node_type;
 use super::nodes::value::get_node_type as value_get_node_type;
 use super::nodes::vec2::get_node_type as vec2_get_node_type;
 use super::nodes::vec3::get_node_type as vec3_get_node_type;
@@ -108,7 +108,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(vec2_get_node_type());
         ret.add_node_type(vec3_get_node_type());
         ret.add_node_type(range_get_node_type());
-        ret.add_node_type(unit_cell_get_node_type());
+        ret.add_node_type(lattice_vecs_get_node_type());
 
         ret.add_node_type(rect_get_node_type());
         ret.add_node_type(circle_get_node_type());

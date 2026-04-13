@@ -66,7 +66,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIIntData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIStringData;
-use crate::api::structure_designer::structure_designer_api_types::APIUnitCellData;
+use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
 use crate::api::structure_designer::structure_designer_api_types::APIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
@@ -132,7 +132,7 @@ use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::sequence::SequenceData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::string::StringData;
-use crate::structure_designer::nodes::unit_cell::UnitCellData;
+use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
 use std::collections::HashMap;
@@ -148,7 +148,7 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
         APIDataTypeBase::Vec3 => DataType::Vec3,
         APIDataTypeBase::IVec2 => DataType::IVec2,
         APIDataTypeBase::IVec3 => DataType::IVec3,
-        APIDataTypeBase::UnitCell => DataType::UnitCell,
+        APIDataTypeBase::LatticeVecs => DataType::LatticeVecs,
         APIDataTypeBase::DrawingPlane => DataType::DrawingPlane,
         APIDataTypeBase::Geometry2D => DataType::Geometry2D,
         APIDataTypeBase::Blueprint => DataType::Blueprint,
@@ -187,7 +187,7 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::Vec3 => APIDataTypeBase::Vec3,
         DataType::IVec2 => APIDataTypeBase::IVec2,
         DataType::IVec3 => APIDataTypeBase::IVec3,
-        DataType::UnitCell => APIDataTypeBase::UnitCell,
+        DataType::LatticeVecs => APIDataTypeBase::LatticeVecs,
         DataType::DrawingPlane => APIDataTypeBase::DrawingPlane,
         DataType::Geometry2D => APIDataTypeBase::Geometry2D,
         DataType::Blueprint => APIDataTypeBase::Blueprint,
@@ -4303,7 +4303,7 @@ pub fn export_visible_atomic_structures(file_path: String) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
+pub fn get_lattice_vecs_data(node_id: u64) -> Option<APILatticeVecsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -4314,22 +4314,22 @@ pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let unit_cell_data = match node_data.as_any_ref().downcast_ref::<UnitCellData>() {
+                let lattice_vecs_data = match node_data.as_any_ref().downcast_ref::<LatticeVecsData>() {
                     Some(data) => data,
                     None => return None,
                 };
                 // Convert to UnitCellStruct and detect crystal system
-                let unit_cell_struct = unit_cell_data.to_unit_cell_struct();
+                let unit_cell_struct = lattice_vecs_data.to_unit_cell_struct();
                 let crystal_system = classify_crystal_system(&unit_cell_struct);
                 let crystal_system_str = crystal_system_to_string(crystal_system);
 
-                Some(APIUnitCellData {
-                    cell_length_a: unit_cell_data.cell_length_a,
-                    cell_length_b: unit_cell_data.cell_length_b,
-                    cell_length_c: unit_cell_data.cell_length_c,
-                    cell_angle_alpha: unit_cell_data.cell_angle_alpha,
-                    cell_angle_beta: unit_cell_data.cell_angle_beta,
-                    cell_angle_gamma: unit_cell_data.cell_angle_gamma,
+                Some(APILatticeVecsData {
+                    cell_length_a: lattice_vecs_data.cell_length_a,
+                    cell_length_b: lattice_vecs_data.cell_length_b,
+                    cell_length_c: lattice_vecs_data.cell_length_c,
+                    cell_angle_alpha: lattice_vecs_data.cell_angle_alpha,
+                    cell_angle_beta: lattice_vecs_data.cell_angle_beta,
+                    cell_angle_gamma: lattice_vecs_data.cell_angle_gamma,
                     crystal_system: crystal_system_str,
                 })
             },
@@ -4339,10 +4339,10 @@ pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
+pub fn set_lattice_vecs_data(node_id: u64, data: APILatticeVecsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let unit_cell_data = Box::new(UnitCellData {
+            let lattice_vecs_data = Box::new(LatticeVecsData {
                 cell_length_a: data.cell_length_a,
                 cell_length_b: data.cell_length_b,
                 cell_length_c: data.cell_length_c,
@@ -4352,7 +4352,7 @@ pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, unit_cell_data);
+                .set_node_network_data(node_id, lattice_vecs_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

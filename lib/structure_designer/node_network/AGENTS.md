@@ -51,7 +51,7 @@ Wires use cubic Bezier curves with data-type-based coloring:
 | Vec2/Vec3/IVec | Cool blue |
 | Geometry | Purple |
 | Atomic | Green |
-| UnitCell/Motif | Teal/cyan |
+| LatticeVecs/Motif | Teal/cyan |
 | Functions | Amber |
 
 ## Node Widget States

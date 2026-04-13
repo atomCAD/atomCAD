@@ -820,14 +820,15 @@ APIResult exportVisibleAtomicStructures({required String filePath}) => RustLib
     .crateApiStructureDesignerStructureDesignerApiExportVisibleAtomicStructures(
         filePath: filePath);
 
-APIUnitCellData? getUnitCellData({required BigInt nodeId}) =>
+APILatticeVecsData? getLatticeVecsData({required BigInt nodeId}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiGetUnitCellData(
+        .crateApiStructureDesignerStructureDesignerApiGetLatticeVecsData(
             nodeId: nodeId);
 
-void setUnitCellData({required BigInt nodeId, required APIUnitCellData data}) =>
+void setLatticeVecsData(
+        {required BigInt nodeId, required APILatticeVecsData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetUnitCellData(
+        .crateApiStructureDesignerStructureDesignerApiSetLatticeVecsData(
             nodeId: nodeId, data: data);
 
 void validateActiveNetwork() => RustLib.instance.api

@@ -154,7 +154,8 @@
       "Bash(gh search:*)",
       "Bash(cat)",
       "Bash(bash /tmp/check_pins.sh)",
-      "Bash(bash /tmp/rename_script.sh)"
+      "Bash(bash /tmp/rename_script.sh)",
+      "Bash(git mv:*)"
     ]
   }
 }

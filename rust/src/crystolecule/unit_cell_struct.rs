@@ -9,7 +9,7 @@ pub struct UnitCellStruct {
     pub a: DVec3,
     pub b: DVec3,
     pub c: DVec3,
-    // Crystallographic parameters using the same naming as UnitCellData
+    // Crystallographic parameters using the same naming as LatticeVecsData
     pub cell_length_a: f64,
     pub cell_length_b: f64,
     pub cell_length_c: f64,

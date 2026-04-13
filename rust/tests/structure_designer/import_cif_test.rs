@@ -84,7 +84,7 @@ fn import_cif_diamond_unit_cell_output() {
 
     let result = evaluate_pin(&designer, node_id, 0);
     match result {
-        NetworkResult::UnitCell(uc) => {
+        NetworkResult::LatticeVecs(uc) => {
             let a = uc.a.length();
             let b = uc.b.length();
             let c = uc.c.length();
@@ -104,7 +104,7 @@ fn import_cif_nacl_unit_cell_output() {
 
     let result = evaluate_pin(&designer, node_id, 0);
     match result {
-        NetworkResult::UnitCell(uc) => {
+        NetworkResult::LatticeVecs(uc) => {
             let a = uc.a.length();
             assert!((a - 5.62).abs() < 0.01, "NaCl a = {}", a);
         }
@@ -120,7 +120,7 @@ fn import_cif_hexagonal_unit_cell_output() {
 
     let result = evaluate_pin(&designer, node_id, 0);
     match result {
-        NetworkResult::UnitCell(uc) => {
+        NetworkResult::LatticeVecs(uc) => {
             let a = uc.a.length();
             let b = uc.b.length();
             assert!(
@@ -333,7 +333,7 @@ fn import_cif_multi_block_first_block_default() {
 
     let result = evaluate_pin(&designer, node_id, 0);
     assert!(
-        matches!(result, NetworkResult::UnitCell(_)),
+        matches!(result, NetworkResult::LatticeVecs(_)),
         "First block should parse successfully"
     );
 }

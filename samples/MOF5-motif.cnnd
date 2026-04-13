@@ -170,12 +170,12 @@
         "node_type": {
           "name": "unit_cell_MOF5",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               245.4635009765625,
               241.88786621093757
@@ -191,7 +191,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,

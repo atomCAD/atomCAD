@@ -5,13 +5,13 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/crystal_system_display.dart';
 
-/// Editor widget for unit_cell nodes
-class UnitCellEditor extends StatefulWidget {
+/// Editor widget for lattice_vecs nodes
+class LatticeVecsEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APIUnitCellData? data;
+  final APILatticeVecsData? data;
   final StructureDesignerModel model;
 
-  const UnitCellEditor({
+  const LatticeVecsEditor({
     super.key,
     required this.nodeId,
     required this.data,
@@ -19,18 +19,18 @@ class UnitCellEditor extends StatefulWidget {
   });
 
   @override
-  State<UnitCellEditor> createState() => UnitCellEditorState();
+  State<LatticeVecsEditor> createState() => LatticeVecsEditorState();
 }
 
-class UnitCellEditorState extends State<UnitCellEditor> {
+class LatticeVecsEditorState extends State<LatticeVecsEditor> {
   /// Get the data to display in UI
-  APIUnitCellData _getDisplayData() {
+  APILatticeVecsData _getDisplayData() {
     return widget.data!;
   }
 
   /// Update the backend with data
-  void _updateUnitCellData(APIUnitCellData data) {
-    widget.model.setUnitCellData(widget.nodeId, data);
+  void _updateLatticeVecsData(APILatticeVecsData data) {
+    widget.model.setLatticeVecsData(widget.nodeId, data);
   }
 
   @override
@@ -46,8 +46,8 @@ class UnitCellEditorState extends State<UnitCellEditor> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const NodeEditorHeader(
-            title: 'Unit Cell Properties',
-            nodeTypeName: 'unit_cell',
+            title: 'Lattice Vectors Properties',
+            nodeTypeName: 'lattice_vecs',
           ),
             const SizedBox(height: 8),
 
@@ -61,7 +61,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               value: _getDisplayData().cellLengthA,
               onChanged: (newValue) {
                 final displayData = _getDisplayData();
-                _updateUnitCellData(APIUnitCellData(
+                _updateLatticeVecsData(APILatticeVecsData(
                   cellLengthA: newValue,
                   cellLengthB: displayData.cellLengthB,
                   cellLengthC: displayData.cellLengthC,
@@ -78,7 +78,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               value: _getDisplayData().cellLengthB,
               onChanged: (newValue) {
                 final displayData = _getDisplayData();
-                _updateUnitCellData(APIUnitCellData(
+                _updateLatticeVecsData(APILatticeVecsData(
                   cellLengthA: displayData.cellLengthA,
                   cellLengthB: newValue,
                   cellLengthC: displayData.cellLengthC,
@@ -95,7 +95,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               value: _getDisplayData().cellLengthC,
               onChanged: (newValue) {
                 final displayData = _getDisplayData();
-                _updateUnitCellData(APIUnitCellData(
+                _updateLatticeVecsData(APILatticeVecsData(
                   cellLengthA: displayData.cellLengthA,
                   cellLengthB: displayData.cellLengthB,
                   cellLengthC: newValue,
@@ -117,7 +117,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               value: _getDisplayData().cellAngleAlpha,
               onChanged: (newValue) {
                 final displayData = _getDisplayData();
-                _updateUnitCellData(APIUnitCellData(
+                _updateLatticeVecsData(APILatticeVecsData(
                   cellLengthA: displayData.cellLengthA,
                   cellLengthB: displayData.cellLengthB,
                   cellLengthC: displayData.cellLengthC,
@@ -134,7 +134,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               value: _getDisplayData().cellAngleBeta,
               onChanged: (newValue) {
                 final displayData = _getDisplayData();
-                _updateUnitCellData(APIUnitCellData(
+                _updateLatticeVecsData(APILatticeVecsData(
                   cellLengthA: displayData.cellLengthA,
                   cellLengthB: displayData.cellLengthB,
                   cellLengthC: displayData.cellLengthC,
@@ -151,7 +151,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               value: _getDisplayData().cellAngleGamma,
               onChanged: (newValue) {
                 final displayData = _getDisplayData();
-                _updateUnitCellData(APIUnitCellData(
+                _updateLatticeVecsData(APILatticeVecsData(
                   cellLengthA: displayData.cellLengthA,
                   cellLengthB: displayData.cellLengthB,
                   cellLengthC: displayData.cellLengthC,
@@ -163,7 +163,7 @@ class UnitCellEditorState extends State<UnitCellEditor> {
               },
             ),
             const SizedBox(height: 16),
-            
+
             // Crystal system display
             CrystalSystemDisplay(
               crystalSystem: widget.data!.crystalSystem,

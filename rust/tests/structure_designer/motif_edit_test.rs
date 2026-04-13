@@ -65,7 +65,7 @@ fn test_motif_edit_node_type_pins() {
     assert_eq!(node_type.parameters[0].name, "molecule");
     assert_eq!(node_type.parameters[0].data_type, DataType::Atomic);
     assert_eq!(node_type.parameters[1].name, "unit_cell");
-    assert_eq!(node_type.parameters[1].data_type, DataType::UnitCell);
+    assert_eq!(node_type.parameters[1].data_type, DataType::LatticeVecs);
     assert_eq!(node_type.parameters[2].name, "tolerance");
     assert_eq!(node_type.parameters[2].data_type, DataType::Float);
 
@@ -151,7 +151,7 @@ fn test_motif_edit_eval_creates_motif_output() {
     designer.set_active_node_network_name(Some("test".to_string()));
 
     // Create unit_cell node + motif_edit node
-    let uc_id = designer.add_node("unit_cell", DVec2::ZERO);
+    let uc_id = designer.add_node("lattice_vecs", DVec2::ZERO);
     let me_id = designer.add_node("motif_edit", DVec2::new(200.0, 0.0));
 
     // Wire unit_cell → motif_edit pin 1 (unit_cell)
@@ -325,7 +325,7 @@ fn test_motif_with_parameter_elements() {
     designer.add_node_network("test");
     designer.set_active_node_network_name(Some("test".to_string()));
 
-    let uc_id = designer.add_node("unit_cell", DVec2::ZERO);
+    let uc_id = designer.add_node("lattice_vecs", DVec2::ZERO);
     let me_id = designer.add_node("motif_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(uc_id, 0, me_id, 1);
 
@@ -1664,7 +1664,7 @@ fn test_motif_edit_eval_populates_effective_atomic_numbers() {
     designer.add_node_network("test");
     designer.set_active_node_network_name(Some("test".to_string()));
 
-    let uc_id = designer.add_node("unit_cell", DVec2::ZERO);
+    let uc_id = designer.add_node("lattice_vecs", DVec2::ZERO);
     let me_id = designer.add_node("motif_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(uc_id, 0, me_id, 1);
 

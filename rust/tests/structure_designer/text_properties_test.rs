@@ -33,7 +33,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::atom_cut::AtomCutData;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_fill::AtomFillData;
 use rust_lib_flutter_cad::structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
-use rust_lib_flutter_cad::structure_designer::nodes::unit_cell::UnitCellData;
+use rust_lib_flutter_cad::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 // I/O nodes
 use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_cif::ImportCifData;
@@ -925,7 +925,7 @@ fn test_lattice_symop_roundtrip() {
 #[test]
 fn test_unit_cell_roundtrip() {
     // Cubic unit cell (diamond)
-    test_roundtrip(&UnitCellData {
+    test_roundtrip(&LatticeVecsData {
         cell_length_a: 3.567,
         cell_length_b: 3.567,
         cell_length_c: 3.567,
@@ -934,7 +934,7 @@ fn test_unit_cell_roundtrip() {
         cell_angle_gamma: 90.0,
     });
     // Non-cubic unit cell
-    test_roundtrip(&UnitCellData {
+    test_roundtrip(&LatticeVecsData {
         cell_length_a: 4.0,
         cell_length_b: 5.0,
         cell_length_c: 6.0,

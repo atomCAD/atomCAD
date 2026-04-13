@@ -18,7 +18,7 @@ pub enum DataType {
     Vec3,
     IVec2,
     IVec3,
-    UnitCell,
+    LatticeVecs,
     DrawingPlane,
     Geometry2D,
     Blueprint,
@@ -40,7 +40,7 @@ impl fmt::Display for DataType {
             DataType::Vec3 => write!(f, "Vec3"),
             DataType::IVec2 => write!(f, "IVec2"),
             DataType::IVec3 => write!(f, "IVec3"),
-            DataType::UnitCell => write!(f, "UnitCell"),
+            DataType::LatticeVecs => write!(f, "LatticeVecs"),
             DataType::DrawingPlane => write!(f, "DrawingPlane"),
             DataType::Geometry2D => write!(f, "Geometry2D"),
             DataType::Blueprint => write!(f, "Blueprint"),
@@ -142,8 +142,8 @@ impl DataType {
             (DataType::IVec3, DataType::Vec3) => true,
             (DataType::Vec3, DataType::IVec3) => true,
 
-            // UnitCell -> DrawingPlane conversion (backward compatibility for old .cnnd files)
-            (DataType::UnitCell, DataType::DrawingPlane) => true,
+            // LatticeVecs -> DrawingPlane conversion (backward compatibility for old .cnnd files)
+            (DataType::LatticeVecs, DataType::DrawingPlane) => true,
 
             // All other combinations are not compatible
             _ => false,
@@ -251,7 +251,7 @@ impl DataTypeParser {
                     "Vec3" => Ok(DataType::Vec3),
                     "IVec2" => Ok(DataType::IVec2),
                     "IVec3" => Ok(DataType::IVec3),
-                    "UnitCell" => Ok(DataType::UnitCell),
+                    "LatticeVecs" => Ok(DataType::LatticeVecs),
                     "DrawingPlane" => Ok(DataType::DrawingPlane),
                     "Geometry2D" => Ok(DataType::Geometry2D),
                     "Blueprint" => Ok(DataType::Blueprint),

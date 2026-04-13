@@ -185,9 +185,9 @@ fn test_get_compatible_node_types_returns_grouped_categories() {
 fn test_get_compatible_node_types_no_matches() {
     let registry = NodeTypeRegistry::new();
 
-    // UnitCell is a specialized type - few nodes output it
-    // When dragging FROM UnitCell output, looking for nodes with UnitCell input
-    let categories = registry.get_compatible_node_types(&DataType::UnitCell, true);
+    // LatticeVecs is a specialized type - few nodes output it
+    // When dragging FROM LatticeVecs output, looking for nodes with LatticeVecs input
+    let categories = registry.get_compatible_node_types(&DataType::LatticeVecs, true);
 
     // Should still return valid result (possibly with matches like atom_fill, drawing_plane)
     let all_node_names: Vec<&str> = categories

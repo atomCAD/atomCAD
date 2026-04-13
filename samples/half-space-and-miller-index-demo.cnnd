@@ -194,7 +194,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               239.12762451171875,
               175.88969726562505
@@ -210,7 +210,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 70.0,
@@ -357,12 +357,12 @@
         "node_type": {
           "name": "α_polonium_unit_cell",
           "parameters": [],
-          "output_type": "UnitCell"
+          "output_type": "LatticeVecs"
         },
         "nodes": [
           {
             "id": 1,
-            "node_type_name": "unit_cell",
+            "node_type_name": "lattice_vecs",
             "position": [
               156.867431640625,
               31.85643310546874
@@ -378,7 +378,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "unit_cell",
+            "data_type": "lattice_vecs",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,

@@ -47,7 +47,7 @@ import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/lattice_vecs_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -623,15 +623,14 @@ class NodeDataWidget extends StatelessWidget {
           data: atomCutData,
           model: model,
         );
-      case 'unit_cell':
-        // Fetch the unit_cell data here in the parent widget
-        final unitCellData = getUnitCellData(
+      case 'lattice_vecs':
+        final latticeVecsData = getLatticeVecsData(
           nodeId: selectedNode.id,
         );
 
-        return UnitCellEditor(
+        return LatticeVecsEditor(
           nodeId: selectedNode.id,
-          data: unitCellData,
+          data: latticeVecsData,
           model: model,
         );
       default:

@@ -429,7 +429,7 @@ You can directly enter the translation vector or drag the axes of the gadget."
             Parameter {
                 id: None,
                 name: "unit_cell".to_string(),
-                data_type: DataType::UnitCell,
+                data_type: DataType::LatticeVecs,
             },
         ],
         output_pins: OutputPinDefinition::single(DataType::Atomic),

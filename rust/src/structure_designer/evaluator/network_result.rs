@@ -182,7 +182,7 @@ pub enum NetworkResult {
     Vec3(DVec3),
     IVec2(IVec2),
     IVec3(IVec3),
-    UnitCell(UnitCellStruct),
+    LatticeVecs(UnitCellStruct),
     DrawingPlane(DrawingPlane),
     Geometry2D(GeometrySummary2D),
     Blueprint(GeometrySummary),
@@ -206,7 +206,7 @@ impl NetworkResult {
             NetworkResult::Vec3(_) => Some(DataType::Vec3),
             NetworkResult::IVec2(_) => Some(DataType::IVec2),
             NetworkResult::IVec3(_) => Some(DataType::IVec3),
-            NetworkResult::UnitCell(_) => Some(DataType::UnitCell),
+            NetworkResult::LatticeVecs(_) => Some(DataType::LatticeVecs),
             NetworkResult::DrawingPlane(_) => Some(DataType::DrawingPlane),
             NetworkResult::Geometry2D(_) => Some(DataType::Geometry2D),
             NetworkResult::Blueprint(_) => Some(DataType::Blueprint),
@@ -230,10 +230,10 @@ impl NetworkResult {
         }
     }
 
-    /// Extracts an UnitCellStruct value from the NetworkResult, returns None if not a UnitCell
+    /// Extracts an UnitCellStruct value from the NetworkResult, returns None if not a LatticeVecs
     pub fn extract_unit_cell(self) -> Option<UnitCellStruct> {
         match self {
-            NetworkResult::UnitCell(uc) => Some(uc),
+            NetworkResult::LatticeVecs(uc) => Some(uc),
             _ => None,
         }
     }
@@ -247,11 +247,11 @@ impl NetworkResult {
     }
 
     /// Returns the UnitCellStruct associated with this NetworkResult.
-    /// For UnitCell, DrawingPlane, Geometry2D, and Blueprint variants, returns their unit cell.
+    /// For LatticeVecs, DrawingPlane, Geometry2D, and Blueprint variants, returns their unit cell.
     /// For all other variants, returns None.
     pub fn get_unit_cell(&self) -> Option<UnitCellStruct> {
         match self {
-            NetworkResult::UnitCell(unit_cell) => Some(unit_cell.clone()),
+            NetworkResult::LatticeVecs(unit_cell) => Some(unit_cell.clone()),
             NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
             NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
             NetworkResult::Blueprint(geometry) => Some(geometry.unit_cell.clone()),
@@ -451,9 +451,9 @@ impl NetworkResult {
                 vec.z.round() as i32,
             )),
 
-            // UnitCell -> DrawingPlane (backward compatibility for old .cnnd files)
+            // LatticeVecs -> DrawingPlane (backward compatibility for old .cnnd files)
             // Creates a standard XY plane (001 Miller index) at the origin
-            (NetworkResult::UnitCell(unit_cell), DataType::DrawingPlane) => {
+            (NetworkResult::LatticeVecs(unit_cell), DataType::DrawingPlane) => {
                 match DrawingPlane::new(
                     unit_cell,
                     IVec3::new(0, 0, 1), // XY plane (001 Miller index)
@@ -463,7 +463,7 @@ impl NetworkResult {
                 ) {
                     Ok(drawing_plane) => NetworkResult::DrawingPlane(drawing_plane),
                     Err(err_msg) => NetworkResult::Error(format!(
-                        "Failed to convert UnitCell to DrawingPlane: {}",
+                        "Failed to convert LatticeVecs to DrawingPlane: {}",
                         err_msg
                     )),
                 }
@@ -509,9 +509,9 @@ impl NetworkResult {
                 "network: {} node: {}",
                 closure.node_network_name, closure.node_id
             ),
-            NetworkResult::UnitCell(unit_cell) => {
+            NetworkResult::LatticeVecs(unit_cell) => {
                 format!(
-                    "UnitCell:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})",
+                    "LatticeVecs:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})",
                     unit_cell.a.x,
                     unit_cell.a.y,
                     unit_cell.a.z,

@@ -1396,8 +1396,8 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void setUnitCellData(BigInt nodeId, APIUnitCellData data) {
-    structure_designer_api.setUnitCellData(nodeId: nodeId, data: data);
+  void setLatticeVecsData(BigInt nodeId, APILatticeVecsData data) {
+    structure_designer_api.setLatticeVecsData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

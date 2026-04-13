@@ -53,7 +53,7 @@ fn add_unit_cell_value_node(
         .get_mut(network_name)
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::UnitCell(unit_cell),
+        value: NetworkResult::LatticeVecs(unit_cell),
     });
     network.add_node("value", position, 0, value_data)
 }

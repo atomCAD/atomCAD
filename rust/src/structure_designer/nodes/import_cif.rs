@@ -264,7 +264,7 @@ impl ImportCifData {
 
 fn build_eval_output(result: &CifImportResult) -> EvalOutput {
     EvalOutput::multi(vec![
-        NetworkResult::UnitCell(result.unit_cell.clone()),
+        NetworkResult::LatticeVecs(result.unit_cell.clone()),
         NetworkResult::Atomic(result.atomic_structure.clone()),
         NetworkResult::Motif(result.motif.clone()),
     ])
@@ -631,7 +631,7 @@ pub fn get_node_type() -> NodeType {
         output_pins: vec![
             OutputPinDefinition {
                 name: "unit_cell".to_string(),
-                data_type: DataType::UnitCell,
+                data_type: DataType::LatticeVecs,
             },
             OutputPinDefinition {
                 name: "atoms".to_string(),
