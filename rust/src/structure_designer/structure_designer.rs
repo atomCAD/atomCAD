@@ -1622,9 +1622,20 @@ impl StructureDesigner {
                 None => return false,
             };
 
+            let _ = source_node_type;
+
             if source_is_output {
-                // Source is output, find first compatible input on target
-                let source_output_type = source_node_type.get_output_pin_type(source_pin_index);
+                // Source is output, find first compatible input on target.
+                // Resolve the source pin's concrete type against the current
+                // network state; unresolved polymorphic pins cannot connect.
+                let source_output_type = match self.node_type_registry.resolve_output_type(
+                    source_node,
+                    network,
+                    source_pin_index,
+                ) {
+                    Some(t) => t,
+                    None => return false,
+                };
 
                 // Find first compatible input parameter on target node
                 let mut compatible_param_index: Option<usize> = None;
@@ -1638,13 +1649,21 @@ impl StructureDesigner {
                 compatible_param_index
                     .map(|param_idx| (source_node_id, source_pin_index, target_node_id, param_idx))
             } else {
+                let _ = target_node_type;
                 // Source is input, connect target's output to source's input pin
-                let target_output_type = target_node_type.output_type();
+                let target_output_type = match self.node_type_registry.resolve_output_type(
+                    target_node,
+                    network,
+                    0,
+                ) {
+                    Some(t) => t,
+                    None => return false,
+                };
                 let source_param_type = self
                     .node_type_registry
                     .get_node_param_data_type(source_node, source_pin_index as usize);
 
-                if DataType::can_be_converted_to(target_output_type, &source_param_type) {
+                if DataType::can_be_converted_to(&target_output_type, &source_param_type) {
                     // Connect target output (pin 0) to source input
                     Some((target_node_id, 0, source_node_id, source_pin_index as usize))
                 } else {
@@ -1709,9 +1728,18 @@ impl StructureDesigner {
 
         let mut compatible_pins = Vec::new();
 
+        let _ = source_node_type;
+
         if source_is_output {
-            // Source is output, find all compatible input parameters on target
-            let source_output_type = source_node_type.get_output_pin_type(source_pin_index);
+            // Source is output, find all compatible input parameters on target.
+            let source_output_type = match self.node_type_registry.resolve_output_type(
+                source_node,
+                network,
+                source_pin_index,
+            ) {
+                Some(t) => t,
+                None => return Vec::new(),
+            };
 
             for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
                 if DataType::can_be_converted_to(&source_output_type, &param.data_type) {
@@ -1723,13 +1751,21 @@ impl StructureDesigner {
                 }
             }
         } else {
+            let _ = target_node_type;
             // Source is input, check if target's output is compatible
-            let target_output_type = target_node_type.output_type();
+            let target_output_type = match self.node_type_registry.resolve_output_type(
+                target_node,
+                network,
+                0,
+            ) {
+                Some(t) => t,
+                None => return Vec::new(),
+            };
             let source_param_type = self
                 .node_type_registry
                 .get_node_param_data_type(source_node, source_pin_index as usize);
 
-            if DataType::can_be_converted_to(target_output_type, &source_param_type) {
+            if DataType::can_be_converted_to(&target_output_type, &source_param_type) {
                 // Output pin is always index 0 with name "output"
                 compatible_pins.push((0, "output".to_string(), target_output_type.to_string()));
             }

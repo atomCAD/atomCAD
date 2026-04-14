@@ -457,7 +457,15 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if *data_type == DataType::Atomic {
+        } else if matches!(
+            data_type,
+            DataType::Atomic | DataType::Crystal | DataType::Molecule
+        ) {
+            // Accept both the abstract `Atomic` (still declared by not-yet-migrated
+            // nodes as Fixed(Atomic)) and the concrete `Crystal`/`Molecule` pin
+            // types. In all three cases the NetworkResult carries a
+            // Crystal(..) or Molecule(..) variant from which we extract the
+            // inner AtomicStructure for display.
             if let Some(atomic_structure) = result.extract_atomic() {
                 let mut cloned_atomic_structure = atomic_structure.clone();
                 cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
@@ -571,7 +579,11 @@ impl NetworkEvaluator {
                     geometry_visualization_preferences,
                 )
             }
-            DataType::Atomic => {
+            DataType::Atomic | DataType::Crystal | DataType::Molecule => {
+                // Same handling for abstract `Atomic` arrays (not-yet-migrated
+                // nodes) and concrete `Crystal`/`Molecule` arrays — extract the
+                // inner AtomicStructure from each Crystal(..)/Molecule(..)
+                // variant and union them for display.
                 let mut structures: Vec<AtomicStructure> = Vec::new();
                 for element in elements {
                     if let Some(structure) = element.extract_atomic() {
@@ -845,6 +857,29 @@ impl NetworkEvaluator {
                 node.node_type_name
             )))
         };
+
+        // Runtime guard: if a node produced a value whose inferred data type
+        // is abstract, that is a bug in a polymorphic node's `eval` (it failed
+        // to re-wrap its result in a concrete variant). Replace such values
+        // with a NetworkResult::Error so downstream state is not corrupted.
+        // In debug builds this also asserts — should be unreachable in a
+        // valid, well-implemented graph.
+        let mut eval_output = eval_output;
+        for (pin_idx, result) in eval_output.results.iter_mut().enumerate() {
+            if let Some(t) = result.infer_data_type() {
+                if t.is_abstract() {
+                    debug_assert!(
+                        false,
+                        "node {} pin {} produced value with abstract type {:?}",
+                        node_id, pin_idx, t
+                    );
+                    *result = NetworkResult::Error(format!(
+                        "node produced value with abstract type {:?} on pin {}",
+                        t, pin_idx
+                    ));
+                }
+            }
+        }
 
         // Record error from primary (pin 0) result
         let primary = eval_output.primary();

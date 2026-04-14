@@ -51,3 +51,33 @@ fn extract_molecule_only_matches_molecule() {
     assert!(make_crystal().extract_molecule().is_none());
     assert!(NetworkResult::Int(1).extract_molecule().is_none());
 }
+
+/// Runtime-guard invariant (§6.5 / OQ3): no `NetworkResult` variant should
+/// ever infer an abstract data type. The evaluator's post-eval guard
+/// (`evaluate_all_outputs`) replaces any value whose `infer_data_type()` is
+/// abstract with `NetworkResult::Error`; this test proves the guard's
+/// invariant holds for every concrete-typed variant today. If a new variant
+/// is added that breaks this, the guard fires in release and asserts in debug.
+#[test]
+fn no_network_result_variant_infers_abstract_type() {
+    let samples: Vec<NetworkResult> = vec![
+        NetworkResult::None,
+        NetworkResult::Bool(true),
+        NetworkResult::Int(0),
+        NetworkResult::Float(0.0),
+        NetworkResult::String(String::new()),
+        make_crystal(),
+        make_molecule(),
+        NetworkResult::Error("e".into()),
+        NetworkResult::Array(vec![]),
+    ];
+    for s in samples {
+        if let Some(t) = s.infer_data_type() {
+            assert!(
+                !t.is_abstract(),
+                "NetworkResult variant unexpectedly inferred abstract type {:?}",
+                t
+            );
+        }
+    }
+}
