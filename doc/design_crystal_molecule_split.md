@@ -2,7 +2,7 @@
 
 ## Context
 
-This document specifies the implementation plan for the type-system split that separates the current `DataType::Atomic` into two concrete phase types (`Crystal`, `Molecule`) plus three abstract "two-out-of-three" supertypes (`Atomic`, `StructureBound`, `Unanchored`), together with a new output-pin mechanism (`PinOutputType::SameAsInput`) that lets polymorphic nodes preserve the concrete input type at the output.
+This document specifies the implementation plan for the type-system split that separates the current `DataType::Atomic` into two concrete phase types (`Crystal`, `Molecule`) plus three abstract "two-out-of-three" supertypes (`Atomic`, `StructureBound`, `Unanchored`), together with a new output-pin mechanism (`PinOutputType::SameAsInput` / `SameAsArrayElements`) that lets polymorphic nodes preserve the concrete input type at the output.
 
 It is step 6 of the broader lattice-space refactoring. The motivation, user-facing model, node catalog, and payload-struct shapes are defined in the parent design document:
 
@@ -66,8 +66,8 @@ During wire validation the input pin's concrete type is resolved first; the outp
 - New `NetworkResult` variants: `Crystal(CrystalData)`, `Molecule(MoleculeData)`. Removal of `NetworkResult::Atomic(..)` construction; `DataType::Atomic` is now abstract-only.
 - New payload structs `CrystalData`, `MoleculeData` (shapes below, matching parent doc Appendix B).
 - New `PinOutputType` enum; `OutputPinDefinition.data_type` changes to `PinOutputType`.
-- Extension of the wire-validation / conversion rules to handle abstract upcasting and `SameAsInput` resolution.
-- Migration of the 19 atom-operation node definitions to use `DataType::Atomic` input + `PinOutputType::SameAsInput` output, re-wrapping the concrete variant at evaluation time.
+- Extension of the wire-validation / conversion rules to handle abstract upcasting and `SameAsInput` / `SameAsArrayElements` resolution.
+- Migration of the 19 atom-operation node definitions to use `DataType::Atomic` (or `Array[Atomic]`) input + `PinOutputType::SameAsInput` / `SameAsArrayElements` output, re-wrapping the concrete variant at evaluation time.
 - Update of `atom_fill` to output `Crystal`, wrapping its carved atoms together with the `Structure` sourced from the Blueprint input.
 - Test / snapshot updates.
 
@@ -122,7 +122,7 @@ Array-input atom operations (use `SameAsArrayElements` per OQ1):
 Atom-valued sinks / sources:
 
 16. `export_xyz.rs` — input `Atomic`, no atom-valued output.
-17. `sequence.rs` — `element_type: DataType::Atomic` at `~55–60`. Per OQ1, becomes type-preserving: its output's resolved element type is the unified concrete kind of its element inputs (all Crystal → `Array[Crystal]`, all Molecule → `Array[Molecule]`, mixed → validation error).
+17. `sequence.rs` — `element_type: DataType::Atomic` at `~55–60`. Per OQ1, `element_type` is a user-configured field and must be concrete; abstract types are rejected at node construction / config-edit time. Existing `Atomic` values in loaded `.cnnd` files are rewritten to `Molecule` at load (the safe default — see OQ1 for rationale). The output pin stays `Fixed(Array[element_type])` — no type-preservation machinery needed.
 18. `import_xyz.rs` — currently outputs `Atomic`; update to `Fixed(DataType::Molecule)` (XYZ carries no structure).
 19. `import_cif.rs` — currently outputs `Atomic`; see Open Question 2.
 
@@ -144,8 +144,7 @@ File: `rust/src/structure_designer/data_type.rs`.
   - `Crystal → Atomic`, `Crystal → StructureBound`, `Crystal → Crystal`
   - `Molecule → Atomic`, `Molecule → Unanchored`, `Molecule → Molecule`
   - `Blueprint → StructureBound`, `Blueprint → Unanchored`, `Blueprint → Blueprint` (existing identity)
-  - `Atomic → Atomic`, `StructureBound → StructureBound`, `Unanchored → Unanchored`
-  - No abstract → concrete conversion. No cross-abstract conversion (e.g., `StructureBound → Unanchored`).
+  - No abstract → concrete conversion. No cross-abstract conversion (e.g., `StructureBound → Unanchored`). No abstract → abstract identity edges (`Atomic → Atomic` etc.) — abstract types only ever appear as declared input-pin types on built-in polymorphic nodes, and sources in wire-validation are always concrete after resolution.
 - Add a helper `DataType::is_abstract(&self) -> bool` returning true for `Atomic`, `StructureBound`, `Unanchored`. This is used as a debug-assertion hook in 6.2 and a validation guard in 6.4.
 
 ### 6.2 — Payload structs and NetworkResult variants
@@ -187,7 +186,7 @@ pub enum PinOutputType {
 ```
 
 - Change `OutputPinDefinition.data_type: DataType` to `data_type: PinOutputType`.
-- Provide constructors: `OutputPinDefinition::fixed(name, DataType)`, `OutputPinDefinition::same_as_input(name, input_pin_name)` plus convenience `::single_fixed` / `::single_same_as(..)` mirroring the existing `single` helper.
+- Provide constructors: `OutputPinDefinition::fixed(name, DataType)`, `OutputPinDefinition::same_as_input(name, input_pin_name)`, `OutputPinDefinition::same_as_array_elements(name, input_pin_name)` plus convenience `::single_fixed` / `::single_same_as(..)` / `::single_same_as_array_elements(..)` mirroring the existing `single` helper.
 - Add a resolution helper:
   ```rust
   fn resolve_output_type(
@@ -195,20 +194,24 @@ pub enum PinOutputType {
       node: &Node,
       network: &NodeNetwork,
       registry: &NodeTypeRegistry,
-  ) -> DataType;
+  ) -> Option<DataType>;
   ```
-  which, for `Fixed(t)`, returns `t`; for `SameAsInput(name)`, looks up the upstream wire feeding `name`, asks the registry for the source node's output-pin concrete type (recursively resolving), and returns it. If no wire is connected, returns the declared abstract type of that input pin (so downstream validation sees the abstract type and rejects anything that requires concreteness — consistent with "abstract cannot downcast").
+  which, for `Fixed(t)`, returns `Some(t)`; for `SameAsInput(name)`, looks up the upstream wire feeding `name`, asks the registry for the source node's output-pin concrete type (recursively resolving), and returns it. If the referenced input is unconnected — or if recursive resolution fails anywhere upstream — returns `None`, signalling "unresolved." The result is never an abstract `DataType`. Unresolved outputs flag the node invalid and are treated as disconnected by downstream wire validation (see §6.4). Same contract for `SameAsArrayElements`.
 - Update all existing readers of `OutputPinDefinition.data_type` to call `resolve_output_type` when they need the resolved concrete type, or to pattern-match on `PinOutputType` where that is more natural. Affected sites (known so far): `node_type_registry.rs`, `network_validator.rs`, `network_evaluator.rs` (display metadata path), scene conversion in `rust/src/api/structure_designer/...`, and any Flutter-facing type reporting. The FFI surface still reports a single `DataType` per pin — convert via `resolve_output_type` before crossing the API boundary.
 
 ### 6.4 — Wire validation and output-type propagation
 
 Files: `rust/src/structure_designer/network_validator.rs`, `rust/src/structure_designer/node_network.rs`, `rust/src/structure_designer/structure_designer.rs`.
 
-- During `validate_node_network`, walk nodes in topological order. For each node, after its inputs are resolved, compute and cache each output pin's *resolved concrete* `DataType`. Downstream wire checks read this cache instead of recomputing. (A plain `HashMap<(NodeId, PinIndex), DataType>` on a local `ValidationContext` is sufficient; do not persist it on the network.)
+- During `validate_node_network`, walk nodes in topological order. For each node, after its inputs are resolved, compute and cache each output pin's *resolved concrete* `DataType`. Downstream wire checks read this cache instead of recomputing. (A plain `HashMap<(NodeId, PinIndex), DataType>` on a local `ValidationContext` is sufficient; do not persist it on the network.) Unresolved outputs are absent from the cache; downstream wires reading an absent source entry behave as if the wire were disconnected.
+
+- **Uniform resolution rule:** every pin-type resolver (`Fixed`, `SameAsInput`, `SameAsArrayElements`) produces either a concrete `DataType` or "unresolved." It never produces an abstract `DataType`. A node is flagged invalid if any of its outputs is unresolved, or — equivalently — if any input pin whose declared type is abstract is unconnected. This subsumes and generalises the OQ1 array-element rule: the mixed-phase array case and the disconnected scalar case are the same case. Rationale: abstract input pins have no default runtime value (you cannot construct a `NetworkResult::Atomic(..)`), so a disconnected abstract input already means the node cannot evaluate — flagging it invalid is just making that explicit at validation time.
+
+- **Invariant 1 holds without exception** because abstract types never appear outside built-in polymorphic node input pins. In particular, custom-network parameter pins must be concrete (see OQ1), so parameter nodes inside a subnetwork template carry concrete output types and no "abstract-in-edit-mode" situation ever arises.
 - `is_valid_connection` and `auto_connect_wire`:
   - Source pin's resolved concrete type is read from the cache if available, otherwise recomputed via `resolve_output_type`.
   - Destination pin's declared type may be abstract. Use `DataType::can_be_converted_to(source, dest)`.
-- `update_network_output_type()` (currently at `network_validator.rs:488–524`) does not need structural changes: it clones the return node's `output_pins` onto the network's `NodeType`. If a return node's output is `SameAsInput`, the enclosing custom network will *also* expose `SameAsInput` on its synthesised output pin, which naturally re-resolves when the custom network itself is wired into a larger graph.
+- `update_network_output_type()` (currently at `network_validator.rs:488–524`) clones the return node's `output_pins` onto the network's `NodeType`, substituting each pin's resolved concrete type. Because custom-network parameter pins are required to be concrete (OQ1), the return node's `SameAsInput`/`SameAsArrayElements` always resolves to a concrete type at template-validation time, and the enclosing custom network exposes a plain `Fixed(<concrete>)` on its synthesised output pin. No `SameAsInput` ever crosses a custom-network boundary; there is no wire chasing or name remapping across levels.
 - Add a validation-time guard: reject any `NetworkResult` produced by evaluation whose `infer_data_type()` is abstract (debug-assert; should be impossible).
 
 ### 6.5 — Evaluator dispatch
@@ -216,7 +219,7 @@ Files: `rust/src/structure_designer/network_validator.rs`, `rust/src/structure_d
 File: `rust/src/structure_designer/evaluator/network_evaluator.rs`.
 
 - At every former `if let NetworkResult::Atomic(s) = ..` site (`~461`, `~577`), match on `Crystal(..) | Molecule(..)` and extract the inner `AtomicStructure`. Carry the originating variant forward when re-wrapping.
-- For array flattening in polymorphic Array-input nodes, see Open Question 1.
+- For element-type resolution in polymorphic Array-input nodes (`atom_union`, `atom_composediff`), see Open Question 1.
 
 ### 6.6 — `atom_fill` migration
 
@@ -310,8 +313,8 @@ pub enum NetworkResult {
 
 ## Invariants after this step
 
-1. No `NetworkResult` value ever carries an abstract `DataType`. Every runtime atomic value is exactly `Crystal` or `Molecule`. This extends recursively: no resolved pin type is abstract at any nesting depth inside `Array[..]` either.
-2. Every output pin has either a `Fixed` concrete type, a `SameAsInput`, or a `SameAsArrayElements` that, when resolved against a valid graph, yields a concrete type. If resolution fails (unconnected input, mixed-phase array), the node is flagged invalid and downstream wires are treated as disconnected.
+1. No resolved pin type is abstract — at any nesting depth, including inside `Array[..]`, and in both fully-instantiated graphs and subnetwork templates under edit. No `NetworkResult` value ever carries an abstract `DataType`; every runtime atomic value is exactly `Crystal` or `Molecule`. Abstract types appear *only* as declared input-pin types on built-in polymorphic nodes; they are never stored on outputs, runtime values, user-declared type fields, or custom-network parameter pins.
+2. Every output pin has either a `Fixed` concrete type, a `SameAsInput`, or a `SameAsArrayElements` that, when resolved against a valid graph, yields a concrete type. Resolution returns `Option<DataType>` and never returns an abstract type. If resolution fails (unconnected abstract input, mixed-phase array, upstream unresolved), the node is flagged invalid and downstream wires are treated as disconnected — one uniform rule for all failure modes.
 3. `can_be_converted_to` never permits abstract → concrete. It permits concrete → abstract only along the membership edges listed above.
 4. `atom_fill` is the only producer of `Crystal` after this step. `import_xyz` and `import_cif` are the producers of `Molecule` (the latter with a TODO — see OQ2).
 5. The Flutter API and `.cnnd` file format are unchanged.
@@ -334,12 +337,13 @@ Mechanism:
 - `atom_union` and `atom_composediff` use `SameAsArrayElements("input")` (or the actual pin name).
 - The runtime `evaluate` also debug-asserts that every array element carries the same concrete variant; this should be unreachable in a valid graph.
 
-For this to work, every pin whose type is `Array[Atomic]` must also resolve its element type concretely — otherwise the validator has no concrete info to feed rules 2/3. This is a strengthening of invariant 1: **no resolved pin type is abstract, at any nesting depth inside `Array[..]` either.** The implication:
+For this to work, every pin whose type is `Array[Atomic]` must also resolve its element type concretely — otherwise the validator has no concrete info to feed rules 2/3. This is a consequence of invariant 1 applied at nesting depth: no resolved pin type is abstract, including inside `Array[..]`. The implications:
 
-- **`sequence` node must become type-preserving.** Currently declares `element_type: DataType::Atomic` (abstract). After this step, its output pin's resolved element type is the unified concrete kind of its element inputs — all Crystal → `Array[Crystal]`, all Molecule → `Array[Molecule]`, mixed → validation error (same rule as `atom_union`). Any future array-literal nodes over atomic values follow the same rule.
-- **Custom networks** whose return pin is `Array[Atomic]` inherit this automatically, because `update_network_output_type` already clones the return node's resolved output pins.
+- **`sequence` node**: its `element_type` is a user-configured field, not a wire-derived type. The simplest honest answer is to forbid abstract values there. The output stays `Fixed(Array[element_type])`; the user picks Crystal or Molecule explicitly when creating the node. This avoids inventing a variadic unification mechanism (`SameAsInput` only names a single pin) for what is really a declaration, not a polymorphic conduit.
+- **General rule:** abstract types are permitted **only** as declared input-pin types on built-in polymorphic nodes. They may not appear in any user-declared type field: node config like `sequence.element_type`, *and* custom-network parameter-pin types. Enforced as a one-line check at node construction / config-edit time and at parameter-pin type-edit time.
+- **Custom networks are concrete at the boundary.** Because parameter pins are concrete, every wire inside a template has a concrete source, so the return node's output resolves to a concrete type at template-validation time. `update_network_output_type` stores that as `Fixed(<concrete>)` on the synthesised output pin. Trade-off: a user who wants a phase-polymorphic helper subnet must author two copies (one per phase). Accepted in exchange for dropping all cross-boundary type-preservation machinery (wire chasing, name remapping, template-edit exceptions, abstract-identity conversion edges). Revisit if real workflows show this hurts.
 
-Practical consequence: if a user wires a Crystal and a Molecule into `atom_union` (or any array pin over atoms), they see a validation error on the offending node and must insert an explicit phase-transition step — silent "downgrade to Molecule" never happens.
+Practical consequence: if a user wires a Crystal and a Molecule into `atom_union` (or any array pin over atoms), they see a validation error on the offending node and must insert an explicit phase-transition step — silent "downgrade to Molecule" never happens. Mixed-phase `sequence` inputs are caught even earlier, by ordinary concrete-to-concrete wire validation against the user-chosen `element_type`.
 
 ### OQ2 — `import_cif` output type — **RESOLVED**
 
