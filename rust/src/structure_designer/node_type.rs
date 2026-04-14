@@ -4,6 +4,7 @@ use crate::structure_designer::data_type::FunctionType;
 use crate::structure_designer::node_data::NodeData;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
 use std::io;
 
 #[derive(Clone, PartialEq)]
@@ -13,20 +14,109 @@ pub struct Parameter {
     pub data_type: DataType,
 }
 
+/// Specification for how an output pin's concrete data type is determined.
+///
+/// `Fixed` declares a static type. `SameAsInput` and `SameAsArrayElements` describe
+/// polymorphic pins whose concrete type is derived from an input pin at validation
+/// time (see `NodeTypeRegistry::resolve_output_type`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum PinOutputType {
+    /// Fixed, statically declared output type.
+    Fixed(DataType),
+    /// Output type mirrors the resolved concrete type of the named input pin.
+    SameAsInput(String),
+    /// Output type mirrors the element type of the named `Array[..]` input pin.
+    SameAsArrayElements(String),
+}
+
+impl PinOutputType {
+    /// Returns the declared `DataType` when this pin is `Fixed`; `None` otherwise.
+    pub fn fixed_type(&self) -> Option<&DataType> {
+        match self {
+            PinOutputType::Fixed(t) => Some(t),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for PinOutputType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PinOutputType::Fixed(t) => write!(f, "{}", t),
+            PinOutputType::SameAsInput(name) => write!(f, "SameAsInput({})", name),
+            PinOutputType::SameAsArrayElements(name) => {
+                write!(f, "SameAsArrayElements({})", name)
+            }
+        }
+    }
+}
+
+/// Stable `&'static DataType::None` used as a fallback return from `output_type()`
+/// when a pin is polymorphic (not yet resolved against a concrete input). Callers
+/// that need the resolved concrete type must use `NodeTypeRegistry::resolve_output_type`.
+fn none_data_type_ref() -> &'static DataType {
+    static NONE_TYPE: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+    NONE_TYPE.get_or_init(|| DataType::None)
+}
+
 /// Definition of an output pin on a node type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutputPinDefinition {
     pub name: String,
-    pub data_type: DataType,
+    pub data_type: PinOutputType,
 }
 
 impl OutputPinDefinition {
-    /// Convenience constructor for single-output nodes.
+    /// Output pin with a statically declared type.
+    pub fn fixed(name: &str, data_type: DataType) -> Self {
+        Self {
+            name: name.to_string(),
+            data_type: PinOutputType::Fixed(data_type),
+        }
+    }
+
+    /// Output pin that mirrors the resolved concrete type of the named input pin.
+    pub fn same_as_input(name: &str, input_pin_name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            data_type: PinOutputType::SameAsInput(input_pin_name.to_string()),
+        }
+    }
+
+    /// Output pin that mirrors the element type of the named `Array[..]` input pin.
+    pub fn same_as_array_elements(name: &str, input_pin_name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            data_type: PinOutputType::SameAsArrayElements(input_pin_name.to_string()),
+        }
+    }
+
+    /// Backward-compatible convenience for single-output nodes with a fixed type.
     pub fn single(data_type: DataType) -> Vec<OutputPinDefinition> {
-        vec![OutputPinDefinition {
-            name: "result".to_string(),
-            data_type,
-        }]
+        vec![OutputPinDefinition::fixed("result", data_type)]
+    }
+
+    /// Single-output node with a fixed type.
+    pub fn single_fixed(data_type: DataType) -> Vec<OutputPinDefinition> {
+        vec![OutputPinDefinition::fixed("result", data_type)]
+    }
+
+    /// Single-output node whose type mirrors the named input pin.
+    pub fn single_same_as(input_pin_name: &str) -> Vec<OutputPinDefinition> {
+        vec![OutputPinDefinition::same_as_input("result", input_pin_name)]
+    }
+
+    /// Single-output node whose type mirrors the element type of an `Array[..]` input pin.
+    pub fn single_same_as_array_elements(input_pin_name: &str) -> Vec<OutputPinDefinition> {
+        vec![OutputPinDefinition::same_as_array_elements(
+            "result",
+            input_pin_name,
+        )]
+    }
+
+    /// Returns the declared fixed `DataType` when this pin is `Fixed`; `None` otherwise.
+    pub fn fixed_type(&self) -> Option<&DataType> {
+        self.data_type.fixed_type()
     }
 }
 
@@ -51,8 +141,15 @@ pub struct NodeType {
 
 impl NodeType {
     /// The primary output type (pin 0). Panics if no output pins.
+    ///
+    /// Returns the declared `Fixed` type when pin 0 is `Fixed`; otherwise returns
+    /// a reference to a static `DataType::None` sentinel. Callers that require the
+    /// resolved concrete type of a polymorphic pin must use
+    /// `NodeTypeRegistry::resolve_output_type` with a node/network context.
     pub fn output_type(&self) -> &DataType {
-        &self.output_pins[0].data_type
+        self.output_pins[0]
+            .fixed_type()
+            .unwrap_or_else(|| none_data_type_ref())
     }
 
     pub fn get_function_type(&self) -> DataType {
@@ -72,7 +169,7 @@ impl NodeType {
         } else {
             self.output_pins
                 .get(output_pin_index as usize)
-                .map(|p| p.data_type.clone())
+                .map(|p| p.fixed_type().cloned().unwrap_or(DataType::None))
                 .unwrap_or(DataType::None)
         }
     }

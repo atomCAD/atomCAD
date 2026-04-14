@@ -72,9 +72,15 @@ fn test_motif_edit_node_type_pins() {
     // 2 output pins: result (Motif), diff (Atomic)
     assert_eq!(node_type.output_pins.len(), 2);
     assert_eq!(node_type.output_pins[0].name, "result");
-    assert_eq!(node_type.output_pins[0].data_type, DataType::Motif);
+    assert_eq!(
+        node_type.output_pins[0].fixed_type(),
+        Some(&DataType::Motif)
+    );
     assert_eq!(node_type.output_pins[1].name, "diff");
-    assert_eq!(node_type.output_pins[1].data_type, DataType::Atomic);
+    assert_eq!(
+        node_type.output_pins[1].fixed_type(),
+        Some(&DataType::Atomic)
+    );
 }
 
 #[test]

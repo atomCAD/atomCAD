@@ -1,4 +1,4 @@
-use super::node_type::NodeType;
+use super::node_type::{NodeType, PinOutputType};
 use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
 use super::nodes::atom_composediff::get_node_type as atom_composediff_get_node_type;
@@ -421,6 +421,106 @@ impl NodeTypeRegistry {
     pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> DataType {
         let node_type = self.get_node_type_for_node(node).unwrap();
         node_type.parameters[parameter_index].data_type.clone()
+    }
+
+    /// Resolves the concrete `DataType` of one of `node`'s output pins in `network`.
+    ///
+    /// - `output_pin_index == -1` returns the node's function type.
+    /// - For a `Fixed(t)` pin, returns `Some(t)` (or `None` if `t` is abstract).
+    /// - For `SameAsInput(name)`, resolves the concrete type of the upstream
+    ///   wire feeding the named input pin (recursively).
+    /// - For `SameAsArrayElements(name)`, resolves the concrete element type
+    ///   common to every source feeding the array input (`None` on mismatch,
+    ///   disconnected, or unresolved upstream).
+    ///
+    /// Returns `None` whenever resolution fails for any reason. The returned
+    /// type is never abstract.
+    pub fn resolve_output_type(
+        &self,
+        node: &Node,
+        network: &NodeNetwork,
+        output_pin_index: i32,
+    ) -> Option<DataType> {
+        let node_type = self.get_node_type_for_node(node)?;
+        if output_pin_index == -1 {
+            return Some(node_type.get_function_type());
+        }
+        let pin = node_type.output_pins.get(output_pin_index as usize)?;
+        self.resolve_pin_output_type(&pin.data_type, node, node_type, network)
+    }
+
+    fn resolve_pin_output_type(
+        &self,
+        pin_type: &PinOutputType,
+        node: &Node,
+        node_type: &NodeType,
+        network: &NodeNetwork,
+    ) -> Option<DataType> {
+        match pin_type {
+            PinOutputType::Fixed(t) => {
+                if t.is_abstract() {
+                    None
+                } else {
+                    Some(t.clone())
+                }
+            }
+            PinOutputType::SameAsInput(input_pin_name) => {
+                let (src_node, src_pin_index) =
+                    self.single_source_for_input(node, node_type, input_pin_name, network)?;
+                self.resolve_output_type(src_node, network, src_pin_index)
+            }
+            PinOutputType::SameAsArrayElements(input_pin_name) => {
+                let arg_index = node_type
+                    .parameters
+                    .iter()
+                    .position(|p| p.name == *input_pin_name)?;
+                let argument = node.arguments.get(arg_index)?;
+                if argument.argument_output_pins.is_empty() {
+                    return None;
+                }
+                let mut common: Option<DataType> = None;
+                for (&src_node_id, &src_pin_index) in &argument.argument_output_pins {
+                    let src_node = network.nodes.get(&src_node_id)?;
+                    let src_ty = self.resolve_output_type(src_node, network, src_pin_index)?;
+                    // Peel a single Array wrapper if present; non-array sources broadcast
+                    // as single elements of that type.
+                    let element_ty = match src_ty {
+                        DataType::Array(inner) => *inner,
+                        other => other,
+                    };
+                    if element_ty.is_abstract() {
+                        return None;
+                    }
+                    match &common {
+                        None => common = Some(element_ty),
+                        Some(existing) if *existing == element_ty => {}
+                        _ => return None,
+                    }
+                }
+                common
+            }
+        }
+    }
+
+    fn single_source_for_input<'a>(
+        &self,
+        node: &'a Node,
+        node_type: &NodeType,
+        input_pin_name: &str,
+        network: &'a NodeNetwork,
+    ) -> Option<(&'a Node, i32)> {
+        let arg_index = node_type
+            .parameters
+            .iter()
+            .position(|p| p.name == input_pin_name)?;
+        let argument = node.arguments.get(arg_index)?;
+        // SameAsInput is only meaningful for single-connection (non-array) input pins.
+        if argument.argument_output_pins.len() != 1 {
+            return None;
+        }
+        let (&src_node_id, &src_pin_index) = argument.argument_output_pins.iter().next()?;
+        let src_node = network.nodes.get(&src_node_id)?;
+        Some((src_node, src_pin_index))
     }
 
     pub fn get_parameter_name(&self, node: &Node, parameter_index: usize) -> String {

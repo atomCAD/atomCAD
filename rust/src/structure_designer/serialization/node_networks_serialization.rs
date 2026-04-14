@@ -216,10 +216,7 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
                         format!("Invalid output pin type: {}", e),
                     )
                 })?;
-                Ok(OutputPinDefinition {
-                    name: p.name.clone(),
-                    data_type,
-                })
+                Ok(OutputPinDefinition::fixed(&p.name, data_type))
             })
             .collect::<io::Result<Vec<_>>>()?
     } else if let Some(ref output_type_str) = serializable.output_type {

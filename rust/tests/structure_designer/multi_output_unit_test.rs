@@ -26,14 +26,14 @@ fn test_output_pin_definition_single() {
     let pins = OutputPinDefinition::single(DataType::Blueprint);
     assert_eq!(pins.len(), 1);
     assert_eq!(pins[0].name, "result");
-    assert_eq!(pins[0].data_type, DataType::Blueprint);
+    assert_eq!(pins[0].fixed_type(), Some(&DataType::Blueprint));
 }
 
 #[test]
 fn test_output_pin_definition_single_none() {
     let pins = OutputPinDefinition::single(DataType::None);
     assert_eq!(pins.len(), 1);
-    assert_eq!(pins[0].data_type, DataType::None);
+    assert_eq!(pins[0].fixed_type(), Some(&DataType::None));
 }
 
 // ===== NodeType accessor tests =====
@@ -632,7 +632,10 @@ fn test_custom_network_multi_output_return_node_propagates_pins() {
     assert_eq!(network.node_type.output_pins[0].name, "result");
     assert_eq!(*network.node_type.output_type(), DataType::Atomic);
     assert_eq!(network.node_type.output_pins[1].name, "diff");
-    assert_eq!(network.node_type.output_pins[1].data_type, DataType::Atomic);
+    assert_eq!(
+        network.node_type.output_pins[1].fixed_type(),
+        Some(&DataType::Atomic)
+    );
     assert!(network.node_type.has_multi_output());
 }
 
@@ -977,4 +980,224 @@ fn test_infer_data_type_none_variants() {
     assert_eq!(NetworkResult::None.infer_data_type(), None);
     assert_eq!(NetworkResult::Error("err".into()).infer_data_type(), None);
     assert_eq!(NetworkResult::Array(vec![]).infer_data_type(), None);
+}
+
+// ===== resolve_output_type tests (step 6.3) =====
+//
+// These tests exercise each PinOutputType variant against a toy NodeType + registry.
+// They do not depend on any real node-migration work from later sub-steps.
+
+mod resolve_output_type_tests {
+    use glam::DVec2;
+    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+    use rust_lib_flutter_cad::structure_designer::node_data::NoData;
+    use rust_lib_flutter_cad::structure_designer::node_network::{Argument, Node, NodeNetwork};
+    use rust_lib_flutter_cad::structure_designer::node_type::{
+        NodeType, OutputPinDefinition, Parameter, no_data_loader, no_data_saver,
+    };
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+
+    fn toy_node_type(
+        name: &str,
+        parameters: Vec<Parameter>,
+        output_pins: Vec<OutputPinDefinition>,
+    ) -> NodeType {
+        NodeType {
+            name: name.to_string(),
+            description: String::new(),
+            summary: None,
+            category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
+            parameters,
+            output_pins,
+            public: true,
+            node_data_creator: || Box::new(NoData {}),
+            node_data_saver: no_data_saver,
+            node_data_loader: no_data_loader,
+        }
+    }
+
+    fn make_node(id: u64, node_type_name: &str, arg_count: usize) -> Node {
+        Node {
+            id,
+            node_type_name: node_type_name.to_string(),
+            custom_name: None,
+            position: DVec2::ZERO,
+            arguments: (0..arg_count).map(|_| Argument::new()).collect(),
+            data: Box::new(NoData {}),
+            custom_node_type: None,
+        }
+    }
+
+    /// Builds a registry with three toy types:
+    /// - `src_float`: no params, single `Fixed(Float)` output
+    /// - `src_float_array`: no params, single `Fixed(Array[Float])` output
+    /// - `poly`: one input `"in"` (DataType::Atomic, abstract) + an array input `"arr"` (Array[Atomic]);
+    ///           three outputs: fixed Int at pin 0, SameAsInput("in") at pin 1,
+    ///           SameAsArrayElements("arr") at pin 2.
+    fn build_toy_registry() -> NodeTypeRegistry {
+        let mut registry = NodeTypeRegistry::new();
+
+        registry.built_in_node_types.insert(
+            "src_float".to_string(),
+            toy_node_type(
+                "src_float",
+                vec![],
+                OutputPinDefinition::single(DataType::Float),
+            ),
+        );
+        registry.built_in_node_types.insert(
+            "src_float_array".to_string(),
+            toy_node_type(
+                "src_float_array",
+                vec![],
+                OutputPinDefinition::single(DataType::Array(Box::new(DataType::Float))),
+            ),
+        );
+        registry.built_in_node_types.insert(
+            "poly".to_string(),
+            toy_node_type(
+                "poly",
+                vec![
+                    Parameter {
+                        id: None,
+                        name: "in".to_string(),
+                        data_type: DataType::Atomic,
+                    },
+                    Parameter {
+                        id: None,
+                        name: "arr".to_string(),
+                        data_type: DataType::Array(Box::new(DataType::Atomic)),
+                    },
+                ],
+                vec![
+                    OutputPinDefinition::fixed("fixed", DataType::Int),
+                    OutputPinDefinition::same_as_input("mirror", "in"),
+                    OutputPinDefinition::same_as_array_elements("elem", "arr"),
+                ],
+            ),
+        );
+
+        registry
+    }
+
+    fn empty_network() -> NodeNetwork {
+        NodeNetwork::new(NodeType {
+            name: "test_network".to_string(),
+            description: String::new(),
+            summary: None,
+            category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
+            parameters: vec![],
+            output_pins: OutputPinDefinition::single(DataType::None),
+            public: true,
+            node_data_creator: || Box::new(NoData {}),
+            node_data_saver: no_data_saver,
+            node_data_loader: no_data_loader,
+        })
+    }
+
+    #[test]
+    fn fixed_pin_returns_its_declared_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 0);
+        assert_eq!(resolved, Some(DataType::Int));
+    }
+
+    #[test]
+    fn same_as_input_mirrors_connected_source_concrete_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+
+        let src = make_node(1, "src_float", 0);
+        let mut poly = make_node(2, "poly", 2);
+        // Wire src (pin 0) → poly.arguments[0] ("in")
+        poly.arguments[0].argument_output_pins.insert(1, 0);
+        network.nodes.insert(1, src);
+        network.nodes.insert(2, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&2], &network, 1);
+        assert_eq!(resolved, Some(DataType::Float));
+    }
+
+    #[test]
+    fn same_as_input_returns_none_when_input_unconnected() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 1);
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn same_as_array_elements_mirrors_connected_array_source_element_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+
+        let src = make_node(1, "src_float_array", 0);
+        let mut poly = make_node(2, "poly", 2);
+        // Wire src (pin 0, Array[Float]) → poly.arguments[1] ("arr")
+        poly.arguments[1].argument_output_pins.insert(1, 0);
+        network.nodes.insert(1, src);
+        network.nodes.insert(2, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&2], &network, 2);
+        assert_eq!(resolved, Some(DataType::Float));
+    }
+
+    #[test]
+    fn same_as_array_elements_accepts_scalar_broadcast_source() {
+        // A scalar source connected to an Array[..] pin is valid via broadcasting;
+        // its element type is the scalar's type.
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+
+        let src = make_node(1, "src_float", 0);
+        let mut poly = make_node(2, "poly", 2);
+        poly.arguments[1].argument_output_pins.insert(1, 0);
+        network.nodes.insert(1, src);
+        network.nodes.insert(2, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&2], &network, 2);
+        assert_eq!(resolved, Some(DataType::Float));
+    }
+
+    #[test]
+    fn same_as_array_elements_returns_none_when_input_unconnected() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 2);
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn function_pin_returns_function_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, -1);
+        assert!(matches!(resolved, Some(DataType::Function(_))));
+    }
+
+    #[test]
+    fn out_of_range_pin_returns_none() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        assert_eq!(
+            registry.resolve_output_type(&network.nodes[&1], &network, 99),
+            None
+        );
+    }
 }

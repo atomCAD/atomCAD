@@ -1887,14 +1887,8 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition {
-                name: "result".to_string(),
-                data_type: DataType::Atomic,
-            },
-            OutputPinDefinition {
-                name: "diff".to_string(),
-                data_type: DataType::Atomic,
-            },
+            OutputPinDefinition::fixed("result", DataType::Atomic),
+            OutputPinDefinition::fixed("diff", DataType::Atomic),
         ],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new()),
@@ -1949,14 +1943,8 @@ pub fn get_node_type_motif_edit() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition {
-                name: "result".to_string(),
-                data_type: DataType::Motif,
-            },
-            OutputPinDefinition {
-                name: "diff".to_string(),
-                data_type: DataType::Atomic,
-            },
+            OutputPinDefinition::fixed("result", DataType::Motif),
+            OutputPinDefinition::fixed("diff", DataType::Atomic),
         ],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new_motif_mode()),

@@ -629,18 +629,9 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition {
-                name: "unit_cell".to_string(),
-                data_type: DataType::LatticeVecs,
-            },
-            OutputPinDefinition {
-                name: "atoms".to_string(),
-                data_type: DataType::Atomic,
-            },
-            OutputPinDefinition {
-                name: "motif".to_string(),
-                data_type: DataType::Motif,
-            },
+            OutputPinDefinition::fixed("unit_cell", DataType::LatticeVecs),
+            OutputPinDefinition::fixed("atoms", DataType::Atomic),
+            OutputPinDefinition::fixed("motif", DataType::Motif),
         ],
         public: true,
         node_data_creator: || Box::new(ImportCifData::new()),
