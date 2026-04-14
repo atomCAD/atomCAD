@@ -64,9 +64,18 @@ fn bare_structure_node_outputs_diamond_defaults() {
     let s = extract_structure(result);
     let diamond = Structure::diamond();
 
-    assert_eq!(s.lattice_vecs.cell_length_a, DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
-    assert_eq!(s.lattice_vecs.cell_length_b, DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
-    assert_eq!(s.lattice_vecs.cell_length_c, DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+    assert_eq!(
+        s.lattice_vecs.cell_length_a,
+        DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+    );
+    assert_eq!(
+        s.lattice_vecs.cell_length_b,
+        DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+    );
+    assert_eq!(
+        s.lattice_vecs.cell_length_c,
+        DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+    );
     assert_eq!(s.motif_offset, DVec3::ZERO);
     assert_eq!(s.motif.sites.len(), diamond.motif.sites.len());
 }
@@ -119,7 +128,10 @@ fn motif_offset_override_replaces_only_offset() {
     let s = extract_structure(evaluate(&designer, st_id));
     assert_eq!(s.motif_offset, DVec3::new(0.25, 0.5, 0.75));
     // lattice still diamond default
-    assert_eq!(s.lattice_vecs.cell_length_a, DIAMOND_UNIT_CELL_SIZE_ANGSTROM);
+    assert_eq!(
+        s.lattice_vecs.cell_length_a,
+        DIAMOND_UNIT_CELL_SIZE_ANGSTROM
+    );
 }
 
 #[test]

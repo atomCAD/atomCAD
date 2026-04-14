@@ -1,11 +1,11 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -51,23 +51,22 @@ impl NodeData for HydrogenPassivateData {
             return EvalOutput::single(input_val);
         }
 
-        if let Some(mut structure) = input_val.extract_atomic() {
+        let at_root = network_stack.len() == 1;
+        let output = map_atomic(input_val, |mut structure| {
             let options = AddHydrogensOptions {
                 selected_only: false,
                 skip_already_passivated: true,
             };
             let result = add_hydrogens(&mut structure, &options);
 
-            if network_stack.len() == 1 {
+            if at_root {
                 context.selected_node_eval_cache = Some(Box::new(HydrogenPassivateEvalCache {
                     message: format!("Added {} hydrogens", result.hydrogens_added),
                 }));
             }
-
-            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: structure, geo_tree_root: None }))
-        } else {
-            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }))
-        }
+            structure
+        });
+        EvalOutput::single(output)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -101,7 +100,7 @@ pub fn get_node_type() -> NodeType {
             name: "molecule".to_string(),
             data_type: DataType::Atomic,
         }],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(HydrogenPassivateData {}),
         node_data_saver: generic_node_data_saver::<HydrogenPassivateData>,

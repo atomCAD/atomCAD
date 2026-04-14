@@ -13,7 +13,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -383,10 +383,19 @@ impl AtomEditData {
 
         // 7. Build EvalOutput with display override
         let mut output = EvalOutput::multi(vec![
-            NetworkResult::Motif(motif),       // pin 0 wire value
-            NetworkResult::Molecule(MoleculeData { atoms: diff_clone, geo_tree_root: None }), // pin 1
+            NetworkResult::Motif(motif), // pin 0 wire value
+            NetworkResult::Molecule(MoleculeData {
+                atoms: diff_clone,
+                geo_tree_root: None,
+            }), // pin 1
         ]);
-        output.set_display_override(0, NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None })); // pin 0 display
+        output.set_display_override(
+            0,
+            NetworkResult::Molecule(MoleculeData {
+                atoms: result,
+                geo_tree_root: None,
+            }),
+        ); // pin 0 display
         output.unit_cell_override = Some(unit_cell);
 
         output
@@ -1506,7 +1515,7 @@ impl NodeData for AtomEditData {
             }
             let structure = match input_val {
                 NetworkResult::Crystal(c) => c.atoms,
-            NetworkResult::Molecule(m) => m.atoms,
+                NetworkResult::Molecule(m) => m.atoms,
                 _ => AtomicStructure::new(),
             };
             if let Ok(mut guard) = self.cached_input.lock() {
@@ -1695,8 +1704,14 @@ impl NodeData for AtomEditData {
         }
 
         EvalOutput::multi(vec![
-            NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }),
-            NetworkResult::Molecule(MoleculeData { atoms: diff_clone, geo_tree_root: None }),
+            NetworkResult::Molecule(MoleculeData {
+                atoms: result,
+                geo_tree_root: None,
+            }),
+            NetworkResult::Molecule(MoleculeData {
+                atoms: diff_clone,
+                geo_tree_root: None,
+            }),
         ])
     }
 
@@ -1887,8 +1902,8 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition::fixed("result", DataType::Atomic),
-            OutputPinDefinition::fixed("diff", DataType::Atomic),
+            OutputPinDefinition::fixed("result", DataType::Molecule),
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
         ],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new()),
@@ -1944,7 +1959,7 @@ pub fn get_node_type_motif_edit() -> NodeType {
         ],
         output_pins: vec![
             OutputPinDefinition::fixed("result", DataType::Motif),
-            OutputPinDefinition::fixed("diff", DataType::Atomic),
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
         ],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new_motif_mode()),

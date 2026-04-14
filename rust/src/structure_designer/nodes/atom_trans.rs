@@ -4,9 +4,10 @@ use crate::display::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -69,53 +70,49 @@ impl NodeData for AtomTransData {
         if let NetworkResult::Error(_) = input_val {
             return EvalOutput::single(input_val);
         }
-        if let Some(atomic_structure) = input_val.extract_atomic() {
-            let translation = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.translation,
-                NetworkResult::extract_vec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
+        let translation = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.translation,
+            NetworkResult::extract_vec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        let rotation = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            self.rotation,
+            NetworkResult::extract_vec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        let rotation_quat =
+            DQuat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
+
+        // Deprecated node (removed in phase 7). With frame_transform gone from
+        // AtomicStructure, we can no longer compose with a prior frame; apply the
+        // translation/rotation directly to atom positions.
+        if network_stack.len() == 1 {
+            let eval_cache = AtomTransEvalCache {
+                input_frame_transform: Transform::default(),
             };
-
-            let rotation = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.rotation,
-                NetworkResult::extract_vec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
-
-            let rotation_quat =
-                DQuat::from_euler(glam::EulerRot::XYZ, rotation.x, rotation.y, rotation.z);
-
-            // Deprecated node (removed in phase 7). With frame_transform gone from
-            // AtomicStructure, we can no longer compose with a prior frame; apply the
-            // translation/rotation directly to atom positions.
-            if network_stack.len() == 1 {
-                let eval_cache = AtomTransEvalCache {
-                    input_frame_transform: Transform::default(),
-                };
-                context.selected_node_eval_cache = Some(Box::new(eval_cache));
-            }
-
-            let mut result_atomic_structure = atomic_structure.clone();
-            result_atomic_structure.transform(&rotation_quat, &translation);
-
-            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result_atomic_structure, geo_tree_root: None }))
-        } else {
-            EvalOutput::single(NetworkResult::None)
+            context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
+
+        EvalOutput::single(map_atomic(input_val, |mut atoms| {
+            atoms.transform(&rotation_quat, &translation);
+            atoms
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -355,7 +352,7 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Vec3,
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Atomic),
+      output_pins: OutputPinDefinition::single_same_as("molecule"),
       public: false,  // Deprecated: use atom_move and atom_rot instead
       node_data_creator: || Box::new(AtomTransData {
         translation: DVec3::new(0.0, 0.0, 0.0),

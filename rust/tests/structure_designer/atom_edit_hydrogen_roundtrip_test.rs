@@ -10,7 +10,9 @@
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     add_hydrogen_atom_edit, remove_hydrogen_atom_edit,
 };
@@ -40,7 +42,10 @@ fn add_atomic_value_node(
         .get_mut(network_name)
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData { atoms: structure, geo_tree_root: None }),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: structure,
+            geo_tree_root: None,
+        }),
     });
     network.add_node("value", position, 0, value_data)
 }

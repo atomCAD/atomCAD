@@ -1,10 +1,11 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_structure_utils::auto_create_bonds_with_tolerance;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -71,8 +72,7 @@ impl NodeData for InferBondsData {
                 _ => self.bond_tolerance,
             };
 
-        if let Some(structure) = input_val.extract_atomic() {
-            let mut result = structure.clone();
+        EvalOutput::single(map_atomic(input_val, |mut result| {
             // Save existing bonds if in additive mode
             let existing_bonds: Vec<(u32, u32, u8)> = if additive {
                 let mut bonds = Vec::new();
@@ -104,12 +104,8 @@ impl NodeData for InferBondsData {
                     result.add_bond(id1, id2, order);
                 }
             }
-            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }))
-        } else {
-            EvalOutput::single(NetworkResult::Error(
-                "Expected atomic structure".to_string(),
-            ))
-        }
+            result
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -194,7 +190,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(InferBondsData::default()),
         node_data_saver: generic_node_data_saver::<InferBondsData>,

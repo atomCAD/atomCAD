@@ -7,7 +7,9 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure_diff;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -36,7 +38,10 @@ fn add_atomic_value_node(
         .get_mut(network_name)
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Molecule(MoleculeData { atoms: structure, geo_tree_root: None }),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: structure,
+            geo_tree_root: None,
+        }),
     });
     network.add_node("value", position, 0, value_data)
 }
@@ -386,11 +391,12 @@ fn atom_composediff_node_snapshot() {
     );
     assert_eq!(node_type.parameters[1].name, "tolerance");
 
-    // Verify output type
-    assert_eq!(
-        node_type.output_type(),
-        &rust_lib_flutter_cad::structure_designer::data_type::DataType::Atomic
-    );
+    // Verify output pin is polymorphic (mirrors array element type).
+    use rust_lib_flutter_cad::structure_designer::node_type::PinOutputType;
+    assert!(matches!(
+        &node_type.output_pins[0].data_type,
+        PinOutputType::SameAsArrayElements(name) if name == "diffs"
+    ));
 
     // Verify node data defaults
     let data = (node_type.node_data_creator)();

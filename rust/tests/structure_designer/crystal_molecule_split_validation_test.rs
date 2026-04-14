@@ -54,7 +54,11 @@ fn build_polymorphic_registry() -> NodeTypeRegistry {
 
     registry.built_in_node_types.insert(
         "crystal_src".to_string(),
-        toy_node_type("crystal_src", vec![], OutputPinDefinition::single(DataType::Crystal)),
+        toy_node_type(
+            "crystal_src",
+            vec![],
+            OutputPinDefinition::single(DataType::Crystal),
+        ),
     );
     registry.built_in_node_types.insert(
         "molecule_src".to_string(),
@@ -129,7 +133,10 @@ fn polymorphic_output_with_unconnected_input_flags_node_invalid() {
         .node_networks
         .get("test")
         .unwrap();
-    assert!(!network.valid, "poly with unconnected abstract input must be invalid");
+    assert!(
+        !network.valid,
+        "poly with unconnected abstract input must be invalid"
+    );
 }
 
 #[test]
@@ -282,7 +289,10 @@ fn custom_network_output_pin_is_fixed_concrete_when_return_uses_same_as_input() 
     // network can reference them.
     let toy = build_polymorphic_registry();
     for (name, nt) in toy.built_in_node_types {
-        designer.node_type_registry.built_in_node_types.insert(name, nt);
+        designer
+            .node_type_registry
+            .built_in_node_types
+            .insert(name, nt);
     }
 
     designer.add_node_network("inner");

@@ -459,11 +459,15 @@ fn validate_wires(
                 // source type. If resolution fails (unresolved polymorphic
                 // output upstream), treat the wire as disconnected — the
                 // upstream node itself is flagged invalid below.
-                let source_data_type =
-                    match ctx.resolve(network, node_type_registry, *source_node_id, *output_pin_index) {
-                        Some(t) => t,
-                        None => continue,
-                    };
+                let source_data_type = match ctx.resolve(
+                    network,
+                    node_type_registry,
+                    *source_node_id,
+                    *output_pin_index,
+                ) {
+                    Some(t) => t,
+                    None => continue,
+                };
                 let dest_data_type =
                     node_type_registry.get_node_param_data_type(dest_node, arg_index);
                 if !DataType::can_be_converted_to(&source_data_type, &dest_data_type) {
@@ -581,8 +585,7 @@ pub fn validate_network(
     // even when wires are invalid so the enclosing network can still see this
     // network's interface shape (e.g. to repair call-sites). Pins that cannot
     // be resolved fall back to DataType::None.
-    let output_type_changed =
-        update_network_output_type(network, node_type_registry, &mut ctx);
+    let output_type_changed = update_network_output_type(network, node_type_registry, &mut ctx);
 
     NetworkValidationResult {
         valid: network.valid,
@@ -618,13 +621,8 @@ fn update_network_output_type(
                 let data_type = match &pin.data_type {
                     PinOutputType::Fixed(_) => pin.data_type.clone(),
                     _ => PinOutputType::Fixed(
-                        ctx.resolve(
-                            network,
-                            node_type_registry,
-                            return_node_id,
-                            pin_idx as i32,
-                        )
-                        .unwrap_or(DataType::None),
+                        ctx.resolve(network, node_type_registry, return_node_id, pin_idx as i32)
+                            .unwrap_or(DataType::None),
                     ),
                 };
                 pins.push(OutputPinDefinition {

@@ -1,17 +1,18 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::Gadget;
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
-use crate::crystolecule::structure::Structure;
 use crate::structure_designer::evaluator::network_result::{
-    BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
+    BlueprintData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -115,37 +116,40 @@ impl NodeData for LatticeMoveData {
         let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
 
         if self.is_atomic_mode {
-            if let Some(structure) = input_val.extract_atomic() {
-                // Get unit_cell from pin 3 (optional, defaults to cubic diamond)
-                let unit_cell = match network_evaluator.evaluate_or_default(
-                    network_stack,
-                    node_id,
-                    registry,
-                    context,
-                    3,
-                    UnitCellStruct::cubic_diamond(),
-                    NetworkResult::extract_unit_cell,
-                ) {
-                    Ok(value) => value,
-                    Err(error) => return EvalOutput::single(error),
-                };
-
-                let real_translation = unit_cell.dvec3_lattice_to_real(&subdivided_translation);
-
-                // Store evaluation cache for root-level evaluations
-                if network_stack.len() == 1 {
-                    let eval_cache = LatticeMoveEvalCache {
-                        unit_cell: unit_cell.clone(),
-                    };
-                    context.selected_node_eval_cache = Some(Box::new(eval_cache));
-                }
-
-                let mut result = structure.clone();
-                result.transform(&DQuat::IDENTITY, &real_translation);
-                EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }))
-            } else {
-                EvalOutput::single(runtime_type_error_in_input(0))
+            if !matches!(
+                input_val,
+                NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+            ) {
+                return EvalOutput::single(runtime_type_error_in_input(0));
             }
+            // Get unit_cell from pin 3 (optional, defaults to cubic diamond)
+            let unit_cell = match network_evaluator.evaluate_or_default(
+                network_stack,
+                node_id,
+                registry,
+                context,
+                3,
+                UnitCellStruct::cubic_diamond(),
+                NetworkResult::extract_unit_cell,
+            ) {
+                Ok(value) => value,
+                Err(error) => return EvalOutput::single(error),
+            };
+
+            let real_translation = unit_cell.dvec3_lattice_to_real(&subdivided_translation);
+
+            // Store evaluation cache for root-level evaluations
+            if network_stack.len() == 1 {
+                let eval_cache = LatticeMoveEvalCache {
+                    unit_cell: unit_cell.clone(),
+                };
+                context.selected_node_eval_cache = Some(Box::new(eval_cache));
+            }
+
+            EvalOutput::single(map_atomic(input_val, |mut atoms| {
+                atoms.transform(&DQuat::IDENTITY, &real_translation);
+                atoms
+            }))
         } else if let NetworkResult::Blueprint(shape) = input_val {
             let real_translation = shape
                 .structure
@@ -433,7 +437,7 @@ You can directly enter the translation vector or drag the axes of the gadget."
                 data_type: DataType::LatticeVecs,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || {
             Box::new(LatticeMoveData {

@@ -5,9 +5,10 @@ use crate::renderer::tessellator::tessellator::{
     Tessellatable, TessellationOutput, tessellate_cone, tessellate_cylinder, tessellate_sphere,
 };
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -78,82 +79,75 @@ impl NodeData for AtomRotData {
             return EvalOutput::single(input_val);
         }
 
-        if let Some(atomic_structure) = input_val.extract_atomic() {
-            // 2. Get angle (from pin or property)
-            let angle = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.angle,
-                NetworkResult::extract_float,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
+        // 2. Get angle (from pin or property)
+        let angle = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.angle,
+            NetworkResult::extract_float,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
 
-            // 3. Get rotation axis (from pin or property)
-            let rot_axis = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.rot_axis,
-                NetworkResult::extract_vec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
+        // 3. Get rotation axis (from pin or property)
+        let rot_axis = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            self.rot_axis,
+            NetworkResult::extract_vec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
 
-            // 4. Get pivot point (from pin or property)
-            let pivot_point = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                3,
-                self.pivot_point,
-                NetworkResult::extract_vec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
+        // 4. Get pivot point (from pin or property)
+        let pivot_point = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            3,
+            self.pivot_point,
+            NetworkResult::extract_vec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
 
-            // 5. Normalize the rotation axis
-            let normalized_axis = rot_axis.normalize_or_zero();
-            if normalized_axis == DVec3::ZERO {
-                // Invalid axis - return input unchanged
-                return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: atomic_structure, geo_tree_root: None }));
-            }
-
-            // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-            if network_stack.len() == 1 {
-                let eval_cache = AtomRotEvalCache {
-                    pivot_point,
-                    rot_axis: normalized_axis,
-                };
-                context.selected_node_eval_cache = Some(Box::new(eval_cache));
-            }
-
-            // 6. Create rotation quaternion
-            let rotation_quat = DQuat::from_axis_angle(normalized_axis, angle);
-
-            // 7. Apply rotation around pivot point directly to atoms (NO frame transform manipulation)
-            // This is: translate to origin, rotate, translate back
-            let mut result = atomic_structure.clone();
-
-            // For each atom: new_pos = pivot + rotation * (old_pos - pivot)
-            // Which is equivalent to: translate by -pivot, rotate, translate by +pivot
-            result.transform(&DQuat::IDENTITY, &(-pivot_point)); // Move pivot to origin
-            result.transform(&rotation_quat, &DVec3::ZERO); // Rotate around origin
-            result.transform(&DQuat::IDENTITY, &pivot_point); // Move back
-
-            return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }));
+        // 5. Normalize the rotation axis
+        let normalized_axis = rot_axis.normalize_or_zero();
+        if normalized_axis == DVec3::ZERO {
+            // Invalid axis - return input unchanged
+            return EvalOutput::single(map_atomic(input_val, |s| s));
         }
 
-        EvalOutput::single(NetworkResult::None)
+        // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
+        if network_stack.len() == 1 {
+            let eval_cache = AtomRotEvalCache {
+                pivot_point,
+                rot_axis: normalized_axis,
+            };
+            context.selected_node_eval_cache = Some(Box::new(eval_cache));
+        }
+
+        // 6. Create rotation quaternion
+        let rotation_quat = DQuat::from_axis_angle(normalized_axis, angle);
+
+        EvalOutput::single(map_atomic(input_val, |mut atoms| {
+            // 7. Apply rotation around pivot point directly to atoms (NO frame transform manipulation)
+            // For each atom: new_pos = pivot + rotation * (old_pos - pivot)
+            atoms.transform(&DQuat::IDENTITY, &(-pivot_point)); // Move pivot to origin
+            atoms.transform(&rotation_quat, &DVec3::ZERO); // Rotate around origin
+            atoms.transform(&DQuat::IDENTITY, &pivot_point); // Move back
+            atoms
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -493,7 +487,7 @@ The rotation angle is in radians in text format (e.g., 1.5708 for 90°) and degr
                 data_type: DataType::Vec3,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || {
             Box::new(AtomRotData {

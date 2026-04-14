@@ -156,7 +156,9 @@
       "Bash(bash /tmp/check_pins.sh)",
       "Bash(bash /tmp/rename_script.sh)",
       "Bash(git mv:*)",
-      "Bash(INSTA_UPDATE=always cargo test --test structure_designer)"
+      "Bash(INSTA_UPDATE=always cargo test --test structure_designer)",
+      "Bash(INSTA_UPDATE=no cargo test test_extrude_demo_evaluation)",
+      "Bash(INSTA_UPDATE=always cargo test)"
     ]
   }
 }

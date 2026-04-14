@@ -10,7 +10,9 @@ use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_network::{
     NodeDisplayState, NodeDisplayType, NodeNetwork,
@@ -630,11 +632,11 @@ fn test_custom_network_multi_output_return_node_propagates_pins() {
         "Custom network should have 2 output pins from atom_edit return node"
     );
     assert_eq!(network.node_type.output_pins[0].name, "result");
-    assert_eq!(*network.node_type.output_type(), DataType::Atomic);
+    assert_eq!(*network.node_type.output_type(), DataType::Molecule);
     assert_eq!(network.node_type.output_pins[1].name, "diff");
     assert_eq!(
         network.node_type.output_pins[1].fixed_type(),
-        Some(&DataType::Atomic)
+        Some(&DataType::Molecule)
     );
     assert!(network.node_type.has_multi_output());
 }
@@ -770,14 +772,20 @@ fn test_custom_network_node_evaluate_pin1() {
     // Evaluate pin 0 (result)
     let result_pin0 = evaluate_pin(&designer, "outer", inner_node_id, 0);
     assert!(
-        matches!(result_pin0, NetworkResult::Crystal(_) | NetworkResult::Molecule(_)),
+        matches!(
+            result_pin0,
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+        ),
         "Pin 0 should be Atomic"
     );
 
     // Evaluate pin 1 (diff) — should also be Atomic
     let result_pin1 = evaluate_pin(&designer, "outer", inner_node_id, 1);
     assert!(
-        matches!(result_pin1, NetworkResult::Crystal(_) | NetworkResult::Molecule(_)),
+        matches!(
+            result_pin1,
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+        ),
         "Pin 1 should be Atomic"
     );
 }
@@ -886,18 +894,33 @@ fn test_eval_output_display_override_basic() {
 
     let mut output = EvalOutput::multi(vec![
         NetworkResult::Motif(motif),
-        NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }),
+        NetworkResult::Molecule(MoleculeData {
+            atoms: AtomicStructure::new(),
+            geo_tree_root: None,
+        }),
     ]);
-    output.set_display_override(0, NetworkResult::Molecule(MoleculeData { atoms: viz, geo_tree_root: None }));
+    output.set_display_override(
+        0,
+        NetworkResult::Molecule(MoleculeData {
+            atoms: viz,
+            geo_tree_root: None,
+        }),
+    );
 
     // Wire value: get(0) returns Motif
     assert!(matches!(output.get(0), NetworkResult::Motif(_)));
 
     // Display value: get_display(0) returns Atomic (the override)
-    assert!(matches!(output.get_display(0), NetworkResult::Crystal(_) | NetworkResult::Molecule(_)));
+    assert!(matches!(
+        output.get_display(0),
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 
     // Pin 1 has no override: get_display(1) falls back to wire value
-    assert!(matches!(output.get_display(1), NetworkResult::Crystal(_) | NetworkResult::Molecule(_)));
+    assert!(matches!(
+        output.get_display(1),
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 }
 
 #[test]
@@ -959,7 +982,11 @@ fn test_infer_data_type_vectors() {
 #[test]
 fn test_infer_data_type_complex() {
     assert_eq!(
-        NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }).infer_data_type(),
+        NetworkResult::Molecule(MoleculeData {
+            atoms: AtomicStructure::new(),
+            geo_tree_root: None
+        })
+        .infer_data_type(),
         Some(DataType::Molecule)
     );
     let motif = Motif {

@@ -1651,14 +1651,14 @@ impl StructureDesigner {
             } else {
                 let _ = target_node_type;
                 // Source is input, connect target's output to source's input pin
-                let target_output_type = match self.node_type_registry.resolve_output_type(
-                    target_node,
-                    network,
-                    0,
-                ) {
-                    Some(t) => t,
-                    None => return false,
-                };
+                let target_output_type =
+                    match self
+                        .node_type_registry
+                        .resolve_output_type(target_node, network, 0)
+                    {
+                        Some(t) => t,
+                        None => return false,
+                    };
                 let source_param_type = self
                     .node_type_registry
                     .get_node_param_data_type(source_node, source_pin_index as usize);
@@ -1753,14 +1753,14 @@ impl StructureDesigner {
         } else {
             let _ = target_node_type;
             // Source is input, check if target's output is compatible
-            let target_output_type = match self.node_type_registry.resolve_output_type(
-                target_node,
-                network,
-                0,
-            ) {
-                Some(t) => t,
-                None => return Vec::new(),
-            };
+            let target_output_type =
+                match self
+                    .node_type_registry
+                    .resolve_output_type(target_node, network, 0)
+                {
+                    Some(t) => t,
+                    None => return Vec::new(),
+                };
             let source_param_type = self
                 .node_type_registry
                 .get_node_param_data_type(source_node, source_pin_index as usize);

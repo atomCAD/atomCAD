@@ -111,7 +111,13 @@ fn is_abstract_truth_table() {
 
 #[test]
 fn new_type_names_roundtrip_through_string() {
-    for name in ["Crystal", "Molecule", "StructureBound", "Unanchored", "Atomic"] {
+    for name in [
+        "Crystal",
+        "Molecule",
+        "StructureBound",
+        "Unanchored",
+        "Atomic",
+    ] {
         let parsed = DataType::from_string(name).expect("parse");
         assert_eq!(parsed.to_string(), name);
     }

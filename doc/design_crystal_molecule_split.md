@@ -317,6 +317,19 @@ Array-input atom operations (`atom_union`, `atom_composediff`): see Open Questio
 
 No changes. `APIDataTypeBase` still has a single `Atomic` variant; the `resolve_output_type` helper collapses `Crystal`/`Molecule` to `Atomic` for the Flutter boundary until the final migration step updates the API.
 
+### 6.10 — atom_edit variant preservation (follow-up)
+
+`atom_edit` and `motif_edit` currently declare `Fixed(Molecule)` on their output pins and their eval unconditionally flattens the input variant to `Molecule`. This loses Crystal lattice/Structure information when a Crystal is fed in — a real semantic limitation beyond the mechanical split done in 6.7.
+
+Scope sketch (to be expanded):
+- `atom_edit` pin 0 (`result`): change to `SameAsInput("molecule")` and use the wrapper-mutate pattern so a Crystal input yields a Crystal output.
+- Decide the semantics of pin 1 (`diff`): likely stays `Fixed(Molecule)` since a raw diff has no inherent lattice identity, but confirm.
+- Decide the analogous question for `motif_edit` (pin 0 is `Fixed(Motif)` — unaffected; only pin 1 `diff` is in scope).
+- Open design questions: do diff atoms placed outside the unit cell retain meaning? Does the diff need lattice-aware coordinates? How does `apply_diff` on a Crystal preserve `Structure`?
+- Tests: Crystal → atom_edit → apply_diff preserves Crystal variant; motif_edit diff pin behavior unchanged.
+
+This step is intentionally separated from 6.7 because it's a behavior change (not a type-declaration flip) and warrants its own short design note before implementation.
+
 ## Payload shape reference
 
 ```rust

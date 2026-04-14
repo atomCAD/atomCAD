@@ -4,7 +4,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -59,10 +59,16 @@ impl NodeData for ApplyDiffData {
             return EvalOutput::single(diff_val);
         }
 
-        // 3. Extract atomic structures
-        let base = match base_val {
-            NetworkResult::Crystal(c) => c.atoms,
-            NetworkResult::Molecule(m) => m.atoms,
+        // 3. Extract atomic structures (preserve base variant for the output)
+        let (mut base_wrapper, base) = match base_val {
+            NetworkResult::Crystal(mut c) => {
+                let atoms = std::mem::take(&mut c.atoms);
+                (NetworkResult::Crystal(c), atoms)
+            }
+            NetworkResult::Molecule(mut m) => {
+                let atoms = std::mem::take(&mut m.atoms);
+                (NetworkResult::Molecule(m), atoms)
+            }
             _ => {
                 return EvalOutput::single(NetworkResult::Error(
                     "apply_diff: 'base' input must be an atomic structure".to_string(),
@@ -122,8 +128,13 @@ impl NodeData for ApplyDiffData {
             }
         }
 
-        // 8. Return the result
-        EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: diff_result.result, geo_tree_root: None }))
+        // 8. Return the result, preserving the base input's variant (Crystal or Molecule)
+        match &mut base_wrapper {
+            NetworkResult::Crystal(c) => c.atoms = diff_result.result,
+            NetworkResult::Molecule(m) => m.atoms = diff_result.result,
+            _ => unreachable!(),
+        }
+        EvalOutput::single(base_wrapper)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -197,7 +208,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("base"),
         public: true,
         node_data_creator: || {
             Box::new(ApplyDiffData {

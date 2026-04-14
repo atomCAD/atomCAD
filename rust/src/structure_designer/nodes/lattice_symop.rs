@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::display::gadget::Gadget;
@@ -10,7 +11,6 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
-use crate::crystolecule::structure::Structure;
 use crate::structure_designer::evaluator::network_result::{
     BlueprintData, NetworkResult, error_in_input, runtime_type_error_in_input,
 };

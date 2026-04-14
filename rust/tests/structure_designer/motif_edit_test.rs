@@ -6,7 +6,9 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, Bond
 use rust_lib_flutter_cad::crystolecule::motif::Motif;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
@@ -69,7 +71,7 @@ fn test_motif_edit_node_type_pins() {
     assert_eq!(node_type.parameters[2].name, "tolerance");
     assert_eq!(node_type.parameters[2].data_type, DataType::Float);
 
-    // 2 output pins: result (Motif), diff (Atomic)
+    // 2 output pins: result (Motif), diff (Molecule)
     assert_eq!(node_type.output_pins.len(), 2);
     assert_eq!(node_type.output_pins[0].name, "result");
     assert_eq!(
@@ -79,7 +81,7 @@ fn test_motif_edit_node_type_pins() {
     assert_eq!(node_type.output_pins[1].name, "diff");
     assert_eq!(
         node_type.output_pins[1].fixed_type(),
-        Some(&DataType::Atomic)
+        Some(&DataType::Molecule)
     );
 }
 
@@ -228,20 +230,35 @@ fn test_eval_output_display_override_motif_pattern() {
 
     let mut output = EvalOutput::multi(vec![
         NetworkResult::Motif(motif),
-        NetworkResult::Molecule(MoleculeData { atoms: diff, geo_tree_root: None }),
+        NetworkResult::Molecule(MoleculeData {
+            atoms: diff,
+            geo_tree_root: None,
+        }),
     ]);
-    output.set_display_override(0, NetworkResult::Molecule(MoleculeData { atoms: viz, geo_tree_root: None }));
+    output.set_display_override(
+        0,
+        NetworkResult::Molecule(MoleculeData {
+            atoms: viz,
+            geo_tree_root: None,
+        }),
+    );
 
     // Wire result is Motif
     assert!(matches!(output.get(0), NetworkResult::Motif(_)));
 
     // Display result is Atomic
     let display = output.get_display(0);
-    assert!(matches!(display, NetworkResult::Crystal(_) | NetworkResult::Molecule(_)));
+    assert!(matches!(
+        display,
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 
     // Pin 1 has no override — display falls back to wire
     let pin1_display = output.get_display(1);
-    assert!(matches!(pin1_display, NetworkResult::Crystal(_) | NetworkResult::Molecule(_)));
+    assert!(matches!(
+        pin1_display,
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 }
 
 // ===== Coordinate roundtrip test =====

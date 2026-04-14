@@ -11,11 +11,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
-fn evaluate_raw(
-    designer: &StructureDesigner,
-    network_name: &str,
-    node_id: u64,
-) -> NetworkResult {
+fn evaluate_raw(designer: &StructureDesigner, network_name: &str, node_id: u64) -> NetworkResult {
     let registry = &designer.node_type_registry;
     let network = registry.node_networks.get(network_name).unwrap();
     let evaluator = NetworkEvaluator::new();

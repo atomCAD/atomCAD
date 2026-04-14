@@ -4,9 +4,10 @@ use crate::display::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -69,35 +70,30 @@ impl NodeData for AtomMoveData {
             return EvalOutput::single(input_val);
         }
 
-        if let Some(atomic_structure) = input_val.extract_atomic() {
-            // 2. Get translation (from pin or property)
-            let translation = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.translation,
-                NetworkResult::extract_vec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
+        // 2. Get translation (from pin or property)
+        let translation = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.translation,
+            NetworkResult::extract_vec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
 
-            // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-            if network_stack.len() == 1 {
-                let eval_cache = AtomMoveEvalCache {};
-                context.selected_node_eval_cache = Some(Box::new(eval_cache));
-            }
-
-            // 3. Apply translation directly to the atomic structure
-            let mut result_atomic_structure = atomic_structure.clone();
-            result_atomic_structure.transform(&DQuat::IDENTITY, &translation);
-
-            return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result_atomic_structure, geo_tree_root: None }));
+        // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
+        if network_stack.len() == 1 {
+            let eval_cache = AtomMoveEvalCache {};
+            context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
 
-        EvalOutput::single(NetworkResult::None)
+        EvalOutput::single(map_atomic(input_val, |mut atomic_structure| {
+            atomic_structure.transform(&DQuat::IDENTITY, &translation);
+            atomic_structure
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -277,7 +273,7 @@ This node operates in continuous space, unlike lattice_move which operates in di
                 data_type: DataType::Vec3,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(AtomMoveData {
             translation: DVec3::ZERO,

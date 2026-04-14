@@ -1,11 +1,11 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_constants::ATOM_INFO;
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -71,13 +71,14 @@ impl NodeData for AtomReplaceData {
             return EvalOutput::single(molecule_input_val);
         }
 
-        if let Some(mut structure) = molecule_input_val.extract_atomic() {
-            if self.replacements.is_empty() {
-                return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: structure, geo_tree_root: None }));
+        let replacements = self.replacements.clone();
+        EvalOutput::single(map_atomic(molecule_input_val, move |mut structure| {
+            if replacements.is_empty() {
+                return structure;
             }
 
             // Build lookup map (last rule wins for duplicate sources)
-            let replacement_map: HashMap<i16, i16> = self.replacements.iter().copied().collect();
+            let replacement_map: HashMap<i16, i16> = replacements.iter().copied().collect();
 
             // Collect atoms to delete and atoms to replace
             let mut atoms_to_delete = Vec::new();
@@ -108,10 +109,8 @@ impl NodeData for AtomReplaceData {
                 structure.delete_atom(atom_id);
             }
 
-            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: structure, geo_tree_root: None }))
-        } else {
-            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }))
-        }
+            structure
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -190,7 +189,7 @@ pub fn get_node_type() -> NodeType {
             name: "molecule".to_string(),
             data_type: DataType::Atomic,
         }],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(AtomReplaceData::default()),
         node_data_saver: generic_node_data_saver::<AtomReplaceData>,

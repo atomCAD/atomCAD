@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::{RotationalSymmetry, analyze_unit_cell_symmetries};
 use crate::display::gadget::Gadget;
@@ -6,13 +7,13 @@ use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
-use crate::crystolecule::structure::Structure;
 use crate::structure_designer::evaluator::network_result::{
-    BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
+    BlueprintData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -124,50 +125,52 @@ impl NodeData for LatticeRotData {
         };
 
         if self.is_atomic_mode {
-            if let Some(structure) = input_val.extract_atomic() {
-                // Get unit_cell from pin 4 (optional, defaults to cubic diamond)
-                let unit_cell = match network_evaluator.evaluate_or_default(
-                    network_stack,
-                    node_id,
-                    registry,
-                    context,
-                    4,
-                    UnitCellStruct::cubic_diamond(),
-                    NetworkResult::extract_unit_cell,
-                ) {
-                    Ok(value) => value,
-                    Err(error) => return EvalOutput::single(error),
-                };
-
-                // Get all available symmetry axes for this unit cell
-                let symmetry_axes = analyze_unit_cell_symmetries(&unit_cell);
-
-                // Calculate rotation quaternion using discrete symmetry approach
-                let real_rotation_quat = compute_rotation_quat(axis_index, step, &symmetry_axes);
-
-                // Store evaluation cache for root-level evaluations
-                if network_stack.len() == 1 {
-                    let eval_cache = LatticeRotEvalCache {
-                        unit_cell: unit_cell.clone(),
-                        pivot_point,
-                    };
-                    context.selected_node_eval_cache = Some(Box::new(eval_cache));
-                }
-
-                // Convert pivot point from lattice coordinates to real space coordinates
-                let pivot_real = unit_cell.ivec3_lattice_to_real(&pivot_point);
-
-                // Apply three-step pivot rotation: translate to origin, rotate, translate back
-                let mut result = structure.clone();
-                let neg_pivot = DVec3::new(-pivot_real.x, -pivot_real.y, -pivot_real.z);
-                result.transform(&DQuat::IDENTITY, &neg_pivot);
-                result.transform(&real_rotation_quat, &DVec3::ZERO);
-                result.transform(&DQuat::IDENTITY, &pivot_real);
-
-                EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }))
-            } else {
-                EvalOutput::single(runtime_type_error_in_input(0))
+            if !matches!(
+                input_val,
+                NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+            ) {
+                return EvalOutput::single(runtime_type_error_in_input(0));
             }
+            // Get unit_cell from pin 4 (optional, defaults to cubic diamond)
+            let unit_cell = match network_evaluator.evaluate_or_default(
+                network_stack,
+                node_id,
+                registry,
+                context,
+                4,
+                UnitCellStruct::cubic_diamond(),
+                NetworkResult::extract_unit_cell,
+            ) {
+                Ok(value) => value,
+                Err(error) => return EvalOutput::single(error),
+            };
+
+            // Get all available symmetry axes for this unit cell
+            let symmetry_axes = analyze_unit_cell_symmetries(&unit_cell);
+
+            // Calculate rotation quaternion using discrete symmetry approach
+            let real_rotation_quat = compute_rotation_quat(axis_index, step, &symmetry_axes);
+
+            // Store evaluation cache for root-level evaluations
+            if network_stack.len() == 1 {
+                let eval_cache = LatticeRotEvalCache {
+                    unit_cell: unit_cell.clone(),
+                    pivot_point,
+                };
+                context.selected_node_eval_cache = Some(Box::new(eval_cache));
+            }
+
+            // Convert pivot point from lattice coordinates to real space coordinates
+            let pivot_real = unit_cell.ivec3_lattice_to_real(&pivot_point);
+
+            EvalOutput::single(map_atomic(input_val, |mut atoms| {
+                // Apply three-step pivot rotation: translate to origin, rotate, translate back
+                let neg_pivot = DVec3::new(-pivot_real.x, -pivot_real.y, -pivot_real.z);
+                atoms.transform(&DQuat::IDENTITY, &neg_pivot);
+                atoms.transform(&real_rotation_quat, &DVec3::ZERO);
+                atoms.transform(&DQuat::IDENTITY, &pivot_real);
+                atoms
+            }))
         } else if let NetworkResult::Blueprint(shape) = input_val {
             // Get all available symmetry axes for this unit cell
             let symmetry_axes = analyze_unit_cell_symmetries(&shape.structure.lattice_vecs);
@@ -513,7 +516,7 @@ You may provide a pivot point for the rotation; by default the pivot is the orig
             data_type: DataType::LatticeVecs,
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Atomic),
+      output_pins: OutputPinDefinition::single_same_as("molecule"),
       public: true,
       node_data_creator: || Box::new(LatticeRotData {
         axis_index: None,

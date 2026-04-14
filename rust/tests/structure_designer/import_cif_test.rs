@@ -146,16 +146,20 @@ fn import_cif_diamond_atomic_output() {
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
-            assert_eq!(
-                structure.get_num_of_atoms(),
-                8,
-                "Diamond should have 8 atoms"
-            );
-            // All should be carbon (Z=6)
-            for atom in structure.atoms_values() {
-                assert_eq!(atom.atomic_number, 6, "All atoms should be carbon");
-            }
-        } else if let NetworkResult::Error(e) = &result { panic!("Expected Atomic, got Error: {}", e); } else { panic!("Expected Atomic result on pin 1"); }
+        assert_eq!(
+            structure.get_num_of_atoms(),
+            8,
+            "Diamond should have 8 atoms"
+        );
+        // All should be carbon (Z=6)
+        for atom in structure.atoms_values() {
+            assert_eq!(atom.atomic_number, 6, "All atoms should be carbon");
+        }
+    } else if let NetworkResult::Error(e) = &result {
+        panic!("Expected Atomic, got Error: {}", e);
+    } else {
+        panic!("Expected Atomic result on pin 1");
+    }
 }
 
 #[test]
@@ -165,12 +169,16 @@ fn import_cif_diamond_atomic_has_bonds() {
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
-            let total_bonds: usize = structure.atoms_values().map(|a| a.bonds.len()).sum();
-            assert!(
-                total_bonds > 0,
-                "Diamond with infer_bonds=true should have bonds"
-            );
-        } else if let NetworkResult::Error(e) = &result { panic!("Expected Atomic, got Error: {}", e); } else { panic!("Expected Atomic result on pin 1"); }
+        let total_bonds: usize = structure.atoms_values().map(|a| a.bonds.len()).sum();
+        assert!(
+            total_bonds > 0,
+            "Diamond with infer_bonds=true should have bonds"
+        );
+    } else if let NetworkResult::Error(e) = &result {
+        panic!("Expected Atomic, got Error: {}", e);
+    } else {
+        panic!("Expected Atomic result on pin 1");
+    }
 }
 
 #[test]
@@ -180,22 +188,26 @@ fn import_cif_nacl_atomic_output() {
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
-            assert_eq!(
-                structure.get_num_of_atoms(),
-                8,
-                "NaCl should have 8 atoms in conventional cell"
-            );
-            let na_count = structure
-                .atoms_values()
-                .filter(|a| a.atomic_number == 11)
-                .count();
-            let cl_count = structure
-                .atoms_values()
-                .filter(|a| a.atomic_number == 17)
-                .count();
-            assert_eq!(na_count, 4, "NaCl: 4 Na atoms");
-            assert_eq!(cl_count, 4, "NaCl: 4 Cl atoms");
-        } else if let NetworkResult::Error(e) = &result { panic!("Expected Atomic, got Error: {}", e); } else { panic!("Expected Atomic result on pin 1"); }
+        assert_eq!(
+            structure.get_num_of_atoms(),
+            8,
+            "NaCl should have 8 atoms in conventional cell"
+        );
+        let na_count = structure
+            .atoms_values()
+            .filter(|a| a.atomic_number == 11)
+            .count();
+        let cl_count = structure
+            .atoms_values()
+            .filter(|a| a.atomic_number == 17)
+            .count();
+        assert_eq!(na_count, 4, "NaCl: 4 Na atoms");
+        assert_eq!(cl_count, 4, "NaCl: 4 Cl atoms");
+    } else if let NetworkResult::Error(e) = &result {
+        panic!("Expected Atomic, got Error: {}", e);
+    } else {
+        panic!("Expected Atomic result on pin 1");
+    }
 }
 
 // ============================================================================
@@ -344,13 +356,17 @@ fn import_cif_multi_block_select_by_name() {
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
-            let has_na = structure.atoms_values().any(|a| a.atomic_number == 11);
-            let has_cl = structure.atoms_values().any(|a| a.atomic_number == 17);
-            assert!(
-                has_na && has_cl,
-                "NaCl block should contain Na and Cl atoms"
-            );
-        } else if let NetworkResult::Error(e) = &result { panic!("Expected Atomic, got Error: {}", e); } else { panic!("Expected Atomic result"); }
+        let has_na = structure.atoms_values().any(|a| a.atomic_number == 11);
+        let has_cl = structure.atoms_values().any(|a| a.atomic_number == 17);
+        assert!(
+            has_na && has_cl,
+            "NaCl block should contain Na and Cl atoms"
+        );
+    } else if let NetworkResult::Error(e) = &result {
+        panic!("Expected Atomic, got Error: {}", e);
+    } else {
+        panic!("Expected Atomic result");
+    }
 }
 
 // ============================================================================
@@ -482,12 +498,16 @@ fn import_cif_with_bonds_file_uses_cif_bonds() {
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
-            let total_bonds: usize = structure.atoms_values().map(|a| a.bonds.len()).sum();
-            assert!(
-                total_bonds > 0,
-                "With use_cif_bonds=true on a CIF that has bonds, should have bonds"
-            );
-        } else if let NetworkResult::Error(e) = &result { panic!("Expected Atomic, got Error: {}", e); } else { panic!("Expected Atomic result on pin 1"); }
+        let total_bonds: usize = structure.atoms_values().map(|a| a.bonds.len()).sum();
+        assert!(
+            total_bonds > 0,
+            "With use_cif_bonds=true on a CIF that has bonds, should have bonds"
+        );
+    } else if let NetworkResult::Error(e) = &result {
+        panic!("Expected Atomic, got Error: {}", e);
+    } else {
+        panic!("Expected Atomic result on pin 1");
+    }
 }
 
 /// Regression test: CIF bonds for atoms with fractional coordinates outside [0,1)

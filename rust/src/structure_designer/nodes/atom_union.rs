@@ -4,7 +4,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -61,9 +61,28 @@ impl NodeData for AtomUnionData {
             ));
         }
 
-        let mut atomic_structures: Vec<AtomicStructure> = Vec::new();
+        // Preserve the concrete variant of the first element (Crystal or Molecule).
+        // Per OQ1, mixed-phase arrays are a validation error; the evaluator trusts
+        // that validation has ensured all elements share the same variant and
+        // debug-asserts that here.
+        let mut iter = structure_results.into_iter();
+        let mut output = iter.next().expect("non-empty checked above");
+        if !matches!(
+            output,
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+        ) {
+            return EvalOutput::single(NetworkResult::Error(
+                "All inputs must be atomic structures".to_string(),
+            ));
+        }
 
-        for structure_val in structure_results {
+        let mut atomic_structures: Vec<AtomicStructure> = Vec::new();
+        for structure_val in iter {
+            debug_assert_eq!(
+                structure_val.infer_data_type(),
+                output.infer_data_type(),
+                "atom_union: mixed-phase array reached evaluator"
+            );
             if let Some(structure) = structure_val.extract_atomic() {
                 atomic_structures.push(structure);
             } else {
@@ -73,13 +92,16 @@ impl NodeData for AtomUnionData {
             }
         }
 
-        let mut result = atomic_structures.remove(0);
-
+        let merged_ref = match &mut output {
+            NetworkResult::Crystal(c) => &mut c.atoms,
+            NetworkResult::Molecule(m) => &mut m.atoms,
+            _ => unreachable!(),
+        };
         for other in &atomic_structures {
-            result.add_atomic_structure(other);
+            merged_ref.add_atomic_structure(other);
         }
 
-        EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }))
+        EvalOutput::single(output)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -113,7 +135,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Array(Box::new(DataType::Atomic)),
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as_array_elements("structures"),
         public: true,
         node_data_creator: || Box::new(AtomUnionData {}),
         node_data_saver: generic_node_data_saver::<AtomUnionData>,
