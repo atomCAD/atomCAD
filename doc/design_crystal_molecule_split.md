@@ -132,7 +132,7 @@ Structural mutation:
 
 ## Implementation sub-steps
 
-Each sub-step is a natural stopping point: the code should compile and the existing test suite (minus snapshots regenerated at the end) should pass.
+Each sub-step is a natural stopping point: the code should compile and the existing test suite (minus snapshots regenerated at the end) should pass. **Tests for each sub-step are added in that sub-step, not deferred.** The final §6.8 is only for insta-snapshot regeneration and a full-suite sign-off.
 
 ### 6.1 — DataType variants and conversion rules
 
@@ -146,6 +146,11 @@ File: `rust/src/structure_designer/data_type.rs`.
   - `Blueprint → StructureBound`, `Blueprint → Unanchored`, `Blueprint → Blueprint` (existing identity)
   - No abstract → concrete conversion. No cross-abstract conversion (e.g., `StructureBound → Unanchored`). No abstract → abstract identity edges (`Atomic → Atomic` etc.) — abstract types only ever appear as declared input-pin types on built-in polymorphic nodes, and sources in wire-validation are always concrete after resolution.
 - Add a helper `DataType::is_abstract(&self) -> bool` returning true for `Atomic`, `StructureBound`, `Unanchored`. This is used as a debug-assertion hook in 6.2 and a validation guard in 6.4.
+
+**Tests added in this sub-step:**
+
+- Conversion-matrix test: every pair in the 7×7 `DataType` grid over the phase types (Blueprint, Crystal, Molecule, Atomic, StructureBound, Unanchored, plus one non-phase type as a control); assert `can_be_converted_to` exactly matches the table in this document.
+- `is_abstract()` truth-table test.
 
 ### 6.2 — Payload structs and NetworkResult variants
 
@@ -173,6 +178,12 @@ pub struct MoleculeData {
 - Update `convert_to` for any runtime coercions that previously touched `Atomic`.
 - Update Display / `to_detailed_string` for the new variants (two insta snapshots regenerate in 6.8).
 
+**Tests added in this sub-step:**
+
+- Migrate all ~52 existing test sites that construct or match `NetworkResult::Atomic(..)` to `Crystal`/`Molecule` with matching payloads. This is required for the crate to compile after `Atomic` is removed — it cannot be deferred. Sites are concentrated in `rust/tests/structure_designer/` and `rust/tests/crystolecule/`.
+- Unit tests for `infer_data_type` returning `Crystal` / `Molecule` for the respective variants.
+- Unit tests for `extract_atomic` borrowing `AtomicStructure` from both `Crystal` and `Molecule`; `extract_crystal` / `extract_molecule` returning `Some` only for the matching variant.
+
 ### 6.3 — PinOutputType
 
 File: `rust/src/structure_designer/node_type.rs`.
@@ -199,6 +210,10 @@ pub enum PinOutputType {
   which, for `Fixed(t)`, returns `Some(t)`; for `SameAsInput(name)`, looks up the upstream wire feeding `name`, asks the registry for the source node's output-pin concrete type (recursively resolving), and returns it. If the referenced input is unconnected — or if recursive resolution fails anywhere upstream — returns `None`, signalling "unresolved." The result is never an abstract `DataType`. Unresolved outputs flag the node invalid and are treated as disconnected by downstream wire validation (see §6.4). Same contract for `SameAsArrayElements`.
 - Update all existing readers of `OutputPinDefinition.data_type` to call `resolve_output_type` when they need the resolved concrete type, or to pattern-match on `PinOutputType` where that is more natural. Affected sites (known so far): `node_type_registry.rs`, `network_validator.rs`, `network_evaluator.rs` (display metadata path), scene conversion in `rust/src/api/structure_designer/...`, and any Flutter-facing type reporting. The FFI surface still reports a single `DataType` per pin — convert via `resolve_output_type` before crossing the API boundary.
 
+**Tests added in this sub-step:**
+
+- `resolve_output_type` unit tests against a toy `NodeType` exercising each variant: `Fixed` returns its type; `SameAsInput` mirrors the connected source's concrete type; `SameAsInput` with unconnected input returns `None`; `SameAsArrayElements` mirrors the element type of a connected `Array[T]` source; `SameAsArrayElements` with unconnected input returns `None`. No dependency on real node migrations.
+
 ### 6.4 — Wire validation and output-type propagation
 
 Files: `rust/src/structure_designer/network_validator.rs`, `rust/src/structure_designer/node_network.rs`, `rust/src/structure_designer/structure_designer.rs`.
@@ -214,12 +229,24 @@ Files: `rust/src/structure_designer/network_validator.rs`, `rust/src/structure_d
 - `update_network_output_type()` (currently at `network_validator.rs:488–524`) clones the return node's `output_pins` onto the network's `NodeType`, substituting each pin's resolved concrete type. Because custom-network parameter pins are required to be concrete (OQ1), the return node's `SameAsInput`/`SameAsArrayElements` always resolves to a concrete type at template-validation time, and the enclosing custom network exposes a plain `Fixed(<concrete>)` on its synthesised output pin. No `SameAsInput` ever crosses a custom-network boundary; there is no wire chasing or name remapping across levels.
 - Add a validation-time guard: reject any `NetworkResult` produced by evaluation whose `infer_data_type()` is abstract (debug-assert; should be impossible).
 
+**Tests added in this sub-step:**
+
+- Unconnected abstract input → node flagged invalid.
+- Mixed-phase array into `SameAsArrayElements` input → node flagged invalid (can be simulated with a stub polymorphic Array-input node; does not require `atom_union` migration).
+- Validation cache: recomputing `resolve_output_type` for any output yields the same value as the cached entry.
+- `update_network_output_type` synthesises `Fixed(<concrete>)` on the enclosing custom network's output pin when the return node uses `SameAsInput` over a concrete parameter pin.
+- Parameter pin cannot be assigned an abstract type (guard at parameter-pin type-edit).
+
 ### 6.5 — Evaluator dispatch
 
 File: `rust/src/structure_designer/evaluator/network_evaluator.rs`.
 
 - At every former `if let NetworkResult::Atomic(s) = ..` site (`~461`, `~577`), match on `Crystal(..) | Molecule(..)` and extract the inner `AtomicStructure`. Carry the originating variant forward when re-wrapping.
 - For element-type resolution in polymorphic Array-input nodes (`atom_union`, `atom_composediff`), see Open Question 1.
+
+**Tests added in this sub-step:**
+
+- Runtime-guard test: an evaluation that (via a deliberately-broken stub node) produces a `NetworkResult` whose `infer_data_type()` would be abstract is surfaced as `NetworkResult::Error(..)` in release and asserts in debug, per OQ3.
 
 ### 6.6 — `atom_fill` migration
 
@@ -235,6 +262,10 @@ File: `rust/src/structure_designer/nodes/atom_fill.rs`.
   })
   ```
 - Keep all existing inputs and parameters (`shape`, `motif`, `m_offset`, `passivate`, `rm_single`, `surf_recon`, `invert_phase`). The node-level motif/offset knobs remain until phase 7 unifies them into `Structure`.
+
+**Tests added in this sub-step:**
+
+- `atom_fill` given a Blueprint input produces `NetworkResult::Crystal(..)` whose `structure` equals the Blueprint's `structure` and whose `atoms` matches the pre-refactor carving result for the same inputs.
 
 ### 6.7 — Migrate polymorphic atom-op nodes
 
@@ -266,15 +297,20 @@ Import and XYZ/CIF import:
 
 Array-input atom operations (`atom_union`, `atom_composediff`): see Open Question 1.
 
-### 6.8 — Tests and snapshots
+**Tests added in this sub-step:**
 
-- Update all tests that construct or match `NetworkResult::Atomic(..)` to use `Crystal`/`Molecule` with the matching payload. The survey counted ~52 reference sites; the majority are node evaluation tests under `rust/tests/structure_designer/` and `rust/tests/crystolecule/`.
-- Regenerate affected insta snapshots via `cargo insta review`. Expected: display-string snapshots that mentioned `Atomic` now say `Crystal` or `Molecule`.
-- Add new unit tests:
-  1. Conversion matrix — every pair in the 7×7 `DataType` grid over the phase types; assert `can_be_converted_to` exactly matches the table in this document.
-  2. `PinOutputType::SameAsInput` resolution — `atom_fill` (Crystal) → `add_hydrogen` → `infer_bonds`: assert the final output pin's resolved concrete type is `Crystal` and the runtime variant is `Crystal`.
-  3. `import_xyz` (Molecule) → `add_hydrogen` → `export_xyz`: assert Molecule is preserved end-to-end.
-  4. Validation rejects an abstract type appearing as a *runtime* result (debug assertion).
+- `map_atomic` helper unit tests: Crystal in → Crystal out (inner `AtomicStructure` transformed, `structure` and `geo_tree_root` preserved); Molecule in → Molecule out (inner `AtomicStructure` transformed, `geo_tree_root` preserved); non-atomic in → `NetworkResult::Error`.
+- Crystal-preservation chain: `atom_fill` → `add_hydrogen` → `infer_bonds`. Assert the final output pin's resolved concrete type is `Crystal` and the runtime variant is `Crystal`.
+- Molecule-preservation chain: `import_xyz` → `add_hydrogen` → `export_xyz`. Assert Molecule is preserved end-to-end.
+- `apply_diff` mirrors `atoms` (not `diff`): connect Crystal to `atoms` and Molecule to `diff`, assert output is Crystal.
+- Array-input polymorphic chain: `sequence { element_type: Crystal }` feeding `atom_union` resolves to Crystal; same with Molecule resolves to Molecule.
+- `import_cif` output is `Molecule` (OQ2).
+
+### 6.8 — Snapshots and full-suite sign-off
+
+- Regenerate affected insta snapshots via `cargo insta review`. Expected: display-string snapshots that mentioned `Atomic` now say `Crystal` or `Molecule` (two snapshots in `network_result.rs`'s display path, plus any node-display snapshots touching atomic values).
+- Run `cargo test` and `cargo clippy` across the whole workspace; confirm green.
+- All new unit tests were added in the sub-step that introduced their subject — nothing new is authored here.
   5. Any array-input meet rule fixed in Open Question 1.
 
 ### 6.9 — Flutter / FRB
