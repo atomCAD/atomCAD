@@ -1966,7 +1966,7 @@ mod node_type_introspection_tests {
         assert!(result.contains("passivate"));
 
         // Check output type
-        assert!(result.contains("Output: Atomic"));
+        assert!(result.contains("Output: Crystal"));
     }
 
     #[test]

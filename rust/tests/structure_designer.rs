@@ -159,3 +159,6 @@ mod network_result_test;
 
 #[path = "structure_designer/crystal_molecule_split_validation_test.rs"]
 mod crystal_molecule_split_validation_test;
+
+#[path = "structure_designer/atom_fill_test.rs"]
+mod atom_fill_test;
