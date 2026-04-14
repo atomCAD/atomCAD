@@ -4,7 +4,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -61,7 +61,8 @@ impl NodeData for ApplyDiffData {
 
         // 3. Extract atomic structures
         let base = match base_val {
-            NetworkResult::Atomic(s) => s,
+            NetworkResult::Crystal(c) => c.atoms,
+            NetworkResult::Molecule(m) => m.atoms,
             _ => {
                 return EvalOutput::single(NetworkResult::Error(
                     "apply_diff: 'base' input must be an atomic structure".to_string(),
@@ -70,7 +71,8 @@ impl NodeData for ApplyDiffData {
         };
 
         let diff = match diff_val {
-            NetworkResult::Atomic(s) => s,
+            NetworkResult::Crystal(c) => c.atoms,
+            NetworkResult::Molecule(m) => m.atoms,
             _ => {
                 return EvalOutput::single(NetworkResult::Error(
                     "apply_diff: 'diff' input must be an atomic structure".to_string(),
@@ -121,7 +123,7 @@ impl NodeData for ApplyDiffData {
         }
 
         // 8. Return the result
-        EvalOutput::single(NetworkResult::Atomic(diff_result.result))
+        EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: diff_result.result, geo_tree_root: None }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

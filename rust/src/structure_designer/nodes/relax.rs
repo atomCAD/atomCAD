@@ -6,7 +6,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -57,7 +57,7 @@ impl NodeData for RelaxData {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(mut atomic_structure) = input_val {
+        if let Some(mut atomic_structure) = input_val.extract_atomic() {
             let num_atoms = atomic_structure.get_num_of_atoms();
             if num_atoms > MAX_RELAX_ATOMS {
                 return EvalOutput::single(NetworkResult::Error(format!(
@@ -84,12 +84,12 @@ impl NodeData for RelaxData {
                         context.selected_node_eval_cache = Some(Box::new(eval_cache));
                     }
 
-                    EvalOutput::single(NetworkResult::Atomic(atomic_structure))
+                    EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: atomic_structure, geo_tree_root: None }))
                 }
                 Err(error_msg) => EvalOutput::single(NetworkResult::Error(error_msg)),
             }
         } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
+            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }))
         }
     }
 

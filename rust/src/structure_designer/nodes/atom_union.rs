@@ -4,7 +4,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -64,7 +64,7 @@ impl NodeData for AtomUnionData {
         let mut atomic_structures: Vec<AtomicStructure> = Vec::new();
 
         for structure_val in structure_results {
-            if let NetworkResult::Atomic(structure) = structure_val {
+            if let Some(structure) = structure_val.extract_atomic() {
                 atomic_structures.push(structure);
             } else {
                 return EvalOutput::single(NetworkResult::Error(
@@ -79,7 +79,7 @@ impl NodeData for AtomUnionData {
             result.add_atomic_structure(other);
         }
 
-        EvalOutput::single(NetworkResult::Atomic(result))
+        EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

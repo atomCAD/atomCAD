@@ -4,7 +4,7 @@ use crate::crystolecule::io::xyz_loader::load_xyz;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -90,7 +90,7 @@ impl NodeData for ImportXYZData {
         };
 
         EvalOutput::single(match atomic_structure {
-            Some(atomic_structure) => NetworkResult::Atomic(atomic_structure.clone()),
+            Some(atomic_structure) => NetworkResult::Molecule(MoleculeData { atoms: atomic_structure.clone(), geo_tree_root: None }),
             None => NetworkResult::Error("No atomic structure imported".to_string()),
         })
     }

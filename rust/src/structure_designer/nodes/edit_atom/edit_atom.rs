@@ -11,7 +11,7 @@ use crate::display::preferences as display_prefs;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -192,11 +192,11 @@ impl NodeData for EditAtomData {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(mut atomic_structure) = input_val {
+        if let Some(mut atomic_structure) = input_val.extract_atomic() {
             self.eval(&mut atomic_structure, decorate);
-            EvalOutput::single(NetworkResult::Atomic(atomic_structure))
+            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: atomic_structure, geo_tree_root: None }))
         } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
+            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }))
         }
     }
 

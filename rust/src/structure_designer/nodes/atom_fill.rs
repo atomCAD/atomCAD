@@ -10,7 +10,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -161,7 +161,7 @@ impl NodeData for AtomFillData {
 
         let mesh = match shape_val {
             NetworkResult::Blueprint(mesh) => mesh,
-            _ => return EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new())),
+            _ => return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None })),
         };
 
         // Evaluate motif input (with default)
@@ -283,7 +283,7 @@ impl NodeData for AtomFillData {
         // Call the lattice fill algorithm
         let result = fill_lattice(&config, &options, &fill_region);
 
-        EvalOutput::single(NetworkResult::Atomic(result.atomic_structure))
+        EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result.atomic_structure, geo_tree_root: None }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {

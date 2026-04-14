@@ -23,6 +23,10 @@ pub enum DataType {
     Geometry2D,
     Blueprint,
     Atomic,
+    Crystal,
+    Molecule,
+    StructureBound,
+    Unanchored,
     Motif,
     Structure,
     Array(Box<DataType>),
@@ -46,6 +50,10 @@ impl fmt::Display for DataType {
             DataType::Geometry2D => write!(f, "Geometry2D"),
             DataType::Blueprint => write!(f, "Blueprint"),
             DataType::Atomic => write!(f, "Atomic"),
+            DataType::Crystal => write!(f, "Crystal"),
+            DataType::Molecule => write!(f, "Molecule"),
+            DataType::StructureBound => write!(f, "StructureBound"),
+            DataType::Unanchored => write!(f, "Unanchored"),
             DataType::Motif => write!(f, "Motif"),
             DataType::Structure => write!(f, "Structure"),
             DataType::Array(element_type) => {
@@ -77,6 +85,16 @@ impl fmt::Display for DataType {
 impl DataType {
     pub fn is_array(&self) -> bool {
         matches!(self, DataType::Array(_))
+    }
+
+    /// Returns true for abstract phase supertypes (Atomic, StructureBound, Unanchored).
+    /// Abstract types appear only as declared input-pin types on built-in polymorphic
+    /// nodes; no `NetworkResult` value ever carries an abstract `DataType`.
+    pub fn is_abstract(&self) -> bool {
+        matches!(
+            self,
+            DataType::Atomic | DataType::StructureBound | DataType::Unanchored
+        )
     }
 
     /// Checks if a source data type can be converted to a destination data type
@@ -146,6 +164,17 @@ impl DataType {
 
             // LatticeVecs -> DrawingPlane conversion (backward compatibility for old .cnnd files)
             (DataType::LatticeVecs, DataType::DrawingPlane) => true,
+
+            // Concrete phase types upcast to the abstract supertypes that contain them.
+            // No abstract -> concrete conversion. No cross-abstract conversion.
+            // No abstract -> abstract identity edges: abstract types only appear as
+            // declared input-pin types and sources are always concrete after resolution.
+            (DataType::Crystal, DataType::Atomic) => true,
+            (DataType::Crystal, DataType::StructureBound) => true,
+            (DataType::Molecule, DataType::Atomic) => true,
+            (DataType::Molecule, DataType::Unanchored) => true,
+            (DataType::Blueprint, DataType::StructureBound) => true,
+            (DataType::Blueprint, DataType::Unanchored) => true,
 
             // All other combinations are not compatible
             _ => false,
@@ -258,6 +287,10 @@ impl DataTypeParser {
                     "Geometry2D" => Ok(DataType::Geometry2D),
                     "Blueprint" => Ok(DataType::Blueprint),
                     "Atomic" => Ok(DataType::Atomic),
+                    "Crystal" => Ok(DataType::Crystal),
+                    "Molecule" => Ok(DataType::Molecule),
+                    "StructureBound" => Ok(DataType::StructureBound),
+                    "Unanchored" => Ok(DataType::Unanchored),
                     "Motif" => Ok(DataType::Motif),
                     "Structure" => Ok(DataType::Structure),
                     _ => Err(format!("Unknown data type: {}", name)),

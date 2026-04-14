@@ -4,7 +4,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -73,28 +73,28 @@ impl NodeData for AtomComposeDiffData {
         // 4. Validate all inputs are diff structures and collect references
         let mut diff_structures = Vec::new();
         for (i, item) in diffs_array.iter().enumerate() {
-            match item {
-                NetworkResult::Atomic(structure) => {
-                    if !structure.is_diff() {
-                        return EvalOutput::single(NetworkResult::Error(format!(
-                            "atom_composediff: input {} is not a diff structure (is_diff = false)",
-                            i
-                        )));
-                    }
-                    diff_structures.push(structure);
-                }
+            let structure = match item {
+                NetworkResult::Crystal(c) => &c.atoms,
+                NetworkResult::Molecule(m) => &m.atoms,
                 _ => {
                     return EvalOutput::single(NetworkResult::Error(format!(
                         "atom_composediff: input {} is not an atomic structure",
                         i
                     )));
                 }
+            };
+            if !structure.is_diff() {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "atom_composediff: input {} is not a diff structure (is_diff = false)",
+                    i
+                )));
             }
+            diff_structures.push(structure);
         }
 
         // 5. Single diff: return clone
         if diff_structures.len() == 1 {
-            return EvalOutput::single(NetworkResult::Atomic(diff_structures[0].clone()));
+            return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: diff_structures[0].clone(), geo_tree_root: None }));
         }
 
         // 6. Get tolerance from pin 1 or property
@@ -122,7 +122,7 @@ impl NodeData for AtomComposeDiffData {
                 }
                 let mut composed = result.composed;
                 composed.decorator_mut().show_anchor_arrows = true;
-                EvalOutput::single(NetworkResult::Atomic(composed))
+                EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: composed, geo_tree_root: None }))
             }
             None => EvalOutput::single(NetworkResult::Error(
                 "atom_composediff: composition failed".to_string(),

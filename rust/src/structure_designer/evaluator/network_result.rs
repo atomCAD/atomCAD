@@ -146,6 +146,19 @@ impl BlueprintData {
 }
 
 #[derive(Clone)]
+pub struct CrystalData {
+    pub structure: Structure,
+    pub atoms: AtomicStructure,
+    pub geo_tree_root: Option<GeoNode>,
+}
+
+#[derive(Clone)]
+pub struct MoleculeData {
+    pub atoms: AtomicStructure,
+    pub geo_tree_root: Option<GeoNode>,
+}
+
+#[derive(Clone)]
 pub struct Closure {
     pub node_network_name: String,
     pub node_id: u64,
@@ -168,7 +181,8 @@ pub enum NetworkResult {
     DrawingPlane(DrawingPlane),
     Geometry2D(GeometrySummary2D),
     Blueprint(BlueprintData),
-    Atomic(AtomicStructure),
+    Crystal(CrystalData),
+    Molecule(MoleculeData),
     Motif(Motif),
     Structure(Structure),
     Array(Vec<NetworkResult>),
@@ -193,11 +207,16 @@ impl NetworkResult {
             NetworkResult::DrawingPlane(_) => Some(DataType::DrawingPlane),
             NetworkResult::Geometry2D(_) => Some(DataType::Geometry2D),
             NetworkResult::Blueprint(_) => Some(DataType::Blueprint),
-            NetworkResult::Atomic(_) => Some(DataType::Atomic),
+            NetworkResult::Crystal(_) => Some(DataType::Crystal),
+            NetworkResult::Molecule(_) => Some(DataType::Molecule),
             NetworkResult::Motif(_) => Some(DataType::Motif),
             NetworkResult::Structure(_) => Some(DataType::Structure),
             _ => None,
         }
+        .map(|t| {
+            debug_assert!(!t.is_abstract(), "infer_data_type returned abstract type");
+            t
+        })
     }
 
     /// Returns true if this NetworkResult is an Error variant
@@ -239,6 +258,7 @@ impl NetworkResult {
             NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
             NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
             NetworkResult::Blueprint(bp) => Some(bp.structure.lattice_vecs.clone()),
+            NetworkResult::Crystal(c) => Some(c.structure.lattice_vecs.clone()),
             NetworkResult::Structure(structure) => Some(structure.lattice_vecs.clone()),
             _ => None,
         }
@@ -332,10 +352,28 @@ impl NetworkResult {
         }
     }
 
-    /// Extracts an AtomicStructure value from the NetworkResult, returns None if not an Atomic
+    /// Extracts an AtomicStructure value from the NetworkResult.
+    /// Accepts both Crystal and Molecule variants (the abstract Atomic supertype).
     pub fn extract_atomic(self) -> Option<AtomicStructure> {
         match self {
-            NetworkResult::Atomic(value) => Some(value),
+            NetworkResult::Crystal(c) => Some(c.atoms),
+            NetworkResult::Molecule(m) => Some(m.atoms),
+            _ => None,
+        }
+    }
+
+    /// Extracts a CrystalData value from the NetworkResult, returns None if not a Crystal.
+    pub fn extract_crystal(self) -> Option<CrystalData> {
+        match self {
+            NetworkResult::Crystal(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Extracts a MoleculeData value from the NetworkResult, returns None if not a Molecule.
+    pub fn extract_molecule(self) -> Option<MoleculeData> {
+        match self {
+            NetworkResult::Molecule(m) => Some(m),
             _ => None,
         }
     }
@@ -543,7 +581,8 @@ impl NetworkResult {
             }
             NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
             NetworkResult::Blueprint(_) => "Blueprint".to_string(),
-            NetworkResult::Atomic(atomic) => format_atomic_display_string(atomic),
+            NetworkResult::Crystal(c) => format_atomic_display_string(&c.atoms),
+            NetworkResult::Molecule(m) => format_atomic_display_string(&m.atoms),
             NetworkResult::Motif(motif) => motif.to_text_format(),
             NetworkResult::Structure(structure) => {
                 let uc = &structure.lattice_vecs;
@@ -579,8 +618,11 @@ impl NetworkResult {
             NetworkResult::Geometry2D(geometry) => {
                 format!("Geometry2D:\n{}", geometry.to_detailed_string())
             }
-            NetworkResult::Atomic(atomic) => {
-                format!("Atomic:\n{}", atomic.to_detailed_string())
+            NetworkResult::Crystal(c) => {
+                format!("Crystal:\n{}", c.atoms.to_detailed_string())
+            }
+            NetworkResult::Molecule(m) => {
+                format!("Molecule:\n{}", m.atoms.to_detailed_string())
             }
             NetworkResult::Motif(motif) => {
                 format!("Motif:\n{}", motif.to_detailed_string())

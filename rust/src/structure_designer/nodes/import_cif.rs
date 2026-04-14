@@ -10,7 +10,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -265,7 +265,7 @@ impl ImportCifData {
 fn build_eval_output(result: &CifImportResult) -> EvalOutput {
     EvalOutput::multi(vec![
         NetworkResult::LatticeVecs(result.unit_cell.clone()),
-        NetworkResult::Atomic(result.atomic_structure.clone()),
+        NetworkResult::Molecule(MoleculeData { atoms: result.atomic_structure.clone(), geo_tree_root: None }),
         NetworkResult::Motif(result.motif.clone()),
     ])
 }

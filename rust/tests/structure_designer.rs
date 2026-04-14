@@ -1,6 +1,9 @@
 #[path = "structure_designer/structure_designer_test.rs"]
 mod structure_designer_test;
 
+#[path = "structure_designer/data_type_test.rs"]
+mod data_type_test;
+
 #[path = "structure_designer/node_dependency_analysis_tests.rs"]
 mod node_dependency_analysis_tests;
 
@@ -150,3 +153,6 @@ mod infer_bonds_test;
 
 #[path = "structure_designer/atom_replace_test.rs"]
 mod atom_replace_test;
+
+#[path = "structure_designer/network_result_test.rs"]
+mod network_result_test;

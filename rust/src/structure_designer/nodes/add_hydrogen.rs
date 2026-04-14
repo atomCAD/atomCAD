@@ -5,7 +5,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -51,7 +51,7 @@ impl NodeData for HydrogenPassivateData {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(mut structure) = input_val {
+        if let Some(mut structure) = input_val.extract_atomic() {
             let options = AddHydrogensOptions {
                 selected_only: false,
                 skip_already_passivated: true,
@@ -64,9 +64,9 @@ impl NodeData for HydrogenPassivateData {
                 }));
             }
 
-            EvalOutput::single(NetworkResult::Atomic(structure))
+            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: structure, geo_tree_root: None }))
         } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
+            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }))
         }
     }
 

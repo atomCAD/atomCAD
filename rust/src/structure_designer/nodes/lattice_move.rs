@@ -11,7 +11,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
 };
 use crate::crystolecule::structure::Structure;
 use crate::structure_designer::evaluator::network_result::{
-    BlueprintData, NetworkResult, runtime_type_error_in_input,
+    BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -115,7 +115,7 @@ impl NodeData for LatticeMoveData {
         let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
 
         if self.is_atomic_mode {
-            if let NetworkResult::Atomic(structure) = input_val {
+            if let Some(structure) = input_val.extract_atomic() {
                 // Get unit_cell from pin 3 (optional, defaults to cubic diamond)
                 let unit_cell = match network_evaluator.evaluate_or_default(
                     network_stack,
@@ -142,7 +142,7 @@ impl NodeData for LatticeMoveData {
 
                 let mut result = structure.clone();
                 result.transform(&DQuat::IDENTITY, &real_translation);
-                EvalOutput::single(NetworkResult::Atomic(result))
+                EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }))
             } else {
                 EvalOutput::single(runtime_type_error_in_input(0))
             }

@@ -7,7 +7,7 @@ use crate::renderer::tessellator::tessellator::{
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -78,7 +78,7 @@ impl NodeData for AtomRotData {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(atomic_structure) = input_val {
+        if let Some(atomic_structure) = input_val.extract_atomic() {
             // 2. Get angle (from pin or property)
             let angle = match network_evaluator.evaluate_or_default(
                 network_stack,
@@ -125,7 +125,7 @@ impl NodeData for AtomRotData {
             let normalized_axis = rot_axis.normalize_or_zero();
             if normalized_axis == DVec3::ZERO {
                 // Invalid axis - return input unchanged
-                return EvalOutput::single(NetworkResult::Atomic(atomic_structure));
+                return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: atomic_structure, geo_tree_root: None }));
             }
 
             // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
@@ -150,7 +150,7 @@ impl NodeData for AtomRotData {
             result.transform(&rotation_quat, &DVec3::ZERO); // Rotate around origin
             result.transform(&DQuat::IDENTITY, &pivot_point); // Move back
 
-            return EvalOutput::single(NetworkResult::Atomic(result));
+            return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result, geo_tree_root: None }));
         }
 
         EvalOutput::single(NetworkResult::None)

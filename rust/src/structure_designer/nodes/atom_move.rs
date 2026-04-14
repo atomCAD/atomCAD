@@ -6,7 +6,7 @@ use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutpu
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -69,7 +69,7 @@ impl NodeData for AtomMoveData {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(atomic_structure) = input_val {
+        if let Some(atomic_structure) = input_val.extract_atomic() {
             // 2. Get translation (from pin or property)
             let translation = match network_evaluator.evaluate_or_default(
                 network_stack,
@@ -94,7 +94,7 @@ impl NodeData for AtomMoveData {
             let mut result_atomic_structure = atomic_structure.clone();
             result_atomic_structure.transform(&DQuat::IDENTITY, &translation);
 
-            return EvalOutput::single(NetworkResult::Atomic(result_atomic_structure));
+            return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: result_atomic_structure, geo_tree_root: None }));
         }
 
         EvalOutput::single(NetworkResult::None)

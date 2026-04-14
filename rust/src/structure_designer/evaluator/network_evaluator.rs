@@ -458,7 +458,7 @@ impl NetworkEvaluator {
                 (NodeOutput::None, None)
             }
         } else if *data_type == DataType::Atomic {
-            if let NetworkResult::Atomic(atomic_structure) = result {
+            if let Some(atomic_structure) = result.extract_atomic() {
                 let mut cloned_atomic_structure = atomic_structure.clone();
                 cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
                 (NodeOutput::Atomic(cloned_atomic_structure), None)
@@ -574,7 +574,7 @@ impl NetworkEvaluator {
             DataType::Atomic => {
                 let mut structures: Vec<AtomicStructure> = Vec::new();
                 for element in elements {
-                    if let NetworkResult::Atomic(structure) = element {
+                    if let Some(structure) = element.extract_atomic() {
                         structures.push(structure);
                     }
                 }

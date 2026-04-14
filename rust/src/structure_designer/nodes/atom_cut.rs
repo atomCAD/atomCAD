@@ -7,7 +7,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, MoleculeData};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -55,12 +55,12 @@ impl NodeData for AtomCutData {
             return EvalOutput::single(molecule_input_val);
         }
 
-        if let NetworkResult::Atomic(mut atomic_structure) = molecule_input_val {
+        if let Some(mut atomic_structure) = molecule_input_val.extract_atomic() {
             let shapes_val =
                 network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
 
             if let NetworkResult::None = shapes_val {
-                return EvalOutput::single(NetworkResult::Atomic(atomic_structure)); // no cutters plugged in, just return the input atomic structure unmodified.
+                return EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: atomic_structure, geo_tree_root: None })); // no cutters plugged in, just return the input atomic structure unmodified.
             }
 
             if let NetworkResult::Error(_) = shapes_val {
@@ -93,9 +93,9 @@ impl NodeData for AtomCutData {
                 self.unit_cell_size,
             );
 
-            EvalOutput::single(NetworkResult::Atomic(atomic_structure))
+            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: atomic_structure, geo_tree_root: None }))
         } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
+            EvalOutput::single(NetworkResult::Molecule(MoleculeData { atoms: AtomicStructure::new(), geo_tree_root: None }))
         }
     }
 

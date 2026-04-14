@@ -1,0 +1,22 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+assertion_line: 101
+expression: snapshot
+---
+{
+  "network_name": "motif_rutile",
+  "node_count": 4,
+  "return_node_id": 4,
+  "displayed_node_outputs": [
+    {
+      "node_id": 1,
+      "node_type": "cuboid",
+      "output": "Blueprint:\nlattice_vecs:\n  a: (3.567000, 0.000000, 0.000000)\n  b: (0.000000, 3.567000, 0.000000)\n  c: (0.000000, 0.000000, 3.567000)\nmotif_offset: (0.000000, 0.000000, 0.000000)\ngeo_tree:\nIntersection3D\n  HalfSpace(normal: (-1, 0, 0), center: (0, 1.78, 1.78))\n  HalfSpace(normal: (1, 0, 0), center: (3.57, 1.78, 1.78))\n  HalfSpace(normal: (0, -1, 0), center: (1.78, 0, 1.78))\n  HalfSpace(normal: (0, 1, 0), center: (1.78, 3.57, 1.78))\n  HalfSpace(normal: (0, 0, -1), center: (1.78, 1.78, 0))\n  HalfSpace(normal: (0, 0, 1), center: (1.78, 1.78, 3.57))"
+    },
+    {
+      "node_id": 3,
+      "node_type": "atom_fill",
+      "output": "Molecule:\natoms: 15\nbonds: 14\nfirst 10 atoms:\n  [1] Z=22 pos=(1.783500, 1.783500, 1.783500) depth=1.783 bonds=6\n  [2] Z=22 pos=(0.000000, 0.000000, 0.000000) depth=-0.000 bonds=1\n  [3] Z=8 pos=(0.697063, 2.869937, 1.783500) depth=0.697 bonds=3\n  [4] Z=8 pos=(2.869937, 0.697063, 1.783500) depth=0.697 bonds=3\n  [5] Z=8 pos=(1.086437, 1.086437, 0.000000) depth=-0.000 bonds=2\n  [6] Z=8 pos=(2.480563, 2.480563, 0.000000) depth=0.000 bonds=2\n  [7] Z=22 pos=(0.000000, 0.000000, 3.567000) depth=-0.000 bonds=1\n  [8] Z=8 pos=(1.086437, 1.086437, 3.567000) depth=-0.000 bonds=2\n  [9] Z=8 pos=(2.480563, 2.480563, 3.567000) depth=-0.000 bonds=2\n  [10] Z=22 pos=(0.000000, 3.567000, 0.000000) depth=-0.000 bonds=1\n  ... and 5 more atoms\nfirst 10 bonds:\n  1 -- 3 (order=1)\n  1 -- 4 (order=1)\n  1 -- 5 (order=1)\n  1 -- 6 (order=1)\n  1 -- 9 (order=1)\n  1 -- 8 (order=1)\n  2 -- 5 (order=1)\n  3 -- 10 (order=1)\n  3 -- 11 (order=1)\n  4 -- 12 (order=1)\n  ... and 4 more bonds"
+    }
+  ]
+}
