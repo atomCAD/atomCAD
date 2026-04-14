@@ -94,9 +94,7 @@ use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
 use crate::structure_designer::nodes::atom_fill::AtomFillData;
-use crate::structure_designer::nodes::atom_move::AtomMoveData;
 use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
-use crate::structure_designer::nodes::atom_rot::AtomRotData;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::circle::CircleData;
@@ -110,6 +108,8 @@ use crate::structure_designer::nodes::expr::ExprData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
 use crate::structure_designer::nodes::float::FloatData;
+use crate::structure_designer::nodes::free_move::FreeMoveData;
+use crate::structure_designer::nodes::free_rot::FreeRotData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
@@ -119,8 +119,6 @@ use crate::structure_designer::nodes::infer_bonds::InferBondsData;
 use crate::structure_designer::nodes::int::IntData;
 use crate::structure_designer::nodes::ivec2::IVec2Data;
 use crate::structure_designer::nodes::ivec3::IVec3Data;
-use crate::structure_designer::nodes::lattice_move::LatticeMoveData;
-use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use crate::structure_designer::nodes::map::MapData;
@@ -133,6 +131,8 @@ use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::sequence::SequenceData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::string::StringData;
+use crate::structure_designer::nodes::structure_move::StructureMoveData;
+use crate::structure_designer::nodes::structure_rot::{StructureRotData, StructureRotEvalCache};
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
 use std::collections::HashMap;
@@ -2145,7 +2145,7 @@ pub fn get_lattice_move_data(node_id: u64) -> Option<APILatticeMoveData> {
                     None => return None,
                 };
                 let lattice_move_data =
-                    match node_data.as_any_ref().downcast_ref::<LatticeMoveData>() {
+                    match node_data.as_any_ref().downcast_ref::<StructureMoveData>() {
                         Some(data) => data,
                         None => return None,
                     };
@@ -2172,11 +2172,11 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let lattice_rot_data = match node_data.as_any_ref().downcast_ref::<LatticeRotData>()
-                {
-                    Some(data) => data,
-                    None => return None,
-                };
+                let lattice_rot_data =
+                    match node_data.as_any_ref().downcast_ref::<StructureRotData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
 
                 // Try to get the evaluation cache to access unit cell and compute symmetries and crystal system
                 let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance
@@ -2184,7 +2184,7 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
                     .get_selected_node_eval_cache()
                 {
                     if let Some(lattice_rot_cache) =
-                        eval_cache.downcast_ref::<LatticeRotEvalCache>()
+                        eval_cache.downcast_ref::<StructureRotEvalCache>()
                     {
                         // Analyze unit cell symmetries and crystal system
                         let (crystal_system, symmetries) =
@@ -2234,7 +2234,7 @@ pub fn get_atom_move_data(node_id: u64) -> Option<APIAtomMoveData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let atom_move_data = match node_data.as_any_ref().downcast_ref::<AtomMoveData>() {
+                let atom_move_data = match node_data.as_any_ref().downcast_ref::<FreeMoveData>() {
                     Some(data) => data,
                     None => return None,
                 };
@@ -2259,7 +2259,7 @@ pub fn get_atom_rot_data(node_id: u64) -> Option<APIAtomRotData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let atom_rot_data = match node_data.as_any_ref().downcast_ref::<AtomRotData>() {
+                let atom_rot_data = match node_data.as_any_ref().downcast_ref::<FreeRotData>() {
                     Some(data) => data,
                     None => return None,
                 };
@@ -3248,17 +3248,9 @@ pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
 pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            // Preserve is_atomic_mode from the existing node data
-            let is_atomic_mode = cad_instance
-                .structure_designer
-                .get_active_node_network()
-                .and_then(|n| n.get_node_network_data(node_id))
-                .and_then(|d| d.as_any_ref().downcast_ref::<LatticeMoveData>())
-                .map_or(false, |d| d.is_atomic_mode);
-            let lattice_move_data = Box::new(LatticeMoveData {
+            let lattice_move_data = Box::new(StructureMoveData {
                 translation: from_api_ivec3(&data.translation),
                 lattice_subdivision: data.lattice_subdivision,
-                is_atomic_mode,
             });
             cad_instance
                 .structure_designer
@@ -3272,18 +3264,10 @@ pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
 pub fn set_lattice_rot_data(node_id: u64, data: APILatticeRotData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            // Preserve is_atomic_mode from the existing node data
-            let is_atomic_mode = cad_instance
-                .structure_designer
-                .get_active_node_network()
-                .and_then(|n| n.get_node_network_data(node_id))
-                .and_then(|d| d.as_any_ref().downcast_ref::<LatticeRotData>())
-                .map_or(false, |d| d.is_atomic_mode);
-            let lattice_rot_data = Box::new(LatticeRotData {
+            let lattice_rot_data = Box::new(StructureRotData {
                 axis_index: data.axis_index,
                 step: data.step,
                 pivot_point: from_api_ivec3(&data.pivot_point),
-                is_atomic_mode,
             });
             cad_instance
                 .structure_designer
@@ -3297,7 +3281,7 @@ pub fn set_lattice_rot_data(node_id: u64, data: APILatticeRotData) {
 pub fn set_atom_move_data(node_id: u64, data: APIAtomMoveData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let atom_move_data = Box::new(AtomMoveData {
+            let atom_move_data = Box::new(FreeMoveData {
                 translation: from_api_vec3(&data.translation),
             });
             cad_instance
@@ -3312,7 +3296,7 @@ pub fn set_atom_move_data(node_id: u64, data: APIAtomMoveData) {
 pub fn set_atom_rot_data(node_id: u64, data: APIAtomRotData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let atom_rot_data = Box::new(AtomRotData {
+            let atom_rot_data = Box::new(FreeRotData {
                 angle: data.angle,
                 rot_axis: from_api_vec3(&data.rot_axis),
                 pivot_point: from_api_vec3(&data.pivot_point),

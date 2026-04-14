@@ -1,0 +1,17 @@
+---
+source: tests/structure_designer/nodes/node_snapshots_test.rs
+assertion_line: 113
+expression: snapshot
+---
+{
+  "network_name": "sample",
+  "node_count": 8,
+  "return_node_id": 2,
+  "displayed_node_outputs": [
+    {
+      "node_id": 2,
+      "node_type": "polar_pattern",
+      "output": "Error: Error in polar_pattern"
+    }
+  ]
+}

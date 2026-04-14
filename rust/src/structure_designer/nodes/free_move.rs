@@ -1,13 +1,15 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::Gadget;
+use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{
+    BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
+};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -18,36 +20,31 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::util::serialization_utils::dvec3_serializer;
+use crate::util::transform::Transform;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-/// Evaluation cache for atom_move node.
-/// Currently empty but reserved for future gadget needs.
 #[derive(Debug, Clone)]
-pub struct AtomMoveEvalCache {
-    // Empty - reserved for future use
-}
+pub struct FreeMoveEvalCache {}
 
-/// Data structure for atom_move node.
-/// Translates an atomic structure by a vector in world space (Cartesian coordinates).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AtomMoveData {
+pub struct FreeMoveData {
     #[serde(with = "dvec3_serializer")]
-    pub translation: DVec3, // Translation vector in angstroms
+    pub translation: DVec3,
 }
 
-impl NodeData for AtomMoveData {
+impl NodeData for FreeMoveData {
     fn provide_gadget(
         &self,
         structure_designer: &StructureDesigner,
     ) -> Option<Box<dyn NodeNetworkGadget>> {
         let eval_cache = structure_designer.get_selected_node_eval_cache()?;
-        let _atom_move_cache = eval_cache.downcast_ref::<AtomMoveEvalCache>()?;
+        let _cache = eval_cache.downcast_ref::<FreeMoveEvalCache>()?;
 
-        Some(Box::new(AtomMoveGadget::new(self.translation)))
+        Some(Box::new(FreeMoveGadget::new(self.translation)))
     }
 
     fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
@@ -63,14 +60,12 @@ impl NodeData for AtomMoveData {
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
     ) -> EvalOutput {
-        // 1. Get input atomic structure
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
             return EvalOutput::single(input_val);
         }
 
-        // 2. Get translation (from pin or property)
         let translation = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
@@ -84,16 +79,32 @@ impl NodeData for AtomMoveData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
         if network_stack.len() == 1 {
-            let eval_cache = AtomMoveEvalCache {};
-            context.selected_node_eval_cache = Some(Box::new(eval_cache));
+            context.selected_node_eval_cache = Some(Box::new(FreeMoveEvalCache {}));
         }
 
-        EvalOutput::single(map_atomic(input_val, |mut atomic_structure| {
-            atomic_structure.transform(&DQuat::IDENTITY, &translation);
-            atomic_structure
-        }))
+        let tr = Transform::new(translation, DQuat::IDENTITY);
+
+        match input_val {
+            NetworkResult::Blueprint(shape) => {
+                EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+                    structure: shape.structure,
+                    geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                }))
+            }
+            NetworkResult::Molecule(mol) => {
+                let mut atoms = mol.atoms;
+                atoms.transform(&DQuat::IDENTITY, &translation);
+                let new_geo = mol
+                    .geo_tree_root
+                    .map(|gt| GeoNode::transform(tr, Box::new(gt)));
+                EvalOutput::single(NetworkResult::Molecule(MoleculeData {
+                    atoms,
+                    geo_tree_root: new_geo,
+                }))
+            }
+            _ => EvalOutput::single(runtime_type_error_in_input(0)),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -125,33 +136,28 @@ impl NodeData for AtomMoveData {
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("molecule".to_string(), (true, None)); // required
+        m.insert("input".to_string(), (true, None));
         m
     }
 }
 
-/// Gadget for atom_move node that displays an XYZ axis gizmo.
-/// The gadget is always world-aligned (not rotated with the structure).
-/// Position is at the translation value (starting from origin).
 #[derive(Clone)]
-pub struct AtomMoveGadget {
+pub struct FreeMoveGadget {
     pub translation: DVec3,
     pub dragged_handle_index: Option<i32>,
     pub start_drag_offset: f64,
     pub start_drag_translation: DVec3,
 }
 
-impl Tessellatable for AtomMoveGadget {
+impl Tessellatable for FreeMoveGadget {
     fn tessellate(&self, output: &mut TessellationOutput) {
         let output_mesh: &mut Mesh = &mut output.mesh;
-        // Use world-aligned gadget (identity rotation)
-        // Gadget is positioned at the translation value
         xyz_gadget_utils::tessellate_xyz_gadget(
             output_mesh,
             &UnitCellStruct::cubic_diamond(),
             DQuat::IDENTITY,
             &self.translation,
-            false, // No rotation handles (translation only)
+            false,
         );
     }
 
@@ -160,7 +166,7 @@ impl Tessellatable for AtomMoveGadget {
     }
 }
 
-impl Gadget for AtomMoveGadget {
+impl Gadget for FreeMoveGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         xyz_gadget_utils::xyz_gadget_hit_test(
             &UnitCellStruct::cubic_diamond(),
@@ -168,7 +174,7 @@ impl Gadget for AtomMoveGadget {
             &self.translation,
             &ray_origin,
             &ray_direction,
-            false, // No rotation handles
+            false,
         )
     }
 
@@ -205,10 +211,10 @@ impl Gadget for AtomMoveGadget {
     }
 }
 
-impl NodeNetworkGadget for AtomMoveGadget {
+impl NodeNetworkGadget for FreeMoveGadget {
     fn sync_data(&self, data: &mut dyn NodeData) {
-        if let Some(atom_move_data) = data.as_any_mut().downcast_mut::<AtomMoveData>() {
-            atom_move_data.translation = self.translation;
+        if let Some(d) = data.as_any_mut().downcast_mut::<FreeMoveData>() {
+            d.translation = self.translation;
         }
     }
 
@@ -217,7 +223,7 @@ impl NodeNetworkGadget for AtomMoveGadget {
     }
 }
 
-impl AtomMoveGadget {
+impl FreeMoveGadget {
     pub fn new(translation: DVec3) -> Self {
         Self {
             translation,
@@ -227,15 +233,11 @@ impl AtomMoveGadget {
         }
     }
 
-    /// Applies drag offset to the translation.
-    /// Returns true if the operation was successful and the drag start should be reset.
     fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
-        // Only handle translation axes (0, 1, 2 for X, Y, Z)
         if !(0..=2).contains(&axis_index) {
             return false;
         }
 
-        // Get the world axis direction (always world-aligned for atom_move)
         let axis_direction = match xyz_gadget_utils::get_local_axis_direction(
             &UnitCellStruct::cubic_diamond(),
             DQuat::IDENTITY,
@@ -245,7 +247,6 @@ impl AtomMoveGadget {
             None => return false,
         };
 
-        // Apply the movement to translation
         let movement_vector = axis_direction * offset_delta;
         self.translation = self.start_drag_translation + movement_vector;
 
@@ -255,17 +256,18 @@ impl AtomMoveGadget {
 
 pub fn get_node_type() -> NodeType {
     NodeType {
-        name: "atom_move".to_string(),
-        description: "Translates an atomic structure by a vector in world space (Cartesian coordinates).
-The translation is specified in angstroms along the X, Y, and Z axes.
-This node operates in continuous space, unlike lattice_move which operates in discrete lattice space.".to_string(),
+        name: "free_move".to_string(),
+        description: "Translates an unanchored object (Blueprint or Molecule) by a vector in world space (Cartesian coordinates).
+For a Blueprint, only the geometry (the cutter) moves; the structure stays fixed. This can drift the cutter off-lattice.
+For a Molecule, atoms and geometry move together freely.
+Crystal inputs are rejected (exit_structure first to get a Molecule, or use structure_move to stay in lattice space).".to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![
             Parameter {
                 id: None,
-                name: "molecule".to_string(),
-                data_type: DataType::Atomic,
+                name: "input".to_string(),
+                data_type: DataType::Unanchored,
             },
             Parameter {
                 id: None,
@@ -273,12 +275,14 @@ This node operates in continuous space, unlike lattice_move which operates in di
                 data_type: DataType::Vec3,
             },
         ],
-        output_pins: OutputPinDefinition::single_same_as("molecule"),
+        output_pins: OutputPinDefinition::single_same_as("input"),
         public: true,
-        node_data_creator: || Box::new(AtomMoveData {
-            translation: DVec3::ZERO,
-        }),
-        node_data_saver: generic_node_data_saver::<AtomMoveData>,
-        node_data_loader: generic_node_data_loader::<AtomMoveData>,
+        node_data_creator: || {
+            Box::new(FreeMoveData {
+                translation: DVec3::ZERO,
+            })
+        },
+        node_data_saver: generic_node_data_saver::<FreeMoveData>,
+        node_data_loader: generic_node_data_loader::<FreeMoveData>,
     }
 }

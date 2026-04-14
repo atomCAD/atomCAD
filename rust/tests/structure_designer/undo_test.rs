@@ -1,7 +1,7 @@
 use glam::{DVec2, DVec3, IVec3};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
-use rust_lib_flutter_cad::structure_designer::nodes::lattice_move::LatticeMoveData;
+use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
 use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
     SerializableNodeTypeRegistryNetworks, node_network_to_serializable,
@@ -1556,7 +1556,7 @@ fn undo_factor_then_edit_then_undo_all() {
 #[test]
 fn undo_gadget_drag_lattice_move() {
     let mut designer = setup_designer_with_network("test");
-    let node_id = designer.add_node("lattice_move", DVec2::ZERO);
+    let node_id = designer.add_node("structure_move", DVec2::ZERO);
     // Select the node so it becomes the active node
     designer.select_node(node_id);
     designer.undo_stack.clear();
@@ -1567,10 +1567,9 @@ fn undo_gadget_drag_lattice_move() {
     designer.begin_gadget_drag_snapshot();
 
     // Modify the node data as a gadget's sync_data() would
-    let new_data = Box::new(LatticeMoveData {
+    let new_data = Box::new(StructureMoveData {
         translation: IVec3::new(3, 0, 0),
         lattice_subdivision: 1,
-        is_atomic_mode: false,
     });
     designer.set_node_network_data(node_id, new_data);
 
@@ -1596,7 +1595,7 @@ fn undo_gadget_drag_lattice_move() {
 fn undo_gadget_drag_simulated_no_change() {
     // If gadget drag doesn't actually change data, no command should be pushed
     let mut designer = setup_designer_with_network("test");
-    let node_id = designer.add_node("lattice_move", DVec2::ZERO);
+    let node_id = designer.add_node("structure_move", DVec2::ZERO);
     designer.select_node(node_id);
     designer.undo_stack.clear();
 
