@@ -2741,9 +2741,7 @@ fn evaluate_atom_edit_pin(designer: &StructureDesigner, pin_index: i32) -> Atomi
     use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
         NetworkEvaluationContext, NetworkStackElement,
     };
-    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
-        MoleculeData, NetworkResult,
-    };
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 
     let network_name = designer.active_node_network_name.as_ref().unwrap();
     let network = designer

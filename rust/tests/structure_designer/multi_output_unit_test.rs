@@ -615,8 +615,11 @@ fn evaluate_pin(
 fn test_custom_network_multi_output_return_node_propagates_pins() {
     let mut designer = setup_designer_with_network("inner");
 
-    // Add an atom_edit node (which has 2 output pins: result + diff)
+    // atom_edit's `result` pin is `SameAsInput("molecule")`, so a concrete
+    // Molecule source must be wired for polymorphic resolution to succeed.
+    let source_id = designer.add_node("import_xyz", DVec2::new(-200.0, 0.0));
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(source_id, 0, atom_edit_id, 0);
     designer.set_return_node_id(Some(atom_edit_id));
 
     let network = designer
@@ -758,10 +761,33 @@ fn test_custom_network_node_evaluate_pin0() {
 /// Using a custom network with multi-output return node: pin 1 evaluation passes through.
 #[test]
 fn test_custom_network_node_evaluate_pin1() {
+    use rust_lib_flutter_cad::structure_designer::nodes::import_xyz::ImportXYZData;
+
     let mut designer = setup_designer_with_network("inner");
+
+    // Wire an import_xyz source (Fixed(Molecule)) into atom_edit so the inner
+    // network's polymorphic `result` pin resolves and the network is valid.
+    // Populate its atomic_structure directly so evaluation produces a real
+    // Molecule instead of an error.
+    let source_id = designer.add_node("import_xyz", DVec2::new(-200.0, 0.0));
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("inner")
+            .unwrap();
+        let data = network
+            .get_node_network_data_mut(source_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<ImportXYZData>()
+            .unwrap();
+        data.atomic_structure = Some(AtomicStructure::new());
+    }
 
     // inner: atom_edit as return node (2 output pins)
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(source_id, 0, atom_edit_id, 0);
     designer.set_return_node_id(Some(atom_edit_id));
 
     // Create outer network and add a node of type "inner"
@@ -795,8 +821,11 @@ fn test_custom_network_node_evaluate_pin1() {
 fn test_custom_network_wire_from_pin1() {
     let mut designer = setup_designer_with_network("inner");
 
-    // inner: atom_edit as return node
+    // Wire a concrete Molecule source into atom_edit so the inner network is
+    // valid (atom_edit's polymorphic `result` pin requires a concrete input).
+    let source_id = designer.add_node("import_xyz", DVec2::new(-200.0, 0.0));
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(source_id, 0, atom_edit_id, 0);
     designer.set_return_node_id(Some(atom_edit_id));
 
     // outer: use inner node, wire pin 1 to apply_diff's base input
@@ -875,6 +904,118 @@ fn test_custom_network_shrink_output_pins_disconnects_wires() {
     assert!(
         node.arguments[0].argument_output_pins.is_empty(),
         "Wire to pin 1 should be disconnected after inner shrinks to single output"
+    );
+}
+
+// ===== Crystal/Molecule variant preservation tests (step 6.10) =====
+
+/// `atom_edit` pin 0 uses `SameAsInput("molecule")`, so a Crystal input must
+/// yield a Crystal output (lattice vectors + motif preserved). Pin 1 (diff)
+/// is always `Fixed(Molecule)`.
+#[test]
+fn test_atom_edit_preserves_crystal_variant_on_pin0() {
+    use rust_lib_flutter_cad::crystolecule::structure::Structure;
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::CrystalData;
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    let mut designer = setup_designer_with_network("test");
+
+    // Feed a Crystal directly via a `value` node (lets us assert variant
+    // preservation without running the full lattice_fill pipeline).
+    let crystal_structure = Structure::diamond();
+    let value_id = {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test")
+            .unwrap();
+        let value_data = Box::new(ValueData {
+            value: NetworkResult::Crystal(CrystalData {
+                structure: crystal_structure,
+                atoms: AtomicStructure::new(),
+                geo_tree_root: None,
+            }),
+        });
+        network.add_node("value", DVec2::new(-200.0, 0.0), 0, value_data)
+    };
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+
+    // Pin 0 preserves the Crystal variant.
+    let pin0 = evaluate_pin(&designer, "test", atom_edit_id, 0);
+    assert!(
+        matches!(pin0, NetworkResult::Crystal(_)),
+        "atom_edit pin 0 should preserve Crystal variant (got {:?})",
+        std::mem::discriminant(&pin0)
+    );
+
+    // Pin 1 (diff) is always Molecule, independent of the input variant.
+    let pin1 = evaluate_pin(&designer, "test", atom_edit_id, 1);
+    assert!(
+        matches!(pin1, NetworkResult::Molecule(_)),
+        "atom_edit pin 1 (diff) must always be Molecule"
+    );
+}
+
+/// Mirrors the Crystal test for the Molecule path: a Molecule input produces
+/// a Molecule on pin 0.
+#[test]
+fn test_atom_edit_preserves_molecule_variant_on_pin0() {
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    let mut designer = setup_designer_with_network("test");
+
+    let value_id = {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test")
+            .unwrap();
+        let value_data = Box::new(ValueData {
+            value: NetworkResult::Molecule(MoleculeData {
+                atoms: AtomicStructure::new(),
+                geo_tree_root: None,
+            }),
+        });
+        network.add_node("value", DVec2::new(-200.0, 0.0), 0, value_data)
+    };
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+
+    let pin0 = evaluate_pin(&designer, "test", atom_edit_id, 0);
+    assert!(
+        matches!(pin0, NetworkResult::Molecule(_)),
+        "atom_edit pin 0 should preserve Molecule variant"
+    );
+}
+
+/// `motif_edit`'s output pin types are Fixed and must not be affected by the
+/// step 6.10 changes to `atom_edit`. Pin 0 is Motif (not SameAsInput) and
+/// pin 1 (diff) is Molecule.
+#[test]
+fn test_motif_edit_output_pin_types_unchanged() {
+    use rust_lib_flutter_cad::structure_designer::node_type::PinOutputType;
+
+    let registry =
+        rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
+    let motif_edit_type = registry.built_in_node_types.get("motif_edit").unwrap();
+
+    assert_eq!(motif_edit_type.output_pin_count(), 2);
+    assert_eq!(motif_edit_type.output_pins[0].name, "result");
+    assert!(
+        matches!(
+            motif_edit_type.output_pins[0].data_type,
+            PinOutputType::Fixed(DataType::Motif)
+        ),
+        "motif_edit pin 0 must remain Fixed(Motif)"
+    );
+    assert_eq!(motif_edit_type.output_pins[1].name, "diff");
+    assert!(
+        matches!(
+            motif_edit_type.output_pins[1].data_type,
+            PinOutputType::Fixed(DataType::Molecule)
+        ),
+        "motif_edit pin 1 (diff) must remain Fixed(Molecule)"
     );
 }
 

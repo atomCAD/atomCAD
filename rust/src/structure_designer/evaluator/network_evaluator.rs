@@ -201,7 +201,16 @@ impl NetworkEvaluator {
                     .unwrap_or_else(|| node_type.output_type().clone());
                 (dr.clone(), dt)
             } else {
-                (eval_output.get(0), node_type.output_type().clone())
+                // Infer from the concrete result first so that pins declared
+                // as `SameAsInput(..)` (for which `output_type()` falls
+                // through to `DataType::None`) still map to the right
+                // NodeOutput variant. Fall back to the declared type when the
+                // result is None/Error/etc.
+                let result = eval_output.get(0);
+                let dt = result
+                    .infer_data_type()
+                    .unwrap_or_else(|| node_type.output_type().clone());
+                (result, dt)
             };
         let (output, geo_tree) = self.convert_result_to_node_output(
             display_result_0,
@@ -238,10 +247,11 @@ impl NetworkEvaluator {
                         .unwrap_or_else(|| node_type.get_output_pin_type(pin_index));
                     (dr.clone(), dt)
                 } else {
-                    (
-                        eval_output.get(pin_index),
-                        node_type.get_output_pin_type(pin_index),
-                    )
+                    let result = eval_output.get(pin_index);
+                    let dt = result
+                        .infer_data_type()
+                        .unwrap_or_else(|| node_type.get_output_pin_type(pin_index));
+                    (result, dt)
                 };
             let (pin_output, pin_geo_tree) = self.convert_result_to_node_output(
                 pin_result,
