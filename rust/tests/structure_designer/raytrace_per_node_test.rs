@@ -20,7 +20,7 @@ fn setup_designer_with_scene_atoms(
         for (atomic_number, position) in atoms {
             structure.add_atom(atomic_number, position);
         }
-        let scene_data = NodeSceneData::new(NodeOutput::Atomic(structure));
+        let scene_data = NodeSceneData::new(NodeOutput::Atomic(structure, None));
         designer
             .last_generated_structure_designer_scene
             .node_data

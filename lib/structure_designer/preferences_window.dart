@@ -21,6 +21,8 @@ class PreferencesKeys {
   static const Key sharpnessThresholdInput =
       Key('pref_sharpness_threshold_input');
   static const Key meshRenderingDropdown = Key('pref_mesh_rendering_dropdown');
+  static const Key showGeometryShellForAtomicCheckbox =
+      Key('pref_show_geometry_shell_for_atomic_checkbox');
 
   // Atomic structure visualization
   static const Key atomicVisualizationDropdown =
@@ -370,6 +372,36 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                     _applyPreferences();
                                   }
                                 },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Show geometry shell on Crystal / Molecule
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys
+                                    .showGeometryShellForAtomicCheckbox,
+                                value: _preferences
+                                    .geometryVisualizationPreferences
+                                    .showGeometryShellForAtomic,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences
+                                          .geometryVisualizationPreferences
+                                          .showGeometryShellForAtomic = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Flexible(
+                                child: Text(
+                                  'Show geometry shell on Crystal and Molecule',
+                                ),
                               ),
                             ],
                           ),
@@ -1049,11 +1081,10 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
                           // Unit cell wireframe color
                           IVec3Input(
-                            key: PreferencesKeys
-                                .unitCellWireframeColorInput,
+                            key: PreferencesKeys.unitCellWireframeColorInput,
                             label: 'Unit cell wireframe color (RGB)',
-                            value: _preferences.backgroundPreferences
-                                .unitCellWireframeColor,
+                            value: _preferences
+                                .backgroundPreferences.unitCellWireframeColor,
                             onChanged: (value) {
                               setState(() {
                                 _preferences.backgroundPreferences

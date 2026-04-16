@@ -11321,8 +11321,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dco_decode_geometry_visualization_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return GeometryVisualizationPreferences(
       geometryVisualization: dco_decode_geometry_visualization(arr[0]),
       wireframeGeometry: dco_decode_bool(arr[1]),
@@ -11330,6 +11330,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       sharpnessAngleThresholdDegree: dco_decode_f_64(arr[3]),
       meshSmoothing: dco_decode_mesh_smoothing(arr[4]),
       displayCameraTarget: dco_decode_bool(arr[5]),
+      showGeometryShellForAtomic: dco_decode_bool(arr[6]),
     );
   }
 
@@ -14040,13 +14041,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sharpnessAngleThresholdDegree = sse_decode_f_64(deserializer);
     var var_meshSmoothing = sse_decode_mesh_smoothing(deserializer);
     var var_displayCameraTarget = sse_decode_bool(deserializer);
+    var var_showGeometryShellForAtomic = sse_decode_bool(deserializer);
     return GeometryVisualizationPreferences(
         geometryVisualization: var_geometryVisualization,
         wireframeGeometry: var_wireframeGeometry,
         samplesPerUnitCell: var_samplesPerUnitCell,
         sharpnessAngleThresholdDegree: var_sharpnessAngleThresholdDegree,
         meshSmoothing: var_meshSmoothing,
-        displayCameraTarget: var_displayCameraTarget);
+        displayCameraTarget: var_displayCameraTarget,
+        showGeometryShellForAtomic: var_showGeometryShellForAtomic);
   }
 
   @protected
@@ -16957,6 +16960,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.sharpnessAngleThresholdDegree, serializer);
     sse_encode_mesh_smoothing(self.meshSmoothing, serializer);
     sse_encode_bool(self.displayCameraTarget, serializer);
+    sse_encode_bool(self.showGeometryShellForAtomic, serializer);
   }
 
   @protected

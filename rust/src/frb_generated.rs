@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -10131,7 +10131,8 @@ let mut var_samplesPerUnitCell = <i32>::sse_decode(deserializer);
 let mut var_sharpnessAngleThresholdDegree = <f64>::sse_decode(deserializer);
 let mut var_meshSmoothing = <crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_decode(deserializer);
 let mut var_displayCameraTarget = <bool>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing, display_camera_target: var_displayCameraTarget};}
+let mut var_showGeometryShellForAtomic = <bool>::sse_decode(deserializer);
+return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing, display_camera_target: var_displayCameraTarget, show_geometry_shell_for_atomic: var_showGeometryShellForAtomic};}
                 }
 
 impl SseDecode
@@ -14658,7 +14659,8 @@ self.wireframe_geometry.into_into_dart().into_dart(),
 self.samples_per_unit_cell.into_into_dart().into_dart(),
 self.sharpness_angle_threshold_degree.into_into_dart().into_dart(),
 self.mesh_smoothing.into_into_dart().into_dart(),
-self.display_camera_target.into_into_dart().into_dart()
+self.display_camera_target.into_into_dart().into_dart(),
+self.show_geometry_shell_for_atomic.into_into_dart().into_dart()
                 ].into_dart()
                 }
             }
@@ -16402,7 +16404,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_preference
 <i32>::sse_encode(self.samples_per_unit_cell, serializer);
 <f64>::sse_encode(self.sharpness_angle_threshold_degree, serializer);
 <crate::api::structure_designer::structure_designer_preferences::MeshSmoothing>::sse_encode(self.mesh_smoothing, serializer);
-<bool>::sse_encode(self.display_camera_target, serializer);}
+<bool>::sse_encode(self.display_camera_target, serializer);
+<bool>::sse_encode(self.show_geometry_shell_for_atomic, serializer);}
                 }
 
 impl SseEncode
@@ -17848,7 +17851,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -17872,7 +17875,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
+    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

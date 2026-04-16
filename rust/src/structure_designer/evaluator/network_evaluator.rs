@@ -294,6 +294,34 @@ impl NetworkEvaluator {
         }
     }
 
+    /// Converts a geometry shell (`GeoNode`) retained on a Crystal/Molecule
+    /// into a renderable `NodeOutput` using the user's current visualization
+    /// method and sharpness settings. Returns `None` if conversion yields no
+    /// mesh (e.g. empty CSG result).
+    fn build_atomic_shell_output(
+        &mut self,
+        geo_tree: &GeoNode,
+        context: &mut NetworkEvaluationContext,
+        geometry_visualization_preferences: &GeometryVisualizationPreferences,
+    ) -> Option<NodeOutput> {
+        match geometry_visualization_preferences.geometry_visualization {
+            GeometryVisualization::SurfaceSplatting => {
+                let point_cloud =
+                    generate_point_cloud(geo_tree, context, geometry_visualization_preferences);
+                Some(NodeOutput::SurfacePointCloud(point_cloud))
+            }
+            GeometryVisualization::ExplicitMesh => {
+                let csg_mesh = geo_tree.to_csg_mesh_cached(Some(&mut self.csg_conversion_cache))?;
+                let mut poly_mesh = convert_csg_mesh_to_poly_mesh(&csg_mesh, false, false);
+                poly_mesh.detect_sharp_edges(
+                    geometry_visualization_preferences.sharpness_angle_threshold_degree,
+                    true,
+                );
+                Some(NodeOutput::PolyMesh(poly_mesh))
+            }
+        }
+    }
+
     fn generate_explicit_mesh_output<'a>(
         &mut self,
         result: NetworkResult,
@@ -476,10 +504,29 @@ impl NetworkEvaluator {
             // types. In all three cases the NetworkResult carries a
             // Crystal(..) or Molecule(..) variant from which we extract the
             // inner AtomicStructure for display.
-            if let Some(atomic_structure) = result.extract_atomic() {
-                let mut cloned_atomic_structure = atomic_structure.clone();
-                cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
-                (NodeOutput::Atomic(cloned_atomic_structure), None)
+            let (atomic_structure, shell_geo_tree) = match result {
+                NetworkResult::Crystal(c) => (Some(c.atoms), c.geo_tree_root),
+                NetworkResult::Molecule(m) => (Some(m.atoms), m.geo_tree_root),
+                _ => (None, None),
+            };
+            if let Some(mut atomic_structure) = atomic_structure {
+                atomic_structure.decorator_mut().from_selected_node = from_selected_node;
+                let shell_output =
+                    if geometry_visualization_preferences.show_geometry_shell_for_atomic {
+                        shell_geo_tree.and_then(|geo_tree| {
+                            self.build_atomic_shell_output(
+                                &geo_tree,
+                                context,
+                                geometry_visualization_preferences,
+                            )
+                        })
+                    } else {
+                        None
+                    };
+                (
+                    NodeOutput::Atomic(atomic_structure, shell_output.map(Box::new)),
+                    None,
+                )
             } else {
                 (NodeOutput::None, None)
             }
@@ -608,7 +655,7 @@ impl NetworkEvaluator {
                     result.add_atomic_structure(other);
                 }
                 result.decorator_mut().from_selected_node = from_selected_node;
-                (NodeOutput::Atomic(result), None)
+                (NodeOutput::Atomic(result, None), None)
             }
             _ => (NodeOutput::None, None),
         }

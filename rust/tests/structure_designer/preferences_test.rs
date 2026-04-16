@@ -291,6 +291,7 @@ fn test_non_default_values_roundtrip() {
             sharpness_angle_threshold_degree: 45.0,
             mesh_smoothing: MeshSmoothing::Sharp,
             display_camera_target: true,
+            show_geometry_shell_for_atomic: false,
         },
         node_display_preferences: NodeDisplayPreferences {
             display_policy: NodeDisplayPolicy::PreferFrontier,

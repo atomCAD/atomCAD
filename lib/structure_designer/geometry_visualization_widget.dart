@@ -84,6 +84,36 @@ class GeometryVisualizationWidget extends StatelessWidget {
                   model.setPreferences(model.preferences!);
                 },
               ),
+
+              // Separator between "geometry rendering method" cluster and
+              // the "shell display" toggle (different axis of choice).
+              Container(
+                width: 1,
+                height: 20,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                color: Colors.grey[400],
+              ),
+
+              // Show geometry shell on Crystal / Molecule toggle
+              _buildIconButton(
+                context,
+                Icons.layers,
+                'Show geometry shell on Crystal and Molecule',
+                key: const Key('geometry_vis_shell_on_atomic'),
+                isSelected: model.preferences?.geometryVisualizationPreferences
+                        .showGeometryShellForAtomic ==
+                    true,
+                onPressed: () {
+                  final current = model
+                          .preferences
+                          ?.geometryVisualizationPreferences
+                          .showGeometryShellForAtomic ??
+                      true;
+                  model.preferences?.geometryVisualizationPreferences
+                      .showGeometryShellForAtomic = !current;
+                  model.setPreferences(model.preferences!);
+                },
+              ),
             ],
           );
         },

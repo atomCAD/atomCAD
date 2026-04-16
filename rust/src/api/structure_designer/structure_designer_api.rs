@@ -1,4 +1,3 @@
-use super::structure_designer_api_types::APIMaterializeData;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
 use super::structure_designer_api_types::APICandidateNode;
@@ -15,6 +14,7 @@ use super::structure_designer_api_types::APIImportCIFData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIInferBondsData;
 use super::structure_designer_api_types::APIMapData;
+use super::structure_designer_api_types::APIMaterializeData;
 use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIMotifParameterInfo;
@@ -49,14 +49,14 @@ use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomComposeDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
-use crate::api::structure_designer::structure_designer_api_types::APIFreeMoveData;
-use crate::api::structure_designer::structure_designer_api_types::APIFreeRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIBoolData;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APIDiffStats;
 use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIFloatData;
+use crate::api::structure_designer::structure_designer_api_types::APIFreeMoveData;
+use crate::api::structure_designer::structure_designer_api_types::APIFreeRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec2Data;
@@ -92,7 +92,6 @@ use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
-use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::circle::CircleData;
@@ -120,6 +119,7 @@ use crate::structure_designer::nodes::ivec3::IVec3Data;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use crate::structure_designer::nodes::map::MapData;
+use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
@@ -3795,8 +3795,7 @@ pub fn get_materialize_data(node_id: u64) -> Option<APIMaterializeData> {
                 let node_data = cad_instance
                     .structure_designer
                     .get_node_network_data(node_id)?;
-                let materialize_data =
-                    node_data.as_any_ref().downcast_ref::<MaterializeData>()?;
+                let materialize_data = node_data.as_any_ref().downcast_ref::<MaterializeData>()?;
 
                 use crate::crystolecule::atomic_constants::ATOM_INFO;
 

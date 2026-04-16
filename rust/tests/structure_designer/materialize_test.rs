@@ -102,7 +102,13 @@ fn materialize_has_no_motif_or_offset_pins() {
         .collect();
     assert_eq!(
         pin_names,
-        vec!["shape", "passivate", "rm_single", "surf_recon", "invert_phase"],
+        vec![
+            "shape",
+            "passivate",
+            "rm_single",
+            "surf_recon",
+            "invert_phase"
+        ],
         "materialize parameter pins"
     );
 }

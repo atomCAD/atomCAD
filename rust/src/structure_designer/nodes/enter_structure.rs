@@ -60,11 +60,13 @@ impl NodeData for EnterStructureData {
         };
 
         match input_val {
-            NetworkResult::Molecule(mol) => EvalOutput::single(NetworkResult::Crystal(CrystalData {
-                structure,
-                atoms: mol.atoms,
-                geo_tree_root: mol.geo_tree_root,
-            })),
+            NetworkResult::Molecule(mol) => {
+                EvalOutput::single(NetworkResult::Crystal(CrystalData {
+                    structure,
+                    atoms: mol.atoms,
+                    geo_tree_root: mol.geo_tree_root,
+                }))
+            }
             _ => EvalOutput::single(runtime_type_error_in_input(0)),
         }
     }

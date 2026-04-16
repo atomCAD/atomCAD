@@ -30,9 +30,9 @@ use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMo
 use rust_lib_flutter_cad::structure_designer::nodes::structure_rot::StructureRotData;
 // Atomic nodes
 use rust_lib_flutter_cad::structure_designer::nodes::atom_cut::AtomCutData;
-use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
 use rust_lib_flutter_cad::structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use rust_lib_flutter_cad::structure_designer::nodes::lattice_vecs::LatticeVecsData;
+use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
 use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
 // I/O nodes
 use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;

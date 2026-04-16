@@ -41,7 +41,10 @@ fn dematerialize_converts_crystal_to_blueprint() {
 
     let cuboid_bp = match evaluate_raw(&designer, network_name, cuboid_id) {
         NetworkResult::Blueprint(bp) => bp,
-        other => panic!("cuboid expected Blueprint, got {:?}", other.infer_data_type()),
+        other => panic!(
+            "cuboid expected Blueprint, got {:?}",
+            other.infer_data_type()
+        ),
     };
 
     let demat_result = evaluate_raw(&designer, network_name, demat_id);

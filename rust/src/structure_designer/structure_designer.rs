@@ -140,7 +140,7 @@ impl StructureDesigner {
             .values()
         {
             if let Some(interactive_output) = node_data.interactive_output() {
-                if let NodeOutput::Atomic(atomic_structure) = interactive_output {
+                if let NodeOutput::Atomic(atomic_structure, _) = interactive_output {
                     if atomic_structure.decorator().from_selected_node {
                         return Some(atomic_structure);
                     }
@@ -3118,7 +3118,7 @@ impl StructureDesigner {
             .values()
         {
             for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
-                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
                     match atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
@@ -3201,7 +3201,7 @@ impl StructureDesigner {
             .values()
         {
             for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
-                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
                     if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
@@ -3253,7 +3253,7 @@ impl StructureDesigner {
             .iter()
         {
             for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
-                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
                     if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
@@ -3309,7 +3309,7 @@ impl StructureDesigner {
 
             // Hit-test all displayed outputs for this node
             for (_pin_index, pin_output, pin_geo_tree) in node_data.displayed_outputs() {
-                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
                     match atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
@@ -3419,13 +3419,20 @@ impl StructureDesigner {
         let node_display_prefs_changed =
             self.preferences.node_display_preferences != preferences.node_display_preferences;
 
+        // Check if geometry visualization preferences have changed (e.g. the
+        // shell-display flag or mesh smoothing). These affect cached evaluator
+        // output for every displayed node, so we must re-evaluate.
+        let geometry_vis_prefs_changed = self.preferences.geometry_visualization_preferences
+            != preferences.geometry_visualization_preferences;
+
         // Update the preferences
         self.preferences = preferences;
 
         // If node display preferences have changed, reapply the node display policy
         if node_display_prefs_changed {
             self.apply_node_display_policy(None);
-            // Preference changes require full refresh
+            self.mark_full_refresh();
+        } else if geometry_vis_prefs_changed {
             self.mark_full_refresh();
         }
     }
@@ -4154,7 +4161,7 @@ impl StructureDesigner {
             .values()
         {
             for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
-                if let NodeOutput::Atomic(atomic_structure) = pin_output {
+                if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
                     merged_structure.add_atomic_structure(atomic_structure);
                     has_structures = true;
                 }

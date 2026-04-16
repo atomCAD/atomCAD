@@ -5,7 +5,6 @@ use super::nodes::atom_composediff::get_node_type as atom_composediff_get_node_t
 use super::nodes::atom_cut::get_node_type as atom_cut_get_node_type;
 use super::nodes::atom_edit::atom_edit::get_node_type as atom_edit_get_node_type;
 use super::nodes::atom_edit::atom_edit::get_node_type_motif_edit as motif_edit_get_node_type;
-use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::atom_replace::get_node_type as atom_replace_get_node_type;
 use super::nodes::atom_union::get_node_type as atom_union_get_node_type;
 use super::nodes::bool::get_node_type as bool_get_node_type;
@@ -40,6 +39,7 @@ use super::nodes::ivec3::get_node_type as ivec3_get_node_type;
 use super::nodes::lattice_symop::get_node_type as lattice_symop_get_node_type;
 use super::nodes::lattice_vecs::get_node_type as lattice_vecs_get_node_type;
 use super::nodes::map::get_node_type as map_get_node_type;
+use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;

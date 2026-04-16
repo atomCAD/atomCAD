@@ -21,8 +21,12 @@ pub struct DisplayedPinOutput {
 /// The explicit geometric/data output of a single node evaluation
 /// This represents the tessellatable/renderable output
 pub enum NodeOutput {
-    /// Atomic structure (from atomic nodes)
-    Atomic(AtomicStructure),
+    /// Atomic structure (from atomic nodes). The optional boxed `NodeOutput`
+    /// is a pre-computed geometry shell (`PolyMesh` or `SurfacePointCloud`)
+    /// for Crystal/Molecule phases — produced by the evaluator when the
+    /// source payload retained a geo_tree and the shell-display preference
+    /// is on.
+    Atomic(AtomicStructure, Option<Box<NodeOutput>>),
 
     /// 3D surface point cloud (from geometry visualization)
     SurfacePointCloud(SurfacePointCloud),
@@ -268,7 +272,13 @@ impl MemorySizeEstimator for NodeOutput {
         let base_size = std::mem::size_of::<NodeOutput>();
 
         let variant_size = match self {
-            NodeOutput::Atomic(atomic_structure) => atomic_structure.estimate_memory_bytes(),
+            NodeOutput::Atomic(atomic_structure, shell) => {
+                atomic_structure.estimate_memory_bytes()
+                    + shell
+                        .as_ref()
+                        .map(|s| s.estimate_memory_bytes())
+                        .unwrap_or(0)
+            }
             NodeOutput::SurfacePointCloud(point_cloud) => point_cloud.estimate_memory_bytes(),
             NodeOutput::SurfacePointCloud2D(point_cloud_2d) => {
                 point_cloud_2d.estimate_memory_bytes()
