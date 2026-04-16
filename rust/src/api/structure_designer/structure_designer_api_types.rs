@@ -52,7 +52,15 @@ pub struct InputPinView {
 
 pub struct OutputPinView {
     pub name: String,
+    /// Declared pin type. For polymorphic pins (`SameAsInput`/`SameAsArrayElements`)
+    /// or abstract `Fixed` types, this is the abstract declaration string
+    /// (e.g. `"SameAsInput(input)"` or `"StructureBound"`).
     pub data_type: String,
+    /// The concrete type the pin resolves to in the current network, if it can be
+    /// resolved. `Some` only when resolution succeeds and produces a concrete type
+    /// that differs from `data_type`. The Flutter UI should prefer this over
+    /// `data_type` for tooltips and color-coding when present.
+    pub resolved_data_type: Option<String>,
     pub index: i32,
 }
 

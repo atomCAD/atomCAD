@@ -11516,10 +11516,12 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_dataType = <String>::sse_decode(deserializer);
+        let mut var_resolvedDataType = <Option<String>>::sse_decode(deserializer);
         let mut var_index = <i32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::OutputPinView {
             name: var_name,
             data_type: var_dataType,
+            resolved_data_type: var_resolvedDataType,
             index: var_index,
         };
     }
@@ -14974,6 +14976,7 @@ impl flutter_rust_bridge::IntoDart
         [
             self.name.into_into_dart().into_dart(),
             self.data_type.into_into_dart().into_dart(),
+            self.resolved_data_type.into_into_dart().into_dart(),
             self.index.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -17613,6 +17616,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.data_type, serializer);
+        <Option<String>>::sse_encode(self.resolved_data_type, serializer);
         <i32>::sse_encode(self.index, serializer);
     }
 }

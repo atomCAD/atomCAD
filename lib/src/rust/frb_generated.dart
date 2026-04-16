@@ -12096,12 +12096,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   OutputPinView dco_decode_output_pin_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return OutputPinView(
       name: dco_decode_String(arr[0]),
       dataType: dco_decode_String(arr[1]),
-      index: dco_decode_i_32(arr[2]),
+      resolvedDataType: dco_decode_opt_String(arr[2]),
+      index: dco_decode_i_32(arr[3]),
     );
   }
 
@@ -15300,9 +15301,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
     var var_dataType = sse_decode_String(deserializer);
+    var var_resolvedDataType = sse_decode_opt_String(deserializer);
     var var_index = sse_decode_i_32(deserializer);
     return OutputPinView(
-        name: var_name, dataType: var_dataType, index: var_index);
+        name: var_name,
+        dataType: var_dataType,
+        resolvedDataType: var_resolvedDataType,
+        index: var_index);
   }
 
   @protected
@@ -18050,6 +18055,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.dataType, serializer);
+    sse_encode_opt_String(self.resolvedDataType, serializer);
     sse_encode_i_32(self.index, serializer);
   }
 

@@ -446,8 +446,8 @@ class NodeWidget extends StatelessWidget {
         ),
         const SizedBox(width: 2),
         PinWidget(
-          pinReference:
-              PinReference(node.id, PinType.output, pin.index, pin.dataType),
+          pinReference: PinReference(
+              node.id, PinType.output, pin.index, pin.effectiveDataType),
           multi: false,
           outputString: pin.index < node.outputPinStrings.length
               ? node.outputPinStrings[pin.index]

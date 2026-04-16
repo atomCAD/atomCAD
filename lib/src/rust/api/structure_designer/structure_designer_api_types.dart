@@ -2383,17 +2383,32 @@ class NodeView {
 
 class OutputPinView {
   final String name;
+
+  /// Declared pin type. For polymorphic pins (`SameAsInput`/`SameAsArrayElements`)
+  /// or abstract `Fixed` types, this is the abstract declaration string
+  /// (e.g. `"SameAsInput(input)"` or `"StructureBound"`).
   final String dataType;
+
+  /// The concrete type the pin resolves to in the current network, if it can be
+  /// resolved. `Some` only when resolution succeeds and produces a concrete type
+  /// that differs from `data_type`. The Flutter UI should prefer this over
+  /// `data_type` for tooltips and color-coding when present.
+  final String? resolvedDataType;
   final int index;
 
   const OutputPinView({
     required this.name,
     required this.dataType,
+    this.resolvedDataType,
     required this.index,
   });
 
   @override
-  int get hashCode => name.hashCode ^ dataType.hashCode ^ index.hashCode;
+  int get hashCode =>
+      name.hashCode ^
+      dataType.hashCode ^
+      resolvedDataType.hashCode ^
+      index.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2402,6 +2417,7 @@ class OutputPinView {
           runtimeType == other.runtimeType &&
           name == other.name &&
           dataType == other.dataType &&
+          resolvedDataType == other.resolvedDataType &&
           index == other.index;
 }
 

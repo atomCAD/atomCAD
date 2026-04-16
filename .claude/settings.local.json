@@ -161,7 +161,10 @@
       "Bash(INSTA_UPDATE=always cargo test)",
       "Bash(find rust:*)",
       "Bash(jq --version)",
-      "Bash(INSTA_UPDATE=always cargo test --tests --test structure_designer)"
+      "Bash(INSTA_UPDATE=always cargo test --tests --test structure_designer)",
+      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\Ádám Nagy\\\\\\\\.claude\\\\\\\\projects\\\\\\\\C--machine-phase-systems-flutter-cad\\\\\\\\e47c75b0-bdd4-4716-bf66-5ffae5f4bae4\\\\\\\\tool-results\\\\\\\\toolu_01RMwv7xuKWt24Hzkps1v9bW.txt\")",
+      "Bash(sed -n '50,100p' /tmp/drawio_values.txt)",
+      "Bash(sed -n '100,180p' /tmp/drawio_values.txt)"
     ]
   }
 }

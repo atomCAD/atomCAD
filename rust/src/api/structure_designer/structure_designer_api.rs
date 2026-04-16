@@ -337,15 +337,37 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                     let output_type = node_type.output_type().clone();
                     let function_type = node_type.get_function_type();
 
-                    // Build output pin views from the node type's output_pins
+                    // Build output pin views from the node type's output_pins.
+                    // For polymorphic pins (SameAsInput / SameAsArrayElements) or
+                    // pins declared with an abstract Fixed type, also resolve the
+                    // concrete type against the upstream wires so the UI can show
+                    // the actual flowing type instead of e.g. "SameAsInput(input)".
                     let output_pins: Vec<OutputPinView> = node_type
                         .output_pins
                         .iter()
                         .enumerate()
-                        .map(|(i, pin_def)| OutputPinView {
-                            name: pin_def.name.clone(),
-                            data_type: pin_def.data_type.to_string(),
-                            index: i as i32,
+                        .map(|(i, pin_def)| {
+                            let needs_resolution = match &pin_def.data_type {
+                                crate::structure_designer::node_type::PinOutputType::Fixed(t) => {
+                                    t.is_abstract()
+                                }
+                                _ => true,
+                            };
+                            let resolved_data_type = if needs_resolution {
+                                cad_instance
+                                    .structure_designer
+                                    .node_type_registry
+                                    .resolve_output_type(node, node_network, i as i32)
+                                    .map(|t| t.to_string())
+                            } else {
+                                None
+                            };
+                            OutputPinView {
+                                name: pin_def.name.clone(),
+                                data_type: pin_def.data_type.to_string(),
+                                resolved_data_type,
+                                index: i as i32,
+                            }
                         })
                         .collect();
 

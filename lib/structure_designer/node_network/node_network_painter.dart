@@ -126,9 +126,10 @@ class NodeNetworkPainter extends CustomPainter {
         // Result output pin(s) — use same vertical spacing as input pins
         sourceVertOffset = NODE_VERT_WIRE_OFFSET +
             (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-        // Get data type from the output pin definition
+        // Get data type from the output pin definition; prefer the resolved
+        // concrete type over the declared (possibly abstract) one for coloring.
         if (pinIndex < sourceNode.outputPins.length) {
-          dataType = sourceNode.outputPins[pinIndex].dataType;
+          dataType = sourceNode.outputPins[pinIndex].effectiveDataType;
         } else {
           dataType = sourceNode.outputType;
         }
@@ -173,7 +174,7 @@ class NodeNetworkPainter extends CustomPainter {
         final startY = nodePos.dy + (nodeSize.height - totalHeight) / 2;
         final outputY = startY + (pinIndex * spacing);
         final dataType = pinIndex < node.outputPins.length
-            ? node.outputPins[pinIndex].dataType
+            ? node.outputPins[pinIndex].effectiveDataType
             : node.outputType;
         return (Offset(rightEdgeX, outputY), dataType);
       } else {

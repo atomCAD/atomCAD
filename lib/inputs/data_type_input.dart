@@ -125,6 +125,14 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'Blueprint';
       case APIDataTypeBase.atomic:
         return 'Atomic';
+      case APIDataTypeBase.crystal:
+        return 'Crystal';
+      case APIDataTypeBase.molecule:
+        return 'Molecule';
+      case APIDataTypeBase.structureBound:
+        return 'StructureBound';
+      case APIDataTypeBase.unanchored:
+        return 'Unanchored';
       case APIDataTypeBase.motif:
         return 'Motif';
       case APIDataTypeBase.structure:

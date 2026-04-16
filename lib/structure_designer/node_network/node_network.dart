@@ -91,10 +91,16 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 
   // Geometry types (purple family - abstract shapes)
   'Geometry2D': Color(0xFFBA68C8), // Light purple
-  'Blueprint': Color(0xFF9C27B0), // Light deep purple
+  'Blueprint': Color(0xFF9C27B0), // Deep purple - latent atoms in a structure
 
-  // Physical types (green family - real-world matter)
-  'Atomic': Color(0xFF66BB6A), // Light green
+  // Phase types (green family - materialized matter).
+  // Abstract types come first so substring matching doesn't fall through
+  // to the concrete variants (e.g. 'StructureBound' must beat 'Structure').
+  'StructureBound': Color(0xFF7E57C2), // Purple-indigo - Blueprint or Crystal
+  'Unanchored': Color(0xFFCE93D8), // Light mauve - Blueprint or Molecule
+  'Crystal': Color(0xFF558B2F), // Olive green - atoms bound to a structure
+  'Molecule': Color(0xFF81C784), // Soft green - free atoms, no structure
+  'Atomic': Color(0xFF66BB6A), // Mid green - Crystal or Molecule
 
   // Crystal structure types (teal family - crystalline matter)
   'LatticeVecs': Color(0xFF26A69A), // Teal
@@ -162,6 +168,13 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
     final height = scaledHeight > minHeight ? scaledHeight : minHeight;
     return Size(width, height);
   }
+}
+
+/// The concrete type the pin actually carries in the current network, falling
+/// back to the declared (possibly abstract / `SameAsInput(...)`) type when
+/// resolution didn't produce anything.
+extension OutputPinViewEffectiveType on OutputPinView {
+  String get effectiveDataType => resolvedDataType ?? dataType;
 }
 
 /// Gets the appropriate color for a data type based on its name.
