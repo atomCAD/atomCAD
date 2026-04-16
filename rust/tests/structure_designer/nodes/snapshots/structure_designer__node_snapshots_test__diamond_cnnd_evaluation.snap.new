@@ -10,7 +10,7 @@ expression: snapshot
   "displayed_node_outputs": [
     {
       "node_id": 12,
-      "node_type": "atom_fill",
+      "node_type": "materialize",
       "output": "Error: error in shape input"
     },
     {

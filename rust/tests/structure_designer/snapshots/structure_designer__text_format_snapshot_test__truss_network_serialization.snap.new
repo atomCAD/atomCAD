@@ -34,6 +34,6 @@ diff1 = diff { base: intersect1, sub: [intersect2, intersect3, lattice_move1] }
 lattice_rot3 = lattice_rot
 lattice_rot1 = lattice_rot
 union1 = union { shapes: [lattice_rot1, lattice_rot3], visible: true }
-atom_fill1 = atom_fill { shape: union1, parameter_element_value_definition: "", m_offset: (0.0, 0.0, 0.5), passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+materialize1 = materialize { shape: union1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 
 # 30 nodes

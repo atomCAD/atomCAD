@@ -162,3 +162,6 @@ mod crystal_molecule_split_validation_test;
 
 #[path = "structure_designer/materialize_test.rs"]
 mod materialize_test;
+
+#[path = "structure_designer/phase_transitions_test.rs"]
+mod phase_transitions_test;
