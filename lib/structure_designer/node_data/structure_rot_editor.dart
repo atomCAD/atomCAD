@@ -6,28 +6,28 @@ import 'package:flutter_cad/common/crystal_system_display.dart';
 import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 
-/// Editor widget for lattice_rot nodes
-class LatticeRotEditor extends StatefulWidget {
+/// Editor widget for structure_rot nodes
+class StructureRotEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APILatticeRotData? data;
+  final APIStructureRotData? data;
   final StructureDesignerModel model;
   final String title;
   final String nodeTypeName;
 
-  const LatticeRotEditor({
+  const StructureRotEditor({
     super.key,
     required this.nodeId,
     required this.data,
     required this.model,
-    this.title = 'Lattice Rotation Properties',
-    this.nodeTypeName = 'lattice_rot',
+    this.title = 'Structure Rotation Properties',
+    this.nodeTypeName = 'structure_rot',
   });
 
   @override
-  State<LatticeRotEditor> createState() => _LatticeRotEditorState();
+  State<StructureRotEditor> createState() => _StructureRotEditorState();
 }
 
-class _LatticeRotEditorState extends State<LatticeRotEditor> {
+class _StructureRotEditorState extends State<StructureRotEditor> {
   int? _selectedAxisIndex;
   int _selectedStep = 0;
 
@@ -38,7 +38,7 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
   }
 
   @override
-  void didUpdateWidget(LatticeRotEditor oldWidget) {
+  void didUpdateWidget(StructureRotEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data != widget.data) {
       _initializeFromData();
@@ -47,7 +47,7 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
 
   void _initializeFromData() {
     if (widget.data == null) return;
-    
+
     setState(() {
       _selectedAxisIndex = widget.data!.axisIndex;
       _selectedStep = widget.data!.step;
@@ -57,14 +57,16 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
   void _updateData() {
     if (widget.data == null) return;
 
-    widget.model.setLatticeRotData(
+    widget.model.setStructureRotData(
       widget.nodeId,
-      APILatticeRotData(
+      APIStructureRotData(
         axisIndex: _selectedAxisIndex,
         step: _selectedStep,
         pivotPoint: widget.data!.pivotPoint,
-        rotationalSymmetries: widget.data!.rotationalSymmetries, // This will be ignored by the setter
-        crystalSystem: widget.data!.crystalSystem, // Preserve existing crystal system
+        rotationalSymmetries: widget
+            .data!.rotationalSymmetries, // This will be ignored by the setter
+        crystalSystem:
+            widget.data!.crystalSystem, // Preserve existing crystal system
       ),
     );
   }
@@ -76,14 +78,18 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
 
   /// Get the angle in degrees for the current step and selected axis
   double _getCurrentAngleDegrees() {
-    if (_selectedAxisIndex == null || widget.data == null || _selectedStep == 0) return 0.0;
-    
+    if (_selectedAxisIndex == null ||
+        widget.data == null ||
+        _selectedStep == 0) {
+      return 0.0;
+    }
+
     final symmetries = widget.data!.rotationalSymmetries;
     if (symmetries.isEmpty) return 0.0;
-    
+
     final safeAxisIndex = _selectedAxisIndex! % symmetries.length;
     final selectedSymmetry = symmetries[safeAxisIndex];
-    
+
     final anglePerStep = 360.0 / selectedSymmetry.nFold;
     return (_selectedStep % selectedSymmetry.nFold) * anglePerStep;
   }
@@ -106,21 +112,21 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
             nodeTypeName: widget.nodeTypeName,
           ),
           const SizedBox(height: 16),
-          
+
           // Crystal system display
           CrystalSystemDisplay(
             crystalSystem: widget.data!.crystalSystem,
           ),
           const SizedBox(height: 16),
-          
+
           // Pivot point input
           IVec3Input(
             label: 'Pivot Point',
             value: widget.data!.pivotPoint,
             onChanged: (newValue) {
-              widget.model.setLatticeRotData(
+              widget.model.setStructureRotData(
                 widget.nodeId,
-                APILatticeRotData(
+                APIStructureRotData(
                   axisIndex: _selectedAxisIndex,
                   step: _selectedStep,
                   pivotPoint: newValue,
@@ -131,7 +137,7 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
             },
           ),
           const SizedBox(height: 16),
-          
+
           if (!hasSymmetries) ...[
             // No symmetries available
             Card(
@@ -170,7 +176,8 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
               value: _selectedAxisIndex,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
               items: [
                 // Add "No Rotation" option
@@ -179,7 +186,10 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
                   child: Text('No Rotation'),
                 ),
                 // Add all available symmetries with their indices
-                ...widget.data!.rotationalSymmetries.asMap().entries.map((entry) {
+                ...widget.data!.rotationalSymmetries
+                    .asMap()
+                    .entries
+                    .map((entry) {
                   final index = entry.key;
                   final symmetry = entry.value;
                   return DropdownMenuItem<int?>(
@@ -198,7 +208,7 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
               },
             ),
             const SizedBox(height: 16),
-            
+
             // Step input (only show if an axis is selected)
             if (_selectedAxisIndex != null) ...[
               IntInput(
@@ -212,10 +222,13 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
                 },
               ),
               const SizedBox(height: 8),
-              
+
               // Show current angle
               Card(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.5),
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Row(
@@ -229,8 +242,10 @@ class _LatticeRotEditorState extends State<LatticeRotEditor> {
                       Text(
                         'Current rotation: ${_getCurrentAngleDegrees().toStringAsFixed(1)}°',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
                       ),
                     ],
                   ),

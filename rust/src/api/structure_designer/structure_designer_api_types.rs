@@ -29,6 +29,10 @@ pub enum APIDataTypeBase {
     Geometry2D,
     Blueprint,
     Atomic,
+    Crystal,
+    Molecule,
+    StructureBound,
+    Unanchored,
     Motif,
     Structure,
     Custom,
@@ -220,12 +224,12 @@ pub struct APILatticeSymopData {
     pub crystal_system: String,
 }
 
-pub struct APILatticeMoveData {
+pub struct APIStructureMoveData {
     pub translation: APIIVec3,
     pub lattice_subdivision: i32,
 }
 
-pub struct APILatticeRotData {
+pub struct APIStructureRotData {
     pub axis_index: Option<i32>,
     pub step: i32,
     pub pivot_point: APIIVec3,
@@ -233,19 +237,14 @@ pub struct APILatticeRotData {
     pub crystal_system: String,
 }
 
-pub struct APIAtomMoveData {
+pub struct APIFreeMoveData {
     pub translation: APIVec3,
 }
 
-pub struct APIAtomRotData {
+pub struct APIFreeRotData {
     pub angle: f64, // In radians
     pub rot_axis: APIVec3,
     pub pivot_point: APIVec3,
-}
-
-pub struct APIAtomTransData {
-    pub translation: APIVec3,
-    pub rotation: APIVec3, // intrinsic euler angles in radians
 }
 
 pub struct APIEditAtomData {
@@ -763,9 +762,8 @@ pub struct APIMotifParameterInfo {
 }
 
 #[flutter_rust_bridge::frb]
-pub struct APIAtomFillData {
+pub struct APIMaterializeData {
     pub parameter_element_value_definition: String, // The parameter element value definition text
-    pub motif_offset: APIVec3,                      // Offset in fractional lattice coordinates
     pub hydrogen_passivation: bool,                 // Whether to apply hydrogen passivation
     pub remove_single_bond_atoms_before_passivation: bool, // Whether to remove atoms with exactly one bond before passivation
     pub surface_reconstruction: bool, // Whether to apply surface reconstruction
@@ -794,7 +792,7 @@ pub struct BatchCliConfig {
 pub struct APINodeEvaluationResult {
     /// The node ID that was evaluated
     pub node_id: u64,
-    /// The node type name (e.g., "cuboid", "atom_fill")
+    /// The node type name (e.g., "cuboid", "materialize")
     pub node_type_name: String,
     /// The custom name if assigned, otherwise None
     pub custom_name: Option<String>,

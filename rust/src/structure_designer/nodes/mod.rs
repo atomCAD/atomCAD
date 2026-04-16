@@ -5,7 +5,6 @@ pub mod atom_cut;
 pub mod atom_edit;
 pub mod materialize;
 pub mod atom_replace;
-pub mod atom_trans;
 pub mod atom_union;
 pub mod bool;
 pub mod circle;

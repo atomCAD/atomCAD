@@ -33,10 +33,8 @@ Editors typically use shared widgets from `lib/common/` for numeric inputs, drop
 
 Editor files follow: `{node_type_name}_editor.dart`
 - `sphere_editor.dart` → Sphere node
-- `atom_fill_editor.dart` → AtomFill node
+- `materialize_editor.dart` → Materialize node
 - `vec3_editor.dart` → Vec3 node
-
-Exception: `atom_trans.dart` (no `_editor` suffix, legacy).
 
 ## Node Types Without Custom Editors
 

@@ -8,8 +8,10 @@ Built-in node type implementations. Each file defines one node type's behavior v
 - **Math/Programming:** `expr`, `value`, `map`, `range`, `parameter`
 - **Geometry 2D:** `rect`, `circle`, `reg_poly`, `polygon`, `union_2d`, `intersect_2d`, `diff_2d`, `half_plane`
 - **Geometry 3D:** `cuboid`, `sphere`, `extrude`, `half_space`, `drawing_plane`, `facet_shell`, `union`, `intersect`, `diff`, `geo_trans`
-- **Atomic:** `unit_cell`, `motif`, `atom_fill`, `edit_atom/`, `atom_edit/`, `motif_edit`, `atom_move`, `atom_rot`, `atom_trans`, `atom_union`, `atom_cut`, `relax`, `add_hydrogen`
-- **Lattice:** `lattice_symop`, `lattice_move`, `lattice_rot`
+- **Structure:** `lattice_vecs`, `motif`, `structure`
+- **Phase transitions:** `materialize`, `dematerialize`, `exit_structure`, `enter_structure`
+- **Atomic:** `edit_atom/`, `atom_edit/`, `motif_edit`, `atom_union`, `atom_cut`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `apply_diff`, `atom_composediff`
+- **Movement:** `structure_move`, `structure_rot` (StructureBound), `free_move`, `free_rot` (Unanchored), `lattice_symop`
 - **I/O:** `import_xyz`, `import_cif`, `export_xyz`
 - **Annotation:** `comment`
 

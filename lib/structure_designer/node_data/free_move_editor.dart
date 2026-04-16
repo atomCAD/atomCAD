@@ -4,14 +4,14 @@ import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
-/// Editor widget for atom_move nodes.
+/// Editor widget for free_move nodes.
 /// Allows editing the translation vector in world space (Cartesian coordinates).
-class AtomMoveEditor extends StatefulWidget {
+class FreeMoveEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APIAtomMoveData? data;
+  final APIFreeMoveData? data;
   final StructureDesignerModel model;
 
-  const AtomMoveEditor({
+  const FreeMoveEditor({
     super.key,
     required this.nodeId,
     required this.data,
@@ -19,10 +19,10 @@ class AtomMoveEditor extends StatefulWidget {
   });
 
   @override
-  State<AtomMoveEditor> createState() => AtomMoveEditorState();
+  State<FreeMoveEditor> createState() => FreeMoveEditorState();
 }
 
-class AtomMoveEditorState extends State<AtomMoveEditor> {
+class FreeMoveEditorState extends State<FreeMoveEditor> {
   @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
@@ -35,17 +35,17 @@ class AtomMoveEditorState extends State<AtomMoveEditor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const NodeEditorHeader(
-            title: 'Atom Move Properties',
-            nodeTypeName: 'atom_move',
+            title: 'Free Move Properties',
+            nodeTypeName: 'free_move',
           ),
           const SizedBox(height: 16),
           Vec3Input(
             label: 'Translation (Å)',
             value: widget.data!.translation,
             onChanged: (newValue) {
-              widget.model.setAtomMoveData(
+              widget.model.setFreeMoveData(
                 widget.nodeId,
-                APIAtomMoveData(
+                APIFreeMoveData(
                   translation: newValue,
                 ),
               );

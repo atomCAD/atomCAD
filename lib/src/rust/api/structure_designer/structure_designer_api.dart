@@ -436,28 +436,23 @@ APILatticeSymopData? getLatticeSymopData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetLatticeSymopData(
             nodeId: nodeId);
 
-APILatticeMoveData? getLatticeMoveData({required BigInt nodeId}) =>
+APIStructureMoveData? getStructureMoveData({required BigInt nodeId}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiGetLatticeMoveData(
+        .crateApiStructureDesignerStructureDesignerApiGetStructureMoveData(
             nodeId: nodeId);
 
-APILatticeRotData? getLatticeRotData({required BigInt nodeId}) =>
+APIStructureRotData? getStructureRotData({required BigInt nodeId}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiGetLatticeRotData(
+        .crateApiStructureDesignerStructureDesignerApiGetStructureRotData(
             nodeId: nodeId);
 
-APIAtomMoveData? getAtomMoveData({required BigInt nodeId}) =>
+APIFreeMoveData? getFreeMoveData({required BigInt nodeId}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiGetAtomMoveData(
+        .crateApiStructureDesignerStructureDesignerApiGetFreeMoveData(
             nodeId: nodeId);
 
-APIAtomRotData? getAtomRotData({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiGetAtomRotData(
-        nodeId: nodeId);
-
-APIAtomTransData? getAtomTransData({required BigInt nodeId}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerStructureDesignerApiGetAtomTransData(
+APIFreeRotData? getFreeRotData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetFreeRotData(
         nodeId: nodeId);
 
 APIEditAtomData? getEditAtomData({required BigInt nodeId}) =>
@@ -593,32 +588,26 @@ void setLatticeSymopData(
         .crateApiStructureDesignerStructureDesignerApiSetLatticeSymopData(
             nodeId: nodeId, data: data);
 
-void setLatticeMoveData(
-        {required BigInt nodeId, required APILatticeMoveData data}) =>
+void setStructureMoveData(
+        {required BigInt nodeId, required APIStructureMoveData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetLatticeMoveData(
+        .crateApiStructureDesignerStructureDesignerApiSetStructureMoveData(
             nodeId: nodeId, data: data);
 
-void setLatticeRotData(
-        {required BigInt nodeId, required APILatticeRotData data}) =>
+void setStructureRotData(
+        {required BigInt nodeId, required APIStructureRotData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetLatticeRotData(
+        .crateApiStructureDesignerStructureDesignerApiSetStructureRotData(
             nodeId: nodeId, data: data);
 
-void setAtomMoveData({required BigInt nodeId, required APIAtomMoveData data}) =>
+void setFreeMoveData({required BigInt nodeId, required APIFreeMoveData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetAtomMoveData(
+        .crateApiStructureDesignerStructureDesignerApiSetFreeMoveData(
             nodeId: nodeId, data: data);
 
-void setAtomRotData({required BigInt nodeId, required APIAtomRotData data}) =>
+void setFreeRotData({required BigInt nodeId, required APIFreeRotData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetAtomRotData(
-            nodeId: nodeId, data: data);
-
-void setAtomTransData(
-        {required BigInt nodeId, required APIAtomTransData data}) =>
-    RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetAtomTransData(
+        .crateApiStructureDesignerStructureDesignerApiSetFreeRotData(
             nodeId: nodeId, data: data);
 
 void setAtomCutData({required BigInt nodeId, required APIAtomCutData data}) =>
@@ -709,15 +698,15 @@ APIResult setMotifData({required BigInt nodeId, required APIMotifData data}) =>
         .crateApiStructureDesignerStructureDesignerApiSetMotifData(
             nodeId: nodeId, data: data);
 
-APIAtomFillData? getAtomFillData({required BigInt nodeId}) =>
+APIMaterializeData? getMaterializeData({required BigInt nodeId}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiGetAtomFillData(
+        .crateApiStructureDesignerStructureDesignerApiGetMaterializeData(
             nodeId: nodeId);
 
-APIResult setAtomFillData(
-        {required BigInt nodeId, required APIAtomFillData data}) =>
+APIResult setMaterializeData(
+        {required BigInt nodeId, required APIMaterializeData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetAtomFillData(
+        .crateApiStructureDesignerStructureDesignerApiSetMaterializeData(
             nodeId: nodeId, data: data);
 
 APIMotifSubData? getMotifSubData({required BigInt nodeId}) =>

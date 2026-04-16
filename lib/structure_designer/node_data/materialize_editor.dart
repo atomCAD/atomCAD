@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/inputs/vec3_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/parameter_element_override_editor.dart';
 
-/// Editor widget for atom_fill nodes
-class AtomFillEditor extends StatefulWidget {
+/// Editor widget for materialize nodes
+class MaterializeEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APIAtomFillData? data;
+  final APIMaterializeData? data;
   final StructureDesignerModel model;
 
-  const AtomFillEditor({
+  const MaterializeEditor({
     super.key,
     required this.nodeId,
     required this.data,
@@ -20,12 +18,11 @@ class AtomFillEditor extends StatefulWidget {
   });
 
   @override
-  State<AtomFillEditor> createState() => _AtomFillEditorState();
+  State<MaterializeEditor> createState() => _MaterializeEditorState();
 }
 
-class _AtomFillEditorState extends State<AtomFillEditor> {
+class _MaterializeEditorState extends State<MaterializeEditor> {
   late String _parameterElementValueDefinition;
-  late APIVec3 _motifOffset;
   late bool _hydrogenPassivation;
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
@@ -36,11 +33,10 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
       return;
     }
 
-    widget.model.setAtomFillData(
+    widget.model.setMaterializeData(
       widget.nodeId,
-      APIAtomFillData(
+      APIMaterializeData(
         parameterElementValueDefinition: _parameterElementValueDefinition,
-        motifOffset: _motifOffset,
         hydrogenPassivation: _hydrogenPassivation,
         removeSingleBondAtomsBeforePassivation:
             _removeSingleBondAtomsBeforePassivation,
@@ -57,7 +53,6 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
     super.initState();
     _parameterElementValueDefinition =
         widget.data?.parameterElementValueDefinition ?? '';
-    _motifOffset = widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
     _removeSingleBondAtomsBeforePassivation =
         widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
@@ -66,16 +61,12 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
   }
 
   @override
-  void didUpdateWidget(AtomFillEditor oldWidget) {
+  void didUpdateWidget(MaterializeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.data?.parameterElementValueDefinition !=
         widget.data?.parameterElementValueDefinition) {
       _parameterElementValueDefinition =
           widget.data?.parameterElementValueDefinition ?? '';
-    }
-    if (oldWidget.data?.motifOffset != widget.data?.motifOffset) {
-      _motifOffset =
-          widget.data?.motifOffset ?? APIVec3(x: 0.0, y: 0.0, z: 0.0);
     }
     if (oldWidget.data?.hydrogenPassivation !=
         widget.data?.hydrogenPassivation) {
@@ -107,8 +98,8 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const NodeEditorHeader(
-            title: 'Atom Fill Properties',
-            nodeTypeName: 'atom_fill',
+            title: 'Materialize Properties',
+            nodeTypeName: 'materialize',
           ),
           const SizedBox(height: 8),
 
@@ -120,21 +111,6 @@ class _AtomFillEditorState extends State<AtomFillEditor> {
               setState(() {
                 _parameterElementValueDefinition = newText;
               });
-              _commitChanges();
-            },
-          ),
-
-          const SizedBox(height: 8),
-
-          // Motif Offset input
-          Vec3Input(
-            label: 'Motif Offset (fractional coordinates)',
-            value: _motifOffset,
-            onChanged: (value) {
-              setState(() {
-                _motifOffset = value;
-              });
-
               _commitChanges();
             },
           ),

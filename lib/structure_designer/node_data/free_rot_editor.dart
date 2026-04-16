@@ -7,14 +7,14 @@ import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
-/// Editor widget for atom_rot nodes.
+/// Editor widget for free_rot nodes.
 /// Allows editing the rotation angle, axis, and pivot point in world space.
-class AtomRotEditor extends StatefulWidget {
+class FreeRotEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APIAtomRotData? data;
+  final APIFreeRotData? data;
   final StructureDesignerModel model;
 
-  const AtomRotEditor({
+  const FreeRotEditor({
     super.key,
     required this.nodeId,
     required this.data,
@@ -22,10 +22,10 @@ class AtomRotEditor extends StatefulWidget {
   });
 
   @override
-  State<AtomRotEditor> createState() => AtomRotEditorState();
+  State<FreeRotEditor> createState() => FreeRotEditorState();
 }
 
-class AtomRotEditorState extends State<AtomRotEditor> {
+class FreeRotEditorState extends State<FreeRotEditor> {
   // Preset axis options
   static const Map<String, APIVec3?> presetAxes = {
     'X-axis': APIVec3(x: 1, y: 0, z: 0),
@@ -53,9 +53,9 @@ class AtomRotEditorState extends State<AtomRotEditor> {
   double _degreesToRadians(double degrees) => degrees * math.pi / 180.0;
 
   void _updateRotationAxis(APIVec3 newAxis) {
-    widget.model.setAtomRotData(
+    widget.model.setFreeRotData(
       widget.nodeId,
-      APIAtomRotData(
+      APIFreeRotData(
         angle: widget.data!.angle,
         rotAxis: newAxis,
         pivotPoint: widget.data!.pivotPoint,
@@ -64,9 +64,9 @@ class AtomRotEditorState extends State<AtomRotEditor> {
   }
 
   void _updateAngle(double newAngleRadians) {
-    widget.model.setAtomRotData(
+    widget.model.setFreeRotData(
       widget.nodeId,
-      APIAtomRotData(
+      APIFreeRotData(
         angle: newAngleRadians,
         rotAxis: widget.data!.rotAxis,
         pivotPoint: widget.data!.pivotPoint,
@@ -75,9 +75,9 @@ class AtomRotEditorState extends State<AtomRotEditor> {
   }
 
   void _updatePivotPoint(APIVec3 newPivotPoint) {
-    widget.model.setAtomRotData(
+    widget.model.setFreeRotData(
       widget.nodeId,
-      APIAtomRotData(
+      APIFreeRotData(
         angle: widget.data!.angle,
         rotAxis: widget.data!.rotAxis,
         pivotPoint: newPivotPoint,
@@ -99,8 +99,8 @@ class AtomRotEditorState extends State<AtomRotEditor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const NodeEditorHeader(
-            title: 'Atom Rotation Properties',
-            nodeTypeName: 'atom_rot',
+            title: 'Free Rotation Properties',
+            nodeTypeName: 'free_rot',
           ),
           const SizedBox(height: 16),
 
@@ -113,9 +113,9 @@ class AtomRotEditorState extends State<AtomRotEditor> {
               border: OutlineInputBorder(),
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
-            items: presetAxes.keys.map((name) =>
-              DropdownMenuItem(value: name, child: Text(name))
-            ).toList(),
+            items: presetAxes.keys
+                .map((name) => DropdownMenuItem(value: name, child: Text(name)))
+                .toList(),
             onChanged: (String? newValue) {
               if (newValue != null && presetAxes[newValue] != null) {
                 _updateRotationAxis(presetAxes[newValue]!);
@@ -144,7 +144,10 @@ class AtomRotEditorState extends State<AtomRotEditor> {
 
           // Current rotation display
           Card(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withValues(alpha: 0.5),
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Row(
@@ -158,8 +161,8 @@ class AtomRotEditorState extends State<AtomRotEditor> {
                   Text(
                     'Current rotation: ${_radiansToDegrees(widget.data!.angle).toStringAsFixed(1)}°',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                 ],
               ),

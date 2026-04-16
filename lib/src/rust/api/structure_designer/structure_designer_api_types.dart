@@ -284,73 +284,6 @@ enum APIAtomEditTool {
   ;
 }
 
-class APIAtomFillData {
-  final String parameterElementValueDefinition;
-  final APIVec3 motifOffset;
-  final bool hydrogenPassivation;
-  final bool removeSingleBondAtomsBeforePassivation;
-  final bool surfaceReconstruction;
-  final bool invertPhase;
-  final String? error;
-  final List<APIMotifParameterInfo> availableParameters;
-
-  const APIAtomFillData({
-    required this.parameterElementValueDefinition,
-    required this.motifOffset,
-    required this.hydrogenPassivation,
-    required this.removeSingleBondAtomsBeforePassivation,
-    required this.surfaceReconstruction,
-    required this.invertPhase,
-    this.error,
-    required this.availableParameters,
-  });
-
-  @override
-  int get hashCode =>
-      parameterElementValueDefinition.hashCode ^
-      motifOffset.hashCode ^
-      hydrogenPassivation.hashCode ^
-      removeSingleBondAtomsBeforePassivation.hashCode ^
-      surfaceReconstruction.hashCode ^
-      invertPhase.hashCode ^
-      error.hashCode ^
-      availableParameters.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIAtomFillData &&
-          runtimeType == other.runtimeType &&
-          parameterElementValueDefinition ==
-              other.parameterElementValueDefinition &&
-          motifOffset == other.motifOffset &&
-          hydrogenPassivation == other.hydrogenPassivation &&
-          removeSingleBondAtomsBeforePassivation ==
-              other.removeSingleBondAtomsBeforePassivation &&
-          surfaceReconstruction == other.surfaceReconstruction &&
-          invertPhase == other.invertPhase &&
-          error == other.error &&
-          availableParameters == other.availableParameters;
-}
-
-class APIAtomMoveData {
-  final APIVec3 translation;
-
-  const APIAtomMoveData({
-    required this.translation,
-  });
-
-  @override
-  int get hashCode => translation.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIAtomMoveData &&
-          runtimeType == other.runtimeType &&
-          translation == other.translation;
-}
-
 class APIAtomReplaceData {
   /// List of (from_atomic_number, to_atomic_number) replacement rules.
   final List<APIAtomReplaceRule> replacements;
@@ -389,51 +322,6 @@ class APIAtomReplaceRule {
           runtimeType == other.runtimeType &&
           fromAtomicNumber == other.fromAtomicNumber &&
           toAtomicNumber == other.toAtomicNumber;
-}
-
-class APIAtomRotData {
-  final double angle;
-  final APIVec3 rotAxis;
-  final APIVec3 pivotPoint;
-
-  const APIAtomRotData({
-    required this.angle,
-    required this.rotAxis,
-    required this.pivotPoint,
-  });
-
-  @override
-  int get hashCode => angle.hashCode ^ rotAxis.hashCode ^ pivotPoint.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIAtomRotData &&
-          runtimeType == other.runtimeType &&
-          angle == other.angle &&
-          rotAxis == other.rotAxis &&
-          pivotPoint == other.pivotPoint;
-}
-
-class APIAtomTransData {
-  final APIVec3 translation;
-  final APIVec3 rotation;
-
-  const APIAtomTransData({
-    required this.translation,
-    required this.rotation,
-  });
-
-  @override
-  int get hashCode => translation.hashCode ^ rotation.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APIAtomTransData &&
-          runtimeType == other.runtimeType &&
-          translation == other.translation &&
-          rotation == other.rotation;
 }
 
 /// Bond length computation mode for guided atom placement.
@@ -606,6 +494,10 @@ enum APIDataTypeBase {
   geometry2D,
   blueprint,
   atomic,
+  crystal,
+  molecule,
+  structureBound,
+  unanchored,
   motif,
   structure,
   custom,
@@ -941,6 +833,48 @@ class APIFloatData {
           value == other.value;
 }
 
+class APIFreeMoveData {
+  final APIVec3 translation;
+
+  const APIFreeMoveData({
+    required this.translation,
+  });
+
+  @override
+  int get hashCode => translation.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFreeMoveData &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation;
+}
+
+class APIFreeRotData {
+  final double angle;
+  final APIVec3 rotAxis;
+  final APIVec3 pivotPoint;
+
+  const APIFreeRotData({
+    required this.angle,
+    required this.rotAxis,
+    required this.pivotPoint,
+  });
+
+  @override
+  int get hashCode => angle.hashCode ^ rotAxis.hashCode ^ pivotPoint.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFreeRotData &&
+          runtimeType == other.runtimeType &&
+          angle == other.angle &&
+          rotAxis == other.rotAxis &&
+          pivotPoint == other.pivotPoint;
+}
+
 class APIGeoTransData {
   final APIIVec3 translation;
   final APIIVec3 rotation;
@@ -1202,62 +1136,6 @@ class APIIntData {
           value == other.value;
 }
 
-class APILatticeMoveData {
-  final APIIVec3 translation;
-  final int latticeSubdivision;
-
-  const APILatticeMoveData({
-    required this.translation,
-    required this.latticeSubdivision,
-  });
-
-  @override
-  int get hashCode => translation.hashCode ^ latticeSubdivision.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APILatticeMoveData &&
-          runtimeType == other.runtimeType &&
-          translation == other.translation &&
-          latticeSubdivision == other.latticeSubdivision;
-}
-
-class APILatticeRotData {
-  final int? axisIndex;
-  final int step;
-  final APIIVec3 pivotPoint;
-  final List<APIRotationalSymmetry> rotationalSymmetries;
-  final String crystalSystem;
-
-  const APILatticeRotData({
-    this.axisIndex,
-    required this.step,
-    required this.pivotPoint,
-    required this.rotationalSymmetries,
-    required this.crystalSystem,
-  });
-
-  @override
-  int get hashCode =>
-      axisIndex.hashCode ^
-      step.hashCode ^
-      pivotPoint.hashCode ^
-      rotationalSymmetries.hashCode ^
-      crystalSystem.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APILatticeRotData &&
-          runtimeType == other.runtimeType &&
-          axisIndex == other.axisIndex &&
-          step == other.step &&
-          pivotPoint == other.pivotPoint &&
-          rotationalSymmetries == other.rotationalSymmetries &&
-          crystalSystem == other.crystalSystem;
-}
-
 class APILatticeSymopData {
   final APIIVec3 translation;
   final APIVec3? rotationAxis;
@@ -1359,6 +1237,51 @@ class APIMapData {
           runtimeType == other.runtimeType &&
           inputType == other.inputType &&
           outputType == other.outputType;
+}
+
+class APIMaterializeData {
+  final String parameterElementValueDefinition;
+  final bool hydrogenPassivation;
+  final bool removeSingleBondAtomsBeforePassivation;
+  final bool surfaceReconstruction;
+  final bool invertPhase;
+  final String? error;
+  final List<APIMotifParameterInfo> availableParameters;
+
+  const APIMaterializeData({
+    required this.parameterElementValueDefinition,
+    required this.hydrogenPassivation,
+    required this.removeSingleBondAtomsBeforePassivation,
+    required this.surfaceReconstruction,
+    required this.invertPhase,
+    this.error,
+    required this.availableParameters,
+  });
+
+  @override
+  int get hashCode =>
+      parameterElementValueDefinition.hashCode ^
+      hydrogenPassivation.hashCode ^
+      removeSingleBondAtomsBeforePassivation.hashCode ^
+      surfaceReconstruction.hashCode ^
+      invertPhase.hashCode ^
+      error.hashCode ^
+      availableParameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMaterializeData &&
+          runtimeType == other.runtimeType &&
+          parameterElementValueDefinition ==
+              other.parameterElementValueDefinition &&
+          hydrogenPassivation == other.hydrogenPassivation &&
+          removeSingleBondAtomsBeforePassivation ==
+              other.removeSingleBondAtomsBeforePassivation &&
+          surfaceReconstruction == other.surfaceReconstruction &&
+          invertPhase == other.invertPhase &&
+          error == other.error &&
+          availableParameters == other.availableParameters;
 }
 
 @freezed
@@ -1575,7 +1498,7 @@ class APINodeEvaluationResult {
   /// The node ID that was evaluated
   final BigInt nodeId;
 
-  /// The node type name (e.g., "cuboid", "atom_fill")
+  /// The node type name (e.g., "cuboid", "materialize")
   final String nodeTypeName;
 
   /// The custom name if assigned, otherwise None
@@ -1883,6 +1806,62 @@ class APIStringData {
       other is APIStringData &&
           runtimeType == other.runtimeType &&
           value == other.value;
+}
+
+class APIStructureMoveData {
+  final APIIVec3 translation;
+  final int latticeSubdivision;
+
+  const APIStructureMoveData({
+    required this.translation,
+    required this.latticeSubdivision,
+  });
+
+  @override
+  int get hashCode => translation.hashCode ^ latticeSubdivision.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIStructureMoveData &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation &&
+          latticeSubdivision == other.latticeSubdivision;
+}
+
+class APIStructureRotData {
+  final int? axisIndex;
+  final int step;
+  final APIIVec3 pivotPoint;
+  final List<APIRotationalSymmetry> rotationalSymmetries;
+  final String crystalSystem;
+
+  const APIStructureRotData({
+    this.axisIndex,
+    required this.step,
+    required this.pivotPoint,
+    required this.rotationalSymmetries,
+    required this.crystalSystem,
+  });
+
+  @override
+  int get hashCode =>
+      axisIndex.hashCode ^
+      step.hashCode ^
+      pivotPoint.hashCode ^
+      rotationalSymmetries.hashCode ^
+      crystalSystem.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIStructureRotData &&
+          runtimeType == other.runtimeType &&
+          axisIndex == other.axisIndex &&
+          step == other.step &&
+          pivotPoint == other.pivotPoint &&
+          rotationalSymmetries == other.rotationalSymmetries &&
+          crystalSystem == other.crystalSystem;
 }
 
 /// Result of applying text format edits to the active network.
