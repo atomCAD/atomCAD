@@ -49,10 +49,12 @@ Wires use cubic Bezier curves with data-type-based coloring:
 |------|-------------|
 | Bool/Int/Float | Warm orange |
 | Vec2/Vec3/IVec | Cool blue |
-| Geometry | Purple |
+| Geometry2D/Blueprint | Purple |
 | Atomic | Green |
-| LatticeVecs/Motif | Teal/cyan |
+| LatticeVecs/Motif/Structure | Teal/cyan |
 | Functions | Amber |
+
+`DATA_TYPE_COLORS` in `node_network.dart` matches by substring, so array types `[T]` pick up the base `T` color. Crystal/Molecule/StructureBound/Unanchored currently fall through to the default grey — they match no entry and are rare on wires (wires usually carry the concrete phase; abstract types appear only as declared input-pin types and resolve to the source's concrete type).
 
 ## Node Widget States
 

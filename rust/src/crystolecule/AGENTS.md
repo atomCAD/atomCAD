@@ -20,6 +20,7 @@ crystolecule/
 ├── motif_parser.rs                 # Text format parser for motifs
 ├── guided_placement.rs             # Guided atom placement geometry (bond directions, saturation)
 ├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures
+├── structure.rs                    # `Structure` value type (lattice_vecs + motif + motif_offset)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
 ├── unit_cell_symmetries.rs         # Crystal system classification (7 systems)
 ├── atomic_structure/
@@ -66,6 +67,7 @@ crystolecule/
 | `InlineBond` | `atomic_structure/inline_bond.rs` | 4-byte bond: 29-bit atom_id + 3-bit order. Supports 7 bond types |
 | `BondReference` | `atomic_structure/bond_reference.rs` | Unordered (atom_id1, atom_id2) pair, hashable |
 | `UnitCellStruct` | `unit_cell_struct.rs` | Basis vectors (a,b,c), lattice↔real coordinate conversion |
+| `Structure` | `structure.rs` | Bundles `lattice_vecs: UnitCellStruct` + `motif: Motif` + `motif_offset: DVec3`. Factories: `Structure::diamond()` (cubic diamond + zincblende motif + zero offset), `Structure::from_lattice_vecs(...)` (default motif + zero offset). Carried by `BlueprintData` and `CrystalData` as a first-class value |
 | `Motif` | `motif.rs` | Sites (fractional coords), bonds (with cell offsets), parameter elements |
 | `SiteSpecifier` | `motif.rs` | Site index + IVec3 relative cell offset |
 | `DrawingPlane` | `drawing_plane.rs` | Miller-indexed 2D plane with 2D↔3D transforms |
@@ -94,7 +96,7 @@ crystolecule/
 
 **Lattice Filling**: `fill_lattice()` recursively subdivides a bounding box, evaluates an SDF geometry at motif sites, places atoms where SDF ≤ 0.01, creates bonds from the motif template, then applies cleanup → surface reconstruction → hydrogen passivation.
 
-**Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries.
+**Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
 **Guided Placement** (`guided_placement.rs`): Computes chemically valid candidate positions for bonded atom placement. Given an anchor atom, determines hybridization (sp3/sp2/sp1 via UFF type assignment or manual override), checks saturation, computes bond distance, and returns guide dot positions at correct bond angles. Three placement modes: `FixedDots` (deterministic positions), `FreeSphere` (bare atom, click anywhere), `FreeRing` (single bond without dihedral reference, rotating dots on cone). Includes a crystal bond length table for ~20 semiconductor compounds (diamond cubic / zinc blende lattice parameters) with UFF fallback. Dative bond mode unlocks lone pair / empty orbital positions but does not persist any bond kind distinction — dative is a placement-time consideration only. Design doc: `doc/atom_edit/guided_atom_placement.md`.
 
