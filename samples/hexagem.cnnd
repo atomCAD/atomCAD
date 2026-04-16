@@ -410,7 +410,7 @@
           },
           {
             "id": 34,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               2301.4725341796875,
               42.874316406250074
@@ -423,16 +423,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },

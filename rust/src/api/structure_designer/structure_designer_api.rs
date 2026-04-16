@@ -93,7 +93,7 @@ use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
-use crate::structure_designer::nodes::atom_fill::AtomFillData;
+use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::atom_trans::AtomTransData;
 use crate::structure_designer::nodes::bool::BoolData;
@@ -3809,11 +3809,12 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
                 let node_data = cad_instance
                     .structure_designer
                     .get_node_network_data(node_id)?;
-                let atom_fill_data = node_data.as_any_ref().downcast_ref::<AtomFillData>()?;
+                let materialize_data =
+                    node_data.as_any_ref().downcast_ref::<MaterializeData>()?;
 
                 use crate::crystolecule::atomic_constants::ATOM_INFO;
 
-                let available_parameters = atom_fill_data
+                let available_parameters = materialize_data
                     .available_parameters
                     .borrow()
                     .iter()
@@ -3831,16 +3832,16 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
                     .collect();
 
                 Some(APIAtomFillData {
-                    parameter_element_value_definition: atom_fill_data
+                    parameter_element_value_definition: materialize_data
                         .parameter_element_value_definition
                         .clone(),
-                    motif_offset: to_api_vec3(&atom_fill_data.motif_offset),
-                    hydrogen_passivation: atom_fill_data.hydrogen_passivation,
-                    remove_single_bond_atoms_before_passivation: atom_fill_data
+                    motif_offset: to_api_vec3(&glam::f64::DVec3::ZERO),
+                    hydrogen_passivation: materialize_data.hydrogen_passivation,
+                    remove_single_bond_atoms_before_passivation: materialize_data
                         .remove_single_bond_atoms_before_passivation,
-                    surface_reconstruction: atom_fill_data.surface_reconstruction,
-                    invert_phase: atom_fill_data.invert_phase,
-                    error: atom_fill_data.error.clone(),
+                    surface_reconstruction: materialize_data.surface_reconstruction,
+                    invert_phase: materialize_data.invert_phase,
+                    error: materialize_data.error.clone(),
                     available_parameters,
                 })
             },
@@ -3854,9 +3855,11 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let mut atom_fill_data = Box::new(AtomFillData {
+                // motif_offset on APIAtomFillData is legacy; ignored now that motif
+                // offset flows through the upstream Structure value (Phase 7b).
+                let _ = &data.motif_offset;
+                let mut materialize_data = Box::new(MaterializeData {
                     parameter_element_value_definition: data.parameter_element_value_definition,
-                    motif_offset: from_api_vec3(&data.motif_offset),
                     hydrogen_passivation: data.hydrogen_passivation,
                     remove_single_bond_atoms_before_passivation: data
                         .remove_single_bond_atoms_before_passivation,
@@ -3866,10 +3869,10 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                     parameter_element_values: HashMap::new(),
                     available_parameters: std::cell::RefCell::new(Vec::new()),
                 });
-                atom_fill_data.parse_and_validate(node_id);
+                materialize_data.parse_and_validate(node_id);
                 cad_instance
                     .structure_designer
-                    .set_node_network_data(node_id, atom_fill_data);
+                    .set_node_network_data(node_id, materialize_data);
                 refresh_structure_designer_auto(cad_instance);
 
                 APIResult {

@@ -48,8 +48,8 @@ fn test_get_compatible_node_types_from_geometry_output() {
         "diff should accept Blueprint"
     );
     assert!(
-        all_node_names.contains(&"atom_fill"),
-        "atom_fill should accept Blueprint"
+        all_node_names.contains(&"materialize"),
+        "materialize should accept Blueprint"
     );
 
     // Float node should NOT be in the list (no Blueprint input)

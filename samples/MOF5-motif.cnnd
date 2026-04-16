@@ -96,7 +96,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               775.443603515625,
               104.5080444335938
@@ -108,19 +108,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "2": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -282,7 +284,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               456.56982421875,
               39.701342773437545
@@ -294,19 +296,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "4": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           }

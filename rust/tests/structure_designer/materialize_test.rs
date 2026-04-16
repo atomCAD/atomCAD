@@ -1,8 +1,6 @@
-//! Tests for step 6.6 of the Crystal / Molecule split: `atom_fill`
-//! now outputs `Crystal` instead of `Atomic`, carrying the `Structure`
-//! extracted from its Blueprint input.
-//!
-//! See `doc/design_crystal_molecule_split.md` §6.6.
+//! Tests for Phase 7b: `atom_fill` was renamed to `materialize` and its
+//! `motif` / `m_offset` input pins were removed. Motif and motif offset now
+//! flow through the upstream Blueprint's `Structure` value.
 
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
@@ -23,19 +21,18 @@ fn evaluate_raw(designer: &StructureDesigner, network_name: &str, node_id: u64) 
     evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context)
 }
 
-/// `atom_fill` with a Blueprint input produces `NetworkResult::Crystal`
+/// `materialize` with a Blueprint input produces `NetworkResult::Crystal`
 /// whose `structure` matches the Blueprint's `structure` and whose carved
 /// atoms are non-empty.
 #[test]
-fn atom_fill_outputs_crystal_with_blueprint_structure() {
-    let network_name = "test_atom_fill_crystal";
+fn materialize_outputs_crystal_with_blueprint_structure() {
+    let network_name = "test_materialize_crystal";
     let mut designer = StructureDesigner::new();
     designer.add_node_network(network_name);
     designer.set_active_node_network_name(Some(network_name.to_string()));
 
     let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
-    let fill_id = designer.add_node("atom_fill", DVec2::new(300.0, 0.0));
-    // atom_fill `shape` is the first parameter (index 0).
+    let fill_id = designer.add_node("materialize", DVec2::new(300.0, 0.0));
     designer.connect_nodes(cuboid_id, 0, fill_id, 0);
 
     let blueprint_result = evaluate_raw(&designer, network_name, cuboid_id);
@@ -50,9 +47,9 @@ fn atom_fill_outputs_crystal_with_blueprint_structure() {
     let fill_result = evaluate_raw(&designer, network_name, fill_id);
     let crystal = match fill_result {
         NetworkResult::Crystal(c) => c,
-        NetworkResult::Error(e) => panic!("atom_fill returned error: {}", e),
+        NetworkResult::Error(e) => panic!("materialize returned error: {}", e),
         other => panic!(
-            "Expected atom_fill to produce Crystal, got {:?}",
+            "Expected materialize to produce Crystal, got {:?}",
             other.infer_data_type()
         ),
     };
@@ -70,22 +67,42 @@ fn atom_fill_outputs_crystal_with_blueprint_structure() {
     );
     assert!(
         crystal.atoms.get_num_of_atoms() > 0,
-        "atom_fill over a default cuboid should carve at least one atom"
+        "materialize over a default cuboid should carve at least one atom"
     );
 }
 
-/// `atom_fill`'s output pin is declared as `Crystal`.
+/// `materialize`'s output pin is declared as `Crystal`.
 #[test]
-fn atom_fill_node_type_output_is_crystal() {
+fn materialize_node_type_output_is_crystal() {
     use rust_lib_flutter_cad::structure_designer::data_type::DataType;
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
     let registry = NodeTypeRegistry::new();
-    let node_type = registry.get_node_type("atom_fill").unwrap();
+    let node_type = registry.get_node_type("materialize").unwrap();
     assert_eq!(node_type.output_pins.len(), 1);
     assert_eq!(
         node_type.output_pins[0].fixed_type(),
         Some(&DataType::Crystal),
-        "atom_fill output pin should be Fixed(Crystal)"
+        "materialize output pin should be Fixed(Crystal)"
+    );
+}
+
+/// `materialize` exposes only `shape`, `passivate`, `rm_single`,
+/// `surf_recon`, `invert_phase` — no `motif` or `m_offset` pins.
+#[test]
+fn materialize_has_no_motif_or_offset_pins() {
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+
+    let registry = NodeTypeRegistry::new();
+    let node_type = registry.get_node_type("materialize").unwrap();
+    let pin_names: Vec<&str> = node_type
+        .parameters
+        .iter()
+        .map(|p| p.name.as_str())
+        .collect();
+    assert_eq!(
+        pin_names,
+        vec!["shape", "passivate", "rm_single", "surf_recon", "invert_phase"],
+        "materialize parameter pins"
     );
 }

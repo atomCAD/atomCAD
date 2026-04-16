@@ -159,7 +159,9 @@
       "Bash(INSTA_UPDATE=always cargo test --test structure_designer)",
       "Bash(INSTA_UPDATE=no cargo test test_extrude_demo_evaluation)",
       "Bash(INSTA_UPDATE=always cargo test)",
-      "Bash(find rust:*)"
+      "Bash(find rust:*)",
+      "Bash(jq --version)",
+      "Bash(INSTA_UPDATE=always cargo test --tests --test structure_designer)"
     ]
   }
 }

@@ -1,18 +1,18 @@
 {
   "node_networks": [
     [
-      "α_polonium_motif",
+      "\u03b1_polonium_motif",
       {
         "next_node_id": 5,
         "node_type": {
-          "name": "α_polonium_motif",
+          "name": "\u03b1_polonium_motif",
           "parameters": [],
           "output_type": "Motif"
         },
         "nodes": [
           {
             "id": 3,
-            "node_type_name": "α_polonium_unit_cell",
+            "node_type_name": "\u03b1_polonium_unit_cell",
             "position": [
               85.52212524414062,
               129.4938842773438
@@ -23,7 +23,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               491.4937438964844,
               232.11707153320316
@@ -35,19 +35,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "1": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -96,7 +98,7 @@
             "data_type": "motif",
             "data": {
               "definition": "PARAM POLO Po\nSITE Po1 POLO 0.0 0.0 0.0\nSITE Po2 POLO 1.0 0.0 0.0\nSITE Po3 POLO 0.0 1.0 0.0\nSITE Po4 POLO 0.0 0.0 1.0\nSITE Po5 POLO 1.0 1.0 0.0\nSITE Po6 POLO 0.0 1.0 1.0\nSITE Po7 POLO 1.0 0.0 1.0\nSITE Po8 POLO 1.0 1.0 1.0\nBOND Po1 ...Po2\nBOND Po1 ...Po3\nBOND Po1 ...Po4\nBOND Po2 ...Po5\nBOND Po5 ...Po3\nBOND Po3 ...Po6\nBOND Po2 ...Po7\nBOND Po4 ...Po6\nBOND Po4 ...Po7\nBOND Po8 ...Po6\nBOND Po8 ...Po7\n",
-              "name": "α_polonium"
+              "name": "\u03b1_polonium"
             }
           }
         ],
@@ -126,7 +128,7 @@
         "nodes": [
           {
             "id": 6,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1276.6890258789062,
               172.0539306640626
@@ -138,25 +140,27 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "1": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
           {
             "id": 1,
-            "node_type_name": "α_polonium_motif",
+            "node_type_name": "\u03b1_polonium_motif",
             "position": [
               969.1420288085938,
               280.81743164062505
@@ -351,11 +355,11 @@
       }
     ],
     [
-      "α_polonium_unit_cell",
+      "\u03b1_polonium_unit_cell",
       {
         "next_node_id": 2,
         "node_type": {
-          "name": "α_polonium_unit_cell",
+          "name": "\u03b1_polonium_unit_cell",
           "parameters": [],
           "output_type": "LatticeVecs"
         },
@@ -467,7 +471,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "α_polonium_unit_cell",
+            "node_type_name": "\u03b1_polonium_unit_cell",
             "position": [
               148.21621704101562,
               208.9915649414063
@@ -478,7 +482,7 @@
           },
           {
             "id": 6,
-            "node_type_name": "α_polonium_motif",
+            "node_type_name": "\u03b1_polonium_motif",
             "position": [
               626.9924926757812,
               369.01591796875005
@@ -523,7 +527,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               873.162109375,
               198.09086914062505
@@ -535,19 +539,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "6": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           }
@@ -582,7 +588,7 @@
         "nodes": [
           {
             "id": 3,
-            "node_type_name": "α_polonium_unit_cell",
+            "node_type_name": "\u03b1_polonium_unit_cell",
             "position": [
               218.55670166015625,
               278.36519165039067
@@ -616,7 +622,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1105.3114013671875,
               343.25191040039067
@@ -628,19 +634,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "4": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -687,7 +695,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "α_polonium_motif",
+            "node_type_name": "\u03b1_polonium_motif",
             "position": [
               804.1868286132812,
               410.3940002441407

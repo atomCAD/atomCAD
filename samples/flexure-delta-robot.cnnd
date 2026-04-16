@@ -48,7 +48,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               644.5,
               126.40000000000008
@@ -60,19 +60,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "1": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -448,7 +450,7 @@
           },
           {
             "id": 24,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1349.5,
               337.40000000000003
@@ -460,19 +462,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "22": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -969,7 +973,7 @@
           },
           {
             "id": 13,
-            "node_type_name": "lib_irod_x_rect◇{110}_centered",
+            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
             "position": [
               864.375,
               577.0213378906251
@@ -2702,7 +2706,7 @@
           },
           {
             "id": 54,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               5331.125579833984,
               215.69141845703143
@@ -2715,16 +2719,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -3037,7 +3045,7 @@
           },
           {
             "id": 126,
-            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
+            "node_type_name": "lib_irod_xyz_hex\u2b21{110}_centered",
             "position": [
               4287.207275390625,
               -28.273715209960756
@@ -4916,11 +4924,11 @@
       }
     ],
     [
-      "lib_irod_x_rect◇{110}_centered",
+      "lib_irod_x_rect\u25c7{110}_centered",
       {
         "next_node_id": 17,
         "node_type": {
-          "name": "lib_irod_x_rect◇{110}_centered",
+          "name": "lib_irod_x_rect\u25c7{110}_centered",
           "parameters": [
             {
               "name": "half_width_pp",
@@ -5217,7 +5225,7 @@
           },
           {
             "id": 16,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1166.5,
               324.7000152587891
@@ -5230,16 +5238,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -6458,7 +6470,7 @@
         "nodes": [
           {
             "id": 2,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               606.5,
               299.2580322265625
@@ -6470,19 +6482,21 @@
                 }
               },
               {
-                "argument_output_pins": {
-                  "8": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -7195,7 +7209,7 @@
           },
           {
             "id": 16,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1172.046875,
               441.6675903320313
@@ -7208,16 +7222,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -7722,7 +7740,7 @@
           },
           {
             "id": 20,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1344.0,
               332.9000000000001
@@ -7735,16 +7753,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -7918,7 +7940,7 @@
           },
           {
             "id": 16,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1108.9058837890625,
               64.28914489746103
@@ -7931,16 +7953,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -8032,7 +8058,7 @@
           },
           {
             "id": 15,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               961.8131713867188,
               441.4366668701173
@@ -8045,16 +8071,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -8219,11 +8249,11 @@
       }
     ],
     [
-      "lib_irod_xyz_hex⬡{110}_centered",
+      "lib_irod_xyz_hex\u2b21{110}_centered",
       {
         "next_node_id": 23,
         "node_type": {
-          "name": "lib_irod_xyz_hex⬡{110}_centered",
+          "name": "lib_irod_xyz_hex\u2b21{110}_centered",
           "parameters": [
             {
               "name": "half_thickness",
@@ -8447,7 +8477,7 @@
           },
           {
             "id": 22,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1342.0,
               94.40000000000003
@@ -8460,16 +8490,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -8648,7 +8682,7 @@
           },
           {
             "id": 18,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1346.0,
               230.10000000000016
@@ -8661,16 +8695,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -9166,7 +9204,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               834.0,
               151.4115966796876
@@ -9179,16 +9217,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -10280,7 +10322,7 @@
           },
           {
             "id": 24,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1353.0,
               417.9000000000001
@@ -10293,16 +10335,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -10940,7 +10986,7 @@
           },
           {
             "id": 6,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1427.6989440917969,
               42.999194335937545
@@ -10953,16 +10999,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -11280,7 +11330,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "position": [
               1895.5916748046875,
               166.27278442382817
@@ -11293,16 +11343,20 @@
               },
               {
                 "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
-              "motif_offset": [
-                0.5,
-                0.5,
-                0.5
-              ],
               "parameter_element_value_definition": ""
             }
           },

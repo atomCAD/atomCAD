@@ -3,7 +3,7 @@ pub mod apply_diff;
 pub mod atom_composediff;
 pub mod atom_cut;
 pub mod atom_edit;
-pub mod atom_fill;
+pub mod materialize;
 pub mod atom_replace;
 pub mod atom_trans;
 pub mod atom_union;

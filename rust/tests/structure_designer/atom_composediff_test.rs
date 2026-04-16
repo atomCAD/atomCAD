@@ -339,7 +339,7 @@ fn atom_composediff_node_eval_with_text_format() {
     // Build network via text format
     // Multi-input pins use array syntax: diffs: [ref1, ref2]
     let text = r#"
-base = atom_fill {}
+base = materialize {}
 edit1 = atom_edit { base: base }
 edit2 = atom_edit { base: edit1 }
 composed = atom_composediff { diffs: [edit1.diff, edit2.diff] }

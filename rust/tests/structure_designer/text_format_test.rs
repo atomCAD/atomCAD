@@ -1953,16 +1953,15 @@ mod node_type_introspection_tests {
     }
 
     #[test]
-    fn test_describe_node_type_atom_fill() {
+    fn test_describe_node_type_materialize() {
         let registry = create_test_registry();
-        let result = describe_node_type("atom_fill", &registry);
+        let result = describe_node_type("materialize", &registry);
 
-        assert!(result.contains("Node: atom_fill"));
+        assert!(result.contains("Node: materialize"));
         assert!(result.contains("Category: AtomicStructure"));
 
         // Check for key parameters
         assert!(result.contains("shape"));
-        assert!(result.contains("motif"));
         assert!(result.contains("passivate"));
 
         // Check output type

@@ -82,7 +82,7 @@
           },
           {
             "id": 2,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "custom_name": "atoms",
             "position": [
               310.0,
@@ -105,23 +105,12 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
               "invert_phase": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false,
               "surface_reconstruction": false

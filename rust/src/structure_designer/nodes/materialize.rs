@@ -1,6 +1,5 @@
-// Node wrapper for lattice filling algorithm
+// Materialize: carves atoms out of a Blueprint's structure using the blueprint's geometry.
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use crate::crystolecule::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::common_constants::{
     REAL_IMPLICIT_VOLUME_MAX, REAL_IMPLICIT_VOLUME_MIN,
@@ -20,8 +19,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::daabox::DAABox;
-use crate::util::serialization_utils::dvec3_serializer;
-use glam::f64::DVec3;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -31,10 +28,8 @@ use std::collections::HashMap;
 use crate::crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct AtomFillData {
+pub struct MaterializeData {
     pub parameter_element_value_definition: String,
-    #[serde(with = "dvec3_serializer")]
-    pub motif_offset: DVec3,
     pub hydrogen_passivation: bool,
     #[serde(default)]
     pub remove_single_bond_atoms_before_passivation: bool,
@@ -52,10 +47,8 @@ pub struct AtomFillData {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct AtomFillDataDeserialized {
+struct MaterializeDataDeserialized {
     pub parameter_element_value_definition: String,
-    #[serde(with = "dvec3_serializer")]
-    pub motif_offset: DVec3,
     pub hydrogen_passivation: bool,
     #[serde(default)]
     pub remove_single_bond_atoms_before_passivation: bool,
@@ -65,16 +58,15 @@ struct AtomFillDataDeserialized {
     pub invert_phase: bool,
 }
 
-impl<'de> Deserialize<'de> for AtomFillData {
+impl<'de> Deserialize<'de> for MaterializeData {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let de = AtomFillDataDeserialized::deserialize(deserializer)?;
+        let de = MaterializeDataDeserialized::deserialize(deserializer)?;
 
-        let mut data = AtomFillData {
+        let mut data = MaterializeData {
             parameter_element_value_definition: de.parameter_element_value_definition,
-            motif_offset: de.motif_offset,
             hydrogen_passivation: de.hydrogen_passivation,
             remove_single_bond_atoms_before_passivation: de
                 .remove_single_bond_atoms_before_passivation,
@@ -100,7 +92,7 @@ impl<'de> Deserialize<'de> for AtomFillData {
     }
 }
 
-impl AtomFillData {
+impl MaterializeData {
     /// Parses and validates the parameter element definition and returns any validation errors
     pub fn parse_and_validate(&mut self, node_id: u64) -> Vec<ValidationError> {
         let mut errors = Vec::new();
@@ -130,7 +122,7 @@ impl AtomFillData {
     }
 }
 
-impl NodeData for AtomFillData {
+impl NodeData for MaterializeData {
     fn provide_gadget(
         &self,
         _structure_designer: &StructureDesigner,
@@ -162,26 +154,16 @@ impl NodeData for AtomFillData {
             NetworkResult::Blueprint(mesh) => mesh,
             _ => {
                 return EvalOutput::single(NetworkResult::Error(
-                    "atom_fill: shape input must be a Blueprint".to_string(),
+                    "materialize: shape input must be a Blueprint".to_string(),
                 ));
             }
         };
         let structure = mesh.structure.clone();
         let geo_tree_root_for_crystal = mesh.geo_tree_root.clone();
 
-        // Evaluate motif input (with default)
-        let motif = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            1,
-            DEFAULT_ZINCBLENDE_MOTIF.clone(),
-            NetworkResult::extract_motif,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::single(error),
-        };
+        // Motif and motif offset now come from the Blueprint's structure.
+        let motif = mesh.structure.motif.clone();
+        let motif_offset = mesh.structure.motif_offset;
 
         // Cache motif parameters for UI display
         *self.available_parameters.borrow_mut() = motif
@@ -190,27 +172,13 @@ impl NodeData for AtomFillData {
             .map(|p| (p.name.clone(), p.default_atomic_number))
             .collect();
 
-        // Evaluate m_offset input (with default)
-        let motif_offset = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            2,
-            self.motif_offset,
-            NetworkResult::extract_vec3,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::single(error),
-        };
-
         // Evaluate passivate input (with default)
         let hydrogen_passivation = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
-            3,
+            1,
             self.hydrogen_passivation,
             NetworkResult::extract_bool,
         ) {
@@ -224,7 +192,7 @@ impl NodeData for AtomFillData {
             node_id,
             registry,
             context,
-            4,
+            2,
             self.remove_single_bond_atoms_before_passivation,
             NetworkResult::extract_bool,
         ) {
@@ -238,7 +206,7 @@ impl NodeData for AtomFillData {
             node_id,
             registry,
             context,
-            5,
+            3,
             self.surface_reconstruction,
             NetworkResult::extract_bool,
         ) {
@@ -251,7 +219,7 @@ impl NodeData for AtomFillData {
             node_id,
             registry,
             context,
-            6,
+            4,
             self.invert_phase,
             NetworkResult::extract_bool,
         ) {
@@ -313,8 +281,6 @@ impl NodeData for AtomFillData {
                 "parameter_element_value_definition".to_string(),
                 TextValue::String(self.parameter_element_value_definition.clone()),
             ),
-            // Property names match parameter names for connection shadowing
-            ("m_offset".to_string(), TextValue::Vec3(self.motif_offset)),
             (
                 "passivate".to_string(),
                 TextValue::Bool(self.hydrogen_passivation),
@@ -354,11 +320,6 @@ impl NodeData for AtomFillData {
                 }
             }
         }
-        if let Some(v) = props.get("m_offset") {
-            self.motif_offset = v
-                .as_vec3()
-                .ok_or_else(|| "m_offset must be a Vec3".to_string())?;
-        }
         if let Some(v) = props.get("passivate") {
             self.hydrogen_passivation = v
                 .as_bool()
@@ -385,18 +346,14 @@ impl NodeData for AtomFillData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("shape".to_string(), (true, None)); // required
-        m.insert(
-            "motif".to_string(),
-            (false, Some("cubic zincblende".to_string())),
-        );
         m
     }
 }
 
 pub fn get_node_type() -> NodeType {
     NodeType {
-      name: "atom_fill".to_string(),
-      description: "Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its `shape` input.".to_string(),
+      name: "materialize".to_string(),
+      description: "Converts a Blueprint into a Crystal by carving atoms out of the Blueprint's structure using its geometry.".to_string(),
       summary: None,
       category: NodeTypeCategory::AtomicStructure,
       parameters: vec![
@@ -404,16 +361,6 @@ pub fn get_node_type() -> NodeType {
               id: None,
               name: "shape".to_string(),
               data_type: DataType::Blueprint,
-          },
-          Parameter {
-              id: None,
-              name: "motif".to_string(),
-              data_type: DataType::Motif,
-          },
-          Parameter {
-              id: None,
-              name: "m_offset".to_string(),
-              data_type: DataType::Vec3,
           },
           Parameter {
               id: None,
@@ -438,9 +385,8 @@ pub fn get_node_type() -> NodeType {
       ],
       output_pins: OutputPinDefinition::single_fixed(DataType::Crystal),
       public: true,
-      node_data_creator: || Box::new(AtomFillData {
+      node_data_creator: || Box::new(MaterializeData {
         parameter_element_value_definition: String::new(),
-        motif_offset: DVec3::ZERO,
         hydrogen_passivation: true,
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
@@ -449,7 +395,7 @@ pub fn get_node_type() -> NodeType {
         parameter_element_values: HashMap::new(),
         available_parameters: RefCell::new(Vec::new()),
       }),
-      node_data_saver: generic_node_data_saver::<AtomFillData>,
-      node_data_loader: generic_node_data_loader::<AtomFillData>,
+      node_data_saver: generic_node_data_saver::<MaterializeData>,
+      node_data_loader: generic_node_data_loader::<MaterializeData>,
     }
 }

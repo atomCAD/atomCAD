@@ -30,7 +30,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMo
 use rust_lib_flutter_cad::structure_designer::nodes::structure_rot::StructureRotData;
 // Atomic nodes
 use rust_lib_flutter_cad::structure_designer::nodes::atom_cut::AtomCutData;
-use rust_lib_flutter_cad::structure_designer::nodes::atom_fill::AtomFillData;
+use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
 use rust_lib_flutter_cad::structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use rust_lib_flutter_cad::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
@@ -989,10 +989,9 @@ fn test_drawing_plane_roundtrip() {
 }
 
 #[test]
-fn test_atom_fill_roundtrip() {
-    test_roundtrip(&AtomFillData {
+fn test_materialize_roundtrip() {
+    test_roundtrip(&MaterializeData {
         parameter_element_value_definition: "C=6".to_string(),
-        motif_offset: DVec3::new(0.0, 0.0, 0.0),
         hydrogen_passivation: true,
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
@@ -1001,9 +1000,8 @@ fn test_atom_fill_roundtrip() {
         parameter_element_values: HashMap::new(),
         available_parameters: std::cell::RefCell::new(Vec::new()),
     });
-    test_roundtrip(&AtomFillData {
+    test_roundtrip(&MaterializeData {
         parameter_element_value_definition: "".to_string(),
-        motif_offset: DVec3::new(0.25, 0.25, 0.25),
         hydrogen_passivation: false,
         remove_single_bond_atoms_before_passivation: true,
         surface_reconstruction: true,
