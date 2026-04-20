@@ -174,63 +174,111 @@ fn structure_move_non_divisible_becomes_lattice_unaligned_crystal() {
     assert_eq!(c.alignment, Alignment::LatticeUnaligned);
 }
 
-// ---- structure_rot (Phase 1: pass-through) ----
+// ---- structure_rot (Phase 2: motif-symmetry detection) ----
+
+/// Helper to configure a structure_rot node's axis and step.
+fn set_structure_rot(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    rot_id: u64,
+    axis_index: Option<i32>,
+    step: i32,
+) {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    let node = network.nodes.get_mut(&rot_id).unwrap();
+    let data = node
+        .data
+        .as_any_mut()
+        .downcast_mut::<StructureRotData>()
+        .unwrap();
+    data.axis_index = axis_index;
+    data.step = step;
+}
 
 #[test]
-fn structure_rot_passes_alignment_through_phase1() {
+fn structure_rot_four_fold_90deg_is_motif_unaligned_on_diamond() {
+    // axis 0 is the a-axis 4-fold; step 1 = 90°. That is NOT a diamond motif
+    // symmetry (sends INTERIOR2 off the motif), so the output must drop to
+    // MotifUnaligned.
     let mut designer = setup_designer("t");
     let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
     let rot_id = designer.add_node("structure_rot", DVec2::new(300.0, 0.0));
-    // Set a non-trivial rotation so we exercise the rotation branch, but
-    // Phase 1 still must not degrade alignment.
-    {
-        let network = designer
-            .node_type_registry
-            .node_networks
-            .get_mut("t")
-            .unwrap();
-        let node = network.nodes.get_mut(&rot_id).unwrap();
-        let data = node
-            .data
-            .as_any_mut()
-            .downcast_mut::<StructureRotData>()
-            .unwrap();
-        data.axis_index = Some(0);
-        data.step = 1;
-    }
+    set_structure_rot(&mut designer, "t", rot_id, Some(0), 1);
     designer.connect_nodes(cuboid_id, 0, rot_id, 0);
 
     let bp = blueprint(evaluate_raw(&designer, "t", rot_id));
-    assert_eq!(
-        bp.alignment,
-        Alignment::Aligned,
-        "Phase 1 structure_rot should keep alignment unchanged"
-    );
+    assert_eq!(bp.alignment, Alignment::MotifUnaligned);
+}
+
+#[test]
+fn structure_rot_180deg_about_a_axis_stays_aligned_on_diamond() {
+    // axis 0, step 2 = 180°: a proper C2 rotation of diamond. Alignment is
+    // preserved.
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let rot_id = designer.add_node("structure_rot", DVec2::new(300.0, 0.0));
+    set_structure_rot(&mut designer, "t", rot_id, Some(0), 2);
+    designer.connect_nodes(cuboid_id, 0, rot_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", rot_id));
+    assert_eq!(bp.alignment, Alignment::Aligned);
+}
+
+#[test]
+fn structure_rot_three_fold_body_diagonal_stays_aligned_on_diamond() {
+    // axis 3 is [111] 3-fold; step 1 = 120°. Cyclic permutation of (x,y,z)
+    // is a motif symmetry of diamond.
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let rot_id = designer.add_node("structure_rot", DVec2::new(300.0, 0.0));
+    set_structure_rot(&mut designer, "t", rot_id, Some(3), 1);
+    designer.connect_nodes(cuboid_id, 0, rot_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", rot_id));
+    assert_eq!(bp.alignment, Alignment::Aligned);
+}
+
+#[test]
+fn structure_rot_identity_keeps_alignment_unchanged() {
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let rot_id = designer.add_node("structure_rot", DVec2::new(300.0, 0.0));
+    // step = 0 → identity rotation, axis irrelevant.
+    set_structure_rot(&mut designer, "t", rot_id, Some(0), 0);
+    designer.connect_nodes(cuboid_id, 0, rot_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", rot_id));
+    assert_eq!(bp.alignment, Alignment::Aligned);
+}
+
+#[test]
+fn structure_rot_degrades_crystal_to_motif_unaligned() {
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let mat_id = designer.add_node("materialize", DVec2::new(200.0, 0.0));
+    let rot_id = designer.add_node("structure_rot", DVec2::new(500.0, 0.0));
+    set_structure_rot(&mut designer, "t", rot_id, Some(0), 1);
+    designer.connect_nodes(cuboid_id, 0, mat_id, 0);
+    designer.connect_nodes(mat_id, 0, rot_id, 0);
+
+    let c = crystal(evaluate_raw(&designer, "t", rot_id));
+    assert_eq!(c.alignment, Alignment::MotifUnaligned);
 }
 
 #[test]
 fn structure_rot_preserves_degraded_alignment() {
     // If the upstream is already LatticeUnaligned (via a non-divisible
-    // structure_move), structure_rot must not report a better alignment.
+    // structure_move), structure_rot must not report a better alignment,
+    // even when it would otherwise degrade to MotifUnaligned.
     let mut designer = setup_designer("t");
     let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
     let move_id = add_structure_move(&mut designer, "t", IVec3::new(1, 0, 0), 2);
     let rot_id = designer.add_node("structure_rot", DVec2::new(600.0, 0.0));
-    {
-        let network = designer
-            .node_type_registry
-            .node_networks
-            .get_mut("t")
-            .unwrap();
-        let node = network.nodes.get_mut(&rot_id).unwrap();
-        let data = node
-            .data
-            .as_any_mut()
-            .downcast_mut::<StructureRotData>()
-            .unwrap();
-        data.axis_index = Some(0);
-        data.step = 1;
-    }
+    set_structure_rot(&mut designer, "t", rot_id, Some(0), 1);
     designer.connect_nodes(cuboid_id, 0, move_id, 0);
     designer.connect_nodes(move_id, 0, rot_id, 0);
 

@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::motif_symmetry::rotation_preserves_motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::{RotationalSymmetry, analyze_unit_cell_symmetries};
 use crate::display::gadget::Gadget;
@@ -11,7 +12,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
 use crate::structure_designer::evaluator::network_result::{
-    BlueprintData, CrystalData, NetworkResult, runtime_type_error_in_input,
+    Alignment, BlueprintData, CrystalData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -119,16 +120,20 @@ impl NodeData for StructureRotData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        let unit_cell = match &input_val {
-            NetworkResult::Blueprint(bp) => bp.structure.lattice_vecs.clone(),
-            NetworkResult::Crystal(c) => c.structure.lattice_vecs.clone(),
+        let structure_ref = match &input_val {
+            NetworkResult::Blueprint(bp) => &bp.structure,
+            NetworkResult::Crystal(c) => &c.structure,
             _ => return EvalOutput::single(runtime_type_error_in_input(0)),
         };
+        let unit_cell = structure_ref.lattice_vecs.clone();
 
         let symmetry_axes = analyze_unit_cell_symmetries(&unit_cell);
         let real_rotation_quat = compute_rotation_quat(axis_index, step, &symmetry_axes);
         let pivot_real = unit_cell.ivec3_lattice_to_real(&pivot_point);
         let tr = Transform::new_rotation_around_point(pivot_real, real_rotation_quat);
+
+        let motif_preserved =
+            rotation_preserves_motif(structure_ref, axis_index, step, pivot_point);
 
         if network_stack.len() == 1 {
             context.selected_node_eval_cache = Some(Box::new(StructureRotEvalCache {
@@ -139,12 +144,10 @@ impl NodeData for StructureRotData {
 
         match input_val {
             NetworkResult::Blueprint(shape) => {
-                // Phase 1: keep alignment unchanged. Motif-symmetry detection is
-                // deferred to Phase 2; in the meantime the lattice is preserved by
-                // construction (axis comes from analyze_unit_cell_symmetries), so
-                // the worst we miss is a motif-unalignment that a later phase will
-                // detect.
-                let alignment = shape.alignment;
+                let mut alignment = shape.alignment;
+                if !motif_preserved {
+                    alignment.worsen_to(Alignment::MotifUnaligned);
+                }
                 EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                     structure: shape.structure.clone(),
                     geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
@@ -162,7 +165,10 @@ impl NodeData for StructureRotData {
                     .geo_tree_root
                     .map(|gt| GeoNode::transform(tr, Box::new(gt)));
 
-                let alignment = crystal.alignment;
+                let mut alignment = crystal.alignment;
+                if !motif_preserved {
+                    alignment.worsen_to(Alignment::MotifUnaligned);
+                }
                 EvalOutput::single(NetworkResult::Crystal(CrystalData {
                     structure: crystal.structure,
                     atoms,
