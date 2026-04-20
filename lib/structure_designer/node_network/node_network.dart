@@ -94,13 +94,11 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   'Blueprint': Color(0xFF9C27B0), // Deep purple - latent atoms in a structure
 
   // Phase types (green family - materialized matter).
-  // Abstract types come first so substring matching doesn't fall through
-  // to the concrete variants (e.g. 'StructureBound' must beat 'Structure').
-  'StructureBound': Color(0xFF7E57C2), // Purple-indigo - Blueprint or Crystal
-  'Unanchored': Color(0xFFCE93D8), // Light mauve - Blueprint or Molecule
+  // Abstract types (Atomic, StructureBound, Unanchored) have no entry here —
+  // abstract-typed input pins render pie-sliced in the concrete satisfier
+  // colors (see ABSTRACT_TYPE_CONCRETES and PinViewWidget).
   'Crystal': Color(0xFF558B2F), // Olive green - atoms bound to a structure
   'Molecule': Color(0xFF81C784), // Soft green - free atoms, no structure
-  'Atomic': Color(0xFF66BB6A), // Mid green - Crystal or Molecule
 
   // Crystal structure types (teal family - crystalline matter)
   'LatticeVecs': Color(0xFF26A69A), // Teal
@@ -176,6 +174,22 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
 extension OutputPinViewEffectiveType on OutputPinView {
   String get effectiveDataType => resolvedDataType ?? dataType;
 }
+
+/// Concrete types that satisfy each abstract data type, in a stable display
+/// order. Mirror of the abstract→concrete rules in Rust
+/// `rust/src/structure_designer/data_type.rs` `DataType::can_be_converted_to`
+/// — keep in sync.
+///
+/// Used to render abstract-typed input pins as N-sliced pie circles, with one
+/// slice per concrete satisfier colored as that concrete.
+const Map<String, List<String>> ABSTRACT_TYPE_CONCRETES = {
+  'Atomic': ['Crystal', 'Molecule'],
+  'StructureBound': ['Blueprint', 'Crystal'],
+  'Unanchored': ['Blueprint', 'Molecule'],
+};
+
+bool isAbstractDataType(String typeName) =>
+    ABSTRACT_TYPE_CONCRETES.containsKey(typeName);
 
 /// Gets the appropriate color for a data type based on its name.
 ///

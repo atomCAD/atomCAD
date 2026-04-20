@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -59,6 +62,11 @@ const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
 class PinViewWidget extends StatelessWidget {
   final String dataType;
   final bool multi;
+
+  /// Input pins may declare an abstract data type (`Atomic`, `StructureBound`,
+  /// `Unanchored`); those render as an N-sliced pie of concrete-satisfier
+  /// colors. Output pins are always concrete and render single-colored.
+  final bool isInput;
   final String? outputString;
   final String? pinName;
 
@@ -66,18 +74,29 @@ class PinViewWidget extends StatelessWidget {
       {super.key,
       required this.dataType,
       required this.multi,
+      required this.isInput,
       this.outputString,
       this.pinName});
 
   @override
   Widget build(BuildContext context) {
-    final color = getDataTypeColor(dataType);
+    final List<Color> sliceColors;
+    final String typeLabel;
+    if (isInput && isAbstractDataType(dataType)) {
+      final concretes = ABSTRACT_TYPE_CONCRETES[dataType]!;
+      sliceColors =
+          concretes.map(getDataTypeColor).toList(growable: false);
+      typeLabel = '$dataType (${concretes.join(' or ')})';
+    } else {
+      sliceColors = [getDataTypeColor(dataType)];
+      typeLabel = dataType;
+    }
 
     String tooltipMessage = '';
     if (pinName != null && pinName!.isNotEmpty) {
-      tooltipMessage = '── $pinName ──  $dataType';
+      tooltipMessage = '── $pinName ──  $typeLabel';
     } else {
-      tooltipMessage = dataType;
+      tooltipMessage = typeLabel;
     }
     if (outputString != null && outputString!.isNotEmpty) {
       const maxLines = 15;
@@ -103,24 +122,86 @@ class PinViewWidget extends StatelessWidget {
       message: tooltipMessage,
       preferBelow: false,
       child: Center(
-        child: Container(
-            width: PIN_SIZE,
-            height: PIN_SIZE,
-            decoration: multi
-                ? BoxDecoration(
-                    border: Border.all(
-                      color: color, // Set the border color
-                      width: PIN_BORDER_WIDTH, // Set the border width
-                    ),
-                    shape: BoxShape.circle,
-                    color: Colors.black,
-                  )
-                : BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color,
-                  )),
+        child: SizedBox(
+          width: PIN_SIZE,
+          height: PIN_SIZE,
+          child: CustomPaint(
+            painter: _PinPainter(
+              sliceColors: sliceColors,
+              hollow: multi,
+              borderWidth: PIN_BORDER_WIDTH,
+            ),
+          ),
+        ),
       ),
     );
+  }
+}
+
+/// Paints a pin as either a filled/ringed disk (single-color) or a pie-sliced
+/// disk/ring (multi-color). Slices start at 12 o'clock and sweep clockwise.
+class _PinPainter extends CustomPainter {
+  final List<Color> sliceColors;
+  final bool hollow;
+  final double borderWidth;
+
+  const _PinPainter({
+    required this.sliceColors,
+    required this.hollow,
+    required this.borderWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final outerRadius = size.width / 2;
+
+    if (hollow) {
+      // Match Flutter's BoxDecoration border behavior: the border is drawn
+      // inside the shape bounds, so the stroke centerline sits at
+      // outerRadius - borderWidth/2.
+      final strokeRadius = outerRadius - borderWidth / 2;
+      final strokeRect = Rect.fromCircle(center: center, radius: strokeRadius);
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth;
+
+      if (sliceColors.length == 1) {
+        paint.color = sliceColors.first;
+        canvas.drawCircle(center, strokeRadius, paint);
+      } else {
+        final sweep = 2 * math.pi / sliceColors.length;
+        double startAngle = -math.pi / 2;
+        for (final color in sliceColors) {
+          paint.color = color;
+          canvas.drawArc(strokeRect, startAngle, sweep, false, paint);
+          startAngle += sweep;
+        }
+      }
+    } else {
+      final paint = Paint()..style = PaintingStyle.fill;
+
+      if (sliceColors.length == 1) {
+        paint.color = sliceColors.first;
+        canvas.drawCircle(center, outerRadius, paint);
+      } else {
+        final rect = Rect.fromCircle(center: center, radius: outerRadius);
+        final sweep = 2 * math.pi / sliceColors.length;
+        double startAngle = -math.pi / 2;
+        for (final color in sliceColors) {
+          paint.color = color;
+          canvas.drawArc(rect, startAngle, sweep, true, paint);
+          startAngle += sweep;
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PinPainter oldDelegate) {
+    return !listEquals(oldDelegate.sliceColors, sliceColors) ||
+        oldDelegate.hollow != hollow ||
+        oldDelegate.borderWidth != borderWidth;
   }
 }
 
@@ -152,6 +233,7 @@ class PinWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isInput = pinReference.pinType == PinType.input;
     return SizedBox(
       width: PIN_HIT_AREA_WIDTH,
       height: PIN_HIT_AREA_HEIGHT,
@@ -167,6 +249,7 @@ class PinWidget extends StatelessWidget {
                 child: PinViewWidget(
                     dataType: pinReference.dataType,
                     multi: multi,
+                    isInput: isInput,
                     outputString: outputString,
                     pinName: pinName),
               ),
@@ -178,6 +261,7 @@ class PinWidget extends StatelessWidget {
                 child: PinViewWidget(
                     dataType: pinReference.dataType,
                     multi: multi,
+                    isInput: isInput,
                     outputString: outputString,
                     pinName: pinName),
               ),
