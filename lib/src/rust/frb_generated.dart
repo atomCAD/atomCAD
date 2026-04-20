@@ -9721,6 +9721,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIAlignment dco_decode_api_alignment(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return APIAlignment.values[raw as int];
+  }
+
+  @protected
   APIApplyDiffData dco_decode_api_apply_diff_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -10823,6 +10829,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIAlignment dco_decode_box_autoadd_api_alignment(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_alignment(raw);
+  }
+
+  @protected
   APIApplyDiffData dco_decode_box_autoadd_api_apply_diff_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_apply_diff_data(raw);
@@ -11649,6 +11661,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIAlignment? dco_decode_opt_box_autoadd_api_alignment(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_alignment(raw);
+  }
+
+  @protected
   APIApplyDiffData? dco_decode_opt_box_autoadd_api_apply_diff_data(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -12097,13 +12115,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   OutputPinView dco_decode_output_pin_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return OutputPinView(
       name: dco_decode_String(arr[0]),
       dataType: dco_decode_String(arr[1]),
       resolvedDataType: dco_decode_opt_String(arr[2]),
       index: dco_decode_i_32(arr[3]),
+      alignment: dco_decode_opt_box_autoadd_api_alignment(arr[4]),
     );
   }
 
@@ -12390,6 +12409,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         hasPreviewEnd: var_hasPreviewEnd,
         snappedToAtom: var_snappedToAtom,
         bondOrder: var_bondOrder);
+  }
+
+  @protected
+  APIAlignment sse_decode_api_alignment(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return APIAlignment.values[inner];
   }
 
   @protected
@@ -13491,6 +13517,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIAlignment sse_decode_box_autoadd_api_alignment(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_alignment(deserializer));
+  }
+
+  @protected
   APIApplyDiffData sse_decode_box_autoadd_api_apply_diff_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -14514,6 +14547,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIAlignment? sse_decode_opt_box_autoadd_api_alignment(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_alignment(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   APIApplyDiffData? sse_decode_opt_box_autoadd_api_apply_diff_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -15306,11 +15351,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_dataType = sse_decode_String(deserializer);
     var var_resolvedDataType = sse_decode_opt_String(deserializer);
     var var_index = sse_decode_i_32(deserializer);
+    var var_alignment = sse_decode_opt_box_autoadd_api_alignment(deserializer);
     return OutputPinView(
         name: var_name,
         dataType: var_dataType,
         resolvedDataType: var_resolvedDataType,
-        index: var_index);
+        index: var_index,
+        alignment: var_alignment);
   }
 
   @protected
@@ -15580,6 +15627,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.hasPreviewEnd, serializer);
     sse_encode_bool(self.snappedToAtom, serializer);
     sse_encode_u_8(self.bondOrder, serializer);
+  }
+
+  @protected
+  void sse_encode_api_alignment(APIAlignment self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -16420,6 +16473,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_alignment(
+      APIAlignment self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_alignment(self, serializer);
   }
 
   @protected
@@ -17333,6 +17393,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_api_alignment(
+      APIAlignment? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_alignment(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_api_apply_diff_data(
       APIApplyDiffData? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -18061,6 +18132,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.dataType, serializer);
     sse_encode_opt_String(self.resolvedDataType, serializer);
     sse_encode_i_32(self.index, serializer);
+    sse_encode_opt_box_autoadd_api_alignment(self.alignment, serializer);
   }
 
   @protected

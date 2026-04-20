@@ -6,6 +6,7 @@ use crate::display::surface_point_cloud::SurfacePointCloud;
 use crate::display::surface_point_cloud::SurfacePointCloud2D;
 use crate::geo_tree::GeoNode;
 use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use std::any::Any;
@@ -16,6 +17,9 @@ pub struct DisplayedPinOutput {
     pub pin_index: i32,
     pub output: NodeOutput,
     pub geo_tree: Option<GeoNode>,
+    /// Alignment of this pin's value, if it carries one (Blueprint/Crystal).
+    /// None for types that have no alignment (Molecule, primitives, etc.).
+    pub alignment: Option<Alignment>,
 }
 
 /// The explicit geometric/data output of a single node evaluation

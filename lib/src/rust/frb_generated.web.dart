@@ -49,6 +49,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAddBondMoveResult dco_decode_api_add_bond_move_result(dynamic raw);
 
   @protected
+  APIAlignment dco_decode_api_alignment(dynamic raw);
+
+  @protected
   APIApplyDiffData dco_decode_api_apply_diff_data(dynamic raw);
 
   @protected
@@ -299,6 +302,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  APIAlignment dco_decode_box_autoadd_api_alignment(dynamic raw);
 
   @protected
   APIApplyDiffData dco_decode_box_autoadd_api_apply_diff_data(dynamic raw);
@@ -656,6 +662,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  APIAlignment? dco_decode_opt_box_autoadd_api_alignment(dynamic raw);
+
+  @protected
   APIApplyDiffData? dco_decode_opt_box_autoadd_api_apply_diff_data(dynamic raw);
 
   @protected
@@ -954,6 +963,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIAlignment sse_decode_api_alignment(SseDeserializer deserializer);
+
+  @protected
   APIApplyDiffData sse_decode_api_apply_diff_data(SseDeserializer deserializer);
 
   @protected
@@ -1229,6 +1241,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  APIAlignment sse_decode_box_autoadd_api_alignment(
+      SseDeserializer deserializer);
 
   @protected
   APIApplyDiffData sse_decode_box_autoadd_api_apply_diff_data(
@@ -1656,6 +1672,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  APIAlignment? sse_decode_opt_box_autoadd_api_alignment(
+      SseDeserializer deserializer);
+
+  @protected
   APIApplyDiffData? sse_decode_opt_box_autoadd_api_apply_diff_data(
       SseDeserializer deserializer);
 
@@ -2006,6 +2026,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIAddBondMoveResult self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_alignment(APIAlignment self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_apply_diff_data(
       APIApplyDiffData self, SseSerializer serializer);
 
@@ -2307,6 +2330,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_alignment(
+      APIAlignment self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_apply_diff_data(
@@ -2743,6 +2770,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_alignment(
+      APIAlignment? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_apply_diff_data(

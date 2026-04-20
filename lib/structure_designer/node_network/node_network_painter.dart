@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/api_utils.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+
+// Dash patterns for wires carrying unaligned Blueprint/Crystal values.
+// Long-dash for motif-unaligned (softer warning), short-dash for lattice-unaligned
+// (more visually fragmented = more broken). See doc/design_blueprint_alignment.md §6.1.
+const double WIRE_DASH_MOTIF_UNALIGNED_ON = 10.0;
+const double WIRE_DASH_MOTIF_UNALIGNED_OFF = 4.0;
+const double WIRE_DASH_LATTICE_UNALIGNED_ON = 3.0;
+const double WIRE_DASH_LATTICE_UNALIGNED_OFF = 3.0;
 
 class WireHitResult {
   final BigInt sourceNodeId;
@@ -76,7 +85,10 @@ class NodeNetworkPainter extends CustomPainter {
         continue;
       }
 
-      _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected);
+      final alignment = _getSourcePinAlignment(
+          wire.sourceNodeId, wire.sourceOutputPinIndex);
+      _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected,
+          alignment);
     }
 
     // Draw dragged wire on top
@@ -89,14 +101,30 @@ class NodeNetworkPainter extends CustomPainter {
         return;
       }
       final wireEndPos = graphModel.draggedWire!.wireEndPosition;
-      if (graphModel.draggedWire!.startPin.pinType == PinType.output) {
+      final startPin = graphModel.draggedWire!.startPin;
+      final alignment = startPin.pinType == PinType.output
+          ? _getSourcePinAlignment(startPin.nodeId, startPin.pinIndex)
+          : null;
+      if (startPin.pinType == PinType.output) {
         // start is source
-        _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2, false);
+        _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2, false,
+            alignment);
       } else {
         // start is dest
-        _drawWire(wireEndPos, wireStart.$1, canvas, paint, wireStart.$2, false);
+        _drawWire(wireEndPos, wireStart.$1, canvas, paint, wireStart.$2, false,
+            alignment);
       }
     }
+  }
+
+  /// Looks up the alignment carried by the given output pin on the source node.
+  /// Returns `null` when the pin has no alignment (non-Blueprint/Crystal, or
+  /// not yet evaluated) or when the pin index is the function pin (-1).
+  APIAlignment? _getSourcePinAlignment(BigInt nodeId, int pinIndex) {
+    if (pinIndex < 0) return null;
+    final node = graphModel.nodeNetworkView?.nodes[nodeId];
+    if (node == null || pinIndex >= node.outputPins.length) return null;
+    return node.outputPins[pinIndex].alignment;
   }
 
   (Offset, String) _getPinPositionAndDataType(
@@ -198,23 +226,68 @@ class NodeNetworkPainter extends CustomPainter {
   }
 
   _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint,
-      String dataType, bool selected) {
+      String dataType, bool selected, APIAlignment? alignment) {
     paint.color = getDataTypeColor(dataType);
     paint.strokeWidth = selected ? WIRE_WIDTH_SELECTED : WIRE_WIDTH_NORMAL;
+
+    final path = _getPath(sourcePos, destPos);
 
     if (selected) {
       paint.color = WIRE_COLOR_SELECTED;
 
-      // Draw glow effect for selected wire
+      // Draw glow effect for selected wire (always solid — alignment dashes
+      // would be imperceptible under the wider glow stroke).
       final glowPaint = Paint()
         ..color = WIRE_COLOR_SELECTED.withValues(alpha: WIRE_GLOW_OPACITY)
         ..strokeWidth = paint.strokeWidth * 2
         ..style = PaintingStyle.stroke;
 
-      canvas.drawPath(_getPath(sourcePos, destPos), glowPaint);
+      canvas.drawPath(path, glowPaint);
     }
 
-    canvas.drawPath(_getPath(sourcePos, destPos), paint);
+    final dashPattern = _dashPatternFor(alignment);
+    if (dashPattern == null) {
+      canvas.drawPath(path, paint);
+    } else {
+      canvas.drawPath(_dashedPath(path, dashPattern.$1, dashPattern.$2), paint);
+    }
+  }
+
+  /// Returns `(onLength, offLength)` for the given alignment, or `null` for a
+  /// solid wire (Aligned / no alignment info).
+  (double, double)? _dashPatternFor(APIAlignment? alignment) {
+    switch (alignment) {
+      case APIAlignment.motifUnaligned:
+        return (WIRE_DASH_MOTIF_UNALIGNED_ON, WIRE_DASH_MOTIF_UNALIGNED_OFF);
+      case APIAlignment.latticeUnaligned:
+        return (
+          WIRE_DASH_LATTICE_UNALIGNED_ON,
+          WIRE_DASH_LATTICE_UNALIGNED_OFF
+        );
+      case APIAlignment.aligned:
+      case null:
+        return null;
+    }
+  }
+
+  /// Extracts a dashed sub-path of the Bezier by walking its arc-length via
+  /// `PathMetric`, alternating `on` and `off` segments. No dependencies.
+  Path _dashedPath(Path source, double on, double off) {
+    final result = Path();
+    for (final metric in source.computeMetrics()) {
+      double distance = 0.0;
+      bool draw = true;
+      while (distance < metric.length) {
+        final next =
+            (distance + (draw ? on : off)).clamp(0.0, metric.length).toDouble();
+        if (draw) {
+          result.addPath(metric.extractPath(distance, next), Offset.zero);
+        }
+        distance = next;
+        draw = !draw;
+      }
+    }
+    return result;
   }
 
   Path _getPath(Offset sourcePos, Offset destPos) {

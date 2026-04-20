@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -8642,6 +8642,19 @@ impl SseDecode
     }
 }
 
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIAlignment {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_api_types::APIAlignment::Aligned,
+1 => crate::api::structure_designer::structure_designer_api_types::APIAlignment::MotifUnaligned,
+2 => crate::api::structure_designer::structure_designer_api_types::APIAlignment::LatticeUnaligned,
+            _ => unreachable!("Invalid variant for APIAlignment: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -10677,6 +10690,19 @@ impl SseDecode for Option<String> {
 }
 
 impl SseDecode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIAlignment>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIAlignment>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -11519,11 +11545,15 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_dataType = <String>::sse_decode(deserializer);
         let mut var_resolvedDataType = <Option<String>>::sse_decode(deserializer);
         let mut var_index = <i32>::sse_decode(deserializer);
+        let mut var_alignment = <Option<
+            crate::api::structure_designer::structure_designer_api_types::APIAlignment,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::OutputPinView {
             name: var_name,
             data_type: var_dataType,
             resolved_data_type: var_resolvedDataType,
             index: var_index,
+            alignment: var_alignment,
         };
     }
 }
@@ -12159,6 +12189,34 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIAddBondMoveResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIAlignment
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Aligned => 0.into_dart(),
+            Self::MotifUnaligned => 1.into_dart(),
+            Self::LatticeUnaligned => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIAlignment
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIAlignment,
+    > for crate::api::structure_designer::structure_designer_api_types::APIAlignment
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIAlignment {
         self
     }
 }
@@ -14980,6 +15038,7 @@ impl flutter_rust_bridge::IntoDart
             self.data_type.into_into_dart().into_dart(),
             self.resolved_data_type.into_into_dart().into_dart(),
             self.index.into_into_dart().into_dart(),
+            self.alignment.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15358,6 +15417,16 @@ impl SseEncode
         <bool>::sse_encode(self.has_preview_end, serializer);
         <bool>::sse_encode(self.snapped_to_atom, serializer);
         <u8>::sse_encode(self.bond_order, serializer);
+    }
+}
+
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIAlignment {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIAlignment::Aligned => { 0 }
+crate::api::structure_designer::structure_designer_api_types::APIAlignment::MotifUnaligned => { 1 }
+crate::api::structure_designer::structure_designer_api_types::APIAlignment::LatticeUnaligned => { 2 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 
@@ -16839,6 +16908,18 @@ impl SseEncode for Option<String> {
 }
 
 impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIAlignment>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIAlignment>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode
     for Option<crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -17621,6 +17702,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <String>::sse_encode(self.data_type, serializer);
         <Option<String>>::sse_encode(self.resolved_data_type, serializer);
         <i32>::sse_encode(self.index, serializer);
+        <Option<crate::api::structure_designer::structure_designer_api_types::APIAlignment>>::sse_encode(self.alignment, serializer);
     }
 }
 
@@ -17851,7 +17933,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -17875,7 +17957,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

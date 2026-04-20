@@ -59,6 +59,11 @@ const Color NODE_TITLE_COLOR_PARAMETER = Color(0xFF1B5E20); // Dark green
 const double WIRE_GLOW_BLUR_RADIUS = 8.0;
 const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
 
+// Alignment tooltip colors — see doc/design_blueprint_alignment.md §6.2
+const Color ALIGNMENT_MOTIF_UNALIGNED_COLOR = Color(0xFF6D4C41); // brown
+// LatticeUnaligned reuses WIRE_COLOR_SELECTED (0xFFD84315, orange) defined in
+// node_network.dart.
+
 class PinViewWidget extends StatelessWidget {
   final String dataType;
   final bool multi;
@@ -69,6 +74,7 @@ class PinViewWidget extends StatelessWidget {
   final bool isInput;
   final String? outputString;
   final String? pinName;
+  final APIAlignment? alignment;
 
   const PinViewWidget(
       {super.key,
@@ -76,7 +82,8 @@ class PinViewWidget extends StatelessWidget {
       required this.multi,
       required this.isInput,
       this.outputString,
-      this.pinName});
+      this.pinName,
+      this.alignment});
 
   @override
   Widget build(BuildContext context) {
@@ -92,11 +99,22 @@ class PinViewWidget extends StatelessWidget {
       typeLabel = dataType;
     }
 
-    String tooltipMessage = '';
+    final List<InlineSpan> spans = [];
     if (pinName != null && pinName!.isNotEmpty) {
-      tooltipMessage = '── $pinName ──  $typeLabel';
+      spans.add(TextSpan(text: '── $pinName ──  $typeLabel'));
     } else {
-      tooltipMessage = typeLabel;
+      spans.add(TextSpan(text: typeLabel));
+    }
+    if (alignment == APIAlignment.motifUnaligned) {
+      spans.add(const TextSpan(
+        text: '\nAlignment: motif-unaligned',
+        style: TextStyle(color: ALIGNMENT_MOTIF_UNALIGNED_COLOR),
+      ));
+    } else if (alignment == APIAlignment.latticeUnaligned) {
+      spans.add(const TextSpan(
+        text: '\nAlignment: lattice-unaligned',
+        style: TextStyle(color: WIRE_COLOR_SELECTED),
+      ));
     }
     if (outputString != null && outputString!.isNotEmpty) {
       const maxLines = 15;
@@ -115,22 +133,27 @@ class PinViewWidget extends StatelessWidget {
       if (truncated) {
         preview = '$preview\n...';
       }
-      tooltipMessage = '$tooltipMessage\n$preview';
+      spans.add(TextSpan(text: '\n$preview'));
     }
 
+    final bool unaligned = alignment == APIAlignment.motifUnaligned ||
+        alignment == APIAlignment.latticeUnaligned;
+
     return Tooltip(
-      message: tooltipMessage,
+      richMessage: TextSpan(children: spans),
       preferBelow: false,
       child: Center(
         child: SizedBox(
           width: PIN_SIZE,
           height: PIN_SIZE,
           child: CustomPaint(
-            painter: _PinPainter(
-              sliceColors: sliceColors,
-              hollow: multi,
-              borderWidth: PIN_BORDER_WIDTH,
-            ),
+            painter: unaligned
+                ? _WarningTrianglePinPainter(color: sliceColors.first)
+                : _PinPainter(
+                    sliceColors: sliceColors,
+                    hollow: multi,
+                    borderWidth: PIN_BORDER_WIDTH,
+                  ),
           ),
         ),
       ),
@@ -205,16 +228,68 @@ class _PinPainter extends CustomPainter {
   }
 }
 
+/// Paints an output pin as a filled warning triangle with an exclamation mark
+/// for Blueprint/Crystal pins whose alignment is MotifUnaligned or
+/// LatticeUnaligned. The triangle fits within the pin's circle bounding box so
+/// wire-endpoint math and hit testing stay unchanged. See
+/// `doc/design_blueprint_alignment.md` §6.3.
+class _WarningTrianglePinPainter extends CustomPainter {
+  final Color color;
+
+  const _WarningTrianglePinPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+    final path = Path()
+      ..moveTo(w / 2, 0)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+
+    final fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = color;
+    canvas.drawPath(path, fillPaint);
+
+    // Exclamation mark: a short black bar above a small black dot, centered
+    // in the lower half of the triangle where it has room.
+    final barPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.black;
+    final double barWidth = w * 0.14;
+    final double barTop = h * 0.32;
+    final double barBottom = h * 0.68;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(w / 2 - barWidth / 2, barTop, w / 2 + barWidth / 2,
+            barBottom),
+        Radius.circular(barWidth / 2),
+      ),
+      barPaint,
+    );
+    canvas.drawCircle(Offset(w / 2, h * 0.83), barWidth * 0.75, barPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WarningTrianglePinPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
 class PinWidget extends StatelessWidget {
   final PinReference pinReference;
   final bool multi;
   final String? outputString;
   final String? pinName;
+  final APIAlignment? alignment;
   PinWidget(
       {required this.pinReference,
       required this.multi,
       this.outputString,
-      this.pinName})
+      this.pinName,
+      this.alignment})
       : super(
             key: ValueKey(pinReference.pinIndex +
                 ((pinReference.pinType == PinType.output) ? 1000 : 0)));
@@ -251,7 +326,8 @@ class PinWidget extends StatelessWidget {
                     multi: multi,
                     isInput: isInput,
                     outputString: outputString,
-                    pinName: pinName),
+                    pinName: pinName,
+                    alignment: alignment),
               ),
             ),
             child: SizedBox(
@@ -263,7 +339,8 @@ class PinWidget extends StatelessWidget {
                     multi: multi,
                     isInput: isInput,
                     outputString: outputString,
-                    pinName: pinName),
+                    pinName: pinName,
+                    alignment: alignment),
               ),
             ),
             onDragUpdate: (details) {
@@ -537,6 +614,7 @@ class NodeWidget extends StatelessWidget {
               ? node.outputPinStrings[pin.index]
               : null,
           pinName: node.outputPins.length > 1 ? pin.name : null,
+          alignment: pin.alignment,
         ),
       ],
     );

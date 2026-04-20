@@ -212,6 +212,10 @@ impl NetworkEvaluator {
                     .unwrap_or_else(|| node_type.output_type().clone());
                 (result, dt)
             };
+        // Capture alignment from the wire-level result for pin 0 (not the
+        // display override, which may be an unrelated phase — e.g. motif_edit
+        // shows Atomic in the viewport while the wire carries Motif).
+        let pin_0_alignment = eval_output.get(0).get_alignment();
         let (output, geo_tree) = self.convert_result_to_node_output(
             display_result_0,
             &display_type_0,
@@ -232,11 +236,13 @@ impl NetworkEvaluator {
             let pin_index = pin_index_usize as i32;
             if pin_index == 0 {
                 // Pin 0's actual data lives in NodeSceneData.output / .geo_tree.
-                // displayed_outputs() resolves pin 0 from those fields.
+                // displayed_outputs() resolves pin 0 from those fields. Alignment
+                // is still tracked here so the API layer can surface it per pin.
                 pin_outputs.push(DisplayedPinOutput {
                     pin_index: 0,
                     output: NodeOutput::None,
                     geo_tree: None,
+                    alignment: pin_0_alignment,
                 });
                 continue;
             }
@@ -253,6 +259,8 @@ impl NetworkEvaluator {
                         .unwrap_or_else(|| node_type.get_output_pin_type(pin_index));
                     (result, dt)
                 };
+            // Wire-level alignment (same rationale as pin 0 above).
+            let pin_alignment = eval_output.get(pin_index).get_alignment();
             let (pin_output, pin_geo_tree) = self.convert_result_to_node_output(
                 pin_result,
                 &pin_data_type,
@@ -267,6 +275,7 @@ impl NetworkEvaluator {
                 pin_index,
                 output: pin_output,
                 geo_tree: pin_geo_tree,
+                alignment: pin_alignment,
             });
         }
 

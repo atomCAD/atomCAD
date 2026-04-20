@@ -27,6 +27,7 @@ use super::structure_designer_api_types::APISequenceData;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
+use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
@@ -85,6 +86,7 @@ use crate::crystolecule::unit_cell_symmetries::{
 };
 use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::layout;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
@@ -134,6 +136,14 @@ use crate::structure_designer::nodes::structure_rot::{StructureRotData, Structur
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
 use std::collections::HashMap;
+
+fn alignment_to_api(alignment: Alignment) -> APIAlignment {
+    match alignment {
+        Alignment::Aligned => APIAlignment::Aligned,
+        Alignment::MotifUnaligned => APIAlignment::MotifUnaligned,
+        Alignment::LatticeUnaligned => APIAlignment::LatticeUnaligned,
+    }
+}
 
 fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
     let base_type = match api_data_type.data_type_base {
@@ -337,6 +347,14 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                     let output_type = node_type.output_type().clone();
                     let function_type = node_type.get_function_type();
 
+                    // Look up this node's scene data once so we can read the
+                    // per-pin alignment recorded at evaluation time.
+                    let scene_node_data = cad_instance
+                        .structure_designer
+                        .last_generated_structure_designer_scene
+                        .node_data
+                        .get(&node.id);
+
                     // Build output pin views from the node type's output_pins.
                     // For polymorphic pins (SameAsInput / SameAsArrayElements) or
                     // pins declared with an abstract Fixed type, also resolve the
@@ -362,11 +380,18 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                             } else {
                                 None
                             };
+                            let alignment = scene_node_data
+                                .and_then(|d| {
+                                    d.pin_outputs.iter().find(|p| p.pin_index == i as i32)
+                                })
+                                .and_then(|p| p.alignment)
+                                .map(alignment_to_api);
                             OutputPinView {
                                 name: pin_def.name.clone(),
                                 data_type: pin_def.data_type.to_string(),
                                 resolved_data_type,
                                 index: i as i32,
+                                alignment,
                             }
                         })
                         .collect();

@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -83,6 +83,15 @@ class APIAddBondMoveResult {
           hasPreviewEnd == other.hasPreviewEnd &&
           snappedToAtom == other.snappedToAtom &&
           bondOrder == other.bondOrder;
+}
+
+/// Blueprint/Crystal alignment state, mirrored from `network_result::Alignment`.
+/// Surfaced in the Flutter UI as wire dash style + pin tooltip colouring.
+enum APIAlignment {
+  aligned,
+  motifUnaligned,
+  latticeUnaligned,
+  ;
 }
 
 class APIApplyDiffData {
@@ -2396,11 +2405,17 @@ class OutputPinView {
   final String? resolvedDataType;
   final int index;
 
+  /// Alignment of this pin's last-evaluated value. `None` for types without
+  /// alignment (Molecule, primitives, …) or when the pin has not been
+  /// evaluated in the current scene.
+  final APIAlignment? alignment;
+
   const OutputPinView({
     required this.name,
     required this.dataType,
     this.resolvedDataType,
     required this.index,
+    this.alignment,
   });
 
   @override
@@ -2408,7 +2423,8 @@ class OutputPinView {
       name.hashCode ^
       dataType.hashCode ^
       resolvedDataType.hashCode ^
-      index.hashCode;
+      index.hashCode ^
+      alignment.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2418,7 +2434,8 @@ class OutputPinView {
           name == other.name &&
           dataType == other.dataType &&
           resolvedDataType == other.resolvedDataType &&
-          index == other.index;
+          index == other.index &&
+          alignment == other.alignment;
 }
 
 /// Result of default_tool_pointer_down.

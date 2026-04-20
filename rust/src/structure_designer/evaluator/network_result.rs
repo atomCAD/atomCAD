@@ -243,6 +243,16 @@ impl NetworkResult {
         matches!(self, NetworkResult::Error(_))
     }
 
+    /// Returns the alignment carried by this result, if any.
+    /// Blueprint and Crystal carry alignment; all other variants return `None`.
+    pub fn get_alignment(&self) -> Option<Alignment> {
+        match self {
+            NetworkResult::Blueprint(bp) => Some(bp.alignment),
+            NetworkResult::Crystal(c) => Some(c.alignment),
+            _ => None,
+        }
+    }
+
     /// If this is an Error variant, returns it. Otherwise returns None.
     /// Useful for early error propagation in node evaluation.
     pub fn propagate_error(self) -> Option<NetworkResult> {

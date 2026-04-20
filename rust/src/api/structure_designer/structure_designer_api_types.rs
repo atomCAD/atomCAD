@@ -62,6 +62,19 @@ pub struct OutputPinView {
     /// `data_type` for tooltips and color-coding when present.
     pub resolved_data_type: Option<String>,
     pub index: i32,
+    /// Alignment of this pin's last-evaluated value. `None` for types without
+    /// alignment (Molecule, primitives, …) or when the pin has not been
+    /// evaluated in the current scene.
+    pub alignment: Option<APIAlignment>,
+}
+
+/// Blueprint/Crystal alignment state, mirrored from `network_result::Alignment`.
+/// Surfaced in the Flutter UI as wire dash style + pin tooltip colouring.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APIAlignment {
+    Aligned,
+    MotifUnaligned,
+    LatticeUnaligned,
 }
 
 #[frb]

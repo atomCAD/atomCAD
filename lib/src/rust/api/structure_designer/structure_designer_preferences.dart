@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
