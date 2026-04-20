@@ -16,7 +16,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::{
-    CrystalData, MoleculeData, NetworkResult,
+    Alignment, CrystalData, MoleculeData, NetworkResult,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -43,6 +43,7 @@ enum InputWrapperKind {
     Crystal {
         structure: Structure,
         geo_tree_root: Option<GeoNode>,
+        alignment: Alignment,
     },
     Molecule {
         geo_tree_root: Option<GeoNode>,
@@ -1562,6 +1563,7 @@ impl NodeData for AtomEditData {
                     wrapper: InputWrapperKind::Crystal {
                         structure: c.structure,
                         geo_tree_root: c.geo_tree_root,
+                        alignment: c.alignment,
                     },
                 },
                 NetworkResult::Molecule(m) => CachedInput {
@@ -1770,10 +1772,12 @@ impl NodeData for AtomEditData {
             InputWrapperKind::Crystal {
                 structure,
                 geo_tree_root,
+                alignment,
             } => NetworkResult::Crystal(CrystalData {
                 structure,
                 atoms: result,
                 geo_tree_root,
+                alignment,
             }),
             InputWrapperKind::Molecule { geo_tree_root } => NetworkResult::Molecule(MoleculeData {
                 atoms: result,

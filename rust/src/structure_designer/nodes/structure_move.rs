@@ -10,7 +10,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
 use crate::structure_designer::evaluator::network_result::{
-    BlueprintData, CrystalData, NetworkResult, runtime_type_error_in_input,
+    Alignment, BlueprintData, CrystalData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -107,6 +107,11 @@ impl NodeData for StructureMoveData {
 
         let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
 
+        // Translation is lattice-safe iff each component is divisible by lattice_subdivision.
+        let divisible = translation.x.rem_euclid(lattice_subdivision) == 0
+            && translation.y.rem_euclid(lattice_subdivision) == 0
+            && translation.z.rem_euclid(lattice_subdivision) == 0;
+
         match input_val {
             NetworkResult::Blueprint(shape) => {
                 let unit_cell = shape.structure.lattice_vecs.clone();
@@ -118,12 +123,18 @@ impl NodeData for StructureMoveData {
                     }));
                 }
 
+                let mut alignment = shape.alignment;
+                if !divisible {
+                    alignment.worsen_to(Alignment::LatticeUnaligned);
+                }
+
                 EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                     structure: shape.structure.clone(),
                     geo_tree_root: GeoNode::transform(
                         Transform::new(real_translation, DQuat::IDENTITY),
                         Box::new(shape.geo_tree_root),
                     ),
+                    alignment,
                 }))
             }
             NetworkResult::Crystal(crystal) => {
@@ -146,10 +157,16 @@ impl NodeData for StructureMoveData {
                     )
                 });
 
+                let mut alignment = crystal.alignment;
+                if !divisible {
+                    alignment.worsen_to(Alignment::LatticeUnaligned);
+                }
+
                 EvalOutput::single(NetworkResult::Crystal(CrystalData {
                     structure: crystal.structure,
                     atoms,
                     geo_tree_root: new_geo_tree_root,
+                    alignment,
                 }))
             }
             _ => EvalOutput::single(runtime_type_error_in_input(0)),

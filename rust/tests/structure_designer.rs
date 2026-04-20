@@ -165,3 +165,6 @@ mod materialize_test;
 
 #[path = "structure_designer/phase_transitions_test.rs"]
 mod phase_transitions_test;
+
+#[path = "structure_designer/alignment_test.rs"]
+mod alignment_test;

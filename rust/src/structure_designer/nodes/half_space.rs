@@ -9,6 +9,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
@@ -166,6 +167,7 @@ impl NodeData for HalfSpaceData {
         EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
             structure,
             geo_tree_root: GeoNode::half_space(plane_props.normal, shifted_center),
+            alignment: Alignment::Aligned,
         }))
     }
 

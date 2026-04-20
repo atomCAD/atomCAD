@@ -214,6 +214,7 @@ impl NodeData for LatticeSymopData {
             let BlueprintData {
                 structure,
                 geo_tree_root,
+                alignment,
             } = shape;
             let input_frame_transform = Transform::default();
 
@@ -240,6 +241,7 @@ impl NodeData for LatticeSymopData {
             return EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                 structure: Structure::from_lattice_vecs(structure.lattice_vecs),
                 geo_tree_root: output_geo_tree_root,
+                alignment,
             }));
         } else {
             return EvalOutput::single(runtime_type_error_in_input(0));

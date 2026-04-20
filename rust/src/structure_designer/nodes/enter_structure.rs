@@ -7,7 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::{
-    CrystalData, NetworkResult, runtime_type_error_in_input,
+    Alignment, CrystalData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -65,6 +65,7 @@ impl NodeData for EnterStructureData {
                     structure,
                     atoms: mol.atoms,
                     geo_tree_root: mol.geo_tree_root,
+                    alignment: Alignment::LatticeUnaligned,
                 }))
             }
             _ => EvalOutput::single(runtime_type_error_in_input(0)),

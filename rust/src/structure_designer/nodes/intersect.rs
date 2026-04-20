@@ -5,6 +5,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
@@ -85,13 +86,16 @@ impl NodeData for IntersectData {
         }
 
         let first_lattice_vecs = blueprints[0].structure.lattice_vecs.clone();
+        let mut alignment = Alignment::Aligned;
         for bp in blueprints.into_iter() {
+            alignment.worsen_to(bp.alignment);
             shapes.push(bp.geo_tree_root);
         }
 
         EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
             structure: Structure::from_lattice_vecs(first_lattice_vecs),
             geo_tree_root: GeoNode::intersection_3d(shapes),
+            alignment,
         }))
     }
 

@@ -25,7 +25,7 @@ use crate::structure_designer::structure_designer_scene::{
 
 use super::network_result::Closure;
 use super::network_result::input_missing_error;
-use super::network_result::{BlueprintData, GeometrySummary2D};
+use super::network_result::{Alignment, BlueprintData, GeometrySummary2D};
 use crate::crystolecule::structure::Structure;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
@@ -576,11 +576,13 @@ impl NetworkEvaluator {
             DataType::Blueprint => {
                 let mut shapes: Vec<GeoNode> = Vec::new();
                 let mut first_lattice_vecs = None;
+                let mut alignment = Alignment::Aligned;
                 for element in elements {
                     if let NetworkResult::Blueprint(geo) = element {
                         if first_lattice_vecs.is_none() {
                             first_lattice_vecs = Some(geo.structure.lattice_vecs.clone());
                         }
+                        alignment.worsen_to(geo.alignment);
                         shapes.push(geo.geo_tree_root);
                     }
                 }
@@ -590,6 +592,7 @@ impl NetworkEvaluator {
                 let merged = NetworkResult::Blueprint(BlueprintData {
                     structure: Structure::from_lattice_vecs(first_lattice_vecs.unwrap()),
                     geo_tree_root: GeoNode::union_3d(shapes),
+                    alignment,
                 });
                 self.convert_result_to_node_output(
                     merged,

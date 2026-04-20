@@ -5,6 +5,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::runtime_type_error_in_input;
@@ -182,6 +183,7 @@ impl NodeData for ExtrudeData {
                     plane_to_world_transform,
                     infinite,
                 ),
+                alignment: Alignment::Aligned,
             }))
         } else {
             EvalOutput::single(runtime_type_error_in_input(0))

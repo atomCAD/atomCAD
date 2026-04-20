@@ -139,9 +139,16 @@ impl NodeData for StructureRotData {
 
         match input_val {
             NetworkResult::Blueprint(shape) => {
+                // Phase 1: keep alignment unchanged. Motif-symmetry detection is
+                // deferred to Phase 2; in the meantime the lattice is preserved by
+                // construction (axis comes from analyze_unit_cell_symmetries), so
+                // the worst we miss is a motif-unalignment that a later phase will
+                // detect.
+                let alignment = shape.alignment;
                 EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                     structure: shape.structure.clone(),
                     geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                    alignment,
                 }))
             }
             NetworkResult::Crystal(crystal) => {
@@ -155,10 +162,12 @@ impl NodeData for StructureRotData {
                     .geo_tree_root
                     .map(|gt| GeoNode::transform(tr, Box::new(gt)));
 
+                let alignment = crystal.alignment;
                 EvalOutput::single(NetworkResult::Crystal(CrystalData {
                     structure: crystal.structure,
                     atoms,
                     geo_tree_root: new_geo_tree_root,
+                    alignment,
                 }))
             }
             _ => EvalOutput::single(runtime_type_error_in_input(0)),

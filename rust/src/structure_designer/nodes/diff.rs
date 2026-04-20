@@ -6,6 +6,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
@@ -53,7 +54,7 @@ impl NodeData for DiffData {
             return EvalOutput::single(input_missing_error(&base_input_name));
         }
 
-        let (mut geometry, base_lattice_vecs) = helper_union(
+        let (mut geometry, base_lattice_vecs, base_alignment) = helper_union(
             network_evaluator,
             network_stack,
             node_id,
@@ -71,9 +72,10 @@ impl NodeData for DiffData {
         }
 
         let result_lattice_vecs = base_lattice_vecs.unwrap();
+        let mut alignment = base_alignment;
 
         if !node.arguments[1].is_empty() {
-            let (sub_geometry, sub_lattice_vecs) = helper_union(
+            let (sub_geometry, sub_lattice_vecs, sub_alignment) = helper_union(
                 network_evaluator,
                 network_stack,
                 node_id,
@@ -94,6 +96,8 @@ impl NodeData for DiffData {
                 return EvalOutput::single(unit_cell_mismatch_error());
             }
 
+            alignment.worsen_to(sub_alignment);
+
             geometry = Some(GeoNode::difference_3d(
                 Box::new(geometry.unwrap()),
                 Box::new(sub_geometry.unwrap()),
@@ -103,6 +107,7 @@ impl NodeData for DiffData {
         EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
             structure: Structure::from_lattice_vecs(result_lattice_vecs),
             geo_tree_root: geometry.unwrap(),
+            alignment,
         }))
     }
 
@@ -132,7 +137,7 @@ fn helper_union<'a>(
     parameter_index: usize,
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
-) -> (Option<GeoNode>, Option<UnitCellStruct>) {
+) -> (Option<GeoNode>, Option<UnitCellStruct>, Alignment) {
     let mut shapes: Vec<GeoNode> = Vec::new();
 
     let shapes_val = network_evaluator.evaluate_arg_required(
@@ -144,20 +149,20 @@ fn helper_union<'a>(
     );
 
     if let NetworkResult::Error(_) = shapes_val {
-        return (None, None);
+        return (None, None, Alignment::Aligned);
     }
 
     // Extract the array elements from shapes_val
     let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
         array_elements
     } else {
-        return (None, None);
+        return (None, None, Alignment::Aligned);
     };
 
     let shape_count = shape_results.len();
 
     if shape_count == 0 {
-        return (None, None);
+        return (None, None, Alignment::Aligned);
     }
 
     // Extract geometries and check lattice vector compatibility
@@ -166,20 +171,26 @@ fn helper_union<'a>(
         if let NetworkResult::Blueprint(shape) = shape_val {
             blueprints.push(shape);
         } else {
-            return (None, None);
+            return (None, None, Alignment::Aligned);
         }
     }
 
     if !BlueprintData::all_have_compatible_lattice_vecs(&blueprints) {
-        return (None, None);
+        return (None, None, Alignment::Aligned);
     }
 
     let first_lattice_vecs = blueprints[0].structure.lattice_vecs.clone();
+    let mut alignment = Alignment::Aligned;
     for bp in blueprints.into_iter() {
+        alignment.worsen_to(bp.alignment);
         shapes.push(bp.geo_tree_root);
     }
 
-    (Some(GeoNode::union_3d(shapes)), Some(first_lattice_vecs))
+    (
+        Some(GeoNode::union_3d(shapes)),
+        Some(first_lattice_vecs),
+        alignment,
+    )
 }
 
 pub fn get_node_type() -> NodeType {

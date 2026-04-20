@@ -54,6 +54,7 @@ impl NodeData for DematerializeData {
                     EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                         structure: crystal.structure,
                         geo_tree_root,
+                        alignment: crystal.alignment,
                     }))
                 }
                 None => EvalOutput::single(NetworkResult::Error(

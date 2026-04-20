@@ -160,6 +160,7 @@ impl NodeData for MaterializeData {
         };
         let structure = mesh.structure.clone();
         let geo_tree_root_for_crystal = mesh.geo_tree_root.clone();
+        let alignment = mesh.alignment;
 
         // Motif and motif offset now come from the Blueprint's structure.
         let motif = mesh.structure.motif.clone();
@@ -260,6 +261,7 @@ impl NodeData for MaterializeData {
             structure,
             atoms: result.atomic_structure,
             geo_tree_root: Some(geo_tree_root_for_crystal),
+            alignment,
         }))
     }
 

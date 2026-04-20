@@ -934,6 +934,7 @@ fn test_atom_edit_preserves_crystal_variant_on_pin0() {
                 structure: crystal_structure,
                 atoms: AtomicStructure::new(),
                 geo_tree_root: None,
+                alignment: Default::default(),
             }),
         });
         network.add_node("value", DVec2::new(-200.0, 0.0), 0, value_data)

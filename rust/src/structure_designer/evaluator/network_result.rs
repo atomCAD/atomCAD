@@ -90,10 +90,28 @@ impl GeometrySummary2D {
     }
 }
 
+/// Tracks a Blueprint/Crystal's registration to its underlying Structure's symmetry.
+/// Totally ordered: `Aligned < MotifUnaligned < LatticeUnaligned`. Propagation is `max`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum Alignment {
+    #[default]
+    Aligned,
+    MotifUnaligned,
+    LatticeUnaligned,
+}
+
+impl Alignment {
+    /// Degrades `self` to `other` if `other` is worse (higher in the ordering).
+    pub fn worsen_to(&mut self, other: Self) {
+        *self = (*self).max(other);
+    }
+}
+
 #[derive(Clone)]
 pub struct BlueprintData {
     pub structure: Structure,
     pub geo_tree_root: GeoNode,
+    pub alignment: Alignment,
 }
 
 impl BlueprintData {
@@ -150,6 +168,7 @@ pub struct CrystalData {
     pub structure: Structure,
     pub atoms: AtomicStructure,
     pub geo_tree_root: Option<GeoNode>,
+    pub alignment: Alignment,
 }
 
 #[derive(Clone)]

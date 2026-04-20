@@ -4,7 +4,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{Alignment, NetworkResult};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -77,12 +77,16 @@ impl NodeData for AtomUnionData {
         }
 
         let mut atomic_structures: Vec<AtomicStructure> = Vec::new();
+        let mut rest_alignment = Alignment::Aligned;
         for structure_val in iter {
             debug_assert_eq!(
                 structure_val.infer_data_type(),
                 output.infer_data_type(),
                 "atom_union: mixed-phase array reached evaluator"
             );
+            if let NetworkResult::Crystal(ref c) = structure_val {
+                rest_alignment.worsen_to(c.alignment);
+            }
             if let Some(structure) = structure_val.extract_atomic() {
                 atomic_structures.push(structure);
             } else {
@@ -93,7 +97,10 @@ impl NodeData for AtomUnionData {
         }
 
         let merged_ref = match &mut output {
-            NetworkResult::Crystal(c) => &mut c.atoms,
+            NetworkResult::Crystal(c) => {
+                c.alignment.worsen_to(rest_alignment);
+                &mut c.atoms
+            }
             NetworkResult::Molecule(m) => &mut m.atoms,
             _ => unreachable!(),
         };

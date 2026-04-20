@@ -10,6 +10,7 @@ fn make_crystal() -> NetworkResult {
         structure: Structure::diamond(),
         atoms: AtomicStructure::new(),
         geo_tree_root: None,
+        alignment: Default::default(),
     })
 }
 

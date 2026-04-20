@@ -153,6 +153,7 @@ impl NodeData for GeoTransData {
             EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                 structure: Structure::from_lattice_vecs(shape.structure.lattice_vecs.clone()),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                alignment: shape.alignment,
             }))
         } else {
             EvalOutput::single(runtime_type_error_in_input(0))

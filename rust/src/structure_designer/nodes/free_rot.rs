@@ -9,7 +9,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::{
-    BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
+    Alignment, BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -137,9 +137,12 @@ impl NodeData for FreeRotData {
 
         match input_val {
             NetworkResult::Blueprint(shape) => {
+                let mut alignment = shape.alignment;
+                alignment.worsen_to(Alignment::LatticeUnaligned);
                 EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                     structure: shape.structure,
                     geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                    alignment,
                 }))
             }
             NetworkResult::Molecule(mol) => {
