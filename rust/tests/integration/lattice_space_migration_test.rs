@@ -606,3 +606,400 @@ fn test_roundtrip_primitive_with_lattice() {
         adapter_count
     );
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5: `atom_fill` split (renames to `materialize`, synthesises a
+// `structure` source node holding the motif / motif_offset wires).
+// ---------------------------------------------------------------------------
+
+/// Fixture 2 — `atom_fill_split.cnnd`:
+/// a `unit_cell → cuboid → atom_fill` pipeline with motif and motif_offset
+/// sources wired in, every Bool flag pin (passivate, rm_single, surf_recon,
+/// invert_phase) wired to its own `bool` source, and non-default
+/// `AtomFillData` field values. Verifies the full algorithm in one fixture:
+/// node-rename + data-tag rename, argument re-indexing, NodeData translation
+/// (drop `motif_offset`, keep the rest), and synthesis of the new `structure`
+/// node carrying the motif / motif_offset wires.
+///
+/// Expected post-migration state:
+/// - the v2 `atom_fill` is renamed to `materialize` (both `node_type_name`
+///   and the `data_type` dispatch tag);
+/// - `materialize.arguments` has 5 slots in v3 order: shape (from cuboid),
+///   then the four Bool flag wires;
+/// - a synthesized `structure` node receives the motif wire on arg 2 and the
+///   motif_offset wire on arg 3, with arg 0 (structure) and arg 1
+///   (lattice_vecs) left unwired per the design;
+/// - `MaterializeData` carries `parameter_element_value_definition`,
+///   `hydrogen_passivation`, `remove_single_bond_atoms_before_passivation`,
+///   `surface_reconstruction`, `invert_phase` verbatim from `AtomFillData`;
+/// - `next_node_id` advances past every newly-allocated id (one for the
+///   primitive-adaptation adapter on cuboid, one for the atom_fill split's
+///   structure source).
+#[test]
+fn test_load_atom_fill_split() {
+    use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
+
+    let mut registry = NodeTypeRegistry::new();
+    load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/atom_fill_split.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load atom_fill_split.cnnd");
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // No surviving atom_fill; exactly one materialize.
+    let type_names: std::collections::HashSet<&str> = network
+        .nodes
+        .values()
+        .map(|n| n.node_type_name.as_str())
+        .collect();
+    assert!(
+        !type_names.contains("atom_fill"),
+        "atom_fill must be renamed; got {:?}",
+        type_names
+    );
+    let materialize_nodes: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
+        network
+            .nodes
+            .values()
+            .filter(|n| n.node_type_name == "materialize")
+            .collect();
+    assert_eq!(materialize_nodes.len(), 1, "expected one materialize");
+    let materialize = materialize_nodes[0];
+    // The renamed node keeps its original id (9).
+    assert_eq!(materialize.id, 9);
+
+    // The split synthesises one structure source node; the primitive
+    // adaptation pass synthesises another for the cuboid's old unit_cell wire,
+    // so we expect exactly two `structure` nodes.
+    let structure_nodes: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
+        network
+            .nodes
+            .values()
+            .filter(|n| n.node_type_name == "structure")
+            .collect();
+    assert_eq!(
+        structure_nodes.len(),
+        2,
+        "expected one structure adapter (from primitive adaptation) plus one \
+         structure source (from atom_fill split); got {}",
+        structure_nodes.len()
+    );
+
+    // The split's structure source is the one with motif (arg 2) and
+    // motif_offset (arg 3) wired and structure (arg 0) + lattice_vecs (arg 1)
+    // empty. The primitive adapter is the inverse: lattice_vecs (arg 1) wired,
+    // others empty.
+    let split_source = structure_nodes
+        .iter()
+        .find(|n| {
+            !n.arguments[2].argument_output_pins.is_empty()
+                && !n.arguments[3].argument_output_pins.is_empty()
+        })
+        .expect("structure source for atom_fill split should have motif + motif_offset wired");
+    assert_eq!(split_source.arguments.len(), 4);
+    assert!(
+        split_source.arguments[0].argument_output_pins.is_empty(),
+        "split source's `structure` input (arg 0) must be unwired"
+    );
+    assert!(
+        split_source.arguments[1].argument_output_pins.is_empty(),
+        "split source's `lattice_vecs` input (arg 1) must be unwired"
+    );
+    assert_eq!(
+        split_source.arguments[2].argument_output_pins.get(&3),
+        Some(&0),
+        "split source's `motif` input (arg 2) must be wired to motif source (id 3, pin 0)"
+    );
+    assert_eq!(
+        split_source.arguments[3].argument_output_pins.get(&4),
+        Some(&0),
+        "split source's `motif_offset` input (arg 3) must be wired to vec3 source (id 4, pin 0)"
+    );
+
+    // Materialize args, in v3 order: shape (cuboid id 2), passivate (id 5),
+    // rm_single (id 6), surf_recon (id 7), invert_phase (id 8). The cuboid's
+    // shape wire still points at the cuboid (id 2) — the primitive-adapter
+    // pass rewrote the cuboid's own `structure` input, not its downstream wire.
+    assert_eq!(materialize.arguments.len(), 5);
+    assert_eq!(
+        materialize.arguments[0].argument_output_pins.get(&2),
+        Some(&0)
+    );
+    assert_eq!(
+        materialize.arguments[1].argument_output_pins.get(&5),
+        Some(&0),
+        "passivate wire must move from v2 arg 3 to v3 arg 1"
+    );
+    assert_eq!(
+        materialize.arguments[2].argument_output_pins.get(&6),
+        Some(&0),
+        "rm_single wire must move from v2 arg 4 to v3 arg 2"
+    );
+    assert_eq!(
+        materialize.arguments[3].argument_output_pins.get(&7),
+        Some(&0),
+        "surf_recon wire must move from v2 arg 5 to v3 arg 3"
+    );
+    assert_eq!(
+        materialize.arguments[4].argument_output_pins.get(&8),
+        Some(&0),
+        "invert_phase wire must move from v2 arg 6 to v3 arg 4"
+    );
+
+    // NodeData translation: AtomFillData → MaterializeData. `motif_offset` is
+    // dropped; everything else carries over verbatim from the v2 fixture.
+    let mat_data = materialize
+        .data
+        .as_any_ref()
+        .downcast_ref::<MaterializeData>()
+        .expect("materialize node should hold MaterializeData");
+    assert_eq!(mat_data.parameter_element_value_definition, "X = C");
+    assert!(!mat_data.hydrogen_passivation);
+    assert!(mat_data.remove_single_bond_atoms_before_passivation);
+    assert!(!mat_data.surface_reconstruction);
+    assert!(mat_data.invert_phase);
+
+    // next_node_id advances past every synthesised id — primitive adapter +
+    // atom_fill split each pull one. With v2 next_node_id=10, post-migration
+    // must be ≥ 12.
+    assert!(
+        network.next_node_id >= 12,
+        "next_node_id should advance past both the cuboid adapter and the \
+         atom_fill split's structure source; got {}",
+        network.next_node_id
+    );
+}
+
+#[test]
+fn test_roundtrip_atom_fill_split() {
+    let mut registry = NodeTypeRegistry::new();
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/atom_fill_split.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load");
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path().join("roundtrip.cnnd");
+    save_node_networks_to_file(
+        &mut registry,
+        &temp_path,
+        load_result.direct_editing_mode,
+        &load_result.cli_access_rules,
+    )
+    .expect("Failed to save");
+
+    let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
+    assert!(
+        saved.contains("\"version\": 3"),
+        "saved file should be tagged version: 3"
+    );
+    assert!(
+        !saved.contains("\"atom_fill\""),
+        "saved file must not contain the v2 `atom_fill` node type name"
+    );
+    assert!(
+        saved.contains("\"materialize\""),
+        "saved file should contain the v3 `materialize` node type"
+    );
+
+    // Reload-after-save stays on the v3 no-op path; the split runs once and
+    // doesn't multiply on subsequent loads.
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_path.to_str().unwrap())
+        .expect("Failed to reload");
+    let n1 = registry.node_networks.get("Main").unwrap();
+    let n2 = registry2.node_networks.get("Main").unwrap();
+    assert_eq!(n1.nodes.len(), n2.nodes.len());
+
+    let materialize_count = n2
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "materialize")
+        .count();
+    let structure_count = n2
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "structure")
+        .count();
+    assert_eq!(materialize_count, 1, "second load must not duplicate the materialize node");
+    assert_eq!(
+        structure_count, 2,
+        "second load must not synthesise a third structure node"
+    );
+}
+
+/// Fixture 4 — `shared_unit_cell.cnnd`:
+/// one `unit_cell` (id 1) feeding two primitives — a `cuboid` (id 2) which
+/// then feeds `atom_fill.shape` (id 4), and a parallel `sphere` (id 3) used
+/// directly. Verifies that the primitive-adaptation pass and the atom_fill
+/// split compose cleanly: the unit_cell's two consumers each get their own
+/// independent `structure` adapter (fresh-per-consumer is correct under
+/// evaluator semantics; the design treats deduplication as a polish item),
+/// and the atom_fill split adds a third `structure` for its motif/motif_offset
+/// holder — total three `structure` nodes synthesised.
+#[test]
+fn test_load_shared_unit_cell_composes_passes() {
+    let mut registry = NodeTypeRegistry::new();
+    load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/shared_unit_cell.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load shared_unit_cell.cnnd");
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // Original 4 + 2 primitive adapters + 1 atom_fill-split source = 7 nodes.
+    assert_eq!(
+        network.nodes.len(),
+        7,
+        "expected 4 originals + 2 primitive adapters + 1 atom_fill split source; got {}",
+        network.nodes.len()
+    );
+
+    let structure_nodes: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
+        network
+            .nodes
+            .values()
+            .filter(|n| n.node_type_name == "structure")
+            .collect();
+    assert_eq!(
+        structure_nodes.len(),
+        3,
+        "expected 3 synthesised structure nodes (one adapter per primitive + \
+         one source for the atom_fill split); got {}",
+        structure_nodes.len()
+    );
+
+    // The two primitive adapters both read from the renamed lattice_vecs (id 1).
+    // Each adapter's lattice_vecs input (arg 1) must be wired to id 1, with
+    // structure / motif / motif_offset (args 0, 2, 3) all unwired.
+    let primitive_adapters: Vec<&&rust_lib_flutter_cad::structure_designer::node_network::Node> =
+        structure_nodes
+            .iter()
+            .filter(|n| {
+                !n.arguments[1].argument_output_pins.is_empty()
+                    && n.arguments[2].argument_output_pins.is_empty()
+                    && n.arguments[3].argument_output_pins.is_empty()
+            })
+            .collect();
+    assert_eq!(
+        primitive_adapters.len(),
+        2,
+        "expected exactly two primitive adapters; got {}",
+        primitive_adapters.len()
+    );
+    for adapter in &primitive_adapters {
+        assert_eq!(
+            adapter.arguments[1].argument_output_pins.get(&1),
+            Some(&0),
+            "primitive adapter's lattice_vecs (arg 1) must be wired to id 1, pin 0"
+        );
+    }
+
+    // The third structure is the atom_fill split's source — motif/motif_offset
+    // empty (since the v2 atom_fill had nothing wired there) and
+    // lattice_vecs/structure also empty.
+    let split_source = structure_nodes
+        .iter()
+        .find(|n| n.arguments[1].argument_output_pins.is_empty())
+        .expect("expected one structure node with no lattice_vecs wire (the split source)");
+    assert!(
+        split_source
+            .arguments
+            .iter()
+            .all(|a| a.argument_output_pins.is_empty()),
+        "atom_fill split's structure source should have all four inputs unwired \
+         when the v2 atom_fill had nothing wired to motif / motif_offset"
+    );
+
+    // The materialize node (renamed atom_fill, id 4) has its shape wire
+    // pointing at the cuboid (id 2), and the four Bool flag args are unwired
+    // (no flag wires in this fixture).
+    let materialize = network
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "materialize")
+        .expect("materialize node missing");
+    assert_eq!(materialize.id, 4);
+    assert_eq!(materialize.arguments.len(), 5);
+    assert_eq!(
+        materialize.arguments[0].argument_output_pins.get(&2),
+        Some(&0),
+        "materialize.shape (arg 0) must still point at cuboid (id 2, pin 0)"
+    );
+    for i in 1..5 {
+        assert!(
+            materialize.arguments[i].argument_output_pins.is_empty(),
+            "materialize Bool arg {} should be unwired in this fixture",
+            i
+        );
+    }
+
+    // Each cuboid / sphere has its `structure` input (arg 2) rewired to its
+    // own adapter — never to id 1 directly.
+    for primitive_name in ["cuboid", "sphere"] {
+        let prim = network
+            .nodes
+            .values()
+            .find(|n| n.node_type_name == primitive_name)
+            .unwrap_or_else(|| panic!("{} node missing", primitive_name));
+        let wires = &prim.arguments[2].argument_output_pins;
+        assert_eq!(wires.len(), 1, "{} should have exactly one structure-input source", primitive_name);
+        assert!(
+            !wires.contains_key(&1),
+            "{}'s structure input must point at its adapter, not directly at id 1",
+            primitive_name
+        );
+    }
+}
+
+#[test]
+fn test_roundtrip_shared_unit_cell() {
+    let mut registry = NodeTypeRegistry::new();
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/shared_unit_cell.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load");
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path().join("roundtrip.cnnd");
+    save_node_networks_to_file(
+        &mut registry,
+        &temp_path,
+        load_result.direct_editing_mode,
+        &load_result.cli_access_rules,
+    )
+    .expect("Failed to save");
+
+    let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
+    assert!(
+        saved.contains("\"version\": 3"),
+        "saved file should be tagged version: 3"
+    );
+    assert!(
+        !saved.contains("\"atom_fill\""),
+        "saved file must not contain the v2 `atom_fill` node type name"
+    );
+
+    // Reload-after-save: structure-node count must be stable (no new
+    // synthesis on top of v3 input).
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_path.to_str().unwrap())
+        .expect("Failed to reload");
+    let n1 = registry.node_networks.get("Main").unwrap();
+    let n2 = registry2.node_networks.get("Main").unwrap();
+    assert_eq!(n1.nodes.len(), n2.nodes.len());
+    let s1 = n1.nodes.values().filter(|n| n.node_type_name == "structure").count();
+    let s2 = n2.nodes.values().filter(|n| n.node_type_name == "structure").count();
+    assert_eq!(s1, s2, "structure-node count must survive a v3 round trip");
+}

@@ -1,0 +1,250 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Atomic"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "unit_cell",
+            "custom_name": "uc",
+            "position": [
+              50.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567,
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "cuboid",
+            "custom_name": "shape",
+            "position": [
+              350.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                4
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "motif",
+            "custom_name": "m",
+            "position": [
+              50.0,
+              250.0
+            ],
+            "arguments": [],
+            "data_type": "motif",
+            "data": {
+              "definition": "",
+              "name": null
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "vec3",
+            "custom_name": "moff",
+            "position": [
+              50.0,
+              350.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "vec3",
+            "data": {
+              "value": [
+                0.25,
+                0.25,
+                0.0
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "bool",
+            "custom_name": "passivate_in",
+            "position": [
+              50.0,
+              450.0
+            ],
+            "arguments": [],
+            "data_type": "bool",
+            "data": {
+              "value": true
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "bool",
+            "custom_name": "rm_single_in",
+            "position": [
+              50.0,
+              500.0
+            ],
+            "arguments": [],
+            "data_type": "bool",
+            "data": {
+              "value": false
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "bool",
+            "custom_name": "surf_recon_in",
+            "position": [
+              50.0,
+              550.0
+            ],
+            "arguments": [],
+            "data_type": "bool",
+            "data": {
+              "value": true
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "bool",
+            "custom_name": "invert_in",
+            "position": [
+              50.0,
+              600.0
+            ],
+            "arguments": [],
+            "data_type": "bool",
+            "data": {
+              "value": false
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "atom_fill",
+            "custom_name": "fill",
+            "position": [
+              700.0,
+              300.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "parameter_element_value_definition": "X = C",
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "hydrogen_passivation": false,
+              "remove_single_bond_atoms_before_passivation": true,
+              "surface_reconstruction": false,
+              "invert_phase": true
+            }
+          }
+        ],
+        "return_node_id": 9,
+        "displayed_node_ids": [
+          [
+            9,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}
