@@ -99,7 +99,7 @@ fn is_wire_only_type(data_type: &DataType) -> bool {
         data_type,
         DataType::Blueprint
             | DataType::Geometry2D
-            | DataType::Atomic
+            | DataType::HasAtoms
             | DataType::Motif
             | DataType::Structure
             | DataType::LatticeVecs

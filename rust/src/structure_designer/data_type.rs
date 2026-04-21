@@ -22,11 +22,11 @@ pub enum DataType {
     DrawingPlane,
     Geometry2D,
     Blueprint,
-    Atomic,
+    HasAtoms,
     Crystal,
     Molecule,
-    StructureBound,
-    Unanchored,
+    HasStructure,
+    HasFreeLinOps,
     Motif,
     Structure,
     Array(Box<DataType>),
@@ -49,11 +49,11 @@ impl fmt::Display for DataType {
             DataType::DrawingPlane => write!(f, "DrawingPlane"),
             DataType::Geometry2D => write!(f, "Geometry2D"),
             DataType::Blueprint => write!(f, "Blueprint"),
-            DataType::Atomic => write!(f, "Atomic"),
+            DataType::HasAtoms => write!(f, "HasAtoms"),
             DataType::Crystal => write!(f, "Crystal"),
             DataType::Molecule => write!(f, "Molecule"),
-            DataType::StructureBound => write!(f, "StructureBound"),
-            DataType::Unanchored => write!(f, "Unanchored"),
+            DataType::HasStructure => write!(f, "HasStructure"),
+            DataType::HasFreeLinOps => write!(f, "HasFreeLinOps"),
             DataType::Motif => write!(f, "Motif"),
             DataType::Structure => write!(f, "Structure"),
             DataType::Array(element_type) => {
@@ -87,13 +87,13 @@ impl DataType {
         matches!(self, DataType::Array(_))
     }
 
-    /// Returns true for abstract phase supertypes (Atomic, StructureBound, Unanchored).
+    /// Returns true for abstract phase supertypes (HasAtoms, HasStructure, HasFreeLinOps).
     /// Abstract types appear only as declared input-pin types on built-in polymorphic
     /// nodes; no `NetworkResult` value ever carries an abstract `DataType`.
     pub fn is_abstract(&self) -> bool {
         matches!(
             self,
-            DataType::Atomic | DataType::StructureBound | DataType::Unanchored
+            DataType::HasAtoms | DataType::HasStructure | DataType::HasFreeLinOps
         )
     }
 
@@ -169,12 +169,12 @@ impl DataType {
             // No abstract -> concrete conversion. No cross-abstract conversion.
             // No abstract -> abstract identity edges: abstract types only appear as
             // declared input-pin types and sources are always concrete after resolution.
-            (DataType::Crystal, DataType::Atomic) => true,
-            (DataType::Crystal, DataType::StructureBound) => true,
-            (DataType::Molecule, DataType::Atomic) => true,
-            (DataType::Molecule, DataType::Unanchored) => true,
-            (DataType::Blueprint, DataType::StructureBound) => true,
-            (DataType::Blueprint, DataType::Unanchored) => true,
+            (DataType::Crystal, DataType::HasAtoms) => true,
+            (DataType::Crystal, DataType::HasStructure) => true,
+            (DataType::Molecule, DataType::HasAtoms) => true,
+            (DataType::Molecule, DataType::HasFreeLinOps) => true,
+            (DataType::Blueprint, DataType::HasStructure) => true,
+            (DataType::Blueprint, DataType::HasFreeLinOps) => true,
 
             // All other combinations are not compatible
             _ => false,
@@ -286,11 +286,11 @@ impl DataTypeParser {
                     "DrawingPlane" => Ok(DataType::DrawingPlane),
                     "Geometry2D" => Ok(DataType::Geometry2D),
                     "Blueprint" => Ok(DataType::Blueprint),
-                    "Atomic" => Ok(DataType::Atomic),
+                    "HasAtoms" => Ok(DataType::HasAtoms),
                     "Crystal" => Ok(DataType::Crystal),
                     "Molecule" => Ok(DataType::Molecule),
-                    "StructureBound" => Ok(DataType::StructureBound),
-                    "Unanchored" => Ok(DataType::Unanchored),
+                    "HasStructure" => Ok(DataType::HasStructure),
+                    "HasFreeLinOps" => Ok(DataType::HasFreeLinOps),
                     "Motif" => Ok(DataType::Motif),
                     "Structure" => Ok(DataType::Structure),
                     _ => Err(format!("Unknown data type: {}", name)),

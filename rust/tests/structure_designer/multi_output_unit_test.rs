@@ -311,11 +311,11 @@ fn test_displayed_nodes_serialization_roundtrip_non_default_pins() {
             output_pins: vec![
                 SerializableOutputPin {
                     name: "result".to_string(),
-                    data_type: "Atomic".to_string(),
+                    data_type: "HasAtoms".to_string(),
                 },
                 SerializableOutputPin {
                     name: "diff".to_string(),
-                    data_type: "Atomic".to_string(),
+                    data_type: "HasAtoms".to_string(),
                 },
             ],
             output_type: None,
@@ -1211,7 +1211,7 @@ mod resolve_output_type_tests {
     /// Builds a registry with three toy types:
     /// - `src_float`: no params, single `Fixed(Float)` output
     /// - `src_float_array`: no params, single `Fixed(Array[Float])` output
-    /// - `poly`: one input `"in"` (DataType::Atomic, abstract) + an array input `"arr"` (Array[Atomic]);
+    /// - `poly`: one input `"in"` (DataType::HasAtoms, abstract) + an array input `"arr"` (Array[Atomic]);
     ///           three outputs: fixed Int at pin 0, SameAsInput("in") at pin 1,
     ///           SameAsArrayElements("arr") at pin 2.
     fn build_toy_registry() -> NodeTypeRegistry {
@@ -1241,12 +1241,12 @@ mod resolve_output_type_tests {
                     Parameter {
                         id: None,
                         name: "in".to_string(),
-                        data_type: DataType::Atomic,
+                        data_type: DataType::HasAtoms,
                     },
                     Parameter {
                         id: None,
                         name: "arr".to_string(),
-                        data_type: DataType::Array(Box::new(DataType::Atomic)),
+                        data_type: DataType::Array(Box::new(DataType::HasAtoms)),
                     },
                 ],
                 vec![

@@ -2,7 +2,7 @@
 
 ## Context
 
-This document specifies the implementation plan for the type-system split that separates the current `DataType::Atomic` into two concrete phase types (`Crystal`, `Molecule`) plus three abstract "two-out-of-three" supertypes (`Atomic`, `StructureBound`, `Unanchored`), together with a new output-pin mechanism (`PinOutputType::SameAsInput` / `SameAsArrayElements`) that lets polymorphic nodes preserve the concrete input type at the output.
+This document specifies the implementation plan for the type-system split that separates the current `DataType::Atomic` into two concrete phase types (`Crystal`, `Molecule`) plus three abstract "two-out-of-three" supertypes (`Atomic`, `HasStructure`, `HasFreeLinOps`), together with a new output-pin mechanism (`PinOutputType::SameAsInput` / `SameAsArrayElements`) that lets polymorphic nodes preserve the concrete input type at the output.
 
 It is step 6 of the broader lattice-space refactoring. The motivation, user-facing model, node catalog, and payload-struct shapes are defined in the parent design document:
 
@@ -38,8 +38,8 @@ Three abstract supertypes, each excluding exactly one concrete phase:
 | Abstract | Members | Excludes |
 |---|---|---|
 | **`Atomic`** | Crystal, Molecule | Blueprint |
-| **`StructureBound`** | Blueprint, Crystal | Molecule |
-| **`Unanchored`** | Blueprint, Molecule | Crystal |
+| **`HasStructure`** | Blueprint, Crystal | Molecule |
+| **`HasFreeLinOps`** | Blueprint, Molecule | Crystal |
 
 Invariants:
 
@@ -62,7 +62,7 @@ During wire validation the input pin's concrete type is resolved first; the outp
 
 ### In scope
 
-- New `DataType` variants: `Crystal`, `Molecule`, `StructureBound`, `Unanchored`. Redefinition of the existing `Atomic` variant as abstract (retain the name; existing `.cnnd` strings stay valid).
+- New `DataType` variants: `Crystal`, `Molecule`, `HasStructure`, `HasFreeLinOps`. Redefinition of the existing `Atomic` variant as abstract (retain the name; existing `.cnnd` strings stay valid).
 - New `NetworkResult` variants: `Crystal(CrystalData)`, `Molecule(MoleculeData)`. Removal of `NetworkResult::Atomic(..)` construction; `DataType::Atomic` is now abstract-only.
 - New payload structs `CrystalData`, `MoleculeData` (shapes below, matching parent doc Appendix B).
 - New `PinOutputType` enum; `OutputPinDefinition.data_type` changes to `PinOutputType`.
@@ -138,18 +138,18 @@ Each sub-step is a natural stopping point: the code should compile and the exist
 
 File: `rust/src/structure_designer/data_type.rs`.
 
-- Add `Crystal`, `Molecule`, `StructureBound`, `Unanchored` to the `DataType` enum. Keep `Atomic` in place; its *meaning* changes from "concrete atomic structure" to "abstract supertype of Crystal and Molecule".
+- Add `Crystal`, `Molecule`, `HasStructure`, `HasFreeLinOps` to the `DataType` enum. Keep `Atomic` in place; its *meaning* changes from "concrete atomic structure" to "abstract supertype of Crystal and Molecule".
 - Update `Display`, `from_string`, and `parse_builtin_type` for the four new names. `Atomic`'s string remains `"Atomic"` for backward compatibility with existing `.cnnd` files.
 - Extend `can_be_converted_to(src, dst)` with:
-  - `Crystal → Atomic`, `Crystal → StructureBound`, `Crystal → Crystal`
-  - `Molecule → Atomic`, `Molecule → Unanchored`, `Molecule → Molecule`
-  - `Blueprint → StructureBound`, `Blueprint → Unanchored`, `Blueprint → Blueprint` (existing identity)
-  - No abstract → concrete conversion. No cross-abstract conversion (e.g., `StructureBound → Unanchored`). No abstract → abstract identity edges (`Atomic → Atomic` etc.) — abstract types only ever appear as declared input-pin types on built-in polymorphic nodes, and sources in wire-validation are always concrete after resolution.
-- Add a helper `DataType::is_abstract(&self) -> bool` returning true for `Atomic`, `StructureBound`, `Unanchored`. This is used as a debug-assertion hook in 6.2 and a validation guard in 6.4.
+  - `Crystal → Atomic`, `Crystal → HasStructure`, `Crystal → Crystal`
+  - `Molecule → Atomic`, `Molecule → HasFreeLinOps`, `Molecule → Molecule`
+  - `Blueprint → HasStructure`, `Blueprint → HasFreeLinOps`, `Blueprint → Blueprint` (existing identity)
+  - No abstract → concrete conversion. No cross-abstract conversion (e.g., `HasStructure → HasFreeLinOps`). No abstract → abstract identity edges (`Atomic → Atomic` etc.) — abstract types only ever appear as declared input-pin types on built-in polymorphic nodes, and sources in wire-validation are always concrete after resolution.
+- Add a helper `DataType::is_abstract(&self) -> bool` returning true for `Atomic`, `HasStructure`, `HasFreeLinOps`. This is used as a debug-assertion hook in 6.2 and a validation guard in 6.4.
 
 **Tests added in this sub-step:**
 
-- Conversion-matrix test: every pair in the 7×7 `DataType` grid over the phase types (Blueprint, Crystal, Molecule, Atomic, StructureBound, Unanchored, plus one non-phase type as a control); assert `can_be_converted_to` exactly matches the table in this document.
+- Conversion-matrix test: every pair in the 7×7 `DataType` grid over the phase types (Blueprint, Crystal, Molecule, Atomic, HasStructure, HasFreeLinOps, plus one non-phase type as a control); assert `can_be_converted_to` exactly matches the table in this document.
 - `is_abstract()` truth-table test.
 
 ### 6.2 — Payload structs and NetworkResult variants

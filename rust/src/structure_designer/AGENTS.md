@@ -59,7 +59,7 @@ structure_designer/
 | `EvalOutput` | `node_data.rs` | Multi-output eval result (Vec of NetworkResult) |
 | `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
-| `DataType` | `data_type.rs` | Pin type system: primitives, `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`Atomic`, `StructureBound`, `Unanchored`) |
+| `DataType` | `data_type.rs` | Pin type system: primitives, `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`) |
 | `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types |
 | `NetworkResult` | `evaluator/network_result.rs` | Evaluated node output value |
 
@@ -80,7 +80,7 @@ User Action → StructureDesigner method
 - Single value → Array (broadcasting)
 - Function partial application
 - LatticeVecs → DrawingPlane (legacy)
-- Concrete phase type → its abstract supertypes (Crystal/Molecule → Atomic; Blueprint/Crystal → StructureBound; Blueprint/Molecule → Unanchored). No abstract → concrete downcasts, no cross-abstract edges.
+- Concrete phase type → its abstract supertypes (Crystal/Molecule → HasAtoms; Blueprint/Crystal → HasStructure; Blueprint/Molecule → HasFreeLinOps). No abstract → concrete downcasts, no cross-abstract edges.
 
 Check `DataType::can_be_converted_to()` for the complete rules. `DataType::is_abstract()` identifies the three abstract supertypes.
 
@@ -98,9 +98,9 @@ Three **abstract** supertypes name two-out-of-three combinations (each used only
 
 | Abstract | Members | Property |
 |---|---|---|
-| `Atomic` | Crystal, Molecule | has materialized atoms (atom ops) |
-| `StructureBound` | Blueprint, Crystal | has a structure (structure_move, structure_rot) |
-| `Unanchored` | Blueprint, Molecule | free movement is legal (free_move, free_rot) |
+| `HasAtoms` | Crystal, Molecule | has materialized atoms (atom ops) |
+| `HasStructure` | Blueprint, Crystal | has a structure (structure_move, structure_rot) |
+| `HasFreeLinOps` | Blueprint, Molecule | free movement is legal (free_move, free_rot) |
 
 Polymorphic nodes that accept an abstract input use `OutputPinDefinition::single_same_as("input")` (or `same_as_input(...)` for named pins) so the concrete variant flows through unchanged: a Crystal into `atom_edit` comes out as a Crystal, a Molecule comes out as a Molecule. `NodeTypeRegistry::resolve_output_type` resolves polymorphic pins against the connected source type at validation time; at runtime nothing special happens — the node receives a concrete `NetworkResult::Crystal(..)` / `Molecule(..)` / `Blueprint(..)` and returns the same variant.
 

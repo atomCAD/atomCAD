@@ -229,7 +229,7 @@ fn test_sequence_element_type_changes_output() {
 #[test]
 fn test_sequence_parameter_ids_are_pin_indices() {
     let data = SequenceData {
-        element_type: DataType::Atomic,
+        element_type: DataType::HasAtoms,
         input_count: 5,
     };
 
@@ -252,14 +252,14 @@ fn test_sequence_changing_count_preserves_parameter_ids() {
 
     // With 5 pins, IDs are 0,1,2,3,4
     let data5 = SequenceData {
-        element_type: DataType::Atomic,
+        element_type: DataType::HasAtoms,
         input_count: 5,
     };
     let custom5 = data5.calculate_custom_node_type(base_type).unwrap();
 
     // Reduce to 3 pins
     let data3 = SequenceData {
-        element_type: DataType::Atomic,
+        element_type: DataType::HasAtoms,
         input_count: 3,
     };
     let custom3 = data3.calculate_custom_node_type(base_type).unwrap();
@@ -295,7 +295,7 @@ fn test_sequence_text_properties_roundtrip() {
 #[test]
 fn test_sequence_text_properties_values() {
     let data = SequenceData {
-        element_type: DataType::Atomic,
+        element_type: DataType::HasAtoms,
         input_count: 3,
     };
 
@@ -304,7 +304,7 @@ fn test_sequence_text_properties_values() {
         props[0],
         (
             "element_type".to_string(),
-            TextValue::DataType(DataType::Atomic)
+            TextValue::DataType(DataType::HasAtoms)
         )
     );
     assert_eq!(props[1], ("count".to_string(), TextValue::Int(3)));
@@ -328,7 +328,7 @@ fn test_sequence_set_text_properties_minimum_count() {
 #[test]
 fn test_sequence_data_serde_roundtrip() {
     let original = SequenceData {
-        element_type: DataType::Atomic,
+        element_type: DataType::HasAtoms,
         input_count: 4,
     };
 
@@ -342,12 +342,12 @@ fn test_sequence_data_serde_roundtrip() {
 #[test]
 fn test_sequence_data_json_format() {
     let data = SequenceData {
-        element_type: DataType::Atomic,
+        element_type: DataType::HasAtoms,
         input_count: 3,
     };
 
     let json = serde_json::to_value(&data).unwrap();
-    assert_eq!(json["element_type"], "Atomic");
+    assert_eq!(json["element_type"], "HasAtoms");
     assert_eq!(json["input_count"], 3);
 }
 
@@ -453,7 +453,7 @@ fn test_sequence_text_format_roundtrip() {
 #[test]
 fn test_sequence_default() {
     let data = SequenceData::default();
-    assert_eq!(data.element_type, DataType::Atomic);
+    assert_eq!(data.element_type, DataType::HasAtoms);
     assert_eq!(data.input_count, 2);
 }
 

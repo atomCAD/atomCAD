@@ -65,7 +65,7 @@ fn test_motif_edit_node_type_pins() {
     // 3 input pins: molecule, unit_cell, tolerance
     assert_eq!(node_type.parameters.len(), 3);
     assert_eq!(node_type.parameters[0].name, "molecule");
-    assert_eq!(node_type.parameters[0].data_type, DataType::Atomic);
+    assert_eq!(node_type.parameters[0].data_type, DataType::HasAtoms);
     assert_eq!(node_type.parameters[1].name, "unit_cell");
     assert_eq!(node_type.parameters[1].data_type, DataType::LatticeVecs);
     assert_eq!(node_type.parameters[2].name, "tolerance");

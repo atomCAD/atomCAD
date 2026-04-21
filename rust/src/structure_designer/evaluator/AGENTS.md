@@ -52,7 +52,7 @@ Array(Vec<NetworkResult>), Function(Closure), Error(String)
   - `BlueprintData { structure, geo_tree_root }` — geometry + structure, no atoms.
   - `CrystalData { structure, atoms, geo_tree_root: Option<_> }` — materialized atoms still bound to a structure.
   - `MoleculeData { atoms, geo_tree_root: Option<_> }` — atoms with no structure.
-- **No abstract variants at runtime**: every `NetworkResult` carries a concrete phase (Blueprint/Crystal/Molecule). Abstract `DataType`s (Atomic/StructureBound/Unanchored) are pin-level only. `infer_data_type` debug-asserts this.
+- **No abstract variants at runtime**: every `NetworkResult` carries a concrete phase (Blueprint/Crystal/Molecule). Abstract `DataType`s (HasAtoms/HasStructure/HasFreeLinOps) are pin-level only. `infer_data_type` debug-asserts this.
 - **No `frame_transform`** on `BlueprintData` or `AtomicStructure`. Movement nodes (`structure_move`, `free_move`, etc.) bake transforms into atom positions and wrap `geo_tree_root` in `GeoNode::transform`. `GeometrySummary2D` still carries `frame_transform` (2D-only, unrelated to the refactoring).
 - `Structure` bundles lattice_vecs + motif + motif_offset; emitted by the `structure` node and flowed into primitives.
 - `Closure` captures a function node's network for deferred evaluation.

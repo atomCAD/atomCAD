@@ -261,7 +261,7 @@ fn test_load_old_atom_edit_output_diff_false() {
     assert!(!atom_edit_data.output_diff, "output_diff should be false");
 
     // Verify network output_type is Atomic (atom_edit's output)
-    assert_eq!(*network.node_type.output_type(), DataType::Atomic);
+    assert_eq!(*network.node_type.output_type(), DataType::HasAtoms);
 
     // Verify the atom_edit node is displayed
     let atom_edit_id = network

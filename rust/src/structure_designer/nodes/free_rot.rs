@@ -461,7 +461,7 @@ Crystal inputs are rejected (exit_structure first, or use structure_rot to stay 
             Parameter {
                 id: None,
                 name: "input".to_string(),
-                data_type: DataType::Unanchored,
+                data_type: DataType::HasFreeLinOps,
             },
             Parameter {
                 id: None,

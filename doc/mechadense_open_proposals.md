@@ -281,10 +281,10 @@ that it is needed as it complicates the code base singnificantly.
 **What he wants.** Pane F calls out that our movement set is missing:
 **scale, reflect, rotoreflect, invert, glide, screw**. Some of these are
 space-group-preserving on structured objects (glide, screw, reflect for
-certain axes); others are useful on `Unanchored` objects (free scale, free
+certain axes); others are useful on `HasFreeLinOps` objects (free scale, free
 reflect).
 
-He suggests they be added polymorphically over `StructureBound` / `Unanchored`
+He suggests they be added polymorphically over `HasStructure` / `HasFreeLinOps`
 in the same shape as `structure_move` / `free_move`.
 
 **Understanding.** Understood.

@@ -50,11 +50,11 @@ Wires use cubic Bezier curves with data-type-based coloring:
 | Bool/Int/Float | Warm orange |
 | Vec2/Vec3/IVec | Cool blue |
 | Geometry2D/Blueprint | Purple |
-| Atomic | Green |
+| Crystal/Molecule | Green |
 | LatticeVecs/Motif/Structure | Teal/cyan |
 | Functions | Amber |
 
-`DATA_TYPE_COLORS` in `node_network.dart` matches by substring, so array types `[T]` pick up the base `T` color. The abstract types `Atomic`, `StructureBound`, and `Unanchored` have **no** entry in the color map. Instead, an input pin declared with an abstract type is rendered as a pie-sliced circle, one equal slice per concrete satisfier, colored with that concrete's color (see `ABSTRACT_TYPE_CONCRETES` and `_PinPainter`). Output pins are always concrete and render single-colored; wires color from the source's concrete type.
+`DATA_TYPE_COLORS` in `node_network.dart` matches by substring, so array types `[T]` pick up the base `T` color. The abstract types `HasAtoms`, `HasStructure`, and `HasFreeLinOps` have **no** entry in the color map. Instead, an input pin declared with an abstract type is rendered as a pie-sliced circle, one equal slice per concrete satisfier, colored with that concrete's color (see `ABSTRACT_TYPE_CONCRETES` and `_PinPainter`). Output pins are always concrete and render single-colored; wires color from the source's concrete type.
 
 ## Node Widget States
 

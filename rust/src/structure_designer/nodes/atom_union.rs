@@ -152,7 +152,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "structures".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Atomic)),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
             },
         ],
         output_pins: OutputPinDefinition::single_same_as_array_elements("structures"),

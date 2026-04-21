@@ -1,10 +1,10 @@
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
 // After Phase 7a the four movement node types were repurposed:
-//   lattice_move + atom_lmove  -> structure_move  (StructureBound input)
-//   lattice_rot  + atom_lrot   -> structure_rot   (StructureBound input)
-//   atom_move                  -> free_move       (Unanchored input)
-//   atom_rot                   -> free_rot        (Unanchored input)
+//   lattice_move + atom_lmove  -> structure_move  (HasStructure input)
+//   lattice_rot  + atom_lrot   -> structure_rot   (HasStructure input)
+//   atom_move                  -> free_move       (HasFreeLinOps input)
+//   atom_rot                   -> free_rot        (HasFreeLinOps input)
 // The old Molecule+unit_cell integration tests no longer apply under the
 // new abstract-typed pin design; we now only smoke-test the registrations.
 

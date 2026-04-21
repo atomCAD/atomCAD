@@ -94,7 +94,7 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   'Blueprint': Color(0xFF9C27B0), // Deep purple - latent atoms in a structure
 
   // Phase types (green family - materialized matter).
-  // Abstract types (Atomic, StructureBound, Unanchored) have no entry here —
+  // Abstract types (HasAtoms, HasStructure, HasFreeLinOps) have no entry here —
   // abstract-typed input pins render pie-sliced in the concrete satisfier
   // colors (see ABSTRACT_TYPE_CONCRETES and PinViewWidget).
   'Crystal': Color(0xFF558B2F), // Olive green - atoms bound to a structure
@@ -183,9 +183,9 @@ extension OutputPinViewEffectiveType on OutputPinView {
 /// Used to render abstract-typed input pins as N-sliced pie circles, with one
 /// slice per concrete satisfier colored as that concrete.
 const Map<String, List<String>> ABSTRACT_TYPE_CONCRETES = {
-  'Atomic': ['Crystal', 'Molecule'],
-  'StructureBound': ['Blueprint', 'Crystal'],
-  'Unanchored': ['Blueprint', 'Molecule'],
+  'HasAtoms': ['Crystal', 'Molecule'],
+  'HasStructure': ['Blueprint', 'Crystal'],
+  'HasFreeLinOps': ['Blueprint', 'Molecule'],
 };
 
 bool isAbstractDataType(String typeName) =>

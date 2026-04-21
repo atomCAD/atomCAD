@@ -518,7 +518,7 @@ impl NetworkEvaluator {
             }
         } else if matches!(
             data_type,
-            DataType::Atomic | DataType::Crystal | DataType::Molecule
+            DataType::HasAtoms | DataType::Crystal | DataType::Molecule
         ) {
             // Accept both the abstract `Atomic` (still declared by not-yet-migrated
             // nodes as Fixed(Atomic)) and the concrete `Crystal`/`Molecule` pin
@@ -667,7 +667,7 @@ impl NetworkEvaluator {
                     geometry_visualization_preferences,
                 )
             }
-            DataType::Atomic | DataType::Crystal | DataType::Molecule => {
+            DataType::HasAtoms | DataType::Crystal | DataType::Molecule => {
                 // Same handling for abstract `Atomic` arrays (not-yet-migrated
                 // nodes) and concrete `Crystal`/`Molecule` arrays — extract the
                 // inner AtomicStructure from each Crystal(..)/Molecule(..)

@@ -418,7 +418,7 @@ Molecule inputs are rejected (use free_rot for free-space rotation)."
             Parameter {
                 id: None,
                 name: "input".to_string(),
-                data_type: DataType::StructureBound,
+                data_type: DataType::HasStructure,
             },
             Parameter {
                 id: None,

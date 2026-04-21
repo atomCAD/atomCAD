@@ -2466,7 +2466,7 @@
               "data_type": "Motif"
             }
           ],
-          "output_type": "Atomic"
+          "output_type": "HasAtoms"
         },
         "nodes": [
           {

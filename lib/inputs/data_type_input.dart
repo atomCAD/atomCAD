@@ -123,16 +123,16 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'Geometry2D';
       case APIDataTypeBase.blueprint:
         return 'Blueprint';
-      case APIDataTypeBase.atomic:
-        return 'Atomic';
+      case APIDataTypeBase.hasAtoms:
+        return 'HasAtoms';
       case APIDataTypeBase.crystal:
         return 'Crystal';
       case APIDataTypeBase.molecule:
         return 'Molecule';
-      case APIDataTypeBase.structureBound:
-        return 'StructureBound';
-      case APIDataTypeBase.unanchored:
-        return 'Unanchored';
+      case APIDataTypeBase.hasStructure:
+        return 'HasStructure';
+      case APIDataTypeBase.hasFreeLinOps:
+        return 'HasFreeLinOps';
       case APIDataTypeBase.motif:
         return 'Motif';
       case APIDataTypeBase.structure:

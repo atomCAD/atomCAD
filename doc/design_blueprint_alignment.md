@@ -11,10 +11,10 @@ The four movement nodes can break this registration:
 
 | Node | Acts on | Lattice-safe? | Motif-safe? |
 |---|---|---|---|
-| `structure_move` | `StructureBound` | iff `translation` divisible by `lattice_subdivision` componentwise | same |
-| `structure_rot`  | `StructureBound` | always (axis is picked from the unit cell's point group) | depends on the motif |
-| `free_move`      | `Unanchored`    | no (arbitrary real-space translation) | no |
-| `free_rot`       | `Unanchored`    | no (arbitrary axis, arbitrary angle) | no |
+| `structure_move` | `HasStructure` | iff `translation` divisible by `lattice_subdivision` componentwise | same |
+| `structure_rot`  | `HasStructure` | always (axis is picked from the unit cell's point group) | depends on the motif |
+| `free_move`      | `HasFreeLinOps`    | no (arbitrary real-space translation) | no |
+| `free_rot`       | `HasFreeLinOps`    | no (arbitrary axis, arbitrary angle) | no |
 
 Downstream nodes (boolean CSG, `materialize`, `atom_edit`, …) assume their Blueprint inputs share a common lattice registration. When two Blueprints from "the same" structure differ by a non-lattice-vector shift or a non-symmetry rotation, unioning/intersecting them creates garbage atoms. Today the evaluator has no way to flag this.
 
@@ -340,7 +340,7 @@ Nothing about the wire struct changes. Alignment is purely an emergent property 
 - **`enter_structure` precision:** the current rule says always `lattice_unaligned`. Optionally, if the molecule's atom positions happen to sit on motif sites of the given structure within tolerance, we could report `aligned`. This is a separate detection problem.
 - **Implicit dependency of `structure_rot` alignment on `pivot_point`:** a rotation around pivot A may preserve the motif while the same rotation around pivot B may not. Our mask check (§5) takes pivot into account. Cache key must include pivot in lattice coordinates, not just axis+step.
 - **UX for "user meant to drift":** some workflows (strained-layer heterostructures, testing defect dynamics) deliberately want unaligned Blueprints. The UI should surface alignment but not shame users for using it. Treat dashes as *information*, not *warnings*.
-- **Interaction with abstract pin types:** an abstract `StructureBound` input could be satisfied by either Blueprint or Crystal; the wire's alignment is whichever the concrete value has. No special-casing needed.
+- **Interaction with abstract pin types:** an abstract `HasStructure` input could be satisfied by either Blueprint or Crystal; the wire's alignment is whichever the concrete value has. No special-casing needed.
 
 ## 11. Not in scope
 

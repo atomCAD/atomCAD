@@ -28,11 +28,11 @@ pub enum APIDataTypeBase {
     DrawingPlane,
     Geometry2D,
     Blueprint,
-    Atomic,
+    HasAtoms,
     Crystal,
     Molecule,
-    StructureBound,
-    Unanchored,
+    HasStructure,
+    HasFreeLinOps,
     Motif,
     Structure,
     Custom,
@@ -54,7 +54,7 @@ pub struct OutputPinView {
     pub name: String,
     /// Declared pin type. For polymorphic pins (`SameAsInput`/`SameAsArrayElements`)
     /// or abstract `Fixed` types, this is the abstract declaration string
-    /// (e.g. `"SameAsInput(input)"` or `"StructureBound"`).
+    /// (e.g. `"SameAsInput(input)"` or `"HasStructure"`).
     pub data_type: String,
     /// The concrete type the pin resolves to in the current network, if it can be
     /// resolved. `Some` only when resolution succeeds and produces a concrete type
@@ -821,7 +821,7 @@ pub struct APINodeEvaluationResult {
     pub node_type_name: String,
     /// The custom name if assigned, otherwise None
     pub custom_name: Option<String>,
-    /// The output data type name (e.g., "Blueprint", "Atomic", "Float")
+    /// The output data type name (e.g., "Blueprint", "HasAtoms", "Float")
     pub output_type: String,
     /// Brief display string (from to_display_string())
     pub display_string: String,

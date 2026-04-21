@@ -75,7 +75,7 @@ fn build_polymorphic_registry() -> NodeTypeRegistry {
             vec![Parameter {
                 id: None,
                 name: "in".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             }],
             OutputPinDefinition::single_same_as("in"),
         ),
@@ -87,7 +87,7 @@ fn build_polymorphic_registry() -> NodeTypeRegistry {
             vec![Parameter {
                 id: None,
                 name: "arr".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Atomic)),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
             }],
             OutputPinDefinition::single_same_as_array_elements("arr"),
         ),
@@ -264,7 +264,7 @@ fn parameter_pin_cannot_be_assigned_an_abstract_type() {
         .downcast_ref::<ParameterData>()
         .unwrap()
         .clone();
-    new_data.data_type = DataType::Atomic;
+    new_data.data_type = DataType::HasAtoms;
     designer.set_node_network_data(param_id, Box::new(new_data));
 
     designer.validate_active_network();

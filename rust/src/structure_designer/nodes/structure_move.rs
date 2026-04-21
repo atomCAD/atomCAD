@@ -393,7 +393,7 @@ Molecule inputs are rejected (use free_move for free-space translation)."
             Parameter {
                 id: None,
                 name: "input".to_string(),
-                data_type: DataType::StructureBound,
+                data_type: DataType::HasStructure,
             },
             Parameter {
                 id: None,

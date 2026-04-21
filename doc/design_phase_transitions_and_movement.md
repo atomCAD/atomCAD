@@ -49,7 +49,7 @@ Exactly the same structure in `nodes/lattice_rot.rs` for
 `lattice_rot` / `atom_lrot`.
 
 **Consequence:** unifying them into a single `structure_move` that
-accepts `StructureBound` (Blueprint | Crystal) is mostly a matter of
+accepts `HasStructure` (Blueprint | Crystal) is mostly a matter of
 rewriting the dispatch to branch on concrete `NetworkResult` variant
 instead of `is_atomic_mode`, plus removing the `atom_lmove`
 registration. The atomic branch already supports Crystal (phase 6 split
@@ -72,7 +72,7 @@ Three additional observations drive the Phase 7a design:
 
 2. **The `unit_cell` input pin on `atom_lmove`/`atom_lrot` becomes
    redundant.** It existed because `DataType::Atomic` carries no
-   structure info. `StructureBound` inputs always provide
+   structure info. `HasStructure` inputs always provide
    `structure.lattice_vecs` inline, so `structure_move` and
    `structure_rot` can drop that pin entirely — a simplification over
    both predecessors.
@@ -94,7 +94,7 @@ works unchanged for Crystal or Molecule. It does **not** currently
 accept Blueprint.
 
 **Consequence:** to repurpose as `free_move`, input becomes
-`Unanchored` (Blueprint | Molecule), output becomes
+`HasFreeLinOps` (Blueprint | Molecule), output becomes
 `SameAsInput("molecule")` (renamed to `input` — see pin names below),
 and we add a Blueprint branch that wraps geo tree with
 `GeoNode::transform`, mirroring what `lattice_move` does in its Blueprint
@@ -136,7 +136,7 @@ internally but — need to verify — they may already be exposed. Phase 7
 Flutter work is:
 
 1. Ensure `APIDataTypeBase` covers `Crystal`, `Molecule`,
-   `StructureBound`, `Unanchored`.
+   `HasStructure`, `HasFreeLinOps`.
 2. Regenerate FRB bindings after any node-registry or data-type changes.
 3. Update `dart format` / Dart node-palette entries for the renamed and
    new nodes (mostly string-level).
@@ -162,10 +162,10 @@ abstract-typed input + concrete-preserving output.
   - Single `get_node_type()` factory. Remove
     `get_node_type_atom_lmove`. Remove `atom_lmove` import and
     registration in `node_type_registry.rs`.
-  - Pin 0 renamed to `input`, type `DataType::StructureBound`. Keep
+  - Pin 0 renamed to `input`, type `DataType::HasStructure`. Keep
     `translation` (IVec3) and `subdivision` (Int) pins.
   - **Drop the `unit_cell` pin** that `atom_lmove` carried (pin 3 in
-    the old signature). `StructureBound` always provides
+    the old signature). `HasStructure` always provides
     `structure.lattice_vecs` inline, so the separate pin is redundant.
     Final pin list: `input`, `translation`, `subdivision` — three
     pins, matching the old `lattice_move` shape.
@@ -225,7 +225,7 @@ Same structural changes as `structure_move`:
 - Action:
   - Rename file to `nodes/free_move.rs`, struct to `FreeMoveData`.
   - Pin 0 renamed from `molecule` to `input`, type changed from
-    `DataType::Atomic` to `DataType::Unanchored`.
+    `DataType::Atomic` to `DataType::HasFreeLinOps`.
   - Output: `OutputPinDefinition::single_same_as("input")` (already
     same_as-style; just pin-name rename).
   - `eval()`: dispatch on concrete variant.

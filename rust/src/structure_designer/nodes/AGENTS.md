@@ -10,8 +10,8 @@ Built-in node type implementations. Each file defines one node type's behavior v
 - **Geometry 3D (Blueprint outputs):** `cuboid`, `sphere`, `extrude`, `half_space`, `drawing_plane`, `facet_shell`, `union`, `intersect`, `diff`, `geo_trans`. Primitives take an optional `Structure` input (defaulting to diamond) instead of the old `LatticeVecs`/unit-cell input.
 - **Structure construction:** `lattice_vecs`, `motif`, `motif_sub`, `structure` (unified constructor/modifier — all four inputs optional, defaults to diamond)
 - **Phase transitions:** `materialize` (Blueprint → Crystal), `dematerialize` (Crystal → Blueprint), `exit_structure` (Crystal → Molecule), `enter_structure` (Molecule + Structure → Crystal)
-- **Atomic (Atomic-polymorphic):** `edit_atom/`, `atom_edit/` (plus `motif_edit` sibling node type defined in the same module), `atom_union`, `atom_cut`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `apply_diff`, `atom_composediff`
-- **Movement (polymorphic over abstract inputs):** `structure_move`, `structure_rot` on `StructureBound`; `free_move`, `free_rot` on `Unanchored`; `lattice_symop`. All four movement nodes use `OutputPinDefinition::single_same_as("input")` so the concrete type flows through.
+- **Atomic ops (HasAtoms-polymorphic):** `edit_atom/`, `atom_edit/` (plus `motif_edit` sibling node type defined in the same module), `atom_union`, `atom_cut`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `apply_diff`, `atom_composediff`
+- **Movement (polymorphic over abstract inputs):** `structure_move`, `structure_rot` on `HasStructure`; `free_move`, `free_rot` on `HasFreeLinOps`; `lattice_symop`. All four movement nodes use `OutputPinDefinition::single_same_as("input")` so the concrete type flows through.
 - **I/O:** `import_xyz` (Molecule), `import_cif` (Blueprint), `export_xyz`
 - **Annotation:** `comment`
 
@@ -46,7 +46,7 @@ pub trait NodeData: Send + Sync {
 **IMPORTANT:** `output_type` field no longer exists on `NodeType`. Use `output_pins` with one of the helper constructors on `OutputPinDefinition`:
 
 - `OutputPinDefinition::single_fixed(data_type)` — single output with a statically declared type.
-- `OutputPinDefinition::single_same_as("input_pin_name")` — single polymorphic output that mirrors the resolved concrete type of the named input pin (used with abstract input types like `Atomic`/`StructureBound`/`Unanchored`).
+- `OutputPinDefinition::single_same_as("input_pin_name")` — single polymorphic output that mirrors the resolved concrete type of the named input pin (used with abstract input types like `HasAtoms`/`HasStructure`/`HasFreeLinOps`).
 - `OutputPinDefinition::single_same_as_array_elements("input_pin_name")` — mirrors the element type of an `Array[..]` input pin.
 - For multi-output: build a `vec![OutputPinDefinition::fixed("result", ...), OutputPinDefinition::same_as_input("diff", "molecule"), ...]` manually.
 
@@ -61,7 +61,7 @@ NodeType {
     ],
     output_pins: OutputPinDefinition::single_fixed(DataType::Blueprint),
     // Polymorphic example (atom-op style):
-    //   parameters: vec![Parameter { id: None, name: "molecule".into(), data_type: DataType::Atomic }, ...],
+    //   parameters: vec![Parameter { id: None, name: "molecule".into(), data_type: DataType::HasAtoms }, ...],
     //   output_pins: OutputPinDefinition::single_same_as("molecule"),
     // Multi-output example (atom_edit style):
     //   output_pins: vec![

@@ -502,11 +502,11 @@ enum APIDataTypeBase {
   drawingPlane,
   geometry2D,
   blueprint,
-  atomic,
+  hasAtoms,
   crystal,
   molecule,
-  structureBound,
-  unanchored,
+  hasStructure,
+  hasFreeLinOps,
   motif,
   structure,
   custom,
@@ -1513,7 +1513,7 @@ class APINodeEvaluationResult {
   /// The custom name if assigned, otherwise None
   final String? customName;
 
-  /// The output data type name (e.g., "Blueprint", "Atomic", "Float")
+  /// The output data type name (e.g., "Blueprint", "HasAtoms", "Float")
   final String outputType;
 
   /// Brief display string (from to_display_string())
@@ -2395,7 +2395,7 @@ class OutputPinView {
 
   /// Declared pin type. For polymorphic pins (`SameAsInput`/`SameAsArrayElements`)
   /// or abstract `Fixed` types, this is the abstract declaration string
-  /// (e.g. `"SameAsInput(input)"` or `"StructureBound"`).
+  /// (e.g. `"SameAsInput(input)"` or `"HasStructure"`).
   final String dataType;
 
   /// The concrete type the pin resolves to in the current network, if it can be

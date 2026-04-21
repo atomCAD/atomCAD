@@ -205,7 +205,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "molecule".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             },
             Parameter {
                 id: None,
@@ -213,7 +213,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::String,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single(DataType::HasAtoms),
         public: true,
         node_data_creator: || Box::new(ExportXYZData::new()),
         node_data_saver: export_xyz_data_saver,

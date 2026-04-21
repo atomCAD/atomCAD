@@ -74,8 +74,8 @@ class PinViewWidget extends StatelessWidget {
   final String dataType;
   final bool multi;
 
-  /// Input pins may declare an abstract data type (`Atomic`, `StructureBound`,
-  /// `Unanchored`); those render as an N-sliced pie of concrete-satisfier
+  /// Input pins may declare an abstract data type (`HasAtoms`, `HasStructure`,
+  /// `HasFreeLinOps`); those render as an N-sliced pie of concrete-satisfier
   /// colors. Output pins are always concrete and render single-colored.
   final bool isInput;
   final String? outputString;

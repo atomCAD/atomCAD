@@ -131,7 +131,7 @@ pub fn get_node_type() -> NodeType {
         parameters: vec![Parameter {
             id: None,
             name: "molecule".to_string(),
-            data_type: DataType::Atomic,
+            data_type: DataType::HasAtoms,
         }],
         output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,

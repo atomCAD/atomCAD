@@ -7,9 +7,9 @@ fn phase_grid_types() -> Vec<DataType> {
         DataType::Blueprint,
         DataType::Crystal,
         DataType::Molecule,
-        DataType::Atomic,
-        DataType::StructureBound,
-        DataType::Unanchored,
+        DataType::HasAtoms,
+        DataType::HasStructure,
+        DataType::HasFreeLinOps,
         DataType::Float,
     ]
 }
@@ -25,12 +25,12 @@ fn expected_conversion(src: &DataType, dst: &DataType) -> bool {
     }
     matches!(
         (src, dst),
-        (DataType::Crystal, DataType::Atomic)
-            | (DataType::Crystal, DataType::StructureBound)
-            | (DataType::Molecule, DataType::Atomic)
-            | (DataType::Molecule, DataType::Unanchored)
-            | (DataType::Blueprint, DataType::StructureBound)
-            | (DataType::Blueprint, DataType::Unanchored)
+        (DataType::Crystal, DataType::HasAtoms)
+            | (DataType::Crystal, DataType::HasStructure)
+            | (DataType::Molecule, DataType::HasAtoms)
+            | (DataType::Molecule, DataType::HasFreeLinOps)
+            | (DataType::Blueprint, DataType::HasStructure)
+            | (DataType::Blueprint, DataType::HasFreeLinOps)
     )
 }
 
@@ -53,9 +53,9 @@ fn phase_conversion_matrix_matches_design_doc() {
 #[test]
 fn no_abstract_to_concrete_conversions() {
     let abstracts = [
-        DataType::Atomic,
-        DataType::StructureBound,
-        DataType::Unanchored,
+        DataType::HasAtoms,
+        DataType::HasStructure,
+        DataType::HasFreeLinOps,
     ];
     let concretes = [DataType::Blueprint, DataType::Crystal, DataType::Molecule];
     for src in &abstracts {
@@ -73,9 +73,9 @@ fn no_abstract_to_concrete_conversions() {
 #[test]
 fn no_cross_abstract_conversions() {
     let abstracts = [
-        DataType::Atomic,
-        DataType::StructureBound,
-        DataType::Unanchored,
+        DataType::HasAtoms,
+        DataType::HasStructure,
+        DataType::HasFreeLinOps,
     ];
     for src in &abstracts {
         for dst in &abstracts {
@@ -94,9 +94,9 @@ fn no_cross_abstract_conversions() {
 
 #[test]
 fn is_abstract_truth_table() {
-    assert!(DataType::Atomic.is_abstract());
-    assert!(DataType::StructureBound.is_abstract());
-    assert!(DataType::Unanchored.is_abstract());
+    assert!(DataType::HasAtoms.is_abstract());
+    assert!(DataType::HasStructure.is_abstract());
+    assert!(DataType::HasFreeLinOps.is_abstract());
 
     assert!(!DataType::Blueprint.is_abstract());
     assert!(!DataType::Crystal.is_abstract());
@@ -106,7 +106,7 @@ fn is_abstract_truth_table() {
     assert!(!DataType::None.is_abstract());
     assert!(!DataType::Structure.is_abstract());
     assert!(!DataType::Motif.is_abstract());
-    assert!(!DataType::Array(Box::new(DataType::Atomic)).is_abstract());
+    assert!(!DataType::Array(Box::new(DataType::HasAtoms)).is_abstract());
 }
 
 #[test]
@@ -114,9 +114,9 @@ fn new_type_names_roundtrip_through_string() {
     for name in [
         "Crystal",
         "Molecule",
-        "StructureBound",
-        "Unanchored",
-        "Atomic",
+        "HasStructure",
+        "HasFreeLinOps",
+        "HasAtoms",
     ] {
         let parsed = DataType::from_string(name).expect("parse");
         assert_eq!(parsed.to_string(), name);

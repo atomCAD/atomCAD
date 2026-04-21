@@ -10,7 +10,7 @@
           "summary": null,
           "category": "Custom",
           "parameters": [],
-          "output_type": "Atomic"
+          "output_type": "HasAtoms"
         },
         "nodes": [
           {

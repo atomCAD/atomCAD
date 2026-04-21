@@ -326,7 +326,7 @@ fn atom_composediff_node_eval_with_text_format() {
         summary: None,
         category: NodeTypeCategory::Custom,
         parameters: vec![],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single(DataType::HasAtoms),
         node_data_creator: || {
             Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
         },

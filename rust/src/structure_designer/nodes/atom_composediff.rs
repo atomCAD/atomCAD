@@ -228,7 +228,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "diffs".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Atomic)),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
             },
             Parameter {
                 id: None,

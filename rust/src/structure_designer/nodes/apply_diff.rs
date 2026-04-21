@@ -195,12 +195,12 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "base".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             },
             Parameter {
                 id: None,
                 name: "diff".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             },
             Parameter {
                 id: None,

@@ -632,7 +632,7 @@ This node enables the manual editing of atomic structures. In a node network eve
           Parameter {
               id: None,
               name: "molecule".to_string(),
-              data_type: DataType::Atomic,
+              data_type: DataType::HasAtoms,
           },
       ],
       output_pins: OutputPinDefinition::single_same_as("molecule"),

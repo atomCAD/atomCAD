@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -8959,11 +8959,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 10 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::DrawingPlane,
 11 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D,
 12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint,
-13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic,
+13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasAtoms,
 14 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Crystal,
 15 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Molecule,
-16 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::StructureBound,
-17 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unanchored,
+16 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasStructure,
+17 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps,
 18 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif,
 19 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure,
 20 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
@@ -12722,11 +12722,11 @@ impl flutter_rust_bridge::IntoDart
             Self::DrawingPlane => 10.into_dart(),
             Self::Geometry2D => 11.into_dart(),
             Self::Blueprint => 12.into_dart(),
-            Self::Atomic => 13.into_dart(),
+            Self::HasAtoms => 13.into_dart(),
             Self::Crystal => 14.into_dart(),
             Self::Molecule => 15.into_dart(),
-            Self::StructureBound => 16.into_dart(),
-            Self::Unanchored => 17.into_dart(),
+            Self::HasStructure => 16.into_dart(),
+            Self::HasFreeLinOps => 17.into_dart(),
             Self::Motif => 18.into_dart(),
             Self::Structure => 19.into_dart(),
             Self::Custom => 20.into_dart(),
@@ -15652,11 +15652,11 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::L
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::DrawingPlane => { 10 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D => { 11 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint => { 12 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Atomic => { 13 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasAtoms => { 13 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Crystal => { 14 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Molecule => { 15 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::StructureBound => { 16 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unanchored => { 17 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasStructure => { 16 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps => { 17 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif => { 18 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure => { 19 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 20 }
@@ -17937,7 +17937,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -17961,7 +17961,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
