@@ -9,6 +9,7 @@
 //! of the network itself has changed — things serde-level compat cannot express.
 
 use serde_json::Value;
+use std::collections::HashSet;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -24,6 +25,7 @@ pub enum MigrationError {
 pub fn migrate_v2_to_v3(root: &mut Value) -> Result<(), MigrationError> {
     rename_data_type_strings(root)?;
     rename_node_type_strings(root)?;
+    drop_deleted_nodes_in_all_networks(root)?;
     Ok(())
 }
 
@@ -276,6 +278,133 @@ fn rename_node_type_name(s: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
+// Deleted-node drop
+// ---------------------------------------------------------------------------
+
+/// Node types whose implementations were removed in v3. Instances of these types in a v2
+/// file are dropped by the migration; any wires referencing them on downstream nodes are
+/// disconnected, leaving the consuming argument empty so network validation surfaces the
+/// missing input to the user on first open.
+const DELETED_NODE_TYPES: &[&str] = &["atom_trans", "lattice_symop"];
+
+fn is_deleted_node_type(name: &str) -> bool {
+    DELETED_NODE_TYPES.contains(&name)
+}
+
+/// Iterates every network under `root` and applies [`drop_deleted_nodes`] to each one.
+fn drop_deleted_nodes_in_all_networks(root: &mut Value) -> Result<(), MigrationError> {
+    let Some(node_networks) = root.get_mut("node_networks").and_then(|v| v.as_array_mut()) else {
+        return Ok(());
+    };
+    for entry in node_networks {
+        let Some(entry_arr) = entry.as_array_mut() else {
+            continue;
+        };
+        let Some(network) = entry_arr.get_mut(1) else {
+            continue;
+        };
+        drop_deleted_nodes(network)?;
+    }
+    Ok(())
+}
+
+/// Removes nodes of deleted v2 types (`atom_trans`, `lattice_symop`) from a single network
+/// and severs every stored reference to them:
+/// - drops the node entries themselves;
+/// - disconnects downstream wires by removing the deleted node's id from every remaining
+///   node's `argument_output_pins` (the argument slot itself is kept in place — empty —
+///   so the validator reports a missing required input, which is the intended signal);
+/// - clears `return_node_id` if it pointed at a deleted node;
+/// - drops entries in `displayed_node_ids` and `displayed_output_pins` referring to
+///   deleted ids, so the downstream deserializer doesn't trip over dangling references.
+///
+/// Upstream wires from a deleted node vanish for free: they lived inside the deleted
+/// node's own `arguments` vector, which is removed along with the node.
+fn drop_deleted_nodes(network_json: &mut Value) -> Result<(), MigrationError> {
+    let deleted_ids = collect_deleted_node_ids(network_json);
+    if deleted_ids.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(nodes) = network_json.get_mut("nodes").and_then(|v| v.as_array_mut()) {
+        nodes.retain(|node| {
+            let name = node.get("node_type_name").and_then(|v| v.as_str());
+            !matches!(name, Some(n) if is_deleted_node_type(n))
+        });
+
+        for node in nodes.iter_mut() {
+            let Some(args) = node.get_mut("arguments").and_then(|v| v.as_array_mut()) else {
+                continue;
+            };
+            for arg in args {
+                let Some(pins) = arg
+                    .get_mut("argument_output_pins")
+                    .and_then(|v| v.as_object_mut())
+                else {
+                    continue;
+                };
+                pins.retain(|key, _| {
+                    key.parse::<u64>()
+                        .map(|id| !deleted_ids.contains(&id))
+                        .unwrap_or(true)
+                });
+            }
+        }
+    }
+
+    let return_was_deleted = network_json
+        .get("return_node_id")
+        .and_then(|v| v.as_u64())
+        .map(|id| deleted_ids.contains(&id))
+        .unwrap_or(false);
+    if return_was_deleted {
+        if let Some(obj) = network_json.as_object_mut() {
+            obj.insert("return_node_id".to_string(), Value::Null);
+        }
+    }
+
+    retain_display_entries(network_json, "displayed_node_ids", &deleted_ids);
+    retain_display_entries(network_json, "displayed_output_pins", &deleted_ids);
+
+    Ok(())
+}
+
+fn collect_deleted_node_ids(network_json: &Value) -> HashSet<u64> {
+    let mut ids = HashSet::new();
+    let Some(nodes) = network_json.get("nodes").and_then(|v| v.as_array()) else {
+        return ids;
+    };
+    for node in nodes {
+        let Some(name) = node.get("node_type_name").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if !is_deleted_node_type(name) {
+            continue;
+        }
+        if let Some(id) = node.get("id").and_then(|v| v.as_u64()) {
+            ids.insert(id);
+        }
+    }
+    ids
+}
+
+/// Drops entries from a `Vec<(u64, …)>`-shaped field (first tuple element is the node id)
+/// whose id is in `deleted_ids`. Shared by `displayed_node_ids` and `displayed_output_pins`.
+fn retain_display_entries(network_json: &mut Value, field: &str, deleted_ids: &HashSet<u64>) {
+    let Some(arr) = network_json.get_mut(field).and_then(|v| v.as_array_mut()) else {
+        return;
+    };
+    arr.retain(|entry| {
+        entry
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|v| v.as_u64())
+            .map(|id| !deleted_ids.contains(&id))
+            .unwrap_or(true)
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Stubs for later phases (scaffolding present so the module layout is stable)
 // ---------------------------------------------------------------------------
 
@@ -291,15 +420,6 @@ fn synthesise_structure_for_atom_fill(_network_json: &mut Value) -> Result<(), M
 /// old `lattice_vecs` input pin, insert a `structure` adapter node between the source and the
 /// primitive's new `structure` input. No-op when the old pin was unwired.
 #[allow(dead_code)]
-fn adapt_primitives_lattice_to_structure(
-    _network_json: &mut Value,
-) -> Result<(), MigrationError> {
-    Ok(())
-}
-
-/// Remove deleted node types (`atom_trans`, `lattice_symop`). Downstream wires are left
-/// dangling; network validation surfaces them to the user on first open.
-#[allow(dead_code)]
-fn drop_deleted_nodes(_network_json: &mut Value) -> Result<(), MigrationError> {
+fn adapt_primitives_lattice_to_structure(_network_json: &mut Value) -> Result<(), MigrationError> {
     Ok(())
 }

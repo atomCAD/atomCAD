@@ -1,0 +1,218 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Atomic"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "parameter",
+            "custom_name": "atoms_in",
+            "position": [
+              0.0,
+              0.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Atomic",
+              "data_type_str": null,
+              "param_id": 1,
+              "param_index": 0,
+              "param_name": "atoms_in",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "atom_trans",
+            "custom_name": "at",
+            "position": [
+              150.0,
+              0.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_trans",
+            "data": {
+              "translation": [
+                1.0,
+                0.0,
+                0.0
+              ],
+              "rotation": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "atom_move",
+            "custom_name": "mv",
+            "position": [
+              300.0,
+              0.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_move",
+            "data": {
+              "translation": [
+                0.0,
+                1.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "cuboid",
+            "custom_name": "cu",
+            "position": [
+              0.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                4
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "lattice_symop",
+            "custom_name": "ls",
+            "position": [
+              150.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_symop",
+            "data": {
+              "translation": [
+                1,
+                0,
+                0
+              ],
+              "rotation_axis": null,
+              "rotation_angle_degrees": 0.0,
+              "transform_only_frame": false
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "lattice_move",
+            "custom_name": "lm",
+            "position": [
+              300.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "translation": [
+                0,
+                0,
+                0
+              ],
+              "lattice_subdivision": 1,
+              "is_atomic_mode": false
+            }
+          }
+        ],
+        "return_node_id": 3,
+        "displayed_node_ids": [
+          [
+            3,
+            "Normal"
+          ],
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}
