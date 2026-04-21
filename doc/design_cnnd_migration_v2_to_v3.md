@@ -134,84 +134,107 @@ The `lattice_move`/`lattice_rot` → `structure_move`/`structure_rot` merge is a
 
 ### Node synthesis: `atom_fill` → `structure` + `materialize`
 
-This is the structurally non-trivial case: a single v2 node splits into two v3 nodes. Pre-v3 `atom_fill` produced concrete atoms from a motif tiled on a lattice. In v3 that computation decomposes into:
+This is the structurally non-trivial case: a single v2 node splits into two v3 nodes.
 
-- a **`structure`** node that packages `motif` + `motif_offset` + `lattice_vecs` into a `Structure` value;
-- a **`materialize`** node that consumes a `Blueprint` (a shape carrying a `Structure` field) and outputs a `Crystal`.
+Pre-v3 `atom_fill` consumed a `Geometry` shape (which implicitly carried lattice context), a motif, a motif offset, and four Bool flags, and produced `Atomic`. In v3 that computation decomposes into:
 
-The v3 `structure` output type is `Structure`, and `materialize`'s input type is `Blueprint`. The two are **not** directly wire-compatible: a `Structure` must first pass through a primitive (or any other `Structure → Blueprint` node) before it can reach `materialize`. The migration cannot reliably infer which primitive in the user's network is the intended bounding shape for these atoms, so it does not guess. It synthesises the `structure` node to preserve the user's motif/offset/lattice wiring and leaves `materialize`'s `Blueprint` input disconnected. Network validation then flags the missing input on load — the same lenient, user-surfaced policy already used for deleted nodes.
+- a **`structure`** node that packages `motif` + `motif_offset` (and optionally an upstream `structure` and `lattice_vecs`) into a `Structure` value;
+- a **`materialize`** node that consumes a `Blueprint` (a shape carrying a `Structure` field) plus the four Bool flags (`passivate`, `rm_single`, `surf_recon`, `invert_phase`) and outputs a `Crystal`.
+
+The algorithm depends on the exact argument-vector layouts, so they are stated here explicitly (wires are indexed by position in each node's `arguments: Vec<Argument>`, not by pin name):
+
+| Index | v2 `atom_fill` | v3 `materialize` | v3 `structure` |
+|---|---|---|---|
+| 0 | shape (Geometry) | shape (Blueprint) | structure (Structure) |
+| 1 | motif (Motif) | passivate (Bool) | lattice_vecs (LatticeVecs) |
+| 2 | m_offset (Vec3) | rm_single (Bool) | motif (Motif) |
+| 3 | passivate (Bool) | surf_recon (Bool) | motif_offset (Vec3) |
+| 4 | rm_single (Bool) | invert_phase (Bool) | — |
+| 5 | surf_recon (Bool) | — | — |
+| 6 | invert_phase (Bool) | — | — |
+
+`AtomFillData` → `MaterializeData` is near-identical: `parameter_element_value_definition`, `hydrogen_passivation`, `remove_single_bond_atoms_before_passivation`, `surface_reconstruction`, `invert_phase` carry over verbatim. The one field without a v3 equivalent is `motif_offset: DVec3`, which in v3 lives only as a wire-able pin on the `structure` node, not as a stored default on `materialize`.
+
+Under this layout the `shape` wire is already in place: v2 `atom_fill.shape` (arg 0) becomes v3 `materialize.shape` (arg 0) by re-indexing alone. The v3 primitives (`cuboid`, `sphere`, …) now declare `Blueprint` output in the registry, so an existing `cuboid → atom_fill.shape` wire becomes `cuboid → materialize.shape` without any adapter. The "`materialize.Blueprint` left disconnected" outcome only arises for v2 files that already had `atom_fill.shape` unwired — which would not have evaluated in v2 either.
+
+There is **no** `S → N` wire: the synthesised `Structure` from `S` is not directly compatible with `N`'s `Blueprint` input. `S` exists purely to preserve the user's `motif` / `motif_offset` wires; its `structure` and `lattice_vecs` inputs are left unwired for the user to connect on first open (or delete if the node is not wanted). The lattice context that in v2 flowed through the `Geometry` shape now flows through the primitive's new `structure` input, handled by the primitive-adaptation pass in the next section.
 
 #### Algorithm (per `atom_fill` node `N`)
 
 1. **Allocate** a new ID `S` from the network's `next_node_id`; increment the JSON field.
-2. **Create `S`** with `node_type_name = "structure"` at position `N.position + (-150, 0)` so auto-layout on next load is not disrupted.
-3. **Move wires** from `N`'s inputs onto `S`:
-   - `N.motif` → `S.motif`
-   - `N.m_offset` → `S.motif_offset`
-   - `N.lattice_vecs` → `S.lattice_vecs`
-4. **Rename** `N.node_type_name` from `"atom_fill"` to `"materialize"`. Drop any `atom_fill`-specific fields on `N` that have no equivalent on `materialize` (`materialize` is parameterless).
-5. **Do not add any wire between `S` and `N`.** The synthesised `Structure` output is type-incompatible with `N`'s `Blueprint` input. `N.Blueprint` is left disconnected.
+2. **Create `S`** with `node_type_name = "structure"` at position `N.position + (-150, 0)` so auto-layout on next load is not disrupted. Its `NodeData` is the default empty `StructureData`; its `arguments` vector is four empty `Argument`s.
+3. **Move motif/offset wires** from `N` to `S`, by v2 arg index:
+   - `N.arguments[1]` (motif) → `S.arguments[2]` (motif).
+   - `N.arguments[2]` (m_offset) → `S.arguments[3]` (motif_offset).
+4. **Re-index `N`'s remaining arguments** to the v3 `materialize` layout:
+   - v2 arg 0 (shape) → v3 arg 0 (shape). Kept as-is; wire source unchanged.
+   - v2 arg 3 (passivate) → v3 arg 1.
+   - v2 arg 4 (rm_single) → v3 arg 2.
+   - v2 arg 5 (surf_recon) → v3 arg 3.
+   - v2 arg 6 (invert_phase) → v3 arg 4.
+
+   Explicit re-indexing is **required**. The validator's argument-count repair would otherwise truncate to 5 args and leave `motif` / `m_offset` sitting at positions 1 and 2, where v3 `materialize` expects Bool pins — a type error on load.
+5. **Rename** `N.node_type_name` from `"atom_fill"` to `"materialize"`.
+6. **Translate `N`'s NodeData** from `AtomFillData` to `MaterializeData`: drop the `motif_offset` field; keep the rest verbatim. If the user had a non-zero `motif_offset` without wiring the `m_offset` pin, it is silently dropped — they re-enter it on first open. (Lenient policy, consistent with deleted-node wires.)
 
 Downstream wires leaving `N` are preserved unchanged. They now carry `Crystal` from `materialize` in place of `Atomic` from `atom_fill`, which is the intended v3 typing.
 
-#### Example A — standalone `atom_fill`
+#### Example A — typical `atom_fill` with a primitive shape
 
-Pre-v3:
+Pre-v3 (v2 `atom_fill.shape` takes the primitive, which implicitly carries the lattice; `motif` and `m_offset` are separate wires):
 
 ```
-motif ────┐
-vec3 ─────┼─> atom_fill ─> display
-unit_cell ┘
+unit_cell ─> cuboid ─> atom_fill ─> display
+motif ────────────────^
+vec3 ─────> m_offset ─^
 ```
 
 Post-migration:
 
 ```
-motif ────┐
-vec3 ─────┼─> structure(S)         (output dangling)
-unit_cell ┘
+lattice_vecs ─> structure(adapter) ─> cuboid ─> materialize(N) ─> display
 
-materialize(N) ─> display
-       ↑
-  (Blueprint disconnected — validation error)
+                structure(S)       (output dangling)
+motif ────────────^ (motif)
+vec3 ─────────────^ (motif_offset)
+                  (structure and lattice_vecs inputs unwired)
 ```
 
-All of the user's motif/offset/lattice inputs are preserved on `S`. The user receives a clear "materialize needs a Blueprint" error on load and inserts a primitive between `S` and `N` themselves.
+The `cuboid → materialize.shape` wire carries over unchanged (same arg index 0, registry now declares it `Blueprint → Blueprint`). The primitive-adaptation pass inserts a `structure` adapter ahead of `cuboid` to supply the lattice context that v2 carried implicitly on the `Geometry` wire. `S` holds the user's `motif` and `motif_offset` wires; its own `structure` and `lattice_vecs` inputs are left for the user to connect on first open or to delete.
 
-#### Example B — `atom_fill` shares `unit_cell` with a primitive
+#### Example B — standalone `atom_fill` with unconnected shape
 
-Pre-v3:
-
-```
-motif ─────┐
-vec3 ──────┼─> atom_fill ─> display_A
-unit_cell ─┤
-           └─> cuboid ─> display_B
-```
-
-Post-migration (renames + primitive adaptation + atom_fill split):
+Pre-v3 (rare: `atom_fill.shape` left unwired; would not have evaluated in v2 either):
 
 ```
-motif ──────┐
-vec3 ───────┼─> structure(S) ─> cuboid ─> display_B
-unit_cell ──┘
+motif ─────> atom_fill ─> display
+vec3 ──────> m_offset ─^
+```
 
-            materialize(N) ─> display_A
+Post-migration:
+
+```
+             materialize(N) ─> display
                 ↑
-           (Blueprint disconnected)
+           (shape disconnected — validation error, same as v2)
+
+             structure(S)
+motif ──────────^ (motif)
+vec3 ───────────^ (motif_offset)
+                 (structure and lattice_vecs inputs unwired)
 ```
 
-The primitive-adaptation step (below) routes `S → cuboid.structure` because `cuboid` had a live `LatticeVecs` wire. The migration still refuses to fabricate `cuboid.Blueprint → materialize.Blueprint`: whether `cuboid` is the intended bounding shape for the `atom_fill`'s atoms is a semantic decision the migration is not qualified to make. The user wires that on first open.
+The missing-shape validation error is not a migration artefact — the v2 file was already invalid on this point. The migration faithfully preserves that state.
 
 #### Example C — `atom_fill → atom_lmove → display`
 
 Pre-v3:
 
 ```
-... ─> atom_fill ─> atom_lmove ─> display
+... ─> cuboid ─> atom_fill ─> atom_lmove ─> display
 ```
 
-Post-migration: `atom_lmove` is renamed to `structure_move` by the node-rename pass; `atom_fill` splits into `structure + materialize` with `materialize.Blueprint` disconnected per the algorithm. The `structure_move → display` tail is preserved; it no longer receives a `Crystal` upstream until the user wires a primitive into `materialize`, at which point the whole chain comes live.
+Post-migration: the primitive-adaptation pass inserts a `structure` adapter ahead of `cuboid` if a `unit_cell` was wired to it. `atom_lmove` is renamed to `structure_move` — its surplus v2 `unit_cell` input (arg 3) is dropped by the validator's argument-count repair, leaving the first three args (`input`, `translation`, `subdivision`) aligned with v3 `structure_move`. `atom_fill` splits into `structure(S)` (dangling, holding the v2 motif/m_offset wires) and `materialize(N)` (which now feeds `structure_move`). The whole chain remains live.
 
 ### Primitive input adaptation: `LatticeVecs` → `Structure`
 
@@ -253,27 +276,61 @@ An alternative would be to hard-fail the load. I prefer the drop-with-dangling-w
 
 ## Testing
 
+### Scope
+
+All migration testing lives entirely under `rust/tests/` — no new code in `src/` beyond the migration itself, no cross-branch test infrastructure, no golden-file scheme, no manifests. We rely on hand-crafted fixtures plus a small number of real-world smoke samples pulled from `main`, each tested through the public load/save API.
+
+Cross-branch semantic comparison (evaluate on `main` → evaluate post-migration on this branch → diff) was considered and rejected as too expensive for the coverage it buys. The change classes with non-trivial semantic divergence (`atom_fill` split leaves the synthesised `structure(S)` dangling; `atom_trans` removal strands downstream wires) cannot be covered by evaluation comparison anyway, so the rest does not justify the machinery.
+
+### Hand-crafted fixtures
+
 New fixture directory: `rust/tests/fixtures/lattice_space_migration/`.
 
 Minimum fixtures (one tiny `.cnnd` file each, each focused on one change class):
 
 1. `pure_rename.cnnd` — a network using `Geometry`, `UnitCell`, `unit_cell`, `atom_move` types and nothing structural. Exercises the rename tables.
-2. `atom_fill_split.cnnd` — a minimal `unit_cell → atom_fill` pipeline. Verifies node synthesis.
+2. `atom_fill_split.cnnd` — a minimal `unit_cell → cuboid → atom_fill` pipeline with wires on all four Bool flag pins and non-default `AtomFillData` values. Verifies node synthesis, argument re-indexing, and NodeData translation.
 3. `primitive_with_lattice.cnnd` — a `unit_cell → cuboid` wire. Verifies primitive adapter synthesis.
-4. `shared_unit_cell.cnnd` — one `unit_cell` feeding both a primitive and an `atom_fill`. Verifies composition.
+4. `shared_unit_cell.cnnd` — one `unit_cell` feeding a primitive that then feeds an `atom_fill.shape`, plus the `unit_cell` feeding a second primitive directly. Verifies composition of the primitive-adaptation and atom_fill-split passes.
 5. `frame_transform_present.cnnd` — a file whose `GeometrySummary`-shaped payload carries `frame_transform`. Verifies silent drop.
 6. `atom_trans_present.cnnd` — a file containing `atom_trans`. Verifies drop-with-dangling-wires policy.
 7. `custom_network.cnnd` — a custom network whose `node_type` has parameters and output pins typed `Geometry`/`UnitCell`. Verifies the walker reaches into custom-network type definitions.
 
-New integration test crate: `rust/tests/integration/lattice_space_migration_test.rs`, registered in `rust/tests/integration.rs`.
+New integration test file: `rust/tests/integration/lattice_space_migration_test.rs`, registered in `rust/tests/integration.rs`.
 
 Per-fixture test shape:
 
 - Load the old fixture through `load_node_networks_from_file`.
-- Assert the in-memory form matches expectations (node types present, wires connected, DataTypes resolved).
+- Assert the in-memory form matches expectations (node types present, wires connected, DataTypes resolved, expected validation errors for fixtures whose migration leaves dangling inputs).
 - Re-save to a temp file.
 - Reload the re-saved file. Verify it now has `version: 3` and no longer triggers the migration path.
 - Verify round-trip idempotence: second save produces byte-identical output to the first save.
+
+### Additional cheap checks
+
+On top of the per-fixture loop, add four small class-of-bug guards that cost almost nothing to write and would each catch a real regression:
+
+- **Double-migration idempotence.** Call `migrate_v2_to_v3` twice on the same `Value` and assert the second call is a no-op (`Value` unchanged). Guards against helpers that silently mutate already-migrated shapes — the kind of bug that only surfaces if the pre-pass is accidentally re-invoked.
+- **v3 no-op check.** A fixture already at `version: 3` must skip the pre-pass entirely. Either instrument with a call counter or confirm byte-identity through the load path.
+- **Corrupt-input clear-error check.** One malformed v2 fixture (truncated JSON, broken wire ID) should yield a `MigrationError` with a useful message — never a panic.
+- **Real-sample smoke.** Copy one or two real files from `samples/`/`demolib/` into the fixture directory and test round-trip only — loads, migrates, re-saves, reloads, idempotent. No semantic comparison. Catches combinations of change classes the minimal fixtures don't hit.
+
+### Sourcing real-sample fixtures
+
+**The `samples/` and `demolib/` .cnnd files in this branch's working tree cannot be used as v2 fixtures.** They were partially hand-edited during the rename commits (`atom_fill` renamed in place to `materialize` without the required `structure` synthesis; `lattice_rot`/`lattice_move` stripped of their properties) and are therefore neither clean v2 nor correctly migrated v3. Pull clean v2 copies from `main`:
+
+```sh
+git show main:samples/diamond.cnnd \
+  > rust/tests/fixtures/lattice_space_migration/real_diamond.cnnd
+```
+
+Pick one atom-heavy and one geometry-heavy sample for reasonable coverage. Keep the set small (≤ 2 files); the hand-crafted fixtures remain the primary test surface.
+
+### Pre-existing snapshot breakage
+
+As of the start of this migration work, running `cargo test` on this branch shows 17 pre-existing snapshot failures caused by the partially-edited branch .cnnd files: 10 `text_format_snapshot_test` cases and 7 `node_snapshots_test` evaluation cases across `diamond`, `extrude-demo`, `flexure-delta-robot`, `halfspace-demo`, `hexagem`, `mof5-motif`, `nut-bolt`, `rotation-demo`, `rutile-motif`, `truss`. These failures are not caused by the migration code (which does not yet exist) and are not addressed by the migration test suite. They are cleared in Phase 7 below by re-hydrating the branch files from `main` and letting the load-time migration rewrite them on save.
+
+### Unchanged coverage
 
 Existing `cnnd_roundtrip_test.rs` should continue to pass without changes (it operates on files the new code saves, which are all v3).
 
@@ -286,16 +343,104 @@ Existing `cnnd_roundtrip_test.rs` should continue to pass without changes (it op
 
 ## Implementation Order
 
-1. Add `SERIALIZATION_VERSION = 3` constant. Adjust version check so v2 is accepted and routed through migration.
-2. Create `migrate_v2_to_v3.rs` skeleton with the entry point and empty helpers.
-3. Fill in `rename_data_type_strings` + `rename_node_type_strings`. Ship with fixtures 1 and 7.
-4. Fill in `drop_deleted_nodes`. Ship with fixtures 6.
-5. Fill in `adapt_primitives_lattice_to_structure`. Ship with fixture 3.
-6. Fill in `synthesise_structure_for_atom_fill`. Ship with fixtures 2 and 4.
-7. Regenerate any snapshot tests that now save at version 3.
-8. Merge branch to `main`.
+Eight phases. Each leaves the tree compiling and all tests green (except phase 7, which clears pre-existing failures).
 
-Each step leaves the tree compiling and tests green.
+### Fixture-to-phase map
+
+At-a-glance summary of which test artifacts land in which phase:
+
+| Phase | Migration work | Fixtures / test artifacts shipped |
+|---|---|---|
+| 1 | Scaffolding, version dispatch (identity migration) | Trivial v3-no-op fixture |
+| 2 | `rename_data_type_strings` + `rename_node_type_strings` | `pure_rename.cnnd`, `custom_network.cnnd` |
+| 3 | `drop_deleted_nodes` | `atom_trans_present.cnnd` |
+| 4 | `adapt_primitives_lattice_to_structure` | `primitive_with_lattice.cnnd` |
+| 5 | `synthesise_structure_for_atom_fill` | `atom_fill_split.cnnd`, `shared_unit_cell.cnnd` |
+| 6 | Hardening | `frame_transform_present.cnnd`, double-migration idempotence, v3 no-op, corrupt-input, 1–2 real samples from `main` (via `git show main:…`) |
+| 7 | Re-hydrate branch `samples/` and `demolib/` from `main`, rewrite to v3, refresh snapshots | — (chore) |
+| 8 | Merge to `main` | — |
+
+Two distinct "copy from `main`" operations exist:
+
+- **Phase 6** uses `git show main:samples/<file>.cnnd > rust/tests/fixtures/lattice_space_migration/<file>.cnnd` to seed **test fixtures**.
+- **Phase 7** uses `git checkout main -- samples/... demolib/...` to restore **the app's shipped sample files**, which are then rewritten to v3 by the load-time migration.
+
+### Phase 1 — Scaffolding and version dispatch
+
+- Bump `SERIALIZATION_VERSION` from 2 to 3 in `node_networks_serialization.rs`.
+- Adjust the version check in `load_node_networks_from_file`: reject `version > 3` (current behaviour for `> 2`), accept `version < 3` and route through `migrate_v2_to_v3`.
+- Create `rust/src/structure_designer/serialization/migrate_v2_to_v3.rs` with:
+  - `MigrationError` enum (wrapping `serde_json::Error`, plus `MalformedStructure(String)`).
+  - `pub fn migrate_v2_to_v3(root: &mut serde_json::Value) -> Result<(), MigrationError>` — entry point that currently returns `Ok(())` without touching the value.
+  - Stub signatures for the five internal helpers listed in **Migration Module Layout**.
+- Register new integration test file `rust/tests/integration/lattice_space_migration_test.rs` in `rust/tests/integration.rs` with a single trivial test: a v3-already fixture loads unchanged through the new dispatch.
+
+Exit state: scaffolding compiles, old behaviour preserved, one trivial test passes.
+
+### Phase 2 — String renames (DataType + node type)
+
+- Implement `rename_data_type_strings` covering every location listed in the Change Catalogue's "Where DataType strings appear" subsection, including the `Array[..]` wrapping rule and descent into every custom network's embedded `node_type`. Apply both the straight 1:1 renames and the `Atomic → Molecule` rule.
+- Implement `rename_node_type_strings` against `SerializableNode.node_type_name` and each `SerializableNodeType.name`, using the node rename table.
+- Ship fixtures 1 (`pure_rename.cnnd`) and 7 (`custom_network.cnnd`) with per-fixture tests per the Testing section.
+
+Exit state: pure-rename conversions are covered end-to-end.
+
+### Phase 3 — Deleted-node drop
+
+- Implement `drop_deleted_nodes` for `atom_trans` and `lattice_symop`. Remove the node entries and disconnect wires referencing them on either end (downstream wires are left dangling so network validation surfaces the missing node to the user).
+- Ship fixture 6 (`atom_trans_present.cnnd`). The fixture's expected post-migration state includes a documented validation error list asserted by the test.
+
+Exit state: deleted-node policy covered; lenient-drop behaviour verified.
+
+### Phase 4 — Primitive input adaptation
+
+- Implement `adapt_primitives_lattice_to_structure`. Walk each network's node list; for every primitive node (cuboid, sphere, extrude, …) with a live incoming wire on the old `lattice_vecs` input, synthesise a `structure` adapter node between the source and the primitive as specified in **Primitive input adaptation**. Leave the new `structure` input on the primitive pointing at the adapter's output; allocate IDs from `next_node_id`.
+- Ship fixture 3 (`primitive_with_lattice.cnnd`).
+
+Exit state: pure-adapt conversions are covered, including the dangling-input case (no-op) and the wired case (adapter synthesised).
+
+### Phase 5 — `atom_fill` split
+
+- Implement `synthesise_structure_for_atom_fill` strictly following the algorithm in the Change Catalogue:
+  1. Allocate a new ID `S` from `next_node_id`; increment.
+  2. Create `S` as `structure` at `N.position + (-150, 0)` with default empty `StructureData` and four empty `Argument`s.
+  3. Move `N.arguments[1]` (motif) → `S.arguments[2]`; move `N.arguments[2]` (m_offset) → `S.arguments[3]`. Leave `S.arguments[0]` (structure) and `S.arguments[1]` (lattice_vecs) empty.
+  4. Re-index `N`'s remaining arguments to v3 `materialize` order: `[0]→[0]` (shape), `[3]→[1]` (passivate), `[4]→[2]` (rm_single), `[5]→[3]` (surf_recon), `[6]→[4]` (invert_phase).
+  5. Rename `N.node_type_name` from `"atom_fill"` to `"materialize"`.
+  6. Translate `AtomFillData` → `MaterializeData`: drop `motif_offset`; preserve `parameter_element_value_definition`, `hydrogen_passivation`, `remove_single_bond_atoms_before_passivation`, `surface_reconstruction`, `invert_phase` verbatim.
+  7. Do **not** wire `S → N`; the lattice context flows through the primitive's new `structure` input, handled by phase 4.
+- Ship fixtures 2 (`atom_fill_split.cnnd`) and 4 (`shared_unit_cell.cnnd`). The shared fixture exercises composition with phase 4's adapter pass; assert that both synth passes compose cleanly. `atom_fill_split.cnnd` must include wires on **all four** Bool flag pins plus non-default NodeData values, so the arg re-indexing is verified.
+
+Exit state: all migration helpers complete. Every hand-crafted fixture except 5 passes.
+
+### Phase 6 — Hardening and real-sample smoke
+
+- Ship fixture 5 (`frame_transform_present.cnnd`), verifying serde silently drops the removed field on load and it does not reappear on save.
+- Add the four additional checks listed in **Additional cheap checks**: double-migration idempotence, v3 no-op check, corrupt-input clear-error, and real-sample smoke. Pull the 1–2 real-sample fixtures from `main` via `git show main:samples/<file>.cnnd > …`.
+- Audit the `MigrationError` surface: every `Err` path emits a message locating the offending network / node / pin.
+
+Exit state: full test matrix green; migration code is feature-complete.
+
+### Phase 7 — Re-hydrate branch sample/demolib files and refresh snapshots
+
+This is a chore, not migration-code work, but it must land before merge so the main branch tests are clean.
+
+- For each of the 13 .cnnd files in `samples/` and `demolib/` that this branch modified: restore the clean v2 copy from `main` (`git checkout main -- <path>`), commit.
+- Run the application (or a one-shot load-and-save CLI pass) on each restored file so the load-time migration rewrites it as v3 on disk. Commit the v3 forms.
+- `cargo insta review` the 17 previously-failing snapshots (10 `text_format_snapshot_test`, 7 `node_snapshots_test`). Accept the new shapes; commit.
+- Full `cargo test` sweep must be green.
+
+Exit state: the working tree contains only v3 .cnnd files, snapshots reflect v3 output, all tests pass.
+
+### Phase 8 — Merge to `main`
+
+- Pre-merge checklist:
+  - `cargo test`, `cargo clippy`, `cargo fmt --check`, `flutter analyze` all clean.
+  - No regressions in `cnnd_roundtrip_test` (it should be untouched).
+  - Manifest of migration helpers vs. the Change Catalogue: every class has at least one fixture.
+- Merge `lattice-space-refactoring` → `main`.
+
+After merge, the v2 → v3 pre-pass becomes historical infrastructure. Any future file loaded from a pre-refactoring checkout routes through it silently; every file saved from that point on is v3.
 
 ## Open Questions
 
