@@ -423,3 +423,186 @@ fn test_roundtrip_atom_trans_and_lattice_symop_dropped() {
         .expect("parameter custom_node_type missing");
     assert_eq!(*custom_type.output_type(), DataType::Molecule);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4: primitive input adaptation (`LatticeVecs` wire → `structure` adapter).
+// ---------------------------------------------------------------------------
+
+/// Fixture 3 — `primitive_with_lattice.cnnd`:
+/// a Main network with two primitives covering both branches of the Phase 4
+/// decision tree:
+/// 1. `unit_cell → cuboid.unit_cell` (wired pin) — verifies adapter synthesis;
+/// 2. `sphere` with its `unit_cell` pin unwired — verifies no-op, new
+///    `structure` input falls back to the diamond default.
+///
+/// Expected post-migration state:
+/// - `unit_cell` is renamed to `lattice_vecs`;
+/// - a synthesized `structure` node sits between `lattice_vecs` and `cuboid`,
+///   with the old wire routed to its `lattice_vecs` input (arg 1);
+/// - `cuboid`'s `structure` input (arg 2) points at the adapter's output 0;
+/// - `sphere` is untouched (no adapter synthesized);
+/// - `next_node_id` advances to cover the new adapter's id;
+/// - the network validates cleanly (Blueprint flows to the return node).
+#[test]
+fn test_load_primitive_with_lattice_adapter_synthesised() {
+    let mut registry = NodeTypeRegistry::new();
+    load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/primitive_with_lattice.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load primitive_with_lattice.cnnd");
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // Original 3 + 1 synthesized adapter = 4 nodes.
+    assert_eq!(
+        network.nodes.len(),
+        4,
+        "expected 3 original + 1 synthesized structure adapter; got {}",
+        network.nodes.len()
+    );
+
+    // `unit_cell` renamed; exactly one synthesized `structure` adapter.
+    let structure_adapters: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
+        network
+            .nodes
+            .values()
+            .filter(|n| n.node_type_name == "structure")
+            .collect();
+    assert_eq!(
+        structure_adapters.len(),
+        1,
+        "expected exactly one synthesized structure adapter; got {}",
+        structure_adapters.len()
+    );
+    let adapter = structure_adapters[0];
+
+    // Adapter must be the id allocated from next_node_id (10 → allocated to adapter).
+    assert_eq!(
+        adapter.id, 10,
+        "adapter should use the id pulled from next_node_id"
+    );
+    // The adapter's 4 arguments: only arg 1 (lattice_vecs) is wired — to the
+    // renamed `lattice_vecs` node (id 1). The other three are unwired so the
+    // primitive still gets diamond defaults for motif / motif_offset / base.
+    assert_eq!(adapter.arguments.len(), 4);
+    assert!(adapter.arguments[0].argument_output_pins.is_empty());
+    assert_eq!(
+        adapter.arguments[1].argument_output_pins.get(&1),
+        Some(&0),
+        "adapter's lattice_vecs input (arg 1) must be wired to the renamed unit_cell node (id 1, pin 0)"
+    );
+    assert!(adapter.arguments[2].argument_output_pins.is_empty());
+    assert!(adapter.arguments[3].argument_output_pins.is_empty());
+
+    // The cuboid's structure input (arg 2) now points at the adapter's output 0.
+    let cuboid = network
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "cuboid")
+        .expect("cuboid missing");
+    assert_eq!(
+        cuboid.arguments[2].argument_output_pins.get(&adapter.id),
+        Some(&0),
+        "cuboid's structure input (arg 2) should be wired to adapter's output 0"
+    );
+    assert_eq!(
+        cuboid.arguments[2].argument_output_pins.len(),
+        1,
+        "cuboid's structure pin must have the adapter as its only source"
+    );
+
+    // The sphere — whose unit_cell pin was unwired in v2 — has no adapter.
+    // Its structure input (arg 2) stays empty; diamond defaults apply.
+    let sphere = network
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "sphere")
+        .expect("sphere missing");
+    assert!(
+        sphere.arguments[2].argument_output_pins.is_empty(),
+        "sphere had no v2 unit_cell wire; its structure pin must stay unwired (no adapter synthesized)"
+    );
+
+    // next_node_id advanced past the allocated id so future nodes don't clash.
+    assert!(
+        network.next_node_id > adapter.id,
+        "next_node_id ({}) should be greater than the adapter's id ({})",
+        network.next_node_id,
+        adapter.id
+    );
+
+    // The migrated network validates cleanly: cuboid outputs Blueprint to the
+    // return node and no pin is left dangling.
+    let mut network = registry.node_networks.remove("Main").unwrap();
+    validate_network(&mut network, &mut registry, None);
+    let error_texts: Vec<String> = network
+        .validation_errors
+        .iter()
+        .map(|e| e.error_text.clone())
+        .collect();
+    assert!(
+        network.valid,
+        "migrated network should validate cleanly; errors: {:?}",
+        error_texts
+    );
+}
+
+#[test]
+fn test_roundtrip_primitive_with_lattice() {
+    let mut registry = NodeTypeRegistry::new();
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/primitive_with_lattice.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load");
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path().join("roundtrip.cnnd");
+    save_node_networks_to_file(
+        &mut registry,
+        &temp_path,
+        load_result.direct_editing_mode,
+        &load_result.cli_access_rules,
+    )
+    .expect("Failed to save");
+
+    let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
+    assert!(
+        saved.contains("\"version\": 3"),
+        "saved file should be tagged version: 3"
+    );
+    assert!(
+        !saved.contains("\"unit_cell\""),
+        "saved file must not contain the renamed-away `unit_cell` node type"
+    );
+    // The adapter round-trips as a real `structure` node.
+    assert!(
+        saved.contains("\"structure\""),
+        "saved file should contain the synthesized `structure` node type"
+    );
+
+    // Reload-after-save stays on the v3 no-op path and preserves the adapter.
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_path.to_str().unwrap())
+        .expect("Failed to reload");
+    let n1 = registry.node_networks.get("Main").unwrap();
+    let n2 = registry2.node_networks.get("Main").unwrap();
+    assert_eq!(n1.nodes.len(), n2.nodes.len());
+
+    // Exactly one structure adapter survives the round trip — no second pass
+    // can sneak an extra one in on reload.
+    let adapter_count = n2
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "structure")
+        .count();
+    assert_eq!(
+        adapter_count, 1,
+        "second load must not synthesize a second adapter; got {}",
+        adapter_count
+    );
+}

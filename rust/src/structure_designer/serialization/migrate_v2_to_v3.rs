@@ -26,6 +26,7 @@ pub fn migrate_v2_to_v3(root: &mut Value) -> Result<(), MigrationError> {
     rename_data_type_strings(root)?;
     rename_node_type_strings(root)?;
     drop_deleted_nodes_in_all_networks(root)?;
+    adapt_primitives_lattice_to_structure_in_all_networks(root)?;
     Ok(())
 }
 
@@ -416,10 +417,198 @@ fn synthesise_structure_for_atom_fill(_network_json: &mut Value) -> Result<(), M
     Ok(())
 }
 
-/// For each primitive node (cuboid, sphere, extrude, …) with a live `LatticeVecs` wire on the
-/// old `lattice_vecs` input pin, insert a `structure` adapter node between the source and the
-/// primitive's new `structure` input. No-op when the old pin was unwired.
-#[allow(dead_code)]
-fn adapt_primitives_lattice_to_structure(_network_json: &mut Value) -> Result<(), MigrationError> {
+/// Primitives whose v2 `unit_cell: LatticeVecs` input became a v3 `structure: Structure`
+/// input. The tuple's second element is the argument index of that pin (stable between v2
+/// and v3). Update this table when a new primitive ships.
+const PRIMITIVE_LATTICE_PIN: &[(&str, usize)] = &[
+    ("cuboid", 2),
+    ("sphere", 2),
+    ("extrude", 1),
+    ("half_space", 0),
+    ("drawing_plane", 0),
+    ("facet_shell", 0),
+];
+
+fn primitive_lattice_pin_index(node_type_name: &str) -> Option<usize> {
+    PRIMITIVE_LATTICE_PIN
+        .iter()
+        .find(|(name, _)| *name == node_type_name)
+        .map(|(_, idx)| *idx)
+}
+
+/// Iterates every network under `root` and applies [`adapt_primitives_lattice_to_structure`]
+/// to each one.
+fn adapt_primitives_lattice_to_structure_in_all_networks(
+    root: &mut Value,
+) -> Result<(), MigrationError> {
+    let Some(node_networks) = root.get_mut("node_networks").and_then(|v| v.as_array_mut()) else {
+        return Ok(());
+    };
+    for entry in node_networks {
+        let Some(entry_arr) = entry.as_array_mut() else {
+            continue;
+        };
+        let Some(network) = entry_arr.get_mut(1) else {
+            continue;
+        };
+        adapt_primitives_lattice_to_structure(network)?;
+    }
     Ok(())
+}
+
+/// Describes one primitive whose old `lattice_vecs` input held a wire that must be rerouted
+/// through a newly-synthesized `structure` adapter. Collected in a read-only pre-pass so the
+/// subsequent mutation pass doesn't fight serde_json's borrow rules.
+struct PrimitiveAdaptation {
+    /// The primitive node's id (lookup key for the mutation pass).
+    primitive_id: u64,
+    /// Argument index on the primitive that holds the old `unit_cell` / new `structure` pin.
+    primitive_arg_index: usize,
+    /// The wire map (`argument_output_pins`) lifted off the primitive — becomes the adapter's
+    /// `lattice_vecs` arg (index 1) verbatim.
+    original_wire: serde_json::Map<String, Value>,
+    /// Pre-allocated id for the new `structure` adapter node.
+    new_structure_node_id: u64,
+    /// Position to place the adapter at, offset left of the primitive so auto-layout on the
+    /// next open is not disrupted.
+    new_structure_position: [f64; 2],
+}
+
+/// For each primitive node (cuboid, sphere, extrude, half_space, drawing_plane, facet_shell)
+/// whose v2 `unit_cell` input held a live wire, insert a synthesized `structure` adapter
+/// node between the source and the primitive's new `structure` input.
+///
+/// The adapter's `lattice_vecs` input (arg 1) takes the original wire; its output (pin 0)
+/// feeds the primitive's `structure` input. The adapter's other inputs (`structure`, `motif`,
+/// `motif_offset`) are left unwired so their diamond defaults apply — this preserves the v2
+/// semantics where the primitive's lattice context came solely from the `unit_cell` wire.
+///
+/// Runs after the deleted-node drop so primitives that were wired to `lattice_symop` see
+/// their pin as already unwired and are correctly skipped.
+fn adapt_primitives_lattice_to_structure(
+    network_json: &mut Value,
+) -> Result<(), MigrationError> {
+    let Some(next_id_val) = network_json.get("next_node_id").and_then(|v| v.as_u64()) else {
+        return Ok(());
+    };
+    let mut next_id = next_id_val;
+
+    let mut adaptations: Vec<PrimitiveAdaptation> = Vec::new();
+    if let Some(nodes) = network_json.get("nodes").and_then(|v| v.as_array()) {
+        for node in nodes {
+            let Some(type_name) = node.get("node_type_name").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let Some(pin_index) = primitive_lattice_pin_index(type_name) else {
+                continue;
+            };
+            let Some(id) = node.get("id").and_then(|v| v.as_u64()) else {
+                continue;
+            };
+            let Some(args) = node.get("arguments").and_then(|v| v.as_array()) else {
+                continue;
+            };
+            let Some(arg) = args.get(pin_index) else {
+                continue;
+            };
+            let Some(wire_obj) = arg.get("argument_output_pins").and_then(|v| v.as_object()) else {
+                continue;
+            };
+            if wire_obj.is_empty() {
+                continue;
+            }
+            // Snap the adapter position to integers. The primitive's real-world
+            // fractional position minus a fixed offset occasionally lands on an f64
+            // bit pattern whose `serde_json` round-trip flips the last ULP (the
+            // emitted decimal is shortest-round-trip, but the parser resolves it to
+            // a neighbour), breaking `cnnd_roundtrip_test`. Integer positions are
+            // exact in f64 and always round-trip.
+            let position = node
+                .get("position")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    let x = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    let y = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    [(x - 150.0).round(), y.round()]
+                })
+                .unwrap_or([-150.0, 0.0]);
+            adaptations.push(PrimitiveAdaptation {
+                primitive_id: id,
+                primitive_arg_index: pin_index,
+                original_wire: wire_obj.clone(),
+                new_structure_node_id: next_id,
+                new_structure_position: position,
+            });
+            next_id += 1;
+        }
+    }
+
+    if adaptations.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(n) = network_json.get_mut("next_node_id") {
+        *n = Value::from(next_id);
+    }
+
+    let Some(nodes) = network_json.get_mut("nodes").and_then(|v| v.as_array_mut()) else {
+        return Ok(());
+    };
+
+    // Rewire primitives to point at the synthesized adapters (one wire-swap each).
+    for adaptation in &adaptations {
+        let Some(node) = nodes.iter_mut().find(|n| {
+            n.get("id").and_then(|v| v.as_u64()) == Some(adaptation.primitive_id)
+        }) else {
+            continue;
+        };
+        let Some(arg) = node
+            .get_mut("arguments")
+            .and_then(|v| v.as_array_mut())
+            .and_then(|arr| arr.get_mut(adaptation.primitive_arg_index))
+        else {
+            continue;
+        };
+        let Some(map) = arg
+            .get_mut("argument_output_pins")
+            .and_then(|v| v.as_object_mut())
+        else {
+            continue;
+        };
+        map.clear();
+        map.insert(
+            adaptation.new_structure_node_id.to_string(),
+            Value::from(0),
+        );
+    }
+
+    // Append the synthesized `structure` adapter nodes. Keys and shape mirror
+    // `SerializableNode` / `StructureData`; `custom_name` is omitted so the loader
+    // auto-names the adapter (e.g. "structure1"), matching how a freshly-added
+    // node would look to the user.
+    for adaptation in adaptations {
+        nodes.push(build_structure_adapter_node(
+            adaptation.new_structure_node_id,
+            adaptation.new_structure_position,
+            Value::Object(adaptation.original_wire),
+        ));
+    }
+
+    Ok(())
+}
+
+fn build_structure_adapter_node(id: u64, position: [f64; 2], lattice_wire: Value) -> Value {
+    serde_json::json!({
+        "id": id,
+        "node_type_name": "structure",
+        "position": [position[0], position[1]],
+        "arguments": [
+            { "argument_output_pins": {} },
+            { "argument_output_pins": lattice_wire },
+            { "argument_output_pins": {} },
+            { "argument_output_pins": {} },
+        ],
+        "data_type": "structure",
+        "data": {}
+    })
 }

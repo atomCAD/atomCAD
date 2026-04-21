@@ -27,8 +27,9 @@ BOND Po8 ...Po6
 BOND Po8 ...Po7
 """, name: "α_polonium" }
 α_polonium_unit_cell1 = α_polonium_unit_cell
-cuboid1 = cuboid { structure: α_polonium_unit_cell1, min_corner: (0, 0, 0), extent: (4, 4, 3), visible: true }
+structure1 = structure { lattice_vecs: α_polonium_unit_cell1 }
+cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (4, 4, 3), visible: true }
 materialize1 = materialize { shape: cuboid1, parameter_element_value_definition: "", passivate: false, rm_single: false, surf_recon: false, invert_phase: false }
 output motif1
 
-# 4 nodes
+# 5 nodes
