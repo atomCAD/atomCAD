@@ -18,7 +18,7 @@ use std::io::{self, Read};
 use std::path::Path;
 
 // The current version of the serialization format
-const SERIALIZATION_VERSION: u32 = 2;
+const SERIALIZATION_VERSION: u32 = 3;
 
 /// Camera settings that are saved per node network
 #[derive(Serialize, Deserialize, Clone)]
@@ -602,21 +602,46 @@ pub fn load_node_networks_from_file(
     let mut json_data = String::new();
     file.read_to_string(&mut json_data)?;
 
-    // Deserialize from JSON
-    let serializable_registry: SerializableNodeTypeRegistryNetworks =
-        serde_json::from_str(&json_data)?;
+    // Parse to an untyped JSON value first so the version field can be inspected and any
+    // pre-serde migration pass can rewrite the shape before strict deserialization.
+    let mut root_value: serde_json::Value = serde_json::from_str(&json_data)?;
 
-    let direct_editing_mode = serializable_registry.direct_editing_mode;
-    let cli_access_rules = serializable_registry.cli_access_rules;
+    // Read the version field. Missing or non-integer is treated as 0 (ancient file).
+    let version: u32 = root_value
+        .get("version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
 
-    // Check version for potential compatibility handling in the future
-    let version = serializable_registry.version;
     if version > SERIALIZATION_VERSION {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Unsupported version: {}", version),
         ));
     }
+
+    // Historical up-converter for pre-v3 files. v3 and later skip this entirely.
+    if version < SERIALIZATION_VERSION {
+        super::migrate_v2_to_v3::migrate_v2_to_v3(&mut root_value).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("v2→v3 migration failed: {}", e),
+            )
+        })?;
+        // Reflect the new version in the in-memory value so any downstream reader sees v3.
+        if let Some(obj) = root_value.as_object_mut() {
+            obj.insert(
+                "version".to_string(),
+                serde_json::Value::from(SERIALIZATION_VERSION),
+            );
+        }
+    }
+
+    // Deserialize the (possibly migrated) value into the strict typed form.
+    let serializable_registry: SerializableNodeTypeRegistryNetworks =
+        serde_json::from_value(root_value)?;
+
+    let direct_editing_mode = serializable_registry.direct_editing_mode;
+    let cli_access_rules = serializable_registry.cli_access_rules;
 
     registry.node_networks.clear();
 

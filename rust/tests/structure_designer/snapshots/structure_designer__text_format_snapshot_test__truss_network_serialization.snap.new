@@ -28,12 +28,12 @@ half_space13 = half_space { max_miller_index: 2, m_index: (-1, -1, 1), center: (
 half_space14 = half_space { max_miller_index: 2, m_index: (-1, -1, -1), center: (1, 1, 8), shift: 0, subdivision: 1 }
 half_space15 = half_space { max_miller_index: 2, m_index: (1, 1, 0), center: (0, 0, 0), shift: 5, subdivision: 1 }
 intersect3 = intersect { shapes: [half_space3, half_space10, half_space13, half_space14, half_space15] }
-lattice_rot2 = lattice_rot
-lattice_move1 = lattice_move
-diff1 = diff { base: intersect1, sub: [intersect2, intersect3, lattice_move1] }
-lattice_rot3 = lattice_rot
-lattice_rot1 = lattice_rot
-union1 = union { shapes: [lattice_rot1, lattice_rot3], visible: true }
+structure_rot2 = structure_rot { input: intersect3, axis_index: 2, step: 2, pivot_point: (0, 0, 0) }
+structure_move1 = structure_move { input: structure_rot2, translation: (0, 0, 14), subdivision: 1 }
+diff1 = diff { base: intersect1, sub: [intersect2, intersect3, structure_move1] }
+structure_rot3 = structure_rot { input: diff1, axis_index: 9, step: 1, pivot_point: (0, 0, 0) }
+structure_rot1 = structure_rot { input: structure_rot3, axis_index: 12, step: 1, pivot_point: (0, 0, 0) }
+union1 = union { shapes: [structure_rot1, structure_rot3], visible: true }
 materialize1 = materialize { shape: union1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 
 # 30 nodes

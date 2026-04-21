@@ -1,0 +1,105 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "unit_cell",
+            "custom_name": "uc",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567,
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "atom_move",
+            "custom_name": "mv",
+            "position": [
+              200.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_move",
+            "data": {
+              "translation": [
+                1.0,
+                2.0,
+                3.0
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "parameter",
+            "custom_name": "p_uc",
+            "position": [
+              300.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_id": 4,
+              "param_index": 0,
+              "param_name": "my_param",
+              "sort_order": 0
+            }
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}
