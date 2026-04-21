@@ -66,17 +66,54 @@ Each helper is independent and tested individually.
 
 ### DataType string renames
 
-Applied wherever a DataType is written as a string (the serialised `data_type` of parameters, output pins, and any embedded node-data JSON that stores a DataType by name):
+#### Where DataType strings appear in saved v2 files
 
-| Old | New |
+A v2 `.cnnd` file only stores DataType strings in **user-authored** locations. Built-in nodes do not serialise their per-instance pin declarations — on load, the v3 `NodeTypeRegistry` supplies pins from the v3 definitions, so every surviving built-in node (`atom_edit`, `atom_cut`, `atom_union`, `relax`, …) automatically gets its v3 pin signature (abstract input, `SameAsInput("input")` output) regardless of what v2 called them. Polymorphic pin types (`SameAsInput(..)`) are also not a concern: they are resolved from the connected input at validation time and never written to disk.
+
+The rewrite pass therefore only needs to reach:
+
+1. `SerializableNodeType.parameters[].data_type` — every custom network's declared parameter pins.
+2. `SerializableNodeType.output_pins[].data_type` and the legacy `output_type: Option<String>` — every custom network's declared output pins.
+3. `ParameterData.data_type` inside `parameter` node data — drives the enclosing network's parameter pin type.
+4. `ExprData.data_type`, `MapData.output_type`, `SequenceData.element_type` — `NodeData` fields that embed a `DataType`.
+5. `Array[..]` wrappings of any of the above.
+
+#### Straight 1:1 renames
+
+These have a single unambiguous v3 counterpart, valid in every location listed above:
+
+| v2 | v3 |
 |---|---|
 | `"Geometry"` | `"Blueprint"` |
 | `"UnitCell"` | `"LatticeVecs"` |
-| `"Atomic"` | `"HasAtoms"` |
-| `"StructureBound"` | `"HasStructure"` |
-| `"Unanchored"` | `"HasFreeLinOps"` |
 
-The `"Atomic"` → `"HasAtoms"` rename reflects both a redefinition (concrete → abstract) and a textual rename of the DataType variant. `"StructureBound"` and `"Unanchored"` are listed for completeness although no pre-v3 file could contain them — they were only ever in-memory names on the refactoring branch before the final `Has*` spelling was chosen — and a serde-level string rewrite costs nothing. Concrete uses of `"Atomic"` in saved networks typically referred to `atom_fill` output; since that node is synthesised away (see below), downstream wires end up pointing at `materialize` whose declared output is `"Crystal"`. Because DataType on a wire is not stored per wire (wires are by ID, typing comes from the pin definition), the abstract/concrete reclassification resolves itself once node types and pin declarations are in their v3 form.
+Apply as a blanket string substitution.
+
+#### `Atomic` needs a different treatment — not a rename
+
+The v2 `Atomic` variant was the **concrete** atomic-structure type. In v3 the same identifier (now spelled `HasAtoms`) names the **abstract** supertype of `Crystal` and `Molecule`. A blanket `"Atomic" → "HasAtoms"` rewrite is wrong for two independent reasons:
+
+- **Validation would reject it.** `network_validator.rs` walks every user-declared DataType field — parameter-node `data_type`, custom-network parameters, sequence `element_type`, including inside `Array[..]` — and rejects any abstract type with a hard error ("abstract phase types are not allowed on parameter pins"). Every location where `"Atomic"` can appear in a v2 file is exactly such a field. The file would load and immediately fail.
+- **The migration story runs through node replacement, not type rewriting.** The v2 nodes that produced/consumed `Atomic` fall into three categories, and the migration already handles them at the node layer: deleted-and-synthesised (`atom_fill` → `structure + materialize`, producing `Crystal`), renamed with semantics absorbed (`atom_lmove`/`atom_lrot`/`lattice_move`/`lattice_rot` → `structure_move`/`structure_rot`, polymorphic over `HasStructure`), and surviving with v3 pins auto-supplied by the registry (`atom_edit`, `atom_cut`, `atom_union`, `relax`, …). Once those node replacements are in place, a user-authored `"Atomic"` string elsewhere in the file is no longer a type on a wire — wire typing comes from the pin definitions the registry now supplies — it is a user-chosen placeholder for "this is where my concrete atoms go".
+
+The concrete v3 type that best captures what a v2 author meant by `Atomic` is `Molecule`. Reasoning:
+
+- In v2, `atom_fill` discarded structure; every "free" atomic operator (`atom_move`, `atom_rot`, `atom_edit`, `atom_cut`, `atom_union`, `relax`, …) operated on atoms without a structure association — exactly `Molecule`'s role in v3.
+- Structure-carrying flows went through `atom_lmove`/`atom_lrot` in v2; those are rewritten to `structure_move`/`structure_rot` on `Crystal` by the node-rename pass and do not rely on any serialised `"Atomic"` string.
+- Defaulting to `Molecule` cannot produce a runtime type mismatch. Defaulting to `Crystal` would require a structure association the migration has no way to supply.
+
+Rule applied at every location listed in the "where" subsection:
+
+| v2 | v3 |
+|---|---|
+| `"Atomic"` | `"Molecule"` |
+| `"[Atomic]"` (any `Array[..]` nesting) | `"[Molecule]"` |
+
+A rare user whose v2 intent on a custom-network output pin really was structure-bound will get a valid network that they can retype to `Crystal` in one edit. This is strictly recoverable; a hard validation failure on load is not.
+
+#### `StructureBound` / `Unanchored`
+
+Not handled. These identifiers existed only on intermediate commits of the refactoring branch before the final `Has*` spelling was chosen. No v2 save file in the wild can contain them.
 
 ### Node type renames
 
@@ -97,15 +134,84 @@ The `lattice_move`/`lattice_rot` → `structure_move`/`structure_rot` merge is a
 
 ### Node synthesis: `atom_fill` → `structure` + `materialize`
 
-The structurally non-trivial case. For each `atom_fill` node `N` in a network:
+This is the structurally non-trivial case: a single v2 node splits into two v3 nodes. Pre-v3 `atom_fill` produced concrete atoms from a motif tiled on a lattice. In v3 that computation decomposes into:
 
-1. Allocate a new ID `S` for a synthesised `structure` node (take `next_node_id`, increment it in the JSON).
-2. **Rewire motif / motif_offset inputs.** The old `atom_fill` had input pins for `motif` and `m_offset` (and possibly `lattice_vecs`). Move the wires on those pins to the corresponding input pins of `S` (the new `structure` node accepts `structure`, `lattice_vecs`, `motif`, `motif_offset` as per the design doc — all optional).
-3. **Rename `N`** from `atom_fill` to `materialize`.
-4. **Connect `S` → `N`.** The new `materialize` node takes a `Blueprint` input (which itself now carries structure info via its field). But wait — `materialize: Blueprint → Crystal` reads structure *from the blueprint input*, not a separate structure input. So the synthesised `structure` node is **not** wired into the `materialize` node directly; it is wired into the upstream primitive via the primitive adaptation step below. See "Interaction with primitive adaptation" below.
-5. **Position** the synthesised node near `N` (e.g. `N.position + (-150, 0)` in the 2D layout coordinates) so the auto-layout on next load does not trip.
+- a **`structure`** node that packages `motif` + `motif_offset` + `lattice_vecs` into a `Structure` value;
+- a **`materialize`** node that consumes a `Blueprint` (a shape carrying a `Structure` field) and outputs a `Crystal`.
 
-**Drop** any `atom_fill` inputs/fields that have no equivalent on `materialize` (`materialize` is parameterless per the design).
+The v3 `structure` output type is `Structure`, and `materialize`'s input type is `Blueprint`. The two are **not** directly wire-compatible: a `Structure` must first pass through a primitive (or any other `Structure → Blueprint` node) before it can reach `materialize`. The migration cannot reliably infer which primitive in the user's network is the intended bounding shape for these atoms, so it does not guess. It synthesises the `structure` node to preserve the user's motif/offset/lattice wiring and leaves `materialize`'s `Blueprint` input disconnected. Network validation then flags the missing input on load — the same lenient, user-surfaced policy already used for deleted nodes.
+
+#### Algorithm (per `atom_fill` node `N`)
+
+1. **Allocate** a new ID `S` from the network's `next_node_id`; increment the JSON field.
+2. **Create `S`** with `node_type_name = "structure"` at position `N.position + (-150, 0)` so auto-layout on next load is not disrupted.
+3. **Move wires** from `N`'s inputs onto `S`:
+   - `N.motif` → `S.motif`
+   - `N.m_offset` → `S.motif_offset`
+   - `N.lattice_vecs` → `S.lattice_vecs`
+4. **Rename** `N.node_type_name` from `"atom_fill"` to `"materialize"`. Drop any `atom_fill`-specific fields on `N` that have no equivalent on `materialize` (`materialize` is parameterless).
+5. **Do not add any wire between `S` and `N`.** The synthesised `Structure` output is type-incompatible with `N`'s `Blueprint` input. `N.Blueprint` is left disconnected.
+
+Downstream wires leaving `N` are preserved unchanged. They now carry `Crystal` from `materialize` in place of `Atomic` from `atom_fill`, which is the intended v3 typing.
+
+#### Example A — standalone `atom_fill`
+
+Pre-v3:
+
+```
+motif ────┐
+vec3 ─────┼─> atom_fill ─> display
+unit_cell ┘
+```
+
+Post-migration:
+
+```
+motif ────┐
+vec3 ─────┼─> structure(S)         (output dangling)
+unit_cell ┘
+
+materialize(N) ─> display
+       ↑
+  (Blueprint disconnected — validation error)
+```
+
+All of the user's motif/offset/lattice inputs are preserved on `S`. The user receives a clear "materialize needs a Blueprint" error on load and inserts a primitive between `S` and `N` themselves.
+
+#### Example B — `atom_fill` shares `unit_cell` with a primitive
+
+Pre-v3:
+
+```
+motif ─────┐
+vec3 ──────┼─> atom_fill ─> display_A
+unit_cell ─┤
+           └─> cuboid ─> display_B
+```
+
+Post-migration (renames + primitive adaptation + atom_fill split):
+
+```
+motif ──────┐
+vec3 ───────┼─> structure(S) ─> cuboid ─> display_B
+unit_cell ──┘
+
+            materialize(N) ─> display_A
+                ↑
+           (Blueprint disconnected)
+```
+
+The primitive-adaptation step (below) routes `S → cuboid.structure` because `cuboid` had a live `LatticeVecs` wire. The migration still refuses to fabricate `cuboid.Blueprint → materialize.Blueprint`: whether `cuboid` is the intended bounding shape for the `atom_fill`'s atoms is a semantic decision the migration is not qualified to make. The user wires that on first open.
+
+#### Example C — `atom_fill → atom_lmove → display`
+
+Pre-v3:
+
+```
+... ─> atom_fill ─> atom_lmove ─> display
+```
+
+Post-migration: `atom_lmove` is renamed to `structure_move` by the node-rename pass; `atom_fill` splits into `structure + materialize` with `materialize.Blueprint` disconnected per the algorithm. The `structure_move → display` tail is preserved; it no longer receives a `Crystal` upstream until the user wires a primitive into `materialize`, at which point the whole chain comes live.
 
 ### Primitive input adaptation: `LatticeVecs` → `Structure`
 
@@ -118,9 +224,9 @@ For each primitive node in a network:
 
 ### Interaction between `atom_fill` split and primitive adaptation
 
-The two synthesis passes must compose cleanly:
+Both passes synthesise `structure` nodes; they compose cleanly because neither attempts to guess wiring that spans them. The `atom_fill` split creates one `structure` per `atom_fill` (feeding no one, awaiting the user). The primitive-adaptation step creates one `structure` per primitive that had a `LatticeVecs` wire. In the common "shared `unit_cell`" pattern (Example B above), this produces two synthesised `structure` nodes both reading the same `unit_cell` output — semantically identical but not deduplicated.
 
-- If the pre-v3 file connected a `unit_cell` output into both a primitive *and* an `atom_fill` (the common case: one unit cell shared across a design), the migration synthesises a single `structure` node that absorbs the `unit_cell` (now `lattice_vecs`) output once; both the primitive and the `materialize`-output-feeding blueprint end up consuming this one `structure`. Deduplication is a nice-to-have; an acceptable first version creates a fresh `structure` per consumer and relies on evaluator semantics being identical.
+Deduplication (folding multiple synthesised `structure` nodes into one when their inputs match) is a polish item. Fresh-per-consumer is correct under evaluator semantics; revisit after opening real fixtures if the duplication is visually objectionable.
 
 ### Removed field: `frame_transform`
 
