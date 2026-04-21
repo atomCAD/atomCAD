@@ -168,6 +168,7 @@ impl NodeData for HalfSpaceData {
             structure,
             geo_tree_root: GeoNode::half_space(plane_props.normal, shifted_center),
             alignment: Alignment::Aligned,
+            alignment_reason: None,
         }))
     }
 

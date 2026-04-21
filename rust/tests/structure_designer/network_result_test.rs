@@ -11,6 +11,7 @@ fn make_crystal() -> NetworkResult {
         atoms: AtomicStructure::new(),
         geo_tree_root: None,
         alignment: Default::default(),
+        alignment_reason: None,
     })
 }
 

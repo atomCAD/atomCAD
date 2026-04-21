@@ -552,6 +552,7 @@ impl NodeData for FacetShellData {
             structure,
             geo_tree_root: GeoNode::intersection_3d(shapes),
             alignment: Alignment::Aligned,
+            alignment_reason: None,
         }))
     }
 

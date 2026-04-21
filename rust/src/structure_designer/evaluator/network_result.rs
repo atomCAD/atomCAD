@@ -107,11 +107,45 @@ impl Alignment {
     }
 }
 
+/// If `new_level` is worse than `*level`, update both `*level` and `*reason`.
+/// The reason closure is called only when the level actually changes.
+/// See `doc/design_blueprint_alignment.md` §6.2.
+pub fn worsen_alignment_with_reason<F: FnOnce() -> String>(
+    level: &mut Alignment,
+    reason: &mut Option<String>,
+    new_level: Alignment,
+    new_reason: F,
+) {
+    if new_level > *level {
+        *level = new_level;
+        *reason = Some(new_reason());
+    }
+}
+
+/// Propagates `(other_level, other_reason)` into `(*level, *reason)` using max
+/// semantics, preserving the worsening operand's reason string. Used by CSG
+/// nodes (union, intersect, diff, atom_union) that merge multiple inputs.
+pub fn propagate_alignment_with_reason(
+    level: &mut Alignment,
+    reason: &mut Option<String>,
+    other_level: Alignment,
+    other_reason: &Option<String>,
+) {
+    if other_level > *level {
+        *level = other_level;
+        *reason = other_reason.clone();
+    }
+}
+
 #[derive(Clone)]
 pub struct BlueprintData {
     pub structure: Structure,
     pub geo_tree_root: GeoNode,
     pub alignment: Alignment,
+    /// Short human-readable reason for why alignment is degraded. `None` when
+    /// `alignment == Aligned`. Set by the node that first degrades the state
+    /// and carried along by propagation through downstream nodes.
+    pub alignment_reason: Option<String>,
 }
 
 impl BlueprintData {
@@ -169,6 +203,9 @@ pub struct CrystalData {
     pub atoms: AtomicStructure,
     pub geo_tree_root: Option<GeoNode>,
     pub alignment: Alignment,
+    /// Short human-readable reason for why alignment is degraded. `None` when
+    /// `alignment == Aligned`.
+    pub alignment_reason: Option<String>,
 }
 
 #[derive(Clone)]
@@ -249,6 +286,17 @@ impl NetworkResult {
         match self {
             NetworkResult::Blueprint(bp) => Some(bp.alignment),
             NetworkResult::Crystal(c) => Some(c.alignment),
+            _ => None,
+        }
+    }
+
+    /// Returns the alignment reason string carried by this result, if any.
+    /// `None` either because the variant carries no alignment state, or because
+    /// the alignment is `Aligned`.
+    pub fn get_alignment_reason(&self) -> Option<&str> {
+        match self {
+            NetworkResult::Blueprint(bp) => bp.alignment_reason.as_deref(),
+            NetworkResult::Crystal(c) => c.alignment_reason.as_deref(),
             _ => None,
         }
     }

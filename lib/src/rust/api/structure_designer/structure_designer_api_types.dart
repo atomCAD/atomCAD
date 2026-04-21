@@ -2410,12 +2410,18 @@ class OutputPinView {
   /// evaluated in the current scene.
   final APIAlignment? alignment;
 
+  /// Short human-readable reason for why alignment is degraded. `None` when
+  /// `alignment == Some(Aligned)`, when the pin has no alignment state, or
+  /// when the pin has not been evaluated in the current scene.
+  final String? alignmentReason;
+
   const OutputPinView({
     required this.name,
     required this.dataType,
     this.resolvedDataType,
     required this.index,
     this.alignment,
+    this.alignmentReason,
   });
 
   @override
@@ -2424,7 +2430,8 @@ class OutputPinView {
       dataType.hashCode ^
       resolvedDataType.hashCode ^
       index.hashCode ^
-      alignment.hashCode;
+      alignment.hashCode ^
+      alignmentReason.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2435,7 +2442,8 @@ class OutputPinView {
           dataType == other.dataType &&
           resolvedDataType == other.resolvedDataType &&
           index == other.index &&
-          alignment == other.alignment;
+          alignment == other.alignment &&
+          alignmentReason == other.alignmentReason;
 }
 
 /// Result of default_tool_pointer_down.

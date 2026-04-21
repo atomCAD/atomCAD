@@ -366,13 +366,10 @@ fn union_of_two_aligned_is_aligned() {
     assert_eq!(bp.alignment, Alignment::Aligned);
 }
 
-/// Runs a polymorphic-output Blueprint (e.g. `structure_move`) through
-/// `materialize`→`dematerialize` so it ends up with a fixed-typed Blueprint
-/// output. This is a workaround for a pre-existing evaluator limitation:
-/// polymorphic outputs (`SameAsInput`) don't get auto-wrapped into the
-/// `Array[Blueprint]` inputs used by boolean CSG nodes. The alignment state
-/// survives both transitions (both `materialize` and `dematerialize` are
-/// alignment pass-through).
+/// Adds a `structure_move` → `materialize` → `dematerialize` chain that
+/// degrades the upstream shape's alignment to `LatticeUnaligned` while
+/// keeping the final output a `Blueprint`. Used to feed a known-unaligned
+/// Blueprint into CSG nodes without directly using a polymorphic output.
 fn add_fixed_output_degrader(designer: &mut StructureDesigner, source_id: u64) -> u64 {
     let move_id = add_structure_move(designer, "t", IVec3::new(1, 0, 0), 2);
     let mat_id = designer.add_node("materialize", DVec2::new(400.0, 0.0));
@@ -394,6 +391,23 @@ fn union_with_lattice_unaligned_input_becomes_lattice_unaligned() {
     designer.connect_nodes(degraded, 0, u, 0);
 
     let bp = blueprint(evaluate_raw(&designer, "t", u));
+    assert_eq!(bp.alignment, Alignment::LatticeUnaligned);
+}
+
+#[test]
+fn intersect_accepts_polymorphic_output_wire() {
+    // Regression test: cuboid → free_move (polymorphic `SameAsInput` output) →
+    // intersect must work. Previously the evaluator reported the source's type
+    // as `DataType::None` for polymorphic pins, so single→array auto-wrap into
+    // intersect's `Array[Blueprint]` input failed with "error in shapes input".
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let move_id = designer.add_node("free_move", DVec2::new(300.0, 0.0));
+    let isect_id = designer.add_node("intersect", DVec2::new(600.0, 0.0));
+    designer.connect_nodes(cuboid_id, 0, move_id, 0);
+    designer.connect_nodes(move_id, 0, isect_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", isect_id));
     assert_eq!(bp.alignment, Alignment::LatticeUnaligned);
 }
 
@@ -597,4 +611,135 @@ fn atom_union_all_aligned_is_aligned() {
 
     let c = crystal(evaluate_raw(&designer, "t", au));
     assert_eq!(c.alignment, Alignment::Aligned);
+}
+
+// ---- Phase 4: per-node reason strings ----
+
+#[test]
+fn aligned_blueprint_has_no_reason() {
+    let mut designer = setup_designer("t");
+    let id = designer.add_node("cuboid", DVec2::ZERO);
+    let bp = blueprint(evaluate_raw(&designer, "t", id));
+    assert_eq!(bp.alignment, Alignment::Aligned);
+    assert_eq!(bp.alignment_reason, None);
+}
+
+#[test]
+fn structure_move_fractional_sets_reason() {
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let move_id = add_structure_move(&mut designer, "t", IVec3::new(1, 0, 0), 2);
+    designer.connect_nodes(cuboid_id, 0, move_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", move_id));
+    assert_eq!(bp.alignment, Alignment::LatticeUnaligned);
+    let reason = bp.alignment_reason.expect("expected reason string");
+    assert!(
+        reason.contains("structure_move") && reason.contains("fractional"),
+        "reason should name the operation and the problem, got: {}",
+        reason
+    );
+}
+
+#[test]
+fn structure_rot_non_symmetry_sets_reason() {
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let rot_id = designer.add_node("structure_rot", DVec2::new(300.0, 0.0));
+    set_structure_rot(&mut designer, "t", rot_id, Some(0), 1);
+    designer.connect_nodes(cuboid_id, 0, rot_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", rot_id));
+    assert_eq!(bp.alignment, Alignment::MotifUnaligned);
+    let reason = bp.alignment_reason.expect("expected reason string");
+    assert!(
+        reason.contains("structure_rot"),
+        "reason should name structure_rot, got: {}",
+        reason
+    );
+}
+
+#[test]
+fn free_move_sets_reason() {
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let move_id = designer.add_node("free_move", DVec2::new(300.0, 0.0));
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("t")
+            .unwrap();
+        let node = network.nodes.get_mut(&move_id).unwrap();
+        let data = node
+            .data
+            .as_any_mut()
+            .downcast_mut::<FreeMoveData>()
+            .unwrap();
+        data.translation = DVec3::new(0.5, 0.0, 0.0);
+    }
+    designer.connect_nodes(cuboid_id, 0, move_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", move_id));
+    assert_eq!(bp.alignment, Alignment::LatticeUnaligned);
+    let reason = bp.alignment_reason.expect("expected reason string");
+    assert!(
+        reason.contains("free_move"),
+        "reason should name free_move, got: {}",
+        reason
+    );
+}
+
+#[test]
+fn reason_propagates_through_pass_through_materialize() {
+    // A LatticeUnaligned reason set by structure_move should survive the
+    // materialize → dematerialize pass-through chain.
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    let move_id = add_structure_move(&mut designer, "t", IVec3::new(1, 0, 0), 2);
+    let mat_id = designer.add_node("materialize", DVec2::new(400.0, 0.0));
+    designer.connect_nodes(cuboid_id, 0, move_id, 0);
+    designer.connect_nodes(move_id, 0, mat_id, 0);
+
+    let c = crystal(evaluate_raw(&designer, "t", mat_id));
+    assert_eq!(c.alignment, Alignment::LatticeUnaligned);
+    assert!(
+        c.alignment_reason
+            .as_deref()
+            .is_some_and(|r| r.contains("structure_move")),
+        "reason should persist across materialize, got: {:?}",
+        c.alignment_reason
+    );
+}
+
+#[test]
+fn csg_union_keeps_worst_reason() {
+    // LatticeUnaligned (from structure_move) should outrank MotifUnaligned
+    // (from structure_rot) in an atom_union, and carry its reason through.
+    let mut designer = setup_designer("t");
+    let a_shape = designer.add_node("sphere", DVec2::ZERO);
+    let b_shape = designer.add_node("cuboid", DVec2::new(0.0, 200.0));
+    let rot_id = designer.add_node("structure_rot", DVec2::new(300.0, 0.0));
+    set_structure_rot(&mut designer, "t", rot_id, Some(0), 1);
+    let move_id = add_structure_move(&mut designer, "t", IVec3::new(1, 0, 0), 2);
+    let a_mat = designer.add_node("materialize", DVec2::new(500.0, 0.0));
+    let b_mat = designer.add_node("materialize", DVec2::new(500.0, 200.0));
+    let au = designer.add_node("atom_union", DVec2::new(800.0, 100.0));
+
+    designer.connect_nodes(a_shape, 0, rot_id, 0);
+    designer.connect_nodes(rot_id, 0, a_mat, 0);
+    designer.connect_nodes(b_shape, 0, move_id, 0);
+    designer.connect_nodes(move_id, 0, b_mat, 0);
+    designer.connect_nodes(a_mat, 0, au, 0);
+    designer.connect_nodes(b_mat, 0, au, 0);
+
+    let c = crystal(evaluate_raw(&designer, "t", au));
+    assert_eq!(c.alignment, Alignment::LatticeUnaligned);
+    assert!(
+        c.alignment_reason
+            .as_deref()
+            .is_some_and(|r| r.contains("structure_move")),
+        "union should surface the worst operand's reason (structure_move), got: {:?}",
+        c.alignment_reason
+    );
 }

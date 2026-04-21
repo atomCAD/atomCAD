@@ -66,6 +66,10 @@ pub struct OutputPinView {
     /// alignment (Molecule, primitives, …) or when the pin has not been
     /// evaluated in the current scene.
     pub alignment: Option<APIAlignment>,
+    /// Short human-readable reason for why alignment is degraded. `None` when
+    /// `alignment == Some(Aligned)`, when the pin has no alignment state, or
+    /// when the pin has not been evaluated in the current scene.
+    pub alignment_reason: Option<String>,
 }
 
 /// Blueprint/Crystal alignment state, mirrored from `network_result::Alignment`.

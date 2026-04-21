@@ -95,6 +95,7 @@ impl NodeData for SphereData {
             structure,
             geo_tree_root: GeoNode::sphere(real_center, real_radius),
             alignment: Alignment::Aligned,
+            alignment_reason: None,
         }))
     }
 

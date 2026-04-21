@@ -55,6 +55,7 @@ impl NodeData for DematerializeData {
                         structure: crystal.structure,
                         geo_tree_root,
                         alignment: crystal.alignment,
+                        alignment_reason: crystal.alignment_reason,
                     }))
                 }
                 None => EvalOutput::single(NetworkResult::Error(

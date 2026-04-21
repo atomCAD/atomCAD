@@ -154,6 +154,7 @@ impl NodeData for GeoTransData {
                 structure: Structure::from_lattice_vecs(shape.structure.lattice_vecs.clone()),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
                 alignment: shape.alignment,
+                alignment_reason: shape.alignment_reason,
             }))
         } else {
             EvalOutput::single(runtime_type_error_in_input(0))

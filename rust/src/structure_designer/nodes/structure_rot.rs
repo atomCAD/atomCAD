@@ -13,6 +13,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
 };
 use crate::structure_designer::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, NetworkResult, runtime_type_error_in_input,
+    worsen_alignment_with_reason,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -145,13 +146,20 @@ impl NodeData for StructureRotData {
         match input_val {
             NetworkResult::Blueprint(shape) => {
                 let mut alignment = shape.alignment;
+                let mut alignment_reason = shape.alignment_reason;
                 if !motif_preserved {
-                    alignment.worsen_to(Alignment::MotifUnaligned);
+                    worsen_alignment_with_reason(
+                        &mut alignment,
+                        &mut alignment_reason,
+                        Alignment::MotifUnaligned,
+                        || "structure_rot by an axis that is not a motif symmetry".to_string(),
+                    );
                 }
                 EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                     structure: shape.structure.clone(),
                     geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
                     alignment,
+                    alignment_reason,
                 }))
             }
             NetworkResult::Crystal(crystal) => {
@@ -166,14 +174,21 @@ impl NodeData for StructureRotData {
                     .map(|gt| GeoNode::transform(tr, Box::new(gt)));
 
                 let mut alignment = crystal.alignment;
+                let mut alignment_reason = crystal.alignment_reason;
                 if !motif_preserved {
-                    alignment.worsen_to(Alignment::MotifUnaligned);
+                    worsen_alignment_with_reason(
+                        &mut alignment,
+                        &mut alignment_reason,
+                        Alignment::MotifUnaligned,
+                        || "structure_rot by an axis that is not a motif symmetry".to_string(),
+                    );
                 }
                 EvalOutput::single(NetworkResult::Crystal(CrystalData {
                     structure: crystal.structure,
                     atoms,
                     geo_tree_root: new_geo_tree_root,
                     alignment,
+                    alignment_reason,
                 }))
             }
             _ => EvalOutput::single(runtime_type_error_in_input(0)),

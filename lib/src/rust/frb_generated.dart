@@ -12115,14 +12115,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   OutputPinView dco_decode_output_pin_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return OutputPinView(
       name: dco_decode_String(arr[0]),
       dataType: dco_decode_String(arr[1]),
       resolvedDataType: dco_decode_opt_String(arr[2]),
       index: dco_decode_i_32(arr[3]),
       alignment: dco_decode_opt_box_autoadd_api_alignment(arr[4]),
+      alignmentReason: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -15352,12 +15353,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_resolvedDataType = sse_decode_opt_String(deserializer);
     var var_index = sse_decode_i_32(deserializer);
     var var_alignment = sse_decode_opt_box_autoadd_api_alignment(deserializer);
+    var var_alignmentReason = sse_decode_opt_String(deserializer);
     return OutputPinView(
         name: var_name,
         dataType: var_dataType,
         resolvedDataType: var_resolvedDataType,
         index: var_index,
-        alignment: var_alignment);
+        alignment: var_alignment,
+        alignmentReason: var_alignmentReason);
   }
 
   @protected
@@ -18133,6 +18136,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.resolvedDataType, serializer);
     sse_encode_i_32(self.index, serializer);
     sse_encode_opt_box_autoadd_api_alignment(self.alignment, serializer);
+    sse_encode_opt_String(self.alignmentReason, serializer);
   }
 
   @protected

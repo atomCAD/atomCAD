@@ -66,6 +66,9 @@ impl NodeData for EnterStructureData {
                     atoms: mol.atoms,
                     geo_tree_root: mol.geo_tree_root,
                     alignment: Alignment::LatticeUnaligned,
+                    alignment_reason: Some(
+                        "enter_structure: molecule atoms are not registered to the target structure's lattice".to_string(),
+                    ),
                 }))
             }
             _ => EvalOutput::single(runtime_type_error_in_input(0)),

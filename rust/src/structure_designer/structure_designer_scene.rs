@@ -20,6 +20,9 @@ pub struct DisplayedPinOutput {
     /// Alignment of this pin's value, if it carries one (Blueprint/Crystal).
     /// None for types that have no alignment (Molecule, primitives, etc.).
     pub alignment: Option<Alignment>,
+    /// Short human-readable reason for why alignment is degraded. `None` when
+    /// `alignment == Some(Aligned)` or when there is no alignment state.
+    pub alignment_reason: Option<String>,
 }
 
 /// The explicit geometric/data output of a single node evaluation

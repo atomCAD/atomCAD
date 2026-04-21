@@ -10,6 +10,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::{
     Alignment, BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
+    worsen_alignment_with_reason,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -138,11 +139,23 @@ impl NodeData for FreeRotData {
         match input_val {
             NetworkResult::Blueprint(shape) => {
                 let mut alignment = shape.alignment;
-                alignment.worsen_to(Alignment::LatticeUnaligned);
+                let mut alignment_reason = shape.alignment_reason;
+                worsen_alignment_with_reason(
+                    &mut alignment,
+                    &mut alignment_reason,
+                    Alignment::LatticeUnaligned,
+                    || {
+                        format!(
+                            "free_rot rotates the cutter by {:.2}° in world space (off-lattice)",
+                            angle.to_degrees()
+                        )
+                    },
+                );
                 EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                     structure: shape.structure,
                     geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
                     alignment,
+                    alignment_reason,
                 }))
             }
             NetworkResult::Molecule(mol) => {

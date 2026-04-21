@@ -25,7 +25,9 @@ use crate::structure_designer::structure_designer_scene::{
 
 use super::network_result::Closure;
 use super::network_result::input_missing_error;
-use super::network_result::{Alignment, BlueprintData, GeometrySummary2D};
+use super::network_result::{
+    Alignment, BlueprintData, GeometrySummary2D, propagate_alignment_with_reason,
+};
 use crate::crystolecule::structure::Structure;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
@@ -216,6 +218,10 @@ impl NetworkEvaluator {
         // display override, which may be an unrelated phase — e.g. motif_edit
         // shows Atomic in the viewport while the wire carries Motif).
         let pin_0_alignment = eval_output.get(0).get_alignment();
+        let pin_0_alignment_reason = eval_output
+            .get(0)
+            .get_alignment_reason()
+            .map(|s| s.to_string());
         let (output, geo_tree) = self.convert_result_to_node_output(
             display_result_0,
             &display_type_0,
@@ -243,6 +249,7 @@ impl NetworkEvaluator {
                     output: NodeOutput::None,
                     geo_tree: None,
                     alignment: pin_0_alignment,
+                    alignment_reason: pin_0_alignment_reason.clone(),
                 });
                 continue;
             }
@@ -261,6 +268,10 @@ impl NetworkEvaluator {
                 };
             // Wire-level alignment (same rationale as pin 0 above).
             let pin_alignment = eval_output.get(pin_index).get_alignment();
+            let pin_alignment_reason = eval_output
+                .get(pin_index)
+                .get_alignment_reason()
+                .map(|s| s.to_string());
             let (pin_output, pin_geo_tree) = self.convert_result_to_node_output(
                 pin_result,
                 &pin_data_type,
@@ -276,6 +287,7 @@ impl NetworkEvaluator {
                 output: pin_output,
                 geo_tree: pin_geo_tree,
                 alignment: pin_alignment,
+                alignment_reason: pin_alignment_reason,
             });
         }
 
@@ -586,12 +598,18 @@ impl NetworkEvaluator {
                 let mut shapes: Vec<GeoNode> = Vec::new();
                 let mut first_lattice_vecs = None;
                 let mut alignment = Alignment::Aligned;
+                let mut alignment_reason: Option<String> = None;
                 for element in elements {
                     if let NetworkResult::Blueprint(geo) = element {
                         if first_lattice_vecs.is_none() {
                             first_lattice_vecs = Some(geo.structure.lattice_vecs.clone());
                         }
-                        alignment.worsen_to(geo.alignment);
+                        propagate_alignment_with_reason(
+                            &mut alignment,
+                            &mut alignment_reason,
+                            geo.alignment,
+                            &geo.alignment_reason,
+                        );
                         shapes.push(geo.geo_tree_root);
                     }
                 }
@@ -602,6 +620,7 @@ impl NetworkEvaluator {
                     structure: Structure::from_lattice_vecs(first_lattice_vecs.unwrap()),
                     geo_tree_root: GeoNode::union_3d(shapes),
                     alignment,
+                    alignment_reason,
                 });
                 self.convert_result_to_node_output(
                     merged,
@@ -807,11 +826,20 @@ impl NetworkEvaluator {
                 }
 
                 let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
+                let current_network = network_stack.last().unwrap().node_network;
+                // Resolve the concrete output type. For polymorphic pins
+                // (`SameAsInput` / `SameAsArrayElements`) the declared type is
+                // `DataType::None`, which would defeat `convert_to`'s
+                // single→array auto-wrap. `resolve_output_type` walks the
+                // upstream wiring to find the real concrete type.
                 let input_node_output_type = registry
-                    .get_node_type_for_node(input_node)
-                    .unwrap()
-                    .output_type()
-                    .clone();
+                    .resolve_output_type(input_node, current_network, input_node_output_pin_index)
+                    .unwrap_or_else(|| {
+                        registry
+                            .get_node_type_for_node(input_node)
+                            .unwrap()
+                            .get_output_pin_type(input_node_output_pin_index)
+                    });
 
                 // convert_to handles conversion to array types, so we can convert directly.
                 // The result is guaranteed to be an array, containing one or more elements.
@@ -845,10 +873,18 @@ impl NetworkEvaluator {
                 }
 
                 let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
-                let input_node_type = registry.get_node_type_for_node(input_node);
-                let input_node_output_type = input_node_type
-                    .unwrap()
-                    .get_output_pin_type(input_node_output_pin_index);
+                let current_network = network_stack.last().unwrap().node_network;
+                // See the array-branch comment above: resolve the concrete
+                // upstream type so polymorphic output pins don't report
+                // `DataType::None` and break single→array auto-wrap.
+                let input_node_output_type = registry
+                    .resolve_output_type(input_node, current_network, input_node_output_pin_index)
+                    .unwrap_or_else(|| {
+                        registry
+                            .get_node_type_for_node(input_node)
+                            .unwrap()
+                            .get_output_pin_type(input_node_output_pin_index)
+                    });
 
                 // Convert the result to the expected type
 

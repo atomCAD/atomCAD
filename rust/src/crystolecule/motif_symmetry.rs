@@ -54,7 +54,15 @@ pub fn rotation_preserves_motif(
     // Image of each canonical-cell site (site_index → (image site, cell shift)).
     let mut site_images: Vec<(usize, IVec3)> = Vec::with_capacity(motif.sites.len());
     for (i, _) in motif.sites.iter().enumerate() {
-        match image_of_site(i, IVec3::ZERO, motif, lattice, structure.motif_offset, pivot_real, rotation) {
+        match image_of_site(
+            i,
+            IVec3::ZERO,
+            motif,
+            lattice,
+            structure.motif_offset,
+            pivot_real,
+            rotation,
+        ) {
             Some(img) => site_images.push(img),
             None => return false,
         }

@@ -101,6 +101,7 @@ impl NodeData for CuboidData {
             structure,
             geo_tree_root,
             alignment: Alignment::Aligned,
+            alignment_reason: None,
         }))
     }
 

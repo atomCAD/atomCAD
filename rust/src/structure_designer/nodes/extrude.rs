@@ -184,6 +184,7 @@ impl NodeData for ExtrudeData {
                     infinite,
                 ),
                 alignment: Alignment::Aligned,
+                alignment_reason: None,
             }))
         } else {
             EvalOutput::single(runtime_type_error_in_input(0))

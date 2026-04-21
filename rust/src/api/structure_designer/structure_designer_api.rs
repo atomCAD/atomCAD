@@ -1,3 +1,4 @@
+use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
 use super::structure_designer_api_types::APICandidateNode;
@@ -27,7 +28,6 @@ use super::structure_designer_api_types::APISequenceData;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
-use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
@@ -380,18 +380,20 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                             } else {
                                 None
                             };
-                            let alignment = scene_node_data
-                                .and_then(|d| {
-                                    d.pin_outputs.iter().find(|p| p.pin_index == i as i32)
-                                })
-                                .and_then(|p| p.alignment)
-                                .map(alignment_to_api);
+                            let pin_output = scene_node_data.and_then(|d| {
+                                d.pin_outputs.iter().find(|p| p.pin_index == i as i32)
+                            });
+                            let alignment =
+                                pin_output.and_then(|p| p.alignment).map(alignment_to_api);
+                            let alignment_reason =
+                                pin_output.and_then(|p| p.alignment_reason.clone());
                             OutputPinView {
                                 name: pin_def.name.clone(),
                                 data_type: pin_def.data_type.to_string(),
                                 resolved_data_type,
                                 index: i as i32,
                                 alignment,
+                                alignment_reason,
                             }
                         })
                         .collect();

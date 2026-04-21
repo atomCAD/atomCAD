@@ -8,6 +8,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::propagate_alignment_with_reason;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -90,8 +91,14 @@ impl NodeData for UnionData {
         // All compatible; take the first structure's lattice vecs
         let first_lattice_vecs = blueprints[0].structure.lattice_vecs.clone();
         let mut alignment = Alignment::Aligned;
+        let mut alignment_reason: Option<String> = None;
         for bp in blueprints.into_iter() {
-            alignment.worsen_to(bp.alignment);
+            propagate_alignment_with_reason(
+                &mut alignment,
+                &mut alignment_reason,
+                bp.alignment,
+                &bp.alignment_reason,
+            );
             shapes.push(bp.geo_tree_root);
         }
 
@@ -99,6 +106,7 @@ impl NodeData for UnionData {
             structure: Structure::from_lattice_vecs(first_lattice_vecs),
             geo_tree_root: GeoNode::union_3d(shapes),
             alignment,
+            alignment_reason,
         }))
     }
 

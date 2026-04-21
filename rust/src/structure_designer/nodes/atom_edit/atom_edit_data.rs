@@ -44,6 +44,7 @@ enum InputWrapperKind {
         structure: Structure,
         geo_tree_root: Option<GeoNode>,
         alignment: Alignment,
+        alignment_reason: Option<String>,
     },
     Molecule {
         geo_tree_root: Option<GeoNode>,
@@ -1564,6 +1565,7 @@ impl NodeData for AtomEditData {
                         structure: c.structure,
                         geo_tree_root: c.geo_tree_root,
                         alignment: c.alignment,
+                        alignment_reason: c.alignment_reason,
                     },
                 },
                 NetworkResult::Molecule(m) => CachedInput {
@@ -1773,11 +1775,13 @@ impl NodeData for AtomEditData {
                 structure,
                 geo_tree_root,
                 alignment,
+                alignment_reason,
             } => NetworkResult::Crystal(CrystalData {
                 structure,
                 atoms: result,
                 geo_tree_root,
                 alignment,
+                alignment_reason,
             }),
             InputWrapperKind::Molecule { geo_tree_root } => NetworkResult::Molecule(MoleculeData {
                 atoms: result,
