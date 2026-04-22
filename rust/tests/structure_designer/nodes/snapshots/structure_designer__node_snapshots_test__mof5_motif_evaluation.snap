@@ -3,14 +3,19 @@ source: tests/structure_designer/nodes/node_snapshots_test.rs
 expression: snapshot
 ---
 {
-  "network_name": "sample",
+  "network_name": "motif_MOF5",
   "node_count": 6,
-  "return_node_id": null,
+  "return_node_id": 4,
   "displayed_node_outputs": [
     {
+      "node_id": 3,
+      "node_type": "materialize",
+      "output": "Crystal:\natoms: 27\nbonds: 32\nfirst 10 atoms:\n  [1] Z=6 pos=(0.000000, 0.000000, 0.000000) depth=-0.000 bonds=1\n  [2] Z=6 pos=(12.833800, 12.834000, 0.000000) depth=-0.000 bonds=2\n  [3] Z=6 pos=(12.833800, 0.000000, 12.834000) depth=-0.000 bonds=2\n  [4] Z=6 pos=(0.000000, 12.834000, 12.834000) depth=-0.000 bonds=2\n  [5] Z=6 pos=(6.416900, 6.417000, 6.417000) depth=6.417 bonds=4\n  [6] Z=6 pos=(6.416900, 19.251000, 19.251000) depth=6.417 bonds=4\n  [7] Z=6 pos=(19.250700, 6.417000, 19.251000) depth=6.417 bonds=4\n  [8] Z=6 pos=(19.250700, 19.251000, 6.417000) depth=6.417 bonds=4\n  [10] Z=6 pos=(12.833800, 12.834000, 25.668000) depth=-0.000 bonds=2\n  [12] Z=6 pos=(12.833800, 25.668000, 12.834000) depth=-0.000 bonds=2\n  ... and 17 more atoms\nfirst 10 bonds:\n  1 -- 5 (order=1)\n  2 -- 5 (order=1)\n  2 -- 8 (order=1)\n  3 -- 5 (order=1)\n  3 -- 7 (order=1)\n  4 -- 5 (order=1)\n  4 -- 6 (order=1)\n  6 -- 13 (order=1)\n  6 -- 10 (order=1)\n  6 -- 12 (order=1)\n  ... and 22 more bonds"
+    },
+    {
       "node_id": 4,
-      "node_type": "atom_fill",
-      "output": "Crystal:\natoms: 2624\nbonds: 3232\nfirst 10 atoms:\n  [1] Z=8 pos=(-2.565315, -2.788039, -3.088023) depth=0.479 bonds=2\n  [2] Z=8 pos=(-2.261870, -2.783687, -2.787147) depth=0.780 bonds=2\n  [3] Z=8 pos=(-2.563924, -3.087916, -2.788039) depth=0.479 bonds=2\n  [4] Z=6 pos=(-2.557182, -2.791534, -3.471725) depth=0.095 bonds=1\n  [5] Z=6 pos=(-2.558966, -3.473901, -2.794745) depth=0.093 bonds=1\n  [6] Z=6 pos=(-2.675250, -2.675250, -3.375095) depth=0.192 bonds=3\n  [7] Z=6 pos=(-1.974691, -2.675250, -2.675250) depth=0.892 bonds=3\n  [8] Z=6 pos=(-1.879096, -2.790107, -2.794388) depth=0.773 bonds=2\n  [9] Z=6 pos=(-2.675250, -3.376522, -2.675250) depth=0.190 bonds=3\n  [10] Z=6 pos=(-2.675250, -3.168209, -2.675250) depth=0.399 bonds=3\n  ... and 2614 more atoms\nfirst 10 bonds:\n  1 -- 11 (order=1)\n  1 -- 13 (order=1)\n  2 -- 13 (order=1)\n  2 -- 12 (order=1)\n  3 -- 13 (order=1)\n  3 -- 10 (order=1)\n  4 -- 6 (order=1)\n  5 -- 9 (order=1)\n  6 -- 11 (order=1)\n  6 -- 132 (order=1)\n  ... and 3222 more bonds"
+      "node_type": "motif",
+      "output": "Motif:\nsites: 328\nbonds: 416\nparameters: 3\nparameter_elements:\n  CARBON (default Z=6)\n  OXYGEN (default Z=8)\n  ZINC (default Z=30)\nfirst 10 sites:\n  [0] Z=-2 pos=(0.280820, 0.218380, 0.134280)\n  [1] Z=-2 pos=(0.365890, 0.219600, 0.218630)\n  [2] Z=-2 pos=(0.281210, 0.134310, 0.218380)\n  [3] Z=-1 pos=(0.283100, 0.217400, 0.026710)\n  [4] Z=-1 pos=(0.282600, 0.026100, 0.216500)\n  [5] Z=-1 pos=(0.250000, 0.250000, 0.053800)\n  [6] Z=-1 pos=(0.446400, 0.250000, 0.250000)\n  [7] Z=-1 pos=(0.473200, 0.217800, 0.216600)\n  [8] Z=-1 pos=(0.250000, 0.053400, 0.250000)\n  [9] Z=-1 pos=(0.250000, 0.111800, 0.250000)\n  ... and 318 more sites\nfirst 10 bonds:\n  site[3]@(0,0,0) -- site[5]@(0,0,0) mult=1\n  site[5]@(0,0,0) -- site[10]@(0,0,0) mult=1\n  site[0]@(0,0,0) -- site[10]@(0,0,0) mult=1\n  site[0]@(0,0,0) -- site[12]@(0,0,0) mult=1\n  site[2]@(0,0,0) -- site[12]@(0,0,0) mult=1\n  site[1]@(0,0,0) -- site[12]@(0,0,0) mult=1\n  site[12]@(0,0,0) -- site[13]@(0,0,0) mult=1\n  site[4]@(0,0,0) -- site[8]@(0,0,0) mult=1\n  site[6]@(0,0,0) -- site[7]@(0,0,0) mult=1\n  site[2]@(0,0,0) -- site[9]@(0,0,0) mult=1\n  ... and 406 more bonds"
     }
   ]
 }

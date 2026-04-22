@@ -363,9 +363,12 @@ impl FacetShellData {
         unique_perms.insert((c, a, b));
         unique_perms.insert((c, b, a));
 
-        // Convert the HashSet into a Vec and return it.
-        // The order of elements in the resulting Vec is not guaranteed.
-        unique_perms.into_iter().collect()
+        // Convert the HashSet into a Vec, sorted for deterministic order
+        // so downstream consumers (e.g. snapshot tests over the resulting
+        // intersection geometry) see a stable element ordering.
+        let mut perms: Vec<(i32, i32, i32)> = unique_perms.into_iter().collect();
+        perms.sort();
+        perms
     }
 
     /// Hit test a ray against the facet shell polyhedron

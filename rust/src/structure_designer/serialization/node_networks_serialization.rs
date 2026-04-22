@@ -537,10 +537,22 @@ pub fn save_node_networks_to_file(
     // Extract design directory early
     let design_dir = file_path.parent().and_then(|p| p.to_str());
 
-    // Convert the node networks to a serializable format
-    let mut serializable_networks = Vec::new();
+    // Convert the node networks to a serializable format. Sort by name so the
+    // file's network array order is deterministic across saves (HashMap
+    // iteration order is not stable, which would otherwise leak into the
+    // serialized file and shuffle which network ends up "first" — affecting
+    // any consumer that keys off `LoadResult.first_network_name`, including
+    // the snapshot test suite).
+    let mut sorted_names: Vec<&String> = registry.node_networks.keys().collect();
+    sorted_names.sort();
+    let sorted_names: Vec<String> = sorted_names.into_iter().cloned().collect();
 
-    for (name, network) in &mut registry.node_networks {
+    let mut serializable_networks = Vec::new();
+    for name in &sorted_names {
+        let network = registry
+            .node_networks
+            .get_mut(name)
+            .expect("name came from this map's keys");
         let serializable_network =
             node_network_to_serializable(network, &registry.built_in_node_types, design_dir)?;
         serializable_networks.push((name.clone(), serializable_network));

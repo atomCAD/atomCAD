@@ -19,18 +19,27 @@
         },
         "nodes": [
           {
-            "id": 20,
+            "id": 10,
             "node_type_name": "intersect",
-            "custom_name": "intersect3",
+            "custom_name": "intersect2",
             "position": [
-              1555.3920288085938,
-              -237.48814086914055
+              1327.980224609375,
+              232.3649780273438
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "18": 0,
-                  "19": 0
+                  "22": 0,
+                  "11": 0,
+                  "15": 0,
+                  "13": 0,
+                  "16": 0,
+                  "17": 0,
+                  "20": 0,
+                  "21": 0,
+                  "23": 0,
+                  "8": 0,
+                  "9": 0
                 }
               }
             ],
@@ -38,12 +47,91 @@
             "data": {}
           },
           {
-            "id": 27,
-            "node_type_name": "structure",
-            "custom_name": "structure1",
+            "id": 23,
+            "node_type_name": "structure_rot",
+            "custom_name": "structure_rot7",
             "position": [
-              2203.0,
-              44.0
+              1918.953063964844,
+              -65.11436157226558
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 3
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "half_space",
+            "custom_name": "half_space9",
+            "position": [
+              1315.8628540039062,
+              -357.34064941406245
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                5,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                0,
+                -1
+              ],
+              "shift": 0,
+              "subdivision": 1
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "half_space",
+            "custom_name": "half_space5",
+            "position": [
+              925.6524658203124,
+              6.2713195800781705
             ],
             "arguments": [
               {
@@ -56,11 +144,30 @@
                 "argument_output_pins": {}
               },
               {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "structure",
-            "data": {}
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                -1,
+                0,
+                0
+              ],
+              "shift": 0,
+              "subdivision": 1
+            }
           },
           {
             "id": 24,
@@ -172,156 +279,17 @@
             }
           },
           {
-            "id": 4,
-            "node_type_name": "int",
-            "custom_name": "int1",
-            "position": [
-              187.18362426757812,
-              234.63151855468757
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 7
-            }
-          },
-          {
-            "id": 25,
-            "node_type_name": "structure_move",
-            "custom_name": "structure_move1",
-            "position": [
-              2133.1642456054688,
-              27.594653320312545
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "10": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "structure_move",
-            "data": {
-              "lattice_subdivision": 1,
-              "translation": [
-                0,
-                0,
-                5
-              ]
-            }
-          },
-          {
-            "id": 14,
-            "node_type_name": "int",
-            "custom_name": "int2",
-            "position": [
-              399.4287414550781,
-              -76.00458984374995
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 5
-            }
-          },
-          {
-            "id": 19,
-            "node_type_name": "half_space",
-            "custom_name": "half_space9",
-            "position": [
-              1315.8628540039062,
-              -357.34064941406245
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "24": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                5,
-                0,
-                0
-              ],
-              "max_miller_index": 2,
-              "miller_index": [
-                1,
-                0,
-                -1
-              ],
-              "shift": 0,
-              "subdivision": 1
-            }
-          },
-          {
-            "id": 12,
-            "node_type_name": "materialize",
-            "custom_name": "materialize1",
-            "position": [
-              2352.830993652344,
-              43.926196289062545
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "25": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "materialize",
-            "data": {
-              "hydrogen_passivation": true,
-              "invert_phase": false,
-              "parameter_element_value_definition": "",
-              "remove_single_bond_atoms_before_passivation": false,
-              "surface_reconstruction": false
-            }
-          },
-          {
-            "id": 22,
+            "id": 9,
             "node_type_name": "structure_rot",
-            "custom_name": "structure_rot6",
+            "custom_name": "structure_rot4",
             "position": [
-              1738.9530639648438,
-              -65.11436157226558
+              1208.507080078125,
+              343.4046508789063
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "20": 0
+                  "8": 0
                 }
               },
               {
@@ -343,173 +311,6 @@
                 0
               ],
               "step": 2
-            }
-          },
-          {
-            "id": 7,
-            "node_type_name": "structure_rot",
-            "custom_name": "structure_rot3",
-            "position": [
-              864.2285766601562,
-              493.81535644531255
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "2": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "structure_rot",
-            "data": {
-              "axis_index": 0,
-              "pivot_point": [
-                0,
-                0,
-                0
-              ],
-              "step": 3
-            }
-          },
-          {
-            "id": 15,
-            "node_type_name": "half_space",
-            "custom_name": "half_space5",
-            "position": [
-              925.6524658203124,
-              6.2713195800781705
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "14": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 1,
-              "miller_index": [
-                -1,
-                0,
-                0
-              ],
-              "shift": 0,
-              "subdivision": 1
-            }
-          },
-          {
-            "id": 17,
-            "node_type_name": "half_space",
-            "custom_name": "half_space7",
-            "position": [
-              719.9754638671875,
-              -90.18732910156244
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "14": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 1,
-              "miller_index": [
-                0,
-                -1,
-                0
-              ],
-              "shift": 0,
-              "subdivision": 1
-            }
-          },
-          {
-            "id": 16,
-            "node_type_name": "half_space",
-            "custom_name": "half_space6",
-            "position": [
-              655.6240234375,
-              -253.3591430664062
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "14": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 1,
-              "miller_index": [
-                0,
-                1,
-                0
-              ],
-              "shift": 0,
-              "subdivision": 1
             }
           },
           {
@@ -557,27 +358,18 @@
             }
           },
           {
-            "id": 10,
+            "id": 20,
             "node_type_name": "intersect",
-            "custom_name": "intersect2",
+            "custom_name": "intersect3",
             "position": [
-              1327.980224609375,
-              232.3649780273438
+              1555.3920288085938,
+              -237.48814086914055
             ],
             "arguments": [
               {
                 "argument_output_pins": {
-                  "16": 0,
-                  "11": 0,
-                  "13": 0,
-                  "20": 0,
-                  "21": 0,
-                  "22": 0,
-                  "23": 0,
-                  "15": 0,
-                  "17": 0,
-                  "8": 0,
-                  "9": 0
+                  "18": 0,
+                  "19": 0
                 }
               }
             ],
@@ -585,18 +377,19 @@
             "data": {}
           },
           {
-            "id": 9,
-            "node_type_name": "structure_rot",
-            "custom_name": "structure_rot4",
+            "id": 11,
+            "node_type_name": "half_space",
+            "custom_name": "half_space3",
             "position": [
-              1208.507080078125,
-              343.4046508789063
+              1209.13232421875,
+              -84.84821777343745
             ],
             "arguments": [
               {
-                "argument_output_pins": {
-                  "8": 0
-                }
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
               },
               {
                 "argument_output_pins": {}
@@ -608,50 +401,21 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "structure_rot",
+            "data_type": "half_space",
             "data": {
-              "axis_index": 2,
-              "pivot_point": [
+              "center": [
                 0,
                 0,
                 0
               ],
-              "step": 2
-            }
-          },
-          {
-            "id": 21,
-            "node_type_name": "structure_rot",
-            "custom_name": "structure_rot5",
-            "position": [
-              1559.9530639648438,
-              -66.11436157226558
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "20": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "structure_rot",
-            "data": {
-              "axis_index": 2,
-              "pivot_point": [
+              "max_miller_index": 1,
+              "miller_index": [
                 0,
                 0,
-                0
+                1
               ],
-              "step": 1
+              "shift": 1,
+              "subdivision": 1
             }
           },
           {
@@ -699,67 +463,18 @@
             }
           },
           {
-            "id": 11,
-            "node_type_name": "half_space",
-            "custom_name": "half_space3",
+            "id": 4,
+            "node_type_name": "int",
+            "custom_name": "int1",
             "position": [
-              1209.13232421875,
-              -84.84821777343745
+              187.18362426757812,
+              234.63151855468757
             ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
+            "arguments": [],
+            "data_type": "int",
             "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 1,
-              "miller_index": [
-                0,
-                0,
-                1
-              ],
-              "shift": 1,
-              "subdivision": 1
+              "value": 7
             }
-          },
-          {
-            "id": 8,
-            "node_type_name": "intersect",
-            "custom_name": "intersect1",
-            "position": [
-              1100.979736328125,
-              237.94523925781257
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "5": 0,
-                  "6": 0,
-                  "7": 0,
-                  "2": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
           },
           {
             "id": 6,
@@ -794,41 +509,6 @@
                 0
               ],
               "step": 2
-            }
-          },
-          {
-            "id": 23,
-            "node_type_name": "structure_rot",
-            "custom_name": "structure_rot7",
-            "position": [
-              1918.953063964844,
-              -65.11436157226558
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "20": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "structure_rot",
-            "data": {
-              "axis_index": 2,
-              "pivot_point": [
-                0,
-                0,
-                0
-              ],
-              "step": 3
             }
           },
           {
@@ -873,6 +553,326 @@
               ],
               "shift": 2,
               "subdivision": 1
+            }
+          },
+          {
+            "id": 14,
+            "node_type_name": "int",
+            "custom_name": "int2",
+            "position": [
+              399.4287414550781,
+              -76.00458984374995
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 27,
+            "node_type_name": "structure",
+            "custom_name": "structure1",
+            "position": [
+              2203.0,
+              44.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure",
+            "data": {}
+          },
+          {
+            "id": 25,
+            "node_type_name": "structure_move",
+            "custom_name": "structure_move1",
+            "position": [
+              2133.1642456054688,
+              27.594653320312545
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure_move",
+            "data": {
+              "lattice_subdivision": 1,
+              "translation": [
+                0,
+                0,
+                5
+              ]
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "materialize",
+            "custom_name": "materialize1",
+            "position": [
+              2352.830993652344,
+              43.926196289062545
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "materialize",
+            "data": {
+              "hydrogen_passivation": true,
+              "invert_phase": false,
+              "parameter_element_value_definition": "",
+              "remove_single_bond_atoms_before_passivation": false,
+              "surface_reconstruction": false
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "half_space",
+            "custom_name": "half_space7",
+            "position": [
+              719.9754638671875,
+              -90.18732910156244
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                0,
+                -1,
+                0
+              ],
+              "shift": 0,
+              "subdivision": 1
+            }
+          },
+          {
+            "id": 22,
+            "node_type_name": "structure_rot",
+            "custom_name": "structure_rot6",
+            "position": [
+              1738.9530639648438,
+              -65.11436157226558
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 2
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "half_space",
+            "custom_name": "half_space6",
+            "position": [
+              655.6240234375,
+              -253.3591430664062
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                0,
+                1,
+                0
+              ],
+              "shift": 0,
+              "subdivision": 1
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "intersect",
+            "custom_name": "intersect1",
+            "position": [
+              1100.979736328125,
+              237.94523925781257
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0,
+                  "2": 0,
+                  "5": 0,
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "structure_rot",
+            "custom_name": "structure_rot3",
+            "position": [
+              864.2285766601562,
+              493.81535644531255
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure_rot",
+            "data": {
+              "axis_index": 0,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 3
+            }
+          },
+          {
+            "id": 21,
+            "node_type_name": "structure_rot",
+            "custom_name": "structure_rot5",
+            "position": [
+              1559.9530639648438,
+              -66.11436157226558
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 1
             }
           }
         ],

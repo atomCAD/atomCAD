@@ -1,330 +1,6 @@
 {
   "node_networks": [
     [
-      "unit_cell_MOF5",
-      {
-        "next_node_id": 2,
-        "node_type": {
-          "name": "unit_cell_MOF5",
-          "description": "",
-          "summary": null,
-          "category": "Custom",
-          "parameters": [],
-          "output_pins": [
-            {
-              "name": "result",
-              "data_type": "LatticeVecs"
-            }
-          ]
-        },
-        "nodes": [
-          {
-            "id": 1,
-            "node_type_name": "lattice_vecs",
-            "custom_name": "lattice_vecs1",
-            "position": [
-              245.4635009765625,
-              241.88786621093757
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "lattice_vecs",
-            "data": {
-              "cell_angle_alpha": 90.0,
-              "cell_angle_beta": 90.0,
-              "cell_angle_gamma": 90.0,
-              "cell_length_a": 25.6676,
-              "cell_length_b": 25.668,
-              "cell_length_c": 25.668
-            }
-          }
-        ],
-        "return_node_id": 1,
-        "displayed_node_ids": [
-          [
-            1,
-            "Normal"
-          ]
-        ]
-      }
-    ],
-    [
-      "sample",
-      {
-        "next_node_id": 10,
-        "node_type": {
-          "name": "sample",
-          "description": "",
-          "summary": null,
-          "category": "Custom",
-          "parameters": [],
-          "output_pins": [
-            {
-              "name": "result",
-              "data_type": "None"
-            }
-          ]
-        },
-        "nodes": [
-          {
-            "id": 5,
-            "node_type_name": "half_space",
-            "custom_name": "half_space1",
-            "position": [
-              418.3353271484375,
-              271.9372436523438
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "7": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "half_space",
-            "data": {
-              "center": [
-                0,
-                0,
-                0
-              ],
-              "max_miller_index": 1,
-              "miller_index": [
-                1,
-                1,
-                1
-              ],
-              "shift": 3,
-              "subdivision": 1
-            }
-          },
-          {
-            "id": 1,
-            "node_type_name": "unit_cell_MOF5",
-            "custom_name": "unit_cell_MOF51",
-            "position": [
-              221.58804321289065,
-              53.987292480468795
-            ],
-            "arguments": [],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 8,
-            "node_type_name": "structure",
-            "custom_name": "structure2",
-            "position": [
-              327.0,
-              53.0
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "1": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "structure",
-            "data": {}
-          },
-          {
-            "id": 9,
-            "node_type_name": "structure",
-            "custom_name": "structure3",
-            "position": [
-              625.0,
-              105.0
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "2": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "structure",
-            "data": {}
-          },
-          {
-            "id": 3,
-            "node_type_name": "cuboid",
-            "custom_name": "cuboid1",
-            "position": [
-              476.572021484375,
-              53.091784667968795
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "8": 0
-                }
-              }
-            ],
-            "data_type": "cuboid",
-            "data": {
-              "extent": [
-                2,
-                2,
-                2
-              ],
-              "min_corner": [
-                -1,
-                -1,
-                -1
-              ]
-            }
-          },
-          {
-            "id": 7,
-            "node_type_name": "structure",
-            "custom_name": "structure1",
-            "position": [
-              268.0,
-              272.0
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "1": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "structure",
-            "data": {}
-          },
-          {
-            "id": 2,
-            "node_type_name": "motif_MOF5",
-            "custom_name": "motif_MOF51",
-            "position": [
-              224.39389038085935,
-              159.0727416992188
-            ],
-            "arguments": [],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 4,
-            "node_type_name": "materialize",
-            "custom_name": "materialize1",
-            "position": [
-              775.443603515625,
-              104.5080444335938
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "3": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "materialize",
-            "data": {
-              "hydrogen_passivation": false,
-              "invert_phase": false,
-              "parameter_element_value_definition": "",
-              "remove_single_bond_atoms_before_passivation": false,
-              "surface_reconstruction": false
-            }
-          },
-          {
-            "id": 6,
-            "node_type_name": "intersect",
-            "custom_name": "intersect1",
-            "position": [
-              794.8661499023438,
-              291.6108276367188
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "3": 0,
-                  "5": 0
-                }
-              }
-            ],
-            "data_type": "intersect",
-            "data": {}
-          }
-        ],
-        "return_node_id": null,
-        "displayed_node_ids": [
-          [
-            4,
-            "Normal"
-          ]
-        ]
-      }
-    ],
-    [
       "motif_MOF5",
       {
         "next_node_id": 11,
@@ -342,53 +18,6 @@
           ]
         },
         "nodes": [
-          {
-            "id": 6,
-            "node_type_name": "unit_cell_MOF5",
-            "custom_name": "unit_cell_MOF51",
-            "position": [
-              -54.421630859375,
-              -33.02419433593741
-            ],
-            "arguments": [],
-            "data_type": "no_data",
-            "data": {}
-          },
-          {
-            "id": 1,
-            "node_type_name": "cuboid",
-            "custom_name": "cuboid1",
-            "position": [
-              181.4569091796875,
-              -69.64166259765625
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "9": 0
-                }
-              }
-            ],
-            "data_type": "cuboid",
-            "data": {
-              "extent": [
-                2,
-                1,
-                1
-              ],
-              "min_corner": [
-                0,
-                0,
-                0
-              ]
-            }
-          },
           {
             "id": 4,
             "node_type_name": "motif",
@@ -493,6 +122,53 @@
               "remove_single_bond_atoms_before_passivation": false,
               "surface_reconstruction": false
             }
+          },
+          {
+            "id": 6,
+            "node_type_name": "unit_cell_MOF5",
+            "custom_name": "unit_cell_MOF51",
+            "position": [
+              -54.421630859375,
+              -33.02419433593741
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 1,
+            "node_type_name": "cuboid",
+            "custom_name": "cuboid1",
+            "position": [
+              181.4569091796875,
+              -69.64166259765625
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "9": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                2,
+                1,
+                1
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
           }
         ],
         "return_node_id": 4,
@@ -503,6 +179,330 @@
           ],
           [
             3,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "sample",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "sample",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "None"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 6,
+            "node_type_name": "intersect",
+            "custom_name": "intersect1",
+            "position": [
+              794.8661499023438,
+              291.6108276367188
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0,
+                  "5": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 9,
+            "node_type_name": "structure",
+            "custom_name": "structure3",
+            "position": [
+              625.0,
+              105.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure",
+            "data": {}
+          },
+          {
+            "id": 8,
+            "node_type_name": "structure",
+            "custom_name": "structure2",
+            "position": [
+              327.0,
+              53.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure",
+            "data": {}
+          },
+          {
+            "id": 2,
+            "node_type_name": "motif_MOF5",
+            "custom_name": "motif_MOF51",
+            "position": [
+              224.39389038085935,
+              159.0727416992188
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "structure",
+            "custom_name": "structure1",
+            "position": [
+              268.0,
+              272.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "structure",
+            "data": {}
+          },
+          {
+            "id": 1,
+            "node_type_name": "unit_cell_MOF5",
+            "custom_name": "unit_cell_MOF51",
+            "position": [
+              221.58804321289065,
+              53.987292480468795
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "materialize",
+            "custom_name": "materialize1",
+            "position": [
+              775.443603515625,
+              104.5080444335938
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "materialize",
+            "data": {
+              "hydrogen_passivation": false,
+              "invert_phase": false,
+              "parameter_element_value_definition": "",
+              "remove_single_bond_atoms_before_passivation": false,
+              "surface_reconstruction": false
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "cuboid",
+            "custom_name": "cuboid1",
+            "position": [
+              476.572021484375,
+              53.091784667968795
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                2,
+                2,
+                2
+              ],
+              "min_corner": [
+                -1,
+                -1,
+                -1
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "half_space",
+            "custom_name": "half_space1",
+            "position": [
+              418.3353271484375,
+              271.9372436523438
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                1,
+                1,
+                1
+              ],
+              "shift": 3,
+              "subdivision": 1
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            4,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "unit_cell_MOF5",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "unit_cell_MOF5",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "LatticeVecs"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "lattice_vecs",
+            "custom_name": "lattice_vecs1",
+            "position": [
+              245.4635009765625,
+              241.88786621093757
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_vecs",
+            "data": {
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0,
+              "cell_length_a": 25.6676,
+              "cell_length_b": 25.668,
+              "cell_length_c": 25.668
+            }
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
             "Normal"
           ]
         ]
