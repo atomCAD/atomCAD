@@ -6,6 +6,9 @@
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::network_validator::validate_network;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::serialization::migrate_v2_to_v3::{
+    migrate_v2_to_v3, migration_call_count, reset_migration_call_count,
+};
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
@@ -20,11 +23,9 @@ const FIXTURE_DIR: &str = "tests/fixtures/lattice_space_migration";
 #[test]
 fn test_load_trivial_v3_no_op() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/trivial_v3.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load trivial_v3.cnnd");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &format!("{}/trivial_v3.cnnd", FIXTURE_DIR))
+            .expect("Failed to load trivial_v3.cnnd");
 
     assert_eq!(load_result.first_network_name, "Main");
 
@@ -53,11 +54,8 @@ fn test_load_trivial_v3_no_op() {
 #[test]
 fn test_load_pure_rename() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/pure_rename.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load pure_rename.cnnd");
+    load_node_networks_from_file(&mut registry, &format!("{}/pure_rename.cnnd", FIXTURE_DIR))
+        .expect("Failed to load pure_rename.cnnd");
 
     let network = registry
         .node_networks
@@ -107,11 +105,9 @@ fn test_load_pure_rename() {
 #[test]
 fn test_roundtrip_pure_rename() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/pure_rename.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &format!("{}/pure_rename.cnnd", FIXTURE_DIR))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -237,10 +233,7 @@ fn test_roundtrip_custom_network_rename() {
     let c1 = registry.node_networks.get("my_custom").unwrap();
     let c2 = registry2.node_networks.get("my_custom").unwrap();
     assert_eq!(c1.node_type.output_type(), c2.node_type.output_type());
-    assert_eq!(
-        c1.node_type.parameters.len(),
-        c2.node_type.parameters.len()
-    );
+    assert_eq!(c1.node_type.parameters.len(), c2.node_type.parameters.len());
 }
 
 // ---------------------------------------------------------------------------
@@ -827,7 +820,10 @@ fn test_roundtrip_atom_fill_split() {
         .values()
         .filter(|n| n.node_type_name == "structure")
         .count();
-    assert_eq!(materialize_count, 1, "second load must not duplicate the materialize node");
+    assert_eq!(
+        materialize_count, 1,
+        "second load must not duplicate the materialize node"
+    );
     assert_eq!(
         structure_count, 2,
         "second load must not synthesise a third structure node"
@@ -953,7 +949,12 @@ fn test_load_shared_unit_cell_composes_passes() {
             .find(|n| n.node_type_name == primitive_name)
             .unwrap_or_else(|| panic!("{} node missing", primitive_name));
         let wires = &prim.arguments[2].argument_output_pins;
-        assert_eq!(wires.len(), 1, "{} should have exactly one structure-input source", primitive_name);
+        assert_eq!(
+            wires.len(),
+            1,
+            "{} should have exactly one structure-input source",
+            primitive_name
+        );
         assert!(
             !wires.contains_key(&1),
             "{}'s structure input must point at its adapter, not directly at id 1",
@@ -999,7 +1000,289 @@ fn test_roundtrip_shared_unit_cell() {
     let n1 = registry.node_networks.get("Main").unwrap();
     let n2 = registry2.node_networks.get("Main").unwrap();
     assert_eq!(n1.nodes.len(), n2.nodes.len());
-    let s1 = n1.nodes.values().filter(|n| n.node_type_name == "structure").count();
-    let s2 = n2.nodes.values().filter(|n| n.node_type_name == "structure").count();
+    let s1 = n1
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "structure")
+        .count();
+    let s2 = n2
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "structure")
+        .count();
     assert_eq!(s1, s2, "structure-node count must survive a v3 round trip");
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6: hardening — frame_transform silent drop, idempotence, v3 no-op,
+// corrupt-input error surface, real-sample smoke.
+// ---------------------------------------------------------------------------
+
+/// Fixture 5 — `frame_transform_present.cnnd`:
+/// a v2 file whose `cuboid` and `sphere` node data blocks each carry a stray
+/// `frame_transform` field (as Appendix B of the refactoring design anticipates
+/// for older saves that encoded it inline). Verifies that serde's default
+/// leniency drops the field on deserialization and that it does not reappear
+/// in the v3 output on save — i.e. no explicit migration action is required
+/// for this removed field.
+#[test]
+fn test_load_frame_transform_dropped_silently() {
+    let mut registry = NodeTypeRegistry::new();
+    load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/frame_transform_present.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load frame_transform_present.cnnd");
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // The two original primitives survived the load. Nothing synthesised — the
+    // fixture has no lattice wires or atom_fill nodes.
+    assert_eq!(
+        network.nodes.len(),
+        2,
+        "expected both primitives preserved; got {}",
+        network.nodes.len()
+    );
+    let type_names: std::collections::HashSet<&str> = network
+        .nodes
+        .values()
+        .map(|n| n.node_type_name.as_str())
+        .collect();
+    assert!(type_names.contains("cuboid"));
+    assert!(type_names.contains("sphere"));
+}
+
+#[test]
+fn test_roundtrip_frame_transform_dropped() {
+    let mut registry = NodeTypeRegistry::new();
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/frame_transform_present.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load");
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path().join("roundtrip.cnnd");
+    save_node_networks_to_file(
+        &mut registry,
+        &temp_path,
+        load_result.direct_editing_mode,
+        &load_result.cli_access_rules,
+    )
+    .expect("Failed to save");
+
+    let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
+    assert!(
+        saved.contains("\"version\": 3"),
+        "saved file should be tagged version: 3"
+    );
+    assert!(
+        !saved.contains("frame_transform"),
+        "saved v3 file must not carry the dropped `frame_transform` field; got:\n{}",
+        saved
+    );
+}
+
+/// Calling the pre-pass twice on the same in-memory value must produce a
+/// byte-identical result the second time. Catches helpers that silently mutate
+/// already-migrated shapes — the kind of bug that only surfaces if the
+/// migration is accidentally re-invoked on its own output.
+#[test]
+fn test_double_migration_is_idempotent() {
+    let raw = std::fs::read_to_string(&format!("{}/atom_fill_split.cnnd", FIXTURE_DIR))
+        .expect("read atom_fill_split fixture");
+    let mut value: serde_json::Value = serde_json::from_str(&raw).expect("parse fixture");
+
+    migrate_v2_to_v3(&mut value).expect("first migration call failed");
+    let snapshot_after_first = value.clone();
+
+    migrate_v2_to_v3(&mut value).expect("second migration call failed");
+    assert_eq!(
+        value, snapshot_after_first,
+        "second migrate_v2_to_v3 call must be a no-op on an already-migrated value"
+    );
+}
+
+/// A v3 file must skip the pre-pass entirely — the version dispatch should not
+/// even call [`migrate_v2_to_v3`]. Uses the test-only call counter to observe
+/// dispatch behaviour directly. The counter is thread-local, so parallel tests
+/// don't contaminate this observation.
+#[test]
+fn test_v3_file_skips_migration_pre_pass() {
+    reset_migration_call_count();
+
+    let mut registry = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry, &format!("{}/trivial_v3.cnnd", FIXTURE_DIR))
+        .expect("Failed to load trivial_v3.cnnd");
+
+    assert_eq!(
+        migration_call_count(),
+        0,
+        "loading a v3 file must not invoke migrate_v2_to_v3; the version dispatch should short-circuit"
+    );
+}
+
+/// A v2 file must go through the pre-pass exactly once per load — the counterpart
+/// to the v3 no-op check. Together they prove the dispatch routes correctly.
+#[test]
+fn test_v2_file_invokes_migration_pre_pass() {
+    reset_migration_call_count();
+
+    let mut registry = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry, &format!("{}/pure_rename.cnnd", FIXTURE_DIR))
+        .expect("Failed to load pure_rename.cnnd");
+
+    assert_eq!(
+        migration_call_count(),
+        1,
+        "loading a v2 file must invoke migrate_v2_to_v3 exactly once"
+    );
+}
+
+/// A structurally corrupt v2 file (truncated mid-JSON) must surface as a clear
+/// error from the load path — never a panic. The exact error type depends on
+/// where the parse fails; the requirement is that the Display message carries
+/// useful locating information, which serde_json's errors always do
+/// (line/column).
+#[test]
+fn test_corrupt_v2_produces_clear_error() {
+    let mut registry = NodeTypeRegistry::new();
+    let result =
+        load_node_networks_from_file(&mut registry, &format!("{}/corrupt_v2.cnnd", FIXTURE_DIR));
+
+    // Can't use `expect_err` here — `LoadResult` doesn't implement `Debug`. Match
+    // explicitly and panic with the message we do have.
+    let err = match result {
+        Ok(_) => panic!("truncated v2 fixture must not load successfully"),
+        Err(e) => e,
+    };
+    let msg = err.to_string();
+    assert!(
+        !msg.is_empty(),
+        "error must have a non-empty message; got {:?}",
+        err
+    );
+    // serde_json errors on malformed input always include a line/column
+    // locator, which is sufficient "where did it fail" context for the user.
+    assert!(
+        msg.contains("line") && msg.contains("column"),
+        "corrupt-input error should locate the problem (expected line/column info); got {:?}",
+        msg
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Real-sample smoke: `git show main:samples/...` seeded fixtures. These
+// exercise combinations of change classes the minimal fixtures don't hit.
+// No semantic comparison — just load / migrate / save / reload / idempotent
+// per the design doc's Phase 6 instructions.
+// ---------------------------------------------------------------------------
+
+/// Real v2 sample — atom-heavy. Diamond uses `half_space`, `atom_fill`,
+/// `lattice_move`, `lattice_rot`, `intersect`. Exercises every major migration
+/// change class in combination within one file.
+#[test]
+fn test_real_diamond_roundtrip_smoke() {
+    real_sample_roundtrip_smoke("real_diamond.cnnd");
+}
+
+/// Real v2 sample — geometry-heavy. Extrude-demo uses `extrude`, `polygon`,
+/// `diff_2d`, `atom_fill`, `lattice_move`, plus custom networks (`M`, `P`, `S`).
+/// Exercises the rename walker descending into custom-network `node_type`
+/// definitions alongside the structural passes.
+#[test]
+fn test_real_extrude_demo_roundtrip_smoke() {
+    real_sample_roundtrip_smoke("real_extrude_demo.cnnd");
+}
+
+/// Shared smoke shape used for every real sample: load, re-save, reload.
+/// No semantic comparison — just that the pipeline runs end-to-end without
+/// panics or errors, that the saved file is tagged v3, and that every v2
+/// token we migrate has been erased.
+///
+/// Byte-identity between two saves of the same network is **not** asserted:
+/// `NodeNetwork::nodes` is a `HashMap` and its iteration order is not stable
+/// across independent instances (which is what you get from load / re-save /
+/// re-load). Node-count parity and v3-version tagging are the strongest
+/// checks that survive that constraint. Reload-skips-migration is also
+/// verified via the process-wide call counter.
+fn real_sample_roundtrip_smoke(fixture_name: &str) {
+    let path = format!("{}/{}", FIXTURE_DIR, fixture_name);
+
+    let mut registry = NodeTypeRegistry::new();
+    let load_result = load_node_networks_from_file(&mut registry, &path)
+        .unwrap_or_else(|e| panic!("Failed to load {}: {}", fixture_name, e));
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let first_save = temp_dir.path().join("first.cnnd");
+    save_node_networks_to_file(
+        &mut registry,
+        &first_save,
+        load_result.direct_editing_mode,
+        &load_result.cli_access_rules,
+    )
+    .unwrap_or_else(|e| panic!("Failed to save {}: {}", fixture_name, e));
+
+    let first_bytes = std::fs::read_to_string(&first_save).expect("read first save");
+    assert!(
+        first_bytes.contains("\"version\": 3"),
+        "{}: saved file should be tagged version: 3",
+        fixture_name
+    );
+    // Every migration change class should have erased its v2 tokens. The
+    // smoke test doesn't care which of them was present in this sample; any
+    // stragglers would be a bug.
+    for v2_token in [
+        "\"unit_cell\"",
+        "\"atom_fill\"",
+        "\"atom_trans\"",
+        "\"lattice_symop\"",
+        "\"atom_lmove\"",
+        "\"atom_lrot\"",
+        "\"Geometry\"",
+        "\"UnitCell\"",
+        "\"Atomic\"",
+    ] {
+        assert!(
+            !first_bytes.contains(v2_token),
+            "{}: saved v3 file must not contain v2 token {}",
+            fixture_name,
+            v2_token
+        );
+    }
+
+    // Reload-skips-migration: the counter is thread-local, so the first load
+    // earlier in this fn (which bumped the counter to 1) is isolated. Reset
+    // before the reload and assert the reload itself did not bump it.
+    reset_migration_call_count();
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, first_save.to_str().unwrap())
+        .unwrap_or_else(|e| panic!("Failed to reload saved {}: {}", fixture_name, e));
+    assert_eq!(
+        migration_call_count(),
+        0,
+        "{}: reloading the saved v3 form must not trigger the v2→v3 pre-pass",
+        fixture_name
+    );
+
+    // Node count survives the full v2 load → v3 save → v3 reload cycle.
+    let net_names: Vec<String> = registry.node_networks.keys().cloned().collect();
+    for name in &net_names {
+        let net1 = registry.node_networks.get(name).unwrap();
+        let net2 = registry2
+            .node_networks
+            .get(name)
+            .unwrap_or_else(|| panic!("{}: network {} missing from reload", fixture_name, name));
+        assert_eq!(
+            net1.nodes.len(),
+            net2.nodes.len(),
+            "{}: network {} lost nodes on reload",
+            fixture_name,
+            name
+        );
+    }
 }

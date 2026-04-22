@@ -9,9 +9,24 @@
 //! of the network itself has changed — things serde-level compat cannot express.
 
 use serde_json::Value;
+use std::cell::Cell;
 use std::collections::HashSet;
 use thiserror::Error;
 
+/// Errors the v2→v3 pre-pass can surface to the load path. Both variants are
+/// currently unconstructed: the helpers follow the design doc's
+/// drop-with-dangling-wires policy (see "Error Policy"), so malformed shapes
+/// are skipped silently with a `let Some(..) else { return Ok(()) }` guard
+/// rather than rejected. `Json` is reserved for any helper that might later
+/// call into `serde_json` (today migration operates purely on an
+/// already-parsed `Value`); `MalformedStructure` is reserved for a future
+/// condition severe enough to warrant hard-failing the load.
+///
+/// **Contract for future contributors adding an `Err` path:** the message must
+/// locate the offending position — at minimum the network name, and where
+/// applicable the node id (plus pin index for pin-level faults). The load
+/// layer wraps this Display into an `io::Error` prefixed with
+/// `"v2→v3 migration failed: "`, so the message is what the user sees.
 #[derive(Debug, Error)]
 pub enum MigrationError {
     #[error("JSON error during migration: {0}")]
@@ -21,8 +36,35 @@ pub enum MigrationError {
     MalformedStructure(String),
 }
 
+// Test-only instrumentation: counts invocations of `migrate_v2_to_v3` so the
+// test suite can verify the version dispatch actually skips the pre-pass for
+// v3 files. Production code never reads this.
+//
+// Uses a `thread_local!` cell so each `#[test]` fn (which `cargo test` runs on
+// its own dedicated thread) observes an independent counter — no cross-test
+// contamination and no need for a serializing mutex. The load path is entirely
+// synchronous, so the counter bump happens on the same thread that called
+// `load_node_networks_from_file`.
+thread_local! {
+    static MIGRATION_CALL_COUNT: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Returns the number of times [`migrate_v2_to_v3`] has been called on the
+/// current thread. Tests call [`reset_migration_call_count`] before exercising
+/// a load, then read this afterwards.
+pub fn migration_call_count() -> u64 {
+    MIGRATION_CALL_COUNT.with(|c| c.get())
+}
+
+/// Resets the current thread's [`migration_call_count`] counter. Tests call
+/// this before a load that they want to observe in isolation.
+pub fn reset_migration_call_count() {
+    MIGRATION_CALL_COUNT.with(|c| c.set(0));
+}
+
 /// Top-level v2 → v3 pre-pass. Runs on the parsed JSON value before strict deserialization.
 pub fn migrate_v2_to_v3(root: &mut Value) -> Result<(), MigrationError> {
+    MIGRATION_CALL_COUNT.with(|c| c.set(c.get() + 1));
     rename_data_type_strings(root)?;
     rename_node_type_strings(root)?;
     drop_deleted_nodes_in_all_networks(root)?;
@@ -692,13 +734,32 @@ struct PrimitiveAdaptation {
 ///
 /// Runs after the deleted-node drop so primitives that were wired to `lattice_symop` see
 /// their pin as already unwired and are correctly skipped.
-fn adapt_primitives_lattice_to_structure(
-    network_json: &mut Value,
-) -> Result<(), MigrationError> {
+fn adapt_primitives_lattice_to_structure(network_json: &mut Value) -> Result<(), MigrationError> {
     let Some(next_id_val) = network_json.get("next_node_id").and_then(|v| v.as_u64()) else {
         return Ok(());
     };
     let mut next_id = next_id_val;
+
+    // Index node types by id so we can peek at a wire's source type. Used below to
+    // keep this pass idempotent: a primitive whose pin already points at a
+    // `structure` node has been adapted by a previous run and must not be
+    // re-adapted. (In production the version dispatch prevents re-entry, but the
+    // test suite's double-migration idempotence check exercises this path
+    // directly — per the design doc's "class-of-bug guard".)
+    let node_type_by_id: std::collections::HashMap<u64, String> = network_json
+        .get("nodes")
+        .and_then(|v| v.as_array())
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter_map(|n| {
+                    let id = n.get("id").and_then(|v| v.as_u64())?;
+                    let name = n.get("node_type_name").and_then(|v| v.as_str())?;
+                    Some((id, name.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     let mut adaptations: Vec<PrimitiveAdaptation> = Vec::new();
     if let Some(nodes) = network_json.get("nodes").and_then(|v| v.as_array()) {
@@ -722,6 +783,19 @@ fn adapt_primitives_lattice_to_structure(
                 continue;
             };
             if wire_obj.is_empty() {
+                continue;
+            }
+            // Idempotence guard: if every source on this pin already points at a
+            // `structure` node, this primitive was adapted on a prior run.
+            // Skip — re-adapting would chain a second adapter behind the first.
+            let all_sources_already_structure = wire_obj.keys().all(|k| {
+                k.parse::<u64>()
+                    .ok()
+                    .and_then(|src_id| node_type_by_id.get(&src_id))
+                    .map(|n| n == "structure")
+                    .unwrap_or(false)
+            });
+            if all_sources_already_structure {
                 continue;
             }
             // Snap the adapter position to integers. The primitive's real-world
@@ -764,9 +838,10 @@ fn adapt_primitives_lattice_to_structure(
 
     // Rewire primitives to point at the synthesized adapters (one wire-swap each).
     for adaptation in &adaptations {
-        let Some(node) = nodes.iter_mut().find(|n| {
-            n.get("id").and_then(|v| v.as_u64()) == Some(adaptation.primitive_id)
-        }) else {
+        let Some(node) = nodes
+            .iter_mut()
+            .find(|n| n.get("id").and_then(|v| v.as_u64()) == Some(adaptation.primitive_id))
+        else {
             continue;
         };
         let Some(arg) = node
@@ -783,10 +858,7 @@ fn adapt_primitives_lattice_to_structure(
             continue;
         };
         map.clear();
-        map.insert(
-            adaptation.new_structure_node_id.to_string(),
-            Value::from(0),
-        );
+        map.insert(adaptation.new_structure_node_id.to_string(), Value::from(0));
     }
 
     // Append the synthesized `structure` adapter nodes. Keys and shape mirror

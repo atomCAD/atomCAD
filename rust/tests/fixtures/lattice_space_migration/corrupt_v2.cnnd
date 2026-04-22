@@ -1,0 +1,27 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "sphere",
+            "custom_name": "sp",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
