@@ -71,7 +71,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               375.7552490234375,
               43.183398437500045
@@ -83,21 +83,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "4": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           }
@@ -122,12 +120,12 @@
         "node_type": {
           "name": "unit_cell_rutile",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               245.4635009765625,
               241.88786621093757
@@ -143,7 +141,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -170,7 +168,7 @@
         "nodes": [
           {
             "id": 4,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               775.443603515625,
               104.5080444335938
@@ -182,21 +180,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "2": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           },

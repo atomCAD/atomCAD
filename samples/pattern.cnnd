@@ -16,7 +16,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -292,7 +292,7 @@
             "data_type": "map",
             "data": {
               "input_type": "Int",
-              "output_type": "Blueprint"
+              "output_type": "Geometry"
             }
           },
           {

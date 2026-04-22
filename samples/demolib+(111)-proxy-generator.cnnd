@@ -1,13 +1,13 @@
 {
   "node_networks": [
     [
-      "lib_multirot120\u00b0[111]",
+      "lib_multirot120°[111]",
       {
         "next_node_id": 7,
         "node_type": {
-          "name": "lib_multirot120\u00b0[111]",
+          "name": "lib_multirot120°[111]",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -32,12 +32,12 @@
             "data_type": "map",
             "data": {
               "input_type": "Int",
-              "output_type": "Blueprint"
+              "output_type": "Geometry"
             }
           },
           {
             "id": 1,
-            "node_type_name": "lib_multirot120\u00b0[111]_helper",
+            "node_type_name": "lib_multirot120°[111]_helper",
             "position": [
               750.5,
               294.7
@@ -166,11 +166,11 @@
       }
     ],
     [
-      "lib_irod_xyz_triangleleft\u25c1{110}",
+      "lib_irod_xyz_triangleleft◁{110}",
       {
         "next_node_id": 15,
         "node_type": {
-          "name": "lib_irod_xyz_triangleleft\u25c1{110}",
+          "name": "lib_irod_xyz_triangleleft◁{110}",
           "parameters": [
             {
               "name": "half_size",
@@ -178,10 +178,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -229,7 +229,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -188.0,
               610.2
@@ -245,7 +245,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -325,7 +325,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -334,7 +334,7 @@
           },
           {
             "id": 13,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1251.5,
               327.9000000000001
@@ -347,20 +347,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -602,19 +598,19 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             },
             {
               "name": "param1",
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
             "id": 16,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               481.0,
               728.8098754882812
@@ -734,7 +730,7 @@
           },
           {
             "id": 26,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1684.5,
               566.0099060058594
@@ -747,20 +743,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -802,7 +794,7 @@
           },
           {
             "id": 17,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               478.5,
               841.3098754882812
@@ -829,7 +821,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               491.5,
               141.80987548828125
@@ -920,7 +912,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               54.5,
               20.309906005859375
@@ -936,7 +928,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -975,7 +967,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -1004,7 +996,7 @@
           },
           {
             "id": 15,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               487.0,
               551.3098754882812
@@ -1142,7 +1134,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               490.0,
               251.30987548828125
@@ -1204,7 +1196,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               489.0,
               439.3098754882813
@@ -1258,12 +1250,12 @@
         "node_type": {
           "name": "unit-cell_zinkblende",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               82.452880859375,
               61.305499267578114
@@ -1279,7 +1271,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -1342,10 +1334,10 @@
           "parameters": [
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -1464,7 +1456,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "unit_cell",
@@ -1558,7 +1550,7 @@
           },
           {
             "id": 20,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1300.0,
               393.4000000000001
@@ -1571,20 +1563,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -1689,7 +1677,7 @@
           },
           {
             "id": 6,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -80.5,
               695.2
@@ -1705,7 +1693,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -1864,14 +1852,14 @@
           "parameters": [
             {
               "name": "geometry",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             },
             {
               "name": "motif",
               "data_type": "Motif"
             }
           ],
-          "output_type": "HasAtoms"
+          "output_type": "Atomic"
         },
         "nodes": [
           {
@@ -1961,7 +1949,7 @@
           },
           {
             "id": 2,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               606.5,
               299.2580322265625
@@ -1973,21 +1961,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "8": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -2045,7 +2031,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "geometry",
@@ -2102,10 +2088,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -2177,7 +2163,7 @@
           },
           {
             "id": 8,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               294.0,
               857.0
@@ -2193,7 +2179,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -2362,7 +2348,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -2371,7 +2357,7 @@
           },
           {
             "id": 14,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1225.0,
               648.2
@@ -2384,20 +2370,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -2450,7 +2432,7 @@
         "node_type": {
           "name": "unit-cell_lonsdaleite_c-in-z",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -2489,7 +2471,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               101.5,
               46.700000000000045
@@ -2505,7 +2487,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -2534,10 +2516,10 @@
           "parameters": [
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -2703,7 +2685,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "unit_cell",
@@ -2811,12 +2793,12 @@
               "expression": "if flag then x else y",
               "parameters": [
                 {
-                  "data_type": "Blueprint",
+                  "data_type": "Geometry",
                   "data_type_str": null,
                   "name": "x"
                 },
                 {
-                  "data_type": "Blueprint",
+                  "data_type": "Geometry",
                   "data_type_str": null,
                   "name": "y"
                 },
@@ -2849,7 +2831,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               18.0,
               748.2
@@ -2865,7 +2847,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -3049,7 +3031,7 @@
           },
           {
             "id": 13,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               864.375,
               577.0213378906251
@@ -3101,7 +3083,7 @@
           "parameters": [
             {
               "name": "geometry",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             },
             {
               "name": "move_vector",
@@ -3120,7 +3102,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -3145,7 +3127,7 @@
             "data_type": "map",
             "data": {
               "input_type": "Int",
-              "output_type": "Blueprint"
+              "output_type": "Geometry"
             }
           },
           {
@@ -3164,7 +3146,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "geometry",
@@ -3468,7 +3450,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -3724,7 +3706,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -80.0,
               -109.79999999999995
@@ -3740,7 +3722,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -3837,7 +3819,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_iedge_xy_z_\u221f{100}",
+            "node_type_name": "lib_iedge_xy_z_∟{100}",
             "position": [
               676.0,
               -184.79999999999995
@@ -4088,7 +4070,7 @@
             "data_type": "map",
             "data": {
               "input_type": "Float",
-              "output_type": "Blueprint"
+              "output_type": "Geometry"
             }
           },
           {
@@ -4362,7 +4344,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               811.5621337890625,
               364.6957763671875
@@ -4375,20 +4357,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": true
             }
@@ -4443,10 +4421,10 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -4478,7 +4456,7 @@
           },
           {
             "id": 18,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1344.0,
               264.4000000000001
@@ -4491,20 +4469,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -4525,7 +4499,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -4798,7 +4772,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -137.5,
               -151.29999999999995
@@ -4814,7 +4788,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -4892,10 +4866,10 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -4933,7 +4907,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               472.5,
               483.9000000000001
@@ -4991,7 +4965,7 @@
           },
           {
             "id": 15,
-            "node_type_name": "lib_irod_xyz_hex\u2b21{110}_centered",
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
             "position": [
               473.0,
               792.9000000000001
@@ -5013,7 +4987,7 @@
           },
           {
             "id": 2,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -158.5,
               749.7
@@ -5029,7 +5003,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -5041,7 +5015,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               473.5,
               320.4000000000001
@@ -5095,7 +5069,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -5135,7 +5109,7 @@
           },
           {
             "id": 11,
-            "node_type_name": "lib_irod_x_rect\u25ad\u25a1\u25af{100}_centered",
+            "node_type_name": "lib_irod_x_rect▭□▯{100}_centered",
             "position": [
               476.0,
               601.9000000000001
@@ -5188,7 +5162,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_irod_xy_rect\u25ad\u25af(00\u00b11)(\u00b11\u221310)_centered",
+            "node_type_name": "lib_irod_xy_rect▭▯(00±1)(±1∓10)_centered",
             "position": [
               473.5,
               190.70000000000005
@@ -5273,11 +5247,11 @@
       }
     ],
     [
-      "lib_irod_x_rect\u25c7{110}_centered",
+      "lib_irod_x_rect◇{110}_centered",
       {
         "next_node_id": 17,
         "node_type": {
-          "name": "lib_irod_x_rect\u25c7{110}_centered",
+          "name": "lib_irod_x_rect◇{110}_centered",
           "parameters": [
             {
               "name": "half_width_pp",
@@ -5289,10 +5263,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -5360,7 +5334,7 @@
           },
           {
             "id": 16,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1166.5,
               324.7000152587891
@@ -5373,20 +5347,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -5448,7 +5418,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -128.5,
               538.5000152587891
@@ -5464,7 +5434,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -5584,7 +5554,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -5649,10 +5619,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -5773,7 +5743,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -5809,7 +5779,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -21.5,
               407.7
@@ -5825,7 +5795,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -5882,7 +5852,7 @@
           },
           {
             "id": 24,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1349.5,
               337.40000000000003
@@ -5894,21 +5864,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "22": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -6187,7 +6155,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               833.5,
               641.4000000000001
@@ -6199,21 +6167,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "8": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -6312,7 +6278,7 @@
           },
           {
             "id": 14,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               831.5,
               882.1000000000001
@@ -6324,21 +6290,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "17": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -6413,7 +6377,7 @@
           },
           {
             "id": 2,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               819.0,
               405.7
@@ -6425,21 +6389,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "1": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -6587,11 +6549,11 @@
       }
     ],
     [
-      "lib_multirot180\u00b0[110]_helper",
+      "lib_multirot180°[110]_helper",
       {
         "next_node_id": 10,
         "node_type": {
-          "name": "lib_multirot180\u00b0[110]_helper",
+          "name": "lib_multirot180°[110]_helper",
           "parameters": [
             {
               "name": "param0",
@@ -6599,10 +6561,10 @@
             },
             {
               "name": "param1",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -6644,7 +6606,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "param1",
@@ -6666,7 +6628,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -38.0,
               209.7
@@ -6682,7 +6644,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -6912,7 +6874,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               290.5,
               148.01776123046875
@@ -7044,7 +7006,7 @@
           },
           {
             "id": 15,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               436.0,
               598.0177612304688
@@ -7188,7 +7150,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               444.5,
               476.0177612304687
@@ -7451,7 +7413,7 @@
           },
           {
             "id": 2,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               287.5,
               46.01776123046875
@@ -7600,11 +7562,11 @@
       }
     ],
     [
-      "lib_multirot90\u00b0(001)_helper",
+      "lib_multirot90°(001)_helper",
       {
         "next_node_id": 14,
         "node_type": {
-          "name": "lib_multirot90\u00b0(001)_helper",
+          "name": "lib_multirot90°(001)_helper",
           "parameters": [
             {
               "name": "rotation_counter",
@@ -7612,10 +7574,10 @@
             },
             {
               "name": "geometry",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -7634,7 +7596,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "geometry",
@@ -7834,23 +7796,23 @@
       }
     ],
     [
-      "lib_multirot180\u00b0[110]",
+      "lib_multirot180°[110]",
       {
         "next_node_id": 9,
         "node_type": {
-          "name": "lib_multirot180\u00b0[110]",
+          "name": "lib_multirot180°[110]",
           "parameters": [
             {
               "name": "geometry",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             }
           ],
-          "output_type": "[Blueprint]"
+          "output_type": "[Geometry]"
         },
         "nodes": [
           {
             "id": 4,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               100.5,
               285.2
@@ -7866,7 +7828,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -7945,7 +7907,7 @@
             "data_type": "map",
             "data": {
               "input_type": "Int",
-              "output_type": "Blueprint"
+              "output_type": "Geometry"
             }
           },
           {
@@ -7989,7 +7951,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "geometry",
@@ -8024,7 +7986,7 @@
           },
           {
             "id": 6,
-            "node_type_name": "lib_multirot180\u00b0[110]_helper",
+            "node_type_name": "lib_multirot180°[110]_helper",
             "position": [
               681.5,
               158.7
@@ -8059,7 +8021,7 @@
         "node_type": {
           "name": "unit-cell_Si-silicon",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -8111,7 +8073,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               406.8307495117187,
               77.207275390625
@@ -8127,7 +8089,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -8154,7 +8116,7 @@
         "node_type": {
           "name": "unit-cell_Ge-germanium",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -8193,7 +8155,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               133.33074951171875,
               89.207275390625
@@ -8209,7 +8171,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -8243,23 +8205,23 @@
       }
     ],
     [
-      "lib_iedge_x_z_\u2039{110}",
+      "lib_iedge_x_z_‹{110}",
       {
         "next_node_id": 15,
         "node_type": {
-          "name": "lib_iedge_x_z_\u2039{110}",
+          "name": "lib_iedge_x_z_‹{110}",
           "parameters": [
             {
               "name": "param0",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
             "id": 14,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -175.0,
               594.0470336914063
@@ -8275,7 +8237,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -8421,7 +8383,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -8430,7 +8392,7 @@
           },
           {
             "id": 12,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1196.0,
               331.54703369140634
@@ -8443,20 +8405,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -8625,7 +8583,7 @@
         "node_type": {
           "name": "unit-cell_diamond",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -8664,7 +8622,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               97.452880859375,
               75.80549926757811
@@ -8680,7 +8638,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -8720,7 +8678,7 @@
         "node_type": {
           "name": "demo_rack_x_cross-assembly",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -9336,10 +9294,10 @@
             },
             {
               "name": "param2",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -9358,7 +9316,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "param2",
@@ -9407,7 +9365,7 @@
           },
           {
             "id": 22,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -219.26010131835935,
               353.90000000000003
@@ -9423,7 +9381,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -9594,7 +9552,7 @@
           },
           {
             "id": 23,
-            "node_type_name": "unit-cell_diamond_rotated+90\u00b0z",
+            "node_type_name": "unit-cell_diamond_rotated+90°z",
             "position": [
               -221.26010131835935,
               489.4000000000001
@@ -9618,7 +9576,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_irod_xyz_triangintersect\u25b7\u25c1{110}",
+            "node_type_name": "lib_irod_xyz_triangintersect▷◁{110}",
             "position": [
               336.73992919921875,
               -203.29999999999995
@@ -9645,7 +9603,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1060.23974609375,
               157.70000000000005
@@ -9658,27 +9616,23 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
           },
           {
             "id": 14,
-            "node_type_name": "lib_irod_xyz_hex\u2b21{110}_centered",
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
             "position": [
               290.73992919921875,
               -47.299999999999955
@@ -9731,7 +9685,7 @@
         "node_type": {
           "name": "unit-cell_wurtzite_triple-hex-R1-reverse",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -9856,11 +9810,11 @@
       }
     ],
     [
-      "lib_irod_xy_rhombic\u2662{111}_positive",
+      "lib_irod_xy_rhombic♢{111}_positive",
       {
         "next_node_id": 14,
         "node_type": {
-          "name": "lib_irod_xy_rhombic\u2662{111}_positive",
+          "name": "lib_irod_xy_rhombic♢{111}_positive",
           "parameters": [
             {
               "name": "size1",
@@ -9872,10 +9826,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -10054,7 +10008,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -128.0,
               322.20000000000005
@@ -10070,7 +10024,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -10119,7 +10073,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -10188,7 +10142,7 @@
         "node_type": {
           "name": "unit-cell_lonsdaleite_c-in-y",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -10227,7 +10181,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               123.5,
               59.200000000000045
@@ -10243,7 +10197,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 120.0,
@@ -10276,14 +10230,14 @@
             },
             {
               "name": "geometry",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             },
             {
               "name": "move_vector",
               "data_type": "IVec3"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -10378,7 +10332,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "geometry",
@@ -10510,26 +10464,26 @@
       }
     ],
     [
-      "lib_irod_xy_rect\u25ad\u25af(00\u00b11)(\u00b11\u221310)_centered",
+      "lib_irod_xy_rect▭▯(00±1)(±1∓10)_centered",
       {
         "next_node_id": 24,
         "node_type": {
-          "name": "lib_irod_xy_rect\u25ad\u25af(00\u00b11)(\u00b11\u221310)_centered",
+          "name": "lib_irod_xy_rect▭▯(00±1)(±1∓10)_centered",
           "parameters": [
             {
-              "name": "half_width_(\u00b11\u221310)",
+              "name": "half_width_(±1∓10)",
               "data_type": "Int"
             },
             {
-              "name": "half_thickness2_(\u00b1100)",
+              "name": "half_thickness2_(±100)",
               "data_type": "Int"
             },
             {
               "name": "param0",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -10552,7 +10506,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               754.0,
               669.3231933593751
@@ -10568,7 +10522,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -10580,7 +10534,7 @@
           },
           {
             "id": 23,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1950.5,
               271.0231933593751
@@ -10593,20 +10547,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -10683,7 +10633,7 @@
               "data_type": "Int",
               "data_type_str": null,
               "param_index": 1,
-              "param_name": "half_thickness2_(\u00b1100)",
+              "param_name": "half_thickness2_(±100)",
               "sort_order": 1
             }
           },
@@ -10786,7 +10736,7 @@
               "data_type": "Int",
               "data_type_str": null,
               "param_index": 0,
-              "param_name": "half_width_(\u00b11\u221310)",
+              "param_name": "half_width_(±1∓10)",
               "sort_order": 0
             }
           },
@@ -10833,7 +10783,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "param0",
@@ -10863,10 +10813,10 @@
           "parameters": [
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -10940,7 +10890,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -121.0,
               -25.299999999999955
@@ -10956,7 +10906,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -10982,7 +10932,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "unit_cell",
@@ -10991,7 +10941,7 @@
           },
           {
             "id": 20,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1367.0,
               258.60000000000014
@@ -11004,20 +10954,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -11380,11 +11326,11 @@
           "parameters": [
             {
               "name": "hexagonal_unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             },
             {
               "name": "cubic_unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
           "output_type": "None"
@@ -11681,12 +11627,12 @@
                   "name": "switch"
                 },
                 {
-                  "data_type": "LatticeVecs",
+                  "data_type": "UnitCell",
                   "data_type_str": null,
                   "name": "obverse"
                 },
                 {
-                  "data_type": "LatticeVecs",
+                  "data_type": "UnitCell",
                   "data_type_str": null,
                   "name": "reverse"
                 }
@@ -11758,7 +11704,7 @@
           },
           {
             "id": 38,
-            "node_type_name": "lib_irod_xyz_hex\u2b21{110}_centered",
+            "node_type_name": "lib_irod_xyz_hex⬡{110}_centered",
             "position": [
               608.7398376464844,
               -315.9923217773437
@@ -11834,7 +11780,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1318.4999389648438,
               -316.19232177734375
@@ -11846,21 +11792,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "11": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "PRIMARY C\nSECONDARY C",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -11885,7 +11829,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1317.4999389648438,
               41.80767822265625
@@ -11897,21 +11841,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "3": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "PRIMARY C\nSECONDARY C",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -12019,7 +11961,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "cubic_unit_cell",
@@ -12255,7 +12197,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "hexagonal_unit_cell",
@@ -12309,11 +12251,11 @@
       }
     ],
     [
-      "lib_irod_x_rect\u25ad\u25a1\u25af{100}_centered",
+      "lib_irod_x_rect▭□▯{100}_centered",
       {
         "next_node_id": 18,
         "node_type": {
-          "name": "lib_irod_x_rect\u25ad\u25a1\u25af{100}_centered",
+          "name": "lib_irod_x_rect▭□▯{100}_centered",
           "parameters": [
             {
               "name": "half_thickness_y",
@@ -12325,15 +12267,15 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
             "id": 5,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -138.0,
               435.7115966796875
@@ -12349,7 +12291,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -12375,7 +12317,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -12581,7 +12523,7 @@
           },
           {
             "id": 17,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1027.0,
               82.91159667968753
@@ -12594,20 +12536,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -12654,13 +12592,13 @@
       }
     ],
     [
-      "unit-cell_\u03b1Sn-grey-tin",
+      "unit-cell_αSn-grey-tin",
       {
         "next_node_id": 4,
         "node_type": {
-          "name": "unit-cell_\u03b1Sn-grey-tin",
+          "name": "unit-cell_αSn-grey-tin",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -12712,7 +12650,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               236.33074951171875,
               78.207275390625
@@ -12728,7 +12666,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -12761,10 +12699,10 @@
             },
             {
               "name": "unit_cell_hexagonal",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -12897,7 +12835,7 @@
           },
           {
             "id": 13,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1200.3635864257812,
               64.96477050781249
@@ -12909,21 +12847,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "14": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -13260,7 +13196,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell_hexagonal",
@@ -13294,10 +13230,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -13384,7 +13320,7 @@
           },
           {
             "id": 26,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1447.000030517578,
               348.40000000000003
@@ -13397,20 +13333,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -13472,7 +13404,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -13624,7 +13556,7 @@
           },
           {
             "id": 16,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               52.500030517578125,
               -33.30000000000001
@@ -13640,7 +13572,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -14110,7 +14042,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               409.0,
               -40.799999999999955
@@ -14285,7 +14217,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               398.0,
               80.70000000000005
@@ -14447,7 +14379,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "lib_irod_xy_rect\u25ad\u25af(00\u00b11)(\u00b11\u221310)_centered",
+            "node_type_name": "lib_irod_xy_rect▭▯(00±1)(±1∓10)_centered",
             "position": [
               539.5,
               545.2
@@ -14474,7 +14406,7 @@
           },
           {
             "id": 22,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               948.0,
               514.9000000000001
@@ -14486,21 +14418,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "30": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -14520,7 +14450,7 @@
           },
           {
             "id": 25,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               1458.5,
               739.9000000000001
@@ -14639,7 +14569,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               124.5,
               51.700000000000045
@@ -14655,7 +14585,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -14774,7 +14704,7 @@
         "node_type": {
           "name": "unit-cell_wurtzite_triple-hex-R1-obverse",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -14940,7 +14870,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               888.7398681640625,
               324.9000000000001
@@ -14952,21 +14882,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "1": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -15020,10 +14948,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -15184,7 +15112,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 3,
               "param_name": "unit_cell",
@@ -15193,7 +15121,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -118.0,
               789.7
@@ -15209,7 +15137,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -15541,7 +15469,7 @@
           },
           {
             "id": 24,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1353.0,
               417.9000000000001
@@ -15554,20 +15482,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -15684,10 +15608,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -15742,7 +15666,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -14.0,
               -70.79999999999995
@@ -15758,7 +15682,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -15878,7 +15802,7 @@
           },
           {
             "id": 20,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1344.0,
               332.9000000000001
@@ -15891,20 +15815,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -16045,7 +15965,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 3,
               "param_name": "unit_cell",
@@ -16224,7 +16144,7 @@
           "parameters": [
             {
               "name": "igeom_to_test",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             },
             {
               "name": "radius",
@@ -16232,14 +16152,14 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             },
             {
               "name": "param3",
               "data_type": "Motif"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -16292,7 +16212,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -16328,7 +16248,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "igeom_to_test",
@@ -16337,7 +16257,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -217.0,
               235.21159667968757
@@ -16353,7 +16273,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -16434,7 +16354,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               834.0,
               151.4115966796876
@@ -16447,20 +16367,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -16550,11 +16466,11 @@
       }
     ],
     [
-      "lib_irod_x_rect\u25ad\u25a1\u25af{100}_positive",
+      "lib_irod_x_rect▭□▯{100}_positive",
       {
         "next_node_id": 15,
         "node_type": {
-          "name": "lib_irod_x_rect\u25ad\u25a1\u25af{100}_positive",
+          "name": "lib_irod_x_rect▭□▯{100}_positive",
           "parameters": [
             {
               "name": "size_x",
@@ -16566,10 +16482,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -16633,7 +16549,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -16731,7 +16647,7 @@
           },
           {
             "id": 14,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1341.9605712890625,
               154.98806152343752
@@ -16744,20 +16660,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -16854,7 +16766,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -20.0394287109375,
               372.39403076171874
@@ -16870,7 +16782,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -16906,7 +16818,7 @@
         "nodes": [
           {
             "id": 6,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               879.2398681640625,
               358.40000000000015
@@ -16918,21 +16830,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "1": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -17068,7 +16978,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               644.5,
               126.40000000000008
@@ -17080,21 +16990,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "1": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -17151,7 +17059,7 @@
               "data_type": "Float"
             }
           ],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -17453,7 +17361,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               378.9962768554687,
               -20.8238525390625
@@ -17475,7 +17383,7 @@
                 }
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -17578,12 +17486,12 @@
         "node_type": {
           "name": "lib_icorner_x_rhombdode{110}",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
             "id": 9,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1432.2576293945312,
               444.83829345703134
@@ -17596,20 +17504,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -17843,26 +17747,26 @@
       }
     ],
     [
-      "lib_irod_xyz_triangintersect\u25b7\u25c1{110}",
+      "lib_irod_xyz_triangintersect▷◁{110}",
       {
         "next_node_id": 13,
         "node_type": {
-          "name": "lib_irod_xyz_triangintersect\u25b7\u25c1{110}",
+          "name": "lib_irod_xyz_triangintersect▷◁{110}",
           "parameters": [
             {
-              "name": "half_size_righttriang\u25b7",
+              "name": "half_size_righttriang▷",
               "data_type": "Int"
             },
             {
-              "name": "half_size_lefttriang\u25c1",
+              "name": "half_size_lefttriang◁",
               "data_type": "Int"
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -17884,7 +17788,7 @@
               "data_type": "Int",
               "data_type_str": null,
               "param_index": 1,
-              "param_name": "half_size_lefttriang\u25c1",
+              "param_name": "half_size_lefttriang◁",
               "sort_order": 1
             }
           },
@@ -17907,7 +17811,7 @@
               "data_type": "Int",
               "data_type_str": null,
               "param_index": 0,
-              "param_name": "half_size_righttriang\u25b7",
+              "param_name": "half_size_righttriang▷",
               "sort_order": 0
             }
           },
@@ -17939,7 +17843,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -276.0,
               327.20000000000005
@@ -17955,7 +17859,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -17981,7 +17885,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -17990,7 +17894,7 @@
           },
           {
             "id": 11,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1127.927490234375,
               243.54788818359384
@@ -18003,27 +17907,23 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
           },
           {
             "id": 2,
-            "node_type_name": "lib_irod_xyz_triangleleft\u25c1{110}",
+            "node_type_name": "lib_irod_xyz_triangleleft◁{110}",
             "position": [
               197.0,
               228.20000000000005
@@ -18045,7 +17945,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_irod_xyz_triangleright\u25b7{110}",
+            "node_type_name": "lib_irod_xyz_triangleright▷{110}",
             "position": [
               191.0,
               122.20000000000005
@@ -18140,11 +18040,11 @@
       }
     ],
     [
-      "lib_irod_xyz_hex\u2b21{110}_centered",
+      "lib_irod_xyz_hex⬡{110}_centered",
       {
         "next_node_id": 23,
         "node_type": {
-          "name": "lib_irod_xyz_hex\u2b21{110}_centered",
+          "name": "lib_irod_xyz_hex⬡{110}_centered",
           "parameters": [
             {
               "name": "half_thickness",
@@ -18152,10 +18052,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -18187,7 +18087,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -18242,7 +18142,7 @@
           },
           {
             "id": 22,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1342.0,
               94.40000000000003
@@ -18255,20 +18155,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -18302,7 +18198,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -22.5,
               380.7
@@ -18318,7 +18214,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -18500,11 +18396,11 @@
       }
     ],
     [
-      "lib_irod_xyz_triangleright\u25b7{110}",
+      "lib_irod_xyz_triangleright▷{110}",
       {
         "next_node_id": 15,
         "node_type": {
-          "name": "lib_irod_xyz_triangleright\u25b7{110}",
+          "name": "lib_irod_xyz_triangleright▷{110}",
           "parameters": [
             {
               "name": "half_size",
@@ -18512,10 +18408,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -18573,7 +18469,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -113.0,
               571.7
@@ -18589,7 +18485,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -18615,7 +18511,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "unit_cell",
@@ -18882,7 +18778,7 @@
           },
           {
             "id": 13,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1187.5,
               317.10000000000014
@@ -18895,20 +18791,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -19148,11 +19040,11 @@
       }
     ],
     [
-      "lib_multirot120\u00b0[111]_helper",
+      "lib_multirot120°[111]_helper",
       {
         "next_node_id": 12,
         "node_type": {
-          "name": "lib_multirot120\u00b0[111]_helper",
+          "name": "lib_multirot120°[111]_helper",
           "parameters": [
             {
               "name": "param1",
@@ -19160,10 +19052,10 @@
             },
             {
               "name": "geometry",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -19339,7 +19231,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "geometry",
@@ -19376,7 +19268,7 @@
         "node_type": {
           "name": "unit-cell_wurtzite_c-in-y",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -19415,7 +19307,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               139.33074951171875,
               87.207275390625
@@ -19431,7 +19323,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 120.0,
@@ -19476,7 +19368,7 @@
         "nodes": [
           {
             "id": 5,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               123.5,
               174.4000000000001
@@ -19492,7 +19384,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 120.0,
@@ -19609,7 +19501,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               115.0,
               391.4000000000001
@@ -19625,7 +19517,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -19637,7 +19529,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               583.0,
               116.20000000000005
@@ -19649,21 +19541,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "20": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": false,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -19762,7 +19652,7 @@
           },
           {
             "id": 19,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               575.5,
               675.4000000000001
@@ -19774,21 +19664,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "8": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -19856,7 +19744,7 @@
           },
           {
             "id": 11,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               576.0,
               383.4000000000001
@@ -19868,21 +19756,19 @@
                 }
               },
               {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
+                "argument_output_pins": {
+                  "8": 0
+                }
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -20070,13 +19956,13 @@
       }
     ],
     [
-      "unit-cell_diamond_rotated+90\u00b0z",
+      "unit-cell_diamond_rotated+90°z",
       {
         "next_node_id": 13,
         "node_type": {
-          "name": "unit-cell_diamond_rotated+90\u00b0z",
+          "name": "unit-cell_diamond_rotated+90°z",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -20135,7 +20021,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               921.7399291992188,
               113.90000000000008
@@ -20148,20 +20034,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -20222,7 +20104,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               431.7398986816406,
               148.70000000000005
@@ -20244,7 +20126,7 @@
                 }
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -20308,7 +20190,7 @@
           "parameters": [
             {
               "name": "param0",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             },
             {
               "name": "rack_h_thickness",
@@ -20339,7 +20221,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -20799,7 +20681,7 @@
           },
           {
             "id": 41,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               1334.5,
               56.88199462890634
@@ -20928,7 +20810,7 @@
           },
           {
             "id": 34,
-            "node_type_name": "lib_irod_x_rect\u25c7{110}_centered",
+            "node_type_name": "lib_irod_x_rect◇{110}_centered",
             "position": [
               409.8065185546875,
               -585.1180664062499
@@ -20979,7 +20861,7 @@
           },
           {
             "id": 46,
-            "node_type_name": "lib_iedge_x_z_\u2039{110}",
+            "node_type_name": "lib_iedge_x_z_‹{110}",
             "position": [
               217.5,
               -146.09458007812486
@@ -21162,7 +21044,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -21336,7 +21218,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -473.5,
               203.63252563476567
@@ -21352,7 +21234,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -21486,7 +21368,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               296.0,
               536.2000305175782
@@ -21546,10 +21428,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -21674,7 +21556,7 @@
           },
           {
             "id": 17,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1332.5,
               60.23090209960941
@@ -21687,20 +21569,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -21747,7 +21625,7 @@
           },
           {
             "id": 11,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -339.5,
               395.7309020996094
@@ -21763,7 +21641,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -21927,7 +21805,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 3,
               "param_name": "unit_cell",
@@ -22037,7 +21915,7 @@
         "node_type": {
           "name": "lib_icorner_xyz_rhombdode{110}_negative",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -22079,7 +21957,7 @@
           },
           {
             "id": 8,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               992.7576904296876,
               222.9000000000001
@@ -22092,20 +21970,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -22280,10 +22154,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -22526,7 +22400,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -30.5,
               567.2
@@ -22542,7 +22416,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -22610,7 +22484,7 @@
           },
           {
             "id": 18,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1346.0,
               230.10000000000016
@@ -22623,20 +22497,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -22685,7 +22555,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -22753,7 +22623,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -22771,7 +22641,7 @@
           },
           {
             "id": 19,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_positive",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_positive",
             "position": [
               230.5,
               -361.0999999999999
@@ -22822,7 +22692,7 @@
           },
           {
             "id": 24,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               206.0,
               32.200000000000045
@@ -22888,7 +22758,7 @@
           },
           {
             "id": 9,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               206.0,
               -75.79999999999995
@@ -23023,7 +22893,7 @@
           },
           {
             "id": 20,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_positive",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_positive",
             "position": [
               225.0,
               -243.0999999999999
@@ -23048,7 +22918,7 @@
           },
           {
             "id": 11,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1276.5,
               317.70000000000005
@@ -23061,20 +22931,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -23147,7 +23013,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1290.0,
               215.70000000000005
@@ -23160,20 +23026,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": true
             }
@@ -23253,18 +23115,18 @@
       }
     ],
     [
-      "lib_multirot90\u00b0(001)",
+      "lib_multirot90°(001)",
       {
         "next_node_id": 14,
         "node_type": {
-          "name": "lib_multirot90\u00b0(001)",
+          "name": "lib_multirot90°(001)",
           "parameters": [
             {
               "name": "geometry",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -23294,7 +23156,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "lib_multirot90\u00b0(001)_helper",
+            "node_type_name": "lib_multirot90°(001)_helper",
             "position": [
               396.750244140625,
               157.7535156250001
@@ -23334,7 +23196,7 @@
             "data_type": "map",
             "data": {
               "input_type": "Int",
-              "output_type": "Blueprint"
+              "output_type": "Geometry"
             }
           },
           {
@@ -23370,7 +23232,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "geometry",
@@ -23448,12 +23310,12 @@
         "node_type": {
           "name": "unit-cell_wurtzite_c-in-z",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               134.33074951171875,
               79.707275390625
@@ -23469,7 +23331,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -23524,11 +23386,11 @@
       }
     ],
     [
-      "lib_irod_xy_rhombic\u2662{111}_centered",
+      "lib_irod_xy_rhombic♢{111}_centered",
       {
         "next_node_id": 26,
         "node_type": {
-          "name": "lib_irod_xy_rhombic\u2662{111}_centered",
+          "name": "lib_irod_xy_rhombic♢{111}_centered",
           "parameters": [
             {
               "name": "half_thickness_npp",
@@ -23540,10 +23402,10 @@
             },
             {
               "name": "unit_cell",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -23561,7 +23423,7 @@
           },
           {
             "id": 10,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               197.5,
               569.4115966796876
@@ -23577,7 +23439,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -23670,7 +23532,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 2,
               "param_name": "unit_cell",
@@ -23796,7 +23658,7 @@
           },
           {
             "id": 25,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1452.5,
               311.6115966796876
@@ -23809,20 +23671,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.5,
+                0.5,
+                0.5
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -23879,7 +23737,7 @@
         "node_type": {
           "name": "demo_selfcentercross",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -23990,7 +23848,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "lib_irod_x_rect\u25ad\u25a1\u25af{100}_centered",
+            "node_type_name": "lib_irod_x_rect▭□▯{100}_centered",
             "position": [
               367.0,
               258.20000000000005
@@ -24292,7 +24150,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lib_irod_xy_rhombic\u2662{111}_centered",
+            "node_type_name": "lib_irod_xy_rhombic♢{111}_centered",
             "position": [
               389.5,
               89.20000000000005
@@ -24545,7 +24403,7 @@
           },
           {
             "id": 11,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               0.5,
               429.2000000000001
@@ -24561,7 +24419,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -24736,18 +24594,18 @@
       }
     ],
     [
-      "lib_iedge_xy_z_\u221f{100}",
+      "lib_iedge_xy_z_∟{100}",
       {
         "next_node_id": 10,
         "node_type": {
-          "name": "lib_iedge_xy_z_\u221f{100}",
+          "name": "lib_iedge_xy_z_∟{100}",
           "parameters": [
             {
               "name": "param0",
-              "data_type": "LatticeVecs"
+              "data_type": "UnitCell"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -24803,7 +24661,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "LatticeVecs",
+              "data_type": "UnitCell",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "param0",
@@ -24869,7 +24727,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               -113.0,
               -10.799999999999956
@@ -24885,7 +24743,7 @@
                 "argument_output_pins": {}
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -24936,7 +24794,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               981.0,
               204.20000000000005
@@ -24949,20 +24807,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": false
             }
@@ -24997,7 +24851,7 @@
               "data_type": "Float"
             }
           ],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {
@@ -25296,7 +25150,7 @@
           },
           {
             "id": 1,
-            "node_type_name": "lattice_vecs",
+            "node_type_name": "unit_cell",
             "position": [
               1077.5000610351562,
               351.2270080566406
@@ -25318,7 +25172,7 @@
                 }
               }
             ],
-            "data_type": "lattice_vecs",
+            "data_type": "unit_cell",
             "data": {
               "cell_angle_alpha": 90.0,
               "cell_angle_beta": 90.0,
@@ -25424,7 +25278,7 @@
         "node_type": {
           "name": "unit-cell_lonsdaleite_triple-hex-R1-obverse",
           "parameters": [],
-          "output_type": "LatticeVecs"
+          "output_type": "UnitCell"
         },
         "nodes": [
           {

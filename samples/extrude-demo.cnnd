@@ -7,7 +7,7 @@
         "node_type": {
           "name": "M",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -131,7 +131,7 @@
           },
           {
             "id": 3,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1055.666015625,
               140.90629882812505
@@ -144,20 +144,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           }
@@ -182,7 +178,7 @@
         "node_type": {
           "name": "P",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -276,7 +272,7 @@
           },
           {
             "id": 5,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               1201.9970703125,
               188.4817993164063
@@ -289,20 +285,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -505,7 +497,7 @@
           },
           {
             "id": 7,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               825.5927124023438,
               23.105944824218795
@@ -518,26 +510,22 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           },
           {
             "id": 9,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               904.7999877929688,
               285.16008300781255
@@ -550,20 +538,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           },
@@ -617,7 +601,7 @@
           },
           {
             "id": 8,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               832.5089111328125,
               148.9011108398438
@@ -630,20 +614,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           }
@@ -684,7 +664,7 @@
         "node_type": {
           "name": "S",
           "parameters": [],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -807,7 +787,7 @@
           },
           {
             "id": 4,
-            "node_type_name": "materialize",
+            "node_type_name": "atom_fill",
             "position": [
               967.6971435546876,
               186.2435058593751
@@ -820,20 +800,16 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "materialize",
+            "data_type": "atom_fill",
             "data": {
               "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
               "parameter_element_value_definition": ""
             }
           },

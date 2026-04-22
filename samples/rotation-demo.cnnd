@@ -12,7 +12,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -221,7 +221,7 @@
           "parameters": [
             {
               "name": "shape",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             },
             {
               "name": "axis_index",
@@ -236,7 +236,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -333,7 +333,7 @@
             "data_type": "map",
             "data": {
               "input_type": "Int",
-              "output_type": "Blueprint"
+              "output_type": "Geometry"
             }
           },
           {
@@ -392,7 +392,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 0,
               "param_name": "shape",
@@ -542,7 +542,7 @@
             },
             {
               "name": "shape",
-              "data_type": "Blueprint"
+              "data_type": "Geometry"
             },
             {
               "name": "axis_index",
@@ -553,7 +553,7 @@
               "data_type": "IVec3"
             }
           ],
-          "output_type": "Blueprint"
+          "output_type": "Geometry"
         },
         "nodes": [
           {
@@ -716,7 +716,7 @@
             ],
             "data_type": "parameter",
             "data": {
-              "data_type": "Blueprint",
+              "data_type": "Geometry",
               "data_type_str": null,
               "param_index": 1,
               "param_name": "shape",
