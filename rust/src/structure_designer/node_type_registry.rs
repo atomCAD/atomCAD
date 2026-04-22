@@ -1,29 +1,30 @@
-use super::node_type::NodeType;
+use super::node_type::{NodeType, PinOutputType};
 use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
 use super::nodes::atom_composediff::get_node_type as atom_composediff_get_node_type;
 use super::nodes::atom_cut::get_node_type as atom_cut_get_node_type;
-use super::nodes::atom_replace::get_node_type as atom_replace_get_node_type;
 use super::nodes::atom_edit::atom_edit::get_node_type as atom_edit_get_node_type;
 use super::nodes::atom_edit::atom_edit::get_node_type_motif_edit as motif_edit_get_node_type;
-use super::nodes::atom_fill::get_node_type as atom_fill_get_node_type;
-use super::nodes::atom_move::get_node_type as atom_move_get_node_type;
-use super::nodes::atom_rot::get_node_type as atom_rot_get_node_type;
-use super::nodes::atom_trans::get_node_type as atom_trans_get_node_type;
+use super::nodes::atom_replace::get_node_type as atom_replace_get_node_type;
 use super::nodes::atom_union::get_node_type as atom_union_get_node_type;
 use super::nodes::bool::get_node_type as bool_get_node_type;
 use super::nodes::circle::get_node_type as circle_get_node_type;
 use super::nodes::comment::get_node_type as comment_get_node_type;
 use super::nodes::cuboid::get_node_type as cuboid_get_node_type;
+use super::nodes::dematerialize::get_node_type as dematerialize_get_node_type;
 use super::nodes::diff::get_node_type as diff_get_node_type;
 use super::nodes::diff_2d::get_node_type as diff_2d_get_node_type;
 use super::nodes::drawing_plane::get_node_type as drawing_plane_get_node_type;
 use super::nodes::edit_atom::edit_atom::get_node_type as edit_atom_get_node_type;
+use super::nodes::enter_structure::get_node_type as enter_structure_get_node_type;
+use super::nodes::exit_structure::get_node_type as exit_structure_get_node_type;
 use super::nodes::export_xyz::get_node_type as export_xyz_get_node_type;
 use super::nodes::expr::get_node_type as expr_get_node_type;
 use super::nodes::extrude::get_node_type as extrude_get_node_type;
 use super::nodes::facet_shell::get_node_type as facet_shell_get_node_type;
 use super::nodes::float::get_node_type as float_get_node_type;
+use super::nodes::free_move::get_node_type as free_move_get_node_type;
+use super::nodes::free_rot::get_node_type as free_rot_get_node_type;
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
 use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
 use super::nodes::half_space::get_node_type as half_space_get_node_type;
@@ -35,12 +36,10 @@ use super::nodes::intersect::get_node_type as intersect_get_node_type;
 use super::nodes::intersect_2d::get_node_type as intersect_2d_get_node_type;
 use super::nodes::ivec2::get_node_type as ivec2_get_node_type;
 use super::nodes::ivec3::get_node_type as ivec3_get_node_type;
-use super::nodes::lattice_move::get_node_type_atom_lmove as atom_lmove_get_node_type;
-use super::nodes::lattice_move::get_node_type_lattice_move as lattice_move_get_node_type;
-use super::nodes::lattice_rot::get_node_type_atom_lrot as atom_lrot_get_node_type;
-use super::nodes::lattice_rot::get_node_type_lattice_rot as lattice_rot_get_node_type;
 use super::nodes::lattice_symop::get_node_type as lattice_symop_get_node_type;
+use super::nodes::lattice_vecs::get_node_type as lattice_vecs_get_node_type;
 use super::nodes::map::get_node_type as map_get_node_type;
+use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
@@ -53,9 +52,11 @@ use super::nodes::remove_hydrogen::get_node_type as remove_hydrogen_get_node_typ
 use super::nodes::sequence::get_node_type as sequence_get_node_type;
 use super::nodes::sphere::get_node_type as sphere_get_node_type;
 use super::nodes::string::get_node_type as string_get_node_type;
+use super::nodes::structure::get_node_type as structure_get_node_type;
+use super::nodes::structure_move::get_node_type as structure_move_get_node_type;
+use super::nodes::structure_rot::get_node_type as structure_rot_get_node_type;
 use super::nodes::union::get_node_type as union_get_node_type;
 use super::nodes::union_2d::get_node_type as union_2d_get_node_type;
-use super::nodes::unit_cell::get_node_type as unit_cell_get_node_type;
 use super::nodes::value::get_node_type as value_get_node_type;
 use super::nodes::vec2::get_node_type as vec2_get_node_type;
 use super::nodes::vec3::get_node_type as vec3_get_node_type;
@@ -108,7 +109,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(vec2_get_node_type());
         ret.add_node_type(vec3_get_node_type());
         ret.add_node_type(range_get_node_type());
-        ret.add_node_type(unit_cell_get_node_type());
+        ret.add_node_type(lattice_vecs_get_node_type());
 
         ret.add_node_type(rect_get_node_type());
         ret.add_node_type(circle_get_node_type());
@@ -130,19 +131,20 @@ impl NodeTypeRegistry {
         ret.add_node_type(diff_get_node_type());
         ret.add_node_type(geo_trans_get_node_type());
         ret.add_node_type(lattice_symop_get_node_type());
-        ret.add_node_type(lattice_move_get_node_type());
-        ret.add_node_type(lattice_rot_get_node_type());
-        ret.add_node_type(atom_lmove_get_node_type());
-        ret.add_node_type(atom_lrot_get_node_type());
+        ret.add_node_type(structure_move_get_node_type());
+        ret.add_node_type(structure_rot_get_node_type());
         ret.add_node_type(motif_get_node_type());
         ret.add_node_type(motif_sub_get_node_type());
-        ret.add_node_type(atom_fill_get_node_type());
+        ret.add_node_type(structure_get_node_type());
+        ret.add_node_type(materialize_get_node_type());
+        ret.add_node_type(dematerialize_get_node_type());
+        ret.add_node_type(exit_structure_get_node_type());
+        ret.add_node_type(enter_structure_get_node_type());
         ret.add_node_type(edit_atom_get_node_type());
         ret.add_node_type(atom_edit_get_node_type());
         ret.add_node_type(motif_edit_get_node_type());
-        ret.add_node_type(atom_move_get_node_type());
-        ret.add_node_type(atom_rot_get_node_type());
-        ret.add_node_type(atom_trans_get_node_type());
+        ret.add_node_type(free_move_get_node_type());
+        ret.add_node_type(free_rot_get_node_type());
         ret.add_node_type(atom_union_get_node_type());
         ret.add_node_type(apply_diff_get_node_type());
         ret.add_node_type(atom_composediff_get_node_type());
@@ -419,6 +421,106 @@ impl NodeTypeRegistry {
     pub fn get_node_param_data_type(&self, node: &Node, parameter_index: usize) -> DataType {
         let node_type = self.get_node_type_for_node(node).unwrap();
         node_type.parameters[parameter_index].data_type.clone()
+    }
+
+    /// Resolves the concrete `DataType` of one of `node`'s output pins in `network`.
+    ///
+    /// - `output_pin_index == -1` returns the node's function type.
+    /// - For a `Fixed(t)` pin, returns `Some(t)` (or `None` if `t` is abstract).
+    /// - For `SameAsInput(name)`, resolves the concrete type of the upstream
+    ///   wire feeding the named input pin (recursively).
+    /// - For `SameAsArrayElements(name)`, resolves the concrete element type
+    ///   common to every source feeding the array input (`None` on mismatch,
+    ///   disconnected, or unresolved upstream).
+    ///
+    /// Returns `None` whenever resolution fails for any reason. The returned
+    /// type is never abstract.
+    pub fn resolve_output_type(
+        &self,
+        node: &Node,
+        network: &NodeNetwork,
+        output_pin_index: i32,
+    ) -> Option<DataType> {
+        let node_type = self.get_node_type_for_node(node)?;
+        if output_pin_index == -1 {
+            return Some(node_type.get_function_type());
+        }
+        let pin = node_type.output_pins.get(output_pin_index as usize)?;
+        self.resolve_pin_output_type(&pin.data_type, node, node_type, network)
+    }
+
+    fn resolve_pin_output_type(
+        &self,
+        pin_type: &PinOutputType,
+        node: &Node,
+        node_type: &NodeType,
+        network: &NodeNetwork,
+    ) -> Option<DataType> {
+        match pin_type {
+            PinOutputType::Fixed(t) => {
+                if t.is_abstract() {
+                    None
+                } else {
+                    Some(t.clone())
+                }
+            }
+            PinOutputType::SameAsInput(input_pin_name) => {
+                let (src_node, src_pin_index) =
+                    self.single_source_for_input(node, node_type, input_pin_name, network)?;
+                self.resolve_output_type(src_node, network, src_pin_index)
+            }
+            PinOutputType::SameAsArrayElements(input_pin_name) => {
+                let arg_index = node_type
+                    .parameters
+                    .iter()
+                    .position(|p| p.name == *input_pin_name)?;
+                let argument = node.arguments.get(arg_index)?;
+                if argument.argument_output_pins.is_empty() {
+                    return None;
+                }
+                let mut common: Option<DataType> = None;
+                for (&src_node_id, &src_pin_index) in &argument.argument_output_pins {
+                    let src_node = network.nodes.get(&src_node_id)?;
+                    let src_ty = self.resolve_output_type(src_node, network, src_pin_index)?;
+                    // Peel a single Array wrapper if present; non-array sources broadcast
+                    // as single elements of that type.
+                    let element_ty = match src_ty {
+                        DataType::Array(inner) => *inner,
+                        other => other,
+                    };
+                    if element_ty.is_abstract() {
+                        return None;
+                    }
+                    match &common {
+                        None => common = Some(element_ty),
+                        Some(existing) if *existing == element_ty => {}
+                        _ => return None,
+                    }
+                }
+                common
+            }
+        }
+    }
+
+    fn single_source_for_input<'a>(
+        &self,
+        node: &'a Node,
+        node_type: &NodeType,
+        input_pin_name: &str,
+        network: &'a NodeNetwork,
+    ) -> Option<(&'a Node, i32)> {
+        let arg_index = node_type
+            .parameters
+            .iter()
+            .position(|p| p.name == input_pin_name)?;
+        let argument = node.arguments.get(arg_index)?;
+        // SameAsInput is only meaningful for single-connection (non-array) input pins.
+        if argument.argument_output_pins.len() != 1 {
+            return None;
+        }
+        let (&src_node_id, &src_pin_index) = argument.argument_output_pins.iter().next()?;
+        let src_node = network.nodes.get(&src_node_id)?;
+        Some((src_node, src_pin_index))
     }
 
     pub fn get_parameter_name(&self, node: &Node, parameter_index: usize) -> String {

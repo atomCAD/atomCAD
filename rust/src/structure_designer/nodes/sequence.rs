@@ -26,7 +26,7 @@ pub struct SequenceData {
 impl Default for SequenceData {
     fn default() -> Self {
         Self {
-            element_type: DataType::Atomic,
+            element_type: DataType::HasAtoms,
             input_count: 2,
         }
     }

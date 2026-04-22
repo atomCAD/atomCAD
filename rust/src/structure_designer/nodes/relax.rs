@@ -1,5 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::simulation::minimize_energy;
 use crate::crystolecule::simulation::uff::VdwMode;
 use crate::structure_designer::data_type::DataType;
@@ -57,39 +56,51 @@ impl NodeData for RelaxData {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(mut atomic_structure) = input_val {
-            let num_atoms = atomic_structure.get_num_of_atoms();
-            if num_atoms > MAX_RELAX_ATOMS {
+        let mut wrapper = match input_val {
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_) => input_val,
+            other => {
                 return EvalOutput::single(NetworkResult::Error(format!(
-                    "Structure has {} atoms, which exceeds the relax node limit of {}. \
-                     Large structures cause excessive computation time. \
-                     Consider reducing the structure size or using a smaller region.",
-                    num_atoms, MAX_RELAX_ATOMS
+                    "relax: expected atomic input, got {:?}",
+                    other.infer_data_type()
                 )));
             }
+        };
 
-            let vdw_mode = if context.use_vdw_cutoff {
-                VdwMode::Cutoff(6.0)
-            } else {
-                VdwMode::AllPairs
-            };
-            match minimize_energy(&mut atomic_structure, vdw_mode) {
-                Ok(result) => {
-                    // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-                    // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
-                    if network_stack.len() == 1 {
-                        let eval_cache = RelaxEvalCache {
-                            relax_message: result.message.clone(),
-                        };
-                        context.selected_node_eval_cache = Some(Box::new(eval_cache));
-                    }
+        let atoms_ref = match &mut wrapper {
+            NetworkResult::Crystal(c) => &mut c.atoms,
+            NetworkResult::Molecule(m) => &mut m.atoms,
+            _ => unreachable!(),
+        };
 
-                    EvalOutput::single(NetworkResult::Atomic(atomic_structure))
-                }
-                Err(error_msg) => EvalOutput::single(NetworkResult::Error(error_msg)),
-            }
+        let num_atoms = atoms_ref.get_num_of_atoms();
+        if num_atoms > MAX_RELAX_ATOMS {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "Structure has {} atoms, which exceeds the relax node limit of {}. \
+                 Large structures cause excessive computation time. \
+                 Consider reducing the structure size or using a smaller region.",
+                num_atoms, MAX_RELAX_ATOMS
+            )));
+        }
+
+        let vdw_mode = if context.use_vdw_cutoff {
+            VdwMode::Cutoff(6.0)
         } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
+            VdwMode::AllPairs
+        };
+        match minimize_energy(atoms_ref, vdw_mode) {
+            Ok(result) => {
+                // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
+                // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+                if network_stack.len() == 1 {
+                    let eval_cache = RelaxEvalCache {
+                        relax_message: result.message.clone(),
+                    };
+                    context.selected_node_eval_cache = Some(Box::new(eval_cache));
+                }
+
+                EvalOutput::single(wrapper)
+            }
+            Err(error_msg) => EvalOutput::single(NetworkResult::Error(error_msg)),
         }
     }
 
@@ -120,9 +131,9 @@ pub fn get_node_type() -> NodeType {
         parameters: vec![Parameter {
             id: None,
             name: "molecule".to_string(),
-            data_type: DataType::Atomic,
+            data_type: DataType::HasAtoms,
         }],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(RelaxData {}),
         node_data_saver: generic_node_data_saver::<RelaxData>,

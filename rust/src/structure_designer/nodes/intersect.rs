@@ -1,11 +1,14 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::Alignment;
+use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::propagate_alignment_with_reason;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -14,9 +17,6 @@ use crate::structure_designer::node_type::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform;
-use glam::f64::DQuat;
-use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,7 +45,6 @@ impl NodeData for IntersectData {
     ) -> EvalOutput {
         //let _timer = Timer::new("eval_intersect");
         let mut shapes: Vec<GeoNode> = Vec::new();
-        let mut frame_translation = DVec3::ZERO;
 
         let shapes_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
@@ -71,11 +70,11 @@ impl NodeData for IntersectData {
             ));
         }
 
-        // Extract geometries and check unit cell compatibility
-        let mut geometries: Vec<GeometrySummary> = Vec::new();
+        // Extract geometries and check lattice vector compatibility
+        let mut blueprints: Vec<BlueprintData> = Vec::new();
         for shape_val in shape_results {
-            if let NetworkResult::Geometry(shape) = shape_val {
-                geometries.push(shape);
+            if let NetworkResult::Blueprint(shape) = shape_val {
+                blueprints.push(shape);
             } else {
                 return EvalOutput::single(NetworkResult::Error(
                     "All inputs must be geometry objects".to_string(),
@@ -83,25 +82,28 @@ impl NodeData for IntersectData {
             }
         }
 
-        // Check unit cell compatibility - compare all to the first geometry
-        if !GeometrySummary::all_have_compatible_unit_cells(&geometries) {
+        if !BlueprintData::all_have_compatible_lattice_vecs(&blueprints) {
             return EvalOutput::single(unit_cell_mismatch_error());
         }
 
-        // All unit cells are compatible, proceed with intersection
-        // Take the first unit cell by value before consuming the geometries vector
-        let first_unit_cell = geometries[0].unit_cell.clone();
-        for geometry in geometries.into_iter() {
-            shapes.push(geometry.geo_tree_root);
-            frame_translation += geometry.frame_transform.translation;
+        let first_lattice_vecs = blueprints[0].structure.lattice_vecs.clone();
+        let mut alignment = Alignment::Aligned;
+        let mut alignment_reason: Option<String> = None;
+        for bp in blueprints.into_iter() {
+            propagate_alignment_with_reason(
+                &mut alignment,
+                &mut alignment_reason,
+                bp.alignment,
+                &bp.alignment_reason,
+            );
+            shapes.push(bp.geo_tree_root);
         }
 
-        frame_translation /= shape_count as f64;
-
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
-            unit_cell: first_unit_cell,
-            frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
+        EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+            structure: Structure::from_lattice_vecs(first_lattice_vecs),
             geo_tree_root: GeoNode::intersection_3d(shapes),
+            alignment,
+            alignment_reason,
         }))
     }
 
@@ -126,17 +128,17 @@ impl NodeData for IntersectData {
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "intersect".to_string(),
-      description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values. Use this to cut geometries with a half-space.".to_string(),
+      description: "Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Blueprint` values. Use this to cut geometries with a half-space.".to_string(),
       summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
           Parameter {
               id: None,
               name: "shapes".to_string(),
-              data_type: DataType::Array(Box::new(DataType::Geometry)),
+              data_type: DataType::Array(Box::new(DataType::Blueprint)),
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Geometry),
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
       public: true,
       node_data_creator: || Box::new(IntersectData {}),
       node_data_saver: generic_node_data_saver::<IntersectData>,

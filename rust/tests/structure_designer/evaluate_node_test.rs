@@ -116,33 +116,33 @@ fn test_evaluate_vec3_node() {
 fn test_evaluate_geometry_node_brief() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Add a sphere node (outputs Geometry)
+    // Add a sphere node (outputs Blueprint)
     let sphere_id = designer.add_node("sphere", DVec2::new(0.0, 0.0));
 
     let result = designer.evaluate_node_for_cli(sphere_id, false).unwrap();
 
     assert_eq!(result.node_id, sphere_id);
     assert_eq!(result.node_type_name, "sphere");
-    assert_eq!(result.output_type, "Geometry");
+    assert_eq!(result.output_type, "Blueprint");
     assert!(result.success);
     assert!(result.detailed_string.is_none()); // Not verbose
-    // Brief output for Geometry should just show "Geometry"
-    assert!(result.display_string.contains("Geometry"));
+    // Brief output for Blueprint should just show "Blueprint"
+    assert!(result.display_string.contains("Blueprint"));
 }
 
 #[test]
 fn test_evaluate_cuboid_node_brief() {
     let mut designer = setup_designer_with_network("test_network");
 
-    // Add a cuboid node (outputs Geometry)
+    // Add a cuboid node (outputs Blueprint)
     let cuboid_id = designer.add_node("cuboid", DVec2::new(0.0, 0.0));
 
     let result = designer.evaluate_node_for_cli(cuboid_id, false).unwrap();
 
     assert_eq!(result.node_type_name, "cuboid");
-    assert_eq!(result.output_type, "Geometry");
+    assert_eq!(result.output_type, "Blueprint");
     assert!(result.success);
-    assert!(result.display_string.contains("Geometry"));
+    assert!(result.display_string.contains("Blueprint"));
 }
 
 // ===== VERBOSE OUTPUT TESTS =====
@@ -320,7 +320,7 @@ fn test_evaluate_connected_geometry_network() {
     // Evaluate the union node
     let result = designer.evaluate_node_for_cli(union_id, false).unwrap();
 
-    assert_eq!(result.output_type, "Geometry");
+    assert_eq!(result.output_type, "Blueprint");
     assert!(result.success);
 }
 

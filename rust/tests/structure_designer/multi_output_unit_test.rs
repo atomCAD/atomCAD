@@ -10,7 +10,9 @@ use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_network::{
     NodeDisplayState, NodeDisplayType, NodeNetwork,
@@ -23,17 +25,17 @@ use std::collections::HashSet;
 
 #[test]
 fn test_output_pin_definition_single() {
-    let pins = OutputPinDefinition::single(DataType::Geometry);
+    let pins = OutputPinDefinition::single(DataType::Blueprint);
     assert_eq!(pins.len(), 1);
     assert_eq!(pins[0].name, "result");
-    assert_eq!(pins[0].data_type, DataType::Geometry);
+    assert_eq!(pins[0].fixed_type(), Some(&DataType::Blueprint));
 }
 
 #[test]
 fn test_output_pin_definition_single_none() {
     let pins = OutputPinDefinition::single(DataType::None);
     assert_eq!(pins.len(), 1);
-    assert_eq!(pins[0].data_type, DataType::None);
+    assert_eq!(pins[0].fixed_type(), Some(&DataType::None));
 }
 
 // ===== NodeType accessor tests =====
@@ -43,7 +45,7 @@ fn test_node_type_output_type_accessor() {
     let registry =
         rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
     let sphere_type = registry.get_node_type("sphere").unwrap();
-    assert_eq!(*sphere_type.output_type(), DataType::Geometry);
+    assert_eq!(*sphere_type.output_type(), DataType::Blueprint);
 }
 
 #[test]
@@ -51,7 +53,7 @@ fn test_node_type_get_output_pin_type_pin0() {
     let registry =
         rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
     let sphere_type = registry.get_node_type("sphere").unwrap();
-    assert_eq!(sphere_type.get_output_pin_type(0), DataType::Geometry);
+    assert_eq!(sphere_type.get_output_pin_type(0), DataType::Blueprint);
 }
 
 #[test]
@@ -273,7 +275,7 @@ fn test_displayed_nodes_serialization_roundtrip_default_pins() {
             parameters: vec![],
             output_pins: vec![SerializableOutputPin {
                 name: "result".to_string(),
-                data_type: "Geometry".to_string(),
+                data_type: "Blueprint".to_string(),
             }],
             output_type: None,
         },
@@ -309,11 +311,11 @@ fn test_displayed_nodes_serialization_roundtrip_non_default_pins() {
             output_pins: vec![
                 SerializableOutputPin {
                     name: "result".to_string(),
-                    data_type: "Atomic".to_string(),
+                    data_type: "HasAtoms".to_string(),
                 },
                 SerializableOutputPin {
                     name: "diff".to_string(),
-                    data_type: "Atomic".to_string(),
+                    data_type: "HasAtoms".to_string(),
                 },
             ],
             output_type: None,
@@ -346,7 +348,7 @@ fn test_old_format_without_displayed_output_pins_loads_with_default_pin0() {
             "description": "",
             "category": "Custom",
             "parameters": [],
-            "output_pins": [{"name": "result", "data_type": "Geometry"}]
+            "output_pins": [{"name": "result", "data_type": "Blueprint"}]
         },
         "nodes": [],
         "return_node_id": null,
@@ -475,6 +477,8 @@ fn test_node_scene_data_interactive_pin_single() {
             pin_index: 0,
             output: NodeOutput::None,
             geo_tree: None,
+            alignment: None,
+            alignment_reason: None,
         }],
         displayed_pins: std::collections::HashSet::from([0]),
         node_errors: std::collections::HashMap::new(),
@@ -501,11 +505,15 @@ fn test_node_scene_data_interactive_pin_multi() {
                 pin_index: 0,
                 output: NodeOutput::None,
                 geo_tree: None,
+                alignment: None,
+                alignment_reason: None,
             },
             DisplayedPinOutput {
                 pin_index: 1,
                 output: NodeOutput::None,
                 geo_tree: None,
+                alignment: None,
+                alignment_reason: None,
             },
         ],
         displayed_pins: std::collections::HashSet::from([0, 1]),
@@ -534,11 +542,15 @@ fn test_node_scene_data_interactive_pin_only_pin1() {
                 pin_index: 0,
                 output: NodeOutput::None,
                 geo_tree: None,
+                alignment: None,
+                alignment_reason: None,
             },
             DisplayedPinOutput {
                 pin_index: 1,
                 output: NodeOutput::None,
                 geo_tree: None,
+                alignment: None,
+                alignment_reason: None,
             },
         ],
         displayed_pins: std::collections::HashSet::from([1]),
@@ -613,8 +625,11 @@ fn evaluate_pin(
 fn test_custom_network_multi_output_return_node_propagates_pins() {
     let mut designer = setup_designer_with_network("inner");
 
-    // Add an atom_edit node (which has 2 output pins: result + diff)
+    // atom_edit's `result` pin is `SameAsInput("molecule")`, so a concrete
+    // Molecule source must be wired for polymorphic resolution to succeed.
+    let source_id = designer.add_node("import_xyz", DVec2::new(-200.0, 0.0));
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(source_id, 0, atom_edit_id, 0);
     designer.set_return_node_id(Some(atom_edit_id));
 
     let network = designer
@@ -630,9 +645,12 @@ fn test_custom_network_multi_output_return_node_propagates_pins() {
         "Custom network should have 2 output pins from atom_edit return node"
     );
     assert_eq!(network.node_type.output_pins[0].name, "result");
-    assert_eq!(*network.node_type.output_type(), DataType::Atomic);
+    assert_eq!(*network.node_type.output_type(), DataType::Molecule);
     assert_eq!(network.node_type.output_pins[1].name, "diff");
-    assert_eq!(network.node_type.output_pins[1].data_type, DataType::Atomic);
+    assert_eq!(
+        network.node_type.output_pins[1].fixed_type(),
+        Some(&DataType::Molecule)
+    );
     assert!(network.node_type.has_multi_output());
 }
 
@@ -652,7 +670,7 @@ fn test_custom_network_single_output_return_node() {
 
     assert_eq!(network.node_type.output_pin_count(), 1);
     assert_eq!(network.node_type.output_pins[0].name, "result");
-    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
+    assert_eq!(*network.node_type.output_type(), DataType::Blueprint);
     assert!(!network.node_type.has_multi_output());
 }
 
@@ -682,7 +700,7 @@ fn test_custom_network_return_node_change_multi_to_single() {
         .get("inner")
         .unwrap();
     assert_eq!(network.node_type.output_pin_count(), 1);
-    assert_eq!(*network.node_type.output_type(), DataType::Geometry);
+    assert_eq!(*network.node_type.output_type(), DataType::Blueprint);
 }
 
 /// Switching return node from single-output to multi-output updates output_pins.
@@ -753,10 +771,33 @@ fn test_custom_network_node_evaluate_pin0() {
 /// Using a custom network with multi-output return node: pin 1 evaluation passes through.
 #[test]
 fn test_custom_network_node_evaluate_pin1() {
+    use rust_lib_flutter_cad::structure_designer::nodes::import_xyz::ImportXYZData;
+
     let mut designer = setup_designer_with_network("inner");
+
+    // Wire an import_xyz source (Fixed(Molecule)) into atom_edit so the inner
+    // network's polymorphic `result` pin resolves and the network is valid.
+    // Populate its atomic_structure directly so evaluation produces a real
+    // Molecule instead of an error.
+    let source_id = designer.add_node("import_xyz", DVec2::new(-200.0, 0.0));
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("inner")
+            .unwrap();
+        let data = network
+            .get_node_network_data_mut(source_id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<ImportXYZData>()
+            .unwrap();
+        data.atomic_structure = Some(AtomicStructure::new());
+    }
 
     // inner: atom_edit as return node (2 output pins)
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(source_id, 0, atom_edit_id, 0);
     designer.set_return_node_id(Some(atom_edit_id));
 
     // Create outer network and add a node of type "inner"
@@ -767,14 +808,20 @@ fn test_custom_network_node_evaluate_pin1() {
     // Evaluate pin 0 (result)
     let result_pin0 = evaluate_pin(&designer, "outer", inner_node_id, 0);
     assert!(
-        matches!(result_pin0, NetworkResult::Atomic(_)),
+        matches!(
+            result_pin0,
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+        ),
         "Pin 0 should be Atomic"
     );
 
     // Evaluate pin 1 (diff) — should also be Atomic
     let result_pin1 = evaluate_pin(&designer, "outer", inner_node_id, 1);
     assert!(
-        matches!(result_pin1, NetworkResult::Atomic(_)),
+        matches!(
+            result_pin1,
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+        ),
         "Pin 1 should be Atomic"
     );
 }
@@ -784,8 +831,11 @@ fn test_custom_network_node_evaluate_pin1() {
 fn test_custom_network_wire_from_pin1() {
     let mut designer = setup_designer_with_network("inner");
 
-    // inner: atom_edit as return node
+    // Wire a concrete Molecule source into atom_edit so the inner network is
+    // valid (atom_edit's polymorphic `result` pin requires a concrete input).
+    let source_id = designer.add_node("import_xyz", DVec2::new(-200.0, 0.0));
     let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(source_id, 0, atom_edit_id, 0);
     designer.set_return_node_id(Some(atom_edit_id));
 
     // outer: use inner node, wire pin 1 to apply_diff's base input
@@ -867,6 +917,120 @@ fn test_custom_network_shrink_output_pins_disconnects_wires() {
     );
 }
 
+// ===== Crystal/Molecule variant preservation tests (step 6.10) =====
+
+/// `atom_edit` pin 0 uses `SameAsInput("molecule")`, so a Crystal input must
+/// yield a Crystal output (lattice vectors + motif preserved). Pin 1 (diff)
+/// is always `Fixed(Molecule)`.
+#[test]
+fn test_atom_edit_preserves_crystal_variant_on_pin0() {
+    use rust_lib_flutter_cad::crystolecule::structure::Structure;
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::CrystalData;
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    let mut designer = setup_designer_with_network("test");
+
+    // Feed a Crystal directly via a `value` node (lets us assert variant
+    // preservation without running the full lattice_fill pipeline).
+    let crystal_structure = Structure::diamond();
+    let value_id = {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test")
+            .unwrap();
+        let value_data = Box::new(ValueData {
+            value: NetworkResult::Crystal(CrystalData {
+                structure: crystal_structure,
+                atoms: AtomicStructure::new(),
+                geo_tree_root: None,
+                alignment: Default::default(),
+                alignment_reason: None,
+            }),
+        });
+        network.add_node("value", DVec2::new(-200.0, 0.0), 0, value_data)
+    };
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+
+    // Pin 0 preserves the Crystal variant.
+    let pin0 = evaluate_pin(&designer, "test", atom_edit_id, 0);
+    assert!(
+        matches!(pin0, NetworkResult::Crystal(_)),
+        "atom_edit pin 0 should preserve Crystal variant (got {:?})",
+        std::mem::discriminant(&pin0)
+    );
+
+    // Pin 1 (diff) is always Molecule, independent of the input variant.
+    let pin1 = evaluate_pin(&designer, "test", atom_edit_id, 1);
+    assert!(
+        matches!(pin1, NetworkResult::Molecule(_)),
+        "atom_edit pin 1 (diff) must always be Molecule"
+    );
+}
+
+/// Mirrors the Crystal test for the Molecule path: a Molecule input produces
+/// a Molecule on pin 0.
+#[test]
+fn test_atom_edit_preserves_molecule_variant_on_pin0() {
+    use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+
+    let mut designer = setup_designer_with_network("test");
+
+    let value_id = {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test")
+            .unwrap();
+        let value_data = Box::new(ValueData {
+            value: NetworkResult::Molecule(MoleculeData {
+                atoms: AtomicStructure::new(),
+                geo_tree_root: None,
+            }),
+        });
+        network.add_node("value", DVec2::new(-200.0, 0.0), 0, value_data)
+    };
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(value_id, 0, atom_edit_id, 0);
+
+    let pin0 = evaluate_pin(&designer, "test", atom_edit_id, 0);
+    assert!(
+        matches!(pin0, NetworkResult::Molecule(_)),
+        "atom_edit pin 0 should preserve Molecule variant"
+    );
+}
+
+/// `motif_edit`'s output pin types are Fixed and must not be affected by the
+/// step 6.10 changes to `atom_edit`. Pin 0 is Motif (not SameAsInput) and
+/// pin 1 (diff) is Molecule.
+#[test]
+fn test_motif_edit_output_pin_types_unchanged() {
+    use rust_lib_flutter_cad::structure_designer::node_type::PinOutputType;
+
+    let registry =
+        rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
+    let motif_edit_type = registry.built_in_node_types.get("motif_edit").unwrap();
+
+    assert_eq!(motif_edit_type.output_pin_count(), 2);
+    assert_eq!(motif_edit_type.output_pins[0].name, "result");
+    assert!(
+        matches!(
+            motif_edit_type.output_pins[0].data_type,
+            PinOutputType::Fixed(DataType::Motif)
+        ),
+        "motif_edit pin 0 must remain Fixed(Motif)"
+    );
+    assert_eq!(motif_edit_type.output_pins[1].name, "diff");
+    assert!(
+        matches!(
+            motif_edit_type.output_pins[1].data_type,
+            PinOutputType::Fixed(DataType::Molecule)
+        ),
+        "motif_edit pin 1 (diff) must remain Fixed(Molecule)"
+    );
+}
+
 // ===== EvalOutput display override tests =====
 
 #[test]
@@ -883,18 +1047,33 @@ fn test_eval_output_display_override_basic() {
 
     let mut output = EvalOutput::multi(vec![
         NetworkResult::Motif(motif),
-        NetworkResult::Atomic(AtomicStructure::new()),
+        NetworkResult::Molecule(MoleculeData {
+            atoms: AtomicStructure::new(),
+            geo_tree_root: None,
+        }),
     ]);
-    output.set_display_override(0, NetworkResult::Atomic(viz));
+    output.set_display_override(
+        0,
+        NetworkResult::Molecule(MoleculeData {
+            atoms: viz,
+            geo_tree_root: None,
+        }),
+    );
 
     // Wire value: get(0) returns Motif
     assert!(matches!(output.get(0), NetworkResult::Motif(_)));
 
     // Display value: get_display(0) returns Atomic (the override)
-    assert!(matches!(output.get_display(0), NetworkResult::Atomic(_)));
+    assert!(matches!(
+        output.get_display(0),
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 
     // Pin 1 has no override: get_display(1) falls back to wire value
-    assert!(matches!(output.get_display(1), NetworkResult::Atomic(_)));
+    assert!(matches!(
+        output.get_display(1),
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 }
 
 #[test]
@@ -956,8 +1135,12 @@ fn test_infer_data_type_vectors() {
 #[test]
 fn test_infer_data_type_complex() {
     assert_eq!(
-        NetworkResult::Atomic(AtomicStructure::new()).infer_data_type(),
-        Some(DataType::Atomic)
+        NetworkResult::Molecule(MoleculeData {
+            atoms: AtomicStructure::new(),
+            geo_tree_root: None
+        })
+        .infer_data_type(),
+        Some(DataType::Molecule)
     );
     let motif = Motif {
         parameters: vec![],
@@ -977,4 +1160,224 @@ fn test_infer_data_type_none_variants() {
     assert_eq!(NetworkResult::None.infer_data_type(), None);
     assert_eq!(NetworkResult::Error("err".into()).infer_data_type(), None);
     assert_eq!(NetworkResult::Array(vec![]).infer_data_type(), None);
+}
+
+// ===== resolve_output_type tests (step 6.3) =====
+//
+// These tests exercise each PinOutputType variant against a toy NodeType + registry.
+// They do not depend on any real node-migration work from later sub-steps.
+
+mod resolve_output_type_tests {
+    use glam::DVec2;
+    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+    use rust_lib_flutter_cad::structure_designer::node_data::NoData;
+    use rust_lib_flutter_cad::structure_designer::node_network::{Argument, Node, NodeNetwork};
+    use rust_lib_flutter_cad::structure_designer::node_type::{
+        NodeType, OutputPinDefinition, Parameter, no_data_loader, no_data_saver,
+    };
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+
+    fn toy_node_type(
+        name: &str,
+        parameters: Vec<Parameter>,
+        output_pins: Vec<OutputPinDefinition>,
+    ) -> NodeType {
+        NodeType {
+            name: name.to_string(),
+            description: String::new(),
+            summary: None,
+            category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
+            parameters,
+            output_pins,
+            public: true,
+            node_data_creator: || Box::new(NoData {}),
+            node_data_saver: no_data_saver,
+            node_data_loader: no_data_loader,
+        }
+    }
+
+    fn make_node(id: u64, node_type_name: &str, arg_count: usize) -> Node {
+        Node {
+            id,
+            node_type_name: node_type_name.to_string(),
+            custom_name: None,
+            position: DVec2::ZERO,
+            arguments: (0..arg_count).map(|_| Argument::new()).collect(),
+            data: Box::new(NoData {}),
+            custom_node_type: None,
+        }
+    }
+
+    /// Builds a registry with three toy types:
+    /// - `src_float`: no params, single `Fixed(Float)` output
+    /// - `src_float_array`: no params, single `Fixed(Array[Float])` output
+    /// - `poly`: one input `"in"` (DataType::HasAtoms, abstract) + an array input `"arr"` (Array[Atomic]);
+    ///           three outputs: fixed Int at pin 0, SameAsInput("in") at pin 1,
+    ///           SameAsArrayElements("arr") at pin 2.
+    fn build_toy_registry() -> NodeTypeRegistry {
+        let mut registry = NodeTypeRegistry::new();
+
+        registry.built_in_node_types.insert(
+            "src_float".to_string(),
+            toy_node_type(
+                "src_float",
+                vec![],
+                OutputPinDefinition::single(DataType::Float),
+            ),
+        );
+        registry.built_in_node_types.insert(
+            "src_float_array".to_string(),
+            toy_node_type(
+                "src_float_array",
+                vec![],
+                OutputPinDefinition::single(DataType::Array(Box::new(DataType::Float))),
+            ),
+        );
+        registry.built_in_node_types.insert(
+            "poly".to_string(),
+            toy_node_type(
+                "poly",
+                vec![
+                    Parameter {
+                        id: None,
+                        name: "in".to_string(),
+                        data_type: DataType::HasAtoms,
+                    },
+                    Parameter {
+                        id: None,
+                        name: "arr".to_string(),
+                        data_type: DataType::Array(Box::new(DataType::HasAtoms)),
+                    },
+                ],
+                vec![
+                    OutputPinDefinition::fixed("fixed", DataType::Int),
+                    OutputPinDefinition::same_as_input("mirror", "in"),
+                    OutputPinDefinition::same_as_array_elements("elem", "arr"),
+                ],
+            ),
+        );
+
+        registry
+    }
+
+    fn empty_network() -> NodeNetwork {
+        NodeNetwork::new(NodeType {
+            name: "test_network".to_string(),
+            description: String::new(),
+            summary: None,
+            category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
+            parameters: vec![],
+            output_pins: OutputPinDefinition::single(DataType::None),
+            public: true,
+            node_data_creator: || Box::new(NoData {}),
+            node_data_saver: no_data_saver,
+            node_data_loader: no_data_loader,
+        })
+    }
+
+    #[test]
+    fn fixed_pin_returns_its_declared_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 0);
+        assert_eq!(resolved, Some(DataType::Int));
+    }
+
+    #[test]
+    fn same_as_input_mirrors_connected_source_concrete_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+
+        let src = make_node(1, "src_float", 0);
+        let mut poly = make_node(2, "poly", 2);
+        // Wire src (pin 0) → poly.arguments[0] ("in")
+        poly.arguments[0].argument_output_pins.insert(1, 0);
+        network.nodes.insert(1, src);
+        network.nodes.insert(2, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&2], &network, 1);
+        assert_eq!(resolved, Some(DataType::Float));
+    }
+
+    #[test]
+    fn same_as_input_returns_none_when_input_unconnected() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 1);
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn same_as_array_elements_mirrors_connected_array_source_element_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+
+        let src = make_node(1, "src_float_array", 0);
+        let mut poly = make_node(2, "poly", 2);
+        // Wire src (pin 0, Array[Float]) → poly.arguments[1] ("arr")
+        poly.arguments[1].argument_output_pins.insert(1, 0);
+        network.nodes.insert(1, src);
+        network.nodes.insert(2, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&2], &network, 2);
+        assert_eq!(resolved, Some(DataType::Float));
+    }
+
+    #[test]
+    fn same_as_array_elements_accepts_scalar_broadcast_source() {
+        // A scalar source connected to an Array[..] pin is valid via broadcasting;
+        // its element type is the scalar's type.
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+
+        let src = make_node(1, "src_float", 0);
+        let mut poly = make_node(2, "poly", 2);
+        poly.arguments[1].argument_output_pins.insert(1, 0);
+        network.nodes.insert(1, src);
+        network.nodes.insert(2, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&2], &network, 2);
+        assert_eq!(resolved, Some(DataType::Float));
+    }
+
+    #[test]
+    fn same_as_array_elements_returns_none_when_input_unconnected() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 2);
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn function_pin_returns_function_type() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, -1);
+        assert!(matches!(resolved, Some(DataType::Function(_))));
+    }
+
+    #[test]
+    fn out_of_range_pin_returns_none() {
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        assert_eq!(
+            registry.resolve_output_type(&network.nodes[&1], &network, 99),
+            None
+        );
+    }
 }

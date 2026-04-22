@@ -1,0 +1,62 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Blueprint"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "sphere",
+            "custom_name": "s",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "sphere",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "radius": 5
+            }
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 3
+}

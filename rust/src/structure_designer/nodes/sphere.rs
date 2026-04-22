@@ -1,11 +1,12 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::crystolecule::structure::Structure;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::Alignment;
+use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -16,8 +17,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::serialization_utils::ivec3_serializer;
-use crate::util::transform::Transform;
-use glam::f64::DQuat;
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -76,26 +75,27 @@ impl NodeData for SphereData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        let unit_cell = match network_evaluator.evaluate_or_default(
+        let structure = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
             2,
-            UnitCellStruct::cubic_diamond(),
-            NetworkResult::extract_unit_cell,
+            Structure::diamond(),
+            NetworkResult::extract_structure,
         ) {
             Ok(value) => value,
             Err(error) => return EvalOutput::single(error),
         };
 
-        let real_center = unit_cell.ivec3_lattice_to_real(&center);
-        let real_radius = unit_cell.int_lattice_to_real(radius);
+        let real_center = structure.lattice_vecs.ivec3_lattice_to_real(&center);
+        let real_radius = structure.lattice_vecs.int_lattice_to_real(radius);
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
-            unit_cell,
-            frame_transform: Transform::new(real_center, DQuat::IDENTITY),
+        EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+            structure,
             geo_tree_root: GeoNode::sphere(real_center, real_radius),
+            alignment: Alignment::Aligned,
+            alignment_reason: None,
         }))
     }
 
@@ -148,8 +148,8 @@ impl NodeData for SphereData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert(
-            "unit_cell".to_string(),
-            (false, Some("cubic diamond".to_string())),
+            "structure".to_string(),
+            (false, Some("diamond".to_string())),
         );
         m
     }
@@ -175,11 +175,11 @@ pub fn get_node_type() -> NodeType {
             },
             Parameter {
                 id: None,
-                name: "unit_cell".to_string(),
-                data_type: DataType::UnitCell,
+                name: "structure".to_string(),
+                data_type: DataType::Structure,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || {
             Box::new(SphereData {

@@ -1,0 +1,790 @@
+{
+  "node_networks": [
+    [
+      "sample",
+      {
+        "next_node_id": 27,
+        "node_type": {
+          "name": "sample",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 2,
+            "node_type_name": "half_space",
+            "position": [
+              505.6326904296875,
+              56.726794433593795
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                1,
+                1,
+                1
+              ],
+              "shift": 2
+            }
+          },
+          {
+            "id": 17,
+            "node_type_name": "half_space",
+            "position": [
+              719.9754638671875,
+              -90.18732910156244
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                0,
+                -1,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 24,
+            "node_type_name": "ivec3",
+            "position": [
+              904.6478271484376,
+              -411.28022460937495
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "ivec3",
+            "data": {
+              "value": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 22,
+            "node_type_name": "lattice_rot",
+            "position": [
+              1738.9530639648438,
+              -65.11436157226558
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 2
+            }
+          },
+          {
+            "id": 16,
+            "node_type_name": "half_space",
+            "position": [
+              655.6240234375,
+              -253.3591430664062
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                0,
+                1,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 18,
+            "node_type_name": "half_space",
+            "position": [
+              1135.8628540039062,
+              -357.34064941406245
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                5,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                0,
+                1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 12,
+            "node_type_name": "atom_fill",
+            "position": [
+              2352.8309936523438,
+              43.926196289062545
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "25": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 10,
+            "node_type_name": "intersect",
+            "position": [
+              1327.980224609375,
+              232.3649780273438
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "9": 0,
+                  "11": 0,
+                  "15": 0,
+                  "8": 0,
+                  "20": 0,
+                  "17": 0,
+                  "23": 0,
+                  "16": 0,
+                  "21": 0,
+                  "22": 0,
+                  "13": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 20,
+            "node_type_name": "intersect",
+            "position": [
+              1555.3920288085938,
+              -237.48814086914055
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "19": 0,
+                  "18": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "int",
+            "position": [
+              187.18362426757812,
+              234.63151855468757
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 7
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "lattice_rot",
+            "position": [
+              1208.507080078125,
+              343.4046508789063
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 2
+            }
+          },
+          {
+            "id": 23,
+            "node_type_name": "lattice_rot",
+            "position": [
+              1918.953063964844,
+              -65.11436157226558
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 3
+            }
+          },
+          {
+            "id": 14,
+            "node_type_name": "int",
+            "position": [
+              399.4287414550781,
+              -76.00458984374995
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
+            "id": 19,
+            "node_type_name": "half_space",
+            "position": [
+              1315.8628540039062,
+              -357.34064941406245
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "24": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                5,
+                0,
+                0
+              ],
+              "max_miller_index": 2,
+              "miller_index": [
+                1,
+                0,
+                -1
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "lattice_rot",
+            "position": [
+              864.2285766601562,
+              493.81535644531255
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 0,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 3
+            }
+          },
+          {
+            "id": 21,
+            "node_type_name": "lattice_rot",
+            "position": [
+              1559.9530639648438,
+              -66.11436157226558
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "20": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 2,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 1
+            }
+          },
+          {
+            "id": 15,
+            "node_type_name": "half_space",
+            "position": [
+              925.6524658203124,
+              6.2713195800781705
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                -1,
+                0,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 13,
+            "node_type_name": "half_space",
+            "position": [
+              892.0640258789062,
+              -195.97886352539055
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "14": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                1,
+                0,
+                0
+              ],
+              "shift": 0
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "intersect",
+            "position": [
+              1100.979736328125,
+              237.94523925781257
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0,
+                  "2": 0,
+                  "7": 0,
+                  "6": 0
+                }
+              }
+            ],
+            "data_type": "intersect",
+            "data": {}
+          },
+          {
+            "id": 11,
+            "node_type_name": "half_space",
+            "position": [
+              1209.13232421875,
+              -84.84821777343745
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                0,
+                0,
+                1
+              ],
+              "shift": 1
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "half_space",
+            "position": [
+              498.8113403320313,
+              294.4277221679688
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "half_space",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "max_miller_index": 1,
+              "miller_index": [
+                -1,
+                -1,
+                -1
+              ],
+              "shift": 2
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "lattice_rot",
+            "position": [
+              840.822998046875,
+              180.1797973632813
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 0,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 1
+            }
+          },
+          {
+            "id": 25,
+            "node_type_name": "lattice_move",
+            "position": [
+              2133.1642456054688,
+              27.594653320312545
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "10": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "translation": [
+                0,
+                0,
+                5
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "lattice_rot",
+            "position": [
+              857.32958984375,
+              337.5927612304688
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_rot",
+            "data": {
+              "axis_index": 0,
+              "pivot_point": [
+                0,
+                0,
+                0
+              ],
+              "step": 2
+            }
+          }
+        ],
+        "return_node_id": 25,
+        "displayed_node_ids": [
+          [
+            25,
+            "Normal"
+          ],
+          [
+            12,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

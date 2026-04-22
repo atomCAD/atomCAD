@@ -1,6 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
 use crate::crystolecule::drawing_plane::DrawingPlane;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::Gadget;
 use crate::renderer::mesh::Mesh;
@@ -75,18 +76,19 @@ impl NodeData for DrawingPlaneData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let unit_cell = match network_evaluator.evaluate_or_default(
+        let structure = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
             0,
-            UnitCellStruct::cubic_diamond(),
-            NetworkResult::extract_unit_cell,
+            Structure::diamond(),
+            NetworkResult::extract_structure,
         ) {
             Ok(value) => value,
             Err(error) => return EvalOutput::single(error),
         };
+        let unit_cell = structure.lattice_vecs.clone();
 
         let miller_index = match network_evaluator.evaluate_or_default(
             network_stack,
@@ -252,8 +254,8 @@ impl NodeData for DrawingPlaneData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert(
-            "unit_cell".to_string(),
-            (false, Some("cubic diamond".to_string())),
+            "structure".to_string(),
+            (false, Some("diamond".to_string())),
         );
         m
     }
@@ -438,8 +440,8 @@ pub fn get_node_type() -> NodeType {
       parameters: vec![
         Parameter {
           id: None,
-          name: "unit_cell".to_string(),
-          data_type: DataType::UnitCell,
+          name: "structure".to_string(),
+          data_type: DataType::Structure,
         },
         Parameter {
           id: None,

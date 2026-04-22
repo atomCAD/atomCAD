@@ -1,7 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_constants::ATOM_INFO;
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -71,13 +71,14 @@ impl NodeData for AtomReplaceData {
             return EvalOutput::single(molecule_input_val);
         }
 
-        if let NetworkResult::Atomic(mut structure) = molecule_input_val {
-            if self.replacements.is_empty() {
-                return EvalOutput::single(NetworkResult::Atomic(structure));
+        let replacements = self.replacements.clone();
+        EvalOutput::single(map_atomic(molecule_input_val, move |mut structure| {
+            if replacements.is_empty() {
+                return structure;
             }
 
             // Build lookup map (last rule wins for duplicate sources)
-            let replacement_map: HashMap<i16, i16> = self.replacements.iter().copied().collect();
+            let replacement_map: HashMap<i16, i16> = replacements.iter().copied().collect();
 
             // Collect atoms to delete and atoms to replace
             let mut atoms_to_delete = Vec::new();
@@ -108,10 +109,8 @@ impl NodeData for AtomReplaceData {
                 structure.delete_atom(atom_id);
             }
 
-            EvalOutput::single(NetworkResult::Atomic(structure))
-        } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
-        }
+            structure
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -131,9 +130,7 @@ impl NodeData for AtomReplaceData {
             .replacements
             .iter()
             .take(max_display)
-            .map(|(from, to)| {
-                format!("{}→{}", element_symbol(*from), element_symbol(*to))
-            })
+            .map(|(from, to)| format!("{}→{}", element_symbol(*from), element_symbol(*to)))
             .collect();
 
         let remaining = self.replacements.len().saturating_sub(max_display);
@@ -162,9 +159,7 @@ impl NodeData for AtomReplaceData {
                 self.replacements = items
                     .iter()
                     .map(|item| {
-                        let iv = item
-                            .as_ivec2()
-                            .ok_or("each replacement must be an IVec2")?;
+                        let iv = item.as_ivec2().ok_or("each replacement must be an IVec2")?;
                         Ok((iv.x as i16, iv.y as i16))
                     })
                     .collect::<Result<Vec<_>, String>>()?;
@@ -192,9 +187,9 @@ pub fn get_node_type() -> NodeType {
         parameters: vec![Parameter {
             id: None,
             name: "molecule".to_string(),
-            data_type: DataType::Atomic,
+            data_type: DataType::HasAtoms,
         }],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(AtomReplaceData::default()),
         node_data_saver: generic_node_data_saver::<AtomReplaceData>,

@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -56,28 +59,80 @@ const Color NODE_TITLE_COLOR_PARAMETER = Color(0xFF1B5E20); // Dark green
 const double WIRE_GLOW_BLUR_RADIUS = 8.0;
 const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
 
+// Alignment tooltip colors — see doc/design_blueprint_alignment.md §6.2.
+// Tooltips render on a dark background, so we use light tints rather than
+// the saturated brown/orange used by the warning-triangle pin icon.
+const Color ALIGNMENT_MOTIF_UNALIGNED_TOOLTIP_COLOR =
+    Color(0xFFD7B49E); // light tan
+const Color ALIGNMENT_LATTICE_UNALIGNED_TOOLTIP_COLOR =
+    Color(0xFFFFAB91); // light salmon
+// Saturated brown used by the warning-triangle pin painter; readable against
+// the light node background.
+const Color ALIGNMENT_MOTIF_UNALIGNED_COLOR = Color(0xFF6D4C41);
+
 class PinViewWidget extends StatelessWidget {
   final String dataType;
   final bool multi;
+
+  /// Input pins may declare an abstract data type (`HasAtoms`, `HasStructure`,
+  /// `HasFreeLinOps`); those render as an N-sliced pie of concrete-satisfier
+  /// colors. Output pins are always concrete and render single-colored.
+  final bool isInput;
   final String? outputString;
   final String? pinName;
+  final APIAlignment? alignment;
+  final String? alignmentReason;
 
   const PinViewWidget(
       {super.key,
       required this.dataType,
       required this.multi,
+      required this.isInput,
       this.outputString,
-      this.pinName});
+      this.pinName,
+      this.alignment,
+      this.alignmentReason});
 
   @override
   Widget build(BuildContext context) {
-    final color = getDataTypeColor(dataType);
-
-    String tooltipMessage = '';
-    if (pinName != null && pinName!.isNotEmpty) {
-      tooltipMessage = '── $pinName ──  $dataType';
+    final List<Color> sliceColors;
+    final String typeLabel;
+    if (isInput && isAbstractDataType(dataType)) {
+      final concretes = ABSTRACT_TYPE_CONCRETES[dataType]!;
+      sliceColors = concretes.map(getDataTypeColor).toList(growable: false);
+      typeLabel = '$dataType (${concretes.join(' or ')})';
     } else {
-      tooltipMessage = dataType;
+      sliceColors = [getDataTypeColor(dataType)];
+      typeLabel = dataType;
+    }
+
+    final List<InlineSpan> spans = [];
+    if (pinName != null && pinName!.isNotEmpty) {
+      spans.add(TextSpan(text: '── $pinName ──  $typeLabel'));
+    } else {
+      spans.add(TextSpan(text: typeLabel));
+    }
+    Color? reasonColor;
+    if (alignment == APIAlignment.motifUnaligned) {
+      spans.add(const TextSpan(
+        text: '\nAlignment: motif-unaligned',
+        style: TextStyle(color: ALIGNMENT_MOTIF_UNALIGNED_TOOLTIP_COLOR),
+      ));
+      reasonColor = ALIGNMENT_MOTIF_UNALIGNED_TOOLTIP_COLOR;
+    } else if (alignment == APIAlignment.latticeUnaligned) {
+      spans.add(const TextSpan(
+        text: '\nAlignment: lattice-unaligned',
+        style: TextStyle(color: ALIGNMENT_LATTICE_UNALIGNED_TOOLTIP_COLOR),
+      ));
+      reasonColor = ALIGNMENT_LATTICE_UNALIGNED_TOOLTIP_COLOR;
+    }
+    if (reasonColor != null &&
+        alignmentReason != null &&
+        alignmentReason!.isNotEmpty) {
+      spans.add(TextSpan(
+        text: '\n  ($alignmentReason)',
+        style: TextStyle(color: reasonColor),
+      ));
     }
     if (outputString != null && outputString!.isNotEmpty) {
       const maxLines = 15;
@@ -96,31 +151,148 @@ class PinViewWidget extends StatelessWidget {
       if (truncated) {
         preview = '$preview\n...';
       }
-      tooltipMessage = '$tooltipMessage\n$preview';
+      spans.add(TextSpan(text: '\n$preview'));
     }
 
+    final bool unaligned = alignment == APIAlignment.motifUnaligned ||
+        alignment == APIAlignment.latticeUnaligned;
+
     return Tooltip(
-      message: tooltipMessage,
+      richMessage: TextSpan(children: spans),
       preferBelow: false,
       child: Center(
-        child: Container(
-            width: PIN_SIZE,
-            height: PIN_SIZE,
-            decoration: multi
-                ? BoxDecoration(
-                    border: Border.all(
-                      color: color, // Set the border color
-                      width: PIN_BORDER_WIDTH, // Set the border width
-                    ),
-                    shape: BoxShape.circle,
-                    color: Colors.black,
-                  )
-                : BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: color,
-                  )),
+        child: SizedBox(
+          width: PIN_SIZE,
+          height: PIN_SIZE,
+          child: CustomPaint(
+            painter: unaligned
+                ? _WarningTrianglePinPainter(color: sliceColors.first)
+                : _PinPainter(
+                    sliceColors: sliceColors,
+                    hollow: multi,
+                    borderWidth: PIN_BORDER_WIDTH,
+                  ),
+          ),
+        ),
       ),
     );
+  }
+}
+
+/// Paints a pin as either a filled/ringed disk (single-color) or a pie-sliced
+/// disk/ring (multi-color). Slices start at 12 o'clock and sweep clockwise.
+class _PinPainter extends CustomPainter {
+  final List<Color> sliceColors;
+  final bool hollow;
+  final double borderWidth;
+
+  const _PinPainter({
+    required this.sliceColors,
+    required this.hollow,
+    required this.borderWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final outerRadius = size.width / 2;
+
+    if (hollow) {
+      // Match Flutter's BoxDecoration border behavior: the border is drawn
+      // inside the shape bounds, so the stroke centerline sits at
+      // outerRadius - borderWidth/2.
+      final strokeRadius = outerRadius - borderWidth / 2;
+      final strokeRect = Rect.fromCircle(center: center, radius: strokeRadius);
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth;
+
+      if (sliceColors.length == 1) {
+        paint.color = sliceColors.first;
+        canvas.drawCircle(center, strokeRadius, paint);
+      } else {
+        final sweep = 2 * math.pi / sliceColors.length;
+        double startAngle = -math.pi / 2;
+        for (final color in sliceColors) {
+          paint.color = color;
+          canvas.drawArc(strokeRect, startAngle, sweep, false, paint);
+          startAngle += sweep;
+        }
+      }
+    } else {
+      final paint = Paint()..style = PaintingStyle.fill;
+
+      if (sliceColors.length == 1) {
+        paint.color = sliceColors.first;
+        canvas.drawCircle(center, outerRadius, paint);
+      } else {
+        final rect = Rect.fromCircle(center: center, radius: outerRadius);
+        final sweep = 2 * math.pi / sliceColors.length;
+        double startAngle = -math.pi / 2;
+        for (final color in sliceColors) {
+          paint.color = color;
+          canvas.drawArc(rect, startAngle, sweep, true, paint);
+          startAngle += sweep;
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PinPainter oldDelegate) {
+    return !listEquals(oldDelegate.sliceColors, sliceColors) ||
+        oldDelegate.hollow != hollow ||
+        oldDelegate.borderWidth != borderWidth;
+  }
+}
+
+/// Paints an output pin as a filled warning triangle with an exclamation mark
+/// for Blueprint/Crystal pins whose alignment is MotifUnaligned or
+/// LatticeUnaligned. The triangle fits within the pin's circle bounding box so
+/// wire-endpoint math and hit testing stay unchanged. See
+/// `doc/design_blueprint_alignment.md` §6.3.
+class _WarningTrianglePinPainter extends CustomPainter {
+  final Color color;
+
+  const _WarningTrianglePinPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double w = size.width;
+    final double h = size.height;
+    final path = Path()
+      ..moveTo(w / 2, 0)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+
+    final fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = color;
+    canvas.drawPath(path, fillPaint);
+
+    // Exclamation mark: a short black bar above a small black dot, centered
+    // in the lower half of the triangle where it has room.
+    final barPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.black;
+    final double barWidth = w * 0.14;
+    final double barTop = h * 0.32;
+    final double barBottom = h * 0.68;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(
+            w / 2 - barWidth / 2, barTop, w / 2 + barWidth / 2, barBottom),
+        Radius.circular(barWidth / 2),
+      ),
+      barPaint,
+    );
+    canvas.drawCircle(Offset(w / 2, h * 0.83), barWidth * 0.75, barPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WarningTrianglePinPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
 
@@ -129,11 +301,15 @@ class PinWidget extends StatelessWidget {
   final bool multi;
   final String? outputString;
   final String? pinName;
+  final APIAlignment? alignment;
+  final String? alignmentReason;
   PinWidget(
       {required this.pinReference,
       required this.multi,
       this.outputString,
-      this.pinName})
+      this.pinName,
+      this.alignment,
+      this.alignmentReason})
       : super(
             key: ValueKey(pinReference.pinIndex +
                 ((pinReference.pinType == PinType.output) ? 1000 : 0)));
@@ -152,6 +328,7 @@ class PinWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isInput = pinReference.pinType == PinType.input;
     return SizedBox(
       width: PIN_HIT_AREA_WIDTH,
       height: PIN_HIT_AREA_HEIGHT,
@@ -167,8 +344,11 @@ class PinWidget extends StatelessWidget {
                 child: PinViewWidget(
                     dataType: pinReference.dataType,
                     multi: multi,
+                    isInput: isInput,
                     outputString: outputString,
-                    pinName: pinName),
+                    pinName: pinName,
+                    alignment: alignment,
+                    alignmentReason: alignmentReason),
               ),
             ),
             child: SizedBox(
@@ -178,8 +358,11 @@ class PinWidget extends StatelessWidget {
                 child: PinViewWidget(
                     dataType: pinReference.dataType,
                     multi: multi,
+                    isInput: isInput,
                     outputString: outputString,
-                    pinName: pinName),
+                    pinName: pinName,
+                    alignment: alignment,
+                    alignmentReason: alignmentReason),
               ),
             ),
             onDragUpdate: (details) {
@@ -446,13 +629,15 @@ class NodeWidget extends StatelessWidget {
         ),
         const SizedBox(width: 2),
         PinWidget(
-          pinReference:
-              PinReference(node.id, PinType.output, pin.index, pin.dataType),
+          pinReference: PinReference(
+              node.id, PinType.output, pin.index, pin.effectiveDataType),
           multi: false,
           outputString: pin.index < node.outputPinStrings.length
               ? node.outputPinStrings[pin.index]
               : null,
           pinName: node.outputPins.length > 1 ? pin.name : null,
+          alignment: pin.alignment,
+          alignmentReason: pin.alignmentReason,
         ),
       ],
     );

@@ -10,7 +10,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -264,8 +264,11 @@ impl ImportCifData {
 
 fn build_eval_output(result: &CifImportResult) -> EvalOutput {
     EvalOutput::multi(vec![
-        NetworkResult::UnitCell(result.unit_cell.clone()),
-        NetworkResult::Atomic(result.atomic_structure.clone()),
+        NetworkResult::LatticeVecs(result.unit_cell.clone()),
+        NetworkResult::Molecule(MoleculeData {
+            atoms: result.atomic_structure.clone(),
+            geo_tree_root: None,
+        }),
         NetworkResult::Motif(result.motif.clone()),
     ])
 }
@@ -629,18 +632,12 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition {
-                name: "unit_cell".to_string(),
-                data_type: DataType::UnitCell,
-            },
-            OutputPinDefinition {
-                name: "atoms".to_string(),
-                data_type: DataType::Atomic,
-            },
-            OutputPinDefinition {
-                name: "motif".to_string(),
-                data_type: DataType::Motif,
-            },
+            OutputPinDefinition::fixed("unit_cell", DataType::LatticeVecs),
+            // TODO: CIF's crystal lattice/motif info is discarded when emitting a
+            // Molecule. Once phase-transition nodes land, this should emit Crystal
+            // with an extracted Structure instead.
+            OutputPinDefinition::fixed("atoms", DataType::Molecule),
+            OutputPinDefinition::fixed("motif", DataType::Motif),
         ],
         public: true,
         node_data_creator: || Box::new(ImportCifData::new()),

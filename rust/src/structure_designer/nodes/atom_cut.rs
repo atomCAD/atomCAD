@@ -4,6 +4,7 @@ use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -55,48 +56,44 @@ impl NodeData for AtomCutData {
             return EvalOutput::single(molecule_input_val);
         }
 
-        if let NetworkResult::Atomic(mut atomic_structure) = molecule_input_val {
-            let shapes_val =
-                network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
+        let shapes_val =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
 
-            if let NetworkResult::None = shapes_val {
-                return EvalOutput::single(NetworkResult::Atomic(atomic_structure)); // no cutters plugged in, just return the input atomic structure unmodified.
+        if let NetworkResult::None = shapes_val {
+            // no cutters plugged in; just return the input atomic structure unmodified
+            return EvalOutput::single(map_atomic(molecule_input_val, |s| s));
+        }
+
+        if let NetworkResult::Error(_) = shapes_val {
+            return EvalOutput::single(shapes_val);
+        }
+
+        let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
+            array_elements
+        } else {
+            return EvalOutput::single(NetworkResult::Error("Invalid shapes input.".to_string()));
+        };
+
+        let mut shapes: Vec<GeoNode> = Vec::new();
+        for shape_val in shape_results {
+            if let NetworkResult::Blueprint(shape) = shape_val {
+                shapes.push(shape.geo_tree_root);
             }
+        }
 
-            if let NetworkResult::Error(_) = shapes_val {
-                return EvalOutput::single(shapes_val);
-            }
+        let cutter_geo_tree_root = GeoNode::intersection_3d(shapes);
+        let cut_sdf_value = self.cut_sdf_value;
+        let unit_cell_size = self.unit_cell_size;
 
-            let mut shapes: Vec<GeoNode> = Vec::new();
-
-            // Extract the array elements from shapes_val
-            let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
-                array_elements
-            } else {
-                return EvalOutput::single(NetworkResult::Error(
-                    "Invalid shapes input.".to_string(),
-                ));
-            };
-
-            for shape_val in shape_results {
-                if let NetworkResult::Geometry(shape) = shape_val {
-                    shapes.push(shape.geo_tree_root);
-                }
-            }
-
-            let cutter_geo_tree_root = GeoNode::intersection_3d(shapes);
-
+        EvalOutput::single(map_atomic(molecule_input_val, |mut atomic_structure| {
             cut_atomic_structure(
                 &mut atomic_structure,
                 &cutter_geo_tree_root,
-                self.cut_sdf_value,
-                self.unit_cell_size,
+                cut_sdf_value,
+                unit_cell_size,
             );
-
-            EvalOutput::single(NetworkResult::Atomic(atomic_structure))
-        } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
-        }
+            atomic_structure
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -198,15 +195,15 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "molecule".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             },
             Parameter {
                 id: None,
                 name: "cutters".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Geometry)),
+                data_type: DataType::Array(Box::new(DataType::Blueprint)),
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(AtomCutData::new()),
         node_data_saver: generic_node_data_saver::<AtomCutData>,

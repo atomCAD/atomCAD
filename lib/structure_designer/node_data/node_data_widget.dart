@@ -12,11 +12,10 @@ import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/drawing_plane_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_symop_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/lattice_move_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/lattice_rot_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/atom_move_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/atom_rot_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/atom_trans.dart';
+import 'package:flutter_cad/structure_designer/node_data/structure_move_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/structure_rot_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/free_move_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/free_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_edit_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
@@ -38,7 +37,7 @@ import 'package:flutter_cad/structure_designer/node_data/vec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/expr_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/motif_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/motif_sub_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/atom_fill_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/materialize_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_cif_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/infer_bonds_editor.dart';
@@ -47,7 +46,7 @@ import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/unit_cell_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/lattice_vecs_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -221,75 +220,44 @@ class NodeDataWidget extends StatelessWidget {
           data: latticeSymopData,
           model: model,
         );
-      case 'lattice_move':
-        // Fetch the lattice move data here in the parent widget
-        final latticeMoveData = model.getLatticeMoveData(selectedNode.id);
+      case 'structure_move':
+        // Fetch the structure move data here in the parent widget
+        final structureMoveData = model.getStructureMoveData(selectedNode.id);
 
-        return LatticeMoveEditor(
+        return StructureMoveEditor(
           nodeId: selectedNode.id,
-          data: latticeMoveData,
+          data: structureMoveData,
           model: model,
         );
-      case 'atom_lmove':
-        final atomLmoveData = model.getLatticeMoveData(selectedNode.id);
+      case 'structure_rot':
+        // Fetch the structure rotation data here in the parent widget
+        final structureRotData = model.getStructureRotData(selectedNode.id);
 
-        return LatticeMoveEditor(
+        return StructureRotEditor(
           nodeId: selectedNode.id,
-          data: atomLmoveData,
-          model: model,
-          title: 'Atom Lattice Move Properties',
-          nodeTypeName: 'atom_lmove',
-        );
-      case 'lattice_rot':
-        // Fetch the lattice rotation data here in the parent widget
-        final latticeRotData = model.getLatticeRotData(selectedNode.id);
-
-        return LatticeRotEditor(
-          nodeId: selectedNode.id,
-          data: latticeRotData,
+          data: structureRotData,
           model: model,
         );
-      case 'atom_lrot':
-        final atomLrotData = model.getLatticeRotData(selectedNode.id);
-
-        return LatticeRotEditor(
-          nodeId: selectedNode.id,
-          data: atomLrotData,
-          model: model,
-          title: 'Atom Lattice Rotation Properties',
-          nodeTypeName: 'atom_lrot',
-        );
-      case 'atom_move':
-        // Fetch the atom move data here in the parent widget
-        final atomMoveData = getAtomMoveData(
+      case 'free_move':
+        // Fetch the free move data here in the parent widget
+        final freeMoveData = getFreeMoveData(
           nodeId: selectedNode.id,
         );
 
-        return AtomMoveEditor(
+        return FreeMoveEditor(
           nodeId: selectedNode.id,
-          data: atomMoveData,
+          data: freeMoveData,
           model: model,
         );
-      case 'atom_rot':
-        // Fetch the atom rotation data here in the parent widget
-        final atomRotData = getAtomRotData(
+      case 'free_rot':
+        // Fetch the free rotation data here in the parent widget
+        final freeRotData = getFreeRotData(
           nodeId: selectedNode.id,
         );
 
-        return AtomRotEditor(
+        return FreeRotEditor(
           nodeId: selectedNode.id,
-          data: atomRotData,
-          model: model,
-        );
-      case 'atom_trans':
-        // Fetch the atom transformation data here in the parent widget
-        final atomTransData = getAtomTransData(
-          nodeId: selectedNode.id,
-        );
-
-        return AtomTransEditor(
-          nodeId: selectedNode.id,
-          data: atomTransData,
+          data: freeRotData,
           model: model,
         );
       case 'edit_atom':
@@ -539,13 +507,13 @@ class NodeDataWidget extends StatelessWidget {
           data: motifSubData,
           model: model,
         );
-      case 'atom_fill':
-        // Fetch the atom_fill data here in the parent widget
-        final atomFillData = model.getAtomFillData(selectedNode.id);
+      case 'materialize':
+        // Fetch the materialize data here in the parent widget
+        final materializeData = model.getMaterializeData(selectedNode.id);
 
-        return AtomFillEditor(
+        return MaterializeEditor(
           nodeId: selectedNode.id,
-          data: atomFillData,
+          data: materializeData,
           model: model,
         );
       case 'import_xyz':
@@ -623,15 +591,14 @@ class NodeDataWidget extends StatelessWidget {
           data: atomCutData,
           model: model,
         );
-      case 'unit_cell':
-        // Fetch the unit_cell data here in the parent widget
-        final unitCellData = getUnitCellData(
+      case 'lattice_vecs':
+        final latticeVecsData = getLatticeVecsData(
           nodeId: selectedNode.id,
         );
 
-        return UnitCellEditor(
+        return LatticeVecsEditor(
           nodeId: selectedNode.id,
-          data: unitCellData,
+          data: latticeVecsData,
           model: model,
         );
       default:

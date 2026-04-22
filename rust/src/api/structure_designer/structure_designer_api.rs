@@ -1,6 +1,6 @@
+use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
-use super::structure_designer_api_types::APIAtomFillData;
 use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICommentData;
@@ -15,6 +15,7 @@ use super::structure_designer_api_types::APIImportCIFData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIInferBondsData;
 use super::structure_designer_api_types::APIMapData;
+use super::structure_designer_api_types::APIMaterializeData;
 use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIMotifParameterInfo;
@@ -49,24 +50,23 @@ use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomComposeDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
-use crate::api::structure_designer::structure_designer_api_types::APIAtomMoveData;
-use crate::api::structure_designer::structure_designer_api_types::APIAtomRotData;
-use crate::api::structure_designer::structure_designer_api_types::APIAtomTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIBoolData;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APIDiffStats;
 use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIFloatData;
+use crate::api::structure_designer::structure_designer_api_types::APIFreeMoveData;
+use crate::api::structure_designer::structure_designer_api_types::APIFreeRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIntData;
+use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIStringData;
-use crate::api::structure_designer::structure_designer_api_types::APIUnitCellData;
 use crate::api::structure_designer::structure_designer_api_types::APIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::InputPinView;
@@ -79,25 +79,22 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIDataTypeBase, APINetworkWithValidationErrors, APINodeCategoryView, NodeNetworkView,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
-    APILatticeMoveData, APILatticeRotData, APILatticeSymopData, APIRotationalSymmetry,
+    APILatticeSymopData, APIRotationalSymmetry, APIStructureMoveData, APIStructureRotData,
 };
 use crate::crystolecule::unit_cell_symmetries::{
     CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
 };
 use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::layout;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
-use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
-use crate::structure_designer::nodes::atom_fill::AtomFillData;
-use crate::structure_designer::nodes::atom_move::AtomMoveData;
-use crate::structure_designer::nodes::atom_rot::AtomRotData;
-use crate::structure_designer::nodes::atom_trans::AtomTransData;
+use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::circle::CircleData;
 use crate::structure_designer::nodes::comment::CommentData;
@@ -110,6 +107,8 @@ use crate::structure_designer::nodes::expr::ExprData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
 use crate::structure_designer::nodes::float::FloatData;
+use crate::structure_designer::nodes::free_move::FreeMoveData;
+use crate::structure_designer::nodes::free_rot::FreeRotData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
@@ -119,10 +118,10 @@ use crate::structure_designer::nodes::infer_bonds::InferBondsData;
 use crate::structure_designer::nodes::int::IntData;
 use crate::structure_designer::nodes::ivec2::IVec2Data;
 use crate::structure_designer::nodes::ivec3::IVec3Data;
-use crate::structure_designer::nodes::lattice_move::LatticeMoveData;
-use crate::structure_designer::nodes::lattice_rot::{LatticeRotData, LatticeRotEvalCache};
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
+use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use crate::structure_designer::nodes::map::MapData;
+use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
@@ -132,10 +131,19 @@ use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::sequence::SequenceData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::string::StringData;
-use crate::structure_designer::nodes::unit_cell::UnitCellData;
+use crate::structure_designer::nodes::structure_move::StructureMoveData;
+use crate::structure_designer::nodes::structure_rot::{StructureRotData, StructureRotEvalCache};
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
 use std::collections::HashMap;
+
+fn alignment_to_api(alignment: Alignment) -> APIAlignment {
+    match alignment {
+        Alignment::Aligned => APIAlignment::Aligned,
+        Alignment::MotifUnaligned => APIAlignment::MotifUnaligned,
+        Alignment::LatticeUnaligned => APIAlignment::LatticeUnaligned,
+    }
+}
 
 fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
     let base_type = match api_data_type.data_type_base {
@@ -148,12 +156,17 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
         APIDataTypeBase::Vec3 => DataType::Vec3,
         APIDataTypeBase::IVec2 => DataType::IVec2,
         APIDataTypeBase::IVec3 => DataType::IVec3,
-        APIDataTypeBase::UnitCell => DataType::UnitCell,
+        APIDataTypeBase::LatticeVecs => DataType::LatticeVecs,
         APIDataTypeBase::DrawingPlane => DataType::DrawingPlane,
         APIDataTypeBase::Geometry2D => DataType::Geometry2D,
-        APIDataTypeBase::Geometry => DataType::Geometry,
-        APIDataTypeBase::Atomic => DataType::Atomic,
+        APIDataTypeBase::Blueprint => DataType::Blueprint,
+        APIDataTypeBase::HasAtoms => DataType::HasAtoms,
+        APIDataTypeBase::Crystal => DataType::Crystal,
+        APIDataTypeBase::Molecule => DataType::Molecule,
+        APIDataTypeBase::HasStructure => DataType::HasStructure,
+        APIDataTypeBase::HasFreeLinOps => DataType::HasFreeLinOps,
         APIDataTypeBase::Motif => DataType::Motif,
+        APIDataTypeBase::Structure => DataType::Structure,
         APIDataTypeBase::Custom => {
             if let Some(custom_str) = &api_data_type.custom_data_type {
                 return DataType::from_string(custom_str);
@@ -187,12 +200,17 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::Vec3 => APIDataTypeBase::Vec3,
         DataType::IVec2 => APIDataTypeBase::IVec2,
         DataType::IVec3 => APIDataTypeBase::IVec3,
-        DataType::UnitCell => APIDataTypeBase::UnitCell,
+        DataType::LatticeVecs => APIDataTypeBase::LatticeVecs,
         DataType::DrawingPlane => APIDataTypeBase::DrawingPlane,
         DataType::Geometry2D => APIDataTypeBase::Geometry2D,
-        DataType::Geometry => APIDataTypeBase::Geometry,
-        DataType::Atomic => APIDataTypeBase::Atomic,
+        DataType::Blueprint => APIDataTypeBase::Blueprint,
+        DataType::HasAtoms => APIDataTypeBase::HasAtoms,
+        DataType::Crystal => APIDataTypeBase::Crystal,
+        DataType::Molecule => APIDataTypeBase::Molecule,
+        DataType::HasStructure => APIDataTypeBase::HasStructure,
+        DataType::HasFreeLinOps => APIDataTypeBase::HasFreeLinOps,
         DataType::Motif => APIDataTypeBase::Motif,
+        DataType::Structure => APIDataTypeBase::Structure,
         _ => APIDataTypeBase::Custom, // All other types are considered custom
     };
 
@@ -329,15 +347,54 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                     let output_type = node_type.output_type().clone();
                     let function_type = node_type.get_function_type();
 
-                    // Build output pin views from the node type's output_pins
+                    // Look up this node's scene data once so we can read the
+                    // per-pin alignment recorded at evaluation time.
+                    let scene_node_data = cad_instance
+                        .structure_designer
+                        .last_generated_structure_designer_scene
+                        .node_data
+                        .get(&node.id);
+
+                    // Build output pin views from the node type's output_pins.
+                    // For polymorphic pins (SameAsInput / SameAsArrayElements) or
+                    // pins declared with an abstract Fixed type, also resolve the
+                    // concrete type against the upstream wires so the UI can show
+                    // the actual flowing type instead of e.g. "SameAsInput(input)".
                     let output_pins: Vec<OutputPinView> = node_type
                         .output_pins
                         .iter()
                         .enumerate()
-                        .map(|(i, pin_def)| OutputPinView {
-                            name: pin_def.name.clone(),
-                            data_type: pin_def.data_type.to_string(),
-                            index: i as i32,
+                        .map(|(i, pin_def)| {
+                            let needs_resolution = match &pin_def.data_type {
+                                crate::structure_designer::node_type::PinOutputType::Fixed(t) => {
+                                    t.is_abstract()
+                                }
+                                _ => true,
+                            };
+                            let resolved_data_type = if needs_resolution {
+                                cad_instance
+                                    .structure_designer
+                                    .node_type_registry
+                                    .resolve_output_type(node, node_network, i as i32)
+                                    .map(|t| t.to_string())
+                            } else {
+                                None
+                            };
+                            let pin_output = scene_node_data.and_then(|d| {
+                                d.pin_outputs.iter().find(|p| p.pin_index == i as i32)
+                            });
+                            let alignment =
+                                pin_output.and_then(|p| p.alignment).map(alignment_to_api);
+                            let alignment_reason =
+                                pin_output.and_then(|p| p.alignment_reason.clone());
+                            OutputPinView {
+                                name: pin_def.name.clone(),
+                                data_type: pin_def.data_type.to_string(),
+                                resolved_data_type,
+                                index: i as i32,
+                                alignment,
+                                alignment_reason,
+                            }
                         })
                         .collect();
 
@@ -568,7 +625,7 @@ pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
 
 /// Returns node types that have at least one pin compatible with the given type.
 ///
-/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Geometry", "Float")
+/// - `source_type_str`: The data type being dragged (serialized string, e.g., "Blueprint", "Float")
 /// - `dragging_from_output`: true if dragging from output pin, false if from input pin
 ///
 /// When dragging from OUTPUT: find nodes with compatible INPUT pins
@@ -2131,7 +2188,7 @@ pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_lattice_move_data(node_id: u64) -> Option<APILatticeMoveData> {
+pub fn get_structure_move_data(node_id: u64) -> Option<APIStructureMoveData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -2142,15 +2199,15 @@ pub fn get_lattice_move_data(node_id: u64) -> Option<APILatticeMoveData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let lattice_move_data =
-                    match node_data.as_any_ref().downcast_ref::<LatticeMoveData>() {
+                let structure_move_data =
+                    match node_data.as_any_ref().downcast_ref::<StructureMoveData>() {
                         Some(data) => data,
                         None => return None,
                     };
 
-                Some(APILatticeMoveData {
-                    translation: to_api_ivec3(&lattice_move_data.translation),
-                    lattice_subdivision: lattice_move_data.lattice_subdivision,
+                Some(APIStructureMoveData {
+                    translation: to_api_ivec3(&structure_move_data.translation),
+                    lattice_subdivision: structure_move_data.lattice_subdivision,
                 })
             },
             None,
@@ -2159,7 +2216,7 @@ pub fn get_lattice_move_data(node_id: u64) -> Option<APILatticeMoveData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
+pub fn get_structure_rot_data(node_id: u64) -> Option<APIStructureRotData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -2170,23 +2227,23 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let lattice_rot_data = match node_data.as_any_ref().downcast_ref::<LatticeRotData>()
-                {
-                    Some(data) => data,
-                    None => return None,
-                };
+                let structure_rot_data =
+                    match node_data.as_any_ref().downcast_ref::<StructureRotData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
 
                 // Try to get the evaluation cache to access unit cell and compute symmetries and crystal system
                 let (api_symmetries, crystal_system_str) = if let Some(eval_cache) = cad_instance
                     .structure_designer
                     .get_selected_node_eval_cache()
                 {
-                    if let Some(lattice_rot_cache) =
-                        eval_cache.downcast_ref::<LatticeRotEvalCache>()
+                    if let Some(structure_rot_cache) =
+                        eval_cache.downcast_ref::<StructureRotEvalCache>()
                     {
                         // Analyze unit cell symmetries and crystal system
                         let (crystal_system, symmetries) =
-                            analyze_unit_cell_complete(&lattice_rot_cache.unit_cell);
+                            analyze_unit_cell_complete(&structure_rot_cache.unit_cell);
 
                         // Convert symmetries to API format
                         let api_symmetries = symmetries
@@ -2199,7 +2256,7 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
 
                         (api_symmetries, crystal_system_to_string(crystal_system))
                     } else {
-                        // No lattice rot cache available - return empty symmetries and unknown crystal system
+                        // No structure rot cache available - return empty symmetries and unknown crystal system
                         (Vec::new(), "Unknown".to_string())
                     }
                 } else {
@@ -2207,10 +2264,10 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
                     (Vec::new(), "Unknown".to_string())
                 };
 
-                Some(APILatticeRotData {
-                    axis_index: lattice_rot_data.axis_index,
-                    step: lattice_rot_data.step,
-                    pivot_point: to_api_ivec3(&lattice_rot_data.pivot_point),
+                Some(APIStructureRotData {
+                    axis_index: structure_rot_data.axis_index,
+                    step: structure_rot_data.step,
+                    pivot_point: to_api_ivec3(&structure_rot_data.pivot_point),
                     rotational_symmetries: api_symmetries,
                     crystal_system: crystal_system_str,
                 })
@@ -2221,7 +2278,7 @@ pub fn get_lattice_rot_data(node_id: u64) -> Option<APILatticeRotData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_move_data(node_id: u64) -> Option<APIAtomMoveData> {
+pub fn get_free_move_data(node_id: u64) -> Option<APIFreeMoveData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -2232,12 +2289,12 @@ pub fn get_atom_move_data(node_id: u64) -> Option<APIAtomMoveData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let atom_move_data = match node_data.as_any_ref().downcast_ref::<AtomMoveData>() {
+                let free_move_data = match node_data.as_any_ref().downcast_ref::<FreeMoveData>() {
                     Some(data) => data,
                     None => return None,
                 };
-                Some(APIAtomMoveData {
-                    translation: to_api_vec3(&atom_move_data.translation),
+                Some(APIFreeMoveData {
+                    translation: to_api_vec3(&free_move_data.translation),
                 })
             },
             None,
@@ -2246,7 +2303,7 @@ pub fn get_atom_move_data(node_id: u64) -> Option<APIAtomMoveData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_rot_data(node_id: u64) -> Option<APIAtomRotData> {
+pub fn get_free_rot_data(node_id: u64) -> Option<APIFreeRotData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -2257,40 +2314,14 @@ pub fn get_atom_rot_data(node_id: u64) -> Option<APIAtomRotData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let atom_rot_data = match node_data.as_any_ref().downcast_ref::<AtomRotData>() {
+                let free_rot_data = match node_data.as_any_ref().downcast_ref::<FreeRotData>() {
                     Some(data) => data,
                     None => return None,
                 };
-                Some(APIAtomRotData {
-                    angle: atom_rot_data.angle,
-                    rot_axis: to_api_vec3(&atom_rot_data.rot_axis),
-                    pivot_point: to_api_vec3(&atom_rot_data.pivot_point),
-                })
-            },
-            None,
-        )
-    }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_trans_data(node_id: u64) -> Option<APIAtomTransData> {
-    unsafe {
-        with_cad_instance_or(
-            |cad_instance| {
-                let node_data = match cad_instance
-                    .structure_designer
-                    .get_node_network_data(node_id)
-                {
-                    Some(data) => data,
-                    None => return None,
-                };
-                let atom_trans_data = match node_data.as_any_ref().downcast_ref::<AtomTransData>() {
-                    Some(data) => data,
-                    None => return None,
-                };
-                Some(APIAtomTransData {
-                    translation: to_api_vec3(&atom_trans_data.translation),
-                    rotation: to_api_vec3(&atom_trans_data.rotation),
+                Some(APIFreeRotData {
+                    angle: free_rot_data.angle,
+                    rot_axis: to_api_vec3(&free_rot_data.rot_axis),
+                    pivot_point: to_api_vec3(&free_rot_data.pivot_point),
                 })
             },
             None,
@@ -3243,97 +3274,65 @@ pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_lattice_move_data(node_id: u64, data: APILatticeMoveData) {
+pub fn set_structure_move_data(node_id: u64, data: APIStructureMoveData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            // Preserve is_atomic_mode from the existing node data
-            let is_atomic_mode = cad_instance
-                .structure_designer
-                .get_active_node_network()
-                .and_then(|n| n.get_node_network_data(node_id))
-                .and_then(|d| d.as_any_ref().downcast_ref::<LatticeMoveData>())
-                .map_or(false, |d| d.is_atomic_mode);
-            let lattice_move_data = Box::new(LatticeMoveData {
+            let structure_move_data = Box::new(StructureMoveData {
                 translation: from_api_ivec3(&data.translation),
                 lattice_subdivision: data.lattice_subdivision,
-                is_atomic_mode,
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, lattice_move_data);
+                .set_node_network_data(node_id, structure_move_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_lattice_rot_data(node_id: u64, data: APILatticeRotData) {
+pub fn set_structure_rot_data(node_id: u64, data: APIStructureRotData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            // Preserve is_atomic_mode from the existing node data
-            let is_atomic_mode = cad_instance
-                .structure_designer
-                .get_active_node_network()
-                .and_then(|n| n.get_node_network_data(node_id))
-                .and_then(|d| d.as_any_ref().downcast_ref::<LatticeRotData>())
-                .map_or(false, |d| d.is_atomic_mode);
-            let lattice_rot_data = Box::new(LatticeRotData {
+            let structure_rot_data = Box::new(StructureRotData {
                 axis_index: data.axis_index,
                 step: data.step,
                 pivot_point: from_api_ivec3(&data.pivot_point),
-                is_atomic_mode,
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, lattice_rot_data);
+                .set_node_network_data(node_id, structure_rot_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_move_data(node_id: u64, data: APIAtomMoveData) {
+pub fn set_free_move_data(node_id: u64, data: APIFreeMoveData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let atom_move_data = Box::new(AtomMoveData {
+            let free_move_data = Box::new(FreeMoveData {
                 translation: from_api_vec3(&data.translation),
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, atom_move_data);
+                .set_node_network_data(node_id, free_move_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_rot_data(node_id: u64, data: APIAtomRotData) {
+pub fn set_free_rot_data(node_id: u64, data: APIFreeRotData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let atom_rot_data = Box::new(AtomRotData {
+            let free_rot_data = Box::new(FreeRotData {
                 angle: data.angle,
                 rot_axis: from_api_vec3(&data.rot_axis),
                 pivot_point: from_api_vec3(&data.pivot_point),
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, atom_rot_data);
-            refresh_structure_designer_auto(cad_instance);
-        });
-    }
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_trans_data(node_id: u64, data: APIAtomTransData) {
-    unsafe {
-        with_mut_cad_instance(|cad_instance| {
-            let atom_trans_data = Box::new(AtomTransData {
-                translation: from_api_vec3(&data.translation),
-                rotation: from_api_vec3(&data.rotation),
-            });
-            cad_instance
-                .structure_designer
-                .set_node_network_data(node_id, atom_trans_data);
+                .set_node_network_data(node_id, free_rot_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -3816,18 +3815,18 @@ pub fn set_motif_data(node_id: u64, data: APIMotifData) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
+pub fn get_materialize_data(node_id: u64) -> Option<APIMaterializeData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
                     .get_node_network_data(node_id)?;
-                let atom_fill_data = node_data.as_any_ref().downcast_ref::<AtomFillData>()?;
+                let materialize_data = node_data.as_any_ref().downcast_ref::<MaterializeData>()?;
 
                 use crate::crystolecule::atomic_constants::ATOM_INFO;
 
-                let available_parameters = atom_fill_data
+                let available_parameters = materialize_data
                     .available_parameters
                     .borrow()
                     .iter()
@@ -3844,17 +3843,16 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
                     })
                     .collect();
 
-                Some(APIAtomFillData {
-                    parameter_element_value_definition: atom_fill_data
+                Some(APIMaterializeData {
+                    parameter_element_value_definition: materialize_data
                         .parameter_element_value_definition
                         .clone(),
-                    motif_offset: to_api_vec3(&atom_fill_data.motif_offset),
-                    hydrogen_passivation: atom_fill_data.hydrogen_passivation,
-                    remove_single_bond_atoms_before_passivation: atom_fill_data
+                    hydrogen_passivation: materialize_data.hydrogen_passivation,
+                    remove_single_bond_atoms_before_passivation: materialize_data
                         .remove_single_bond_atoms_before_passivation,
-                    surface_reconstruction: atom_fill_data.surface_reconstruction,
-                    invert_phase: atom_fill_data.invert_phase,
-                    error: atom_fill_data.error.clone(),
+                    surface_reconstruction: materialize_data.surface_reconstruction,
+                    invert_phase: materialize_data.invert_phase,
+                    error: materialize_data.error.clone(),
                     available_parameters,
                 })
             },
@@ -3864,13 +3862,12 @@ pub fn get_atom_fill_data(node_id: u64) -> Option<APIAtomFillData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
+pub fn set_materialize_data(node_id: u64, data: APIMaterializeData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let mut atom_fill_data = Box::new(AtomFillData {
+                let mut materialize_data = Box::new(MaterializeData {
                     parameter_element_value_definition: data.parameter_element_value_definition,
-                    motif_offset: from_api_vec3(&data.motif_offset),
                     hydrogen_passivation: data.hydrogen_passivation,
                     remove_single_bond_atoms_before_passivation: data
                         .remove_single_bond_atoms_before_passivation,
@@ -3880,10 +3877,10 @@ pub fn set_atom_fill_data(node_id: u64, data: APIAtomFillData) -> APIResult {
                     parameter_element_values: HashMap::new(),
                     available_parameters: std::cell::RefCell::new(Vec::new()),
                 });
-                atom_fill_data.parse_and_validate(node_id);
+                materialize_data.parse_and_validate(node_id);
                 cad_instance
                     .structure_designer
-                    .set_node_network_data(node_id, atom_fill_data);
+                    .set_node_network_data(node_id, materialize_data);
                 refresh_structure_designer_auto(cad_instance);
 
                 APIResult {
@@ -4303,7 +4300,7 @@ pub fn export_visible_atomic_structures(file_path: String) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
+pub fn get_lattice_vecs_data(node_id: u64) -> Option<APILatticeVecsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -4314,22 +4311,23 @@ pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
                     Some(data) => data,
                     None => return None,
                 };
-                let unit_cell_data = match node_data.as_any_ref().downcast_ref::<UnitCellData>() {
-                    Some(data) => data,
-                    None => return None,
-                };
+                let lattice_vecs_data =
+                    match node_data.as_any_ref().downcast_ref::<LatticeVecsData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
                 // Convert to UnitCellStruct and detect crystal system
-                let unit_cell_struct = unit_cell_data.to_unit_cell_struct();
+                let unit_cell_struct = lattice_vecs_data.to_unit_cell_struct();
                 let crystal_system = classify_crystal_system(&unit_cell_struct);
                 let crystal_system_str = crystal_system_to_string(crystal_system);
 
-                Some(APIUnitCellData {
-                    cell_length_a: unit_cell_data.cell_length_a,
-                    cell_length_b: unit_cell_data.cell_length_b,
-                    cell_length_c: unit_cell_data.cell_length_c,
-                    cell_angle_alpha: unit_cell_data.cell_angle_alpha,
-                    cell_angle_beta: unit_cell_data.cell_angle_beta,
-                    cell_angle_gamma: unit_cell_data.cell_angle_gamma,
+                Some(APILatticeVecsData {
+                    cell_length_a: lattice_vecs_data.cell_length_a,
+                    cell_length_b: lattice_vecs_data.cell_length_b,
+                    cell_length_c: lattice_vecs_data.cell_length_c,
+                    cell_angle_alpha: lattice_vecs_data.cell_angle_alpha,
+                    cell_angle_beta: lattice_vecs_data.cell_angle_beta,
+                    cell_angle_gamma: lattice_vecs_data.cell_angle_gamma,
                     crystal_system: crystal_system_str,
                 })
             },
@@ -4339,10 +4337,10 @@ pub fn get_unit_cell_data(node_id: u64) -> Option<APIUnitCellData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
+pub fn set_lattice_vecs_data(node_id: u64, data: APILatticeVecsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let unit_cell_data = Box::new(UnitCellData {
+            let lattice_vecs_data = Box::new(LatticeVecsData {
                 cell_length_a: data.cell_length_a,
                 cell_length_b: data.cell_length_b,
                 cell_length_c: data.cell_length_c,
@@ -4352,7 +4350,7 @@ pub fn set_unit_cell_data(node_id: u64, data: APIUnitCellData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, unit_cell_data);
+                .set_node_network_data(node_id, lattice_vecs_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

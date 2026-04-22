@@ -6,6 +6,7 @@ use crate::display::surface_point_cloud::SurfacePointCloud;
 use crate::display::surface_point_cloud::SurfacePointCloud2D;
 use crate::geo_tree::GeoNode;
 use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use std::any::Any;
@@ -16,13 +17,23 @@ pub struct DisplayedPinOutput {
     pub pin_index: i32,
     pub output: NodeOutput,
     pub geo_tree: Option<GeoNode>,
+    /// Alignment of this pin's value, if it carries one (Blueprint/Crystal).
+    /// None for types that have no alignment (Molecule, primitives, etc.).
+    pub alignment: Option<Alignment>,
+    /// Short human-readable reason for why alignment is degraded. `None` when
+    /// `alignment == Some(Aligned)` or when there is no alignment state.
+    pub alignment_reason: Option<String>,
 }
 
 /// The explicit geometric/data output of a single node evaluation
 /// This represents the tessellatable/renderable output
 pub enum NodeOutput {
-    /// Atomic structure (from atomic nodes)
-    Atomic(AtomicStructure),
+    /// Atomic structure (from atomic nodes). The optional boxed `NodeOutput`
+    /// is a pre-computed geometry shell (`PolyMesh` or `SurfacePointCloud`)
+    /// for Crystal/Molecule phases — produced by the evaluator when the
+    /// source payload retained a geo_tree and the shell-display preference
+    /// is on.
+    Atomic(AtomicStructure, Option<Box<NodeOutput>>),
 
     /// 3D surface point cloud (from geometry visualization)
     SurfacePointCloud(SurfacePointCloud),
@@ -268,7 +279,13 @@ impl MemorySizeEstimator for NodeOutput {
         let base_size = std::mem::size_of::<NodeOutput>();
 
         let variant_size = match self {
-            NodeOutput::Atomic(atomic_structure) => atomic_structure.estimate_memory_bytes(),
+            NodeOutput::Atomic(atomic_structure, shell) => {
+                atomic_structure.estimate_memory_bytes()
+                    + shell
+                        .as_ref()
+                        .map(|s| s.estimate_memory_bytes())
+                        .unwrap_or(0)
+            }
             NodeOutput::SurfacePointCloud(point_cloud) => point_cloud.estimate_memory_bytes(),
             NodeOutput::SurfacePointCloud2D(point_cloud_2d) => {
                 point_cloud_2d.estimate_memory_bytes()

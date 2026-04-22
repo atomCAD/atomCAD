@@ -18,12 +18,17 @@ pub enum DataType {
     Vec3,
     IVec2,
     IVec3,
-    UnitCell,
+    LatticeVecs,
     DrawingPlane,
     Geometry2D,
-    Geometry,
-    Atomic,
+    Blueprint,
+    HasAtoms,
+    Crystal,
+    Molecule,
+    HasStructure,
+    HasFreeLinOps,
     Motif,
+    Structure,
     Array(Box<DataType>),
     Function(FunctionType),
 }
@@ -40,12 +45,17 @@ impl fmt::Display for DataType {
             DataType::Vec3 => write!(f, "Vec3"),
             DataType::IVec2 => write!(f, "IVec2"),
             DataType::IVec3 => write!(f, "IVec3"),
-            DataType::UnitCell => write!(f, "UnitCell"),
+            DataType::LatticeVecs => write!(f, "LatticeVecs"),
             DataType::DrawingPlane => write!(f, "DrawingPlane"),
             DataType::Geometry2D => write!(f, "Geometry2D"),
-            DataType::Geometry => write!(f, "Geometry"),
-            DataType::Atomic => write!(f, "Atomic"),
+            DataType::Blueprint => write!(f, "Blueprint"),
+            DataType::HasAtoms => write!(f, "HasAtoms"),
+            DataType::Crystal => write!(f, "Crystal"),
+            DataType::Molecule => write!(f, "Molecule"),
+            DataType::HasStructure => write!(f, "HasStructure"),
+            DataType::HasFreeLinOps => write!(f, "HasFreeLinOps"),
             DataType::Motif => write!(f, "Motif"),
+            DataType::Structure => write!(f, "Structure"),
             DataType::Array(element_type) => {
                 write!(f, "[{}]", element_type)
             }
@@ -75,6 +85,16 @@ impl fmt::Display for DataType {
 impl DataType {
     pub fn is_array(&self) -> bool {
         matches!(self, DataType::Array(_))
+    }
+
+    /// Returns true for abstract phase supertypes (HasAtoms, HasStructure, HasFreeLinOps).
+    /// Abstract types appear only as declared input-pin types on built-in polymorphic
+    /// nodes; no `NetworkResult` value ever carries an abstract `DataType`.
+    pub fn is_abstract(&self) -> bool {
+        matches!(
+            self,
+            DataType::HasAtoms | DataType::HasStructure | DataType::HasFreeLinOps
+        )
     }
 
     /// Checks if a source data type can be converted to a destination data type
@@ -142,8 +162,19 @@ impl DataType {
             (DataType::IVec3, DataType::Vec3) => true,
             (DataType::Vec3, DataType::IVec3) => true,
 
-            // UnitCell -> DrawingPlane conversion (backward compatibility for old .cnnd files)
-            (DataType::UnitCell, DataType::DrawingPlane) => true,
+            // LatticeVecs -> DrawingPlane conversion (backward compatibility for old .cnnd files)
+            (DataType::LatticeVecs, DataType::DrawingPlane) => true,
+
+            // Concrete phase types upcast to the abstract supertypes that contain them.
+            // No abstract -> concrete conversion. No cross-abstract conversion.
+            // No abstract -> abstract identity edges: abstract types only appear as
+            // declared input-pin types and sources are always concrete after resolution.
+            (DataType::Crystal, DataType::HasAtoms) => true,
+            (DataType::Crystal, DataType::HasStructure) => true,
+            (DataType::Molecule, DataType::HasAtoms) => true,
+            (DataType::Molecule, DataType::HasFreeLinOps) => true,
+            (DataType::Blueprint, DataType::HasStructure) => true,
+            (DataType::Blueprint, DataType::HasFreeLinOps) => true,
 
             // All other combinations are not compatible
             _ => false,
@@ -251,12 +282,17 @@ impl DataTypeParser {
                     "Vec3" => Ok(DataType::Vec3),
                     "IVec2" => Ok(DataType::IVec2),
                     "IVec3" => Ok(DataType::IVec3),
-                    "UnitCell" => Ok(DataType::UnitCell),
+                    "LatticeVecs" => Ok(DataType::LatticeVecs),
                     "DrawingPlane" => Ok(DataType::DrawingPlane),
                     "Geometry2D" => Ok(DataType::Geometry2D),
-                    "Geometry" => Ok(DataType::Geometry),
-                    "Atomic" => Ok(DataType::Atomic),
+                    "Blueprint" => Ok(DataType::Blueprint),
+                    "HasAtoms" => Ok(DataType::HasAtoms),
+                    "Crystal" => Ok(DataType::Crystal),
+                    "Molecule" => Ok(DataType::Molecule),
+                    "HasStructure" => Ok(DataType::HasStructure),
+                    "HasFreeLinOps" => Ok(DataType::HasFreeLinOps),
                     "Motif" => Ok(DataType::Motif),
+                    "Structure" => Ok(DataType::Structure),
                     _ => Err(format!("Unknown data type: {}", name)),
                 }
             }

@@ -468,7 +468,7 @@ mod network_serializer_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -664,7 +664,7 @@ mod network_editor_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -1621,7 +1621,7 @@ mod auto_layout_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -1939,7 +1939,7 @@ mod node_type_introspection_tests {
         assert!(result.contains("Int"));
 
         // Check output
-        assert!(result.contains("Output: Geometry"));
+        assert!(result.contains("Output: Blueprint"));
     }
 
     #[test]
@@ -1953,20 +1953,19 @@ mod node_type_introspection_tests {
     }
 
     #[test]
-    fn test_describe_node_type_atom_fill() {
+    fn test_describe_node_type_materialize() {
         let registry = create_test_registry();
-        let result = describe_node_type("atom_fill", &registry);
+        let result = describe_node_type("materialize", &registry);
 
-        assert!(result.contains("Node: atom_fill"));
+        assert!(result.contains("Node: materialize"));
         assert!(result.contains("Category: AtomicStructure"));
 
         // Check for key parameters
         assert!(result.contains("shape"));
-        assert!(result.contains("motif"));
         assert!(result.contains("passivate"));
 
         // Check output type
-        assert!(result.contains("Output: Atomic"));
+        assert!(result.contains("Output: Crystal"));
     }
 
     #[test]
@@ -1984,9 +1983,9 @@ mod node_type_introspection_tests {
         let registry = create_test_registry();
         let result = describe_node_type("sphere", &registry);
 
-        // unit_cell parameter has hardcoded default and is wire-only
+        // structure parameter has hardcoded default and is wire-only
         assert!(result.contains("wire-only"));
-        assert!(result.contains("default: cubic diamond"));
+        assert!(result.contains("default: diamond"));
     }
 
     #[test]
@@ -2005,7 +2004,7 @@ mod node_type_introspection_tests {
         assert!(result.contains("Node: cuboid"));
         assert!(result.contains("min_corner"));
         assert!(result.contains("extent"));
-        assert!(result.contains("Output: Geometry"));
+        assert!(result.contains("Output: Blueprint"));
     }
 
     #[test]
@@ -2215,7 +2214,7 @@ mod custom_name_tests {
             summary: None,
             category: NodeTypeCategory::Custom,
             parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Geometry),
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})

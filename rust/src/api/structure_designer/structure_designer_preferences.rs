@@ -39,7 +39,7 @@ pub enum MeshSmoothing {
 }
 
 #[frb]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeometryVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default)]
@@ -59,6 +59,9 @@ pub struct GeometryVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default)]
     pub display_camera_target: bool,
+    #[frb(non_final)]
+    #[serde(default = "default_show_geometry_shell_for_atomic")]
+    pub show_geometry_shell_for_atomic: bool,
 }
 
 fn default_samples_per_unit_cell() -> i32 {
@@ -66,6 +69,9 @@ fn default_samples_per_unit_cell() -> i32 {
 }
 fn default_sharpness_angle_threshold() -> f64 {
     29.0
+}
+fn default_show_geometry_shell_for_atomic() -> bool {
+    true
 }
 
 impl Default for GeometryVisualizationPreferences {
@@ -77,6 +83,7 @@ impl Default for GeometryVisualizationPreferences {
             sharpness_angle_threshold_degree: 29.0,
             mesh_smoothing: MeshSmoothing::SmoothingGroupBased,
             display_camera_target: false,
+            show_geometry_shell_for_atomic: true,
         }
     }
 }

@@ -1,0 +1,126 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "my_custom",
+            "custom_name": "part",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "no_data",
+            "data": {}
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "my_custom",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "my_custom",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "uc",
+              "data_type": "UnitCell"
+            },
+            {
+              "name": "motifs",
+              "data_type": "[Atomic]"
+            }
+          ],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "parameter",
+            "custom_name": "uc",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "UnitCell",
+              "data_type_str": null,
+              "param_id": 2,
+              "param_index": 0,
+              "param_name": "uc",
+              "sort_order": 0
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "sphere",
+            "custom_name": "s",
+            "position": [
+              310.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "sphere",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "radius": 1
+            }
+          }
+        ],
+        "return_node_id": 2,
+        "displayed_node_ids": []
+      }
+    ]
+  ],
+  "version": 2
+}

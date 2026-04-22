@@ -3,7 +3,7 @@ use crate::crystolecule::io::xyz_saver::save_xyz;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -95,7 +95,10 @@ impl NodeData for ExportXYZData {
         match save_xyz(&atomic_structure, &resolved_path) {
             Ok(()) => {
                 // Return the atomic structure (pass-through)
-                EvalOutput::single(NetworkResult::Atomic(atomic_structure))
+                EvalOutput::single(NetworkResult::Molecule(MoleculeData {
+                    atoms: atomic_structure,
+                    geo_tree_root: None,
+                }))
             }
             Err(err) => EvalOutput::single(NetworkResult::Error(format!(
                 "Failed to save XYZ file '{}': {}",
@@ -202,7 +205,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "molecule".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             },
             Parameter {
                 id: None,
@@ -210,7 +213,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::String,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single(DataType::HasAtoms),
         public: true,
         node_data_creator: || Box::new(ExportXYZData::new()),
         node_data_saver: export_xyz_data_saver,

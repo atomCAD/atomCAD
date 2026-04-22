@@ -25,11 +25,12 @@ use crate::structure_designer::structure_designer_scene::{
 
 use super::network_result::Closure;
 use super::network_result::input_missing_error;
-use super::network_result::{GeometrySummary, GeometrySummary2D};
-use crate::util::transform::Transform;
+use super::network_result::{
+    Alignment, BlueprintData, GeometrySummary2D, propagate_alignment_with_reason,
+};
+use crate::crystolecule::structure::Structure;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
-use glam::f64::{DQuat, DVec3};
 
 #[derive(Clone)]
 pub struct NetworkStackElement<'a> {
@@ -202,8 +203,25 @@ impl NetworkEvaluator {
                     .unwrap_or_else(|| node_type.output_type().clone());
                 (dr.clone(), dt)
             } else {
-                (eval_output.get(0), node_type.output_type().clone())
+                // Infer from the concrete result first so that pins declared
+                // as `SameAsInput(..)` (for which `output_type()` falls
+                // through to `DataType::None`) still map to the right
+                // NodeOutput variant. Fall back to the declared type when the
+                // result is None/Error/etc.
+                let result = eval_output.get(0);
+                let dt = result
+                    .infer_data_type()
+                    .unwrap_or_else(|| node_type.output_type().clone());
+                (result, dt)
             };
+        // Capture alignment from the wire-level result for pin 0 (not the
+        // display override, which may be an unrelated phase — e.g. motif_edit
+        // shows Atomic in the viewport while the wire carries Motif).
+        let pin_0_alignment = eval_output.get(0).get_alignment();
+        let pin_0_alignment_reason = eval_output
+            .get(0)
+            .get_alignment_reason()
+            .map(|s| s.to_string());
         let (output, geo_tree) = self.convert_result_to_node_output(
             display_result_0,
             &display_type_0,
@@ -224,11 +242,14 @@ impl NetworkEvaluator {
             let pin_index = pin_index_usize as i32;
             if pin_index == 0 {
                 // Pin 0's actual data lives in NodeSceneData.output / .geo_tree.
-                // displayed_outputs() resolves pin 0 from those fields.
+                // displayed_outputs() resolves pin 0 from those fields. Alignment
+                // is still tracked here so the API layer can surface it per pin.
                 pin_outputs.push(DisplayedPinOutput {
                     pin_index: 0,
                     output: NodeOutput::None,
                     geo_tree: None,
+                    alignment: pin_0_alignment,
+                    alignment_reason: pin_0_alignment_reason.clone(),
                 });
                 continue;
             }
@@ -239,11 +260,18 @@ impl NetworkEvaluator {
                         .unwrap_or_else(|| node_type.get_output_pin_type(pin_index));
                     (dr.clone(), dt)
                 } else {
-                    (
-                        eval_output.get(pin_index),
-                        node_type.get_output_pin_type(pin_index),
-                    )
+                    let result = eval_output.get(pin_index);
+                    let dt = result
+                        .infer_data_type()
+                        .unwrap_or_else(|| node_type.get_output_pin_type(pin_index));
+                    (result, dt)
                 };
+            // Wire-level alignment (same rationale as pin 0 above).
+            let pin_alignment = eval_output.get(pin_index).get_alignment();
+            let pin_alignment_reason = eval_output
+                .get(pin_index)
+                .get_alignment_reason()
+                .map(|s| s.to_string());
             let (pin_output, pin_geo_tree) = self.convert_result_to_node_output(
                 pin_result,
                 &pin_data_type,
@@ -258,6 +286,8 @@ impl NetworkEvaluator {
                 pin_index,
                 output: pin_output,
                 geo_tree: pin_geo_tree,
+                alignment: pin_alignment,
+                alignment_reason: pin_alignment_reason,
             });
         }
 
@@ -285,6 +315,34 @@ impl NetworkEvaluator {
         }
     }
 
+    /// Converts a geometry shell (`GeoNode`) retained on a Crystal/Molecule
+    /// into a renderable `NodeOutput` using the user's current visualization
+    /// method and sharpness settings. Returns `None` if conversion yields no
+    /// mesh (e.g. empty CSG result).
+    fn build_atomic_shell_output(
+        &mut self,
+        geo_tree: &GeoNode,
+        context: &mut NetworkEvaluationContext,
+        geometry_visualization_preferences: &GeometryVisualizationPreferences,
+    ) -> Option<NodeOutput> {
+        match geometry_visualization_preferences.geometry_visualization {
+            GeometryVisualization::SurfaceSplatting => {
+                let point_cloud =
+                    generate_point_cloud(geo_tree, context, geometry_visualization_preferences);
+                Some(NodeOutput::SurfacePointCloud(point_cloud))
+            }
+            GeometryVisualization::ExplicitMesh => {
+                let csg_mesh = geo_tree.to_csg_mesh_cached(Some(&mut self.csg_conversion_cache))?;
+                let mut poly_mesh = convert_csg_mesh_to_poly_mesh(&csg_mesh, false, false);
+                poly_mesh.detect_sharp_edges(
+                    geometry_visualization_preferences.sharpness_angle_threshold_degree,
+                    true,
+                );
+                Some(NodeOutput::PolyMesh(poly_mesh))
+            }
+        }
+    }
+
     fn generate_explicit_mesh_output<'a>(
         &mut self,
         result: NetworkResult,
@@ -302,7 +360,7 @@ impl NetworkEvaluator {
             .is_node_selected(node_id);
 
         let poly_mesh = match &result {
-            NetworkResult::Geometry(geometry_summary) => {
+            NetworkResult::Blueprint(geometry_summary) => {
                 if let Some(csg_mesh) = geometry_summary
                     .geo_tree_root
                     .to_csg_mesh_cached(Some(&mut self.csg_conversion_cache))
@@ -360,7 +418,7 @@ impl NetworkEvaluator {
 
         // Extract geo_tree_root from the result based on its type
         let geo_tree = match result {
-            NetworkResult::Geometry(geometry_summary) => Some(geometry_summary.geo_tree_root),
+            NetworkResult::Blueprint(geometry_summary) => Some(geometry_summary.geo_tree_root),
             NetworkResult::Geometry2D(geometry_summary_2d) => {
                 Some(geometry_summary_2d.geo_tree_root)
             }
@@ -427,11 +485,11 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if *data_type == DataType::Geometry {
+        } else if *data_type == DataType::Blueprint {
             if geometry_visualization_preferences.geometry_visualization
                 == GeometryVisualization::SurfaceSplatting
             {
-                if let NetworkResult::Geometry(geometry_summary) = result {
+                if let NetworkResult::Blueprint(geometry_summary) = result {
                     let point_cloud = generate_point_cloud(
                         &geometry_summary.geo_tree_root,
                         context,
@@ -458,11 +516,38 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if *data_type == DataType::Atomic {
-            if let NetworkResult::Atomic(atomic_structure) = result {
-                let mut cloned_atomic_structure = atomic_structure.clone();
-                cloned_atomic_structure.decorator_mut().from_selected_node = from_selected_node;
-                (NodeOutput::Atomic(cloned_atomic_structure), None)
+        } else if matches!(
+            data_type,
+            DataType::HasAtoms | DataType::Crystal | DataType::Molecule
+        ) {
+            // Accept both the abstract `Atomic` (still declared by not-yet-migrated
+            // nodes as Fixed(Atomic)) and the concrete `Crystal`/`Molecule` pin
+            // types. In all three cases the NetworkResult carries a
+            // Crystal(..) or Molecule(..) variant from which we extract the
+            // inner AtomicStructure for display.
+            let (atomic_structure, shell_geo_tree) = match result {
+                NetworkResult::Crystal(c) => (Some(c.atoms), c.geo_tree_root),
+                NetworkResult::Molecule(m) => (Some(m.atoms), m.geo_tree_root),
+                _ => (None, None),
+            };
+            if let Some(mut atomic_structure) = atomic_structure {
+                atomic_structure.decorator_mut().from_selected_node = from_selected_node;
+                let shell_output =
+                    if geometry_visualization_preferences.show_geometry_shell_for_atomic {
+                        shell_geo_tree.and_then(|geo_tree| {
+                            self.build_atomic_shell_output(
+                                &geo_tree,
+                                context,
+                                geometry_visualization_preferences,
+                            )
+                        })
+                    } else {
+                        None
+                    };
+                (
+                    NodeOutput::Atomic(atomic_structure, shell_output.map(Box::new)),
+                    None,
+                )
             } else {
                 (NodeOutput::None, None)
             }
@@ -488,7 +573,7 @@ impl NetworkEvaluator {
 
     /// Merges an array of results into a single displayable output.
     ///
-    /// For `Array<Geometry>`: creates a CSG union of all shapes (like the `union` node).
+    /// For `Array<Blueprint>`: creates a CSG union of all shapes (like the `union` node).
     /// For `Array<Geometry2D>`: creates a 2D CSG union (like the `union_2d` node).
     /// For `Array<Atomic>`: merges all atomic structures (like the `atom_union` node).
     /// Other element types or empty arrays return `NodeOutput::None`.
@@ -509,32 +594,37 @@ impl NetworkEvaluator {
         }
 
         match inner_type {
-            DataType::Geometry => {
+            DataType::Blueprint => {
                 let mut shapes: Vec<GeoNode> = Vec::new();
-                let mut frame_translation = DVec3::ZERO;
-                let mut first_unit_cell = None;
+                let mut first_lattice_vecs = None;
+                let mut alignment = Alignment::Aligned;
+                let mut alignment_reason: Option<String> = None;
                 for element in elements {
-                    if let NetworkResult::Geometry(geo) = element {
-                        if first_unit_cell.is_none() {
-                            first_unit_cell = Some(geo.unit_cell.clone());
+                    if let NetworkResult::Blueprint(geo) = element {
+                        if first_lattice_vecs.is_none() {
+                            first_lattice_vecs = Some(geo.structure.lattice_vecs.clone());
                         }
-                        frame_translation += geo.frame_transform.translation;
+                        propagate_alignment_with_reason(
+                            &mut alignment,
+                            &mut alignment_reason,
+                            geo.alignment,
+                            &geo.alignment_reason,
+                        );
                         shapes.push(geo.geo_tree_root);
                     }
                 }
                 if shapes.is_empty() {
                     return (NodeOutput::None, None);
                 }
-                let count = shapes.len() as f64;
-                frame_translation /= count;
-                let merged = NetworkResult::Geometry(GeometrySummary {
-                    unit_cell: first_unit_cell.unwrap(),
-                    frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
+                let merged = NetworkResult::Blueprint(BlueprintData {
+                    structure: Structure::from_lattice_vecs(first_lattice_vecs.unwrap()),
                     geo_tree_root: GeoNode::union_3d(shapes),
+                    alignment,
+                    alignment_reason,
                 });
                 self.convert_result_to_node_output(
                     merged,
-                    &DataType::Geometry,
+                    &DataType::Blueprint,
                     from_selected_node,
                     network_stack,
                     node_id,
@@ -577,27 +667,26 @@ impl NetworkEvaluator {
                     geometry_visualization_preferences,
                 )
             }
-            DataType::Atomic => {
+            DataType::HasAtoms | DataType::Crystal | DataType::Molecule => {
+                // Same handling for abstract `Atomic` arrays (not-yet-migrated
+                // nodes) and concrete `Crystal`/`Molecule` arrays — extract the
+                // inner AtomicStructure from each Crystal(..)/Molecule(..)
+                // variant and union them for display.
                 let mut structures: Vec<AtomicStructure> = Vec::new();
-                let mut frame_translation_sum = DVec3::ZERO;
                 for element in elements {
-                    if let NetworkResult::Atomic(structure) = element {
-                        frame_translation_sum += structure.frame_transform().translation;
+                    if let Some(structure) = element.extract_atomic() {
                         structures.push(structure);
                     }
                 }
                 if structures.is_empty() {
                     return (NodeOutput::None, None);
                 }
-                let count = structures.len() as f64;
                 let mut result = structures.remove(0);
                 for other in &structures {
                     result.add_atomic_structure(other);
                 }
-                let avg_translation = frame_translation_sum / count;
-                result.set_frame_transform(Transform::new(avg_translation, DQuat::IDENTITY));
                 result.decorator_mut().from_selected_node = from_selected_node;
-                (NodeOutput::Atomic(result), None)
+                (NodeOutput::Atomic(result, None), None)
             }
             _ => (NodeOutput::None, None),
         }
@@ -737,11 +826,20 @@ impl NetworkEvaluator {
                 }
 
                 let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
+                let current_network = network_stack.last().unwrap().node_network;
+                // Resolve the concrete output type. For polymorphic pins
+                // (`SameAsInput` / `SameAsArrayElements`) the declared type is
+                // `DataType::None`, which would defeat `convert_to`'s
+                // single→array auto-wrap. `resolve_output_type` walks the
+                // upstream wiring to find the real concrete type.
                 let input_node_output_type = registry
-                    .get_node_type_for_node(input_node)
-                    .unwrap()
-                    .output_type()
-                    .clone();
+                    .resolve_output_type(input_node, current_network, input_node_output_pin_index)
+                    .unwrap_or_else(|| {
+                        registry
+                            .get_node_type_for_node(input_node)
+                            .unwrap()
+                            .get_output_pin_type(input_node_output_pin_index)
+                    });
 
                 // convert_to handles conversion to array types, so we can convert directly.
                 // The result is guaranteed to be an array, containing one or more elements.
@@ -775,10 +873,18 @@ impl NetworkEvaluator {
                 }
 
                 let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
-                let input_node_type = registry.get_node_type_for_node(input_node);
-                let input_node_output_type = input_node_type
-                    .unwrap()
-                    .get_output_pin_type(input_node_output_pin_index);
+                let current_network = network_stack.last().unwrap().node_network;
+                // See the array-branch comment above: resolve the concrete
+                // upstream type so polymorphic output pins don't report
+                // `DataType::None` and break single→array auto-wrap.
+                let input_node_output_type = registry
+                    .resolve_output_type(input_node, current_network, input_node_output_pin_index)
+                    .unwrap_or_else(|| {
+                        registry
+                            .get_node_type_for_node(input_node)
+                            .unwrap()
+                            .get_output_pin_type(input_node_output_pin_index)
+                    });
 
                 // Convert the result to the expected type
 
@@ -856,6 +962,29 @@ impl NetworkEvaluator {
                 node.node_type_name
             )))
         };
+
+        // Runtime guard: if a node produced a value whose inferred data type
+        // is abstract, that is a bug in a polymorphic node's `eval` (it failed
+        // to re-wrap its result in a concrete variant). Replace such values
+        // with a NetworkResult::Error so downstream state is not corrupted.
+        // In debug builds this also asserts — should be unreachable in a
+        // valid, well-implemented graph.
+        let mut eval_output = eval_output;
+        for (pin_idx, result) in eval_output.results.iter_mut().enumerate() {
+            if let Some(t) = result.infer_data_type() {
+                if t.is_abstract() {
+                    debug_assert!(
+                        false,
+                        "node {} pin {} produced value with abstract type {:?}",
+                        node_id, pin_idx, t
+                    );
+                    *result = NetworkResult::Error(format!(
+                        "node produced value with abstract type {:?} on pin {}",
+                        t, pin_idx
+                    ));
+                }
+            }
+        }
 
         // Record error from primary (pin 0) result
         let primary = eval_output.primary();

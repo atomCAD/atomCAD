@@ -546,18 +546,25 @@ impl NodeNetwork {
             return false;
         }
 
-        // Get the expected input type for the destination parameter
+        // Get the expected input type for the destination parameter.
+        // The destination pin's declared type may be abstract.
         let dest_param_type =
             node_type_registry.get_node_param_data_type(dest_node, dest_param_index);
 
-        // Get the output type of the source node
-        let source_output_type = &node_type_registry
-            .get_node_type_for_node(source_node)
-            .unwrap()
-            .get_output_pin_type(source_output_pin_index);
+        // Get the resolved concrete output type of the source pin. For a
+        // polymorphic pin that cannot yet be resolved (e.g. its own input is
+        // disconnected), the connection is considered invalid.
+        let source_output_type = match node_type_registry.resolve_output_type(
+            source_node,
+            self,
+            source_output_pin_index,
+        ) {
+            Some(t) => t,
+            None => return false,
+        };
 
         // Check if the data types are compatible using conversion rules
-        DataType::can_be_converted_to(source_output_type, &dest_param_type)
+        DataType::can_be_converted_to(&source_output_type, &dest_param_type)
     }
 
     pub fn connect_nodes(

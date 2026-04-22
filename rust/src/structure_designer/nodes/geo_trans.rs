@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::Gadget;
 use crate::geo_tree::GeoNode;
@@ -10,7 +11,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
 use crate::structure_designer::evaluator::network_result::{
-    GeometrySummary, NetworkResult, runtime_type_error_in_input,
+    BlueprintData, NetworkResult, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -80,7 +81,7 @@ impl NodeData for GeoTransData {
 
         if let NetworkResult::Error(_) = shape_val {
             EvalOutput::single(shape_val)
-        } else if let NetworkResult::Geometry(shape) = shape_val {
+        } else if let NetworkResult::Blueprint(shape) = shape_val {
             let translation = match network_evaluator.evaluate_or_default(
                 network_stack,
                 node_id,
@@ -107,9 +108,12 @@ impl NodeData for GeoTransData {
                 Err(error) => return EvalOutput::single(error),
             };
 
-            let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
+            let real_translation = shape
+                .structure
+                .lattice_vecs
+                .ivec3_lattice_to_real(&translation);
 
-            let cubic = shape.unit_cell.is_approximately_cubic();
+            let cubic = shape.structure.lattice_vecs.is_approximately_cubic();
 
             if (!cubic) && rotation != IVec3::ZERO {
                 return EvalOutput::single(NetworkResult::Error(
@@ -125,35 +129,32 @@ impl NodeData for GeoTransData {
                 rotation_euler.z,
             );
 
-            let frame_transform = shape
-                .frame_transform
+            // Source no longer carries a frame transform; treat as identity.
+            let input_frame_transform = Transform::default();
+            let frame_transform = input_frame_transform
                 .apply_lrot_gtrans_new(&Transform::new(real_translation, rotation_quat));
 
             // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
             // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
             if network_stack.len() == 1 {
                 let eval_cache = GeoTransEvalCache {
-                    input_frame_transform: shape.frame_transform.clone(),
-                    unit_cell: shape.unit_cell.clone(),
+                    input_frame_transform: Transform::default(),
+                    unit_cell: shape.structure.lattice_vecs.clone(),
                 };
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
-            // We need to be a bit tricky here.
-            // The input geometry (shape) is already transformed by the input transform.
-            // So theoretically we need to do the inverse of the input transform (shape transform) so the geometry is first transformed back
-            // to its local position.
-            // And then we apply the whole frame transform.
-            let rot = frame_transform.rotation * shape.frame_transform.rotation.inverse();
+            let rot = frame_transform.rotation * input_frame_transform.rotation.inverse();
             let tr = Transform::new(
-                rot.mul_vec3(-shape.frame_transform.translation) + frame_transform.translation,
+                rot.mul_vec3(-input_frame_transform.translation) + frame_transform.translation,
                 rot,
             );
 
-            EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
-                unit_cell: shape.unit_cell,
-                frame_transform,
+            EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+                structure: Structure::from_lattice_vecs(shape.structure.lattice_vecs.clone()),
                 geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                alignment: shape.alignment,
+                alignment_reason: shape.alignment_reason,
             }))
         } else {
             EvalOutput::single(runtime_type_error_in_input(0))
@@ -401,7 +402,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "shape".to_string(),
-                data_type: DataType::Geometry,
+                data_type: DataType::Blueprint,
             },
             Parameter {
                 id: None,
@@ -414,7 +415,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::IVec3,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: false,
         node_data_creator: || {
             Box::new(GeoTransData {

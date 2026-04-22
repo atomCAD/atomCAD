@@ -1,0 +1,121 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "unit_cell",
+            "custom_name": "uc",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "unit_cell",
+            "data": {
+              "cell_length_a": 3.567,
+              "cell_length_b": 3.567,
+              "cell_length_c": 3.567,
+              "cell_angle_alpha": 90.0,
+              "cell_angle_beta": 90.0,
+              "cell_angle_gamma": 90.0
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "cuboid",
+            "custom_name": "cu",
+            "position": [
+              400.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                4,
+                4,
+                4
+              ],
+              "min_corner": [
+                0,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "sphere",
+            "custom_name": "sp_no_lattice",
+            "position": [
+              400.0,
+              250.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "sphere",
+            "data": {
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "radius": 5
+            }
+          }
+        ],
+        "return_node_id": 2,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

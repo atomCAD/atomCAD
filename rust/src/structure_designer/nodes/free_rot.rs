@@ -1,5 +1,6 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::display::gadget::Gadget;
+use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::{Material, Mesh};
 use crate::renderer::tessellator::tessellator::{
     Tessellatable, TessellationOutput, tessellate_cone, tessellate_cylinder, tessellate_sphere,
@@ -7,7 +8,10 @@ use crate::renderer::tessellator::tessellator::{
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{
+    Alignment, BlueprintData, MoleculeData, NetworkResult, runtime_type_error_in_input,
+    worsen_alignment_with_reason,
+};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -18,43 +22,40 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::hit_test_utils::get_closest_point_on_first_ray;
 use crate::util::serialization_utils::dvec3_serializer;
+use crate::util::transform::Transform;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-/// Evaluation cache for atom_rot node.
-/// Stores the evaluated pivot point and rotation axis for gadget creation.
 #[derive(Debug, Clone)]
-pub struct AtomRotEvalCache {
+pub struct FreeRotEvalCache {
     pub pivot_point: DVec3,
-    pub rot_axis: DVec3, // Normalized
+    pub rot_axis: DVec3,
 }
 
-/// Data structure for atom_rot node.
-/// Rotates an atomic structure around an axis in world space by a specified angle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AtomRotData {
-    pub angle: f64, // Rotation angle in radians
+pub struct FreeRotData {
+    pub angle: f64,
     #[serde(with = "dvec3_serializer")]
-    pub rot_axis: DVec3, // Rotation axis direction (will be normalized)
+    pub rot_axis: DVec3,
     #[serde(with = "dvec3_serializer")]
-    pub pivot_point: DVec3, // Point around which rotation occurs (in angstroms)
+    pub pivot_point: DVec3,
 }
 
-impl NodeData for AtomRotData {
+impl NodeData for FreeRotData {
     fn provide_gadget(
         &self,
         structure_designer: &StructureDesigner,
     ) -> Option<Box<dyn NodeNetworkGadget>> {
         let eval_cache = structure_designer.get_selected_node_eval_cache()?;
-        let atom_rot_cache = eval_cache.downcast_ref::<AtomRotEvalCache>()?;
+        let cache = eval_cache.downcast_ref::<FreeRotEvalCache>()?;
 
-        Some(Box::new(AtomRotGadget::new(
+        Some(Box::new(FreeRotGadget::new(
             self.angle,
-            atom_rot_cache.rot_axis,
-            atom_rot_cache.pivot_point,
+            cache.rot_axis,
+            cache.pivot_point,
         )))
     }
 
@@ -71,89 +72,107 @@ impl NodeData for AtomRotData {
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
     ) -> EvalOutput {
-        // 1. Get input atomic structure
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(atomic_structure) = input_val {
-            // 2. Get angle (from pin or property)
-            let angle = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                1,
-                self.angle,
-                NetworkResult::extract_float,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
+        let angle = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.angle,
+            NetworkResult::extract_float,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
 
-            // 3. Get rotation axis (from pin or property)
-            let rot_axis = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                2,
-                self.rot_axis,
-                NetworkResult::extract_vec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
+        let rot_axis = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            self.rot_axis,
+            NetworkResult::extract_vec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
 
-            // 4. Get pivot point (from pin or property)
-            let pivot_point = match network_evaluator.evaluate_or_default(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                3,
-                self.pivot_point,
-                NetworkResult::extract_vec3,
-            ) {
-                Ok(value) => value,
-                Err(error) => return EvalOutput::single(error),
-            };
+        let pivot_point = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            3,
+            self.pivot_point,
+            NetworkResult::extract_vec3,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
 
-            // 5. Normalize the rotation axis
-            let normalized_axis = rot_axis.normalize_or_zero();
-            if normalized_axis == DVec3::ZERO {
-                // Invalid axis - return input unchanged
-                return EvalOutput::single(NetworkResult::Atomic(atomic_structure));
-            }
-
-            // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-            if network_stack.len() == 1 {
-                let eval_cache = AtomRotEvalCache {
-                    pivot_point,
-                    rot_axis: normalized_axis,
-                };
-                context.selected_node_eval_cache = Some(Box::new(eval_cache));
-            }
-
-            // 6. Create rotation quaternion
-            let rotation_quat = DQuat::from_axis_angle(normalized_axis, angle);
-
-            // 7. Apply rotation around pivot point directly to atoms (NO frame transform manipulation)
-            // This is: translate to origin, rotate, translate back
-            let mut result = atomic_structure.clone();
-
-            // For each atom: new_pos = pivot + rotation * (old_pos - pivot)
-            // Which is equivalent to: translate by -pivot, rotate, translate by +pivot
-            result.transform(&DQuat::IDENTITY, &(-pivot_point)); // Move pivot to origin
-            result.transform(&rotation_quat, &DVec3::ZERO); // Rotate around origin
-            result.transform(&DQuat::IDENTITY, &pivot_point); // Move back
-
-            return EvalOutput::single(NetworkResult::Atomic(result));
+        let normalized_axis = rot_axis.normalize_or_zero();
+        if normalized_axis == DVec3::ZERO {
+            // Invalid axis — return input unchanged (must still respect type).
+            return EvalOutput::single(match input_val {
+                NetworkResult::Blueprint(_) | NetworkResult::Molecule(_) => input_val,
+                _ => runtime_type_error_in_input(0),
+            });
         }
 
-        EvalOutput::single(NetworkResult::None)
+        if network_stack.len() == 1 {
+            context.selected_node_eval_cache = Some(Box::new(FreeRotEvalCache {
+                pivot_point,
+                rot_axis: normalized_axis,
+            }));
+        }
+
+        let rotation_quat = DQuat::from_axis_angle(normalized_axis, angle);
+        let tr = Transform::new_rotation_around_point(pivot_point, rotation_quat);
+
+        match input_val {
+            NetworkResult::Blueprint(shape) => {
+                let mut alignment = shape.alignment;
+                let mut alignment_reason = shape.alignment_reason;
+                worsen_alignment_with_reason(
+                    &mut alignment,
+                    &mut alignment_reason,
+                    Alignment::LatticeUnaligned,
+                    || {
+                        format!(
+                            "free_rot rotates the cutter by {:.2}° in world space (off-lattice)",
+                            angle.to_degrees()
+                        )
+                    },
+                );
+                EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+                    structure: shape.structure,
+                    geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                    alignment,
+                    alignment_reason,
+                }))
+            }
+            NetworkResult::Molecule(mol) => {
+                let mut atoms = mol.atoms;
+                atoms.transform(&DQuat::IDENTITY, &(-pivot_point));
+                atoms.transform(&rotation_quat, &DVec3::ZERO);
+                atoms.transform(&DQuat::IDENTITY, &pivot_point);
+                let new_geo = mol
+                    .geo_tree_root
+                    .map(|gt| GeoNode::transform(tr, Box::new(gt)));
+                EvalOutput::single(NetworkResult::Molecule(MoleculeData {
+                    atoms,
+                    geo_tree_root: new_geo,
+                }))
+            }
+            _ => EvalOutput::single(runtime_type_error_in_input(0)),
+        }
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -192,7 +211,7 @@ impl NodeData for AtomRotData {
         let show_axis = !connected_input_pins.contains("rot_axis");
 
         if self.angle == 0.0 {
-            return None; // No rotation
+            return None;
         }
 
         let mut parts = Vec::new();
@@ -203,7 +222,6 @@ impl NodeData for AtomRotData {
         }
 
         if show_axis {
-            // Show simplified axis name if it's a standard axis
             let axis_name = match (self.rot_axis.x, self.rot_axis.y, self.rot_axis.z) {
                 (x, y, z) if (x - 1.0).abs() < 0.001 && y.abs() < 0.001 && z.abs() < 0.001 => "X",
                 (x, y, z) if x.abs() < 0.001 && (y - 1.0).abs() < 0.001 && z.abs() < 0.001 => "Y",
@@ -225,41 +243,36 @@ impl NodeData for AtomRotData {
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("molecule".to_string(), (true, None)); // required
+        m.insert("input".to_string(), (true, None));
         m
     }
 }
 
-/// Gadget for atom_rot node that displays the rotation axis as an arrow.
-/// The gadget shows a yellow cylinder with an arrow head at the positive end,
-/// and a red sphere at the pivot point.
 #[derive(Clone)]
-pub struct AtomRotGadget {
+pub struct FreeRotGadget {
     pub angle: f64,
-    pub rot_axis: DVec3, // Normalized
+    pub rot_axis: DVec3,
     pub pivot_point: DVec3,
     pub dragging: bool,
     pub drag_start_angle: f64,
-    pub drag_start_offset: f64, // Offset along axis at drag start
+    pub drag_start_offset: f64,
 }
 
-const AXIS_LENGTH: f64 = 15.0; // Length of the rotation axis visualization in angstroms
-const CYLINDER_RADIUS: f64 = 0.2; // Match AXIS_CYLINDER_RADIUS in xyz_gadget_utils
-const HIT_RADIUS: f64 = 1.5; // Hit detection radius (larger for easier clicking)
-const ROTATION_SENSITIVITY: f64 = 0.3; // Radians per unit offset delta
+const AXIS_LENGTH: f64 = 15.0;
+const CYLINDER_RADIUS: f64 = 0.2;
+const HIT_RADIUS: f64 = 1.5;
+const ROTATION_SENSITIVITY: f64 = 0.3;
 
-impl Tessellatable for AtomRotGadget {
+impl Tessellatable for FreeRotGadget {
     fn tessellate(&self, output: &mut TessellationOutput) {
         let output_mesh: &mut Mesh = &mut output.mesh;
 
-        // Calculate axis endpoints
         let half_length = AXIS_LENGTH * 0.5;
         let top_center = self.pivot_point + self.rot_axis * half_length;
         let bottom_center = self.pivot_point - self.rot_axis * half_length;
 
         let yellow_material = Material::new(&glam::f32::Vec3::new(1.0, 1.0, 0.0), 0.4, 0.8);
 
-        // Cylinder for the axis
         tessellate_cylinder(
             output_mesh,
             &top_center,
@@ -272,7 +285,6 @@ impl Tessellatable for AtomRotGadget {
             Some(&yellow_material),
         );
 
-        // Arrow head at top
         let arrow_tip = top_center + self.rot_axis * 0.5;
         tessellate_cone(
             output_mesh,
@@ -281,49 +293,35 @@ impl Tessellatable for AtomRotGadget {
             CYLINDER_RADIUS * 3.0,
             16,
             &yellow_material,
-            true, // include base
+            true,
         );
 
-        // Red sphere at pivot point
         let red_material = Material::new(&glam::f32::Vec3::new(1.0, 0.0, 0.0), 0.4, 0.0);
 
         tessellate_sphere(output_mesh, &self.pivot_point, 0.4, 12, 12, &red_material);
 
-        // === Perpendicular flag that rotates with self.angle ===
-        // This provides visual feedback during dragging
-
-        // Create a reference direction perpendicular to the rotation axis
         let base_perp_dir = if self.rot_axis.dot(DVec3::X).abs() < 0.9 {
             self.rot_axis.cross(DVec3::X).normalize()
         } else {
             self.rot_axis.cross(DVec3::Y).normalize()
         };
 
-        // Rotate the perpendicular direction by the current angle
         let rotation_quat = DQuat::from_axis_angle(self.rot_axis, self.angle);
         let rotated_perp_dir = rotation_quat * base_perp_dir;
 
-        // Flag parameters
-        let flag_length = 3.0; // Length of the flag
-        let flag_offset_along_axis = 2.0; // Offset from pivot along the axis
+        let flag_length = 3.0;
+        let flag_offset_along_axis = 2.0;
 
-        // Position the flag slightly above the pivot point
         let flag_base = self.pivot_point + self.rot_axis * flag_offset_along_axis;
         let flag_end = flag_base + rotated_perp_dir * flag_length;
 
-        // Use a cyan/teal color for the flag to distinguish from the yellow axis
-        let flag_material = Material::new(
-            &glam::f32::Vec3::new(0.0, 1.0, 1.0), // Cyan
-            0.4,
-            0.8,
-        );
+        let flag_material = Material::new(&glam::f32::Vec3::new(0.0, 1.0, 1.0), 0.4, 0.8);
 
-        // Draw the flag cylinder
         tessellate_cylinder(
             output_mesh,
             &flag_base,
             &flag_end,
-            CYLINDER_RADIUS * 1.5, // Slightly thicker than axis
+            CYLINDER_RADIUS * 1.5,
             12,
             &flag_material,
             true,
@@ -331,7 +329,6 @@ impl Tessellatable for AtomRotGadget {
             Some(&flag_material),
         );
 
-        // Small sphere at the flag tip for better visibility
         tessellate_sphere(output_mesh, &flag_end, 0.3, 8, 8, &flag_material);
     }
 
@@ -340,7 +337,7 @@ impl Tessellatable for AtomRotGadget {
     }
 }
 
-impl Gadget for AtomRotGadget {
+impl Gadget for FreeRotGadget {
     fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         if cylinder_ray_intersection(
             ray_origin,
@@ -372,10 +369,10 @@ impl Gadget for AtomRotGadget {
     }
 }
 
-impl NodeNetworkGadget for AtomRotGadget {
+impl NodeNetworkGadget for FreeRotGadget {
     fn sync_data(&self, data: &mut dyn NodeData) {
-        if let Some(atom_rot_data) = data.as_any_mut().downcast_mut::<AtomRotData>() {
-            atom_rot_data.angle = self.angle;
+        if let Some(d) = data.as_any_mut().downcast_mut::<FreeRotData>() {
+            d.angle = self.angle;
         }
     }
 
@@ -384,7 +381,7 @@ impl NodeNetworkGadget for AtomRotGadget {
     }
 }
 
-impl AtomRotGadget {
+impl FreeRotGadget {
     pub fn new(angle: f64, rot_axis: DVec3, pivot_point: DVec3) -> Self {
         Self {
             angle,
@@ -396,7 +393,6 @@ impl AtomRotGadget {
         }
     }
 
-    /// Get the current drag offset along the rotation axis
     fn get_axis_offset(&self, ray_origin: DVec3, ray_direction: DVec3) -> f64 {
         get_closest_point_on_first_ray(
             &self.pivot_point,
@@ -407,7 +403,6 @@ impl AtomRotGadget {
     }
 }
 
-/// Test if a ray intersects with a cylinder along an axis
 fn cylinder_ray_intersection(
     ray_origin: DVec3,
     ray_direction: DVec3,
@@ -416,44 +411,36 @@ fn cylinder_ray_intersection(
     cylinder_length: f64,
     hit_radius: f64,
 ) -> bool {
-    // Cylinder segment endpoints
     let half_length = cylinder_length * 0.5;
     let top = cylinder_center + cylinder_axis * half_length;
     let bottom = cylinder_center - cylinder_axis * half_length;
 
-    // Find closest points between cylinder axis line and ray line
-    // Line 1 (cylinder): P1 + s * d1 where P1 = bottom, d1 = (top - bottom)
-    // Line 2 (ray): P2 + t * d2 where P2 = ray_origin, d2 = ray_direction
     let d1 = top - bottom;
     let d2 = ray_direction;
-    let w = bottom - ray_origin; // P1 - P2 (correct sign for formula)
+    let w = bottom - ray_origin;
 
-    let a = d1.dot(d1); // |d1|²
-    let b = d1.dot(d2); // d1 · d2
-    let c = d2.dot(d2); // |d2|²
-    let d = d1.dot(w); // d1 · w
-    let e = d2.dot(w); // d2 · w
+    let a = d1.dot(d1);
+    let b = d1.dot(d2);
+    let c = d2.dot(d2);
+    let d = d1.dot(w);
+    let e = d2.dot(w);
 
     let denom = a * c - b * b;
     if denom.abs() < 1e-10 {
-        return false; // Lines are parallel
+        return false;
     }
 
-    // Closest point parameters
-    let s = (b * e - c * d) / denom; // Parameter along cylinder axis [0,1]
-    let t = (a * e - b * d) / denom; // Parameter along ray [0,∞)
+    let s = (b * e - c * d) / denom;
+    let t = (a * e - b * d) / denom;
 
-    // Check if the closest point is within the cylinder bounds
     if !(0.0..=1.0).contains(&s) {
         return false;
     }
 
-    // Check if the intersection is in front of the camera (t >= 0)
     if t < 0.0 {
         return false;
     }
 
-    // Calculate the distance between the closest points
     let point_on_axis = bottom + d1 * s;
     let point_on_ray = ray_origin + ray_direction * t;
     let distance = (point_on_axis - point_on_ray).length();
@@ -463,19 +450,18 @@ fn cylinder_ray_intersection(
 
 pub fn get_node_type() -> NodeType {
     NodeType {
-        name: "atom_rot".to_string(),
-        description: "Rotates an atomic structure around an axis in world space.
-The rotation is performed around the specified axis direction, centered at the pivot point.
-The axis is always interpreted in the fixed Cartesian coordinate system (world space).
-The rotation angle is in radians in text format (e.g., 1.5708 for 90°) and degrees in the UI."
-            .to_string(),
+        name: "free_rot".to_string(),
+        description: "Rotates an unanchored object (Blueprint or Molecule) around an axis in world space.
+For a Blueprint, only the geometry (the cutter) rotates; the structure stays fixed. This can drift the cutter off-lattice.
+For a Molecule, atoms and geometry rotate together.
+Crystal inputs are rejected (exit_structure first, or use structure_rot to stay in lattice space).".to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![
             Parameter {
                 id: None,
-                name: "molecule".to_string(),
-                data_type: DataType::Atomic,
+                name: "input".to_string(),
+                data_type: DataType::HasFreeLinOps,
             },
             Parameter {
                 id: None,
@@ -493,16 +479,16 @@ The rotation angle is in radians in text format (e.g., 1.5708 for 90°) and degr
                 data_type: DataType::Vec3,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as("input"),
         public: true,
         node_data_creator: || {
-            Box::new(AtomRotData {
+            Box::new(FreeRotData {
                 angle: 0.0,
-                rot_axis: DVec3::new(0.0, 0.0, 1.0), // Default: Z-axis
+                rot_axis: DVec3::new(0.0, 0.0, 1.0),
                 pivot_point: DVec3::ZERO,
             })
         },
-        node_data_saver: generic_node_data_saver::<AtomRotData>,
-        node_data_loader: generic_node_data_loader::<AtomRotData>,
+        node_data_saver: generic_node_data_saver::<FreeRotData>,
+        node_data_loader: generic_node_data_loader::<FreeRotData>,
     }
 }

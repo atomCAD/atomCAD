@@ -5,10 +5,10 @@ use crate::crystolecule::atomic_structure::{
 };
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::motif::Motif;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
-use crate::util::transform::Transform;
 use crate::util::transform::Transform2D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
@@ -90,77 +90,128 @@ impl GeometrySummary2D {
     }
 }
 
-#[derive(Clone)]
-pub struct GeometrySummary {
-    pub unit_cell: UnitCellStruct,
-    pub frame_transform: Transform,
-    pub geo_tree_root: GeoNode,
+/// Tracks a Blueprint/Crystal's registration to its underlying Structure's symmetry.
+/// Totally ordered: `Aligned < MotifUnaligned < LatticeUnaligned`. Propagation is `max`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum Alignment {
+    #[default]
+    Aligned,
+    MotifUnaligned,
+    LatticeUnaligned,
 }
 
-impl GeometrySummary {
+impl Alignment {
+    /// Degrades `self` to `other` if `other` is worse (higher in the ordering).
+    pub fn worsen_to(&mut self, other: Self) {
+        *self = (*self).max(other);
+    }
+}
+
+/// If `new_level` is worse than `*level`, update both `*level` and `*reason`.
+/// The reason closure is called only when the level actually changes.
+/// See `doc/design_blueprint_alignment.md` §6.2.
+pub fn worsen_alignment_with_reason<F: FnOnce() -> String>(
+    level: &mut Alignment,
+    reason: &mut Option<String>,
+    new_level: Alignment,
+    new_reason: F,
+) {
+    if new_level > *level {
+        *level = new_level;
+        *reason = Some(new_reason());
+    }
+}
+
+/// Propagates `(other_level, other_reason)` into `(*level, *reason)` using max
+/// semantics, preserving the worsening operand's reason string. Used by CSG
+/// nodes (union, intersect, diff, atom_union) that merge multiple inputs.
+pub fn propagate_alignment_with_reason(
+    level: &mut Alignment,
+    reason: &mut Option<String>,
+    other_level: Alignment,
+    other_reason: &Option<String>,
+) {
+    if other_level > *level {
+        *level = other_level;
+        *reason = other_reason.clone();
+    }
+}
+
+#[derive(Clone)]
+pub struct BlueprintData {
+    pub structure: Structure,
+    pub geo_tree_root: GeoNode,
+    pub alignment: Alignment,
+    /// Short human-readable reason for why alignment is degraded. `None` when
+    /// `alignment == Aligned`. Set by the node that first degrades the state
+    /// and carried along by propagation through downstream nodes.
+    pub alignment_reason: Option<String>,
+}
+
+impl BlueprintData {
     /// Returns a detailed string representation for snapshot testing.
     pub fn to_detailed_string(&self) -> String {
-        let uc = &self.unit_cell;
-        let t = &self.frame_transform;
+        let lv = &self.structure.lattice_vecs;
+        let mo = &self.structure.motif_offset;
         format!(
-            "unit_cell:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})\nframe_transform:\n  translation: ({:.6}, {:.6}, {:.6})\n  rotation: ({:.6}, {:.6}, {:.6}, {:.6})\ngeo_tree:\n{}",
-            uc.a.x,
-            uc.a.y,
-            uc.a.z,
-            uc.b.x,
-            uc.b.y,
-            uc.b.z,
-            uc.c.x,
-            uc.c.y,
-            uc.c.z,
-            t.translation.x,
-            t.translation.y,
-            t.translation.z,
-            t.rotation.x,
-            t.rotation.y,
-            t.rotation.z,
-            t.rotation.w,
+            "lattice_vecs:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})\nmotif_offset: ({:.6}, {:.6}, {:.6})\ngeo_tree:\n{}",
+            lv.a.x,
+            lv.a.y,
+            lv.a.z,
+            lv.b.x,
+            lv.b.y,
+            lv.b.z,
+            lv.c.x,
+            lv.c.y,
+            lv.c.z,
+            mo.x,
+            mo.y,
+            mo.z,
             self.geo_tree_root
         )
     }
 
-    /// Checks if this geometry's unit cell is compatible with another geometry's unit cell.
+    /// Checks if this blueprint's lattice vectors are compatible with another's.
     ///
-    /// This is useful for CSG operations where geometries must have compatible unit cells.
-    /// Uses approximate equality with tolerance for small calculation errors.
-    ///
-    /// # Arguments
-    /// * `other` - The other GeometrySummary to compare unit cells with
-    ///
-    /// # Returns
-    /// * `true` if the unit cells are approximately equal within tolerance
-    /// * `false` if they differ significantly
-    pub fn has_compatible_unit_cell(&self, other: &GeometrySummary) -> bool {
-        self.unit_cell.is_approximately_equal(&other.unit_cell)
+    /// Boolean CSG operations require compatible lattice vectors. Uses approximate
+    /// equality with tolerance for small calculation errors. Motif compatibility
+    /// is not required at this level.
+    pub fn has_compatible_lattice_vecs(&self, other: &BlueprintData) -> bool {
+        self.structure
+            .lattice_vecs
+            .is_approximately_equal(&other.structure.lattice_vecs)
     }
 
-    /// Checks if all geometries in a vector have approximately the same unit cells.
-    ///
-    /// Compares each geometry's unit cell to the first geometry's unit cell.
+    /// Checks if all blueprints in a vector have approximately the same lattice vectors.
     /// Returns true if the vector is empty or has only one element.
-    ///
-    /// # Arguments
-    /// * `geometries` - Vector of GeometrySummary objects to check
-    ///
-    /// # Returns
-    /// * `true` if all unit cells are approximately equal or vector has ≤1 elements
-    /// * `false` if any unit cell differs significantly from the first
-    pub fn all_have_compatible_unit_cells(geometries: &[GeometrySummary]) -> bool {
-        if geometries.len() <= 1 {
+    pub fn all_have_compatible_lattice_vecs(blueprints: &[BlueprintData]) -> bool {
+        if blueprints.len() <= 1 {
             return true;
         }
 
-        let first_unit_cell = &geometries[0].unit_cell;
-        geometries
+        let first = &blueprints[0].structure.lattice_vecs;
+        blueprints
             .iter()
             .skip(1)
-            .all(|geometry| first_unit_cell.is_approximately_equal(&geometry.unit_cell))
+            .all(|bp| first.is_approximately_equal(&bp.structure.lattice_vecs))
     }
+}
+
+#[derive(Clone)]
+pub struct CrystalData {
+    pub structure: Structure,
+    pub atoms: AtomicStructure,
+    pub geo_tree_root: Option<GeoNode>,
+    pub alignment: Alignment,
+    /// Short human-readable reason for why alignment is degraded. `None` when
+    /// `alignment == Aligned`.
+    pub alignment_reason: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct MoleculeData {
+    pub atoms: AtomicStructure,
+    pub geo_tree_root: Option<GeoNode>,
 }
 
 #[derive(Clone)]
@@ -182,12 +233,14 @@ pub enum NetworkResult {
     Vec3(DVec3),
     IVec2(IVec2),
     IVec3(IVec3),
-    UnitCell(UnitCellStruct),
+    LatticeVecs(UnitCellStruct),
     DrawingPlane(DrawingPlane),
     Geometry2D(GeometrySummary2D),
-    Geometry(GeometrySummary),
-    Atomic(AtomicStructure),
+    Blueprint(BlueprintData),
+    Crystal(CrystalData),
+    Molecule(MoleculeData),
     Motif(Motif),
+    Structure(Structure),
     Array(Vec<NetworkResult>),
     Function(Closure),
     Error(String),
@@ -206,19 +259,46 @@ impl NetworkResult {
             NetworkResult::Vec3(_) => Some(DataType::Vec3),
             NetworkResult::IVec2(_) => Some(DataType::IVec2),
             NetworkResult::IVec3(_) => Some(DataType::IVec3),
-            NetworkResult::UnitCell(_) => Some(DataType::UnitCell),
+            NetworkResult::LatticeVecs(_) => Some(DataType::LatticeVecs),
             NetworkResult::DrawingPlane(_) => Some(DataType::DrawingPlane),
             NetworkResult::Geometry2D(_) => Some(DataType::Geometry2D),
-            NetworkResult::Geometry(_) => Some(DataType::Geometry),
-            NetworkResult::Atomic(_) => Some(DataType::Atomic),
+            NetworkResult::Blueprint(_) => Some(DataType::Blueprint),
+            NetworkResult::Crystal(_) => Some(DataType::Crystal),
+            NetworkResult::Molecule(_) => Some(DataType::Molecule),
             NetworkResult::Motif(_) => Some(DataType::Motif),
+            NetworkResult::Structure(_) => Some(DataType::Structure),
             _ => None,
         }
+        .map(|t| {
+            debug_assert!(!t.is_abstract(), "infer_data_type returned abstract type");
+            t
+        })
     }
 
     /// Returns true if this NetworkResult is an Error variant
     pub fn is_error(&self) -> bool {
         matches!(self, NetworkResult::Error(_))
+    }
+
+    /// Returns the alignment carried by this result, if any.
+    /// Blueprint and Crystal carry alignment; all other variants return `None`.
+    pub fn get_alignment(&self) -> Option<Alignment> {
+        match self {
+            NetworkResult::Blueprint(bp) => Some(bp.alignment),
+            NetworkResult::Crystal(c) => Some(c.alignment),
+            _ => None,
+        }
+    }
+
+    /// Returns the alignment reason string carried by this result, if any.
+    /// `None` either because the variant carries no alignment state, or because
+    /// the alignment is `Aligned`.
+    pub fn get_alignment_reason(&self) -> Option<&str> {
+        match self {
+            NetworkResult::Blueprint(bp) => bp.alignment_reason.as_deref(),
+            NetworkResult::Crystal(c) => c.alignment_reason.as_deref(),
+            _ => None,
+        }
     }
 
     /// If this is an Error variant, returns it. Otherwise returns None.
@@ -230,10 +310,10 @@ impl NetworkResult {
         }
     }
 
-    /// Extracts an UnitCellStruct value from the NetworkResult, returns None if not a UnitCell
+    /// Extracts an UnitCellStruct value from the NetworkResult, returns None if not a LatticeVecs
     pub fn extract_unit_cell(self) -> Option<UnitCellStruct> {
         match self {
-            NetworkResult::UnitCell(uc) => Some(uc),
+            NetworkResult::LatticeVecs(uc) => Some(uc),
             _ => None,
         }
     }
@@ -247,14 +327,16 @@ impl NetworkResult {
     }
 
     /// Returns the UnitCellStruct associated with this NetworkResult.
-    /// For UnitCell, DrawingPlane, Geometry2D, and Geometry variants, returns their unit cell.
+    /// For LatticeVecs, DrawingPlane, Geometry2D, and Blueprint variants, returns their unit cell.
     /// For all other variants, returns None.
     pub fn get_unit_cell(&self) -> Option<UnitCellStruct> {
         match self {
-            NetworkResult::UnitCell(unit_cell) => Some(unit_cell.clone()),
+            NetworkResult::LatticeVecs(unit_cell) => Some(unit_cell.clone()),
             NetworkResult::DrawingPlane(drawing_plane) => Some(drawing_plane.unit_cell.clone()),
             NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.unit_cell.clone()),
-            NetworkResult::Geometry(geometry) => Some(geometry.unit_cell.clone()),
+            NetworkResult::Blueprint(bp) => Some(bp.structure.lattice_vecs.clone()),
+            NetworkResult::Crystal(c) => Some(c.structure.lattice_vecs.clone()),
+            NetworkResult::Structure(structure) => Some(structure.lattice_vecs.clone()),
             _ => None,
         }
     }
@@ -347,10 +429,28 @@ impl NetworkResult {
         }
     }
 
-    /// Extracts an AtomicStructure value from the NetworkResult, returns None if not an Atomic
+    /// Extracts an AtomicStructure value from the NetworkResult.
+    /// Accepts both Crystal and Molecule variants (the abstract Atomic supertype).
     pub fn extract_atomic(self) -> Option<AtomicStructure> {
         match self {
-            NetworkResult::Atomic(value) => Some(value),
+            NetworkResult::Crystal(c) => Some(c.atoms),
+            NetworkResult::Molecule(m) => Some(m.atoms),
+            _ => None,
+        }
+    }
+
+    /// Extracts a CrystalData value from the NetworkResult, returns None if not a Crystal.
+    pub fn extract_crystal(self) -> Option<CrystalData> {
+        match self {
+            NetworkResult::Crystal(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Extracts a MoleculeData value from the NetworkResult, returns None if not a Molecule.
+    pub fn extract_molecule(self) -> Option<MoleculeData> {
+        match self {
+            NetworkResult::Molecule(m) => Some(m),
             _ => None,
         }
     }
@@ -359,6 +459,26 @@ impl NetworkResult {
     pub fn extract_motif(self) -> Option<Motif> {
         match self {
             NetworkResult::Motif(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Extracts a Structure value from the NetworkResult, returns None if not a Structure
+    pub fn extract_structure(self) -> Option<Structure> {
+        match self {
+            NetworkResult::Structure(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// Extracts an optional Structure value from the NetworkResult.
+    /// Returns Some(None) if NetworkResult::None (no input connected),
+    /// Some(Some(structure)) if NetworkResult::Structure(...),
+    /// None otherwise.
+    pub fn extract_optional_structure(self) -> Option<Option<Structure>> {
+        match self {
+            NetworkResult::None => Some(None),
+            NetworkResult::Structure(value) => Some(Some(value)),
             _ => None,
         }
     }
@@ -451,9 +571,9 @@ impl NetworkResult {
                 vec.z.round() as i32,
             )),
 
-            // UnitCell -> DrawingPlane (backward compatibility for old .cnnd files)
+            // LatticeVecs -> DrawingPlane (backward compatibility for old .cnnd files)
             // Creates a standard XY plane (001 Miller index) at the origin
-            (NetworkResult::UnitCell(unit_cell), DataType::DrawingPlane) => {
+            (NetworkResult::LatticeVecs(unit_cell), DataType::DrawingPlane) => {
                 match DrawingPlane::new(
                     unit_cell,
                     IVec3::new(0, 0, 1), // XY plane (001 Miller index)
@@ -463,7 +583,7 @@ impl NetworkResult {
                 ) {
                     Ok(drawing_plane) => NetworkResult::DrawingPlane(drawing_plane),
                     Err(err_msg) => NetworkResult::Error(format!(
-                        "Failed to convert UnitCell to DrawingPlane: {}",
+                        "Failed to convert LatticeVecs to DrawingPlane: {}",
                         err_msg
                     )),
                 }
@@ -486,7 +606,7 @@ impl NetworkResult {
     }
 
     /// Returns a user-readable string representation for all variants.
-    /// For complex variants like Geometry2D, Geometry, Atomic, and Error, returns the variant name.
+    /// For complex variants like Geometry2D, Blueprint, Atomic, and Error, returns the variant name.
     pub fn to_display_string(&self) -> String {
         match self {
             NetworkResult::None => "None".to_string(),
@@ -509,9 +629,9 @@ impl NetworkResult {
                 "network: {} node: {}",
                 closure.node_network_name, closure.node_id
             ),
-            NetworkResult::UnitCell(unit_cell) => {
+            NetworkResult::LatticeVecs(unit_cell) => {
                 format!(
-                    "UnitCell:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})",
+                    "LatticeVecs:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})",
                     unit_cell.a.x,
                     unit_cell.a.y,
                     unit_cell.a.z,
@@ -537,30 +657,70 @@ impl NetworkResult {
                 )
             }
             NetworkResult::Geometry2D(_) => "Geometry2D".to_string(),
-            NetworkResult::Geometry(_) => "Geometry".to_string(),
-            NetworkResult::Atomic(atomic) => format_atomic_display_string(atomic),
+            NetworkResult::Blueprint(_) => "Blueprint".to_string(),
+            NetworkResult::Crystal(c) => format_atomic_display_string(&c.atoms),
+            NetworkResult::Molecule(m) => format_atomic_display_string(&m.atoms),
             NetworkResult::Motif(motif) => motif.to_text_format(),
+            NetworkResult::Structure(structure) => {
+                let uc = &structure.lattice_vecs;
+                format!(
+                    "Structure:\n  lattice_vecs: a=({:.6}, {:.6}, {:.6}) b=({:.6}, {:.6}, {:.6}) c=({:.6}, {:.6}, {:.6})\n  motif_offset: ({:.6}, {:.6}, {:.6})",
+                    uc.a.x,
+                    uc.a.y,
+                    uc.a.z,
+                    uc.b.x,
+                    uc.b.y,
+                    uc.b.z,
+                    uc.c.x,
+                    uc.c.y,
+                    uc.c.z,
+                    structure.motif_offset.x,
+                    structure.motif_offset.y,
+                    structure.motif_offset.z,
+                )
+            }
             NetworkResult::Error(_) => "Error".to_string(),
         }
     }
 
     /// Returns a detailed string representation including full contents for complex types.
-    /// For Geometry/Geometry2D, shows unit cell/drawing plane, frame transform, and geo tree.
+    /// For Blueprint/Geometry2D, shows unit cell/drawing plane, frame transform, and geo tree.
     /// For Atomic/Motif, shows counts plus first 10 atoms/sites/bonds.
     /// For other variants, delegates to to_display_string().
     pub fn to_detailed_string(&self) -> String {
         match self {
-            NetworkResult::Geometry(geometry) => {
-                format!("Geometry:\n{}", geometry.to_detailed_string())
+            NetworkResult::Blueprint(geometry) => {
+                format!("Blueprint:\n{}", geometry.to_detailed_string())
             }
             NetworkResult::Geometry2D(geometry) => {
                 format!("Geometry2D:\n{}", geometry.to_detailed_string())
             }
-            NetworkResult::Atomic(atomic) => {
-                format!("Atomic:\n{}", atomic.to_detailed_string())
+            NetworkResult::Crystal(c) => {
+                format!("Crystal:\n{}", c.atoms.to_detailed_string())
+            }
+            NetworkResult::Molecule(m) => {
+                format!("Molecule:\n{}", m.atoms.to_detailed_string())
             }
             NetworkResult::Motif(motif) => {
                 format!("Motif:\n{}", motif.to_detailed_string())
+            }
+            NetworkResult::Structure(structure) => {
+                format!(
+                    "Structure:\n  lattice_vecs:\n    a: ({:.6}, {:.6}, {:.6})\n    b: ({:.6}, {:.6}, {:.6})\n    c: ({:.6}, {:.6}, {:.6})\n  motif_offset: ({:.6}, {:.6}, {:.6})\n  motif:\n{}",
+                    structure.lattice_vecs.a.x,
+                    structure.lattice_vecs.a.y,
+                    structure.lattice_vecs.a.z,
+                    structure.lattice_vecs.b.x,
+                    structure.lattice_vecs.b.y,
+                    structure.lattice_vecs.b.z,
+                    structure.lattice_vecs.c.x,
+                    structure.lattice_vecs.c.y,
+                    structure.lattice_vecs.c.z,
+                    structure.motif_offset.x,
+                    structure.motif_offset.y,
+                    structure.motif_offset.z,
+                    structure.motif.to_detailed_string(),
+                )
             }
             NetworkResult::Error(msg) => {
                 format!("Error: {}", msg)

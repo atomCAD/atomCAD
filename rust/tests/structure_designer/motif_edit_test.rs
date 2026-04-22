@@ -6,7 +6,9 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, Bond
 use rust_lib_flutter_cad::crystolecule::motif::Motif;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
@@ -63,18 +65,24 @@ fn test_motif_edit_node_type_pins() {
     // 3 input pins: molecule, unit_cell, tolerance
     assert_eq!(node_type.parameters.len(), 3);
     assert_eq!(node_type.parameters[0].name, "molecule");
-    assert_eq!(node_type.parameters[0].data_type, DataType::Atomic);
+    assert_eq!(node_type.parameters[0].data_type, DataType::HasAtoms);
     assert_eq!(node_type.parameters[1].name, "unit_cell");
-    assert_eq!(node_type.parameters[1].data_type, DataType::UnitCell);
+    assert_eq!(node_type.parameters[1].data_type, DataType::LatticeVecs);
     assert_eq!(node_type.parameters[2].name, "tolerance");
     assert_eq!(node_type.parameters[2].data_type, DataType::Float);
 
-    // 2 output pins: result (Motif), diff (Atomic)
+    // 2 output pins: result (Motif), diff (Molecule)
     assert_eq!(node_type.output_pins.len(), 2);
     assert_eq!(node_type.output_pins[0].name, "result");
-    assert_eq!(node_type.output_pins[0].data_type, DataType::Motif);
+    assert_eq!(
+        node_type.output_pins[0].fixed_type(),
+        Some(&DataType::Motif)
+    );
     assert_eq!(node_type.output_pins[1].name, "diff");
-    assert_eq!(node_type.output_pins[1].data_type, DataType::Atomic);
+    assert_eq!(
+        node_type.output_pins[1].fixed_type(),
+        Some(&DataType::Molecule)
+    );
 }
 
 #[test]
@@ -151,7 +159,7 @@ fn test_motif_edit_eval_creates_motif_output() {
     designer.set_active_node_network_name(Some("test".to_string()));
 
     // Create unit_cell node + motif_edit node
-    let uc_id = designer.add_node("unit_cell", DVec2::ZERO);
+    let uc_id = designer.add_node("lattice_vecs", DVec2::ZERO);
     let me_id = designer.add_node("motif_edit", DVec2::new(200.0, 0.0));
 
     // Wire unit_cell → motif_edit pin 1 (unit_cell)
@@ -222,20 +230,35 @@ fn test_eval_output_display_override_motif_pattern() {
 
     let mut output = EvalOutput::multi(vec![
         NetworkResult::Motif(motif),
-        NetworkResult::Atomic(diff),
+        NetworkResult::Molecule(MoleculeData {
+            atoms: diff,
+            geo_tree_root: None,
+        }),
     ]);
-    output.set_display_override(0, NetworkResult::Atomic(viz));
+    output.set_display_override(
+        0,
+        NetworkResult::Molecule(MoleculeData {
+            atoms: viz,
+            geo_tree_root: None,
+        }),
+    );
 
     // Wire result is Motif
     assert!(matches!(output.get(0), NetworkResult::Motif(_)));
 
     // Display result is Atomic
     let display = output.get_display(0);
-    assert!(matches!(display, NetworkResult::Atomic(_)));
+    assert!(matches!(
+        display,
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 
     // Pin 1 has no override — display falls back to wire
     let pin1_display = output.get_display(1);
-    assert!(matches!(pin1_display, NetworkResult::Atomic(_)));
+    assert!(matches!(
+        pin1_display,
+        NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+    ));
 }
 
 // ===== Coordinate roundtrip test =====
@@ -325,7 +348,7 @@ fn test_motif_with_parameter_elements() {
     designer.add_node_network("test");
     designer.set_active_node_network_name(Some("test".to_string()));
 
-    let uc_id = designer.add_node("unit_cell", DVec2::ZERO);
+    let uc_id = designer.add_node("lattice_vecs", DVec2::ZERO);
     let me_id = designer.add_node("motif_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(uc_id, 0, me_id, 1);
 
@@ -1664,7 +1687,7 @@ fn test_motif_edit_eval_populates_effective_atomic_numbers() {
     designer.add_node_network("test");
     designer.set_active_node_network_name(Some("test".to_string()));
 
-    let uc_id = designer.add_node("unit_cell", DVec2::ZERO);
+    let uc_id = designer.add_node("lattice_vecs", DVec2::ZERO);
     let me_id = designer.add_node("motif_edit", DVec2::new(200.0, 0.0));
     designer.connect_nodes(uc_id, 0, me_id, 1);
 

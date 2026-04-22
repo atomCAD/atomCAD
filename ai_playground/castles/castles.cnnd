@@ -229,7 +229,7 @@
           },
           {
             "id": 88,
-            "node_type_name": "atom_fill",
+            "node_type_name": "materialize",
             "custom_name": "atoms",
             "position": [
               3810.0,
@@ -252,23 +252,12 @@
               },
               {
                 "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
-            "data_type": "atom_fill",
+            "data_type": "materialize",
             "data": {
               "hydrogen_passivation": true,
               "invert_phase": false,
-              "motif_offset": [
-                0.0,
-                0.0,
-                0.0
-              ],
               "parameter_element_value_definition": "",
               "remove_single_bond_atoms_before_passivation": true,
               "surface_reconstruction": false
@@ -545,7 +534,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -905,7 +894,7 @@
         "next_node_id": 21,
         "node_type": {
           "name": "arrow_slit_wall_y",
-          "description": "A Y-aligned wall segment with a centered arrow slit. Outputs Geometry.",
+          "description": "A Y-aligned wall segment with a centered arrow slit. Outputs Blueprint.",
           "category": "Custom",
           "parameters": [
             {
@@ -933,7 +922,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -1434,7 +1423,7 @@
         "next_node_id": 21,
         "node_type": {
           "name": "arrow_slit_wall",
-          "description": "A wall segment with a centered arrow slit. Outputs Geometry.",
+          "description": "A wall segment with a centered arrow slit. Outputs Blueprint.",
           "category": "Custom",
           "parameters": [
             {
@@ -1462,7 +1451,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {
@@ -1979,7 +1968,7 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_type": "Blueprint"
         },
         "nodes": [
           {

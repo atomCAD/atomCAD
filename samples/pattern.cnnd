@@ -6,6 +6,9 @@
         "next_node_id": 9,
         "node_type": {
           "name": "pattern",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
           "parameters": [
             {
               "name": "index",
@@ -16,12 +19,53 @@
               "data_type": "Int"
             }
           ],
-          "output_type": "Geometry"
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "Blueprint"
+            }
+          ]
         },
         "nodes": [
           {
+            "id": 5,
+            "node_type_name": "cuboid",
+            "custom_name": "cuboid1",
+            "position": [
+              770.4000000000017,
+              67.14000000000158
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "cuboid",
+            "data": {
+              "extent": [
+                2,
+                2,
+                2
+              ],
+              "min_corner": [
+                -1,
+                -1,
+                -1
+              ]
+            }
+          },
+          {
             "id": 1,
             "node_type_name": "parameter",
+            "custom_name": "parameter1",
             "position": [
               193.60000000000105,
               50.340000000000146
@@ -37,14 +81,41 @@
             "data": {
               "data_type": "Int",
               "data_type_str": null,
+              "param_id": null,
               "param_index": 0,
               "param_name": "index",
               "sort_order": 0
             }
           },
           {
+            "id": 2,
+            "node_type_name": "parameter",
+            "custom_name": "parameter2",
+            "position": [
+              188.7999999999999,
+              134.3400000000022
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_id": null,
+              "param_index": 1,
+              "param_name": "gap",
+              "sort_order": 1
+            }
+          },
+          {
             "id": 4,
             "node_type_name": "ivec3",
+            "custom_name": "ivec31",
             "position": [
               593.6,
               80.74000000000001
@@ -74,9 +145,10 @@
           {
             "id": 6,
             "node_type_name": "expr",
+            "custom_name": "expr1",
             "position": [
               380.7999999999989,
-              117.48000000000013
+              117.48000000000012
             ],
             "arguments": [
               {
@@ -97,11 +169,13 @@
                 {
                   "data_type": "Int",
                   "data_type_str": null,
+                  "id": null,
                   "name": "index"
                 },
                 {
                   "data_type": "Int",
                   "data_type_str": null,
+                  "id": null,
                   "name": "gap"
                 }
               ]
@@ -110,6 +184,7 @@
           {
             "id": 7,
             "node_type_name": "int",
+            "custom_name": "int1",
             "position": [
               23.99999999999858,
               39.88000000000039
@@ -123,6 +198,7 @@
           {
             "id": 8,
             "node_type_name": "int",
+            "custom_name": "int2",
             "position": [
               22.399999999999352,
               131.08000000000192
@@ -132,74 +208,20 @@
             "data": {
               "value": 4
             }
-          },
-          {
-            "id": 2,
-            "node_type_name": "parameter",
-            "position": [
-              188.7999999999999,
-              134.3400000000022
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "8": 0
-                }
-              }
-            ],
-            "data_type": "parameter",
-            "data": {
-              "data_type": "Int",
-              "data_type_str": null,
-              "param_index": 1,
-              "param_name": "gap",
-              "sort_order": 1
-            }
-          },
-          {
-            "id": 5,
-            "node_type_name": "cuboid",
-            "position": [
-              770.4000000000017,
-              67.14000000000158
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {
-                  "4": 0
-                }
-              },
-              {
-                "argument_output_pins": {}
-              }
-            ],
-            "data_type": "cuboid",
-            "data": {
-              "extent": [
-                2,
-                2,
-                2
-              ],
-              "min_corner": [
-                -1,
-                -1,
-                -1
-              ]
-            }
           }
         ],
         "return_node_id": 5,
         "displayed_node_ids": [
-          [
-            2,
-            "Normal"
-          ],
           [
             1,
             "Normal"
           ],
           [
             5,
+            "Normal"
+          ],
+          [
+            2,
             "Normal"
           ]
         ]
@@ -211,13 +233,54 @@
         "next_node_id": 7,
         "node_type": {
           "name": "sample",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
           "parameters": [],
-          "output_type": "None"
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "None"
+            }
+          ]
         },
         "nodes": [
           {
+            "id": 6,
+            "node_type_name": "union",
+            "custom_name": "union1",
+            "position": [
+              653.1999999999991,
+              109.07999999999942
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "union",
+            "data": {}
+          },
+          {
+            "id": 5,
+            "node_type_name": "int",
+            "custom_name": "int1",
+            "position": [
+              12.399999999999068,
+              137.14000000000112
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 5
+            }
+          },
+          {
             "id": 3,
             "node_type_name": "range",
+            "custom_name": "range1",
             "position": [
               180.39999999999984,
               13.939999999999486
@@ -241,38 +304,30 @@
             }
           },
           {
-            "id": 5,
-            "node_type_name": "int",
+            "id": 2,
+            "node_type_name": "pattern",
+            "custom_name": "pattern1",
             "position": [
-              12.399999999999068,
-              137.14000000000112
-            ],
-            "arguments": [],
-            "data_type": "int",
-            "data": {
-              "value": 5
-            }
-          },
-          {
-            "id": 6,
-            "node_type_name": "union",
-            "position": [
-              653.1999999999991,
-              109.07999999999942
+              190.8000000000004,
+              133.1399999999967
             ],
             "arguments": [
               {
+                "argument_output_pins": {}
+              },
+              {
                 "argument_output_pins": {
-                  "4": 0
+                  "5": 0
                 }
               }
             ],
-            "data_type": "union",
+            "data_type": "no_data",
             "data": {}
           },
           {
             "id": 4,
             "node_type_name": "map",
+            "custom_name": "map1",
             "position": [
               425.2000000000001,
               85.93999999999994
@@ -292,28 +347,8 @@
             "data_type": "map",
             "data": {
               "input_type": "Int",
-              "output_type": "Geometry"
+              "output_type": "Blueprint"
             }
-          },
-          {
-            "id": 2,
-            "node_type_name": "pattern",
-            "position": [
-              190.8000000000004,
-              133.1399999999967
-            ],
-            "arguments": [
-              {
-                "argument_output_pins": {}
-              },
-              {
-                "argument_output_pins": {
-                  "5": 0
-                }
-              }
-            ],
-            "data_type": "no_data",
-            "data": {}
           }
         ],
         "return_node_id": null,
@@ -326,5 +361,5 @@
       }
     ]
   ],
-  "version": 1
+  "version": 3
 }

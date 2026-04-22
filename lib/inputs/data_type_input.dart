@@ -115,18 +115,28 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'IVec2';
       case APIDataTypeBase.iVec3:
         return 'IVec3';
-      case APIDataTypeBase.unitCell:
-        return 'UnitCell';
+      case APIDataTypeBase.latticeVecs:
+        return 'LatticeVecs';
       case APIDataTypeBase.drawingPlane:
         return 'DrawingPlane';
       case APIDataTypeBase.geometry2D:
         return 'Geometry2D';
-      case APIDataTypeBase.geometry:
-        return 'Geometry';
-      case APIDataTypeBase.atomic:
-        return 'Atomic';
+      case APIDataTypeBase.blueprint:
+        return 'Blueprint';
+      case APIDataTypeBase.hasAtoms:
+        return 'HasAtoms';
+      case APIDataTypeBase.crystal:
+        return 'Crystal';
+      case APIDataTypeBase.molecule:
+        return 'Molecule';
+      case APIDataTypeBase.hasStructure:
+        return 'HasStructure';
+      case APIDataTypeBase.hasFreeLinOps:
+        return 'HasFreeLinOps';
       case APIDataTypeBase.motif:
         return 'Motif';
+      case APIDataTypeBase.structure:
+        return 'Structure';
       case APIDataTypeBase.custom:
         return 'Custom...';
     }

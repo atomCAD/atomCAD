@@ -13,7 +13,7 @@ SDF (Signed Distance Field) evaluation and visualization for implicit geometry.
 
 ## How It Works
 
-Geometry nodes produce `ImplicitGeometry3D` (or 2D) objects — SDF functions that return signed distance to the nearest surface for any point in space.
+Blueprint nodes produce `ImplicitGeometry3D` (or 2D) objects — SDF functions that return signed distance to the nearest surface for any point in space.
 
 Visualization approaches:
 - **Surface splatting:** Sample points near the surface → display as point cloud

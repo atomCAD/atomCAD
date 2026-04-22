@@ -153,7 +153,22 @@
       "WebFetch(domain:cci.lbl.gov)",
       "Bash(gh search:*)",
       "Bash(cat)",
-      "Bash(bash /tmp/check_pins.sh)"
+      "Bash(bash /tmp/check_pins.sh)",
+      "Bash(bash /tmp/rename_script.sh)",
+      "Bash(git mv:*)",
+      "Bash(INSTA_UPDATE=always cargo test --test structure_designer)",
+      "Bash(INSTA_UPDATE=no cargo test test_extrude_demo_evaluation)",
+      "Bash(INSTA_UPDATE=always cargo test)",
+      "Bash(find rust:*)",
+      "Bash(jq --version)",
+      "Bash(INSTA_UPDATE=always cargo test --tests --test structure_designer)",
+      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\Ádám Nagy\\\\\\\\.claude\\\\\\\\projects\\\\\\\\C--machine-phase-systems-flutter-cad\\\\\\\\e47c75b0-bdd4-4716-bf66-5ffae5f4bae4\\\\\\\\tool-results\\\\\\\\toolu_01RMwv7xuKWt24Hzkps1v9bW.txt\")",
+      "Bash(sed -n '50,100p' /tmp/drawio_values.txt)",
+      "Bash(sed -n '100,180p' /tmp/drawio_values.txt)",
+      "Bash(git ls-tree *)",
+      "Bash(rustfmt --check src/structure_designer/serialization/migrate_v2_to_v3.rs tests/integration/lattice_space_migration_test.rs)",
+      "Bash(rustfmt --check tests/integration/lattice_space_migration_test.rs)",
+      "Bash(rustfmt --check src/structure_designer/serialization/migrate_v2_to_v3.rs)"
     ]
   }
 }

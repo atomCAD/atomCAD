@@ -2764,7 +2764,8 @@ fn evaluate_atom_edit_pin(designer: &StructureDesigner, pin_index: i32) -> Atomi
         &mut context,
     );
     match result {
-        NetworkResult::Atomic(s) => s,
+        NetworkResult::Crystal(c) => c.atoms,
+        NetworkResult::Molecule(m) => m.atoms,
         _ => panic!("Expected Atomic result for pin {pin_index}"),
     }
 }
@@ -2843,7 +2844,9 @@ fn hybridization_override_appears_on_pin1_diff_output() {
 #[test]
 fn hybridization_override_migrated_on_base_atom_promotion() {
     use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
-    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+        MoleculeData, NetworkResult,
+    };
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 
     // Create a base structure with one carbon atom at origin, with sp2 hybridization
@@ -2862,7 +2865,10 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
         .get_mut("test")
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Atomic(base),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: base,
+            geo_tree_root: None,
+        }),
     });
     let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
 
@@ -2921,7 +2927,9 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
 /// Under inline metadata, frozen state is carried via `BaseAtomPromotionInfo.flags`.
 #[test]
 fn frozen_flag_migrated_on_base_atom_promotion() {
-    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+        MoleculeData, NetworkResult,
+    };
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 
     // Create a base structure with one carbon atom at origin, frozen
@@ -2939,7 +2947,10 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
         .get_mut("test")
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Atomic(base),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: base,
+            geo_tree_root: None,
+        }),
     });
     let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
 
@@ -2980,7 +2991,9 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
 /// Regression test: freezing a diff atom must appear on pin 1 (diff) output.
 #[test]
 fn frozen_diff_atom_appears_on_pin1_output() {
-    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+        MoleculeData, NetworkResult,
+    };
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 
     let mut base = AtomicStructure::new();
@@ -2996,7 +3009,10 @@ fn frozen_diff_atom_appears_on_pin1_output() {
         .get_mut("test")
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Atomic(base),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: base,
+            geo_tree_root: None,
+        }),
     });
     let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
 
@@ -3037,7 +3053,9 @@ fn frozen_diff_atom_appears_on_pin1_output() {
 
 /// Helper: sets up a designer with a base structure wired to an atom_edit node.
 fn setup_atom_edit_with_base(base: AtomicStructure) -> StructureDesigner {
-    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+        MoleculeData, NetworkResult,
+    };
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 
     let mut designer = StructureDesigner::new();
@@ -3050,7 +3068,10 @@ fn setup_atom_edit_with_base(base: AtomicStructure) -> StructureDesigner {
         .get_mut("test")
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Atomic(base),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: base,
+            geo_tree_root: None,
+        }),
     });
     let value_id = network.add_node("value", DVec2::ZERO, 0, value_data);
 

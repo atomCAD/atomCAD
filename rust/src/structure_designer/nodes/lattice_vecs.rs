@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UnitCellData {
+pub struct LatticeVecsData {
     pub cell_length_a: f64,
     pub cell_length_b: f64,
     pub cell_length_c: f64,
@@ -28,8 +28,8 @@ pub struct UnitCellData {
     pub cell_angle_gamma: f64, // in degrees
 }
 
-impl UnitCellData {
-    /// Converts UnitCellData (crystallographic format) to UnitCellStruct (basis vectors)
+impl LatticeVecsData {
+    /// Converts LatticeVecsData (crystallographic format) to UnitCellStruct (basis vectors)
     ///
     /// This function converts from the standard crystallographic unit cell parameters
     /// (lengths a, b, c and angles α, β, γ) to three basis vectors in 3D space.
@@ -88,7 +88,7 @@ impl UnitCellData {
     }
 }
 
-impl NodeData for UnitCellData {
+impl NodeData for LatticeVecsData {
     fn provide_gadget(
         &self,
         _structure_designer: &StructureDesigner,
@@ -160,10 +160,10 @@ impl NodeData for UnitCellData {
 
         // If none were overridden, return the default to preserve exact crystallographic parameters
         if a_is_default && b_is_default && c_is_default {
-            EvalOutput::single(NetworkResult::UnitCell(default_unit_cell_struct))
+            EvalOutput::single(NetworkResult::LatticeVecs(default_unit_cell_struct))
         } else {
             // At least one was overridden, calculate crystallographic parameters from basis vectors
-            EvalOutput::single(NetworkResult::UnitCell(UnitCellStruct::new(a, b, c)))
+            EvalOutput::single(NetworkResult::LatticeVecs(UnitCellStruct::new(a, b, c)))
         }
     }
 
@@ -260,8 +260,8 @@ impl NodeData for UnitCellData {
 
 pub fn get_node_type() -> NodeType {
     NodeType {
-      name: "unit_cell".to_string(),
-      description: "Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.".to_string(),
+      name: "lattice_vecs".to_string(),
+      description: "Produces a `LatticeVecs` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.".to_string(),
       summary: None,
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![
@@ -281,9 +281,9 @@ pub fn get_node_type() -> NodeType {
           data_type: DataType::Vec3,
         },
       ],
-      output_pins: OutputPinDefinition::single(DataType::UnitCell),
+      output_pins: OutputPinDefinition::single(DataType::LatticeVecs),
       public: true,
-      node_data_creator: || Box::new(UnitCellData {
+      node_data_creator: || Box::new(LatticeVecsData {
         cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
         cell_length_b: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
         cell_length_c: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,
@@ -291,7 +291,7 @@ pub fn get_node_type() -> NodeType {
         cell_angle_beta: 90.0,
         cell_angle_gamma: 90.0,
       }),
-      node_data_saver: generic_node_data_saver::<UnitCellData>,
-      node_data_loader: generic_node_data_loader::<UnitCellData>,
+      node_data_saver: generic_node_data_saver::<LatticeVecsData>,
+      node_data_loader: generic_node_data_loader::<LatticeVecsData>,
   }
 }

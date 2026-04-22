@@ -47,7 +47,7 @@ fn create_serializable_network(nodes: Vec<SerializableNode>) -> SerializableNode
             parameters: vec![],
             output_pins: vec![SerializableOutputPin {
                 name: "result".to_string(),
-                data_type: "Geometry".to_string(),
+                data_type: "Blueprint".to_string(),
             }],
             output_type: None,
         },

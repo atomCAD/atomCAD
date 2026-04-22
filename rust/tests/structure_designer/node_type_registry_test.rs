@@ -25,37 +25,37 @@ fn create_test_network(name: &str) -> NodeNetwork {
 fn test_get_compatible_node_types_from_geometry_output() {
     let registry = NodeTypeRegistry::new();
 
-    // Dragging from a Geometry output pin
-    let categories = registry.get_compatible_node_types(&DataType::Geometry, true);
+    // Dragging from a Blueprint output pin
+    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
 
-    // Should find nodes with Geometry input pins
+    // Should find nodes with Blueprint input pins
     let all_node_names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
         .collect();
 
-    // Union, Intersect, Diff all accept Geometry inputs
+    // Union, Intersect, Diff all accept Blueprint inputs
     assert!(
         all_node_names.contains(&"union"),
-        "union should accept Geometry"
+        "union should accept Blueprint"
     );
     assert!(
         all_node_names.contains(&"intersect"),
-        "intersect should accept Geometry"
+        "intersect should accept Blueprint"
     );
     assert!(
         all_node_names.contains(&"diff"),
-        "diff should accept Geometry"
+        "diff should accept Blueprint"
     );
     assert!(
-        all_node_names.contains(&"atom_fill"),
-        "atom_fill should accept Geometry"
+        all_node_names.contains(&"materialize"),
+        "materialize should accept Blueprint"
     );
 
-    // Float node should NOT be in the list (no Geometry input)
+    // Float node should NOT be in the list (no Blueprint input)
     assert!(
         !all_node_names.contains(&"float"),
-        "float should not accept Geometry"
+        "float should not accept Blueprint"
     );
 }
 
@@ -85,33 +85,33 @@ fn test_get_compatible_node_types_from_float_output() {
 fn test_get_compatible_node_types_to_geometry_input() {
     let registry = NodeTypeRegistry::new();
 
-    // Dragging from a Geometry INPUT pin (looking for nodes that OUTPUT Geometry)
-    let categories = registry.get_compatible_node_types(&DataType::Geometry, false);
+    // Dragging from a Blueprint INPUT pin (looking for nodes that OUTPUT Blueprint)
+    let categories = registry.get_compatible_node_types(&DataType::Blueprint, false);
 
     let all_node_names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
         .collect();
 
-    // These nodes output Geometry
+    // These nodes output Blueprint
     assert!(
         all_node_names.contains(&"sphere"),
-        "sphere outputs Geometry"
+        "sphere outputs Blueprint"
     );
     assert!(
         all_node_names.contains(&"cuboid"),
-        "cuboid outputs Geometry"
+        "cuboid outputs Blueprint"
     );
-    assert!(all_node_names.contains(&"union"), "union outputs Geometry");
+    assert!(all_node_names.contains(&"union"), "union outputs Blueprint");
     assert!(
         all_node_names.contains(&"extrude"),
-        "extrude outputs Geometry"
+        "extrude outputs Blueprint"
     );
 
-    // Float node outputs Float, not Geometry
+    // Float node outputs Float, not Blueprint
     assert!(
         !all_node_names.contains(&"float"),
-        "float does not output Geometry"
+        "float does not output Blueprint"
     );
 }
 
@@ -136,7 +136,7 @@ fn test_get_compatible_node_types_to_float_input() {
         "int output converts to Float"
     );
 
-    // Sphere outputs Geometry, not Float
+    // Sphere outputs Blueprint, not Float
     assert!(
         !all_node_names.contains(&"sphere"),
         "sphere does not output Float"
@@ -147,19 +147,19 @@ fn test_get_compatible_node_types_to_float_input() {
 fn test_get_compatible_node_types_array_compatibility() {
     let registry = NodeTypeRegistry::new();
 
-    // Dragging single Geometry - should match nodes with [Geometry] array inputs
+    // Dragging single Blueprint - should match nodes with [Blueprint] array inputs
     // because DataType::can_be_converted_to allows T -> [T] conversion
-    let categories = registry.get_compatible_node_types(&DataType::Geometry, true);
+    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
 
     let all_node_names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
         .collect();
 
-    // Union accepts [Geometry] array, and single Geometry can convert to [Geometry]
+    // Union accepts [Blueprint] array, and single Blueprint can convert to [Blueprint]
     assert!(
         all_node_names.contains(&"union"),
-        "union should accept single Geometry (converts to array)"
+        "union should accept single Blueprint (converts to array)"
     );
 }
 
@@ -167,7 +167,7 @@ fn test_get_compatible_node_types_array_compatibility() {
 fn test_get_compatible_node_types_returns_grouped_categories() {
     let registry = NodeTypeRegistry::new();
 
-    let categories = registry.get_compatible_node_types(&DataType::Geometry, true);
+    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
 
     // Should have categories, not just a flat list
     assert!(
@@ -185,9 +185,9 @@ fn test_get_compatible_node_types_returns_grouped_categories() {
 fn test_get_compatible_node_types_no_matches() {
     let registry = NodeTypeRegistry::new();
 
-    // UnitCell is a specialized type - few nodes output it
-    // When dragging FROM UnitCell output, looking for nodes with UnitCell input
-    let categories = registry.get_compatible_node_types(&DataType::UnitCell, true);
+    // LatticeVecs is a specialized type - few nodes output it
+    // When dragging FROM LatticeVecs output, looking for nodes with LatticeVecs input
+    let categories = registry.get_compatible_node_types(&DataType::LatticeVecs, true);
 
     // Should still return valid result (possibly with matches like atom_fill, drawing_plane)
     let all_node_names: Vec<&str> = categories
@@ -195,10 +195,10 @@ fn test_get_compatible_node_types_no_matches() {
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
         .collect();
 
-    // drawing_plane and atom_fill accept UnitCell
+    // structure accepts LatticeVecs as input
     assert!(
-        all_node_names.contains(&"drawing_plane") || all_node_names.contains(&"atom_fill"),
-        "Should find nodes that accept UnitCell"
+        all_node_names.contains(&"structure"),
+        "Should find nodes that accept LatticeVecs"
     );
 }
 
@@ -279,7 +279,7 @@ fn test_get_node_type_returns_correct_properties() {
 
     let sphere_type = registry.get_node_type("sphere").unwrap();
     assert_eq!(sphere_type.name, "sphere");
-    assert_eq!(*sphere_type.output_type(), DataType::Geometry);
+    assert_eq!(*sphere_type.output_type(), DataType::Blueprint);
 }
 
 #[test]

@@ -65,7 +65,7 @@ fn create_test_node_type(name: &str) -> NodeType {
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
@@ -83,7 +83,7 @@ fn create_test_node_type_with_params(name: &str, num_params: usize) -> NodeType 
         parameters.push(Parameter {
             id: Some(i as u64 + 1),
             name: format!("param{}", i),
-            data_type: DataType::Geometry,
+            data_type: DataType::Blueprint,
         });
     }
 
@@ -93,7 +93,7 @@ fn create_test_node_type_with_params(name: &str, num_params: usize) -> NodeType 
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         parameters,
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,

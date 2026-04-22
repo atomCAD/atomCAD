@@ -54,11 +54,12 @@ structure_designer/
 | `NodeNetwork` | `node_network.rs` | DAG of nodes with connections, selection, display state |
 | `Node` | `node_network.rs` | Single node: type, position, arguments, data |
 | `NodeType` | `node_type.rs` | Node signature: parameters, output pins, serialization fns |
-| `OutputPinDefinition` | `node_type.rs` | Output pin name + data type |
+| `OutputPinDefinition` | `node_type.rs` | Output pin name + `PinOutputType` (Fixed / SameAsInput / SameAsArrayElements) |
+| `PinOutputType` | `node_type.rs` | `Fixed(DataType)` for static types; `SameAsInput(name)` mirrors a named input pin's resolved concrete type (used for abstract-input polymorphic nodes) |
 | `EvalOutput` | `node_data.rs` | Multi-output eval result (Vec of NetworkResult) |
 | `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
-| `DataType` | `data_type.rs` | Pin type system (Bool, Float, Vec3, Geometry, Atomic, etc.) |
+| `DataType` | `data_type.rs` | Pin type system: primitives, `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`) |
 | `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types |
 | `NetworkResult` | `evaluator/network_result.rs` | Evaluated node output value |
 
@@ -78,9 +79,34 @@ User Action → StructureDesigner method
 - Int ↔ Float, IVec2 ↔ Vec2, IVec3 ↔ Vec3
 - Single value → Array (broadcasting)
 - Function partial application
-- UnitCell → DrawingPlane (legacy)
+- LatticeVecs → DrawingPlane (legacy)
+- Concrete phase type → its abstract supertypes (Crystal/Molecule → HasAtoms; Blueprint/Crystal → HasStructure; Blueprint/Molecule → HasFreeLinOps). No abstract → concrete downcasts, no cross-abstract edges.
 
-Check `DataType::can_be_converted_to()` for the complete rules.
+Check `DataType::can_be_converted_to()` for the complete rules. `DataType::is_abstract()` identifies the three abstract supertypes.
+
+### Three-Phase Model (lattice-space refactoring)
+
+Objects in the node network flow through three concrete phases:
+
+| Phase | Ingredients | Role |
+|---|---|---|
+| **Blueprint** | Structure + Geometry | *Design.* Geometry is a "cookie cutter" positioned in an infinite crystal field. |
+| **Crystal** | Structure + Geometry (opt) + Atoms | *Construction.* Atoms have been carved out of the structure; atoms + geometry are rigidly coupled. |
+| **Molecule** | Geometry (opt) + Atoms | *Deployment.* No structure association; free-floating. |
+
+Three **abstract** supertypes name two-out-of-three combinations (each used only as an input-pin type):
+
+| Abstract | Members | Property |
+|---|---|---|
+| `HasAtoms` | Crystal, Molecule | has materialized atoms (atom ops) |
+| `HasStructure` | Blueprint, Crystal | has a structure (structure_move, structure_rot) |
+| `HasFreeLinOps` | Blueprint, Molecule | free movement is legal (free_move, free_rot) |
+
+Polymorphic nodes that accept an abstract input use `OutputPinDefinition::single_same_as("input")` (or `same_as_input(...)` for named pins) so the concrete variant flows through unchanged: a Crystal into `atom_edit` comes out as a Crystal, a Molecule comes out as a Molecule. `NodeTypeRegistry::resolve_output_type` resolves polymorphic pins against the connected source type at validation time; at runtime nothing special happens — the node receives a concrete `NetworkResult::Crystal(..)` / `Molecule(..)` / `Blueprint(..)` and returns the same variant.
+
+Payload structs (in `evaluator/network_result.rs`): `BlueprintData { structure, geo_tree_root }`, `CrystalData { structure, atoms, geo_tree_root: Option<_> }`, `MoleculeData { atoms, geo_tree_root: Option<_> }`. The legacy `frame_transform` field is gone — movement nodes bake transforms directly into atom positions and `geo_tree` transforms. (`GeometrySummary2D` still carries one; it is 2D-only and unaffected.)
+
+Design docs: `doc/design_lattice_space_refactoring.md` (master), `doc/design_crystal_molecule_split.md` (phase 6), `doc/design_phase_transitions_and_movement.md` (phase 7).
 
 ## Multi-Output Pins
 

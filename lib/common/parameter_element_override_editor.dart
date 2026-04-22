@@ -10,7 +10,7 @@ import 'package:flutter_cad/common/select_element_widget.dart';
 /// element and a dropdown to override it. When no parameters are available
 /// (e.g., no motif connected), shows a placeholder message.
 ///
-/// Used by atom_fill node editor and (future) motif parameter override node.
+/// Used by materialize node editor and (future) motif parameter override node.
 class ParameterElementOverrideEditor extends StatefulWidget {
   /// Parameters from the connected motif (populated after evaluation)
   final List<APIMotifParameterInfo> availableParameters;

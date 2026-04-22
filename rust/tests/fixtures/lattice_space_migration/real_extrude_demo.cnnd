@@ -1,0 +1,1003 @@
+{
+  "node_networks": [
+    [
+      "M",
+      {
+        "next_node_id": 6,
+        "node_type": {
+          "name": "M",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 2,
+            "node_type_name": "extrude",
+            "position": [
+              815.5309448242188,
+              58.603991699218795
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "extrude",
+            "data": {
+              "height": 3
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "polygon",
+            "position": [
+              787.3570556640625,
+              264.51785888671884
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "polygon",
+            "data": {
+              "vertices": [
+                [
+                  -10,
+                  0
+                ],
+                [
+                  -10,
+                  4
+                ],
+                [
+                  -10,
+                  8
+                ],
+                [
+                  -10,
+                  12
+                ],
+                [
+                  -10,
+                  16
+                ],
+                [
+                  -10,
+                  20
+                ],
+                [
+                  -8,
+                  20
+                ],
+                [
+                  0,
+                  12
+                ],
+                [
+                  8,
+                  20
+                ],
+                [
+                  10,
+                  20
+                ],
+                [
+                  10,
+                  17
+                ],
+                [
+                  10,
+                  0
+                ],
+                [
+                  6,
+                  0
+                ],
+                [
+                  6,
+                  13
+                ],
+                [
+                  0,
+                  7
+                ],
+                [
+                  -6,
+                  13
+                ],
+                [
+                  -6,
+                  8
+                ],
+                [
+                  -6,
+                  4
+                ],
+                [
+                  -6,
+                  0
+                ]
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "atom_fill",
+            "position": [
+              1055.666015625,
+              140.90629882812505
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          }
+        ],
+        "return_node_id": 2,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ],
+          [
+            3,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "P",
+      {
+        "next_node_id": 9,
+        "node_type": {
+          "name": "P",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 8,
+            "node_type_name": "diff_2d",
+            "position": [
+              887.5175170898438,
+              293.4551879882813
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              }
+            ],
+            "data_type": "diff_2d",
+            "data": {}
+          },
+          {
+            "id": 4,
+            "node_type_name": "extrude",
+            "position": [
+              1079.5262451171875,
+              300.40092773437505
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "8": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "extrude",
+            "data": {
+              "height": 3
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "polygon",
+            "position": [
+              647.8294982910156,
+              419.0051025390626
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "polygon",
+            "data": {
+              "vertices": [
+                [
+                  -2,
+                  11
+                ],
+                [
+                  2,
+                  11
+                ],
+                [
+                  3,
+                  12
+                ],
+                [
+                  3,
+                  16
+                ],
+                [
+                  2,
+                  17
+                ],
+                [
+                  -2,
+                  17
+                ]
+              ]
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "atom_fill",
+            "position": [
+              1201.9970703125,
+              188.4817993164063
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 1,
+            "node_type_name": "polygon",
+            "position": [
+              194.19924926757812,
+              85.36052246093755
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "polygon",
+            "data": {
+              "vertices": [
+                [
+                  -1,
+                  0
+                ],
+                [
+                  1,
+                  0
+                ],
+                [
+                  1,
+                  3
+                ],
+                [
+                  3,
+                  3
+                ],
+                [
+                  4,
+                  4
+                ],
+                [
+                  4,
+                  7
+                ],
+                [
+                  3,
+                  8
+                ],
+                [
+                  -1,
+                  8
+                ]
+              ]
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "polygon",
+            "position": [
+              435.6255187988281,
+              328.04532470703134
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "polygon",
+            "data": {
+              "vertices": [
+                [
+                  -2,
+                  0
+                ],
+                [
+                  -6,
+                  0
+                ],
+                [
+                  -6,
+                  4
+                ],
+                [
+                  -6,
+                  8
+                ],
+                [
+                  -6,
+                  12
+                ],
+                [
+                  -6,
+                  16
+                ],
+                [
+                  -6,
+                  20
+                ],
+                [
+                  -2,
+                  20
+                ],
+                [
+                  2,
+                  20
+                ],
+                [
+                  4,
+                  20
+                ],
+                [
+                  6,
+                  18
+                ],
+                [
+                  6,
+                  16
+                ],
+                [
+                  6,
+                  12
+                ],
+                [
+                  6,
+                  10
+                ],
+                [
+                  4,
+                  8
+                ],
+                [
+                  -2,
+                  8
+                ],
+                [
+                  -2,
+                  4
+                ]
+              ]
+            }
+          }
+        ],
+        "return_node_id": 4,
+        "displayed_node_ids": [
+          [
+            4,
+            "Normal"
+          ],
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "Demo_Extrusion",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "Demo_Extrusion",
+          "parameters": [],
+          "output_type": "None"
+        },
+        "nodes": [
+          {
+            "id": 4,
+            "node_type_name": "lattice_move",
+            "position": [
+              621.1056518554688,
+              18.576464843750045
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "translation": [
+                -20,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "M",
+            "position": [
+              408.099609375,
+              23.950366210937545
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 7,
+            "node_type_name": "atom_fill",
+            "position": [
+              825.5927124023438,
+              23.105944824218795
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 9,
+            "node_type_name": "atom_fill",
+            "position": [
+              904.7999877929688,
+              285.16008300781255
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "lattice_move",
+            "position": [
+              653.294677734375,
+              251.9097778320313
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "lattice_move",
+            "data": {
+              "translation": [
+                16,
+                0,
+                0
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "P",
+            "position": [
+              432.80865478515625,
+              163.0569946289063
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 5,
+            "node_type_name": "S",
+            "position": [
+              437.55999755859375,
+              279.7816040039063
+            ],
+            "arguments": [],
+            "data_type": "no_data",
+            "data": {}
+          },
+          {
+            "id": 8,
+            "node_type_name": "atom_fill",
+            "position": [
+              832.5089111328125,
+              148.9011108398438
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            8,
+            "Normal"
+          ],
+          [
+            7,
+            "Normal"
+          ],
+          [
+            3,
+            "Normal"
+          ],
+          [
+            4,
+            "Normal"
+          ],
+          [
+            6,
+            "Normal"
+          ],
+          [
+            9,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "S",
+      {
+        "next_node_id": 6,
+        "node_type": {
+          "name": "S",
+          "parameters": [],
+          "output_type": "Geometry"
+        },
+        "nodes": [
+          {
+            "id": 2,
+            "node_type_name": "polygon",
+            "position": [
+              502.21234130859375,
+              288.00321044921884
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "polygon",
+            "data": {
+              "vertices": [
+                [
+                  -4,
+                  0
+                ],
+                [
+                  -3,
+                  0
+                ],
+                [
+                  -1,
+                  0
+                ],
+                [
+                  1,
+                  0
+                ],
+                [
+                  1,
+                  2
+                ],
+                [
+                  1,
+                  4
+                ],
+                [
+                  -3,
+                  7
+                ],
+                [
+                  -3,
+                  8
+                ],
+                [
+                  -1,
+                  8
+                ],
+                [
+                  -1,
+                  6
+                ],
+                [
+                  1,
+                  6
+                ],
+                [
+                  1,
+                  9
+                ],
+                [
+                  0,
+                  10
+                ],
+                [
+                  -1,
+                  10
+                ],
+                [
+                  -3,
+                  10
+                ],
+                [
+                  -5,
+                  10
+                ],
+                [
+                  -5,
+                  8
+                ],
+                [
+                  -5,
+                  6
+                ],
+                [
+                  -1,
+                  3
+                ],
+                [
+                  -1,
+                  2
+                ],
+                [
+                  -3,
+                  2
+                ],
+                [
+                  -3,
+                  3
+                ],
+                [
+                  -3,
+                  4
+                ],
+                [
+                  -5,
+                  4
+                ],
+                [
+                  -5,
+                  1
+                ]
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "atom_fill",
+            "position": [
+              967.6971435546876,
+              186.2435058593751
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "hydrogen_passivation": true,
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "parameter_element_value_definition": ""
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "polygon",
+            "position": [
+              463.05517578125,
+              140.49918212890634
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "polygon",
+            "data": {
+              "vertices": [
+                [
+                  -4,
+                  0
+                ],
+                [
+                  -2,
+                  0
+                ],
+                [
+                  2,
+                  0
+                ],
+                [
+                  4,
+                  0
+                ],
+                [
+                  6,
+                  2
+                ],
+                [
+                  6,
+                  4
+                ],
+                [
+                  6,
+                  7
+                ],
+                [
+                  -2,
+                  15
+                ],
+                [
+                  -2,
+                  16
+                ],
+                [
+                  2,
+                  16
+                ],
+                [
+                  2,
+                  15
+                ],
+                [
+                  2,
+                  13
+                ],
+                [
+                  2,
+                  12
+                ],
+                [
+                  6,
+                  12
+                ],
+                [
+                  6,
+                  13
+                ],
+                [
+                  6,
+                  16
+                ],
+                [
+                  6,
+                  18
+                ],
+                [
+                  4,
+                  20
+                ],
+                [
+                  2,
+                  20
+                ],
+                [
+                  -2,
+                  20
+                ],
+                [
+                  -4,
+                  20
+                ],
+                [
+                  -6,
+                  18
+                ],
+                [
+                  -6,
+                  16
+                ],
+                [
+                  -6,
+                  13
+                ],
+                [
+                  2,
+                  5
+                ],
+                [
+                  2,
+                  4
+                ],
+                [
+                  -2,
+                  4
+                ],
+                [
+                  -2,
+                  7
+                ],
+                [
+                  -2,
+                  8
+                ],
+                [
+                  -6,
+                  8
+                ],
+                [
+                  -6,
+                  4
+                ],
+                [
+                  -6,
+                  2
+                ]
+              ]
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "extrude",
+            "position": [
+              753.249267578125,
+              178.75784912109384
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "extrude",
+            "data": {
+              "height": 3
+            }
+          }
+        ],
+        "return_node_id": 3,
+        "displayed_node_ids": [
+          [
+            5,
+            "Normal"
+          ],
+          [
+            4,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

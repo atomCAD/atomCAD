@@ -165,7 +165,50 @@ fn tessellate_non_lightweight_content(
         // Render every displayed output pin for this node
         for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
             match pin_output {
-                NodeOutput::Atomic(atomic_structure) => {
+                NodeOutput::Atomic(atomic_structure, shell) => {
+                    // If a geometry shell is attached (Crystal/Molecule with
+                    // show_geometry_shell_for_atomic enabled), render it as an
+                    // overlay using the same visualization method the user
+                    // chose for Blueprint geometry.
+                    if let Some(shell) = shell {
+                        match shell.as_ref() {
+                            NodeOutput::SurfacePointCloud(point_cloud) => {
+                                surface_point_tessellator::tessellate_surface_point_cloud(
+                                    &mut main_mesh,
+                                    point_cloud,
+                                    outside_material,
+                                    inside_material,
+                                );
+                            }
+                            NodeOutput::PolyMesh(poly_mesh) => {
+                                if preferences.geometry_visualization.wireframe_geometry {
+                                    let wireframe_color = if is_active {
+                                        [1.0, 1.0, 1.0]
+                                    } else {
+                                        [0.5, 0.55, 0.6]
+                                    };
+                                    tessellate_poly_mesh_to_line_mesh(
+                                        poly_mesh,
+                                        &mut wireframe_mesh,
+                                        preferences.geometry_visualization.mesh_smoothing.clone(),
+                                        wireframe_color,
+                                        wireframe_color,
+                                    );
+                                } else {
+                                    tessellate_poly_mesh(
+                                        poly_mesh,
+                                        &mut main_mesh,
+                                        preferences.geometry_visualization.mesh_smoothing.clone(),
+                                        outside_material,
+                                        Some(inside_material),
+                                        Some(&highlighted_material),
+                                    );
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
                     // Tessellate atomic structures based on rendering method
                     match preferences.atomic_structure_visualization.rendering_method {
                         AtomicRenderingMethod::TriangleMesh => {

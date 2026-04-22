@@ -25,15 +25,15 @@ use rust_lib_flutter_cad::structure_designer::nodes::half_space::HalfSpaceData;
 use rust_lib_flutter_cad::structure_designer::nodes::sphere::SphereData;
 // Transformation nodes
 use rust_lib_flutter_cad::structure_designer::nodes::geo_trans::GeoTransData;
-use rust_lib_flutter_cad::structure_designer::nodes::lattice_move::LatticeMoveData;
-use rust_lib_flutter_cad::structure_designer::nodes::lattice_rot::LatticeRotData;
 use rust_lib_flutter_cad::structure_designer::nodes::lattice_symop::LatticeSymopData;
+use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
+use rust_lib_flutter_cad::structure_designer::nodes::structure_rot::StructureRotData;
 // Atomic nodes
 use rust_lib_flutter_cad::structure_designer::nodes::atom_cut::AtomCutData;
-use rust_lib_flutter_cad::structure_designer::nodes::atom_fill::AtomFillData;
 use rust_lib_flutter_cad::structure_designer::nodes::drawing_plane::DrawingPlaneData;
+use rust_lib_flutter_cad::structure_designer::nodes::lattice_vecs::LatticeVecsData;
+use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
 use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
-use rust_lib_flutter_cad::structure_designer::nodes::unit_cell::UnitCellData;
 // I/O nodes
 use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_cif::ImportCifData;
@@ -212,7 +212,7 @@ fn test_vec3_data_text_properties() {
 }
 
 // ============================================================================
-// Geometry Node Tests
+// Blueprint Node Tests
 // ============================================================================
 
 #[test]
@@ -338,11 +338,11 @@ fn test_map_data_text_properties() {
     );
     map.insert(
         "output_type".to_string(),
-        TextValue::DataType(DataType::Geometry),
+        TextValue::DataType(DataType::Blueprint),
     );
     data2.set_text_properties(&map).unwrap();
     assert_eq!(data2.input_type, DataType::Vec3);
-    assert_eq!(data2.output_type, DataType::Geometry);
+    assert_eq!(data2.output_type, DataType::Blueprint);
 }
 
 #[test]
@@ -762,7 +762,7 @@ fn test_vec2_roundtrip() {
 }
 
 // ============================================================================
-// 2D Geometry Node Roundtrip Tests
+// 2D Blueprint Node Roundtrip Tests
 // ============================================================================
 
 #[test]
@@ -815,7 +815,7 @@ fn test_half_plane_roundtrip() {
 }
 
 // ============================================================================
-// 3D Geometry Node Roundtrip Tests
+// 3D Blueprint Node Roundtrip Tests
 // ============================================================================
 
 #[test]
@@ -860,15 +860,13 @@ fn test_extrude_roundtrip() {
 
 #[test]
 fn test_lattice_move_roundtrip() {
-    test_roundtrip(&LatticeMoveData {
+    test_roundtrip(&StructureMoveData {
         translation: IVec3::new(5, 10, 15),
         lattice_subdivision: 1,
-        is_atomic_mode: false,
     });
-    test_roundtrip(&LatticeMoveData {
+    test_roundtrip(&StructureMoveData {
         translation: IVec3::new(-1, 2, 3),
         lattice_subdivision: 4,
-        is_atomic_mode: false,
     });
 }
 
@@ -877,11 +875,10 @@ fn test_lattice_rot_roundtrip() {
     // Test with axis_index set (Note: axis_index is optional,
     // but roundtrip only works when it's Some because get_text_properties
     // conditionally includes it)
-    test_roundtrip(&LatticeRotData {
+    test_roundtrip(&StructureRotData {
         axis_index: Some(0),
         step: 2,
         pivot_point: IVec3::new(1, 2, 3),
-        is_atomic_mode: false,
     });
 }
 
@@ -925,7 +922,7 @@ fn test_lattice_symop_roundtrip() {
 #[test]
 fn test_unit_cell_roundtrip() {
     // Cubic unit cell (diamond)
-    test_roundtrip(&UnitCellData {
+    test_roundtrip(&LatticeVecsData {
         cell_length_a: 3.567,
         cell_length_b: 3.567,
         cell_length_c: 3.567,
@@ -934,7 +931,7 @@ fn test_unit_cell_roundtrip() {
         cell_angle_gamma: 90.0,
     });
     // Non-cubic unit cell
-    test_roundtrip(&UnitCellData {
+    test_roundtrip(&LatticeVecsData {
         cell_length_a: 4.0,
         cell_length_b: 5.0,
         cell_length_c: 6.0,
@@ -992,10 +989,9 @@ fn test_drawing_plane_roundtrip() {
 }
 
 #[test]
-fn test_atom_fill_roundtrip() {
-    test_roundtrip(&AtomFillData {
+fn test_materialize_roundtrip() {
+    test_roundtrip(&MaterializeData {
         parameter_element_value_definition: "C=6".to_string(),
-        motif_offset: DVec3::new(0.0, 0.0, 0.0),
         hydrogen_passivation: true,
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
@@ -1004,9 +1000,8 @@ fn test_atom_fill_roundtrip() {
         parameter_element_values: HashMap::new(),
         available_parameters: std::cell::RefCell::new(Vec::new()),
     });
-    test_roundtrip(&AtomFillData {
+    test_roundtrip(&MaterializeData {
         parameter_element_value_definition: "".to_string(),
-        motif_offset: DVec3::new(0.25, 0.25, 0.25),
         hydrogen_passivation: false,
         remove_single_bond_atoms_before_passivation: true,
         surface_reconstruction: true,

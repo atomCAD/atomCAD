@@ -9,11 +9,15 @@ use crate::crystolecule::atomic_structure_diff::{
     AtomSource, DiffProvenance, apply_diff, enrich_diff_with_base_bonds,
 };
 use crate::crystolecule::motif::{Motif, MotifBond, Site, SiteSpecifier};
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{
+    Alignment, CrystalData, MoleculeData, NetworkResult,
+};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -29,6 +33,42 @@ use std::sync::Mutex;
 use crate::structure_designer::serialization::atom_edit_data_serialization::{
     SerializableAtomEditData, atom_edit_data_to_serializable, serializable_to_atom_edit_data,
 };
+
+// --- Input-wrapper cache ---
+
+/// Origin-variant metadata captured from the node's `molecule` input.
+/// Used to re-wrap pin 0's result with the same concrete variant as the input.
+#[derive(Clone)]
+enum InputWrapperKind {
+    Crystal {
+        structure: Structure,
+        geo_tree_root: Option<GeoNode>,
+        alignment: Alignment,
+        alignment_reason: Option<String>,
+    },
+    Molecule {
+        geo_tree_root: Option<GeoNode>,
+    },
+    /// Input was missing / Error / some other non-atomic value.
+    /// Fall back to emitting a Molecule with no geometry.
+    Other,
+}
+
+impl std::fmt::Debug for InputWrapperKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Crystal { .. } => f.write_str("Crystal { .. }"),
+            Self::Molecule { .. } => f.write_str("Molecule { .. }"),
+            Self::Other => f.write_str("Other"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CachedInput {
+    atoms: AtomicStructure,
+    wrapper: InputWrapperKind,
+}
 
 // --- Main data struct ---
 
@@ -67,7 +107,9 @@ pub struct AtomEditData {
     /// Cached input molecule for interactive editing performance.
     /// When present, reused instead of re-evaluating upstream.
     /// Cleared by `clear_input_cache()` when upstream may have changed.
-    cached_input: Mutex<Option<AtomicStructure>>,
+    /// Stores both the atoms and the originating wrapper kind so pin 0
+    /// can be re-emitted with the same concrete variant (Crystal or Molecule).
+    cached_input: Mutex<Option<CachedInput>>,
     /// Result-space atom ID to highlight while the modify measurement dialog is open.
     /// Set by `atom_edit_set_measurement_mark`, cleared by `atom_edit_clear_measurement_mark`.
     pub measurement_marked_atom_id: Option<u32>,
@@ -383,10 +425,19 @@ impl AtomEditData {
 
         // 7. Build EvalOutput with display override
         let mut output = EvalOutput::multi(vec![
-            NetworkResult::Motif(motif),       // pin 0 wire value
-            NetworkResult::Atomic(diff_clone), // pin 1
+            NetworkResult::Motif(motif), // pin 0 wire value
+            NetworkResult::Molecule(MoleculeData {
+                atoms: diff_clone,
+                geo_tree_root: None,
+            }), // pin 1
         ]);
-        output.set_display_override(0, NetworkResult::Atomic(result)); // pin 0 display
+        output.set_display_override(
+            0,
+            NetworkResult::Molecule(MoleculeData {
+                atoms: result,
+                geo_tree_root: None,
+            }),
+        ); // pin 0 display
         output.unit_cell_override = Some(unit_cell);
 
         output
@@ -934,7 +985,10 @@ impl AtomEditData {
     /// Get a clone of the cached input structure (if available).
     /// Used by bond order change operations to resolve result-space IDs.
     pub fn get_cached_input(&self) -> Option<AtomicStructure> {
-        self.cached_input.lock().ok().and_then(|g| g.clone())
+        self.cached_input
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|c| c.atoms.clone()))
     }
 
     /// Remove an atom from the diff entirely (and its anchor if any).
@@ -1491,7 +1545,7 @@ impl NodeData for AtomEditData {
     ) -> EvalOutput {
         // Use cached input if available (populated during previous eval,
         // cleared by clear_input_cache() when upstream may have changed).
-        let input_structure = if let Some(cached) = self
+        let cached = if let Some(cached) = self
             .cached_input
             .lock()
             .ok()
@@ -1504,15 +1558,34 @@ impl NodeData for AtomEditData {
             if let NetworkResult::Error(_) = input_val {
                 return EvalOutput::single(input_val);
             }
-            let structure = match input_val {
-                NetworkResult::Atomic(s) => s,
-                _ => AtomicStructure::new(),
+            let fresh = match input_val {
+                NetworkResult::Crystal(c) => CachedInput {
+                    atoms: c.atoms,
+                    wrapper: InputWrapperKind::Crystal {
+                        structure: c.structure,
+                        geo_tree_root: c.geo_tree_root,
+                        alignment: c.alignment,
+                        alignment_reason: c.alignment_reason,
+                    },
+                },
+                NetworkResult::Molecule(m) => CachedInput {
+                    atoms: m.atoms,
+                    wrapper: InputWrapperKind::Molecule {
+                        geo_tree_root: m.geo_tree_root,
+                    },
+                },
+                _ => CachedInput {
+                    atoms: AtomicStructure::new(),
+                    wrapper: InputWrapperKind::Other,
+                },
             };
             if let Ok(mut guard) = self.cached_input.lock() {
-                *guard = Some(structure.clone());
+                *guard = Some(fresh.clone());
             }
-            structure
+            fresh
         };
+        let input_structure = cached.atoms;
+        let input_wrapper = cached.wrapper;
 
         // Get tolerance from tolerance pin or property
         let tolerance = match network_evaluator.evaluate_or_default(
@@ -1693,9 +1766,39 @@ impl NodeData for AtomEditData {
             context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
 
+        // Pin 0 (`result`): re-wrap in the same concrete variant as the input
+        // (`SameAsInput("molecule")`). A Crystal input keeps its Structure and
+        // geo_tree_root; a Molecule input keeps its geo_tree_root. The diff
+        // operates on Cartesian atoms only — lattice metadata is untouched.
+        let result_pin = match input_wrapper {
+            InputWrapperKind::Crystal {
+                structure,
+                geo_tree_root,
+                alignment,
+                alignment_reason,
+            } => NetworkResult::Crystal(CrystalData {
+                structure,
+                atoms: result,
+                geo_tree_root,
+                alignment,
+                alignment_reason,
+            }),
+            InputWrapperKind::Molecule { geo_tree_root } => NetworkResult::Molecule(MoleculeData {
+                atoms: result,
+                geo_tree_root,
+            }),
+            InputWrapperKind::Other => NetworkResult::Molecule(MoleculeData {
+                atoms: result,
+                geo_tree_root: None,
+            }),
+        };
+
         EvalOutput::multi(vec![
-            NetworkResult::Atomic(result),
-            NetworkResult::Atomic(diff_clone),
+            result_pin,
+            NetworkResult::Molecule(MoleculeData {
+                atoms: diff_clone,
+                geo_tree_root: None,
+            }),
         ])
     }
 
@@ -1877,7 +1980,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "molecule".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             },
             Parameter {
                 id: None,
@@ -1886,14 +1989,8 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition {
-                name: "result".to_string(),
-                data_type: DataType::Atomic,
-            },
-            OutputPinDefinition {
-                name: "diff".to_string(),
-                data_type: DataType::Atomic,
-            },
+            OutputPinDefinition::same_as_input("result", "molecule"),
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
         ],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new()),
@@ -1934,12 +2031,12 @@ pub fn get_node_type_motif_edit() -> NodeType {
             Parameter {
                 id: None,
                 name: "molecule".to_string(),
-                data_type: DataType::Atomic,
+                data_type: DataType::HasAtoms,
             },
             Parameter {
                 id: None,
                 name: "unit_cell".to_string(),
-                data_type: DataType::UnitCell,
+                data_type: DataType::LatticeVecs,
             },
             Parameter {
                 id: None,
@@ -1948,14 +2045,8 @@ pub fn get_node_type_motif_edit() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition {
-                name: "result".to_string(),
-                data_type: DataType::Motif,
-            },
-            OutputPinDefinition {
-                name: "diff".to_string(),
-                data_type: DataType::Atomic,
-            },
+            OutputPinDefinition::fixed("result", DataType::Motif),
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
         ],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new_motif_mode()),

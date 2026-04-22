@@ -16,6 +16,9 @@ mod motif_bond_inference_test;
 #[path = "crystolecule/motif_parser_test.rs"]
 mod motif_parser_test;
 
+#[path = "crystolecule/motif_symmetry_test.rs"]
+mod motif_symmetry_test;
+
 #[path = "crystolecule/unit_cell_test.rs"]
 mod unit_cell_test;
 

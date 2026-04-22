@@ -1230,36 +1230,31 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  APILatticeMoveData? getLatticeMoveData(BigInt nodeId) {
-    return structure_designer_api.getLatticeMoveData(nodeId: nodeId);
+  APIStructureMoveData? getStructureMoveData(BigInt nodeId) {
+    return structure_designer_api.getStructureMoveData(nodeId: nodeId);
   }
 
-  void setLatticeMoveData(BigInt nodeId, APILatticeMoveData data) {
-    structure_designer_api.setLatticeMoveData(nodeId: nodeId, data: data);
+  void setStructureMoveData(BigInt nodeId, APIStructureMoveData data) {
+    structure_designer_api.setStructureMoveData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
-  APILatticeRotData? getLatticeRotData(BigInt nodeId) {
-    return structure_designer_api.getLatticeRotData(nodeId: nodeId);
+  APIStructureRotData? getStructureRotData(BigInt nodeId) {
+    return structure_designer_api.getStructureRotData(nodeId: nodeId);
   }
 
-  void setLatticeRotData(BigInt nodeId, APILatticeRotData data) {
-    structure_designer_api.setLatticeRotData(nodeId: nodeId, data: data);
+  void setStructureRotData(BigInt nodeId, APIStructureRotData data) {
+    structure_designer_api.setStructureRotData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
-  void setAtomMoveData(BigInt nodeId, APIAtomMoveData data) {
-    structure_designer_api.setAtomMoveData(nodeId: nodeId, data: data);
+  void setFreeMoveData(BigInt nodeId, APIFreeMoveData data) {
+    structure_designer_api.setFreeMoveData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
-  void setAtomRotData(BigInt nodeId, APIAtomRotData data) {
-    structure_designer_api.setAtomRotData(nodeId: nodeId, data: data);
-    refreshFromKernel();
-  }
-
-  void setAtomTransData(BigInt nodeId, APIAtomTransData data) {
-    structure_designer_api.setAtomTransData(nodeId: nodeId, data: data);
+  void setFreeRotData(BigInt nodeId, APIFreeRotData data) {
+    structure_designer_api.setFreeRotData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1298,13 +1293,13 @@ class StructureDesignerModel extends ChangeNotifier {
     return structure_designer_api.getMotifData(nodeId: nodeId);
   }
 
-  void setAtomFillData(BigInt nodeId, APIAtomFillData data) {
-    structure_designer_api.setAtomFillData(nodeId: nodeId, data: data);
+  void setMaterializeData(BigInt nodeId, APIMaterializeData data) {
+    structure_designer_api.setMaterializeData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
-  APIAtomFillData? getAtomFillData(BigInt nodeId) {
-    return structure_designer_api.getAtomFillData(nodeId: nodeId);
+  APIMaterializeData? getMaterializeData(BigInt nodeId) {
+    return structure_designer_api.getMaterializeData(nodeId: nodeId);
   }
 
   void setMotifSubData(BigInt nodeId, APIMotifSubData data) {
@@ -1396,8 +1391,8 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void setUnitCellData(BigInt nodeId, APIUnitCellData data) {
-    structure_designer_api.setUnitCellData(nodeId: nodeId, data: data);
+  void setLatticeVecsData(BigInt nodeId, APILatticeVecsData data) {
+    structure_designer_api.setLatticeVecsData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

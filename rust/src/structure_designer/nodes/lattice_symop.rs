@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::display::gadget::Gadget;
@@ -11,7 +12,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
 use crate::structure_designer::evaluator::network_result::{
-    GeometrySummary, NetworkResult, error_in_input, runtime_type_error_in_input,
+    BlueprintData, NetworkResult, error_in_input, runtime_type_error_in_input,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -81,7 +82,7 @@ impl NodeData for LatticeSymopData {
 
         if let NetworkResult::Error(_) = shape_val {
             EvalOutput::single(shape_val)
-        } else if let NetworkResult::Geometry(shape) = shape_val {
+        } else if let NetworkResult::Blueprint(shape) = shape_val {
             let translation = match network_evaluator.evaluate_or_default(
                 network_stack,
                 node_id,
@@ -134,10 +135,13 @@ impl NodeData for LatticeSymopData {
                 Err(error) => return EvalOutput::single(error),
             };
 
-            let real_translation = shape.unit_cell.ivec3_lattice_to_real(&translation);
+            let real_translation = shape
+                .structure
+                .lattice_vecs
+                .ivec3_lattice_to_real(&translation);
 
             // Get all available symmetry axes for this unit cell
-            let symmetry_axes = analyze_unit_cell_symmetries(&shape.unit_cell);
+            let symmetry_axes = analyze_unit_cell_symmetries(&shape.structure.lattice_vecs);
 
             // Validate the rotation against available symmetries and calculate quaternion
             let real_rotation_quat = if rotation_axis.is_none()
@@ -200,24 +204,25 @@ impl NodeData for LatticeSymopData {
             // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
             if network_stack.len() == 1 {
                 let eval_cache = LatticeSymopEvalCache {
-                    input_frame_transform: shape.frame_transform.clone(),
-                    unit_cell: shape.unit_cell.clone(),
+                    input_frame_transform: Transform::default(),
+                    unit_cell: shape.structure.lattice_vecs.clone(),
                 };
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
             // Move fields we need by value out of the shape summary
-            let GeometrySummary {
-                unit_cell,
-                frame_transform: input_frame_transform,
+            let BlueprintData {
+                structure,
                 geo_tree_root,
+                alignment,
+                alignment_reason,
             } = shape;
+            let input_frame_transform = Transform::default();
 
-            // Calculate the new frame transform
-            // The resulting frame transform should only contain translation, no rotation
+            // Calculate the new frame transform (no longer stored; kept for local geometry math)
             let frame_transform = Transform::new(
                 input_frame_transform.translation + real_translation,
-                DQuat::IDENTITY, // Frame transform should not contain rotation
+                DQuat::IDENTITY,
             );
 
             // Build the output geometry, moving the geo_tree_root instead of cloning it
@@ -225,11 +230,6 @@ impl NodeData for LatticeSymopData {
                 // Only transform the reference frame, leave geometry in place
                 geo_tree_root
             } else {
-                // Transform both frame and geometry
-                // Since input_frame_transform.rotation is always identity (deprecated), this simplifies to:
-                // 1. Undo the input translation: move geometry back by -input_frame_transform.translation
-                // 2. Apply the new rotation around origin
-                // 3. Apply the new translation: frame_transform.translation
                 let tr = Transform::new(
                     real_rotation_quat.mul_vec3(-input_frame_transform.translation)
                         + frame_transform.translation,
@@ -239,10 +239,11 @@ impl NodeData for LatticeSymopData {
                 GeoNode::transform(tr, Box::new(geo_tree_root))
             };
 
-            return EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
-                unit_cell,
-                frame_transform,
+            return EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+                structure: Structure::from_lattice_vecs(structure.lattice_vecs),
                 geo_tree_root: output_geo_tree_root,
+                alignment,
+                alignment_reason,
             }));
         } else {
             return EvalOutput::single(runtime_type_error_in_input(0));
@@ -538,7 +539,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "shape".to_string(),
-                data_type: DataType::Geometry,
+                data_type: DataType::Blueprint,
             },
             Parameter {
                 id: None,
@@ -561,7 +562,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: false,
         node_data_creator: || {
             Box::new(LatticeSymopData {

@@ -1,10 +1,46 @@
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_network::{Argument, NodeNetwork, ValidationError};
-use crate::structure_designer::node_type::{OutputPinDefinition, Parameter};
+use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOutputType};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+
+/// Per-validation-run cache of resolved concrete output types, keyed by
+/// `(node_id, output_pin_index)`. A `None` entry means "we tried to resolve
+/// and failed" (unresolved — treated as disconnected downstream).
+#[derive(Default)]
+pub struct ValidationContext {
+    resolved_outputs: HashMap<(u64, i32), Option<DataType>>,
+}
+
+impl ValidationContext {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Resolve (with memoization) the concrete output type of `(node_id, pin_index)`.
+    pub fn resolve(
+        &mut self,
+        network: &NodeNetwork,
+        registry: &NodeTypeRegistry,
+        node_id: u64,
+        output_pin_index: i32,
+    ) -> Option<DataType> {
+        if let Some(cached) = self.resolved_outputs.get(&(node_id, output_pin_index)) {
+            return cached.clone();
+        }
+        // Insert a tentative None to guard against infinite recursion on malformed
+        // cyclic graphs; real cycles should be rejected elsewhere.
+        self.resolved_outputs
+            .insert((node_id, output_pin_index), None);
+        let node = network.nodes.get(&node_id)?;
+        let resolved = registry.resolve_output_type(node, network, output_pin_index);
+        self.resolved_outputs
+            .insert((node_id, output_pin_index), resolved.clone());
+        resolved
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct NetworkValidationResult {
@@ -139,6 +175,21 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
             return false;
         } else {
             param_names.insert(param_data.param_name.clone(), *node_id);
+        }
+    }
+
+    // Reject abstract parameter types: abstract types may only appear as declared
+    // input-pin types on built-in polymorphic nodes, not on user-declared parameter pins.
+    for (node_id, param_data) in &parameter_nodes {
+        if contains_abstract(&param_data.data_type) {
+            network.validation_errors.push(ValidationError::new(
+                format!(
+                    "Parameter '{}' has abstract type {:?}; abstract phase types are not allowed on parameter pins",
+                    param_data.param_name, param_data.data_type
+                ),
+                Some(*node_id),
+            ));
+            return false;
         }
     }
 
@@ -281,7 +332,22 @@ fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeT
     }
 }
 
-fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) -> bool {
+/// Returns true if `t` is itself abstract or contains an abstract type inside
+/// an `Array[..]` wrapper. Used for guards on user-declared type fields
+/// (parameter pins, sequence element_type) where abstract is always invalid.
+fn contains_abstract(t: &DataType) -> bool {
+    match t {
+        _ if t.is_abstract() => true,
+        DataType::Array(inner) => contains_abstract(inner),
+        _ => false,
+    }
+}
+
+fn validate_wires(
+    network: &mut NodeNetwork,
+    node_type_registry: &NodeTypeRegistry,
+    ctx: &mut ValidationContext,
+) -> bool {
     // Validate wires - pure checking, no repairs
     for (dest_node_id, dest_node) in &network.nodes {
         // Check if this node references a node network and validate its validity
@@ -389,27 +455,67 @@ fn validate_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegist
                     }
                 };
 
-                // Validate data type compatibility
-                let source_data_type = node_type_registry
-                    .get_node_type_for_node(source_node)
-                    .unwrap()
-                    .get_output_pin_type(*output_pin_index);
+                // Validate data type compatibility using the resolved concrete
+                // source type. If resolution fails (unresolved polymorphic
+                // output upstream), treat the wire as disconnected — the
+                // upstream node itself is flagged invalid below.
+                let source_data_type = match ctx.resolve(
+                    network,
+                    node_type_registry,
+                    *source_node_id,
+                    *output_pin_index,
+                ) {
+                    Some(t) => t,
+                    None => continue,
+                };
                 let dest_data_type =
                     node_type_registry.get_node_param_data_type(dest_node, arg_index);
                 if !DataType::can_be_converted_to(&source_data_type, &dest_data_type) {
                     network.validation_errors.push(ValidationError::new(
                         format!(
                             "Data type mismatch: input expects {:?}, but source outputs {:?}",
-                            parameter.data_type,
-                            node_type_registry
-                                .get_node_type_for_node(source_node)
-                                .unwrap()
-                                .output_type()
+                            parameter.data_type, source_data_type
                         ),
                         Some(*dest_node_id),
                     ));
                     return false;
                 }
+            }
+
+            // Note: a direct "abstract input pin unconnected → invalid" check
+            // is subsumed by the polymorphic-output-unresolved check below
+            // once a node's outputs are migrated to `SameAsInput` /
+            // `SameAsArrayElements`. Not-yet-migrated nodes still declare
+            // `Fixed(Atomic)` on their outputs, and enforcing the rule on
+            // their abstract input pins directly would flag existing valid
+            // graphs invalid before migration lands. The uniform rule is
+            // applied via the output-resolution check below.
+        }
+
+        // Polymorphic output pins must resolve to a concrete type. If any
+        // output is unresolved, the node is flagged invalid. This is the
+        // uniform rule that covers both single-input SameAsInput pins
+        // (disconnected input) and SameAsArrayElements pins (mixed phases,
+        // empty arrays, upstream unresolved).
+        for pin_index_usize in 0..dest_node_type.output_pin_count() {
+            let pin_index = pin_index_usize as i32;
+            let pin = &dest_node_type.output_pins[pin_index_usize];
+            let is_polymorphic = !matches!(pin.data_type, PinOutputType::Fixed(_));
+            if !is_polymorphic {
+                continue;
+            }
+            if ctx
+                .resolve(network, node_type_registry, *dest_node_id, pin_index)
+                .is_none()
+            {
+                network.validation_errors.push(ValidationError::new(
+                    format!(
+                        "Output pin '{}' ({}) could not be resolved to a concrete type",
+                        pin.name, pin.data_type
+                    ),
+                    Some(*dest_node_id),
+                ));
+                return false;
             }
         }
     }
@@ -467,17 +573,19 @@ pub fn validate_network(
     // REPAIR PHASE: Remove wires to output pins that no longer exist
     repair_output_pin_wires(network, node_type_registry);
 
-    // VALIDATION PHASE: Check wire validity (pure checking)
-    if !validate_wires(network, node_type_registry) {
+    // VALIDATION PHASE: Check wire validity and resolve polymorphic output pins.
+    let mut ctx = ValidationContext::new();
+    let wires_valid = validate_wires(network, node_type_registry, &mut ctx);
+    if !wires_valid {
         network.valid = false;
-        return NetworkValidationResult {
-            valid: false,
-            interface_changed,
-        };
     }
 
-    // Update the network's output type based on return node
-    let output_type_changed = update_network_output_type(network, node_type_registry);
+    // Update the network's output type based on return node, using resolved
+    // concrete types for any polymorphic pins on the return node. This runs
+    // even when wires are invalid so the enclosing network can still see this
+    // network's interface shape (e.g. to repair call-sites). Pins that cannot
+    // be resolved fall back to DataType::None.
+    let output_type_changed = update_network_output_type(network, node_type_registry, &mut ctx);
 
     NetworkValidationResult {
         valid: network.valid,
@@ -488,19 +596,41 @@ pub fn validate_network(
 fn update_network_output_type(
     network: &mut NodeNetwork,
     node_type_registry: &NodeTypeRegistry,
+    ctx: &mut ValidationContext,
 ) -> bool {
     let old_output_pins = network.node_type.output_pins.clone();
 
-    // Determine the new output pins based on return_node_id
+    // Determine the new output pins based on return_node_id. Substitute
+    // `Fixed(<concrete>)` for each pin by resolving polymorphic pins against
+    // the validation cache. Custom-network parameter pins are concrete
+    // (enforced in `validate_parameters`), so resolution always succeeds in a
+    // valid graph; unresolved pins fall back to DataType::None, which is
+    // consistent with how unresolved outputs were treated previously.
     let new_output_pins = if let Some(return_node_id) = network.return_node_id {
-        // Get the return node
         if let Some(return_node) = network.nodes.get(&return_node_id) {
-            // Get the node type to find its full output pins
-            node_type_registry
+            let return_node_type = node_type_registry
                 .get_node_type_for_node(return_node)
-                .unwrap()
-                .output_pins
-                .clone()
+                .unwrap();
+            let mut pins = Vec::with_capacity(return_node_type.output_pins.len());
+            for (pin_idx, pin) in return_node_type.output_pins.iter().enumerate() {
+                // Preserve `Fixed` pins as-is so their declared types (even
+                // abstract ones on not-yet-migrated nodes) reach the
+                // enclosing network unchanged. For polymorphic pins,
+                // substitute the resolved concrete type; if resolution fails
+                // fall back to DataType::None.
+                let data_type = match &pin.data_type {
+                    PinOutputType::Fixed(_) => pin.data_type.clone(),
+                    _ => PinOutputType::Fixed(
+                        ctx.resolve(network, node_type_registry, return_node_id, pin_idx as i32)
+                            .unwrap_or(DataType::None),
+                    ),
+                };
+                pins.push(OutputPinDefinition {
+                    name: pin.name.clone(),
+                    data_type,
+                });
+            }
+            pins
         } else {
             // Return node doesn't exist, set to None
             OutputPinDefinition::single(DataType::None)

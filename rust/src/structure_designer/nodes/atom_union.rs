@@ -4,7 +4,9 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{
+    Alignment, NetworkResult, propagate_alignment_with_reason,
+};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -12,8 +14,6 @@ use crate::structure_designer::node_type::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform;
-use glam::f64::{DQuat, DVec3};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,21 +57,45 @@ impl NodeData for AtomUnionData {
             ));
         };
 
-        let structure_count = structure_results.len();
-
-        if structure_count == 0 {
+        if structure_results.is_empty() {
             return EvalOutput::single(NetworkResult::Error(
                 "atom_union requires at least one input structure".to_string(),
             ));
         }
 
-        // Extract atomic structures and collect frame translations for averaging
-        let mut atomic_structures: Vec<AtomicStructure> = Vec::new();
-        let mut frame_translation_sum = DVec3::ZERO;
+        // Preserve the concrete variant of the first element (Crystal or Molecule).
+        // Per OQ1, mixed-phase arrays are a validation error; the evaluator trusts
+        // that validation has ensured all elements share the same variant and
+        // debug-asserts that here.
+        let mut iter = structure_results.into_iter();
+        let mut output = iter.next().expect("non-empty checked above");
+        if !matches!(
+            output,
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+        ) {
+            return EvalOutput::single(NetworkResult::Error(
+                "All inputs must be atomic structures".to_string(),
+            ));
+        }
 
-        for structure_val in structure_results {
-            if let NetworkResult::Atomic(structure) = structure_val {
-                frame_translation_sum += structure.frame_transform().translation;
+        let mut atomic_structures: Vec<AtomicStructure> = Vec::new();
+        let mut rest_alignment = Alignment::Aligned;
+        let mut rest_reason: Option<String> = None;
+        for structure_val in iter {
+            debug_assert_eq!(
+                structure_val.infer_data_type(),
+                output.infer_data_type(),
+                "atom_union: mixed-phase array reached evaluator"
+            );
+            if let NetworkResult::Crystal(ref c) = structure_val {
+                propagate_alignment_with_reason(
+                    &mut rest_alignment,
+                    &mut rest_reason,
+                    c.alignment,
+                    &c.alignment_reason,
+                );
+            }
+            if let Some(structure) = structure_val.extract_atomic() {
                 atomic_structures.push(structure);
             } else {
                 return EvalOutput::single(NetworkResult::Error(
@@ -80,19 +104,24 @@ impl NodeData for AtomUnionData {
             }
         }
 
-        // Start with the first structure as base
-        let mut result = atomic_structures.remove(0);
-
-        // Merge all subsequent structures into the result
+        let merged_ref = match &mut output {
+            NetworkResult::Crystal(c) => {
+                propagate_alignment_with_reason(
+                    &mut c.alignment,
+                    &mut c.alignment_reason,
+                    rest_alignment,
+                    &rest_reason,
+                );
+                &mut c.atoms
+            }
+            NetworkResult::Molecule(m) => &mut m.atoms,
+            _ => unreachable!(),
+        };
         for other in &atomic_structures {
-            result.add_atomic_structure(other);
+            merged_ref.add_atomic_structure(other);
         }
 
-        // Set the frame transform to the average translation with identity rotation
-        let avg_translation = frame_translation_sum / structure_count as f64;
-        result.set_frame_transform(Transform::new(avg_translation, DQuat::IDENTITY));
-
-        EvalOutput::single(NetworkResult::Atomic(result))
+        EvalOutput::single(output)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -123,10 +152,10 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "structures".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Atomic)),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as_array_elements("structures"),
         public: true,
         node_data_creator: || Box::new(AtomUnionData {}),
         node_data_saver: generic_node_data_saver::<AtomUnionData>,

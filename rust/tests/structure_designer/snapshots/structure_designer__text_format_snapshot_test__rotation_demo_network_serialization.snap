@@ -2,16 +2,20 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
-# Network: sample
+# Network: polar_pattern
 
-cuboid1 = cuboid { min_corner: (16, -2, -2), extent: (4, 10, 4) }
-cuboid2 = cuboid { min_corner: (13, 4, -2), extent: (10, 4, 4) }
-union1 = union { shapes: [cuboid1, cuboid2] }
-lattice_move1 = lattice_move { shape: union1, translation: (5, 5, 0), subdivision: 1 }
-int2 = int { value: 0 }
-parameter1 = parameter { default: int2, param_index: 0, param_name: "change_this_value", data_type: Int, sort_order: 0 }
-int1 = int { value: 4 }
-polar_pattern1 = polar_pattern { shape: lattice_move1, axis_index: parameter1, count: int1, visible: true }
-output polar_pattern1
+cuboid1 = cuboid { min_corner: (5, -2, -2), extent: (5, 4, 4) }
+parameter1 = parameter { default: cuboid1, param_index: 0, param_name: "shape", data_type: Blueprint, sort_order: 0 }
+ivec31 = ivec3 { x: 0, y: 0, z: 0 }
+parameter2 = parameter { default: ivec31, param_index: 2, param_name: "pivot_point", data_type: IVec3, sort_order: 2 }
+int1 = int { value: 1 }
+parameter3 = parameter { default: int1, param_index: 1, param_name: "axis_index", data_type: Int, sort_order: 1 }
+int2 = int { value: 4 }
+parameter4 = parameter { default: int2, param_index: 3, param_name: "count", data_type: Int, sort_order: 3 }
+polar_pattern_helper1 = polar_pattern_helper { shape: parameter1, axis_index: parameter3, pivot_point: parameter2 }
+range1 = range { count: parameter4, start: 0, step: 1 }
+map1 = map { xs: range1, f: @polar_pattern_helper1, input_type: Int, output_type: Blueprint, visible: true }
+union1 = union { shapes: map1, visible: true }
+output union1
 
-# 8 nodes
+# 12 nodes

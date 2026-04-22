@@ -27,7 +27,6 @@ use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::util::hit_test_utils;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
-use crate::util::transform::Transform;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use rustc_hash::FxHashMap;
@@ -78,7 +77,6 @@ fn apply_select_modifier(in_selected: bool, select_modifier: &SelectModifier) ->
 
 #[derive(Debug, Clone)]
 pub struct AtomicStructure {
-    frame_transform: Transform,
     atoms: Vec<Option<Atom>>, // Index = atom_id - 1, next ID = atoms.len() + 1
     num_atoms: usize,         // Count of non-None atoms
     num_bonds: usize,         // Count of unique bonds (bidirectional storage counted once)
@@ -112,15 +110,6 @@ impl AtomicStructure {
 
     pub fn decorator_mut(&mut self) -> &mut AtomicStructureDecorator {
         &mut self.decorator
-    }
-
-    // Frame transform access
-    pub fn frame_transform(&self) -> &Transform {
-        &self.frame_transform
-    }
-
-    pub fn set_frame_transform(&mut self, transform: Transform) {
-        self.frame_transform = transform;
     }
 
     // Diff accessors
@@ -268,7 +257,6 @@ impl AtomicStructure {
 
     pub fn new() -> Self {
         Self {
-            frame_transform: Transform::default(),
             atoms: Vec::new(),
             num_atoms: 0,
             num_bonds: 0,
@@ -283,7 +271,6 @@ impl AtomicStructure {
     /// Creates an empty structure marked as a diff
     pub fn new_diff() -> Self {
         Self {
-            frame_transform: Transform::default(),
             atoms: Vec::new(),
             num_atoms: 0,
             num_bonds: 0,
@@ -945,20 +932,6 @@ impl AtomicStructure {
         }
         lines.push(format!("atoms: {}", self.num_atoms));
         lines.push(format!("bonds: {}", self.num_bonds));
-        lines.push("frame_transform:".to_string());
-        lines.push(format!(
-            "  translation: ({:.6}, {:.6}, {:.6})",
-            self.frame_transform.translation.x,
-            self.frame_transform.translation.y,
-            self.frame_transform.translation.z
-        ));
-        lines.push(format!(
-            "  rotation: ({:.6}, {:.6}, {:.6}, {:.6})",
-            self.frame_transform.rotation.x,
-            self.frame_transform.rotation.y,
-            self.frame_transform.rotation.z,
-            self.frame_transform.rotation.w
-        ));
 
         // First 10 atoms
         let atoms: Vec<&Atom> = self.atoms_values().take(10).collect();

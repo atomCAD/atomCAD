@@ -9,6 +9,7 @@ use crate::crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
@@ -192,12 +193,10 @@ impl NodeData for EditAtomData {
             return EvalOutput::single(input_val);
         }
 
-        if let NetworkResult::Atomic(mut atomic_structure) = input_val {
+        EvalOutput::single(map_atomic(input_val, |mut atomic_structure| {
             self.eval(&mut atomic_structure, decorate);
-            EvalOutput::single(NetworkResult::Atomic(atomic_structure))
-        } else {
-            EvalOutput::single(NetworkResult::Atomic(AtomicStructure::new()))
-        }
+            atomic_structure
+        }))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -633,10 +632,10 @@ This node enables the manual editing of atomic structures. In a node network eve
           Parameter {
               id: None,
               name: "molecule".to_string(),
-              data_type: DataType::Atomic,
+              data_type: DataType::HasAtoms,
           },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Atomic),
+      output_pins: OutputPinDefinition::single_same_as("molecule"),
       public: false,
       node_data_creator: || Box::new(EditAtomData::new()),
       node_data_saver: |node_data, _design_dir| {

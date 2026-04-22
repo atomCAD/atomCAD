@@ -1,11 +1,13 @@
-use glam::f64::{DVec2, DVec3};
 use glam::IVec2;
+use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_replace::AtomReplaceData;
 use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
@@ -35,7 +37,10 @@ fn add_atomic_value_node(
         .get_mut(network_name)
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Atomic(structure),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: structure,
+            geo_tree_root: None,
+        }),
     });
     network.add_node("value", DVec2::ZERO, 0, value_data)
 }
@@ -55,7 +60,8 @@ fn evaluate_to_atomic(
     }];
     let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
     match result {
-        NetworkResult::Atomic(s) => s,
+        NetworkResult::Crystal(c) => c.atoms,
+        NetworkResult::Molecule(m) => m.atoms,
         NetworkResult::Error(e) => panic!("Expected Atomic result, got Error: {}", e),
         _ => panic!("Expected Atomic result, got unexpected type"),
     }
@@ -202,7 +208,11 @@ fn atom_replace_preserves_bonds() {
     designer.connect_nodes(value_id, 0, replace_id, 0);
 
     let result = evaluate_to_atomic(&designer, net, replace_id);
-    assert_eq!(result.get_num_of_bonds(), 2, "Bonds should be preserved after replacement");
+    assert_eq!(
+        result.get_num_of_bonds(),
+        2,
+        "Bonds should be preserved after replacement"
+    );
 }
 
 /// Atom positions unchanged after replacement
@@ -240,7 +250,11 @@ fn atom_replace_delete_target() {
 
     let result = evaluate_to_atomic(&designer, net, replace_id);
     assert_eq!(result.atom_ids().count(), 2, "Oxygen should be deleted");
-    assert_eq!(result.get_num_of_bonds(), 1, "C-O bond should be removed, C-C bond remains");
+    assert_eq!(
+        result.get_num_of_bonds(),
+        1,
+        "C-O bond should be removed, C-C bond remains"
+    );
     for (_id, atom) in result.iter_atoms() {
         assert_eq!(atom.atomic_number, 6, "Only carbons should remain");
     }
@@ -258,7 +272,11 @@ fn atom_replace_delete_mixed() {
     designer.connect_nodes(value_id, 0, replace_id, 0);
 
     let result = evaluate_to_atomic(&designer, net, replace_id);
-    assert_eq!(result.atom_ids().count(), 2, "Oxygen deleted, two Si remain");
+    assert_eq!(
+        result.atom_ids().count(),
+        2,
+        "Oxygen deleted, two Si remain"
+    );
     for (_id, atom) in result.iter_atoms() {
         assert_eq!(atom.atomic_number, 14, "All remaining should be silicon");
     }
@@ -284,7 +302,11 @@ fn atom_replace_skip_markers() {
     let result = evaluate_to_atomic(&designer, net, replace_id);
     let mut elements: Vec<i16> = result.iter_atoms().map(|(_, a)| a.atomic_number).collect();
     elements.sort();
-    assert_eq!(elements, vec![-1, 0, 14], "Markers should be unchanged, carbon becomes silicon");
+    assert_eq!(
+        elements,
+        vec![-1, 0, 14],
+        "Markers should be unchanged, carbon becomes silicon"
+    );
 }
 
 /// Text properties roundtrip: get then set
@@ -293,7 +315,10 @@ fn atom_replace_text_properties_roundtrip() {
     // Empty replacements → no properties
     let data = AtomReplaceData::default();
     let props = data.get_text_properties();
-    assert!(props.is_empty(), "Default should produce no text properties");
+    assert!(
+        props.is_empty(),
+        "Default should produce no text properties"
+    );
 
     // Non-empty replacements
     let data = AtomReplaceData {
@@ -330,27 +355,48 @@ fn atom_replace_subtitle() {
     let connected = std::collections::HashSet::new();
 
     // Empty
-    let data = AtomReplaceData { replacements: vec![] };
-    assert_eq!(data.get_subtitle(&connected), Some("(no replacements)".to_string()));
+    let data = AtomReplaceData {
+        replacements: vec![],
+    };
+    assert_eq!(
+        data.get_subtitle(&connected),
+        Some("(no replacements)".to_string())
+    );
 
     // Single rule: C→Si
-    let data = AtomReplaceData { replacements: vec![(6, 14)] };
+    let data = AtomReplaceData {
+        replacements: vec![(6, 14)],
+    };
     assert_eq!(data.get_subtitle(&connected), Some("C→Si".to_string()));
 
     // Two rules
-    let data = AtomReplaceData { replacements: vec![(6, 14), (8, 16)] };
+    let data = AtomReplaceData {
+        replacements: vec![(6, 14), (8, 16)],
+    };
     assert_eq!(data.get_subtitle(&connected), Some("C→Si, O→S".to_string()));
 
     // Three rules
-    let data = AtomReplaceData { replacements: vec![(6, 14), (8, 16), (1, 3)] };
-    assert_eq!(data.get_subtitle(&connected), Some("C→Si, O→S, H→Li".to_string()));
+    let data = AtomReplaceData {
+        replacements: vec![(6, 14), (8, 16), (1, 3)],
+    };
+    assert_eq!(
+        data.get_subtitle(&connected),
+        Some("C→Si, O→S, H→Li".to_string())
+    );
 
     // Four rules → truncated
-    let data = AtomReplaceData { replacements: vec![(6, 14), (8, 16), (1, 3), (7, 15)] };
-    assert_eq!(data.get_subtitle(&connected), Some("C→Si, O→S, H→Li, … (+1 more)".to_string()));
+    let data = AtomReplaceData {
+        replacements: vec![(6, 14), (8, 16), (1, 3), (7, 15)],
+    };
+    assert_eq!(
+        data.get_subtitle(&connected),
+        Some("C→Si, O→S, H→Li, … (+1 more)".to_string())
+    );
 
     // Delete rule
-    let data = AtomReplaceData { replacements: vec![(1, 0)] };
+    let data = AtomReplaceData {
+        replacements: vec![(1, 0)],
+    };
     assert_eq!(data.get_subtitle(&connected), Some("H→(del)".to_string()));
 }
 

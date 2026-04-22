@@ -6,7 +6,9 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
+    MoleculeData, NetworkResult,
+};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -37,7 +39,10 @@ fn add_atomic_value_node(
         .get_mut(network_name)
         .unwrap();
     let value_data = Box::new(ValueData {
-        value: NetworkResult::Atomic(structure),
+        value: NetworkResult::Molecule(MoleculeData {
+            atoms: structure,
+            geo_tree_root: None,
+        }),
     });
     network.add_node("value", position, 0, value_data)
 }
@@ -60,7 +65,8 @@ fn evaluate_to_atomic(
     let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
 
     match result {
-        NetworkResult::Atomic(s) => s,
+        NetworkResult::Crystal(c) => c.atoms,
+        NetworkResult::Molecule(m) => m.atoms,
         NetworkResult::Error(e) => panic!("Expected Atomic result, got Error: {}", e),
         _ => panic!("Expected Atomic result, got unexpected type"),
     }
@@ -172,7 +178,7 @@ fn apply_diff_node_with_moved_diff() {
         add_atomic_value_node(&mut designer, network_name, DVec2::new(0.0, 100.0), diff);
 
     // Add atom_move and apply_diff nodes
-    let atom_move_id = designer.add_node("atom_move", DVec2::new(100.0, 100.0));
+    let atom_move_id = designer.add_node("free_move", DVec2::new(100.0, 100.0));
     let apply_diff_id = designer.add_node("apply_diff", DVec2::new(200.0, 50.0));
 
     // Wire: diff -> atom_move -> apply_diff pin 1

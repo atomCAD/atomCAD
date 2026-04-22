@@ -6,28 +6,28 @@ import 'package:flutter_cad/inputs/int_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
-/// Editor widget for lattice_move nodes
-class LatticeMoveEditor extends StatefulWidget {
+/// Editor widget for structure_move nodes
+class StructureMoveEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APILatticeMoveData? data;
+  final APIStructureMoveData? data;
   final StructureDesignerModel model;
   final String title;
   final String nodeTypeName;
 
-  const LatticeMoveEditor({
+  const StructureMoveEditor({
     super.key,
     required this.nodeId,
     required this.data,
     required this.model,
-    this.title = 'Lattice Move Properties',
-    this.nodeTypeName = 'lattice_move',
+    this.title = 'Structure Move Properties',
+    this.nodeTypeName = 'structure_move',
   });
 
   @override
-  State<LatticeMoveEditor> createState() => _LatticeMoveEditorState();
+  State<StructureMoveEditor> createState() => _StructureMoveEditorState();
 }
 
-class _LatticeMoveEditorState extends State<LatticeMoveEditor> {
+class _StructureMoveEditorState extends State<StructureMoveEditor> {
   @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
@@ -50,9 +50,9 @@ class _LatticeMoveEditorState extends State<LatticeMoveEditor> {
             label: 'Translation',
             value: widget.data!.translation,
             onChanged: (newValue) {
-              widget.model.setLatticeMoveData(
+              widget.model.setStructureMoveData(
                 widget.nodeId,
-                APILatticeMoveData(
+                APIStructureMoveData(
                   translation: newValue,
                   latticeSubdivision: widget.data!.latticeSubdivision,
                 ),
@@ -67,9 +67,9 @@ class _LatticeMoveEditorState extends State<LatticeMoveEditor> {
             value: widget.data!.latticeSubdivision,
             minimumValue: 1,
             onChanged: (newValue) {
-              widget.model.setLatticeMoveData(
+              widget.model.setStructureMoveData(
                 widget.nodeId,
-                APILatticeMoveData(
+                APIStructureMoveData(
                   translation: widget.data!.translation,
                   latticeSubdivision: newValue,
                 ),

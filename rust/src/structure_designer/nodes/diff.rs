@@ -1,14 +1,17 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::GeometrySummary;
+use crate::structure_designer::evaluator::network_result::Alignment;
+use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::evaluator::network_result::input_missing_error;
+use crate::structure_designer::evaluator::network_result::propagate_alignment_with_reason;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -17,9 +20,6 @@ use crate::structure_designer::node_type::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform;
-use glam::f64::DQuat;
-use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +55,7 @@ impl NodeData for DiffData {
             return EvalOutput::single(input_missing_error(&base_input_name));
         }
 
-        let (mut geometry, mut frame_translation, base_unit_cell) = helper_union(
+        let (mut geometry, base_lattice_vecs, base_alignment, base_reason) = helper_union(
             network_evaluator,
             network_stack,
             node_id,
@@ -68,14 +68,16 @@ impl NodeData for DiffData {
             return EvalOutput::single(error_in_input(&base_input_name));
         }
 
-        if base_unit_cell.is_none() {
+        if base_lattice_vecs.is_none() {
             return EvalOutput::single(unit_cell_mismatch_error());
         }
 
-        let result_unit_cell = base_unit_cell.unwrap();
+        let result_lattice_vecs = base_lattice_vecs.unwrap();
+        let mut alignment = base_alignment;
+        let mut alignment_reason = base_reason;
 
         if !node.arguments[1].is_empty() {
-            let (sub_geometry, sub_frame_translation, sub_unit_cell) = helper_union(
+            let (sub_geometry, sub_lattice_vecs, sub_alignment, sub_reason) = helper_union(
                 network_evaluator,
                 network_stack,
                 node_id,
@@ -88,28 +90,32 @@ impl NodeData for DiffData {
                 return EvalOutput::single(error_in_input(&sub_input_name));
             }
 
-            if sub_unit_cell.is_none() {
+            if sub_lattice_vecs.is_none() {
                 return EvalOutput::single(unit_cell_mismatch_error());
             }
 
-            // Check unit cell compatibility between base and sub
-            if !result_unit_cell.is_approximately_equal(&sub_unit_cell.unwrap()) {
+            if !result_lattice_vecs.is_approximately_equal(&sub_lattice_vecs.unwrap()) {
                 return EvalOutput::single(unit_cell_mismatch_error());
             }
+
+            propagate_alignment_with_reason(
+                &mut alignment,
+                &mut alignment_reason,
+                sub_alignment,
+                &sub_reason,
+            );
 
             geometry = Some(GeoNode::difference_3d(
                 Box::new(geometry.unwrap()),
                 Box::new(sub_geometry.unwrap()),
             ));
-
-            frame_translation += sub_frame_translation;
-            frame_translation *= 0.5;
         }
 
-        EvalOutput::single(NetworkResult::Geometry(GeometrySummary {
-            unit_cell: result_unit_cell,
-            frame_transform: Transform::new(frame_translation, DQuat::IDENTITY),
+        EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+            structure: Structure::from_lattice_vecs(result_lattice_vecs),
             geo_tree_root: geometry.unwrap(),
+            alignment,
+            alignment_reason,
         }))
     }
 
@@ -139,9 +145,13 @@ fn helper_union<'a>(
     parameter_index: usize,
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
-) -> (Option<GeoNode>, DVec3, Option<UnitCellStruct>) {
+) -> (
+    Option<GeoNode>,
+    Option<UnitCellStruct>,
+    Alignment,
+    Option<String>,
+) {
     let mut shapes: Vec<GeoNode> = Vec::new();
-    let mut frame_translation = DVec3::ZERO;
 
     let shapes_val = network_evaluator.evaluate_arg_required(
         network_stack,
@@ -152,50 +162,54 @@ fn helper_union<'a>(
     );
 
     if let NetworkResult::Error(_) = shapes_val {
-        return (None, DVec3::ZERO, None);
+        return (None, None, Alignment::Aligned, None);
     }
 
     // Extract the array elements from shapes_val
     let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
         array_elements
     } else {
-        return (None, DVec3::ZERO, None);
+        return (None, None, Alignment::Aligned, None);
     };
 
     let shape_count = shape_results.len();
 
     if shape_count == 0 {
-        return (None, DVec3::ZERO, None);
+        return (None, None, Alignment::Aligned, None);
     }
 
-    // Extract geometries and check unit cell compatibility
-    let mut geometries: Vec<GeometrySummary> = Vec::new();
+    // Extract geometries and check lattice vector compatibility
+    let mut blueprints: Vec<BlueprintData> = Vec::new();
     for shape_val in shape_results {
-        if let NetworkResult::Geometry(shape) = shape_val {
-            geometries.push(shape);
+        if let NetworkResult::Blueprint(shape) = shape_val {
+            blueprints.push(shape);
         } else {
-            return (None, DVec3::ZERO, None);
+            return (None, None, Alignment::Aligned, None);
         }
     }
 
-    // Check unit cell compatibility - compare all to the first geometry
-    if !GeometrySummary::all_have_compatible_unit_cells(&geometries) {
-        return (None, DVec3::ZERO, None);
+    if !BlueprintData::all_have_compatible_lattice_vecs(&blueprints) {
+        return (None, None, Alignment::Aligned, None);
     }
 
-    // All unit cells are compatible, proceed with union
-    let first_unit_cell = geometries[0].unit_cell.clone();
-    for geometry in geometries.into_iter() {
-        shapes.push(geometry.geo_tree_root);
-        frame_translation += geometry.frame_transform.translation;
+    let first_lattice_vecs = blueprints[0].structure.lattice_vecs.clone();
+    let mut alignment = Alignment::Aligned;
+    let mut alignment_reason: Option<String> = None;
+    for bp in blueprints.into_iter() {
+        propagate_alignment_with_reason(
+            &mut alignment,
+            &mut alignment_reason,
+            bp.alignment,
+            &bp.alignment_reason,
+        );
+        shapes.push(bp.geo_tree_root);
     }
-
-    frame_translation /= shape_count as f64;
 
     (
         Some(GeoNode::union_3d(shapes)),
-        frame_translation,
-        Some(first_unit_cell),
+        Some(first_lattice_vecs),
+        alignment,
+        alignment_reason,
     )
 }
 
@@ -209,15 +223,15 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "base".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Geometry)), // If multiple shapes are given, they are unioned.
+                data_type: DataType::Array(Box::new(DataType::Blueprint)), // If multiple shapes are given, they are unioned.
             },
             Parameter {
                 id: None,
                 name: "sub".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Geometry)), // A set of shapes to subtract from base
+                data_type: DataType::Array(Box::new(DataType::Blueprint)), // A set of shapes to subtract from base
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Geometry),
+        output_pins: OutputPinDefinition::single(DataType::Blueprint),
         public: true,
         node_data_creator: || Box::new(DiffData {}),
         node_data_saver: generic_node_data_saver::<DiffData>,

@@ -10,7 +10,8 @@ import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/comment_node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart' as sd_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as sd_api;
 import 'package:flutter_cad/common/api_utils.dart';
 
 // Zoom levels
@@ -90,14 +91,19 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 
   // Geometry types (purple family - abstract shapes)
   'Geometry2D': Color(0xFFBA68C8), // Light purple
-  'Geometry': Color(0xFF9C27B0), // Light deep purple
+  'Blueprint': Color(0xFF9C27B0), // Deep purple - latent atoms in a structure
 
-  // Physical types (green family - real-world matter)
-  'Atomic': Color(0xFF66BB6A), // Light green
+  // Phase types (green family - materialized matter).
+  // Abstract types (HasAtoms, HasStructure, HasFreeLinOps) have no entry here —
+  // abstract-typed input pins render pie-sliced in the concrete satisfier
+  // colors (see ABSTRACT_TYPE_CONCRETES and PinViewWidget).
+  'Crystal': Color(0xFF558B2F), // Olive green - atoms bound to a structure
+  'Molecule': Color(0xFF81C784), // Soft green - free atoms, no structure
 
   // Crystal structure types (teal family - crystalline matter)
-  'UnitCell': Color(0xFF26A69A), // Teal
+  'LatticeVecs': Color(0xFF26A69A), // Teal
   'Motif': Color(0xFF00ACC1), // Light blue-green (cyan)
+  'Structure': Color(0xFF00796B), // Deep teal (composite of lattice + motif)
 
   // Function types (amber family - computational operations)
   '->': Color(0xFFFFA726), // Amber
@@ -138,8 +144,8 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
       node.outputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
   final minOutputHeight = 25.0; // Minimum output area height
   // Main body is a Row, so height = max(left inputs, right outputs)
-  final mainBodyHeight =
-      [inputPinsHeight, outputPinsHeight, minOutputHeight].reduce((a, b) => a > b ? a : b);
+  final mainBodyHeight = [inputPinsHeight, outputPinsHeight, minOutputHeight]
+      .reduce((a, b) => a > b ? a : b);
   final subtitleHeight =
       (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
   final padding = 8.0;
@@ -161,6 +167,29 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
     return Size(width, height);
   }
 }
+
+/// The concrete type the pin actually carries in the current network, falling
+/// back to the declared (possibly abstract / `SameAsInput(...)`) type when
+/// resolution didn't produce anything.
+extension OutputPinViewEffectiveType on OutputPinView {
+  String get effectiveDataType => resolvedDataType ?? dataType;
+}
+
+/// Concrete types that satisfy each abstract data type, in a stable display
+/// order. Mirror of the abstract→concrete rules in Rust
+/// `rust/src/structure_designer/data_type.rs` `DataType::can_be_converted_to`
+/// — keep in sync.
+///
+/// Used to render abstract-typed input pins as N-sliced pie circles, with one
+/// slice per concrete satisfier colored as that concrete.
+const Map<String, List<String>> ABSTRACT_TYPE_CONCRETES = {
+  'HasAtoms': ['Crystal', 'Molecule'],
+  'HasStructure': ['Blueprint', 'Crystal'],
+  'HasFreeLinOps': ['Blueprint', 'Molecule'],
+};
+
+bool isAbstractDataType(String typeName) =>
+    ABSTRACT_TYPE_CONCRETES.containsKey(typeName);
 
 /// Gets the appropriate color for a data type based on its name.
 ///
@@ -329,14 +358,16 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Pan offset so node center maps to viewport center:
     // screenCenter = (nodeCenterLogical + panOffset) * scale
     // panOffset = (screenCenter / scale) - nodeCenterLogical
-    final viewportCenter = Offset(viewportSize.width / 2, viewportSize.height / 2);
+    final viewportCenter =
+        Offset(viewportSize.width / 2, viewportSize.height / 2);
     setState(() {
       _panOffset = (viewportCenter / scale) - nodeCenterLogical;
     });
   }
 
   /// Handles wire dropped in empty space - shows filtered Add Node popup
-  void _handleWireDropInEmptySpace(PinReference startPin, Offset dropPosition) async {
+  void _handleWireDropInEmptySpace(
+      PinReference startPin, Offset dropPosition) async {
     final isOutput = startPin.pinType == PinType.output;
     final dataType = startPin.dataType;
 
@@ -354,7 +385,8 @@ class NodeNetworkState extends State<NodeNetwork> {
     final logicalPosition = screenToLogical(dropPosition, _panOffset, scale);
 
     // Create the new node
-    final newNodeId = widget.graphModel.createNode(selectedNodeType, logicalPosition);
+    final newNodeId =
+        widget.graphModel.createNode(selectedNodeType, logicalPosition);
     if (newNodeId == BigInt.zero) return;
 
     // Get compatible pins on the target node
@@ -631,7 +663,9 @@ class NodeNetworkState extends State<NodeNetwork> {
             : (node.inputPins.isEmpty
                 ? NODE_VERT_WIRE_OFFSET_EMPTY
                 : NODE_VERT_WIRE_OFFSET +
-                    node.inputPins.length * NODE_VERT_WIRE_OFFSET_PER_PARAM * 0.5);
+                    node.inputPins.length *
+                        NODE_VERT_WIRE_OFFSET_PER_PARAM *
+                        0.5);
         return logicalToScreen(
             nodePos + Offset(NODE_WIDTH, vertOffset), _panOffset, scale);
       } else {
@@ -646,8 +680,8 @@ class NodeNetworkState extends State<NodeNetwork> {
       final nodeScreenPos = logicalToScreen(nodePos, _panOffset, scale);
 
       if (isOutput) {
-        return Offset(
-            nodeScreenPos.dx + nodeSize.width, nodeScreenPos.dy + nodeSize.height / 2);
+        return Offset(nodeScreenPos.dx + nodeSize.width,
+            nodeScreenPos.dy + nodeSize.height / 2);
       } else {
         final numInputs = node.inputPins.length;
         final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
@@ -736,8 +770,7 @@ class NodeNetworkState extends State<NodeNetwork> {
         final RenderBox overlay =
             Overlay.of(context).context.findRenderObject() as RenderBox;
         final RelativeRect position = RelativeRect.fromRect(
-          Rect.fromPoints(
-              details.globalPosition, details.globalPosition),
+          Rect.fromPoints(details.globalPosition, details.globalPosition),
           Offset.zero & overlay.size,
         );
 
@@ -1010,8 +1043,8 @@ class NodeNetworkState extends State<NodeNetwork> {
                   event.logicalKey == LogicalKeyboardKey.keyV) {
                 if (model.hasClipboardContent()) {
                   final scale = getZoomScale(_zoomLevel);
-                  final logicalPos = screenToLogical(
-                      _lastMousePosition, _panOffset, scale);
+                  final logicalPos =
+                      screenToLogical(_lastMousePosition, _panOffset, scale);
                   model.pasteAtPosition(logicalPos.dx, logicalPos.dy);
                 }
                 return KeyEventResult.handled;

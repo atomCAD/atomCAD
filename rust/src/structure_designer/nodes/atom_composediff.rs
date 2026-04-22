@@ -70,31 +70,62 @@ impl NodeData for AtomComposeDiffData {
             ));
         }
 
-        // 4. Validate all inputs are diff structures and collect references
-        let mut diff_structures = Vec::new();
-        for (i, item) in diffs_array.iter().enumerate() {
-            match item {
-                NetworkResult::Atomic(structure) => {
-                    if !structure.is_diff() {
-                        return EvalOutput::single(NetworkResult::Error(format!(
-                            "atom_composediff: input {} is not a diff structure (is_diff = false)",
-                            i
-                        )));
-                    }
-                    diff_structures.push(structure);
-                }
-                _ => {
-                    return EvalOutput::single(NetworkResult::Error(format!(
-                        "atom_composediff: input {} is not an atomic structure",
-                        i
-                    )));
-                }
+        // 4. Preserve the concrete variant of the first element (per OQ1, all
+        //    elements are the same variant after validation) and extract atoms.
+        let mut iter = diffs_array.into_iter();
+        let mut output_wrapper = iter.next().expect("non-empty checked above");
+        if !matches!(
+            output_wrapper,
+            NetworkResult::Crystal(_) | NetworkResult::Molecule(_)
+        ) {
+            return EvalOutput::single(NetworkResult::Error(
+                "atom_composediff: input 0 is not an atomic structure".to_string(),
+            ));
+        }
+
+        let mut owned_diffs = Vec::new();
+        {
+            let first_atoms = match &output_wrapper {
+                NetworkResult::Crystal(c) => &c.atoms,
+                NetworkResult::Molecule(m) => &m.atoms,
+                _ => unreachable!(),
+            };
+            if !first_atoms.is_diff() {
+                return EvalOutput::single(NetworkResult::Error(
+                    "atom_composediff: input 0 is not a diff structure (is_diff = false)"
+                        .to_string(),
+                ));
             }
         }
 
-        // 5. Single diff: return clone
-        if diff_structures.len() == 1 {
-            return EvalOutput::single(NetworkResult::Atomic(diff_structures[0].clone()));
+        for (i, item) in iter.enumerate() {
+            debug_assert_eq!(
+                item.infer_data_type(),
+                output_wrapper.infer_data_type(),
+                "atom_composediff: mixed-phase array reached evaluator"
+            );
+            let atoms = match item {
+                NetworkResult::Crystal(c) => c.atoms,
+                NetworkResult::Molecule(m) => m.atoms,
+                _ => {
+                    return EvalOutput::single(NetworkResult::Error(format!(
+                        "atom_composediff: input {} is not an atomic structure",
+                        i + 1
+                    )));
+                }
+            };
+            if !atoms.is_diff() {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "atom_composediff: input {} is not a diff structure (is_diff = false)",
+                    i + 1
+                )));
+            }
+            owned_diffs.push(atoms);
+        }
+
+        // 5. Single diff: return the first wrapper unchanged.
+        if owned_diffs.is_empty() {
+            return EvalOutput::single(output_wrapper);
         }
 
         // 6. Get tolerance from pin 1 or property
@@ -111,8 +142,15 @@ impl NodeData for AtomComposeDiffData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        // 7. Compose diffs
-        let diff_refs: Vec<&_> = diff_structures.into_iter().collect();
+        // 7. Compose diffs (first element's atoms + all subsequent atoms)
+        let first_atoms_ref = match &output_wrapper {
+            NetworkResult::Crystal(c) => &c.atoms,
+            NetworkResult::Molecule(m) => &m.atoms,
+            _ => unreachable!(),
+        };
+        let mut diff_refs: Vec<&_> = vec![first_atoms_ref];
+        diff_refs.extend(owned_diffs.iter());
+
         match atomic_structure_diff::compose_diffs(&diff_refs, tolerance) {
             Some(result) => {
                 // 8. Optionally check stats for stale entries
@@ -122,7 +160,12 @@ impl NodeData for AtomComposeDiffData {
                 }
                 let mut composed = result.composed;
                 composed.decorator_mut().show_anchor_arrows = true;
-                EvalOutput::single(NetworkResult::Atomic(composed))
+                match &mut output_wrapper {
+                    NetworkResult::Crystal(c) => c.atoms = composed,
+                    NetworkResult::Molecule(m) => m.atoms = composed,
+                    _ => unreachable!(),
+                }
+                EvalOutput::single(output_wrapper)
             }
             None => EvalOutput::single(NetworkResult::Error(
                 "atom_composediff: composition failed".to_string(),
@@ -185,7 +228,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "diffs".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Atomic)),
+                data_type: DataType::Array(Box::new(DataType::HasAtoms)),
             },
             Parameter {
                 id: None,
@@ -193,7 +236,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Float,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::Atomic),
+        output_pins: OutputPinDefinition::single_same_as_array_elements("diffs"),
         public: true,
         node_data_creator: || {
             Box::new(AtomComposeDiffData {

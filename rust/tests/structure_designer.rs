@@ -1,6 +1,9 @@
 #[path = "structure_designer/structure_designer_test.rs"]
 mod structure_designer_test;
 
+#[path = "structure_designer/data_type_test.rs"]
+mod data_type_test;
+
 #[path = "structure_designer/node_dependency_analysis_tests.rs"]
 mod node_dependency_analysis_tests;
 
@@ -12,6 +15,9 @@ mod kernel_test;
 
 #[path = "structure_designer/nodes/node_snapshots_test.rs"]
 mod node_snapshots_test;
+
+#[path = "structure_designer/structure_node_test.rs"]
+mod structure_node_test;
 
 #[path = "structure_designer/network_validator_test.rs"]
 mod network_validator_test;
@@ -147,3 +153,18 @@ mod infer_bonds_test;
 
 #[path = "structure_designer/atom_replace_test.rs"]
 mod atom_replace_test;
+
+#[path = "structure_designer/network_result_test.rs"]
+mod network_result_test;
+
+#[path = "structure_designer/crystal_molecule_split_validation_test.rs"]
+mod crystal_molecule_split_validation_test;
+
+#[path = "structure_designer/materialize_test.rs"]
+mod materialize_test;
+
+#[path = "structure_designer/phase_transitions_test.rs"]
+mod phase_transitions_test;
+
+#[path = "structure_designer/alignment_test.rs"]
+mod alignment_test;
