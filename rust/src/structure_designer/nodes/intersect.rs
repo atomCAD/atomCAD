@@ -1,5 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::structure::Structure;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -9,7 +8,7 @@ use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::propagate_alignment_with_reason;
-use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
+use crate::structure_designer::evaluator::network_result::structure_mismatch_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -82,11 +81,11 @@ impl NodeData for IntersectData {
             }
         }
 
-        if !BlueprintData::all_have_compatible_lattice_vecs(&blueprints) {
-            return EvalOutput::single(unit_cell_mismatch_error());
+        if !BlueprintData::all_have_same_structure(&blueprints) {
+            return EvalOutput::single(structure_mismatch_error());
         }
 
-        let first_lattice_vecs = blueprints[0].structure.lattice_vecs.clone();
+        let output_structure = blueprints[0].structure.clone();
         let mut alignment = Alignment::Aligned;
         let mut alignment_reason: Option<String> = None;
         for bp in blueprints.into_iter() {
@@ -100,7 +99,7 @@ impl NodeData for IntersectData {
         }
 
         EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
-            structure: Structure::from_lattice_vecs(first_lattice_vecs),
+            structure: output_structure,
             geo_tree_root: GeoNode::intersection_3d(shapes),
             alignment,
             alignment_reason,

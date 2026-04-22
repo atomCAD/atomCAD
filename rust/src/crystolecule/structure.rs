@@ -51,4 +51,24 @@ impl Structure {
             motif_offset: DVec3::ZERO,
         }
     }
+
+    /// Tolerance-aware structural equality.
+    ///
+    /// Delegates to `UnitCellStruct::is_approximately_equal` for lattice vectors,
+    /// `Motif::is_approximately_equal` for the motif, and `DVec3::abs_diff_eq` for
+    /// the offset. Used by CSG nodes to require that all inputs share the same
+    /// crystal field before combining their shapes.
+    pub fn is_approximately_equal(&self, other: &Structure) -> bool {
+        const MOTIF_TOLERANCE: f64 = 1e-9;
+        const OFFSET_TOLERANCE: f64 = 1e-9;
+
+        self.lattice_vecs
+            .is_approximately_equal(&other.lattice_vecs)
+            && self
+                .motif
+                .is_approximately_equal(&other.motif, MOTIF_TOLERANCE)
+            && self
+                .motif_offset
+                .abs_diff_eq(other.motif_offset, OFFSET_TOLERANCE)
+    }
 }

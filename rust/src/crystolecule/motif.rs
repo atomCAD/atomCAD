@@ -117,6 +117,49 @@ impl Motif {
         true
     }
 
+    /// Compares two motifs with tolerance on fractional site positions.
+    ///
+    /// Same as `is_structurally_equal`, but fractional site positions are compared
+    /// with an absolute tolerance instead of bit-exact equality. Used by
+    /// `Structure::is_approximately_equal` to decide whether two CSG inputs carry
+    /// the same crystal field.
+    pub fn is_approximately_equal(&self, other: &Motif, tolerance: f64) -> bool {
+        if self.parameters.len() != other.parameters.len()
+            || self.sites.len() != other.sites.len()
+            || self.bonds.len() != other.bonds.len()
+        {
+            return false;
+        }
+
+        for (p1, p2) in self.parameters.iter().zip(other.parameters.iter()) {
+            if p1.name != p2.name || p1.default_atomic_number != p2.default_atomic_number {
+                return false;
+            }
+        }
+
+        for (s1, s2) in self.sites.iter().zip(other.sites.iter()) {
+            if s1.atomic_number != s2.atomic_number {
+                return false;
+            }
+            if !s1.position.abs_diff_eq(s2.position, tolerance) {
+                return false;
+            }
+        }
+
+        for (b1, b2) in self.bonds.iter().zip(other.bonds.iter()) {
+            if b1.site_1.site_index != b2.site_1.site_index
+                || b1.site_1.relative_cell != b2.site_1.relative_cell
+                || b1.site_2.site_index != b2.site_2.site_index
+                || b1.site_2.relative_cell != b2.site_2.relative_cell
+                || b1.multiplicity != b2.multiplicity
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// Returns a textual representation similar to the motif text format.
     /// Site names are synthetic (S0, S1, ...) since original names are lost during parsing.
     pub fn to_text_format(&self) -> String {

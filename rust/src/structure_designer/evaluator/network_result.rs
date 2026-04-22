@@ -171,29 +171,24 @@ impl BlueprintData {
         )
     }
 
-    /// Checks if this blueprint's lattice vectors are compatible with another's.
+    /// Checks if all blueprints in a vector share the same `Structure`.
     ///
-    /// Boolean CSG operations require compatible lattice vectors. Uses approximate
-    /// equality with tolerance for small calculation errors. Motif compatibility
-    /// is not required at this level.
-    pub fn has_compatible_lattice_vecs(&self, other: &BlueprintData) -> bool {
-        self.structure
-            .lattice_vecs
-            .is_approximately_equal(&other.structure.lattice_vecs)
-    }
-
-    /// Checks if all blueprints in a vector have approximately the same lattice vectors.
+    /// Boolean CSG operations (`union`, `intersect`, `diff`) require that every
+    /// input carves shapes out of the *same* crystal field — i.e., identical
+    /// lattice vectors, motif, and motif_offset. Comparison uses the tolerance
+    /// semantics of `Structure::is_approximately_equal`.
+    ///
     /// Returns true if the vector is empty or has only one element.
-    pub fn all_have_compatible_lattice_vecs(blueprints: &[BlueprintData]) -> bool {
+    pub fn all_have_same_structure(blueprints: &[BlueprintData]) -> bool {
         if blueprints.len() <= 1 {
             return true;
         }
 
-        let first = &blueprints[0].structure.lattice_vecs;
+        let first = &blueprints[0].structure;
         blueprints
             .iter()
             .skip(1)
-            .all(|bp| first.is_approximately_equal(&bp.structure.lattice_vecs))
+            .all(|bp| first.is_approximately_equal(&bp.structure))
     }
 }
 
@@ -967,6 +962,13 @@ pub fn runtime_type_error_in_input(input_param_index: usize) -> NetworkResult {
 
 pub fn unit_cell_mismatch_error() -> NetworkResult {
     NetworkResult::Error("Unit cell mismatch.".to_string())
+}
+
+pub fn structure_mismatch_error() -> NetworkResult {
+    NetworkResult::Error(
+        "Structure mismatch: CSG inputs must share the same lattice, motif, and motif_offset."
+            .to_string(),
+    )
 }
 
 #[cfg(test)]

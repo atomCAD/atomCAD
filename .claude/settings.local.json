@@ -168,7 +168,21 @@
       "Bash(git ls-tree *)",
       "Bash(rustfmt --check src/structure_designer/serialization/migrate_v2_to_v3.rs tests/integration/lattice_space_migration_test.rs)",
       "Bash(rustfmt --check tests/integration/lattice_space_migration_test.rs)",
-      "Bash(rustfmt --check src/structure_designer/serialization/migrate_v2_to_v3.rs)"
+      "Bash(rustfmt --check src/structure_designer/serialization/migrate_v2_to_v3.rs)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad checkout main)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad status)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad stash list)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad diff -- .claude/settings.local.json)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad checkout -f main)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad status --short)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad branch --show-current)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad merge --no-ff lattice-space-refactoring -m ' *)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad checkout HEAD -- .claude/settings.local.json)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad log -1 --format=\"%H%n%s%n---%n%b\")",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad log --oneline --graph -12)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad stash pop)",
+      "Bash(git -C /c/machine_phase_systems/flutter_cad stash drop stash@{0})",
+      "Bash(git *)"
     ]
   }
 }

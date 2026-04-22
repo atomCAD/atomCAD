@@ -19,6 +19,9 @@ mod motif_parser_test;
 #[path = "crystolecule/motif_symmetry_test.rs"]
 mod motif_symmetry_test;
 
+#[path = "crystolecule/structure_test.rs"]
+mod structure_test;
+
 #[path = "crystolecule/unit_cell_test.rs"]
 mod unit_cell_test;
 

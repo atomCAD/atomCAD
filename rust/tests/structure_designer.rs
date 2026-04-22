@@ -168,3 +168,6 @@ mod phase_transitions_test;
 
 #[path = "structure_designer/alignment_test.rs"]
 mod alignment_test;
+
+#[path = "structure_designer/csg_structure_propagation_test.rs"]
+mod csg_structure_propagation_test;
