@@ -24,6 +24,7 @@ pub mod float;
 pub mod free_move;
 pub mod free_rot;
 pub mod geo_trans;
+pub mod get_structure;
 pub mod half_plane;
 pub mod half_space;
 pub mod import_cif;

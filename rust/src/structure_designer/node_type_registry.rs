@@ -26,6 +26,7 @@ use super::nodes::float::get_node_type as float_get_node_type;
 use super::nodes::free_move::get_node_type as free_move_get_node_type;
 use super::nodes::free_rot::get_node_type as free_rot_get_node_type;
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
+use super::nodes::get_structure::get_node_type as get_structure_get_node_type;
 use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
 use super::nodes::half_space::get_node_type as half_space_get_node_type;
 use super::nodes::import_cif::get_node_type as import_cif_get_node_type;
@@ -136,6 +137,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(motif_get_node_type());
         ret.add_node_type(motif_sub_get_node_type());
         ret.add_node_type(structure_get_node_type());
+        ret.add_node_type(get_structure_get_node_type());
         ret.add_node_type(materialize_get_node_type());
         ret.add_node_type(dematerialize_get_node_type());
         ret.add_node_type(exit_structure_get_node_type());

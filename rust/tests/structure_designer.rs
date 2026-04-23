@@ -171,3 +171,6 @@ mod alignment_test;
 
 #[path = "structure_designer/csg_structure_propagation_test.rs"]
 mod csg_structure_propagation_test;
+
+#[path = "structure_designer/get_structure_test.rs"]
+mod get_structure_test;

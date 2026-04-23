@@ -87,7 +87,8 @@ Follow `rust/tests/structure_designer/` conventions (no inline `#[cfg(test)]` in
 - **`rust/tests/structure_designer/get_structure_test.rs`:**
   - Construct a Blueprint with a known Structure; pass it through `get_structure`; assert the output Structure equals input.
   - Same for Crystal (use a small materialized crystal).
-  - Non-HasStructure input (e.g. Motif) produces a runtime error.
+  - Static validator rejects a non-`HasStructure` source (e.g. a Motif output) on the input pin — no wire can be created.
+  - Defense-in-depth: directly invoke `eval` with a non-`HasStructure` `NetworkResult` (which the validator would normally prevent) and assert it returns `runtime_type_error_in_input(0)`.
 - **`rust/tests/structure_designer/with_structure_test.rs`:**
   - Blueprint in, Structure with non-diamond motif in, Blueprint out carries the new Structure; `geo_tree_root` is preserved bit-for-bit.
   - Non-Blueprint `shape` input (e.g. a Crystal) produces a runtime type error (the validator should also reject it statically; assert the eval-time guard anyway).
@@ -97,57 +98,47 @@ Follow `rust/tests/structure_designer/` conventions (no inline `#[cfg(test)]` in
 
 File: `rust/src/structure_designer/serialization/migrate_v2_to_v3.rs`.
 
-Replace the body of `synthesise_structure_for_atom_fill(network_json)` (around line 523). Per `atom_fill` node `N`:
+Replace the body of `synthesise_structure_for_atom_fill(network_json)` (around line 523). The algorithm is the cross product of two independent predicates per `atom_fill` node `N`:
 
-Let `shape_wire = N.arguments[0]` and `motif_wire = N.arguments[1]` (both are `Argument` JSON values — either wired or empty).
+- `can_chain` ≡ `N.arguments[0]` (v2 shape pin) is wired.
+- `needs_S` ≡ `N.arguments[1]` (v2 motif pin) is wired **OR** `N.arguments[2]` (v2 motif_offset pin) is wired.
 
-**Case A — both `shape_wire` and `motif_wire` are wired:**
+|                | `needs_S`                          | `!needs_S`        |
+|----------------|------------------------------------|-------------------|
+| `can_chain`    | **A:** `G` + `S` + `W` spliced inline | **B:** rename only |
+| `!can_chain`   | **C:** dangling `S`                | **D:** rename only |
 
-1. Allocate three new ids from `next_node_id`: `G`, `S`, `W` (in that order; bump `next_node_id` by 3).
-2. Create `G` = `get_structure` at `N.position + (-330, -40)`:
-   - `G.arguments[0]` ← clone of `shape_wire`.
-3. Create `S` = `structure` at `N.position + (-200, -40)`:
-   - `S.arguments[0]` (structure / base) ← wire from `G` output pin 0.
-   - `S.arguments[1]` (lattice_vecs) ← empty.
-   - `S.arguments[2]` (motif) ← `motif_wire` (moved, not cloned — it is being migrated off `N`).
-   - `S.arguments[3]` (motif_offset) ← move from `N.arguments[2]` if that was wired in v2; else empty.
-4. Create `W` = `with_structure` at `N.position + (-90, 0)`:
-   - `W.arguments[0]` (shape) ← clone of `shape_wire`.
-   - `W.arguments[1]` (structure) ← wire from `S` output pin 0.
-5. Rewrite `N.arguments[0]` to be a wire from `W` output pin 0 (replacing the original `shape_wire`).
-6. Re-index `N.arguments[3..=6]` to `materialize`'s layout: `[3]→[1]`, `[4]→[2]`, `[5]→[3]`, `[6]→[4]`.
-7. Rename `N.node_type_name` from `"atom_fill"` to `"materialize"`.
-8. Translate `AtomFillData` → `MaterializeData` by dropping `motif_offset` (carry over the rest verbatim).
+Procedure, applied per `atom_fill`:
 
-**Case B — `shape_wire` wired, `motif_wire` empty:**
+1. **If `needs_S` and `can_chain`:** allocate fresh ids `G`, `S`, `W` from `next_node_id` in that order (bump by 3). **Else if `needs_S`:** allocate `S` only (bump by 1). **Else:** no allocations.
+2. **If `needs_S`:** create `S` = `structure` at `N.position + (-200, -40)`:
+   - `S.arguments[0]` (base structure) ← wire from `G` output pin 0 if `can_chain`, else empty.
+   - `S.arguments[1]` (lattice_vecs override) ← empty.
+   - `S.arguments[2]` (motif override) ← `N.arguments[1]` if wired, else empty.
+   - `S.arguments[3]` (motif_offset override) ← `N.arguments[2]` if wired, else empty.
+3. **If `needs_S` and `can_chain`:**
+   - Create `G` = `get_structure` at `N.position + (-330, -40)` with `G.arguments[0]` ← clone of `N.arguments[0]`.
+   - Create `W` = `with_structure` at `N.position + (-90, 0)` with `W.arguments[0]` ← clone of `N.arguments[0]` and `W.arguments[1]` ← wire from `S` output pin 0.
+   - Rewrite `N.arguments[0]` to be a wire from `W` output pin 0 (replacing the original shape wire).
+4. **Always:** re-index `N.arguments[3..=6]` to `materialize`'s layout: `[3]→[1]`, `[4]→[2]`, `[5]→[3]`, `[6]→[4]`. This overwrites the original pin-1 and pin-2 slots, which is safe — if their wires were load-bearing they were already moved to `S` in step 2.
+5. **Always:** rename `N.node_type_name` from `"atom_fill"` to `"materialize"` (and the `data_type` tag likewise).
+6. **Always:** translate `AtomFillData` → `MaterializeData` by dropping `motif_offset` (carry over the rest verbatim).
 
-No motif to preserve. Do not create `G`, `S`, or `W`. Re-index and rename as steps 6–8 above. `N.arguments[0]` stays as the original `shape_wire`.
+### Why `needs_S` includes the motif_offset wire
 
-**Case C — `shape_wire` empty, `motif_wire` wired:**
+A v2 user could wire `motif_offset` while leaving `motif` at its default (diamond zincblende) — to shift the default motif inside the unit cell. If `needs_S` were gated only on the motif wire, step 4's re-index would silently overwrite `N.arguments[2]` and the user's offset wire would vanish: silent data loss. Broadening the predicate routes the offset wire onto `S.arguments[3]` whenever it was wired. When only the offset is wired, `S` overrides offset only and leaves `get_structure`'s default-diamond motif intact — exactly matching v2 atom_fill semantics for that input.
 
-Cannot create `G` / `W` because there is no shape value to tap. Preserve the motif in a dangling `S` (this matches the original design doc's "S dangling" outcome for this edge case):
+### Dangling S (row C)
 
-1. Allocate one new id `S`.
-2. Create `S` = `structure` at `N.position + (-150, 0)`:
-   - `S.arguments[0]` ← empty.
-   - `S.arguments[1]` ← empty.
-   - `S.arguments[2]` ← `motif_wire` (moved).
-   - `S.arguments[3]` ← move from `N.arguments[2]` if wired, else empty.
-3. Re-index and rename as in Case A steps 6–8. `N.arguments[0]` stays empty.
+When `needs_S` but not `can_chain`, `S` is created but its output is not connected to anything. The file was already invalid in v2 in this state (no shape input → `atom_fill` could not evaluate), so a dangling `S` that costs the user a single drag-to-reconnect is strictly better than dropping the wires.
 
-The dangling `S` here is load-bearing: the user's motif wire is preserved for them to reconnect. This is strictly better than losing the wire, and matches the file being invalid in v2 anyway (no shape input → `atom_fill` could not evaluate).
+### Iteration order
 
-**Case D — both empty:**
-
-No `G`/`S`/`W`. Just re-index and rename. Same as Case B modulo pin 1 being empty.
+Process `atom_fill` nodes in the order they appear in the JSON `nodes` array, matching the existing migration code. Allocating ids via HashMap iteration would produce non-deterministic v3 output and break the re-save round-trip byte-identity test in Phase 3.
 
 ### Position offsets
 
 The offsets chosen (`-330, -40` for `G`; `-200, -40` for `S`; `-90, 0` for `W`) keep the new nodes to the left of `N` and slightly above, so auto-layout preserves a readable left-to-right flow on first open. Tune during implementation if the defaults look cramped.
-
-### next_node_id discipline
-
-Bump `next_node_id` in the JSON by the number of nodes allocated (3 in Case A, 1 in Case C, 0 otherwise). The existing migration already does this for the single-`S` path; extend the arithmetic.
 
 ### Interaction with phase 4 (primitive adaptation)
 
@@ -159,11 +150,19 @@ Unchanged from the original design. If a v2 `atom_fill` node's JSON is malformed
 
 ## Sample / demolib impact
 
-The sample files affected by this fix — every project containing an `atom_fill` whose `motif` pin was wired — will re-migrate to different v3 shapes than the current code produces. This includes at minimum `MOF5-motif.cnnd` (confirmed), likely others. Phase 7 of the original design (re-hydrate and re-save) must be re-run after this fix ships:
+The sample files affected by this fix — every project containing an `atom_fill` whose `motif` pin was wired — will migrate to different v3 shapes than the current code produces. This includes at minimum `MOF5-motif.cnnd` (confirmed), likely others.
 
-1. Restore v2 copies of `samples/*.cnnd` and `demolib/*.cnnd` from `main` (`git checkout main -- <path>`).
-2. Load-and-save through the updated migration to produce fresh v3 files.
-3. `cargo insta review` the snapshot tests that will shift (`text_format_snapshot_test`, `node_snapshots_test`). Accept the new outputs.
+**Strategy: keep `samples/` and `demolib/` on disk in v2 format; migrate at load time.** This avoids a re-hydration + snapshot-review ceremony every time a migration bug is found. The migration code path also stays continuously exercised by the real fixtures, which is better coverage than synthetic tests alone. Once the migration has been stable for a release or two, a single final re-hydration pass can drop the v2→v3 code path.
+
+The current repo state has `samples/*.cnnd` and `demolib/*.cnnd` already re-saved as v3 (commits `9e1a0d38` and `b4e929e5`). Part of this fix is to revert them to v2:
+
+1. Restore v2 copies of `samples/*.cnnd` and `demolib/*.cnnd` from the `pre-lattice-refactor` tag:
+   ```
+   git checkout pre-lattice-refactor -- samples/ demolib/
+   ```
+   The `pre-lattice-refactor` tag (commit `058258a3`) is the last commit on `main` before the lattice-space-refactoring merge; its files are guaranteed v2.
+2. Do **not** load-and-save through the migration. Leave the files as v2 on disk.
+3. Update snapshot tests that currently assert the v3-on-disk shape to instead assert the post-migration shape (i.e. migration output from the v2 file). `cargo insta review` the shifts and accept.
 
 ## Test plan
 
@@ -176,8 +175,10 @@ Extend `rust/tests/integration/lattice_space_migration_test.rs` and the fixtures
 
 ### New fixtures
 
-- **`motif_mof5.cnnd`** (smaller stand-in if the full MOF5 is unwieldy): a custom network returning `Motif`, with an `atom_fill` on a side-chain display, a wired `motif` input to `atom_fill`, a wired `unit_cell` on the primitive, and a non-default motif. Post-migration, evaluate the materialize node and assert at least one atom of the motif's element is present in the output. This is the regression fixture — failure means we're back to diamond.
-- **`atom_fill_unwired_shape.cnnd`**: Case C coverage — motif wired, shape unwired. Assert S is created dangling, materialize has no shape wire, validation reports the missing shape as a user-visible error (not a migration failure).
+- **`motif_mof5.cnnd`** (smaller stand-in if the full MOF5 is unwieldy): row A coverage with both motif and offset effectively present. A custom network returning `Motif`, with an `atom_fill` on a side-chain display, a wired `motif` input to `atom_fill`, a wired `unit_cell` on the primitive, and a non-default motif. Post-migration, evaluate the materialize node and assert at least one atom of the motif's element is present in the output. This is the regression fixture — failure means we're back to diamond.
+- **`atom_fill_unwired_shape.cnnd`**: row C coverage — motif wired, shape unwired. Assert `S` is created dangling, materialize has no shape wire, validation reports the missing shape as a user-visible error (not a migration failure).
+- **`motif_offset_only_chained.cnnd`**: row A coverage with motif unwired and motif_offset wired (e.g. to a `vec3` literal). Specifically guards the `needs_S` broadening: assert `G` + `S` + `W` are emitted, `S.arguments[2]` (motif override) is empty, `S.arguments[3]` (motif_offset override) holds the user's wire, and evaluating materialize produces atoms shifted by the offset relative to the same fixture with offset unwired.
+- **`motif_offset_only_unchained.cnnd`**: row C coverage with motif unwired and motif_offset wired. Same predicate-broadening guard as above but in the dangling-`S` branch: assert `S` is created dangling, `S.arguments[3]` holds the user's offset wire, `S.arguments[2]` is empty, and the offset wire is not silently overwritten by the re-index step.
 
 ### Real-sample smoke
 
@@ -189,14 +190,60 @@ Copy `MOF5-motif.cnnd` from `c:\atomcad_v0.3.0\samples\` or `git show main:sampl
 - Re-save round-trip byte-identity after first v3 save.
 - `with_structure` rejects Crystal at validation time (static type check, not just runtime).
 
-## Implementation order
+## Phased implementation plan
 
-1. Add `get_structure` node type + tests + snapshot entries.
-2. Add `with_structure` node type + tests + snapshot entries.
-3. Rewrite `synthesise_structure_for_atom_fill` to emit the W/G/S triplet in Case A, and cover cases B/C/D.
-4. Update existing migration fixtures' expected shapes; add `motif_mof5.cnnd` and `real_mof5.cnnd`.
-5. Re-run phase 7 of the original design: re-hydrate `samples/` and `demolib/` from main, re-save through the fixed migration, `cargo insta review` the snapshot shifts.
-6. Full `cargo test` + `cargo clippy` + `cargo fmt --check` green.
+Four phases, each independently committable. Phases 1 and 2 ship standalone node features with no dependency on the migration rewrite; phase 3 depends on both nodes existing; phase 4 depends on the migration being correct.
+
+### Phase 1 — `get_structure` node
+
+**Scope:**
+- Create `rust/src/structure_designer/nodes/get_structure.rs` per the spec above.
+- Register in `nodes/mod.rs` and `node_type_registry.rs::create_built_in_node_types()`.
+- Add unit tests at `rust/tests/structure_designer/get_structure_test.rs` (Blueprint, Crystal, static rejection of non-`HasStructure` source on the input pin, plus a defense-in-depth direct-`eval` test asserting `runtime_type_error_in_input(0)`).
+- Add the node's entry to the existing node-type snapshot suite (`node_snapshots_test.rs`); `cargo insta review` and accept.
+
+**Done means:** `cargo test get_structure` green, snapshot suite green, `cargo clippy` + `cargo fmt --check` green. The node is usable in the UI via the registry but not yet referenced by any migration code.
+
+### Phase 2 — `with_structure` node
+
+**Scope:**
+- Create `rust/src/structure_designer/nodes/with_structure.rs` per the spec above, Blueprint-only.
+- Register in `nodes/mod.rs` and `node_type_registry.rs`.
+- Add unit tests at `rust/tests/structure_designer/with_structure_test.rs`:
+  - Blueprint in + non-diamond Structure in → Blueprint out carries the new Structure; `geo_tree_root` preserved bit-for-bit.
+  - Non-Blueprint `shape` input (Crystal) produces a runtime type error.
+  - Static validator rejects Crystal on the `shape` pin (not just eval-time).
+- Add the node's entry to `node_snapshots_test.rs`; `cargo insta review` and accept.
+
+**Done means:** `cargo test with_structure` green, snapshot suite green, lint/format green. Node is registered but not yet used by migration.
+
+### Phase 3 — Migration algorithm rewrite + fixtures
+
+**Scope:**
+- Rewrite `synthesise_structure_for_atom_fill` in `rust/src/structure_designer/serialization/migrate_v2_to_v3.rs` to emit the W/G/S triplet for Case A and handle cases B/C/D per the algorithm above.
+- Bump `next_node_id` correctly (3 in A, 1 in C, 0 in B/D).
+- Update existing migration fixtures under `rust/tests/fixtures/lattice_space_migration/`:
+  - `atom_fill_split.cnnd`: expected-output assertions rewritten for the new shape.
+  - `shared_unit_cell.cnnd`: same, plus assert materialize evaluation produces atoms against a known motif.
+- Add new fixtures:
+  - `motif_mof5.cnnd` (smaller stand-in if full MOF5 is unwieldy): row A regression fixture; post-migration evaluation must produce atoms of the motif's element, not diamond.
+  - `atom_fill_unwired_shape.cnnd`: row C coverage with motif wired.
+  - `motif_offset_only_chained.cnnd`: row A coverage with motif unwired and motif_offset wired — guards the `needs_S` broadening so the offset wire isn't silently dropped.
+  - `motif_offset_only_unchained.cnnd`: row C coverage with motif unwired and motif_offset wired — same broadening guard in the dangling-`S` branch.
+  - `real_mof5.cnnd`: copy from `c:\atomcad_v0.3.0\samples\MOF5-motif.cnnd` or `git show pre-lattice-refactor:samples/MOF5-motif.cnnd`. Assert materialize on `motif_MOF5` evaluates to atoms including Zn / O / C, not C-only.
+- Add negative / edge tests: double-migration idempotence on Case A, re-save round-trip byte-identity after first v3 save, `with_structure` static rejection of Crystal.
+
+**Done means:** full `cargo test` green including the new fixtures; MOF5 regression test proves motif survives migration; lint/format green. Migration produces correct v3 shapes for all four cases.
+
+### Phase 4 — Sample / demolib restoration + snapshot acceptance
+
+**Scope:**
+- Restore v2 copies of the sample files: `git checkout pre-lattice-refactor -- samples/ demolib/`.
+- Do **not** re-save through the app — files stay as v2 on disk and migrate at load time.
+- Update snapshot tests that currently assert the v3-on-disk shape (`text_format_snapshot_test`, `node_snapshots_test`) to instead assert the post-migration shape. `cargo insta review` and accept.
+- Final full green: `cargo test` + `cargo clippy` + `cargo fmt --check` + `flutter analyze`.
+
+**Done means:** `samples/` and `demolib/` are v2 on disk; loading any of them in the app produces correct v3 in-memory graphs (MOF5 shows its real motif, not diamond); all snapshots reflect migration output, not on-disk shape; full test / lint / format green.
 
 ## Non-goals
 
