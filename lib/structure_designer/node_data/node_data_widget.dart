@@ -47,6 +47,7 @@ import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_vecs_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/supercell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -599,6 +600,14 @@ class NodeDataWidget extends StatelessWidget {
         return LatticeVecsEditor(
           nodeId: selectedNode.id,
           data: latticeVecsData,
+          model: model,
+        );
+      case 'supercell':
+        final supercellData = getSupercellData(nodeId: selectedNode.id);
+
+        return SupercellEditor(
+          nodeId: selectedNode.id,
+          data: supercellData,
           model: model,
         );
       default:

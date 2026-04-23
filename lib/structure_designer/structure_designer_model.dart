@@ -1156,6 +1156,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setSupercellData(BigInt nodeId, APISupercellData data) {
+    structure_designer_api.setSupercellData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setRangeData(BigInt nodeId, APIRangeData data) {
     structure_designer_api.setRangeData(nodeId: nodeId, data: data);
     refreshFromKernel();

@@ -153,6 +153,12 @@ pub struct APIIVec3Data {
     pub value: APIIVec3,
 }
 
+pub struct APISupercellData {
+    pub a: APIIVec3,
+    pub b: APIIVec3,
+    pub c: APIIVec3,
+}
+
 pub struct APIRangeData {
     pub start: i32,
     pub step: i32,

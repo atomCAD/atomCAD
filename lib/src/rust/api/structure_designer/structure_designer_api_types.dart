@@ -1873,6 +1873,30 @@ class APIStructureRotData {
           crystalSystem == other.crystalSystem;
 }
 
+class APISupercellData {
+  final APIIVec3 a;
+  final APIIVec3 b;
+  final APIIVec3 c;
+
+  const APISupercellData({
+    required this.a,
+    required this.b,
+    required this.c,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode ^ c.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISupercellData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b &&
+          c == other.c;
+}
+
 /// Result of applying text format edits to the active network.
 class APITextEditResult {
   final bool success;

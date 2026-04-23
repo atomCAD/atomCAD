@@ -362,6 +362,11 @@ APIIVec2Data? getIvec2Data({required BigInt nodeId}) => RustLib.instance.api
 APIIVec3Data? getIvec3Data({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetIvec3Data(nodeId: nodeId);
 
+APISupercellData? getSupercellData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetSupercellData(
+        nodeId: nodeId);
+
 APIRangeData? getRangeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetRangeData(nodeId: nodeId);
 
@@ -522,6 +527,12 @@ void setIvec2Data({required BigInt nodeId, required APIIVec2Data data}) =>
 void setIvec3Data({required BigInt nodeId, required APIIVec3Data data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetIvec3Data(
+            nodeId: nodeId, data: data);
+
+void setSupercellData(
+        {required BigInt nodeId, required APISupercellData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetSupercellData(
             nodeId: nodeId, data: data);
 
 void setRangeData({required BigInt nodeId, required APIRangeData data}) =>

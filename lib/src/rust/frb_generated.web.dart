@@ -248,6 +248,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIStructureRotData dco_decode_api_structure_rot_data(dynamic raw);
 
   @protected
+  APISupercellData dco_decode_api_supercell_data(dynamic raw);
+
+  @protected
   APITextEditResult dco_decode_api_text_edit_result(dynamic raw);
 
   @protected
@@ -451,6 +454,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIStructureRotData dco_decode_box_autoadd_api_structure_rot_data(
       dynamic raw);
+
+  @protected
+  APISupercellData dco_decode_box_autoadd_api_supercell_data(dynamic raw);
 
   @protected
   APITransform dco_decode_box_autoadd_api_transform(dynamic raw);
@@ -812,6 +818,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIStructureRotData? dco_decode_opt_box_autoadd_api_structure_rot_data(
       dynamic raw);
+
+  @protected
+  APISupercellData? dco_decode_opt_box_autoadd_api_supercell_data(dynamic raw);
 
   @protected
   APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
@@ -1182,6 +1191,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APISupercellData sse_decode_api_supercell_data(SseDeserializer deserializer);
+
+  @protected
   APITextEditResult sse_decode_api_text_edit_result(
       SseDeserializer deserializer);
 
@@ -1428,6 +1440,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIStructureRotData sse_decode_box_autoadd_api_structure_rot_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APISupercellData sse_decode_box_autoadd_api_supercell_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1860,6 +1876,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APISupercellData? sse_decode_opt_box_autoadd_api_supercell_data(
+      SseDeserializer deserializer);
+
+  @protected
   APITransform? sse_decode_opt_box_autoadd_api_transform(
       SseDeserializer deserializer);
 
@@ -2271,6 +2291,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIStructureRotData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_supercell_data(
+      APISupercellData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_text_edit_result(
       APITextEditResult self, SseSerializer serializer);
 
@@ -2522,6 +2546,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_structure_rot_data(
       APIStructureRotData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_supercell_data(
+      APISupercellData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_transform(
@@ -2958,6 +2986,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_structure_rot_data(
       APIStructureRotData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_supercell_data(
+      APISupercellData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_transform(

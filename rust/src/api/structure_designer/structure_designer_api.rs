@@ -66,6 +66,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIIntData;
 use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
+use crate::api::structure_designer::structure_designer_api_types::APISupercellData;
 use crate::api::structure_designer::structure_designer_api_types::APIStringData;
 use crate::api::structure_designer::structure_designer_api_types::APIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIVec3Data;
@@ -132,6 +133,7 @@ use crate::structure_designer::nodes::sequence::SequenceData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::string::StringData;
 use crate::structure_designer::nodes::structure_move::StructureMoveData;
+use crate::structure_designer::nodes::supercell::SupercellData;
 use crate::structure_designer::nodes::structure_rot::{StructureRotData, StructureRotEvalCache};
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
@@ -1662,6 +1664,27 @@ pub fn get_ivec3_data(node_id: u64) -> Option<APIIVec3Data> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_supercell_data(node_id: u64) -> Option<APISupercellData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let supercell_data = node_data.as_any_ref().downcast_ref::<SupercellData>()?;
+                let m = supercell_data.matrix;
+                Some(APISupercellData {
+                    a: to_api_ivec3(&glam::IVec3::new(m[0][0], m[0][1], m[0][2])),
+                    b: to_api_ivec3(&glam::IVec3::new(m[1][0], m[1][1], m[1][2])),
+                    c: to_api_ivec3(&glam::IVec3::new(m[2][0], m[2][1], m[2][2])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_range_data(node_id: u64) -> Option<APIRangeData> {
     unsafe {
         with_cad_instance_or(
@@ -3062,6 +3085,24 @@ pub fn set_ivec3_data(node_id: u64, data: APIIVec3Data) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, ivec3_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_supercell_data(node_id: u64, data: APISupercellData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_ivec3(&data.a);
+            let b = from_api_ivec3(&data.b);
+            let c = from_api_ivec3(&data.c);
+            let supercell_data = Box::new(SupercellData {
+                matrix: [[a.x, a.y, a.z], [b.x, b.y, b.z], [c.x, c.y, c.z]],
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, supercell_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
