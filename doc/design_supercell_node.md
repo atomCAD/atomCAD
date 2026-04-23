@@ -94,6 +94,13 @@ The node's `eval()` is a thin wrapper that resolves the effective matrix, calls 
 
 Let `N = |det(M)|`.
 
+**Coordinate transforms used below.** Let `A_old` be the matrix whose columns are the old basis vectors `a, b, c`, and `A_new` likewise for the new basis. Under the rows convention (`new_a = M[0][0]·a + M[0][1]·b + M[0][2]·c`, etc.), we have `A_new = A_old · Mᵀ`. Therefore for any point `x`:
+
+- Old→new fractional coords: `f_new = M⁻ᵀ · f_old` (equivalently `(M⁻¹)ᵀ`).
+- Translation by `k ∈ ℤ³` new cells in old-integer coords: `Mᵀ · k` (because shifting by `k_i·new_i` adds `k_i · M[i]`, i.e. row `i` of `M` weighted by `k_i` — which equals `Mᵀ · k` read as a column vector).
+
+These are the two linear maps the algorithm uses; everywhere you see `M⁻ᵀ` or `Mᵀ·k` below, it comes from these identities.
+
 ### 1. Validate
 
 - `det(M) == 0` → `SupercellError::Degenerate`.
@@ -140,7 +147,9 @@ let (aabb_min, aabb_max) = new_cell_aabb(m);
 let scan_min = aabb_min - IVec3::ONE;
 let scan_max = aabb_max;
 
-let minv: DMat3 = dmat3_from_i32(m).inverse();
+// M⁻ᵀ maps old fractional coords to new fractional coords (see "Coordinate
+// transforms" above). Precompute once.
+let minv_t: DMat3 = dmat3_from_i32(m).inverse().transpose();
 
 let mut site_map: HashMap<(IVec3, usize), usize> = HashMap::new();
 let mut new_sites = Vec::new();
@@ -151,7 +160,7 @@ for pz in scan_min.z..=scan_max.z {
             let p = IVec3::new(px, py, pz);
             for (s_idx, site) in structure.motif.sites.iter().enumerate() {
                 let old_pos = p.as_dvec3() + site.position;
-                let new_frac = minv * old_pos;
+                let new_frac = minv_t * old_pos;
                 if in_unit_cube_half_open(new_frac, EPS) {
                     site_map.insert((p, s_idx), new_sites.len());
                     new_sites.push(Site {
@@ -199,11 +208,13 @@ for bond in &structure.motif.bonds {
         let end_2_atom_pos: DVec3 = end_2_cell.as_dvec3() + s2_frac;
 
         // Reduce into an interior copy + new-cell translation.
-        // Use the *atom* position, not the cell origin: when Minv has large
+        // Use the *atom* position, not the cell origin: when M⁻ᵀ has large
         // entries, adding s2_frac can push across an integer boundary and
         // flip which new cell the atom belongs to.
-        let new_cell_idx: IVec3 = dvec3_floor(minv * end_2_atom_pos);
-        let end_2_reduced: IVec3 = end_2_cell - m_mul_ivec3(m, new_cell_idx);
+        let new_cell_idx: IVec3 = dvec3_floor(minv_t * end_2_atom_pos);
+        // Translation by `new_cell_idx` new cells is Mᵀ·new_cell_idx in old-integer
+        // coords (see "Coordinate transforms" above).
+        let end_2_reduced: IVec3 = end_2_cell - m_transpose_mul_ivec3(m, new_cell_idx);
 
         let new_site_2_idx = site_map[&(end_2_reduced, s2_idx)];
 
@@ -221,7 +232,7 @@ debug_assert_eq!(
 );
 ```
 
-Correctness argument: `end_2_reduced.as_dvec3() + s2_frac` equals `end_2_atom_pos − M·new_cell_idx`, whose `Minv`-image is in `[0, 1)³` by the floor definition — so the reduced copy is guaranteed to be in `site_map` from step 3. Each old bond produces exactly `|det(M)|` new bonds (one per `site_1` copy), matching the correct total.
+Correctness argument: `end_2_reduced.as_dvec3() + s2_frac` equals `end_2_atom_pos − Mᵀ·new_cell_idx`, whose `M⁻ᵀ`-image is in `[0, 1)³` by the floor definition — so the reduced copy is guaranteed to be in `site_map` from step 3. Each old bond produces exactly `|det(M)|` new bonds (one per `site_1` copy), matching the correct total.
 
 The linear scan over `site_map` per bond is `O(|bonds| · |det(M)| · |sites|)`, fine for realistic motifs. If this ever shows up in a profile, add a `HashMap<usize, Vec<(IVec3, usize)>>` index keyed by site index.
 
@@ -238,11 +249,11 @@ let new_structure = Structure {
         bonds: new_bonds,
         // bonds_by_site1_index / bonds_by_site2_index rebuilt from new_bonds
     },
-    motif_offset: snap_unit(minv * structure.motif_offset),
+    motif_offset: snap_unit(minv_t * structure.motif_offset),
 };
 ```
 
-`Minv · old_motif_offset` re-expresses the offset in the new basis: a fractional shift measured in old-lattice units becomes the same physical shift measured in new-lattice units. This is the only line in the algorithm that references `motif_offset` — steps 3b and 4 are offset-free because a constant translation factors out of the per-site and per-bond math. `snap_unit` cleans up near-0 / near-1 noise; it does not reduce arbitrary values mod 1.
+`M⁻ᵀ · old_motif_offset` re-expresses the offset in the new basis: a fractional shift measured in old-lattice units becomes the same physical shift measured in new-lattice units. This is the only line in the algorithm that references `motif_offset` — steps 3b and 4 are offset-free because a constant translation factors out of the per-site and per-bond math. `snap_unit` cleans up near-0 / near-1 noise; it does not reduce arbitrary values mod 1.
 
 ## Where the code lives
 
@@ -322,7 +333,7 @@ Three phases, each independently mergeable, each landing its own tests. Phase 1 
 **Deliverables:**
 - `SupercellError` enum: `Degenerate`, `InvertedHandedness`, `TooLarge`.
 - `apply_supercell(structure: &Structure, matrix: &[[i32; 3]; 3]) -> Result<Structure, SupercellError>`.
-- Private helpers: `new_cell_aabb`, `det_abs`, `in_unit_cube_half_open`, `snap_unit`, `dvec3_floor`, `m_mul_ivec3`, `dmat3_from_i32`.
+- Private helpers: `new_cell_aabb`, `det_abs`, `in_unit_cube_half_open`, `snap_unit`, `dvec3_floor`, `m_transpose_mul_ivec3` (returns `Mᵀ · v` as `IVec3`), `dmat3_from_i32`.
 - Use `i64` internally for AABB bounds and bond-reduction arithmetic (see Open Question 2).
 - Register `pub mod supercell;` in `rust/src/crystolecule/mod.rs`.
 
