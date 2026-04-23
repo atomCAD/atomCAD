@@ -14,5 +14,6 @@ pub mod motif_parser;
 pub mod motif_symmetry;
 pub mod simulation;
 pub mod structure;
+pub mod supercell;
 pub mod unit_cell_struct;
 pub mod unit_cell_symmetries;
