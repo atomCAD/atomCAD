@@ -1,0 +1,90 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 3,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_type": "Atomic"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "motif",
+            "custom_name": "m",
+            "position": [
+              50.0,
+              250.0
+            ],
+            "arguments": [],
+            "data_type": "motif",
+            "data": {
+              "definition": "",
+              "name": null
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "atom_fill",
+            "custom_name": "fill",
+            "position": [
+              700.0,
+              300.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "atom_fill",
+            "data": {
+              "parameter_element_value_definition": "",
+              "motif_offset": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "hydrogen_passivation": false,
+              "remove_single_bond_atoms_before_passivation": false,
+              "surface_reconstruction": false,
+              "invert_phase": false
+            }
+          }
+        ],
+        "return_node_id": 2,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

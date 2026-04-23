@@ -449,39 +449,60 @@ fn retain_display_entries(network_json: &mut Value, field: &str, deleted_ids: &H
 }
 
 // ---------------------------------------------------------------------------
-// `atom_fill` split: v2 `atom_fill` becomes v3 `materialize` + a new `structure`
-// source node holding the motif / motif_offset wires. See the design doc
-// "Node synthesis: `atom_fill` → `structure` + `materialize`" for the rationale
-// and the argument-layout table.
+// `atom_fill` split: v2 `atom_fill` becomes v3 `materialize`. When the v2 node
+// had its `motif` or `motif_offset` pin wired, a `structure` (S) override node
+// is synthesised carrying those wires; if the shape pin was also wired, a
+// `get_structure` (G) and `with_structure` (W) pair splice the override into
+// the shape chain immediately before `materialize`. This preserves the v2
+// semantics that `atom_fill.motif` writes the motif into the materialised
+// crystal — silently dropping it would replace the user's motif with the
+// diamond default.
+//
+// See `doc/design_cnnd_migration_motif_fix.md` for the full rationale and the
+// case A/B/C/D matrix:
+//   `can_chain` = shape wire (v2 arg 0) is present.
+//   `needs_S`   = motif (v2 arg 1) OR motif_offset (v2 arg 2) is present.
+//   A: can_chain && needs_S    → G + S + W spliced into the shape chain.
+//   B: can_chain && !needs_S   → rename + re-index only.
+//   C: !can_chain && needs_S   → dangling S.
+//   D: !can_chain && !needs_S  → rename + re-index only.
 // ---------------------------------------------------------------------------
 
-/// Describes one v2 `atom_fill` node that must split into a v3 `materialize` + a synthesized
-/// `structure` source node. Collected in a read-only pre-pass so the mutation pass isn't
-/// fighting serde_json's borrow rules.
+/// Describes one v2 `atom_fill` node and the synthesis required to migrate it
+/// to v3. Collected in a read-only pre-pass so the mutation pass isn't fighting
+/// serde_json's borrow rules.
 struct AtomFillSplit {
     /// Id of the existing node being renamed from `atom_fill` to `materialize`.
     materialize_id: u64,
-    /// The motif wire lifted off v2 arg 1 — becomes the new `structure` node's motif input
-    /// (arg 2).
-    motif_wire: serde_json::Map<String, Value>,
-    /// The motif-offset wire lifted off v2 arg 2 — becomes the new `structure` node's
-    /// `motif_offset` input (arg 3).
-    motif_offset_wire: serde_json::Map<String, Value>,
-    /// v2 arg 0 (shape) — becomes v3 `materialize.shape`.
+    /// `materialize`'s position, snapped to integers (anchor for the new G/S/W
+    /// nodes, which sit to its left).
+    materialize_position: [f64; 2],
+
+    // The seven v2 atom_fill wires, lifted verbatim. An empty map is equivalent
+    // to "unwired" — that's the signal we use for the can_chain / needs_S
+    // predicates and for distinguishing case A / B / C / D below.
     shape_wire: serde_json::Map<String, Value>,
-    /// v2 arg 3 (passivate) — becomes v3 `materialize.passivate`.
+    motif_wire: serde_json::Map<String, Value>,
+    motif_offset_wire: serde_json::Map<String, Value>,
     passivate_wire: serde_json::Map<String, Value>,
-    /// v2 arg 4 (rm_single) — becomes v3 `materialize.rm_single`.
     rm_single_wire: serde_json::Map<String, Value>,
-    /// v2 arg 5 (surf_recon) — becomes v3 `materialize.surf_recon`.
     surf_recon_wire: serde_json::Map<String, Value>,
-    /// v2 arg 6 (invert_phase) — becomes v3 `materialize.invert_phase`.
     invert_phase_wire: serde_json::Map<String, Value>,
-    /// Pre-allocated id for the new `structure` source node.
-    new_structure_node_id: u64,
-    /// Placement of the new `structure` node — offset left of the `materialize` node so the
-    /// next auto-layout is not visually disrupted.
-    new_structure_position: [f64; 2],
+
+    /// Whether v2 arg 0 (shape) is wired. Distinguishes A/B from C/D.
+    can_chain: bool,
+    /// Whether v2 arg 1 (motif) or v2 arg 2 (motif_offset) is wired.
+    /// Broadened beyond just motif so a user who only wired motif_offset
+    /// doesn't lose their offset wire to step 4's re-index — see the design's
+    /// "Why `needs_S` includes the motif_offset wire" section.
+    needs_s: bool,
+
+    /// Allocated id for the synthesized `get_structure` node (case A only).
+    g_id: Option<u64>,
+    /// Allocated id for the synthesized `structure` override node (cases A and C).
+    s_id: Option<u64>,
+    /// Allocated id for the synthesized `with_structure` node (case A only).
+    w_id: Option<u64>,
 }
 
 /// Iterates every network under `root` and applies [`synthesise_structure_for_atom_fill`]
@@ -504,22 +525,28 @@ fn synthesise_structure_for_atom_fill_in_all_networks(
     Ok(())
 }
 
-/// Replaces each v2 `atom_fill` node in a single network with a v3 `materialize` node plus a
-/// new `structure` source node that holds the user's motif / motif_offset wires:
+/// Replaces each v2 `atom_fill` node in a single network with a v3 `materialize` node,
+/// optionally splicing a `get_structure` + `structure` + `with_structure` triplet into the
+/// shape chain to preserve the user's motif / motif_offset wires.
+///
+/// Always:
 /// - the existing node is renamed to `materialize` (both `node_type_name` and the `data_type`
 ///   tag); its arguments are re-indexed to the v3 layout and its `NodeData` loses the
 ///   `motif_offset` field (carries over `parameter_element_value_definition`,
 ///   `hydrogen_passivation`, `remove_single_bond_atoms_before_passivation`,
-///   `surface_reconstruction`, `invert_phase`);
-/// - a fresh `structure` node receives the old motif wire on arg 2 and the old motif_offset
-///   wire on arg 3; its `structure` (arg 0) and `lattice_vecs` (arg 1) inputs are left
-///   unwired for the user to connect, per the design doc.
+///   `surface_reconstruction`, `invert_phase`).
 ///
-/// Downstream wires leaving the old `atom_fill` are preserved unchanged — they now carry
-/// `Crystal` from `materialize` instead of `Atomic` from `atom_fill`, which is the intended
-/// v3 typing. There is no wire from the new `structure` to the `materialize` node: lattice
-/// context flows through the primitive's new `structure` input, handled by the
-/// primitive-adaptation pass.
+/// Per case (see module-level comment for the matrix):
+/// - **A** (shape + motif/offset wired): synthesises `G = get_structure`, `S = structure`,
+///   `W = with_structure`. The shape wire is fanned into both the original chain (cloned
+///   into `W.shape` and `G.input`) and `G` extracts its Structure; `S` overrides the motif
+///   / motif_offset on top of that base; `W` puts the patched Structure back onto the
+///   Blueprint flowing into `materialize`.
+/// - **B** (shape wired, motif/offset unwired): rename + re-index only.
+/// - **C** (shape unwired, motif/offset wired): synthesises `S` only — dangling, since
+///   there is no shape chain to splice it into. The file was already invalid in v2 in
+///   this state, so a dangling `S` is strictly better than dropping the wires.
+/// - **D** (nothing wired beyond defaults): rename + re-index only.
 fn synthesise_structure_for_atom_fill(network_json: &mut Value) -> Result<(), MigrationError> {
     let Some(next_id_val) = network_json.get("next_node_id").and_then(|v| v.as_u64()) else {
         return Ok(());
@@ -552,33 +579,63 @@ fn synthesise_structure_for_atom_fill(network_json: &mut Value) -> Result<(), Mi
                     .unwrap_or_default()
             };
 
-            // Snap the adapter position to integers for the same reason as the primitive
+            let shape_wire = pick_wire(0);
+            let motif_wire = pick_wire(1);
+            let motif_offset_wire = pick_wire(2);
+
+            let can_chain = !shape_wire.is_empty();
+            let needs_s = !motif_wire.is_empty() || !motif_offset_wire.is_empty();
+
+            // Snap the new-node positions to integers for the same reason as the primitive
             // adaptation pass: f64 subtraction near a fractional bit pattern occasionally
             // round-trips to a neighbouring ULP through serde_json's shortest-decimal
-            // emit/parse, breaking `cnnd_roundtrip_test`.
-            let position = node
+            // emit/parse, breaking `cnnd_roundtrip_test`. Integer positions round-trip
+            // exactly.
+            let materialize_position = node
                 .get("position")
                 .and_then(|v| v.as_array())
                 .map(|arr| {
                     let x = arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let y = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    [(x - 150.0).round(), y.round()]
+                    [x.round(), y.round()]
                 })
-                .unwrap_or([-150.0, 0.0]);
+                .unwrap_or([0.0, 0.0]);
+
+            // Allocate ids in the order documented in the design (G, S, W) so the
+            // produced JSON is deterministic across runs and double-migration is byte-
+            // identical on the second call.
+            let (g_id, s_id, w_id) = match (needs_s, can_chain) {
+                (true, true) => {
+                    let g = next_id;
+                    let s = next_id + 1;
+                    let w = next_id + 2;
+                    next_id += 3;
+                    (Some(g), Some(s), Some(w))
+                }
+                (true, false) => {
+                    let s = next_id;
+                    next_id += 1;
+                    (None, Some(s), None)
+                }
+                (false, _) => (None, None, None),
+            };
 
             splits.push(AtomFillSplit {
                 materialize_id: id,
-                shape_wire: pick_wire(0),
-                motif_wire: pick_wire(1),
-                motif_offset_wire: pick_wire(2),
+                materialize_position,
+                shape_wire,
+                motif_wire,
+                motif_offset_wire,
                 passivate_wire: pick_wire(3),
                 rm_single_wire: pick_wire(4),
                 surf_recon_wire: pick_wire(5),
                 invert_phase_wire: pick_wire(6),
-                new_structure_node_id: next_id,
-                new_structure_position: position,
+                can_chain,
+                needs_s,
+                g_id,
+                s_id,
+                w_id,
             });
-            next_id += 1;
         }
     }
 
@@ -594,10 +651,10 @@ fn synthesise_structure_for_atom_fill(network_json: &mut Value) -> Result<(), Mi
         return Ok(());
     };
 
-    // Rewrite each existing atom_fill node into a materialize node (rename + arg re-index
-    // + NodeData translation). The wire-swap is explicit — the validator's argument-count
-    // repair would otherwise truncate to 5 args and leave motif / motif_offset sitting at
-    // positions 1 and 2, where v3 `materialize` expects Bool pins.
+    // Rewrite each existing atom_fill node into a materialize node. The wire-swap is
+    // explicit — the validator's argument-count repair would otherwise truncate to 5 args
+    // and leave motif / motif_offset sitting at positions 1 and 2, where v3 `materialize`
+    // expects Bool pins.
     for split in &splits {
         let Some(node) = nodes
             .iter_mut()
@@ -611,11 +668,23 @@ fn synthesise_structure_for_atom_fill(network_json: &mut Value) -> Result<(), Mi
         if let Some(Value::String(t)) = node.get_mut("data_type") {
             *t = "materialize".to_string();
         }
+
+        // In case A the materialize.shape pin must point at W — replacing the v2 shape
+        // chain. In every other case the original shape wire (which may itself be empty)
+        // becomes materialize.shape unchanged.
+        let shape_into_materialize: serde_json::Map<String, Value> = if let Some(w) = split.w_id {
+            let mut m = serde_json::Map::new();
+            m.insert(w.to_string(), Value::from(0));
+            m
+        } else {
+            split.shape_wire.clone()
+        };
+
         if let Some(obj) = node.as_object_mut() {
             obj.insert(
                 "arguments".to_string(),
                 serde_json::json!([
-                    { "argument_output_pins": Value::Object(split.shape_wire.clone()) },
+                    { "argument_output_pins": Value::Object(shape_into_materialize) },
                     { "argument_output_pins": Value::Object(split.passivate_wire.clone()) },
                     { "argument_output_pins": Value::Object(split.rm_single_wire.clone()) },
                     { "argument_output_pins": Value::Object(split.surf_recon_wire.clone()) },
@@ -632,36 +701,108 @@ fn synthesise_structure_for_atom_fill(network_json: &mut Value) -> Result<(), Mi
         }
     }
 
-    // Append the synthesized `structure` nodes holding the motif / motif_offset wires.
+    // Append the synthesised G / S / W nodes (the cases that do nothing here are B and D).
+    // Order: G, then S, then W — matches id allocation order and keeps the output array
+    // deterministic for snapshot / round-trip comparisons.
     for split in splits {
-        nodes.push(build_structure_source_for_atom_fill(
-            split.new_structure_node_id,
-            split.new_structure_position,
-            Value::Object(split.motif_wire),
-            Value::Object(split.motif_offset_wire),
+        if !split.needs_s {
+            continue;
+        }
+        let m_pos = split.materialize_position;
+
+        // G (case A only): wire arg 0 to a clone of the original shape wire.
+        if let (Some(g), true) = (split.g_id, split.can_chain) {
+            let g_pos = [m_pos[0] - 330.0, m_pos[1] - 40.0];
+            nodes.push(build_get_structure_node(g, g_pos, split.shape_wire.clone()));
+        }
+
+        // S (cases A and C): wire arg 0 to G if chained, else leave empty (dangling base);
+        // wire arg 2 ← motif_wire and arg 3 ← motif_offset_wire.
+        let s_id = split.s_id.expect("needs_s implies s_id is allocated");
+        let s_pos = [m_pos[0] - 200.0, m_pos[1] - 40.0];
+        let mut s_base_wire = serde_json::Map::new();
+        if let Some(g) = split.g_id {
+            s_base_wire.insert(g.to_string(), Value::from(0));
+        }
+        nodes.push(build_structure_override_node(
+            s_id,
+            s_pos,
+            s_base_wire,
+            split.motif_wire,
+            split.motif_offset_wire,
         ));
+
+        // W (case A only): wire arg 0 to a clone of the original shape wire and arg 1 to S.
+        if let (Some(w), true) = (split.w_id, split.can_chain) {
+            let w_pos = [m_pos[0] - 90.0, m_pos[1]];
+            let mut w_struct_wire = serde_json::Map::new();
+            w_struct_wire.insert(s_id.to_string(), Value::from(0));
+            nodes.push(build_with_structure_node(
+                w,
+                w_pos,
+                split.shape_wire.clone(),
+                w_struct_wire,
+            ));
+        }
     }
 
     Ok(())
 }
 
-fn build_structure_source_for_atom_fill(
+fn build_get_structure_node(
     id: u64,
     position: [f64; 2],
-    motif_wire: Value,
-    motif_offset_wire: Value,
+    input_wire: serde_json::Map<String, Value>,
+) -> Value {
+    serde_json::json!({
+        "id": id,
+        "node_type_name": "get_structure",
+        "position": [position[0], position[1]],
+        "arguments": [
+            { "argument_output_pins": Value::Object(input_wire) },
+        ],
+        "data_type": "get_structure",
+        "data": {}
+    })
+}
+
+fn build_structure_override_node(
+    id: u64,
+    position: [f64; 2],
+    base_wire: serde_json::Map<String, Value>,
+    motif_wire: serde_json::Map<String, Value>,
+    motif_offset_wire: serde_json::Map<String, Value>,
 ) -> Value {
     serde_json::json!({
         "id": id,
         "node_type_name": "structure",
         "position": [position[0], position[1]],
         "arguments": [
+            { "argument_output_pins": Value::Object(base_wire) },
             { "argument_output_pins": {} },
-            { "argument_output_pins": {} },
-            { "argument_output_pins": motif_wire },
-            { "argument_output_pins": motif_offset_wire },
+            { "argument_output_pins": Value::Object(motif_wire) },
+            { "argument_output_pins": Value::Object(motif_offset_wire) },
         ],
         "data_type": "structure",
+        "data": {}
+    })
+}
+
+fn build_with_structure_node(
+    id: u64,
+    position: [f64; 2],
+    shape_wire: serde_json::Map<String, Value>,
+    structure_wire: serde_json::Map<String, Value>,
+) -> Value {
+    serde_json::json!({
+        "id": id,
+        "node_type_name": "with_structure",
+        "position": [position[0], position[1]],
+        "arguments": [
+            { "argument_output_pins": Value::Object(shape_wire) },
+            { "argument_output_pins": Value::Object(structure_wire) },
+        ],
+        "data_type": "with_structure",
         "data": {}
     })
 }
