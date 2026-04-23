@@ -2,16 +2,36 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
-# Network: half_lattice_spacing
+# Network: α_polonium_motif
 
+motif1 = motif { definition: """PARAM POLO Po
+SITE Po1 POLO 0.0 0.0 0.0
+SITE Po2 POLO 1.0 0.0 0.0
+SITE Po3 POLO 0.0 1.0 0.0
+SITE Po4 POLO 0.0 0.0 1.0
+SITE Po5 POLO 1.0 1.0 0.0
+SITE Po6 POLO 0.0 1.0 1.0
+SITE Po7 POLO 1.0 0.0 1.0
+SITE Po8 POLO 1.0 1.0 1.0
+BOND Po1 ...Po2
+BOND Po1 ...Po3
+BOND Po1 ...Po4
+BOND Po2 ...Po5
+BOND Po5 ...Po3
+BOND Po3 ...Po6
+BOND Po2 ...Po7
+BOND Po4 ...Po6
+BOND Po4 ...Po7
+BOND Po8 ...Po6
+BOND Po8 ...Po7
+""", name: "α_polonium" }
 α_polonium_unit_cell1 = α_polonium_unit_cell
 structure1 = structure { lattice_vecs: α_polonium_unit_cell1 }
-half_space1 = half_space { structure: structure1, max_miller_index: 2, m_index: (2, 0, 0), center: (0, 0, 0), shift: 1, subdivision: 1 }
-structure2 = structure { lattice_vecs: α_polonium_unit_cell1 }
-cuboid1 = cuboid { structure: structure2, min_corner: (0, 0, 0), extent: (1, 1, 1) }
-intersect1 = intersect { shapes: [half_space1, cuboid1], visible: true }
-materialize1 = materialize { shape: intersect1, parameter_element_value_definition: "", passivate: false, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
-α_polonium_motif1 = α_polonium_motif
-structure3 = structure { motif: α_polonium_motif1 }
+cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (4, 4, 3), visible: true }
+get_structure1 = get_structure { input: cuboid1 }
+structure2 = structure { structure: get_structure1, motif: motif1 }
+with_structure1 = with_structure { shape: cuboid1, structure: structure2 }
+materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: false, rm_single: false, surf_recon: false, invert_phase: false }
+output motif1
 
-# 9 nodes
+# 8 nodes

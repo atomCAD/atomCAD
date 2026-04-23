@@ -4,7 +4,7 @@ expression: snapshot
 ---
 {
   "network_name": "sample",
-  "node_count": 25,
+  "node_count": 24,
   "return_node_id": 25,
   "displayed_node_outputs": [
     {

@@ -3,19 +3,14 @@ source: tests/structure_designer/nodes/node_snapshots_test.rs
 expression: snapshot
 ---
 {
-  "network_name": "half_lattice_spacing",
-  "node_count": 9,
-  "return_node_id": null,
+  "network_name": "α_polonium_motif",
+  "node_count": 8,
+  "return_node_id": 1,
   "displayed_node_outputs": [
     {
-      "node_id": 4,
-      "node_type": "materialize",
-      "output": "Crystal:\natoms: 9\nbonds: 8\nfirst 9 atoms:\n  [1] Z=6 pos=(0.000000, 0.000000, 0.000000) depth=-0.000 bonds=1\n  [2] Z=6 pos=(1.676000, 1.676000, 0.000000) depth=0.000 bonds=1\n  [3] Z=6 pos=(1.676000, 0.000000, 1.676000) depth=-0.000 bonds=1\n  [4] Z=6 pos=(0.000000, 1.676000, 1.676000) depth=-0.000 bonds=2\n  [5] Z=6 pos=(0.838000, 0.838000, 0.838000) depth=0.838 bonds=4\n  [6] Z=6 pos=(0.838000, 2.514000, 2.514000) depth=0.838 bonds=4\n  [8] Z=6 pos=(1.676000, 1.676000, 3.352000) depth=-0.000 bonds=1\n  [10] Z=6 pos=(1.676000, 3.352000, 1.676000) depth=-0.000 bonds=1\n  [11] Z=6 pos=(0.000000, 3.352000, 3.352000) depth=-0.000 bonds=1\nfirst 8 bonds:\n  1 -- 5 (order=1)\n  2 -- 5 (order=1)\n  3 -- 5 (order=1)\n  4 -- 5 (order=1)\n  4 -- 6 (order=1)\n  6 -- 11 (order=1)\n  6 -- 8 (order=1)\n  6 -- 10 (order=1)"
-    },
-    {
-      "node_id": 5,
-      "node_type": "intersect",
-      "output": "Blueprint:\nlattice_vecs:\n  a: (3.352000, 0.000000, 0.000000)\n  b: (0.000000, 3.352000, 0.000000)\n  c: (0.000000, 0.000000, 3.352000)\nmotif_offset: (0.000000, 0.000000, 0.000000)\ngeo_tree:\nIntersection3D\n  HalfSpace(normal: (1, -0, -0), center: (1.68, -0, -0))\n  Intersection3D\n    HalfSpace(normal: (-1, 0, 0), center: (0, 1.68, 1.68))\n    HalfSpace(normal: (1, -0, -0), center: (3.35, 1.68, 1.68))\n    HalfSpace(normal: (0, -1, 0), center: (1.68, 0, 1.68))\n    HalfSpace(normal: (0, 1, -0), center: (1.68, 3.35, 1.68))\n    HalfSpace(normal: (0, 0, -1), center: (1.68, 1.68, 0))\n    HalfSpace(normal: (0, 0, 1), center: (1.68, 1.68, 3.35))"
+      "node_id": 2,
+      "node_type": "cuboid",
+      "output": "Blueprint:\nlattice_vecs:\n  a: (3.352000, 0.000000, 0.000000)\n  b: (0.000000, 3.352000, 0.000000)\n  c: (0.000000, 0.000000, 3.352000)\nmotif_offset: (0.000000, 0.000000, 0.000000)\ngeo_tree:\nIntersection3D\n  HalfSpace(normal: (-1, 0, 0), center: (0, 6.7, 5.03))\n  HalfSpace(normal: (1, -0, -0), center: (13.41, 6.7, 5.03))\n  HalfSpace(normal: (0, -1, 0), center: (6.7, 0, 5.03))\n  HalfSpace(normal: (0, 1, -0), center: (6.7, 13.41, 5.03))\n  HalfSpace(normal: (0, 0, -1), center: (6.7, 6.7, 0))\n  HalfSpace(normal: (0, 0, 1), center: (6.7, 6.7, 10.06))"
     }
   ]
 }

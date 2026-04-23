@@ -2,50 +2,21 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
-# Network: atom_fill_halfshift
+# Network: lib_test-by-sphere-cut
 
-motif1 = motif { definition: """# cubic zincblende motif
+ivec31 = ivec3 { x: 0, y: 0, z: 0, visible: true }
+int1 = int { value: 3 }
+parameter2 = parameter { default: int1, param_index: 1, param_name: "radius", data_type: Int, sort_order: 1 }
+lattice_vecs1 = lattice_vecs { cell_length_a: 3.567, cell_length_b: 3.567, cell_length_c: 3.567, cell_angle_alpha: 90.0, cell_angle_beta: 90.0, cell_angle_gamma: 90.0 }
+parameter3 = parameter { default: lattice_vecs1, param_index: 2, param_name: "unit_cell", data_type: LatticeVecs, sort_order: 2 }
+structure1 = structure { lattice_vecs: parameter3 }
+sphere1 = sphere { center: ivec31, radius: parameter2, structure: structure1 }
+cuboid1 = cuboid { min_corner: (-2, -2, -2), extent: (4, 4, 4) }
+parameter1 = parameter { default: cuboid1, param_index: 0, param_name: "igeom_to_test", data_type: Blueprint, sort_order: 0 }
+intersect1 = intersect { shapes: [sphere1, parameter1], visible: true }
+materialize1 = materialize { shape: intersect1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+motif1 = motif { definition: "" }
+parameter4 = parameter { param_index: 3, param_name: "param3", data_type: Motif, sort_order: 3 }
+output intersect1
 
-PARAM PRIMARY C
-PARAM SECONDARY C
-
-SITE CORNER PRIMARY 0 0 0
-
-SITE FACE_Z PRIMARY 0.5 0.5 0
-SITE FACE_Y PRIMARY 0.5 0 0.5
-SITE FACE_X PRIMARY 0 0.5 0.5
-
-SITE INTERIOR1 SECONDARY 0.25 0.25 0.25
-SITE INTERIOR2 SECONDARY 0.25 0.75 0.75
-SITE INTERIOR3 SECONDARY 0.75 0.25 0.75
-SITE INTERIOR4 SECONDARY 0.75 0.75 0.25
-
-BOND INTERIOR1 ...CORNER
-BOND INTERIOR1 ...FACE_Z
-BOND INTERIOR1 ...FACE_Y
-BOND INTERIOR1 ...FACE_X
-
-BOND INTERIOR2 .++CORNER
-BOND INTERIOR2 ..+FACE_Z
-BOND INTERIOR2 .+.FACE_Y
-BOND INTERIOR2 ...FACE_X
-
-BOND INTERIOR3 +.+CORNER
-BOND INTERIOR3 ..+FACE_Z
-BOND INTERIOR3 ...FACE_Y
-BOND INTERIOR3 +..FACE_X
-
-BOND INTERIOR4 ++.CORNER
-BOND INTERIOR4 ...FACE_Z
-BOND INTERIOR4 .+.FACE_Y
-BOND INTERIOR4 +..FACE_X""" }
-demo_rhombicuboctahedron1 = demo_rhombicuboctahedron
-parameter1 = parameter { default: demo_rhombicuboctahedron1, param_index: 0, param_name: "geometry", data_type: Blueprint, sort_order: 0, visible: true }
-materialize1 = materialize { shape: parameter1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
-parameter2 = parameter { default: motif1, param_index: 1, param_name: "motif", data_type: Motif, sort_order: 1 }
-facet_shell1 = facet_shell { max_miller_index: 2, center: (0, 0, 0), facets: [{ miller_index: (-1, 1, 1), shift: 4, symmetrize: true, visible: true }, { miller_index: (1, 0, 0), shift: 2, symmetrize: true, visible: true }, { miller_index: (1, 1, 0), shift: 3, symmetrize: true, visible: true }], visible: true }
-vec31 = vec3 { x: 0.5, y: 0.5, z: 0.5, visible: true }
-structure1 = structure { motif: parameter2 }
-output materialize1
-
-# 8 nodes
+# 13 nodes

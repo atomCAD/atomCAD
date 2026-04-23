@@ -34,6 +34,5 @@ structure_rot3 = structure_rot { input: diff1, axis_index: 9, step: 1, pivot_poi
 structure_rot1 = structure_rot { input: structure_rot3, axis_index: 12, step: 1, pivot_point: (0, 0, 0) }
 union1 = union { shapes: [structure_rot1, structure_rot3], visible: true }
 materialize1 = materialize { shape: union1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
-structure1 = structure
 
-# 31 nodes
+# 30 nodes

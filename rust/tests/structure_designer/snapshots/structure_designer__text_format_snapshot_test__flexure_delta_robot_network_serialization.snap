@@ -2,12 +2,12 @@
 source: tests/structure_designer/text_format_snapshot_test.rs
 expression: text
 ---
-# Network: atom_fill_halfshift
+# Network: motif_zinkbkende_point-origin
 
 motif1 = motif { definition: """# cubic zincblende motif
 
-PARAM PRIMARY C
-PARAM SECONDARY C
+PARAM PRIMARY Zn
+PARAM SECONDARY S
 
 SITE CORNER PRIMARY 0 0 0
 
@@ -38,14 +38,13 @@ BOND INTERIOR3 +..FACE_X
 BOND INTERIOR4 ++.CORNER
 BOND INTERIOR4 ...FACE_Z
 BOND INTERIOR4 .+.FACE_Y
-BOND INTERIOR4 +..FACE_X""" }
-demo_rhombicuboctahedron1 = demo_rhombicuboctahedron
-parameter1 = parameter { default: demo_rhombicuboctahedron1, param_index: 0, param_name: "geometry", data_type: Blueprint, sort_order: 0, visible: true }
-materialize1 = materialize { shape: parameter1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
-parameter2 = parameter { default: motif1, param_index: 1, param_name: "motif", data_type: Motif, sort_order: 1 }
-facet_shell1 = facet_shell { max_miller_index: 2, center: (0, 0, 0), facets: [{ miller_index: (-1, 1, 1), shift: 4, symmetrize: true, visible: true }, { miller_index: (1, 0, 0), shift: 2, symmetrize: true, visible: true }, { miller_index: (1, 1, 0), shift: 3, symmetrize: true, visible: true }], visible: true }
-vec31 = vec3 { x: 0.5, y: 0.5, z: 0.5, visible: true }
-structure1 = structure { motif: parameter2 }
-output materialize1
+BOND INTERIOR4 +..FACE_X""", visible: true }
+cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1) }
+get_structure1 = get_structure { input: cuboid1 }
+structure1 = structure { structure: get_structure1, motif: motif1 }
+with_structure1 = with_structure { shape: cuboid1, structure: structure1 }
+materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+atom_fill_halfshift1 = atom_fill_halfshift { geometry: cuboid1, motif: motif1 }
+output motif1
 
-# 8 nodes
+# 7 nodes

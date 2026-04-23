@@ -28,7 +28,6 @@ structure_rot7 = structure_rot { input: intersect3, axis_index: 2, step: 3, pivo
 intersect2 = intersect { shapes: [intersect1, structure_rot4, half_space3, half_space4, half_space5, half_space6, half_space7, intersect3, structure_rot5, structure_rot6, structure_rot7] }
 structure_move1 = structure_move { input: intersect2, translation: (0, 0, 5), subdivision: 1, visible: true }
 materialize1 = materialize { shape: structure_move1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
-structure1 = structure
 output structure_move1
 
-# 25 nodes
+# 24 nodes

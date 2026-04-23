@@ -7,7 +7,7 @@ expression: text
 unit_cell_rutile1 = unit_cell_rutile
 structure1 = structure { lattice_vecs: unit_cell_rutile1 }
 cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (1, 1, 1), visible: true }
-materialize1 = materialize { shape: cuboid1, parameter_element_value_definition: "", passivate: false, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+get_structure1 = get_structure { input: cuboid1 }
 motif1 = motif { definition: """#_cell_length_a   4.65327200
 #_cell_length_b   4.65327200
 #_cell_length_c   2.96920300
@@ -35,7 +35,9 @@ BOND O2	.+.Ti1
 BOND O2	.++Ti1
 BOND Ti0 ..+O4
 """, name: "rutile" }
-structure2 = structure { motif: motif1 }
+structure2 = structure { structure: get_structure1, motif: motif1 }
+with_structure1 = with_structure { shape: cuboid1, structure: structure2 }
+materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: false, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 output motif1
 
-# 6 nodes
+# 8 nodes
