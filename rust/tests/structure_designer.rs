@@ -174,3 +174,6 @@ mod csg_structure_propagation_test;
 
 #[path = "structure_designer/get_structure_test.rs"]
 mod get_structure_test;
+
+#[path = "structure_designer/with_structure_test.rs"]
+mod with_structure_test;
