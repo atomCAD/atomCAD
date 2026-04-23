@@ -56,6 +56,7 @@ use super::nodes::string::get_node_type as string_get_node_type;
 use super::nodes::structure::get_node_type as structure_get_node_type;
 use super::nodes::structure_move::get_node_type as structure_move_get_node_type;
 use super::nodes::structure_rot::get_node_type as structure_rot_get_node_type;
+use super::nodes::supercell::get_node_type as supercell_get_node_type;
 use super::nodes::union::get_node_type as union_get_node_type;
 use super::nodes::union_2d::get_node_type as union_2d_get_node_type;
 use super::nodes::value::get_node_type as value_get_node_type;
@@ -138,6 +139,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(motif_get_node_type());
         ret.add_node_type(motif_sub_get_node_type());
         ret.add_node_type(structure_get_node_type());
+        ret.add_node_type(supercell_get_node_type());
         ret.add_node_type(get_structure_get_node_type());
         ret.add_node_type(with_structure_get_node_type());
         ret.add_node_type(materialize_get_node_type());

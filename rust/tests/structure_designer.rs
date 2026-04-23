@@ -177,3 +177,6 @@ mod get_structure_test;
 
 #[path = "structure_designer/with_structure_test.rs"]
 mod with_structure_test;
+
+#[path = "structure_designer/supercell_node_test.rs"]
+mod supercell_node_test;
