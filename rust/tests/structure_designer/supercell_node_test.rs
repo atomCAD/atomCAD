@@ -220,17 +220,20 @@ fn negative_determinant_surfaces_as_error() {
 }
 
 #[test]
-fn missing_required_structure_surfaces_as_error() {
+fn unwired_structure_input_defaults_to_diamond() {
     let mut designer = setup_designer();
-    // Supercell with no structure input wired.
+    // Supercell with no structure input wired — should default to diamond
+    // (identity matrix ⇒ pass-through diamond structure).
     let supercell_id = designer.add_node("supercell", DVec2::ZERO);
     designer.validate_active_network();
 
-    let result = evaluate(&designer, supercell_id);
-    assert!(
-        matches!(result, NetworkResult::Error(_)),
-        "expected error when required structure input is missing, got {}",
-        result.to_display_string()
+    let s = extract_structure(evaluate(&designer, supercell_id));
+    let diamond = Structure::diamond();
+    assert_eq!(s.motif.sites.len(), diamond.motif.sites.len());
+    assert_eq!(s.motif.bonds.len(), diamond.motif.bonds.len());
+    assert_eq!(
+        s.lattice_vecs.cell_length_a,
+        DIAMOND_UNIT_CELL_SIZE_ANGSTROM
     );
 }
 

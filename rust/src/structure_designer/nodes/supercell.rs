@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::supercell::apply_supercell;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -67,13 +68,14 @@ impl NodeData for SupercellData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        // Pin 0: required Structure input.
-        let structure = match network_evaluator.evaluate_required(
+        // Pin 0: optional Structure input. Defaults to diamond when unwired.
+        let structure = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
             0,
+            Structure::diamond(),
             NetworkResult::extract_structure,
         ) {
             Ok(s) => s,
@@ -166,7 +168,10 @@ impl NodeData for SupercellData {
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
-        m.insert("structure".to_string(), (true, None));
+        m.insert(
+            "structure".to_string(),
+            (false, Some("diamond".to_string())),
+        );
         m.insert(
             "diagonal".to_string(),
             (

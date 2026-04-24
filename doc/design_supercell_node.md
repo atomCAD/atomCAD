@@ -10,7 +10,7 @@ Add a `supercell` node that rewrites a `Structure` (lattice vectors + motif + mo
 |---|---|
 | **Name** | `supercell` |
 | **Category** | `OtherBuiltin` (sits next to `structure`, `motif`, `motif_sub`) |
-| **Input pin 0** | `structure: Structure` (required) |
+| **Input pin 0** | `structure: Structure` (optional, defaults to diamond) |
 | **Input pin 1** | `diagonal: IVec3` (optional) — when connected, overrides the stored matrix with `diag(v.x, v.y, v.z)`. Common case: axis-aligned supercells like 2×2×2. |
 | **Output pin 0** | `Structure` |
 | **Stored data** | A 3×3 integer matrix `m: [[i32; 3]; 3]`, default `identity()` |
@@ -359,7 +359,7 @@ At the end of this phase the node is fully usable: users can place it, edit nine
   - `get_text_properties` / `set_text_properties` — three `TextValue::IVec3` keyed `a`, `b`, `c`.
   - `get_subtitle` — compact `det = N` (or error indicator).
   - `clone_box`.
-- `get_node_type()` with inputs `structure: Structure` (required) and `diagonal: IVec3` (optional); single output `Structure`; category `OtherBuiltin`.
+- `get_node_type()` with inputs `structure: Structure` (optional, defaults to diamond) and `diagonal: IVec3` (optional); single output `Structure`; category `OtherBuiltin`.
 - Register in `nodes/mod.rs` and `node_type_registry.rs::create_built_in_node_types`.
 - Regenerate FFI bindings: `flutter_rust_bridge_codegen generate`.
 
