@@ -110,6 +110,66 @@ fn is_abstract_truth_table() {
 }
 
 #[test]
+fn array_elementwise_conversion_follows_element_rule() {
+    // Each permitted concrete -> abstract upcast must also be permitted
+    // when both sides are wrapped in a single Array layer.
+    let pairs = [
+        (DataType::Crystal, DataType::HasAtoms),
+        (DataType::Crystal, DataType::HasStructure),
+        (DataType::Molecule, DataType::HasAtoms),
+        (DataType::Molecule, DataType::HasFreeLinOps),
+        (DataType::Blueprint, DataType::HasStructure),
+        (DataType::Blueprint, DataType::HasFreeLinOps),
+        // Primitive numeric promotion should also lift through arrays.
+        (DataType::Int, DataType::Float),
+    ];
+    for (src, dst) in &pairs {
+        let arr_src = DataType::Array(Box::new(src.clone()));
+        let arr_dst = DataType::Array(Box::new(dst.clone()));
+        assert!(
+            DataType::can_be_converted_to(&arr_src, &arr_dst),
+            "[{:?}] -> [{:?}] should be permitted because {:?} -> {:?} is",
+            src,
+            dst,
+            src,
+            dst
+        );
+    }
+
+    // Nested arrays: [[Molecule]] -> [[HasAtoms]] should also work.
+    let nested_src = DataType::Array(Box::new(DataType::Array(Box::new(DataType::Molecule))));
+    let nested_dst = DataType::Array(Box::new(DataType::Array(Box::new(DataType::HasAtoms))));
+    assert!(DataType::can_be_converted_to(&nested_src, &nested_dst));
+}
+
+#[test]
+fn array_elementwise_conversion_rejects_forbidden_element_pairs() {
+    // Abstract -> concrete must not be rescued by array wrapping.
+    let arr_abstract = DataType::Array(Box::new(DataType::HasAtoms));
+    let arr_concrete = DataType::Array(Box::new(DataType::Crystal));
+    assert!(!DataType::can_be_converted_to(
+        &arr_abstract,
+        &arr_concrete
+    ));
+
+    // Cross-abstract upcasts are forbidden, and array wrapping must not
+    // rescue them either.
+    let arr_has_atoms = DataType::Array(Box::new(DataType::HasAtoms));
+    let arr_has_structure = DataType::Array(Box::new(DataType::HasStructure));
+    assert!(!DataType::can_be_converted_to(
+        &arr_has_atoms,
+        &arr_has_structure
+    ));
+
+    // An array cannot be narrowed to a single element.
+    let arr_molecule = DataType::Array(Box::new(DataType::Molecule));
+    assert!(!DataType::can_be_converted_to(
+        &arr_molecule,
+        &DataType::HasAtoms
+    ));
+}
+
+#[test]
 fn new_type_names_roundtrip_through_string() {
     for name in [
         "Crystal",

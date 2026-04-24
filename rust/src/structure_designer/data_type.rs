@@ -118,6 +118,18 @@ impl DataType {
             }
         }
 
+        // Array-to-array element-wise conversion: [S] -> [T] when S -> T.
+        // Mirrors the runtime conversion in `NetworkResult::convert_to`. Without
+        // this, e.g. [Molecule] cannot flow into a [HasAtoms] input even though
+        // Molecule -> HasAtoms is a permitted concrete -> abstract upcast.
+        if let (DataType::Array(source_element_type), DataType::Array(target_element_type)) =
+            (source_type, dest_type)
+        {
+            if DataType::can_be_converted_to(source_element_type, target_element_type) {
+                return true;
+            }
+        }
+
         // Check function type conversions for partial evaluation
         // Function F can be converted to function G if:
         // 1. F and G have the same return type
