@@ -982,10 +982,7 @@ impl Parser {
 
         if rows.len() != 3 {
             return Err(ParseError::new(
-                format!(
-                    "Matrix literal must have 3 rows, found {}",
-                    rows.len()
-                ),
+                format!("Matrix literal must have 3 rows, found {}", rows.len()),
                 start_line,
                 start_col,
             ));
@@ -1030,10 +1027,7 @@ impl Parser {
 
         if comps.len() != 3 {
             return Err(ParseError::new(
-                format!(
-                    "Matrix row must have 3 components, found {}",
-                    comps.len()
-                ),
+                format!("Matrix row must have 3 components, found {}", comps.len()),
                 line,
                 col,
             ));

@@ -653,17 +653,13 @@ impl NetworkResult {
             NetworkResult::IVec3(vec) => format!("({}, {}, {})", vec.x, vec.y, vec.z),
             NetworkResult::IMat3(m) => format!(
                 "(({}, {}, {}), ({}, {}, {}), ({}, {}, {}))",
-                m[0][0], m[0][1], m[0][2],
-                m[1][0], m[1][1], m[1][2],
-                m[2][0], m[2][1], m[2][2],
+                m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2],
             ),
             NetworkResult::Mat3(m) => {
                 let r = dmat3_to_rows(m);
                 format!(
                     "(({:.6}, {:.6}, {:.6}), ({:.6}, {:.6}, {:.6}), ({:.6}, {:.6}, {:.6}))",
-                    r[0][0], r[0][1], r[0][2],
-                    r[1][0], r[1][1], r[1][2],
-                    r[2][0], r[2][1], r[2][2],
+                    r[0][0], r[0][1], r[0][2], r[1][0], r[1][1], r[1][2], r[2][0], r[2][1], r[2][2],
                 )
             }
             NetworkResult::Array(elements) => {
@@ -1040,11 +1036,7 @@ pub fn dmat3_to_rows(m: &DMat3) -> [[f64; 3]; 3] {
     let c0 = m.col(0);
     let c1 = m.col(1);
     let c2 = m.col(2);
-    [
-        [c0.x, c1.x, c2.x],
-        [c0.y, c1.y, c2.y],
-        [c0.z, c1.z, c2.z],
-    ]
+    [[c0.x, c1.x, c2.x], [c0.y, c1.y, c2.y], [c0.z, c1.z, c2.z]]
 }
 
 /// Construct a `glam::DMat3` (column-major) from a row-major `[[f64; 3]; 3]`.

@@ -147,10 +147,7 @@ fn array_elementwise_conversion_rejects_forbidden_element_pairs() {
     // Abstract -> concrete must not be rescued by array wrapping.
     let arr_abstract = DataType::Array(Box::new(DataType::HasAtoms));
     let arr_concrete = DataType::Array(Box::new(DataType::Crystal));
-    assert!(!DataType::can_be_converted_to(
-        &arr_abstract,
-        &arr_concrete
-    ));
+    assert!(!DataType::can_be_converted_to(&arr_abstract, &arr_concrete));
 
     // Cross-abstract upcasts are forbidden, and array wrapping must not
     // rescue them either.

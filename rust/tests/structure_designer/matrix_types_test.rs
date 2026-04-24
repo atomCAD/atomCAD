@@ -33,24 +33,45 @@ fn data_type_display_round_trip_mat3() {
 
 #[test]
 fn imat3_can_convert_to_mat3_and_back() {
-    assert!(DataType::can_be_converted_to(&DataType::IMat3, &DataType::Mat3));
-    assert!(DataType::can_be_converted_to(&DataType::Mat3, &DataType::IMat3));
+    assert!(DataType::can_be_converted_to(
+        &DataType::IMat3,
+        &DataType::Mat3
+    ));
+    assert!(DataType::can_be_converted_to(
+        &DataType::Mat3,
+        &DataType::IMat3
+    ));
 }
 
 #[test]
 fn imat3_does_not_freely_convert_from_ivec3_or_other_types() {
     // D4: no auto-promotion from IVec3 to diagonal IMat3.
-    assert!(!DataType::can_be_converted_to(&DataType::IVec3, &DataType::IMat3));
-    assert!(!DataType::can_be_converted_to(&DataType::Vec3, &DataType::Mat3));
-    assert!(!DataType::can_be_converted_to(&DataType::Float, &DataType::Mat3));
-    assert!(!DataType::can_be_converted_to(&DataType::Int, &DataType::IMat3));
+    assert!(!DataType::can_be_converted_to(
+        &DataType::IVec3,
+        &DataType::IMat3
+    ));
+    assert!(!DataType::can_be_converted_to(
+        &DataType::Vec3,
+        &DataType::Mat3
+    ));
+    assert!(!DataType::can_be_converted_to(
+        &DataType::Float,
+        &DataType::Mat3
+    ));
+    assert!(!DataType::can_be_converted_to(
+        &DataType::Int,
+        &DataType::IMat3
+    ));
 }
 
 #[test]
 fn matrix_to_array_broadcast_works() {
     // Standard `T -> [T]` broadcasting still applies to matrices.
     let array_of_imat3 = DataType::Array(Box::new(DataType::IMat3));
-    assert!(DataType::can_be_converted_to(&DataType::IMat3, &array_of_imat3));
+    assert!(DataType::can_be_converted_to(
+        &DataType::IMat3,
+        &array_of_imat3
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -102,11 +123,7 @@ fn network_result_convert_imat3_to_mat3_lossless() {
 
 #[test]
 fn network_result_convert_mat3_to_imat3_truncates() {
-    let rows = [
-        [1.7, 2.3, 3.5],
-        [-1.6, 0.9, 4.99],
-        [10.1, -5.5, 0.0],
-    ];
+    let rows = [[1.7, 2.3, 3.5], [-1.6, 0.9, 4.99], [10.1, -5.5, 0.0]];
     let dmat = rows_to_dmat3(&rows);
     let r = NetworkResult::Mat3(dmat).convert_to(&DataType::Mat3, &DataType::IMat3);
     let imat = r.extract_imat3().expect("should be IMat3");
@@ -139,11 +156,7 @@ fn text_value_imat3_serde_round_trip() {
 
 #[test]
 fn text_value_mat3_serde_round_trip() {
-    let tv = TextValue::Mat3([
-        [1.5, 2.5, 3.5],
-        [-1.0, 0.0, 4.25],
-        [10.125, -5.0, 0.0],
-    ]);
+    let tv = TextValue::Mat3([[1.5, 2.5, 3.5], [-1.0, 0.0, 4.25], [10.125, -5.0, 0.0]]);
     let json = serde_json::to_string(&tv).expect("serialize");
     let back: TextValue = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(tv, back);
@@ -177,11 +190,7 @@ fn text_value_to_network_result_imat3_to_mat3_coerces() {
 
 #[test]
 fn text_value_to_network_result_mat3_to_imat3_truncates() {
-    let tv = TextValue::Mat3([
-        [1.9, 2.1, -3.5],
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
-    ]);
+    let tv = TextValue::Mat3([[1.9, 2.1, -3.5], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]);
     let nr = tv.to_network_result(&DataType::IMat3).expect("coerced");
     let m = nr.extract_imat3().expect("IMat3");
     assert_eq!(m[0], [1, 2, -3]);
@@ -191,10 +200,16 @@ fn text_value_to_network_result_mat3_to_imat3_truncates() {
 fn text_value_as_imat3_and_as_mat3_accessors() {
     let tv_i = TextValue::IMat3([[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
     assert_eq!(tv_i.as_imat3(), Some([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));
-    assert_eq!(tv_i.as_mat3(), Some([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]));
+    assert_eq!(
+        tv_i.as_mat3(),
+        Some([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    );
 
     let tv_f = TextValue::Mat3([[1.7, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]);
-    assert_eq!(tv_f.as_mat3(), Some([[1.7, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]));
+    assert_eq!(
+        tv_f.as_mat3(),
+        Some([[1.7, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    );
     // as_imat3 truncates Mat3 source.
     assert_eq!(tv_f.as_imat3(), Some([[1, 0, 0], [0, 1, 0], [0, 0, 1]]));
 }
