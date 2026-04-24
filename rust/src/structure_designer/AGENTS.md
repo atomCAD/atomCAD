@@ -59,7 +59,7 @@ structure_designer/
 | `EvalOutput` | `node_data.rs` | Multi-output eval result (Vec of NetworkResult) |
 | `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
-| `DataType` | `data_type.rs` | Pin type system: primitives, `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`) |
+| `DataType` | `data_type.rs` | Pin type system: primitives (incl. `IMat3`/`Mat3` 3x3 matrices), `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`) |
 | `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types |
 | `NetworkResult` | `evaluator/network_result.rs` | Evaluated node output value |
 
@@ -76,11 +76,13 @@ User Action → StructureDesigner method
 ## Type System
 
 `DataType` governs pin compatibility. Conversion rules:
-- Int ↔ Float, IVec2 ↔ Vec2, IVec3 ↔ Vec3
+- Int ↔ Float, IVec2 ↔ Vec2, IVec3 ↔ Vec3, IMat3 ↔ Mat3 (float→int direction truncates)
 - Single value → Array (broadcasting)
 - Function partial application
 - LatticeVecs → DrawingPlane (legacy)
 - Concrete phase type → its abstract supertypes (Crystal/Molecule → HasAtoms; Blueprint/Crystal → HasStructure; Blueprint/Molecule → HasFreeLinOps). No abstract → concrete downcasts, no cross-abstract edges.
+
+Note: IVec3 does **not** auto-promote to a diagonal IMat3 — wire through an `imat3_diag` node when you want axis-aligned matrix semantics. See `doc/design_matrix_types.md` D4.
 
 Check `DataType::can_be_converted_to()` for the complete rules. `DataType::is_abstract()` identifies the three abstract supertypes.
 

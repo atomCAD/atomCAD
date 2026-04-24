@@ -161,6 +161,42 @@ pub struct APISupercellData {
     pub c: APIIVec3,
 }
 
+/// `a` / `b` / `c` are rows 0 / 1 / 2 — same convention as the
+/// text properties exposed by `IMat3RowsData::get_text_properties`.
+pub struct APIIMat3RowsData {
+    pub a: APIIVec3,
+    pub b: APIIVec3,
+    pub c: APIIVec3,
+}
+
+/// `a` / `b` / `c` are columns 0 / 1 / 2 — same convention as the text
+/// properties exposed by `IMat3ColsData::get_text_properties`.
+pub struct APIIMat3ColsData {
+    pub a: APIIVec3,
+    pub b: APIIVec3,
+    pub c: APIIVec3,
+}
+
+pub struct APIIMat3DiagData {
+    pub v: APIIVec3,
+}
+
+pub struct APIMat3RowsData {
+    pub a: APIVec3,
+    pub b: APIVec3,
+    pub c: APIVec3,
+}
+
+pub struct APIMat3ColsData {
+    pub a: APIVec3,
+    pub b: APIVec3,
+    pub c: APIVec3,
+}
+
+pub struct APIMat3DiagData {
+    pub v: APIVec3,
+}
+
 pub struct APIRangeData {
     pub start: i32,
     pub step: i32,

@@ -1250,6 +1250,72 @@ class APIMapData {
           outputType == other.outputType;
 }
 
+class APIMat3ColsData {
+  final APIVec3 a;
+  final APIVec3 b;
+  final APIVec3 c;
+
+  const APIMat3ColsData({
+    required this.a,
+    required this.b,
+    required this.c,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode ^ c.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMat3ColsData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b &&
+          c == other.c;
+}
+
+class APIMat3DiagData {
+  final APIVec3 v;
+
+  const APIMat3DiagData({
+    required this.v,
+  });
+
+  @override
+  int get hashCode => v.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMat3DiagData &&
+          runtimeType == other.runtimeType &&
+          v == other.v;
+}
+
+class APIMat3RowsData {
+  final APIVec3 a;
+  final APIVec3 b;
+  final APIVec3 c;
+
+  const APIMat3RowsData({
+    required this.a,
+    required this.b,
+    required this.c,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode ^ c.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMat3RowsData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b &&
+          c == other.c;
+}
+
 class APIMaterializeData {
   final String parameterElementValueDefinition;
   final bool hydrogenPassivation;
@@ -2025,6 +2091,76 @@ sealed class APIViewportPickResult with _$APIViewportPickResult {
 
   /// Ray missed everything — proceed with normal click handling.
   const factory APIViewportPickResult.noHit() = APIViewportPickResult_NoHit;
+}
+
+/// `a` / `b` / `c` are columns 0 / 1 / 2 — same convention as the text
+/// properties exposed by `IMat3ColsData::get_text_properties`.
+class APIIMat3ColsData {
+  final APIIVec3 a;
+  final APIIVec3 b;
+  final APIIVec3 c;
+
+  const APIIMat3ColsData({
+    required this.a,
+    required this.b,
+    required this.c,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode ^ c.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIMat3ColsData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b &&
+          c == other.c;
+}
+
+class APIIMat3DiagData {
+  final APIIVec3 v;
+
+  const APIIMat3DiagData({
+    required this.v,
+  });
+
+  @override
+  int get hashCode => v.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIMat3DiagData &&
+          runtimeType == other.runtimeType &&
+          v == other.v;
+}
+
+/// `a` / `b` / `c` are rows 0 / 1 / 2 — same convention as the
+/// text properties exposed by `IMat3RowsData::get_text_properties`.
+class APIIMat3RowsData {
+  final APIIVec3 a;
+  final APIIVec3 b;
+  final APIIVec3 c;
+
+  const APIIMat3RowsData({
+    required this.a,
+    required this.b,
+    required this.c,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode ^ c.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIMat3RowsData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b &&
+          c == other.c;
 }
 
 class APIIVec2Data {

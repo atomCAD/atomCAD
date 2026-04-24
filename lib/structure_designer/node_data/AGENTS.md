@@ -8,6 +8,7 @@ Per-node-type property editor widgets. Each node type has a corresponding editor
 - `node_editor_header.dart` - Shared header (node name, type info)
 - `node_description_button.dart` - Shows node description tooltip
 - `network_description_editor.dart` - Editor for network-level description/summary
+- `matrix_cell.dart` - Shared `IntMatrixCell` / `FloatMatrixCell` widgets (compact numeric input + scroll-to-step) used by the 3x3 matrix editors (`imat3_*_editor.dart`, `mat3_*_editor.dart`)
 - `*_editor.dart` - One file per node type (40+ editors)
 
 ## Adding a New Node Editor

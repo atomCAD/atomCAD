@@ -5,7 +5,7 @@ Built-in node type implementations. Each file defines one node type's behavior v
 ## Node Categories
 
 - **Primitives:** `bool`, `int`, `float`, `string`, `vec2`, `vec3`, `ivec2`, `ivec3`
-- **Math/Programming:** `expr`, `value`, `map`, `range`, `parameter`, `sequence`
+- **Math/Programming:** `expr`, `value`, `map`, `range`, `parameter`, `sequence`, `imat3_rows`, `imat3_cols`, `imat3_diag`, `mat3_rows`, `mat3_cols`, `mat3_diag` (3x3 matrix constructors; `_rows`/`_cols` take three vectors, `_diag` takes one). Stored matrix defaults to identity. Wired input pin overrides the corresponding row/column/diagonal at eval. See `doc/design_matrix_types.md`.
 - **Geometry 2D:** `rect`, `circle`, `reg_poly`, `polygon`, `union_2d`, `intersect_2d`, `diff_2d`, `half_plane`
 - **Geometry 3D (Blueprint outputs):** `cuboid`, `sphere`, `extrude`, `half_space`, `drawing_plane`, `facet_shell`, `union`, `intersect`, `diff`, `geo_trans`. Primitives take an optional `Structure` input (defaulting to diamond) instead of the old `LatticeVecs`/unit-cell input.
 - **Structure construction:** `lattice_vecs`, `motif`, `motif_sub`, `structure` (unified constructor/modifier — all four inputs optional, defaults to diamond)

@@ -367,6 +367,36 @@ APISupercellData? getSupercellData({required BigInt nodeId}) => RustLib
     .crateApiStructureDesignerStructureDesignerApiGetSupercellData(
         nodeId: nodeId);
 
+APIIMat3RowsData? getImat3RowsData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetImat3RowsData(
+        nodeId: nodeId);
+
+APIIMat3ColsData? getImat3ColsData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetImat3ColsData(
+        nodeId: nodeId);
+
+APIIMat3DiagData? getImat3DiagData({required BigInt nodeId}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetImat3DiagData(
+        nodeId: nodeId);
+
+APIMat3RowsData? getMat3RowsData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetMat3RowsData(
+            nodeId: nodeId);
+
+APIMat3ColsData? getMat3ColsData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetMat3ColsData(
+            nodeId: nodeId);
+
+APIMat3DiagData? getMat3DiagData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetMat3DiagData(
+            nodeId: nodeId);
+
 APIRangeData? getRangeData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetRangeData(nodeId: nodeId);
 
@@ -533,6 +563,39 @@ void setSupercellData(
         {required BigInt nodeId, required APISupercellData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetSupercellData(
+            nodeId: nodeId, data: data);
+
+void setImat3RowsData(
+        {required BigInt nodeId, required APIIMat3RowsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImat3RowsData(
+            nodeId: nodeId, data: data);
+
+void setImat3ColsData(
+        {required BigInt nodeId, required APIIMat3ColsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImat3ColsData(
+            nodeId: nodeId, data: data);
+
+void setImat3DiagData(
+        {required BigInt nodeId, required APIIMat3DiagData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImat3DiagData(
+            nodeId: nodeId, data: data);
+
+void setMat3RowsData({required BigInt nodeId, required APIMat3RowsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetMat3RowsData(
+            nodeId: nodeId, data: data);
+
+void setMat3ColsData({required BigInt nodeId, required APIMat3ColsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetMat3ColsData(
+            nodeId: nodeId, data: data);
+
+void setMat3DiagData({required BigInt nodeId, required APIMat3DiagData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetMat3DiagData(
             nodeId: nodeId, data: data);
 
 void setRangeData({required BigInt nodeId, required APIRangeData data}) =>

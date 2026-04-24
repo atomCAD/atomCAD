@@ -60,10 +60,16 @@ use crate::api::structure_designer::structure_designer_api_types::APIFreeMoveDat
 use crate::api::structure_designer::structure_designer_api_types::APIFreeRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
+use crate::api::structure_designer::structure_designer_api_types::APIIMat3ColsData;
+use crate::api::structure_designer::structure_designer_api_types::APIIMat3DiagData;
+use crate::api::structure_designer::structure_designer_api_types::APIIMat3RowsData;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIntData;
 use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
+use crate::api::structure_designer::structure_designer_api_types::APIMat3ColsData;
+use crate::api::structure_designer::structure_designer_api_types::APIMat3DiagData;
+use crate::api::structure_designer::structure_designer_api_types::APIMat3RowsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIStringData;
@@ -113,6 +119,9 @@ use crate::structure_designer::nodes::free_rot::FreeRotData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
+use crate::structure_designer::nodes::imat3_cols::IMat3ColsData;
+use crate::structure_designer::nodes::imat3_diag::IMat3DiagData;
+use crate::structure_designer::nodes::imat3_rows::IMat3RowsData;
 use crate::structure_designer::nodes::import_cif::ImportCifData;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::structure_designer::nodes::infer_bonds::InferBondsData;
@@ -122,6 +131,9 @@ use crate::structure_designer::nodes::ivec3::IVec3Data;
 use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
 use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use crate::structure_designer::nodes::map::MapData;
+use crate::structure_designer::nodes::mat3_cols::Mat3ColsData;
+use crate::structure_designer::nodes::mat3_diag::Mat3DiagData;
+use crate::structure_designer::nodes::mat3_rows::Mat3RowsData;
 use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
@@ -1689,6 +1701,126 @@ pub fn get_supercell_data(node_id: u64) -> Option<APISupercellData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_imat3_rows_data(node_id: u64) -> Option<APIIMat3RowsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<IMat3RowsData>()?;
+                let m = d.matrix;
+                Some(APIIMat3RowsData {
+                    a: to_api_ivec3(&glam::IVec3::new(m[0][0], m[0][1], m[0][2])),
+                    b: to_api_ivec3(&glam::IVec3::new(m[1][0], m[1][1], m[1][2])),
+                    c: to_api_ivec3(&glam::IVec3::new(m[2][0], m[2][1], m[2][2])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_imat3_cols_data(node_id: u64) -> Option<APIIMat3ColsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<IMat3ColsData>()?;
+                let m = d.matrix;
+                Some(APIIMat3ColsData {
+                    a: to_api_ivec3(&glam::IVec3::new(m[0][0], m[1][0], m[2][0])),
+                    b: to_api_ivec3(&glam::IVec3::new(m[0][1], m[1][1], m[2][1])),
+                    c: to_api_ivec3(&glam::IVec3::new(m[0][2], m[1][2], m[2][2])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_imat3_diag_data(node_id: u64) -> Option<APIIMat3DiagData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<IMat3DiagData>()?;
+                Some(APIIMat3DiagData {
+                    v: to_api_ivec3(&d.v),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_mat3_rows_data(node_id: u64) -> Option<APIMat3RowsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<Mat3RowsData>()?;
+                let m = d.matrix;
+                Some(APIMat3RowsData {
+                    a: to_api_vec3(&glam::DVec3::new(m[0][0], m[0][1], m[0][2])),
+                    b: to_api_vec3(&glam::DVec3::new(m[1][0], m[1][1], m[1][2])),
+                    c: to_api_vec3(&glam::DVec3::new(m[2][0], m[2][1], m[2][2])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_mat3_cols_data(node_id: u64) -> Option<APIMat3ColsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<Mat3ColsData>()?;
+                let m = d.matrix;
+                Some(APIMat3ColsData {
+                    a: to_api_vec3(&glam::DVec3::new(m[0][0], m[1][0], m[2][0])),
+                    b: to_api_vec3(&glam::DVec3::new(m[0][1], m[1][1], m[2][1])),
+                    c: to_api_vec3(&glam::DVec3::new(m[0][2], m[1][2], m[2][2])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_mat3_diag_data(node_id: u64) -> Option<APIMat3DiagData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<Mat3DiagData>()?;
+                Some(APIMat3DiagData {
+                    v: to_api_vec3(&d.v),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_range_data(node_id: u64) -> Option<APIRangeData> {
     unsafe {
         with_cad_instance_or(
@@ -3107,6 +3239,108 @@ pub fn set_supercell_data(node_id: u64, data: APISupercellData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, supercell_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_imat3_rows_data(node_id: u64, data: APIIMat3RowsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_ivec3(&data.a);
+            let b = from_api_ivec3(&data.b);
+            let c = from_api_ivec3(&data.c);
+            let payload = Box::new(IMat3RowsData {
+                matrix: [[a.x, a.y, a.z], [b.x, b.y, b.z], [c.x, c.y, c.z]],
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_imat3_cols_data(node_id: u64, data: APIIMat3ColsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_ivec3(&data.a);
+            let b = from_api_ivec3(&data.b);
+            let c = from_api_ivec3(&data.c);
+            let payload = Box::new(IMat3ColsData {
+                matrix: [[a.x, b.x, c.x], [a.y, b.y, c.y], [a.z, b.z, c.z]],
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_imat3_diag_data(node_id: u64, data: APIIMat3DiagData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let payload = Box::new(IMat3DiagData {
+                v: from_api_ivec3(&data.v),
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_mat3_rows_data(node_id: u64, data: APIMat3RowsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_vec3(&data.a);
+            let b = from_api_vec3(&data.b);
+            let c = from_api_vec3(&data.c);
+            let payload = Box::new(Mat3RowsData {
+                matrix: [[a.x, a.y, a.z], [b.x, b.y, b.z], [c.x, c.y, c.z]],
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_mat3_cols_data(node_id: u64, data: APIMat3ColsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_vec3(&data.a);
+            let b = from_api_vec3(&data.b);
+            let c = from_api_vec3(&data.c);
+            let payload = Box::new(Mat3ColsData {
+                matrix: [[a.x, b.x, c.x], [a.y, b.y, c.y], [a.z, b.z, c.z]],
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_mat3_diag_data(node_id: u64, data: APIMat3DiagData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let payload = Box::new(Mat3DiagData {
+                v: from_api_vec3(&data.v),
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }

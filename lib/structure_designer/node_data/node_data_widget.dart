@@ -48,6 +48,12 @@ import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_vecs_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/supercell_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/imat3_rows_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/imat3_cols_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/imat3_diag_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/mat3_rows_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/mat3_cols_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/mat3_diag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -608,6 +614,42 @@ class NodeDataWidget extends StatelessWidget {
         return SupercellEditor(
           nodeId: selectedNode.id,
           data: supercellData,
+          model: model,
+        );
+      case 'imat3_rows':
+        return IMat3RowsEditor(
+          nodeId: selectedNode.id,
+          data: getImat3RowsData(nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'imat3_cols':
+        return IMat3ColsEditor(
+          nodeId: selectedNode.id,
+          data: getImat3ColsData(nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'imat3_diag':
+        return IMat3DiagEditor(
+          nodeId: selectedNode.id,
+          data: getImat3DiagData(nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'mat3_rows':
+        return Mat3RowsEditor(
+          nodeId: selectedNode.id,
+          data: getMat3RowsData(nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'mat3_cols':
+        return Mat3ColsEditor(
+          nodeId: selectedNode.id,
+          data: getMat3ColsData(nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'mat3_diag':
+        return Mat3DiagEditor(
+          nodeId: selectedNode.id,
+          data: getMat3DiagData(nodeId: selectedNode.id),
           model: model,
         );
       default:

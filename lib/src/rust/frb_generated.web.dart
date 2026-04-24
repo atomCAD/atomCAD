@@ -181,6 +181,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData dco_decode_api_map_data(dynamic raw);
 
   @protected
+  APIMat3ColsData dco_decode_api_mat_3_cols_data(dynamic raw);
+
+  @protected
+  APIMat3DiagData dco_decode_api_mat_3_diag_data(dynamic raw);
+
+  @protected
+  APIMat3RowsData dco_decode_api_mat_3_rows_data(dynamic raw);
+
+  @protected
   APIMaterializeData dco_decode_api_materialize_data(dynamic raw);
 
   @protected
@@ -273,6 +282,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIViewportPickResult dco_decode_api_viewport_pick_result(dynamic raw);
+
+  @protected
+  APIIMat3ColsData dco_decode_apii_mat_3_cols_data(dynamic raw);
+
+  @protected
+  APIIMat3DiagData dco_decode_apii_mat_3_diag_data(dynamic raw);
+
+  @protected
+  APIIMat3RowsData dco_decode_apii_mat_3_rows_data(dynamic raw);
 
   @protected
   APIIVec2 dco_decode_apii_vec_2(dynamic raw);
@@ -415,6 +433,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData dco_decode_box_autoadd_api_map_data(dynamic raw);
 
   @protected
+  APIMat3ColsData dco_decode_box_autoadd_api_mat_3_cols_data(dynamic raw);
+
+  @protected
+  APIMat3DiagData dco_decode_box_autoadd_api_mat_3_diag_data(dynamic raw);
+
+  @protected
+  APIMat3RowsData dco_decode_box_autoadd_api_mat_3_rows_data(dynamic raw);
+
+  @protected
   APIMaterializeData dco_decode_box_autoadd_api_materialize_data(dynamic raw);
 
   @protected
@@ -472,6 +499,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data dco_decode_box_autoadd_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIIMat3ColsData dco_decode_box_autoadd_apii_mat_3_cols_data(dynamic raw);
+
+  @protected
+  APIIMat3DiagData dco_decode_box_autoadd_apii_mat_3_diag_data(dynamic raw);
+
+  @protected
+  APIIMat3RowsData dco_decode_box_autoadd_apii_mat_3_rows_data(dynamic raw);
 
   @protected
   APIIVec2Data dco_decode_box_autoadd_apii_vec_2_data(dynamic raw);
@@ -778,6 +814,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData? dco_decode_opt_box_autoadd_api_map_data(dynamic raw);
 
   @protected
+  APIMat3ColsData? dco_decode_opt_box_autoadd_api_mat_3_cols_data(dynamic raw);
+
+  @protected
+  APIMat3DiagData? dco_decode_opt_box_autoadd_api_mat_3_diag_data(dynamic raw);
+
+  @protected
+  APIMat3RowsData? dco_decode_opt_box_autoadd_api_mat_3_rows_data(dynamic raw);
+
+  @protected
   APIMaterializeData? dco_decode_opt_box_autoadd_api_materialize_data(
       dynamic raw);
 
@@ -833,6 +878,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data? dco_decode_opt_box_autoadd_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIIMat3ColsData? dco_decode_opt_box_autoadd_apii_mat_3_cols_data(
+      dynamic raw);
+
+  @protected
+  APIIMat3DiagData? dco_decode_opt_box_autoadd_apii_mat_3_diag_data(
+      dynamic raw);
+
+  @protected
+  APIIMat3RowsData? dco_decode_opt_box_autoadd_apii_mat_3_rows_data(
+      dynamic raw);
 
   @protected
   APIIVec2Data? dco_decode_opt_box_autoadd_apii_vec_2_data(dynamic raw);
@@ -1115,6 +1172,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData sse_decode_api_map_data(SseDeserializer deserializer);
 
   @protected
+  APIMat3ColsData sse_decode_api_mat_3_cols_data(SseDeserializer deserializer);
+
+  @protected
+  APIMat3DiagData sse_decode_api_mat_3_diag_data(SseDeserializer deserializer);
+
+  @protected
+  APIMat3RowsData sse_decode_api_mat_3_rows_data(SseDeserializer deserializer);
+
+  @protected
   APIMaterializeData sse_decode_api_materialize_data(
       SseDeserializer deserializer);
 
@@ -1217,6 +1283,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIViewportPickResult sse_decode_api_viewport_pick_result(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3ColsData sse_decode_apii_mat_3_cols_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3DiagData sse_decode_apii_mat_3_diag_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3RowsData sse_decode_apii_mat_3_rows_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1391,6 +1469,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMapData sse_decode_box_autoadd_api_map_data(SseDeserializer deserializer);
 
   @protected
+  APIMat3ColsData sse_decode_box_autoadd_api_mat_3_cols_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMat3DiagData sse_decode_box_autoadd_api_mat_3_diag_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMat3RowsData sse_decode_box_autoadd_api_mat_3_rows_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMaterializeData sse_decode_box_autoadd_api_materialize_data(
       SseDeserializer deserializer);
 
@@ -1462,6 +1552,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data sse_decode_box_autoadd_api_vec_3_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3ColsData sse_decode_box_autoadd_apii_mat_3_cols_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3DiagData sse_decode_box_autoadd_apii_mat_3_diag_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3RowsData sse_decode_box_autoadd_apii_mat_3_rows_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1824,6 +1926,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIMat3ColsData? sse_decode_opt_box_autoadd_api_mat_3_cols_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMat3DiagData? sse_decode_opt_box_autoadd_api_mat_3_diag_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIMat3RowsData? sse_decode_opt_box_autoadd_api_mat_3_rows_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIMaterializeData? sse_decode_opt_box_autoadd_api_materialize_data(
       SseDeserializer deserializer);
 
@@ -1892,6 +2006,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data? sse_decode_opt_box_autoadd_api_vec_3_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3ColsData? sse_decode_opt_box_autoadd_apii_mat_3_cols_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3DiagData? sse_decode_opt_box_autoadd_apii_mat_3_diag_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIIMat3RowsData? sse_decode_opt_box_autoadd_apii_mat_3_rows_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2209,6 +2335,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_map_data(APIMapData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_mat_3_cols_data(
+      APIMat3ColsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mat_3_diag_data(
+      APIMat3DiagData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_mat_3_rows_data(
+      APIMat3RowsData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_materialize_data(
       APIMaterializeData self, SseSerializer serializer);
 
@@ -2319,6 +2457,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_viewport_pick_result(
       APIViewportPickResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_apii_mat_3_cols_data(
+      APIIMat3ColsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_apii_mat_3_diag_data(
+      APIIMat3DiagData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_apii_mat_3_rows_data(
+      APIIMat3RowsData self, SseSerializer serializer);
 
   @protected
   void sse_encode_apii_vec_2(APIIVec2 self, SseSerializer serializer);
@@ -2496,6 +2646,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMapData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_mat_3_cols_data(
+      APIMat3ColsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_mat_3_diag_data(
+      APIMat3DiagData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_mat_3_rows_data(
+      APIMat3RowsData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_materialize_data(
       APIMaterializeData self, SseSerializer serializer);
 
@@ -2568,6 +2730,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_vec_3_data(
       APIVec3Data self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_apii_mat_3_cols_data(
+      APIIMat3ColsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_apii_mat_3_diag_data(
+      APIIMat3DiagData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_apii_mat_3_rows_data(
+      APIIMat3RowsData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_apii_vec_2_data(
@@ -2936,6 +3110,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMapData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_mat_3_cols_data(
+      APIMat3ColsData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_mat_3_diag_data(
+      APIMat3DiagData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_mat_3_rows_data(
+      APIMat3RowsData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_materialize_data(
       APIMaterializeData? self, SseSerializer serializer);
 
@@ -3006,6 +3192,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_vec_3_data(
       APIVec3Data? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_apii_mat_3_cols_data(
+      APIIMat3ColsData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_apii_mat_3_diag_data(
+      APIIMat3DiagData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_apii_mat_3_rows_data(
+      APIIMat3RowsData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_apii_vec_2_data(

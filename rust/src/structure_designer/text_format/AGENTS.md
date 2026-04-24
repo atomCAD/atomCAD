@@ -33,6 +33,7 @@ output result
 - **Function refs:** `func: @network_name` (reference another network)
 - **Arrays:** `values: [1, 2, 3]`
 - **Vectors:** `pos: (1.0, 2.0, 3.0)`
+- **Matrices:** `m: ((1, 0, 0), (0, 1, 0), (0, 0, 1))` — nested tuples, row-major. Parsed as `IMat3` or `Mat3` based on the target pin's declared type.
 - **Strings:** `name: "hello"` or `name: '''multi-line'''`
 - **Multi-output pin refs:** `input: atom_edit.diff` (selects pin by name). Unqualified `input: atom_edit` defaults to pin 0. Serializer emits `.pinname` only for pin index > 0.
 
@@ -66,11 +67,13 @@ Calculates positions for newly created nodes:
 
 Typed value representation for properties:
 ```
-Bool, Int, Float, String, Vec2, Vec3, IVec2, IVec3,
+Bool, Int, Float, String, Vec2, Vec3, IVec2, IVec3, IMat3, Mat3,
 DataType, Array(Vec<TextValue>), Object(HashMap)
 ```
 
-Supports type coercion (Int→Float, IVec→Vec) and conversion to `NetworkResult`.
+Matrix variants store row-major `[[i32; 3]; 3]` / `[[f64; 3]; 3]`; conversion to `NetworkResult::Mat3(DMat3)` transposes at the boundary (DMat3 is column-major internally).
+
+Supports type coercion (Int→Float, IVec→Vec, IMat3→Mat3) and conversion to `NetworkResult`.
 
 ## Testing
 

@@ -1161,6 +1161,36 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setImat3RowsData(BigInt nodeId, APIIMat3RowsData data) {
+    structure_designer_api.setImat3RowsData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setImat3ColsData(BigInt nodeId, APIIMat3ColsData data) {
+    structure_designer_api.setImat3ColsData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setImat3DiagData(BigInt nodeId, APIIMat3DiagData data) {
+    structure_designer_api.setImat3DiagData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setMat3RowsData(BigInt nodeId, APIMat3RowsData data) {
+    structure_designer_api.setMat3RowsData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setMat3ColsData(BigInt nodeId, APIMat3ColsData data) {
+    structure_designer_api.setMat3ColsData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setMat3DiagData(BigInt nodeId, APIMat3DiagData data) {
+    structure_designer_api.setMat3DiagData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setRangeData(BigInt nodeId, APIRangeData data) {
     structure_designer_api.setRangeData(nodeId: nodeId, data: data);
     refreshFromKernel();

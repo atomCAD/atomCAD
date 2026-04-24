@@ -183,7 +183,8 @@
       "Bash(git -C /c/machine_phase_systems/flutter_cad stash pop)",
       "Bash(git -C /c/machine_phase_systems/flutter_cad stash drop stash@{0})",
       "Bash(git *)",
-      "Read(//c/atomcad_v0.3.0/samples/**)"
+      "Read(//c/atomcad_v0.3.0/samples/**)",
+      "Bash(flutter doctor *)"
     ]
   }
 }
