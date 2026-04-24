@@ -7,7 +7,8 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::nodes::ivec3::IVec3Data;
+use rust_lib_flutter_cad::structure_designer::nodes::imat3_diag::IMat3DiagData;
+use rust_lib_flutter_cad::structure_designer::nodes::imat3_rows::IMat3RowsData;
 use rust_lib_flutter_cad::structure_designer::nodes::supercell::SupercellData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::text_format::TextValue;
@@ -118,7 +119,7 @@ fn set_text_properties_uses_stored_matrix() {
 }
 
 #[test]
-fn diagonal_pin_overrides_stored_matrix() {
+fn matrix_pin_wired_to_imat3_diag_overrides_stored_matrix() {
     let mut designer = setup_designer();
     let (supercell_id, _) = build_diamond_plus_supercell(&mut designer);
 
@@ -131,13 +132,14 @@ fn diagonal_pin_overrides_stored_matrix() {
         },
     );
 
-    // Diagonal pin carrying (2, 2, 2) → effective matrix diag(2,2,2), det=8.
-    let diag_id = designer.add_node("ivec3", DVec2::new(0.0, 200.0));
+    // imat3_diag node with v=(2,2,2) → effective matrix diag(2,2,2), det=8.
+    // Equivalent to the old IVec3 diagonal-pin case.
+    let diag_id = designer.add_node("imat3_diag", DVec2::new(0.0, 200.0));
     set_node_data(
         &mut designer,
         diag_id,
-        IVec3Data {
-            value: IVec3::new(2, 2, 2),
+        IMat3DiagData {
+            v: IVec3::new(2, 2, 2),
         },
     );
     designer.connect_nodes(diag_id, 0, supercell_id, 1);
@@ -148,6 +150,74 @@ fn diagonal_pin_overrides_stored_matrix() {
     // Must match the diagonal override (8×), NOT the stored matrix (27×).
     assert_eq!(s.motif.sites.len(), 8 * diamond.motif.sites.len());
     assert!((s.lattice_vecs.cell_length_a - 2.0 * DIAMOND_UNIT_CELL_SIZE_ANGSTROM).abs() < 1e-9);
+}
+
+#[test]
+fn matrix_pin_wired_with_full_imat3_overrides_stored_matrix() {
+    let mut designer = setup_designer();
+    let (supercell_id, _) = build_diamond_plus_supercell(&mut designer);
+
+    // Stored matrix: 3×3×3 (det=27). Must be ignored when the pin is wired.
+    set_node_data(
+        &mut designer,
+        supercell_id,
+        SupercellData {
+            matrix: [[3, 0, 0], [0, 3, 0], [0, 0, 3]],
+        },
+    );
+
+    // Full IMat3 via imat3_rows: diag(2,2,2) represented as full matrix rows.
+    let rows_id = designer.add_node("imat3_rows", DVec2::new(0.0, 200.0));
+    set_node_data(
+        &mut designer,
+        rows_id,
+        IMat3RowsData {
+            matrix: [[2, 0, 0], [0, 2, 0], [0, 0, 2]],
+        },
+    );
+    designer.connect_nodes(rows_id, 0, supercell_id, 1);
+    designer.validate_active_network();
+
+    let s = extract_structure(evaluate(&designer, supercell_id));
+    let diamond = Structure::diamond();
+    // Must match the wired matrix (det=8), NOT the stored matrix (det=27).
+    assert_eq!(s.motif.sites.len(), 8 * diamond.motif.sites.len());
+    assert!((s.lattice_vecs.cell_length_a - 2.0 * DIAMOND_UNIT_CELL_SIZE_ANGSTROM).abs() < 1e-9);
+}
+
+#[test]
+fn matrix_pin_wired_to_singular_matrix_surfaces_as_error() {
+    let mut designer = setup_designer();
+    let (supercell_id, _) = build_diamond_plus_supercell(&mut designer);
+
+    // Stored matrix would be identity (non-singular) — the singular matrix
+    // comes in via the wired pin and must still surface as an error.
+    let rows_id = designer.add_node("imat3_rows", DVec2::new(0.0, 200.0));
+    set_node_data(
+        &mut designer,
+        rows_id,
+        IMat3RowsData {
+            matrix: [[1, 0, 0], [0, 0, 0], [0, 0, 1]],
+        },
+    );
+    designer.connect_nodes(rows_id, 0, supercell_id, 1);
+    designer.validate_active_network();
+
+    let result = evaluate(&designer, supercell_id);
+    match result {
+        NetworkResult::Error(msg) => {
+            assert!(
+                msg.to_lowercase().contains("degenerate")
+                    || msg.to_lowercase().contains("linearly dependent"),
+                "error should describe degeneracy: {}",
+                msg
+            );
+        }
+        other => panic!(
+            "expected Error result for singular wired matrix, got {}",
+            other.to_display_string()
+        ),
+    }
 }
 
 #[test]
@@ -238,7 +308,7 @@ fn unwired_structure_input_defaults_to_diamond() {
 }
 
 #[test]
-fn subtitle_shows_determinant_when_diagonal_unconnected() {
+fn subtitle_shows_determinant_when_matrix_unconnected() {
     let data = SupercellData {
         matrix: [[2, 0, 0], [0, 2, 0], [0, 0, 2]],
     };
@@ -266,17 +336,17 @@ fn subtitle_shows_determinant_when_diagonal_unconnected() {
 }
 
 #[test]
-fn subtitle_hides_determinant_when_diagonal_connected() {
+fn subtitle_hides_determinant_when_matrix_connected() {
     let data = SupercellData {
         matrix: [[2, 0, 0], [0, 2, 0], [0, 0, 2]],
     };
     let mut connected = std::collections::HashSet::new();
-    connected.insert("diagonal".to_string());
+    connected.insert("matrix".to_string());
     let subtitle = rust_lib_flutter_cad::structure_designer::node_data::NodeData::get_subtitle(
         &data, &connected,
     );
-    // When diagonal is connected, the stored matrix is overridden, so no
-    // concrete determinant should be shown.
+    // When the matrix pin is connected, the stored matrix is overridden, so
+    // no concrete determinant should be shown.
     assert_eq!(subtitle.as_deref(), Some("det = ?"));
 }
 

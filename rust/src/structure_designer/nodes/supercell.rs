@@ -82,17 +82,17 @@ impl NodeData for SupercellData {
             Err(err) => return EvalOutput::single(err),
         };
 
-        // Pin 1: optional diagonal IVec3 override. If connected, build
-        // diag(v.x, v.y, v.z) and use it in place of the stored matrix.
-        let diagonal_arg =
+        // Pin 1: optional IMat3 matrix override. If connected, use it in
+        // place of the stored matrix.
+        let matrix_arg =
             network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
-        let effective_matrix: [[i32; 3]; 3] = match diagonal_arg {
+        let effective_matrix: [[i32; 3]; 3] = match matrix_arg {
             NetworkResult::None => self.matrix,
-            NetworkResult::Error(_) => return EvalOutput::single(diagonal_arg),
-            NetworkResult::IVec3(v) => [[v.x, 0, 0], [0, v.y, 0], [0, 0, v.z]],
+            NetworkResult::Error(_) => return EvalOutput::single(matrix_arg),
+            NetworkResult::IMat3(m) => m,
             other => {
                 return EvalOutput::single(NetworkResult::Error(format!(
-                    "supercell: diagonal input must be IVec3, got {}",
+                    "supercell: matrix input must be IMat3, got {}",
                     other.to_display_string()
                 )));
             }
@@ -112,9 +112,9 @@ impl NodeData for SupercellData {
         &self,
         connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
-        // When the diagonal pin is connected the stored matrix is not the
+        // When the matrix pin is connected the stored matrix is not the
         // effective one; show a neutral indicator instead of a misleading det.
-        if connected_input_pins.contains("diagonal") {
+        if connected_input_pins.contains("matrix") {
             return Some("det = ?".to_string());
         }
         let det = det_i64(&self.matrix);
@@ -173,12 +173,13 @@ impl NodeData for SupercellData {
             (false, Some("diamond".to_string())),
         );
         m.insert(
-            "diagonal".to_string(),
+            "matrix".to_string(),
             (
                 false,
                 Some(
-                    "Optional IVec3 override. When connected, the stored matrix is replaced by \
-                     diag(v.x, v.y, v.z) for axis-aligned supercells."
+                    "Optional IMat3 override. When connected, the stored matrix is replaced by \
+                     the wired 3×3 integer matrix. For the common axis-aligned case wire an \
+                     imat3_diag node."
                         .to_string(),
                 ),
             ),
@@ -194,8 +195,9 @@ pub fn get_node_type() -> NodeType {
             "Rewrites a `Structure` with a larger unit cell defined by a 3×3 integer matrix. \
             Each row of the matrix gives a new basis vector as an integer combination of the \
             old basis vectors (row 0 = a, row 1 = b, row 2 = c). The physical crystal field \
-            is unchanged; only the representation changes. When the optional `diagonal` pin \
-            is connected, the stored matrix is overridden by diag(v.x, v.y, v.z)."
+            is unchanged; only the representation changes. When the optional `matrix` pin \
+            is connected, the wired IMat3 overrides the stored matrix. For the common \
+            axis-aligned case wire an imat3_diag node."
                 .to_string(),
         summary: None,
         category: NodeTypeCategory::OtherBuiltin,
@@ -207,8 +209,8 @@ pub fn get_node_type() -> NodeType {
             },
             Parameter {
                 id: None,
-                name: "diagonal".to_string(),
-                data_type: DataType::IVec3,
+                name: "matrix".to_string(),
+                data_type: DataType::IMat3,
             },
         ],
         output_pins: OutputPinDefinition::single(DataType::Structure),

@@ -4,14 +4,12 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_cad/common/mouse_wheel_block_service.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
-    as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:provider/provider.dart';
 
-const int _DIAGONAL_PIN_INDEX = 1;
+const int _MATRIX_PIN_INDEX = 1;
 const double _CELL_WIDTH = 44.0;
 const double _CELL_HEIGHT = 28.0;
 
@@ -19,10 +17,10 @@ const double _CELL_HEIGHT = 28.0;
 ///
 /// Renders the stored 3x3 integer matrix as three inline equations:
 ///   new_a = [n]·a + [n]·b + [n]·c
-/// plus a live determinant readout below. When the `diagonal` input pin is
-/// connected the stored matrix is read-only (the pin overrides it at eval
-/// time), so the grid is grayed out and the effective diagonal matrix is
-/// derived from the incoming `IVec3` wire's source node when available.
+/// plus a live determinant readout below. When the `matrix` input pin is
+/// connected the stored matrix is overridden at eval time by the wired
+/// IMat3, so the grid is grayed out and the determinant is unknown at
+/// edit time.
 class SupercellEditor extends StatelessWidget {
   final BigInt nodeId;
   final APISupercellData? data;
@@ -42,10 +40,8 @@ class SupercellEditor extends StatelessWidget {
     }
 
     final networkView = model.nodeNetworkView;
-    final diagonalConnected = _isDiagonalConnected(networkView);
-    final effective = diagonalConnected
-        ? _effectiveDiagonalMatrix(networkView) ?? _matrixFromData(data!)
-        : _matrixFromData(data!);
+    final matrixConnected = _isMatrixConnected(networkView);
+    final effective = _matrixFromData(data!);
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -57,30 +53,28 @@ class SupercellEditor extends StatelessWidget {
             nodeTypeName: 'supercell',
           ),
           const SizedBox(height: 8),
-          _hintText(diagonalConnected),
+          _hintText(matrixConnected),
           const SizedBox(height: 8),
           _matrixRows(
             context: context,
             matrix: effective,
-            enabled: !diagonalConnected,
+            enabled: !matrixConnected,
           ),
           const SizedBox(height: 12),
           _determinantReadout(
             matrix: effective,
-            pinConnected: diagonalConnected,
-            pinSourceKnown:
-                !diagonalConnected || _diagonalSourceValue(networkView) != null,
+            pinConnected: matrixConnected,
           ),
         ],
       ),
     );
   }
 
-  Widget _hintText(bool diagonalConnected) {
-    if (diagonalConnected) {
+  Widget _hintText(bool matrixConnected) {
+    if (matrixConnected) {
       return const Text(
-        'Diagonal pin is connected — the stored matrix is overridden by '
-        'diag(v.x, v.y, v.z) at evaluation.',
+        'Matrix pin is connected — the stored matrix is overridden by the '
+        'wired IMat3 at evaluation.',
         style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
       );
     }
@@ -163,11 +157,10 @@ class SupercellEditor extends StatelessWidget {
   Widget _determinantReadout({
     required List<List<int>> matrix,
     required bool pinConnected,
-    required bool pinSourceKnown,
   }) {
-    if (pinConnected && !pinSourceKnown) {
+    if (pinConnected) {
       return const Text(
-        'det = ?  (diagonal pin connected — effective matrix depends on '
+        'det = ?  (matrix pin connected — effective matrix depends on '
         'runtime input)',
         style: TextStyle(fontSize: 13),
       );
@@ -191,43 +184,15 @@ class SupercellEditor extends StatelessWidget {
     );
   }
 
-  bool _isDiagonalConnected(NodeNetworkView? networkView) {
+  bool _isMatrixConnected(NodeNetworkView? networkView) {
     if (networkView == null) return false;
     for (final wire in networkView.wires) {
       if (wire.destNodeId == nodeId &&
-          wire.destParamIndex == BigInt.from(_DIAGONAL_PIN_INDEX)) {
+          wire.destParamIndex == BigInt.from(_MATRIX_PIN_INDEX)) {
         return true;
       }
     }
     return false;
-  }
-
-  /// If the diagonal pin is wired to a literal `ivec3` node, read its value
-  /// so the panel can preview the effective matrix. For any other upstream
-  /// source we cannot know the value at edit time.
-  List<List<int>>? _effectiveDiagonalMatrix(NodeNetworkView? networkView) {
-    final source = _diagonalSourceValue(networkView);
-    if (source == null) return null;
-    return [
-      [source.x, 0, 0],
-      [0, source.y, 0],
-      [0, 0, source.z],
-    ];
-  }
-
-  APIIVec3? _diagonalSourceValue(NodeNetworkView? networkView) {
-    if (networkView == null) return null;
-    for (final wire in networkView.wires) {
-      if (wire.destNodeId == nodeId &&
-          wire.destParamIndex == BigInt.from(_DIAGONAL_PIN_INDEX)) {
-        final source = networkView.nodes[wire.sourceNodeId];
-        if (source == null) return null;
-        if (source.nodeTypeName != 'ivec3') return null;
-        final ivec3Data = sd_api.getIvec3Data(nodeId: wire.sourceNodeId);
-        return ivec3Data?.value;
-      }
-    }
-    return null;
   }
 
   static List<List<int>> _matrixFromData(APISupercellData d) {
