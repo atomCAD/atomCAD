@@ -498,6 +498,8 @@ enum APIDataTypeBase {
   vec3,
   iVec2,
   iVec3,
+  iMat3,
+  mat3,
   latticeVecs,
   drawingPlane,
   geometry2D,

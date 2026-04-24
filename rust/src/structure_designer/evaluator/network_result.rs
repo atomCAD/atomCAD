@@ -10,6 +10,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::util::transform::Transform2D;
+use glam::f64::DMat3;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use glam::i32::IVec2;
@@ -228,6 +229,12 @@ pub enum NetworkResult {
     Vec3(DVec3),
     IVec2(IVec2),
     IVec3(IVec3),
+    /// 3x3 integer matrix, row-major: `[i][j]` is row i, column j.
+    IMat3([[i32; 3]; 3]),
+    /// 3x3 float matrix. `glam::DMat3` is column-major internally; the public
+    /// API exposed via constructor nodes, `.mIJ` accessors, and the text format
+    /// is row-major. Conversion happens at boundaries only.
+    Mat3(DMat3),
     LatticeVecs(UnitCellStruct),
     DrawingPlane(DrawingPlane),
     Geometry2D(GeometrySummary2D),
@@ -254,6 +261,8 @@ impl NetworkResult {
             NetworkResult::Vec3(_) => Some(DataType::Vec3),
             NetworkResult::IVec2(_) => Some(DataType::IVec2),
             NetworkResult::IVec3(_) => Some(DataType::IVec3),
+            NetworkResult::IMat3(_) => Some(DataType::IMat3),
+            NetworkResult::Mat3(_) => Some(DataType::Mat3),
             NetworkResult::LatticeVecs(_) => Some(DataType::LatticeVecs),
             NetworkResult::DrawingPlane(_) => Some(DataType::DrawingPlane),
             NetworkResult::Geometry2D(_) => Some(DataType::Geometry2D),
@@ -396,6 +405,24 @@ impl NetworkResult {
     pub fn extract_vec3(self) -> Option<DVec3> {
         match self {
             NetworkResult::Vec3(vec) => Some(vec),
+            _ => None,
+        }
+    }
+
+    /// Extracts an IMat3 value (row-major `[[i32; 3]; 3]`) from the NetworkResult,
+    /// returns None if not an IMat3.
+    pub fn extract_imat3(self) -> Option<[[i32; 3]; 3]> {
+        match self {
+            NetworkResult::IMat3(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// Extracts a Mat3 value (`glam::DMat3`, column-major storage; row-major
+    /// semantics on the public API) from the NetworkResult, returns None if not a Mat3.
+    pub fn extract_mat3(self) -> Option<DMat3> {
+        match self {
+            NetworkResult::Mat3(m) => Some(m),
             _ => None,
         }
     }
@@ -566,6 +593,17 @@ impl NetworkResult {
                 vec.z.round() as i32,
             )),
 
+            // IMat3 -> Mat3 (lossless). Our IMat3 is row-major; DMat3 is column-major,
+            // so we transpose at the boundary.
+            (NetworkResult::IMat3(m), DataType::Mat3) => {
+                NetworkResult::Mat3(imat3_rows_to_dmat3(&m))
+            }
+
+            // Mat3 -> IMat3 (truncating downcast, per design_matrix_types.md D3 / Edge cases).
+            (NetworkResult::Mat3(m), DataType::IMat3) => {
+                NetworkResult::IMat3(dmat3_to_imat3_rows_truncate(&m))
+            }
+
             // LatticeVecs -> DrawingPlane (backward compatibility for old .cnnd files)
             // Creates a standard XY plane (001 Miller index) at the origin
             (NetworkResult::LatticeVecs(unit_cell), DataType::DrawingPlane) => {
@@ -613,6 +651,21 @@ impl NetworkResult {
             NetworkResult::Vec3(vec) => format!("({:.6}, {:.6}, {:.6})", vec.x, vec.y, vec.z),
             NetworkResult::IVec2(vec) => format!("({}, {})", vec.x, vec.y),
             NetworkResult::IVec3(vec) => format!("({}, {}, {})", vec.x, vec.y, vec.z),
+            NetworkResult::IMat3(m) => format!(
+                "(({}, {}, {}), ({}, {}, {}), ({}, {}, {}))",
+                m[0][0], m[0][1], m[0][2],
+                m[1][0], m[1][1], m[1][2],
+                m[2][0], m[2][1], m[2][2],
+            ),
+            NetworkResult::Mat3(m) => {
+                let r = dmat3_to_rows(m);
+                format!(
+                    "(({:.6}, {:.6}, {:.6}), ({:.6}, {:.6}, {:.6}), ({:.6}, {:.6}, {:.6}))",
+                    r[0][0], r[0][1], r[0][2],
+                    r[1][0], r[1][1], r[1][2],
+                    r[2][0], r[2][1], r[2][2],
+                )
+            }
             NetworkResult::Array(elements) => {
                 let element_strings: Vec<String> = elements
                     .iter()
@@ -969,6 +1022,48 @@ pub fn structure_mismatch_error() -> NetworkResult {
         "Structure mismatch: CSG inputs must share the same lattice, motif, and motif_offset."
             .to_string(),
     )
+}
+
+/// Convert a row-major `[[i32; 3]; 3]` IMat3 (where `m[i]` is row i) into a
+/// `glam::DMat3` (column-major). Transposes at the boundary so the public
+/// row-major API maps correctly onto glam's column-major storage.
+pub fn imat3_rows_to_dmat3(m: &[[i32; 3]; 3]) -> DMat3 {
+    DMat3::from_cols(
+        DVec3::new(m[0][0] as f64, m[1][0] as f64, m[2][0] as f64),
+        DVec3::new(m[0][1] as f64, m[1][1] as f64, m[2][1] as f64),
+        DVec3::new(m[0][2] as f64, m[1][2] as f64, m[2][2] as f64),
+    )
+}
+
+/// Convert a `glam::DMat3` (column-major) to a row-major `[[f64; 3]; 3]`.
+pub fn dmat3_to_rows(m: &DMat3) -> [[f64; 3]; 3] {
+    let c0 = m.col(0);
+    let c1 = m.col(1);
+    let c2 = m.col(2);
+    [
+        [c0.x, c1.x, c2.x],
+        [c0.y, c1.y, c2.y],
+        [c0.z, c1.z, c2.z],
+    ]
+}
+
+/// Construct a `glam::DMat3` (column-major) from a row-major `[[f64; 3]; 3]`.
+pub fn rows_to_dmat3(rows: &[[f64; 3]; 3]) -> DMat3 {
+    DMat3::from_cols(
+        DVec3::new(rows[0][0], rows[1][0], rows[2][0]),
+        DVec3::new(rows[0][1], rows[1][1], rows[2][1]),
+        DVec3::new(rows[0][2], rows[1][2], rows[2][2]),
+    )
+}
+
+/// Truncating downcast: float matrix to integer matrix via `as i32`.
+fn dmat3_to_imat3_rows_truncate(m: &DMat3) -> [[i32; 3]; 3] {
+    let r = dmat3_to_rows(m);
+    [
+        [r[0][0] as i32, r[0][1] as i32, r[0][2] as i32],
+        [r[1][0] as i32, r[1][1] as i32, r[1][2] as i32],
+        [r[2][0] as i32, r[2][1] as i32, r[2][2] as i32],
+    ]
 }
 
 #[cfg(test)]

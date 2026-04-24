@@ -115,6 +115,10 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'IVec2';
       case APIDataTypeBase.iVec3:
         return 'IVec3';
+      case APIDataTypeBase.iMat3:
+        return 'IMat3';
+      case APIDataTypeBase.mat3:
+        return 'Mat3';
       case APIDataTypeBase.latticeVecs:
         return 'LatticeVecs';
       case APIDataTypeBase.drawingPlane:

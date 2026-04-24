@@ -180,3 +180,6 @@ mod with_structure_test;
 
 #[path = "structure_designer/supercell_node_test.rs"]
 mod supercell_node_test;
+
+#[path = "structure_designer/matrix_types_test.rs"]
+mod matrix_types_test;

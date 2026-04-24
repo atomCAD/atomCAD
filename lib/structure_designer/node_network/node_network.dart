@@ -89,6 +89,12 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   'IVec2': Color(0xFF81D4FA), // Light blue variant
   'IVec3': Color(0xFF9575CD), // Light indigo
 
+  // Matrix types. 'IMat3' entry must come before 'Mat3' so that the
+  // substring-match loop picks it for the integer variant before the float
+  // variant's 'Mat3' key also matches.
+  'IMat3': Color(0xFF7986CB), // Desaturated indigo (integer variant)
+  'Mat3': Color(0xFF42A5F5), // Saturated blue (float variant)
+
   // Geometry types (purple family - abstract shapes)
   'Geometry2D': Color(0xFFBA68C8), // Light purple
   'Blueprint': Color(0xFF9C27B0), // Deep purple - latent atoms in a structure

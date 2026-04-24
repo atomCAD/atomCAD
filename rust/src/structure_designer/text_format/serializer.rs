@@ -18,6 +18,18 @@ impl TextValue {
                 format_float(v.y),
                 format_float(v.z)
             ),
+            TextValue::IMat3(m) => format!(
+                "(({}, {}, {}), ({}, {}, {}), ({}, {}, {}))",
+                m[0][0], m[0][1], m[0][2],
+                m[1][0], m[1][1], m[1][2],
+                m[2][0], m[2][1], m[2][2],
+            ),
+            TextValue::Mat3(m) => format!(
+                "(({}, {}, {}), ({}, {}, {}), ({}, {}, {}))",
+                format_float(m[0][0]), format_float(m[0][1]), format_float(m[0][2]),
+                format_float(m[1][0]), format_float(m[1][1]), format_float(m[1][2]),
+                format_float(m[2][0]), format_float(m[2][1]), format_float(m[2][2]),
+            ),
             TextValue::DataType(dt) => dt.to_string(),
             TextValue::Array(arr) => format_array(arr),
             TextValue::Object(obj) => format_object(obj),

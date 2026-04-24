@@ -24,6 +24,8 @@ pub enum APIDataTypeBase {
     Vec3,
     IVec2,
     IVec3,
+    IMat3,
+    Mat3,
     LatticeVecs,
     DrawingPlane,
     Geometry2D,

@@ -23,6 +23,18 @@ pub struct APIIVec3 {
     pub z: i32,
 }
 
+/// 3x3 integer matrix, row-major: `m[i]` is row i.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct APIIMat3 {
+    pub m: [[i32; 3]; 3],
+}
+
+/// 3x3 float matrix, row-major: `m[i]` is row i.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct APIMat3 {
+    pub m: [[f64; 3]; 3],
+}
+
 pub struct APICamera {
     pub eye: APIVec3,
     pub target: APIVec3,

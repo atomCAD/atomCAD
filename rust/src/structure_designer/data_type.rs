@@ -18,6 +18,8 @@ pub enum DataType {
     Vec3,
     IVec2,
     IVec3,
+    IMat3,
+    Mat3,
     LatticeVecs,
     DrawingPlane,
     Geometry2D,
@@ -45,6 +47,8 @@ impl fmt::Display for DataType {
             DataType::Vec3 => write!(f, "Vec3"),
             DataType::IVec2 => write!(f, "IVec2"),
             DataType::IVec3 => write!(f, "IVec3"),
+            DataType::IMat3 => write!(f, "IMat3"),
+            DataType::Mat3 => write!(f, "Mat3"),
             DataType::LatticeVecs => write!(f, "LatticeVecs"),
             DataType::DrawingPlane => write!(f, "DrawingPlane"),
             DataType::Geometry2D => write!(f, "Geometry2D"),
@@ -174,6 +178,10 @@ impl DataType {
             (DataType::IVec3, DataType::Vec3) => true,
             (DataType::Vec3, DataType::IVec3) => true,
 
+            // IMat3 <-> Mat3 conversions (truncating downcast — see design_matrix_types.md D3)
+            (DataType::IMat3, DataType::Mat3) => true,
+            (DataType::Mat3, DataType::IMat3) => true,
+
             // LatticeVecs -> DrawingPlane conversion (backward compatibility for old .cnnd files)
             (DataType::LatticeVecs, DataType::DrawingPlane) => true,
 
@@ -294,6 +302,8 @@ impl DataTypeParser {
                     "Vec3" => Ok(DataType::Vec3),
                     "IVec2" => Ok(DataType::IVec2),
                     "IVec3" => Ok(DataType::IVec3),
+                    "IMat3" => Ok(DataType::IMat3),
+                    "Mat3" => Ok(DataType::Mat3),
                     "LatticeVecs" => Ok(DataType::LatticeVecs),
                     "DrawingPlane" => Ok(DataType::DrawingPlane),
                     "Geometry2D" => Ok(DataType::Geometry2D),

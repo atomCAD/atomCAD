@@ -1,5 +1,5 @@
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::{NetworkResult, rows_to_dmat3};
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use serde::de::{MapAccess, Visitor};
 use serde::ser::SerializeMap;
@@ -18,6 +18,13 @@ pub enum TextValue {
     IVec3(IVec3),
     Vec2(DVec2),
     Vec3(DVec3),
+    /// 3x3 integer matrix, row-major (`m[i]` is row i).
+    IMat3([[i32; 3]; 3]),
+    /// 3x3 float matrix, row-major (`m[i]` is row i). Stored as a plain
+    /// `[[f64; 3]; 3]` rather than `DMat3` so JSON serialization is shape-only;
+    /// conversion to/from glam's column-major `DMat3` happens in
+    /// `to_network_result` and the `Mat3 -> TextValue` path.
+    Mat3([[f64; 3]; 3]),
     DataType(DataType),
     Array(Vec<TextValue>),
     /// For complex nested structures like expr parameters
@@ -62,6 +69,14 @@ impl Serialize for TextValue {
             TextValue::Vec3(v) => {
                 map.serialize_entry("type", "Vec3")?;
                 map.serialize_entry("value", &[v.x, v.y, v.z])?;
+            }
+            TextValue::IMat3(m) => {
+                map.serialize_entry("type", "IMat3")?;
+                map.serialize_entry("value", m)?;
+            }
+            TextValue::Mat3(m) => {
+                map.serialize_entry("type", "Mat3")?;
+                map.serialize_entry("value", m)?;
             }
             TextValue::DataType(v) => {
                 map.serialize_entry("type", "DataType")?;
@@ -151,6 +166,16 @@ impl<'de> Deserialize<'de> for TextValue {
                             serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::Vec3(DVec3::new(arr[0], arr[1], arr[2])))
                     }
+                    "IMat3" => {
+                        let m: [[i32; 3]; 3] =
+                            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                        Ok(TextValue::IMat3(m))
+                    }
+                    "Mat3" => {
+                        let m: [[f64; 3]; 3] =
+                            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                        Ok(TextValue::Mat3(m))
+                    }
                     "DataType" => {
                         let v = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::DataType(v))
@@ -167,7 +192,7 @@ impl<'de> Deserialize<'de> for TextValue {
                         &type_str,
                         &[
                             "Bool", "Int", "Float", "String", "IVec2", "IVec3", "Vec2", "Vec3",
-                            "DataType", "Array", "Object",
+                            "IMat3", "Mat3", "DataType", "Array", "Object",
                         ],
                     )),
                 }
@@ -257,6 +282,32 @@ impl TextValue {
         }
     }
 
+    /// Try to extract an IMat3 value (row-major). Allows Mat3 → IMat3 truncation.
+    pub fn as_imat3(&self) -> Option<[[i32; 3]; 3]> {
+        match self {
+            TextValue::IMat3(m) => Some(*m),
+            TextValue::Mat3(m) => Some([
+                [m[0][0] as i32, m[0][1] as i32, m[0][2] as i32],
+                [m[1][0] as i32, m[1][1] as i32, m[1][2] as i32],
+                [m[2][0] as i32, m[2][1] as i32, m[2][2] as i32],
+            ]),
+            _ => None,
+        }
+    }
+
+    /// Try to extract a Mat3 value (row-major). Allows IMat3 → Mat3 promotion.
+    pub fn as_mat3(&self) -> Option<[[f64; 3]; 3]> {
+        match self {
+            TextValue::Mat3(m) => Some(*m),
+            TextValue::IMat3(m) => Some([
+                [m[0][0] as f64, m[0][1] as f64, m[0][2] as f64],
+                [m[1][0] as f64, m[1][1] as f64, m[1][2] as f64],
+                [m[2][0] as f64, m[2][1] as f64, m[2][2] as f64],
+            ]),
+            _ => None,
+        }
+    }
+
     /// Try to extract a DataType value
     pub fn as_data_type(&self) -> Option<&DataType> {
         match self {
@@ -328,6 +379,16 @@ impl TextValue {
         TextValue::DataType(value)
     }
 
+    /// Create a TextValue from a row-major `[[i32; 3]; 3]` IMat3.
+    pub fn from_imat3(value: [[i32; 3]; 3]) -> Self {
+        TextValue::IMat3(value)
+    }
+
+    /// Create a TextValue from a row-major `[[f64; 3]; 3]` Mat3.
+    pub fn from_mat3(value: [[f64; 3]; 3]) -> Self {
+        TextValue::Mat3(value)
+    }
+
     // ========== Type checking helpers ==========
 
     /// Returns true if this is a numeric type (Int or Float)
@@ -354,6 +415,8 @@ impl TextValue {
             TextValue::IVec3(_) => DataType::IVec3,
             TextValue::Vec2(_) => DataType::Vec2,
             TextValue::Vec3(_) => DataType::Vec3,
+            TextValue::IMat3(_) => DataType::IMat3,
+            TextValue::Mat3(_) => DataType::Mat3,
             TextValue::DataType(_) => DataType::None, // DataType itself is meta
             TextValue::Array(arr) => {
                 if arr.is_empty() {
@@ -398,6 +461,24 @@ impl TextValue {
             (TextValue::Vec3(v), DataType::IVec3) => Some(NetworkResult::IVec3(IVec3::new(
                 v.x as i32, v.y as i32, v.z as i32,
             ))),
+            // Matrix identity mappings
+            (TextValue::IMat3(m), DataType::IMat3) => Some(NetworkResult::IMat3(*m)),
+            (TextValue::Mat3(m), DataType::Mat3) => Some(NetworkResult::Mat3(rows_to_dmat3(m))),
+            // Type coercion: IMat3 to Mat3 (lossless)
+            (TextValue::IMat3(m), DataType::Mat3) => {
+                let rows = [
+                    [m[0][0] as f64, m[0][1] as f64, m[0][2] as f64],
+                    [m[1][0] as f64, m[1][1] as f64, m[1][2] as f64],
+                    [m[2][0] as f64, m[2][1] as f64, m[2][2] as f64],
+                ];
+                Some(NetworkResult::Mat3(rows_to_dmat3(&rows)))
+            }
+            // Type coercion: Mat3 to IMat3 (truncating)
+            (TextValue::Mat3(m), DataType::IMat3) => Some(NetworkResult::IMat3([
+                [m[0][0] as i32, m[0][1] as i32, m[0][2] as i32],
+                [m[1][0] as i32, m[1][1] as i32, m[1][2] as i32],
+                [m[2][0] as i32, m[2][1] as i32, m[2][2] as i32],
+            ])),
             _ => None,
         }
     }

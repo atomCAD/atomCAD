@@ -882,9 +882,17 @@ impl Parser {
         }
     }
 
-    /// Parse a vector literal: `(x, y)` or `(x, y, z)`
+    /// Parse a vector literal: `(x, y)` or `(x, y, z)`, or a 3x3 matrix
+    /// literal `((a,b,c), (d,e,f), (g,h,i))`. Matrix literals are detected by
+    /// peeking the first token after the opening paren — if it is another `(`,
+    /// the literal is a matrix; otherwise it is a vector.
     fn parse_vector_literal(&mut self) -> Result<TextValue, ParseError> {
         self.expect(&Token::LeftParen)?;
+
+        // Matrix literal: nested tuples.
+        if self.peek() == &Token::LeftParen {
+            return self.parse_matrix_literal_body();
+        }
 
         let mut components: Vec<f64> = Vec::new();
         let mut all_ints = true;
@@ -934,6 +942,104 @@ impl Parser {
                 ))
             }
         }
+    }
+
+    /// Parse the body of a matrix literal after the outer `(` has been consumed.
+    /// Expects three 3-component sub-tuples separated by commas, then a closing `)`.
+    /// Returns `TextValue::IMat3` if all 9 components are integers, otherwise `TextValue::Mat3`.
+    fn parse_matrix_literal_body(&mut self) -> Result<TextValue, ParseError> {
+        let (start_line, start_col) = self.current_position();
+
+        let mut rows: Vec<[f64; 3]> = Vec::new();
+        let mut all_ints = true;
+
+        loop {
+            let (row, row_all_ints) = self.parse_3_tuple_row()?;
+            if !row_all_ints {
+                all_ints = false;
+            }
+            rows.push(row);
+
+            match self.peek() {
+                Token::Comma => {
+                    self.bump();
+                }
+                Token::RightParen => {
+                    break;
+                }
+                other => {
+                    let (line, col) = self.current_position();
+                    return Err(ParseError::new(
+                        format!("Expected ',' or ')' in matrix literal, found {:?}", other),
+                        line,
+                        col,
+                    ));
+                }
+            }
+        }
+
+        self.expect(&Token::RightParen)?;
+
+        if rows.len() != 3 {
+            return Err(ParseError::new(
+                format!(
+                    "Matrix literal must have 3 rows, found {}",
+                    rows.len()
+                ),
+                start_line,
+                start_col,
+            ));
+        }
+
+        if all_ints {
+            Ok(TextValue::IMat3([
+                [rows[0][0] as i32, rows[0][1] as i32, rows[0][2] as i32],
+                [rows[1][0] as i32, rows[1][1] as i32, rows[1][2] as i32],
+                [rows[2][0] as i32, rows[2][1] as i32, rows[2][2] as i32],
+            ]))
+        } else {
+            Ok(TextValue::Mat3([rows[0], rows[1], rows[2]]))
+        }
+    }
+
+    /// Parse one `(a, b, c)` triple as part of a matrix literal. Returns the
+    /// three components and whether all were integer-typed (no fractional part).
+    fn parse_3_tuple_row(&mut self) -> Result<([f64; 3], bool), ParseError> {
+        let (line, col) = self.current_position();
+        self.expect(&Token::LeftParen)?;
+
+        let mut comps: Vec<f64> = Vec::new();
+        let mut all_ints = true;
+
+        let first = self.parse_number_component()?;
+        if first.1 {
+            all_ints = false;
+        }
+        comps.push(first.0);
+
+        while self.peek() == &Token::Comma {
+            self.bump();
+            let c = self.parse_number_component()?;
+            if c.1 {
+                all_ints = false;
+            }
+            comps.push(c.0);
+        }
+
+        self.expect(&Token::RightParen)?;
+
+        if comps.len() != 3 {
+            return Err(ParseError::new(
+                format!(
+                    "Matrix row must have 3 components, found {}",
+                    comps.len()
+                ),
+                line,
+                col,
+            ));
+        }
+
+        Ok(([comps[0], comps[1], comps[2]], all_ints))
     }
 
     /// Parse a numeric component, returning (value, is_float)
