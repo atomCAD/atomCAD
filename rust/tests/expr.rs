@@ -9,3 +9,6 @@ mod expr_validation_test;
 
 #[path = "expr/expr_vector_test.rs"]
 mod expr_vector_test;
+
+#[path = "expr/matrix_expr_test.rs"]
+mod matrix_expr_test;

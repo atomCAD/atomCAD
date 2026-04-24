@@ -107,6 +107,41 @@ impl Expr {
                             (DataType::IVec3, DataType::Vec3)
                             | (DataType::Vec3, DataType::IVec3) => Ok(DataType::Vec3),
 
+                            // Matrix +, -: component-wise on matching matrix types.
+                            // Matrix *: matrix product (Mat3 × Mat3) or matrix-vector (Mat3 × Vec3).
+                            // See doc/design_matrix_types.md D7.
+                            (DataType::Mat3, DataType::Mat3)
+                                if matches!(op, BinOp::Add | BinOp::Sub | BinOp::Mul) =>
+                            {
+                                Ok(DataType::Mat3)
+                            }
+                            (DataType::IMat3, DataType::IMat3)
+                                if matches!(op, BinOp::Add | BinOp::Sub | BinOp::Mul) =>
+                            {
+                                Ok(DataType::IMat3)
+                            }
+                            // Matrix type promotion (IMat3 + Mat3 → Mat3) for all three ops.
+                            (DataType::IMat3, DataType::Mat3)
+                            | (DataType::Mat3, DataType::IMat3)
+                                if matches!(op, BinOp::Add | BinOp::Sub | BinOp::Mul) =>
+                            {
+                                Ok(DataType::Mat3)
+                            }
+                            // Matrix × Vector (left-multiply only; Vec3 × Mat3 is rejected).
+                            (DataType::Mat3, DataType::Vec3) if matches!(op, BinOp::Mul) => {
+                                Ok(DataType::Vec3)
+                            }
+                            (DataType::IMat3, DataType::IVec3) if matches!(op, BinOp::Mul) => {
+                                Ok(DataType::IVec3)
+                            }
+                            // Mixed matrix-vector with promotion.
+                            (DataType::Mat3, DataType::IVec3) if matches!(op, BinOp::Mul) => {
+                                Ok(DataType::Vec3)
+                            }
+                            (DataType::IMat3, DataType::Vec3) if matches!(op, BinOp::Mul) => {
+                                Ok(DataType::Vec3)
+                            }
+
                             // Vector-scalar operations (only for Mul and Div)
                             (DataType::Vec2, DataType::Float)
                             | (DataType::Float, DataType::Vec2)
@@ -288,6 +323,10 @@ impl Expr {
                     (DataType::IVec2, "x" | "y") => Ok(DataType::Int),
                     // IVec3 components
                     (DataType::IVec3, "x" | "y" | "z") => Ok(DataType::Int),
+                    // Mat3 / IMat3 `.mIJ` accessors (I, J in 0..=2; row i, column j).
+                    // See doc/design_matrix_types.md D7.
+                    (DataType::Mat3, m) if is_matrix_accessor(m) => Ok(DataType::Float),
+                    (DataType::IMat3, m) if is_matrix_accessor(m) => Ok(DataType::Int),
                     _ => Err(format!(
                         "Type {} does not have member '{}'",
                         expr_type, member
@@ -412,6 +451,24 @@ impl Expr {
                     (NetworkResult::IVec3(vec), "x") => NetworkResult::Int(vec.x),
                     (NetworkResult::IVec3(vec), "y") => NetworkResult::Int(vec.y),
                     (NetworkResult::IVec3(vec), "z") => NetworkResult::Int(vec.z),
+                    // Mat3 `.mIJ`: public API is row-major, storage is column-major glam DMat3.
+                    // `.mIJ` returns `m.col(J)[I]`. See doc/design_matrix_types.md §"Row-major
+                    // API over column-major storage".
+                    (NetworkResult::Mat3(m), name) => match parse_matrix_accessor(name) {
+                        Some((i, j)) => NetworkResult::Float(m.col(j)[i]),
+                        None => NetworkResult::Error(format!(
+                            "Cannot access member '{}' on value",
+                            member
+                        )),
+                    },
+                    // IMat3 is stored row-major directly: `.mIJ` = `m[I][J]`.
+                    (NetworkResult::IMat3(m), name) => match parse_matrix_accessor(name) {
+                        Some((i, j)) => NetworkResult::Int(m[i][j]),
+                        None => NetworkResult::Error(format!(
+                            "Cannot access member '{}' on value",
+                            member
+                        )),
+                    },
                     _ => {
                         NetworkResult::Error(format!("Cannot access member '{}' on value", member))
                     }
@@ -432,12 +489,24 @@ impl Expr {
             // Vector type compatibility (for comparisons)
             (DataType::IVec2, DataType::Vec2) | (DataType::Vec2, DataType::IVec2) => true,
             (DataType::IVec3, DataType::Vec3) | (DataType::Vec3, DataType::IVec3) => true,
+            // Matrix type compatibility (for comparisons / function argument promotion)
+            (DataType::IMat3, DataType::Mat3) | (DataType::Mat3, DataType::IMat3) => true,
             _ => false,
         }
     }
 
     /// Helper function to evaluate binary operations
     fn evaluate_binary_op(left: NetworkResult, op: BinOp, right: NetworkResult) -> NetworkResult {
+        // Matrix-involving arithmetic (+, -, *) uses bespoke logic: `*` is matrix
+        // product / matrix-vector, not component-wise like the scalar/vector case
+        // handled by `arithmetic_op`.
+        if matches!(op, BinOp::Add | BinOp::Sub | BinOp::Mul)
+            && (matches!(left, NetworkResult::Mat3(_) | NetworkResult::IMat3(_))
+                || matches!(right, NetworkResult::Mat3(_) | NetworkResult::IMat3(_)))
+        {
+            return Self::matrix_arith_op(left, right, op);
+        }
+
         match op {
             BinOp::Add => Self::arithmetic_op(left, right, |a, b| a + b, |a, b| a + b),
             BinOp::Sub => Self::arithmetic_op(left, right, |a, b| a - b, |a, b| a - b),
@@ -748,4 +817,116 @@ impl Expr {
             }
         }
     }
+
+    /// Evaluates a binary arithmetic op where at least one operand is a matrix.
+    ///
+    /// Handles `+`, `-` (component-wise), `*` (matrix product or matrix×vector).
+    /// Integer/float promotion mirrors the vector rules — any Mat3 involvement
+    /// upcasts IMat3 inputs to Mat3; IVec3 upcasts to Vec3 when multiplied by Mat3.
+    /// See doc/design_matrix_types.md D7.
+    fn matrix_arith_op(left: NetworkResult, right: NetworkResult, op: BinOp) -> NetworkResult {
+        use crate::structure_designer::evaluator::network_result::imat3_rows_to_dmat3;
+        use glam::f64::{DMat3, DVec3};
+
+        // Component-wise add/sub for matrices.
+        let imat3_component = |a: [[i32; 3]; 3], b: [[i32; 3]; 3], f: fn(i32, i32) -> i32| {
+            let mut r = [[0i32; 3]; 3];
+            for i in 0..3 {
+                for j in 0..3 {
+                    r[i][j] = f(a[i][j], b[i][j]);
+                }
+            }
+            r
+        };
+
+        match (left, right, op) {
+            // IMat3 op IMat3 — integer-preserving for +, -, *.
+            (NetworkResult::IMat3(a), NetworkResult::IMat3(b), BinOp::Add) => {
+                NetworkResult::IMat3(imat3_component(a, b, |x, y| x + y))
+            }
+            (NetworkResult::IMat3(a), NetworkResult::IMat3(b), BinOp::Sub) => {
+                NetworkResult::IMat3(imat3_component(a, b, |x, y| x - y))
+            }
+            (NetworkResult::IMat3(a), NetworkResult::IMat3(b), BinOp::Mul) => {
+                let mut r = [[0i32; 3]; 3];
+                for i in 0..3 {
+                    for k in 0..3 {
+                        r[i][k] = (0..3).map(|j| a[i][j] * b[j][k]).sum();
+                    }
+                }
+                NetworkResult::IMat3(r)
+            }
+
+            // IMat3 × IVec3 (integer-preserving matrix-vector).
+            (NetworkResult::IMat3(m), NetworkResult::IVec3(v), BinOp::Mul) => {
+                let mut r = [0i32; 3];
+                for i in 0..3 {
+                    r[i] = m[i][0] * v.x + m[i][1] * v.y + m[i][2] * v.z;
+                }
+                NetworkResult::IVec3(glam::i32::IVec3::new(r[0], r[1], r[2]))
+            }
+
+            // Mat3 op Mat3.
+            (NetworkResult::Mat3(a), NetworkResult::Mat3(b), BinOp::Add) => {
+                NetworkResult::Mat3(a + b)
+            }
+            (NetworkResult::Mat3(a), NetworkResult::Mat3(b), BinOp::Sub) => {
+                NetworkResult::Mat3(a - b)
+            }
+            // glam's DMat3 * DMat3 matches our row-major semantics — see
+            // doc/design_matrix_types.md §"Row-major API over column-major storage".
+            (NetworkResult::Mat3(a), NetworkResult::Mat3(b), BinOp::Mul) => {
+                NetworkResult::Mat3(a.mul_mat3(&b))
+            }
+
+            // Mat3 × Vec3.
+            (NetworkResult::Mat3(m), NetworkResult::Vec3(v), BinOp::Mul) => {
+                NetworkResult::Vec3(m.mul_vec3(v))
+            }
+
+            // Mixed Mat3/IMat3: promote IMat3 → Mat3 and recurse.
+            (NetworkResult::IMat3(a), NetworkResult::Mat3(b), op) => Self::matrix_arith_op(
+                NetworkResult::Mat3(imat3_rows_to_dmat3(&a)),
+                NetworkResult::Mat3(b),
+                op,
+            ),
+            (NetworkResult::Mat3(a), NetworkResult::IMat3(b), op) => Self::matrix_arith_op(
+                NetworkResult::Mat3(a),
+                NetworkResult::Mat3(imat3_rows_to_dmat3(&b)),
+                op,
+            ),
+
+            // Mat3 × IVec3: promote IVec3 → Vec3.
+            (NetworkResult::Mat3(m), NetworkResult::IVec3(v), BinOp::Mul) => {
+                NetworkResult::Vec3(m.mul_vec3(DVec3::new(v.x as f64, v.y as f64, v.z as f64)))
+            }
+            // IMat3 × Vec3: promote IMat3 → Mat3.
+            (NetworkResult::IMat3(m), NetworkResult::Vec3(v), BinOp::Mul) => {
+                let mat: DMat3 = imat3_rows_to_dmat3(&m);
+                NetworkResult::Vec3(mat.mul_vec3(v))
+            }
+
+            _ => NetworkResult::Error(
+                "Matrix arithmetic operation not supported for these types".to_string(),
+            ),
+        }
+    }
+}
+
+/// Returns true if `member` is a valid matrix accessor name of the form `m<i><j>`
+/// where `i` and `j` are single digits 0..=2 (e.g., `m00`, `m12`).
+fn is_matrix_accessor(member: &str) -> bool {
+    parse_matrix_accessor(member).is_some()
+}
+
+/// Parses a matrix accessor name `m<i><j>` into `(i, j)` with `i, j` in 0..=2.
+/// Returns `None` for anything else (e.g., `m3`, `m33`, `mxx`, `row`).
+fn parse_matrix_accessor(member: &str) -> Option<(usize, usize)> {
+    let bytes = member.as_bytes();
+    if bytes.len() != 3 || bytes[0] != b'm' {
+        return None;
+    }
+    let i = (bytes[1] as char).to_digit(10)? as usize;
+    let j = (bytes[2] as char).to_digit(10)? as usize;
+    if i <= 2 && j <= 2 { Some((i, j)) } else { None }
 }

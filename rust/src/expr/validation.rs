@@ -164,6 +164,76 @@ fn create_standard_function_signatures() -> HashMap<String, FunctionSignature> {
         FunctionSignature::new(vec![DataType::IVec3, DataType::IVec3], DataType::IVec3),
     );
 
+    // Matrix constructors (mirror node names — see doc/design_matrix_types.md D7).
+    functions.insert(
+        "mat3_rows".to_string(),
+        FunctionSignature::new(
+            vec![DataType::Vec3, DataType::Vec3, DataType::Vec3],
+            DataType::Mat3,
+        ),
+    );
+    functions.insert(
+        "imat3_rows".to_string(),
+        FunctionSignature::new(
+            vec![DataType::IVec3, DataType::IVec3, DataType::IVec3],
+            DataType::IMat3,
+        ),
+    );
+    functions.insert(
+        "mat3_cols".to_string(),
+        FunctionSignature::new(
+            vec![DataType::Vec3, DataType::Vec3, DataType::Vec3],
+            DataType::Mat3,
+        ),
+    );
+    functions.insert(
+        "imat3_cols".to_string(),
+        FunctionSignature::new(
+            vec![DataType::IVec3, DataType::IVec3, DataType::IVec3],
+            DataType::IMat3,
+        ),
+    );
+    functions.insert(
+        "mat3_diag".to_string(),
+        FunctionSignature::new(vec![DataType::Vec3], DataType::Mat3),
+    );
+    functions.insert(
+        "imat3_diag".to_string(),
+        FunctionSignature::new(vec![DataType::IVec3], DataType::IMat3),
+    );
+
+    // Matrix functions.
+    functions.insert(
+        "transpose3".to_string(),
+        FunctionSignature::new(vec![DataType::Mat3], DataType::Mat3),
+    );
+    functions.insert(
+        "itranspose3".to_string(),
+        FunctionSignature::new(vec![DataType::IMat3], DataType::IMat3),
+    );
+    functions.insert(
+        "det3".to_string(),
+        FunctionSignature::new(vec![DataType::Mat3], DataType::Float),
+    );
+    functions.insert(
+        "idet3".to_string(),
+        FunctionSignature::new(vec![DataType::IMat3], DataType::Int),
+    );
+    functions.insert(
+        "inv3".to_string(),
+        FunctionSignature::new(vec![DataType::Mat3], DataType::Mat3),
+    );
+
+    // Explicit IMat3 ↔ Mat3 casts.
+    functions.insert(
+        "to_mat3".to_string(),
+        FunctionSignature::new(vec![DataType::IMat3], DataType::Mat3),
+    );
+    functions.insert(
+        "to_imat3".to_string(),
+        FunctionSignature::new(vec![DataType::Mat3], DataType::IMat3),
+    );
+
     functions
 }
 
@@ -589,5 +659,343 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
         }) as EvaluationFunction,
     );
 
+    // Matrix constructors: mat3_rows / imat3_rows.
+    functions.insert(
+        "mat3_rows".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 3 {
+                return NetworkResult::Error(
+                    "mat3_rows() requires exactly 3 arguments".to_string(),
+                );
+            }
+            let a = match promote_to_vec3(&args[0]) {
+                Some(v) => v,
+                None => {
+                    return NetworkResult::Error(
+                        "mat3_rows() requires Vec3/IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let b = match promote_to_vec3(&args[1]) {
+                Some(v) => v,
+                None => {
+                    return NetworkResult::Error(
+                        "mat3_rows() requires Vec3/IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let c = match promote_to_vec3(&args[2]) {
+                Some(v) => v,
+                None => {
+                    return NetworkResult::Error(
+                        "mat3_rows() requires Vec3/IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let rows = [[a.x, a.y, a.z], [b.x, b.y, b.z], [c.x, c.y, c.z]];
+            NetworkResult::Mat3(
+                crate::structure_designer::evaluator::network_result::rows_to_dmat3(&rows),
+            )
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "imat3_rows".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 3 {
+                return NetworkResult::Error(
+                    "imat3_rows() requires exactly 3 arguments".to_string(),
+                );
+            }
+            let a = match &args[0] {
+                NetworkResult::IVec3(v) => *v,
+                _ => {
+                    return NetworkResult::Error(
+                        "imat3_rows() requires IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let b = match &args[1] {
+                NetworkResult::IVec3(v) => *v,
+                _ => {
+                    return NetworkResult::Error(
+                        "imat3_rows() requires IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let c = match &args[2] {
+                NetworkResult::IVec3(v) => *v,
+                _ => {
+                    return NetworkResult::Error(
+                        "imat3_rows() requires IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            NetworkResult::IMat3([[a.x, a.y, a.z], [b.x, b.y, b.z], [c.x, c.y, c.z]])
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "mat3_cols".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 3 {
+                return NetworkResult::Error(
+                    "mat3_cols() requires exactly 3 arguments".to_string(),
+                );
+            }
+            let a = match promote_to_vec3(&args[0]) {
+                Some(v) => v,
+                None => {
+                    return NetworkResult::Error(
+                        "mat3_cols() requires Vec3/IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let b = match promote_to_vec3(&args[1]) {
+                Some(v) => v,
+                None => {
+                    return NetworkResult::Error(
+                        "mat3_cols() requires Vec3/IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let c = match promote_to_vec3(&args[2]) {
+                Some(v) => v,
+                None => {
+                    return NetworkResult::Error(
+                        "mat3_cols() requires Vec3/IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            // Rows are (a[j], b[j], c[j]) for j=0,1,2 — transposed from the column
+            // inputs. rows_to_dmat3 then transposes to column-major glam storage.
+            let rows = [[a.x, b.x, c.x], [a.y, b.y, c.y], [a.z, b.z, c.z]];
+            NetworkResult::Mat3(
+                crate::structure_designer::evaluator::network_result::rows_to_dmat3(&rows),
+            )
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "imat3_cols".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 3 {
+                return NetworkResult::Error(
+                    "imat3_cols() requires exactly 3 arguments".to_string(),
+                );
+            }
+            let a = match &args[0] {
+                NetworkResult::IVec3(v) => *v,
+                _ => {
+                    return NetworkResult::Error(
+                        "imat3_cols() requires IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let b = match &args[1] {
+                NetworkResult::IVec3(v) => *v,
+                _ => {
+                    return NetworkResult::Error(
+                        "imat3_cols() requires IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            let c = match &args[2] {
+                NetworkResult::IVec3(v) => *v,
+                _ => {
+                    return NetworkResult::Error(
+                        "imat3_cols() requires IVec3 arguments".to_string(),
+                    );
+                }
+            };
+            // m[i][j] = col_j[i].
+            NetworkResult::IMat3([[a.x, b.x, c.x], [a.y, b.y, c.y], [a.z, b.z, c.z]])
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "mat3_diag".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("mat3_diag() requires exactly 1 argument".to_string());
+            }
+            let v = match promote_to_vec3(&args[0]) {
+                Some(v) => v,
+                None => {
+                    return NetworkResult::Error(
+                        "mat3_diag() requires a Vec3/IVec3 argument".to_string(),
+                    );
+                }
+            };
+            use glam::f64::{DMat3, DVec3};
+            NetworkResult::Mat3(DMat3::from_cols(
+                DVec3::new(v.x, 0.0, 0.0),
+                DVec3::new(0.0, v.y, 0.0),
+                DVec3::new(0.0, 0.0, v.z),
+            ))
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "imat3_diag".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error(
+                    "imat3_diag() requires exactly 1 argument".to_string(),
+                );
+            }
+            match &args[0] {
+                NetworkResult::IVec3(v) => {
+                    NetworkResult::IMat3([[v.x, 0, 0], [0, v.y, 0], [0, 0, v.z]])
+                }
+                _ => NetworkResult::Error("imat3_diag() requires an IVec3 argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    // Matrix functions: transpose, determinant, inverse, explicit casts.
+    functions.insert(
+        "transpose3".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error(
+                    "transpose3() requires exactly 1 argument".to_string(),
+                );
+            }
+            match &args[0] {
+                NetworkResult::Mat3(m) => NetworkResult::Mat3(m.transpose()),
+                _ => NetworkResult::Error("transpose3() requires a Mat3 argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "itranspose3".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error(
+                    "itranspose3() requires exactly 1 argument".to_string(),
+                );
+            }
+            match &args[0] {
+                NetworkResult::IMat3(m) => {
+                    let t = [
+                        [m[0][0], m[1][0], m[2][0]],
+                        [m[0][1], m[1][1], m[2][1]],
+                        [m[0][2], m[1][2], m[2][2]],
+                    ];
+                    NetworkResult::IMat3(t)
+                }
+                _ => NetworkResult::Error("itranspose3() requires an IMat3 argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "det3".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("det3() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Mat3(m) => NetworkResult::Float(m.determinant()),
+                _ => NetworkResult::Error("det3() requires a Mat3 argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "idet3".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("idet3() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::IMat3(m) => {
+                    let det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+                    NetworkResult::Int(det)
+                }
+                _ => NetworkResult::Error("idet3() requires an IMat3 argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "inv3".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("inv3() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Mat3(m) => {
+                    // glam does not check for singular matrices (returns garbage).
+                    // See doc/design_matrix_types.md §"Determinant and inverse precision".
+                    let det = m.determinant();
+                    if det.abs() < 1e-12 {
+                        NetworkResult::Error("inv3: singular matrix".to_string())
+                    } else {
+                        NetworkResult::Mat3(m.inverse())
+                    }
+                }
+                _ => NetworkResult::Error("inv3() requires a Mat3 argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "to_mat3".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("to_mat3() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::IMat3(m) => NetworkResult::Mat3(
+                    crate::structure_designer::evaluator::network_result::imat3_rows_to_dmat3(m),
+                ),
+                NetworkResult::Mat3(m) => NetworkResult::Mat3(*m),
+                _ => {
+                    NetworkResult::Error("to_mat3() requires an IMat3 or Mat3 argument".to_string())
+                }
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "to_imat3".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("to_imat3() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Mat3(m) => {
+                    // Truncating downcast per doc/design_matrix_types.md D3.
+                    let rows =
+                        crate::structure_designer::evaluator::network_result::dmat3_to_rows(m);
+                    let t = [
+                        [rows[0][0] as i32, rows[0][1] as i32, rows[0][2] as i32],
+                        [rows[1][0] as i32, rows[1][1] as i32, rows[1][2] as i32],
+                        [rows[2][0] as i32, rows[2][1] as i32, rows[2][2] as i32],
+                    ];
+                    NetworkResult::IMat3(t)
+                }
+                NetworkResult::IMat3(m) => NetworkResult::IMat3(*m),
+                _ => {
+                    NetworkResult::Error("to_imat3() requires a Mat3 or IMat3 argument".to_string())
+                }
+            }
+        }) as EvaluationFunction,
+    );
+
     functions
+}
+
+/// Promotes a Vec3 or IVec3 `NetworkResult` to a `DVec3`, returning None for other types.
+fn promote_to_vec3(value: &NetworkResult) -> Option<glam::f64::DVec3> {
+    match value {
+        NetworkResult::Vec3(v) => Some(*v),
+        NetworkResult::IVec3(v) => Some(glam::f64::DVec3::new(v.x as f64, v.y as f64, v.z as f64)),
+        _ => None,
+    }
 }
