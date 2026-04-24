@@ -4,7 +4,7 @@
 // `doc/design_cnnd_migration_v2_to_v3.md` adds new fixtures here.
 
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -323,6 +323,124 @@ fn test_roundtrip_custom_network_rename() {
     let c2 = registry2.node_networks.get("my_custom").unwrap();
     assert_eq!(c1.node_type.output_type(), c2.node_type.output_type());
     assert_eq!(c1.node_type.parameters.len(), c2.node_type.parameters.len());
+}
+
+/// Fixture — `function_type_parameter.cnnd`:
+/// a custom network whose parameter pins include function-typed DataTypes.
+/// Regression coverage for a real user file that the initial v2→v3 migration
+/// failed to load: the old `rename_data_type_display_string` only peeled
+/// `[…]` brackets and matched the core against three exact identifiers, so
+/// `"Atomic -> Atomic"` (function-type Display form) passed through
+/// untouched, leaving a post-migration `Atomic` identifier that v3 could no
+/// longer resolve. The rewrite scans every identifier token in the string so
+/// every `DataType::Display`-emitted shape — plain, array, and function,
+/// including multi-parameter `(A,B) -> C` — converts correctly.
+#[test]
+fn test_load_function_type_parameter_rename() {
+    let mut registry = NodeTypeRegistry::new();
+    load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/function_type_parameter.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load function_type_parameter.cnnd");
+
+    let net = registry
+        .node_networks
+        .get("higher_order")
+        .expect("higher_order network missing");
+
+    let param_types: Vec<(String, DataType)> = net
+        .node_type
+        .parameters
+        .iter()
+        .map(|p| (p.name.clone(), p.data_type.clone()))
+        .collect();
+
+    let expected: Vec<(String, DataType)> = vec![
+        ("molecule".to_string(), DataType::Molecule),
+        (
+            "op".to_string(),
+            DataType::Function(FunctionType {
+                parameter_types: vec![DataType::Molecule],
+                output_type: Box::new(DataType::Molecule),
+            }),
+        ),
+        // `A -> A -> A` parses right-associatively as `A -> (A -> A)`, so
+        // every nested `Atomic` identifier — three in total — must be
+        // rewritten by the scan.
+        (
+            "curried".to_string(),
+            DataType::Function(FunctionType {
+                parameter_types: vec![DataType::Molecule],
+                output_type: Box::new(DataType::Function(FunctionType {
+                    parameter_types: vec![DataType::Molecule],
+                    output_type: Box::new(DataType::Molecule),
+                })),
+            }),
+        ),
+        // `[Atomic] -> Atomic` exercises the combination of array wrapping
+        // and function arrow in a single DataType display string.
+        (
+            "array_op".to_string(),
+            DataType::Function(FunctionType {
+                parameter_types: vec![DataType::Array(Box::new(DataType::Molecule))],
+                output_type: Box::new(DataType::Molecule),
+            }),
+        ),
+    ];
+    assert_eq!(param_types, expected);
+
+    // Output pin: `Atomic` → `Molecule`.
+    assert_eq!(*net.node_type.output_type(), DataType::Molecule);
+}
+
+#[test]
+fn test_roundtrip_function_type_parameter_rename() {
+    let mut registry = NodeTypeRegistry::new();
+    let load_result = load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/function_type_parameter.cnnd", FIXTURE_DIR),
+    )
+    .expect("Failed to load");
+
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path().join("roundtrip.cnnd");
+    save_node_networks_to_file(
+        &mut registry,
+        &temp_path,
+        load_result.direct_editing_mode,
+        &load_result.cli_access_rules,
+    )
+    .expect("Failed to save");
+
+    let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
+    // No v2 identifier survives anywhere in the saved file — including inside
+    // the function-type display strings.
+    assert!(
+        !saved.contains("Atomic"),
+        "saved file must not contain v2 `Atomic` identifier anywhere"
+    );
+    assert!(
+        !saved.contains("Geometry\""),
+        "saved file must not contain v2 `Geometry` identifier"
+    );
+
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_path.to_str().unwrap())
+        .expect("Failed to reload");
+
+    let n1 = registry.node_networks.get("higher_order").unwrap();
+    let n2 = registry2.node_networks.get("higher_order").unwrap();
+    assert_eq!(n1.node_type.parameters.len(), n2.node_type.parameters.len());
+    for (p1, p2) in n1
+        .node_type
+        .parameters
+        .iter()
+        .zip(n2.node_type.parameters.iter())
+    {
+        assert_eq!(p1.name, p2.name);
+        assert_eq!(p1.data_type, p2.data_type);
+    }
 }
 
 // ---------------------------------------------------------------------------

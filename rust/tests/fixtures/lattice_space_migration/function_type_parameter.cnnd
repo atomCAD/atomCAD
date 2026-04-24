@@ -1,0 +1,68 @@
+{
+  "node_networks": [
+    [
+      "higher_order",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "higher_order",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "molecule",
+              "data_type": "Atomic"
+            },
+            {
+              "name": "op",
+              "data_type": "Atomic -> Atomic"
+            },
+            {
+              "name": "curried",
+              "data_type": "Atomic -> Atomic -> Atomic"
+            },
+            {
+              "name": "array_op",
+              "data_type": "[Atomic] -> Atomic"
+            }
+          ],
+          "output_type": "Atomic"
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "parameter",
+            "custom_name": "p_molecule",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Atomic",
+              "data_type_str": null,
+              "param_id": 1,
+              "param_index": 0,
+              "param_name": "molecule",
+              "sort_order": 0
+            }
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 2
+}

@@ -212,9 +212,10 @@ fn rename_data_type_string_in_value(v: &mut Value) {
 
 /// Rewrites a JSON value that came from a `DataType`-typed field with serde's
 /// default enum encoding: primitive variants are plain strings, `Array(inner)`
-/// is `{"Array": <inner>}`. The inner value recurses by the same rule.
-/// Plain strings on this path also get rewritten by the same `Display`-form
-/// rule since primitive variants share that spelling.
+/// is `{"Array": <inner>}`, `Function(FunctionType)` is
+/// `{"Function": {"parameter_types": [..], "output_type": ..}}`. Inner values
+/// recurse by the same rule. Plain strings on this path also get rewritten by
+/// the same `Display`-form rule since primitive variants share that spelling.
 fn rename_data_type_in_value(v: &mut Value) {
     match v {
         Value::String(s) => {
@@ -227,30 +228,69 @@ fn rename_data_type_in_value(v: &mut Value) {
             if let Some(inner) = map.get_mut("Array") {
                 rename_data_type_in_value(inner);
             }
+            if let Some(func) = map.get_mut("Function") {
+                if let Some(func_obj) = func.as_object_mut() {
+                    if let Some(params) = func_obj
+                        .get_mut("parameter_types")
+                        .and_then(|v| v.as_array_mut())
+                    {
+                        for p in params {
+                            rename_data_type_in_value(p);
+                        }
+                    }
+                    if let Some(ot) = func_obj.get_mut("output_type") {
+                        rename_data_type_in_value(ot);
+                    }
+                }
+            }
         }
         _ => {}
     }
 }
 
-/// Applies the primitive rename table to a DataType spelled in `Display` form
-/// (arrays shown as `"[…]"`). The bracket nesting is preserved verbatim.
-/// Unknown names (including already-v3 names) pass through unchanged.
+/// Applies the primitive rename table (`Atomic` → `Molecule`, `Geometry` →
+/// `Blueprint`, `UnitCell` → `LatticeVecs`) to a DataType spelled in `Display`
+/// form. Punctuation is passed through verbatim, so every shape the
+/// `DataType::Display` impl can emit is handled: plain identifiers, arrays
+/// (`"[…]"`, any nesting), and function types in all three written forms
+/// (`A -> B`, `() -> B`, `(A,B) -> C`, nested).
+///
+/// The implementation scans complete identifier tokens
+/// (`[A-Za-z_][A-Za-z0-9_]*`) and renames each that matches the v2 table.
+/// Identifiers that don't match — including already-v3 names like `Geometry2D`
+/// or user-defined custom-network names — pass through unchanged. This is
+/// deliberately broader than just wrapping the old bracket-peel logic: real
+/// user files have been observed carrying function-typed parameter pins (e.g.
+/// `"Atomic -> Atomic"` on a higher-order custom network), and the old
+/// peel-and-match helper returned those strings untouched, producing a
+/// post-migration `Atomic` identifier that v3 cannot resolve.
 fn rename_data_type_display_string(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let opening = bytes.iter().take_while(|&&b| b == b'[').count();
-    let closing = bytes.iter().rev().take_while(|&&b| b == b']').count();
-    let depth = opening.min(closing);
-    if depth * 2 >= s.len() {
-        return s.to_string();
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_alphabetic() || c == '_' {
+            let mut ident = String::new();
+            while let Some(&cc) = chars.peek() {
+                if cc.is_ascii_alphanumeric() || cc == '_' {
+                    ident.push(cc);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            let renamed = match ident.as_str() {
+                "Atomic" => "Molecule",
+                "Geometry" => "Blueprint",
+                "UnitCell" => "LatticeVecs",
+                _ => ident.as_str(),
+            };
+            out.push_str(renamed);
+        } else {
+            out.push(c);
+            chars.next();
+        }
     }
-    let core = &s[depth..s.len() - depth];
-    let renamed_core = match core {
-        "Atomic" => "Molecule",
-        "Geometry" => "Blueprint",
-        "UnitCell" => "LatticeVecs",
-        _ => return s.to_string(),
-    };
-    format!("{}{}{}", "[".repeat(depth), renamed_core, "]".repeat(depth))
+    out
 }
 
 // ---------------------------------------------------------------------------
