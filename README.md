@@ -32,7 +32,7 @@ We’d love to hear about your use case: what are you using — or planning to u
 
 ## Tutorials and Reference Guide
 
-If you are new to atomCAD check out the [atomCAD Basic Tutorial](./doc/atomCAD_basic_tutorial.md) and the [atomCAD Part Design Tutorial](./doc/part_design_tutorial.md) (in this order).
+If you are new to atomCAD check out the [atomCAD Basic Tutorial](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/atomCAD_basic_tutorial.md) and the [atomCAD Part Design Tutorial](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/part_design_tutorial.md) (in this order).
 
 
 For more details see [atomCAD Reference Guide](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/atomCAD_reference_guide.md).
