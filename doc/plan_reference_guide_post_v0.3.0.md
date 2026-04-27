@@ -331,8 +331,15 @@ global cross-reference rewrite across all sub-pages and the repo-wide
 reference update.
 
 **Prerequisite:** Phase 0a is committed. The pre-0a state of the
-reference guide is recoverable via `git show HEAD~1:doc/atomCAD_reference_guide.md`
-if 0a's agent removed the "Nodes reference" content from the hub.
+reference guide is also saved verbatim at
+`doc/_atomCAD_reference_guide_pre_phase_0a.md` (a leading-underscore
+temporary file created during 0a). It is also recoverable via
+`git show HEAD~1:doc/atomCAD_reference_guide.md` or
+`git show v0.3.0-docs:doc/atomCAD_reference_guide.md`.
+
+**Cleanup:** After Phase 0b is complete and verified, delete
+`doc/_atomCAD_reference_guide_pre_phase_0a.md` — it is a temporary
+hand-off file, not part of the published documentation.
 
 **Files created in 0b (6 node sub-pages):**
 
@@ -353,10 +360,12 @@ become `## comment`, `## parameter`, and so on.
 **Steps for Phase 0b:**
 
 - [ ] Confirm Phase 0a is committed: `git log --oneline -5` should show
-      a phase 0a commit. If the source for the node-reference content is
-      no longer in the working tree (because 0a removed it from the hub),
-      retrieve it via `git show HEAD~1:doc/atomCAD_reference_guide.md`
-      or `git show v0.3.0-docs:doc/atomCAD_reference_guide.md`.
+      a phase 0a commit. The pre-split content (with the original
+      single-file structure) is available at
+      `doc/_atomCAD_reference_guide_pre_phase_0a.md`. If that file has
+      been deleted, retrieve it via
+      `git show HEAD~1:doc/atomCAD_reference_guide.md` or
+      `git show v0.3.0-docs:doc/atomCAD_reference_guide.md`.
 - [ ] Extract each of the 6 H3 sections into its destination sub-page:
       - Apply the heading-demotion rule.
       - Add the back-to-hub link directly under the title (using
