@@ -27,6 +27,78 @@ Produces a `LatticeVecs` value representing the three lattice basis vectors defi
 
 ![](../../atomCAD_images/unit_cell_props.png)
 
+## structure
+
+Constructs or modifies a `Structure` value — the bundle of lattice vectors, motif, and motif offset that defines the infinite crystal field used by every blueprint and crystal. All four input pins are optional.
+
+![TODO(image): the `structure` node selected in the network with its properties panel showing the lattice_vecs, motif, and motif_offset slots](TODO)
+
+**Input pins** (all optional)
+
+- `structure` — base `Structure` to modify. When connected, every other unconnected pin passes through unchanged from the base.
+- `lattice_vecs` — overrides the lattice vectors.
+- `motif` — overrides the motif.
+- `motif_offset` — overrides the fractional motif offset (`Vec3`, each component in `[0, 1]`).
+
+**Output**
+
+A single `Structure` value. When the `structure` input is unconnected and a particular pin is also unconnected, the diamond default is used for that field — so an empty `structure` node is the diamond structure.
+
+**Typical uses**
+
+- Build a `Structure` from scratch: wire `lattice_vecs` and `motif` and leave `structure` unconnected.
+- Override one field: wire the upstream `Structure` into `structure` and only the field you want to change. Untouched fields pass through.
+
+A `Structure` value is what the geometry primitives (`cuboid`, `sphere`, `extrude`, …) consume implicitly to interpret their integer coordinates. To swap the structure carried by a `Blueprint` further down the chain, use `with_structure`.
+
+## get_structure
+
+Reads the `Structure` (lattice vectors + motif + motif offset) carried by a `Blueprint` or `Crystal` and emits it as a standalone `Structure` value. Useful when you need to feed the structure of one shape into a `with_structure` node further down the chain without losing the geometry on the original wire.
+
+**Input pin**
+
+- `input: HasStructure` — a `Blueprint` or `Crystal`.
+
+## with_structure
+
+Replaces the `Structure` carried by a `Blueprint` with a different `Structure`, preserving the blueprint's geometry. `Crystal` inputs are not accepted — a crystal's atoms are already materialized against a specific structure, so swapping it out would not be meaningful.
+
+**Input pins**
+
+- `shape: Blueprint` — the blueprint whose structure should be replaced.
+- `structure: Structure` — the replacement structure.
+
+If the replacement structure differs from the original in `lattice_vecs` or `motif_offset`, the geometry is no longer registered to integer translations of the lattice and the result is flagged as *lattice-unaligned*. If only the motif differs, the result is flagged as *motif-unaligned*. Both flags propagate downstream so later nodes (and `materialize`) can warn or refuse to operate on misaligned blueprints. See [Blueprint alignment](../../atomCAD_reference_guide.md#blueprint-alignment) for details.
+
+## supercell
+
+Rewrites a `Structure` so that its unit cell is a larger one defined by a 3×3 integer matrix. The physical infinite crystal is unchanged — only the way it is factored into `(cell + motif)` changes. Used to enlarge the working cell before motif-level edits or to model superstructures.
+
+![TODO(image): the `supercell` node selected with its properties panel visible, showing the equation-style rows for new_a / new_b / new_c and the determinant readout](TODO)
+
+**Input pins**
+
+- `structure: Structure` (optional) — defaults to the diamond structure when unconnected.
+- `matrix: IMat3` (optional) — when connected, overrides the stored matrix. For the common axis-aligned case (e.g. 2×2×2) wire an `imat3_diag` node.
+
+**Properties**
+
+The properties panel shows the matrix as three equation-style rows, one per new basis vector:
+
+```
+new_a = [m00]·a + [m01]·b + [m02]·c
+new_b = [m10]·a + [m11]·b + [m12]·c
+new_c = [m20]·a + [m21]·b + [m22]·c
+```
+
+Each `[n]` is an editable integer field; `a`, `b`, `c` refer to the original basis. Below the rows a live readout shows `det = N` (the volume scaling factor); a determinant of 0 (singular matrix) or a negative determinant (left-handed basis) is highlighted in red, and the node will fail to evaluate.
+
+When the `matrix` input pin is connected, the stored matrix grays out and the readout reflects the wired matrix instead. Disconnecting the pin restores the stored values.
+
+**Behavior**
+
+The new motif contains `|det(matrix)| × old_sites_count` sites — every old cell that fits inside the new cell contributes a tiled copy of the old motif. A common workflow is to feed the supercell output into `motif_edit` to make local modifications (vacancies, substitutions, dopants) inside the larger cell.
+
 ## motif
 
 The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.

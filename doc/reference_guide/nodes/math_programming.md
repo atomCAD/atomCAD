@@ -247,6 +247,23 @@ Creates an array of integers starting from an integer value and having a specifi
 
 ![](../../atomCAD_images/range_node_props.png)
 
+## sequence
+
+Collects a fixed number of inputs into an ordered array. Use `sequence` when you want to build an array from inputs that come from different upstream nodes and you care about their order, or when you want each element to appear on its own labeled pin in the network — `range` and `map` produce arrays from rules, but `sequence` lets you wire up the elements explicitly one at a time.
+
+![TODO(image): a `sequence` node configured with element type Blueprint and three input pins, with three different geometry nodes wired into pins 0, 1, 2](TODO)
+
+**Properties**
+
+- `Element type` — the type of every input pin and of the output array's elements (e.g. `Int`, `Blueprint`, `Crystal`, …). All input pins share this type.
+- `Count` — number of input pins (minimum 1). Each pin is named by its index (`0`, `1`, `2`, …) and the output is `[ElementType]` with elements in pin-index order.
+
+**Behavior**
+
+The output is the array of values from connected pins, in pin-index order. Unconnected pins are skipped (they do not contribute a `None` element). For element-typed pins, each pin can also accept array-typed input thanks to the standard array conventions, but typically each pin carries a single value.
+
+This node is also how the `Display array outputs` workflow is built up by hand: feed several outputs you want to view side-by-side into a `sequence` node, mark its output pin as displayed, and the array's elements render together in the viewport.
+
 ## map
 
 Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.

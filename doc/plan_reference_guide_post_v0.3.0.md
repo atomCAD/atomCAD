@@ -495,35 +495,35 @@ Each item below adds a new node section under "Atomic structure nodes" or
 entries (heading, one-line summary, input/output pins, properties, examples).
 
 ### 2.1 `structure` node + Structure data type
-- [ ] Add node entry; describe what `Structure` carries.
+- [x] Add node entry; describe what `Structure` carries.
 - Representative commits: `7e5da12b` (structure node), `f28761e5` (structure
   node and Structure data type).
 - Source: `rust/src/structure_designer/nodes/structure.rs` (verify path).
 
 ### 2.2 `get_structure` / `with_structure` nodes
-- [ ] Add two node entries.
+- [x] Add two node entries.
 - Representative commits: `8e7cf275` (get_structure), `f2175ca3` (with_structure).
 
 ### 2.3 `supercell` node
-- [ ] Add node entry. Note: structure input pin is optional (commit `d0334770`).
+- [x] Add node entry. Note: structure input pin is optional (commit `d0334770`).
 - Design doc: `doc/design_supercell_node.md`
 - Representative commits: `a7751671` (design), `8309bb98` (refinements),
   `24ad4913`/`a9656c78`/`21d5af87` (phases 1–3).
 
 ### 2.4 `import_cif` node
-- [ ] Add node entry; describe CIF import flow and any new UI affordances.
+- [x] Add node entry; describe CIF import flow and any new UI affordances.
 - Design doc: `doc/design_import_cif.md`
 - Representative commits: `13f66ce3` (design), `78eea280`–`431e7dfb` (phases 0–8).
 - Also update "File Formats" / import section (the reference guide lists `.cif`
   as a supported format — confirm the section exists and add the node link).
 
 ### 2.5 `infer_bonds` node
-- [ ] Add node entry.
+- [x] Add node entry.
 - Design doc: `doc/design_infer_bonds_node.md`
 - Representative commit: `d888ddf6`.
 
 ### 2.6 `sequence` node
-- [ ] Add node entry; describe what "sequence" means in context.
+- [x] Add node entry; describe what "sequence" means in context.
 - Design doc: there was a `doc/design/sequence_node.md` referenced in the diff
   but it appears removed on `main` — check git history (`git log --all -- doc/design/sequence_node.md`) to find the right design source.
 - Representative commits: `b7bbe378`/`bc18e07a` (design), `e8f04107`/`60e6d228`
@@ -531,13 +531,13 @@ entries (heading, one-line summary, input/output pins, properties, examples).
 - Also covers commit `3730fda2` "display array outputs" which is closely related.
 
 ### 2.7 `motif_edit` node
-- [ ] Add node entry. This is a substantial feature; the section may need
+- [x] Add node entry. This is a substantial feature; the section may need
       sub-headings for the editing operations it supports.
 - Design doc: `doc/design_motif_edit.md` (very large — 1574 lines)
 - Representative commits: `fe360075` (design), `b5cbeb0b`–`c48259f8` (phases 1–9).
 
 ### 2.8 `atom_composediff` node
-- [ ] Add node entry; describe diff composition semantics.
+- [x] Add node entry; describe diff composition semantics.
 - Design doc: `doc/design_compose_diffs.md` (very large — 1306 lines)
 - Representative commits: `01acc28d` (design), `944c9cc3`/`02105394`/`0c401b0a`
   (phases 1–3).
