@@ -141,6 +141,24 @@ The `@pattern` syntax means "use the `pattern` node as a callable function" rath
 - When connecting to a function-typed input pin (e.g., `map.f`)
 - When the destination expects a function, not a value
 
+### Multi-Output Pin References
+
+A node can expose more than one output pin. To reference a non-default output, suffix the source name with `.pinname`:
+
+```
+edit1 = atom_edit { base: input1 }
+applied = apply_diff { base: input1, diff: edit1.diff }
+```
+
+Here `edit1.diff` selects the `diff` output pin (pin index 1) of `atom_edit`. An unqualified reference like `edit1` always selects the primary output (pin index 0), so `edit1` and `edit1.result` are equivalent for `atom_edit`.
+
+**Rules:**
+- Unqualified references default to pin 0. This keeps the format backward compatible with single-output networks.
+- Qualified references use the pin name as defined by the node type (e.g. `atom_edit` exposes `result` and `diff`).
+- An unknown pin name (`foo.does_not_exist`) is reported as an editor error during validation.
+
+**Serialization:** When the network is serialized back to text, the `.pinname` suffix is emitted only for pin indices greater than 0. Wires from pin 0 always serialize unqualified.
+
 ## Properties and Input Pins
 
 The format treats node properties and input pin connections uniformly. Both are specified as key-value pairs:
@@ -380,7 +398,8 @@ statement    := 'output' name | 'delete' name
 comment      := '#' any-text-to-eol
 props        := (prop (',' prop)* ','?)?
 prop         := name ':' value
-value        := literal | name | '@' name | array | object
+value        := literal | node-ref | '@' name | array | object
+node-ref     := name ('.' name)?
 literal      := bool | int | float | string | vector
 bool         := 'true' | 'false'
 int          := [+-]? digit+
@@ -431,6 +450,18 @@ fill1 = atom_fill {
 }
 
 output fill1
+```
+
+### Multi-Output Pin Reference
+
+```
+# atom_edit exposes two output pins: "result" (pin 0) and "diff" (pin 1)
+edit1 = atom_edit { base: imported }
+
+# Re-apply the same diff to a different base
+applied = apply_diff { base: other_base, diff: edit1.diff, visible: true }
+
+output applied
 ```
 
 ### Functional Programming Pattern

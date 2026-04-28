@@ -618,7 +618,7 @@ These changes affect general application behavior, not a single node.
 ## Phase 5 — Text format and CLI surface
 
 ### 5.1 Multi-output pin reference syntax in text format
-- [ ] Document the `.pinname` syntax for referring to non-default output
+- [x] Document the `.pinname` syntax for referring to non-default output
       pins in the text format (e.g. `atom_edit.diff`).
 - Design doc: `doc/design_multi_output_pins.md` (Phase 5 section)
 - Representative commit: included in `a6fd4b41` (multi output pins phase 5, 6).
