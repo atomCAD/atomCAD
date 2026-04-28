@@ -34,12 +34,19 @@ We’d love to hear about your use case: what are you using — or planning to u
 - [Direct Editing Mode](./reference_guide/direct_editing.md) — the simplified beginner mode and the atom editor.
 - [Parts of the UI](./reference_guide/ui.md) — viewport, panels, menu bar, preferences.
 - [Node Networks](./reference_guide/node_networks.md) — core concepts: data types, subnetworks, functional programming.
-- **Nodes reference**
-  - [Annotation nodes](./reference_guide/nodes/annotation.md)
-  - [Math and programming nodes](./reference_guide/nodes/math_programming.md)
-  - [2D geometry nodes](./reference_guide/nodes/geometry_2d.md)
-  - [3D geometry nodes](./reference_guide/nodes/geometry_3d.md)
-  - [Atomic structure nodes](./reference_guide/nodes/atomic.md)
-  - [Other nodes](./reference_guide/nodes/other.md)
+- [Nodes reference](#nodes-reference) — built-in node categories.
 - [Headless Mode (CLI)](./reference_guide/headless_cli.md)
 - [Using with Claude Code](./reference_guide/claude_code.md)
+
+## Nodes reference
+
+We categorize nodes by their functionality and/or output pin data type. There are the following categories of nodes:
+
+- [Annotation nodes](./reference_guide/nodes/annotation.md)
+- [Math and programming nodes](./reference_guide/nodes/math_programming.md)
+- [2D Geometry nodes](./reference_guide/nodes/geometry_2d.md)
+- [3D Geometry nodes](./reference_guide/nodes/geometry_3d.md)
+- [Atomic structure nodes](./reference_guide/nodes/atomic.md)
+- [Other nodes](./reference_guide/nodes/other.md)
+
+You create 2D geometry to eventually use the **extrude** node to create 3D geometry from it. You create 3D geometry to eventually use the **atom_fill** node to create an atomic structure from it.

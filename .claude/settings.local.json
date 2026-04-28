@@ -184,7 +184,15 @@
       "Bash(git -C /c/machine_phase_systems/flutter_cad stash drop stash@{0})",
       "Bash(git *)",
       "Read(//c/atomcad_v0.3.0/samples/**)",
-      "Bash(flutter doctor *)"
+      "Bash(flutter doctor *)",
+      "Bash(awk 'NR==538,NR==549' doc/_atomCAD_reference_guide_pre_phase_0a.md)",
+      "Bash(awk 'NR==551,NR==572' doc/_atomCAD_reference_guide_pre_phase_0a.md)",
+      "Bash(awk 'NR==574,NR==762' doc/_atomCAD_reference_guide_pre_phase_0a.md)",
+      "Bash(awk 'NR==764,NR==860' doc/_atomCAD_reference_guide_pre_phase_0a.md)",
+      "Bash(awk 'NR==862,NR==1014' doc/_atomCAD_reference_guide_pre_phase_0a.md)",
+      "Bash(awk 'NR<93' doc/reference_guide/nodes/geometry_3d.md)",
+      "Bash(awk 'NR>=952 && NR<=959' doc/_atomCAD_reference_guide_pre_phase_0a.md)",
+      "Bash(awk 'NR>100' doc/reference_guide/nodes/geometry_3d.md)"
     ]
   }
 }
