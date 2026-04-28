@@ -528,10 +528,12 @@ impl NodeTypeRegistry {
                         // a malformed pin name or multi-connection still yields
                         // None so type errors stay visible.
                         if self.input_is_disconnected(node, node_type, input_pin_name) {
-                            fallback_if_disconnected.as_ref().map(|t| ResolvedOutputType {
-                                data_type: t.clone(),
-                                via_fallback: true,
-                            })
+                            fallback_if_disconnected
+                                .as_ref()
+                                .map(|t| ResolvedOutputType {
+                                    data_type: t.clone(),
+                                    via_fallback: true,
+                                })
                         } else {
                             None
                         }

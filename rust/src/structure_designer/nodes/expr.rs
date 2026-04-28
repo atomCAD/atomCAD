@@ -418,6 +418,30 @@ Example: `if x > 0 then 1 else -1`
 **Type Promotion:**
 Integers and integer vectors automatically promote to floats and float vectors when mixed with floats.
 
+### Array Literals
+
+- `[expr1, expr2, ...]` — non-empty array literal; element type inferred via
+  existing promotion rules; recursive nesting supported.
+- `[]TypeExpr` — empty array of given element type. TypeExpr is a primitive or
+  domain type name (e.g. Int, IVec3, Structure), or `[TypeExpr]` for nested
+  array types.
+
+Examples:
+  [1, 2, 3]                          // Array[Int]
+  [1, 2.0]                           // Array[Float] (Int promoted)
+  [ivec3(1,2,3), ivec3(4,5,6)]       // Array[IVec3]
+  []IVec3                            // empty Array[IVec3]
+  []Structure                        // empty Array[Structure]
+  [][IVec3]                          // empty Array[Array[IVec3]]
+  [][[Int]]                          // empty Array[Array[Array[Int]]]
+  [[]Int]                            // 1-element Array[Array[Int]] containing one empty Array[Int]
+
+The leading `[]` marks an empty-array literal; the trailing TypeExpr declares the
+element type. The abstract supertypes HasAtoms, HasStructure, HasFreeLinOps are
+not accepted as element types. Type-name identifiers are only interpreted as
+types in the position immediately after `[]`, so naming a parameter after a type
+(e.g. `structure: Structure`) is safe.
+
 ### Vector Math Functions
 - `length2(vec2)` - Calculate 2D vector magnitude
 - `length3(vec3)` - Calculate 3D vector magnitude

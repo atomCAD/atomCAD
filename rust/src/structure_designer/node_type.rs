@@ -112,11 +112,7 @@ impl OutputPinDefinition {
     /// disconnected. Use this for nodes whose evaluation produces meaningful
     /// intrinsic content with no input (e.g. `atom_edit` whose diff is itself
     /// a `Molecule`).
-    pub fn same_as_input_or_default(
-        name: &str,
-        input_pin_name: &str,
-        fallback: DataType,
-    ) -> Self {
+    pub fn same_as_input_or_default(name: &str, input_pin_name: &str, fallback: DataType) -> Self {
         Self {
             name: name.to_string(),
             data_type: PinOutputType::SameAsInput {

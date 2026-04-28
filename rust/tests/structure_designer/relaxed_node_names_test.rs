@@ -97,7 +97,14 @@ fn needs_quoting_bare_safe_names() {
 
 #[test]
 fn needs_quoting_keyword_collisions() {
-    for kw in ["true", "false", "output", "delete", "description", "summary"] {
+    for kw in [
+        "true",
+        "false",
+        "output",
+        "delete",
+        "description",
+        "summary",
+    ] {
         assert!(
             Parser::needs_quoting(kw),
             "expected `{}` to require quoting",
@@ -229,7 +236,11 @@ fn serializer_emits_bare_form_for_bare_safe_names() {
     );
     assert!(result.success, "edit failed: {:?}", result.errors);
 
-    let network = designer.node_type_registry.node_networks.get("net").unwrap();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
     let text = serialize_network(network, &designer.node_type_registry, None);
     assert!(text.contains("mybox = cuboid"));
     assert!(text.contains("output mybox"));
@@ -248,7 +259,11 @@ fn serializer_emits_quoted_form_for_relaxed_names() {
     );
     assert!(result.success, "edit failed: {:?}", result.errors);
 
-    let network = designer.node_type_registry.node_networks.get("net").unwrap();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
     let text = serialize_network(network, &designer.node_type_registry, None);
     assert!(text.contains("`weird name` = cuboid"));
     assert!(text.contains("output `weird name`"));
@@ -263,7 +278,11 @@ fn roundtrip_preserves_relaxed_name() {
     let result = edit_designer_network(&mut designer, "net", code, true);
     assert!(result.success, "edit failed: {:?}", result.errors);
 
-    let network = designer.node_type_registry.node_networks.get("net").unwrap();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
     let serialized = serialize_network(network, &designer.node_type_registry, None);
 
     // Re-parse the serialized text into a fresh network and verify the same
@@ -290,7 +309,11 @@ fn roundtrip_byte_stable_for_bare_names() {
     let result = edit_designer_network(&mut designer, "net", code, true);
     assert!(result.success, "edit failed: {:?}", result.errors);
 
-    let network = designer.node_type_registry.node_networks.get("net").unwrap();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
     let first = serialize_network(network, &designer.node_type_registry, None);
 
     let mut designer2 = setup_designer_with_network("net");
@@ -300,7 +323,11 @@ fn roundtrip_byte_stable_for_bare_names() {
         "roundtrip parse failed: {:?}",
         result2.errors
     );
-    let network2 = designer2.node_type_registry.node_networks.get("net").unwrap();
+    let network2 = designer2
+        .node_type_registry
+        .node_networks
+        .get("net")
+        .unwrap();
     let second = serialize_network(network2, &designer2.node_type_registry, None);
 
     assert_eq!(first, second, "bare-only round-trip should be byte-stable");

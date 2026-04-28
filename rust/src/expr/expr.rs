@@ -41,6 +41,8 @@ pub enum Expr {
     Call(String, Vec<Expr>),
     Conditional(Box<Expr>, Box<Expr>, Box<Expr>), // if condition then expr1 else expr2
     MemberAccess(Box<Expr>, String),              // expr.member (e.g., vec.x, vec.y, vec.z)
+    Array(Vec<Expr>),                             // non-empty array literal: [e1, e2, ...]
+    EmptyArray(DataType),                         // typed empty array: []Type
 }
 
 impl Expr {
@@ -333,6 +335,22 @@ impl Expr {
                     )),
                 }
             }
+            Expr::EmptyArray(t) => Ok(DataType::Array(Box::new(t.clone()))),
+            Expr::Array(elements) => {
+                // elements is non-empty by construction (parser produces this only
+                // when at least one element was parsed).
+                let mut unified = elements[0].validate(variables, functions)?;
+                for (i, e) in elements.iter().enumerate().skip(1) {
+                    let ti = e.validate(variables, functions)?;
+                    unified = unify_array_element_types(&unified, &ti).map_err(|_| {
+                        format!(
+                            "array element {} has type {}, incompatible with prior element type {}",
+                            i, ti, unified
+                        )
+                    })?;
+                }
+                Ok(DataType::Array(Box::new(unified)))
+            }
         }
     }
 
@@ -473,6 +491,18 @@ impl Expr {
                         NetworkResult::Error(format!("Cannot access member '{}' on value", member))
                     }
                 }
+            }
+            Expr::EmptyArray(_) => NetworkResult::Array(vec![]),
+            Expr::Array(elements) => {
+                let mut out = Vec::with_capacity(elements.len());
+                for e in elements {
+                    let v = e.evaluate(variables, functions);
+                    if let NetworkResult::Error(_) = v {
+                        return v;
+                    }
+                    out.push(v);
+                }
+                NetworkResult::Array(out)
             }
         }
     }
@@ -815,6 +845,15 @@ impl Expr {
             Expr::MemberAccess(expr, member) => {
                 format!("(. {} {})", expr.to_prefix_string(), member)
             }
+            Expr::Array(elements) => {
+                let elems_str = elements
+                    .iter()
+                    .map(|e| e.to_prefix_string())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(array {})", elems_str)
+            }
+            Expr::EmptyArray(t) => format!("(empty-array {})", t),
         }
     }
 
@@ -910,6 +949,34 @@ impl Expr {
                 "Matrix arithmetic operation not supported for these types".to_string(),
             ),
         }
+    }
+}
+
+/// Unifies two element types for an array literal under the same promotion rules
+/// used by conditional-branch unification and arithmetic. Returns the unified
+/// type or `Err(())` if no common type exists.
+///
+/// Rules:
+/// - Identical types unify to themselves.
+/// - Int + Float -> Float; IVec2 + Vec2 -> Vec2; IVec3 + Vec3 -> Vec3;
+///   IMat3 + Mat3 -> Mat3; Bool + Int -> Int.
+/// - Array[T1] + Array[T2] -> Array[unify(T1, T2)] (recursive).
+/// - Anything else: error.
+pub(crate) fn unify_array_element_types(a: &DataType, b: &DataType) -> Result<DataType, ()> {
+    if a == b {
+        return Ok(a.clone());
+    }
+    match (a, b) {
+        (DataType::Int, DataType::Float) | (DataType::Float, DataType::Int) => Ok(DataType::Float),
+        (DataType::IVec2, DataType::Vec2) | (DataType::Vec2, DataType::IVec2) => Ok(DataType::Vec2),
+        (DataType::IVec3, DataType::Vec3) | (DataType::Vec3, DataType::IVec3) => Ok(DataType::Vec3),
+        (DataType::IMat3, DataType::Mat3) | (DataType::Mat3, DataType::IMat3) => Ok(DataType::Mat3),
+        (DataType::Bool, DataType::Int) | (DataType::Int, DataType::Bool) => Ok(DataType::Int),
+        (DataType::Array(inner_a), DataType::Array(inner_b)) => {
+            let inner = unify_array_element_types(inner_a, inner_b)?;
+            Ok(DataType::Array(Box::new(inner)))
+        }
+        _ => Err(()),
     }
 }
 

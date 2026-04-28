@@ -11,6 +11,8 @@ pub enum Token {
     Caret,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Comma,
     Dot,
     // Comparison operators
@@ -149,6 +151,14 @@ impl<'a> Lexer<'a> {
             Some(')') => {
                 self.i += 1;
                 Token::RParen
+            }
+            Some('[') => {
+                self.i += 1;
+                Token::LBracket
+            }
+            Some(']') => {
+                self.i += 1;
+                Token::RBracket
             }
             Some(',') => {
                 self.i += 1;

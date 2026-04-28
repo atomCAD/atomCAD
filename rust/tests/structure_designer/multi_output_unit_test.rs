@@ -1479,8 +1479,7 @@ mod resolve_output_type_tests {
         let node = make_node(1, "poly_with_default", 1);
         network.nodes.insert(1, node);
 
-        let detailed =
-            registry.resolve_output_type_detailed(&network.nodes[&1], &network, 0);
+        let detailed = registry.resolve_output_type_detailed(&network.nodes[&1], &network, 0);
         let detailed = detailed.expect("fallback should resolve");
         assert_eq!(detailed.data_type, DataType::Molecule);
         assert!(
@@ -1502,8 +1501,7 @@ mod resolve_output_type_tests {
         network.nodes.insert(1, src);
         network.nodes.insert(2, poly);
 
-        let detailed =
-            registry.resolve_output_type_detailed(&network.nodes[&2], &network, 0);
+        let detailed = registry.resolve_output_type_detailed(&network.nodes[&2], &network, 0);
         let detailed = detailed.expect("connected upstream should resolve");
         assert_eq!(detailed.data_type, DataType::Float);
         assert!(

@@ -2,6 +2,7 @@ use crate::expr::expr::BinOp;
 use crate::expr::expr::Expr;
 use crate::expr::expr::UnOp;
 use crate::expr::lexer::Token;
+use crate::structure_designer::data_type::DataType;
 
 // Pratt parser
 struct Parser {
@@ -29,6 +30,57 @@ impl Parser {
         match self.peek() {
             Token::Eof => Ok(expr),
             other => Err(format!("Unexpected token after expression: {:?}", other)),
+        }
+    }
+
+    /// Parse the body of an array literal. The leading `[` has already been consumed.
+    /// Disambiguation: if the next token is `]`, this is an empty-typed-array
+    /// literal (`[]TypeExpr`); otherwise it is a non-empty element list.
+    fn parse_array_literal(&mut self) -> Result<Expr, String> {
+        if matches!(self.peek(), Token::RBracket) {
+            self.bump(); // consume `]`
+            let t = self.parse_type_expr()?;
+            return Ok(Expr::EmptyArray(t));
+        }
+
+        let mut elements = Vec::new();
+        loop {
+            let e = self.parse_bp(0)?;
+            elements.push(e);
+            match self.peek() {
+                Token::Comma => {
+                    self.bump();
+                    continue;
+                }
+                Token::RBracket => {
+                    self.bump();
+                    break;
+                }
+                other => {
+                    return Err(format!(
+                        "Expected ',' or ']' in array literal, got {:?}",
+                        other
+                    ));
+                }
+            }
+        }
+        Ok(Expr::Array(elements))
+    }
+
+    /// Parse a concrete `TypeExpr` used after the empty-array marker `[]`:
+    ///   TypeExpr := TypeName | "[" TypeExpr "]"
+    fn parse_type_expr(&mut self) -> Result<DataType, String> {
+        match self.bump() {
+            Token::LBracket => {
+                let inner = self.parse_type_expr()?;
+                match self.bump() {
+                    Token::RBracket => Ok(DataType::Array(Box::new(inner))),
+                    other => Err(format!("Expected ']' to close array type, got {:?}", other)),
+                }
+            }
+            Token::Ident(name) => parse_concrete_type_name(&name)
+                .ok_or_else(|| format!("Unknown or non-concrete type '{}'", name)),
+            other => Err(format!("Expected type name or '[', got {:?}", other)),
         }
     }
 
@@ -100,6 +152,7 @@ impl Parser {
                     other => return Err(format!("Expected ')', got {:?}", other)),
                 }
             }
+            Token::LBracket => self.parse_array_literal()?,
             Token::Plus => {
                 // unary plus
                 let rhs = self.parse_bp(100)?;
@@ -207,4 +260,22 @@ pub fn parse(input: &str) -> Result<Expr, String> {
     let tokens = crate::expr::lexer::tokenize(input);
     let mut parser = Parser::new(tokens);
     parser.parse()
+}
+
+/// Maps a type-name identifier to a concrete `DataType` for use as an
+/// array-literal element type after `[]`.
+///
+/// Reuses `DataType::from_string` so the variant table stays in one place,
+/// then rejects the documented non-element types: `None`, the abstract
+/// supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`), and `Function(_)`.
+/// Returns `None` for unknown or rejected names.
+pub fn parse_concrete_type_name(name: &str) -> Option<DataType> {
+    let dt = DataType::from_string(name).ok()?;
+    match dt {
+        DataType::None | DataType::HasAtoms | DataType::HasStructure | DataType::HasFreeLinOps => {
+            None
+        }
+        DataType::Function(_) => None,
+        _ => Some(dt),
+    }
 }

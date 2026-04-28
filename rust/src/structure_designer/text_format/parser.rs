@@ -353,11 +353,7 @@ impl Lexer {
                     }
                 }
                 if content.is_empty() {
-                    return Err(ParseError::new(
-                        "Empty quoted identifier",
-                        line,
-                        column,
-                    ));
+                    return Err(ParseError::new("Empty quoted identifier", line, column));
                 }
                 Ok(TokenInfo {
                     token: Token::Identifier(content),

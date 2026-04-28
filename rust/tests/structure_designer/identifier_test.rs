@@ -1,6 +1,4 @@
-use rust_lib_flutter_cad::structure_designer::identifier::{
-    InvalidNameReason, is_valid_user_name,
-};
+use rust_lib_flutter_cad::structure_designer::identifier::{InvalidNameReason, is_valid_user_name};
 
 #[test]
 fn empty_name_is_rejected() {

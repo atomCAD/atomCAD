@@ -192,3 +192,6 @@ mod identifier_test;
 
 #[path = "structure_designer/relaxed_node_names_test.rs"]
 mod relaxed_node_names_test;
+
+#[path = "structure_designer/expr_array_literal_test.rs"]
+mod expr_array_literal_test;

@@ -12,3 +12,6 @@ mod expr_vector_test;
 
 #[path = "expr/matrix_expr_test.rs"]
 mod matrix_expr_test;
+
+#[path = "expr/array_literal_test.rs"]
+mod array_literal_test;
