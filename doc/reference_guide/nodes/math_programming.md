@@ -207,6 +207,35 @@ The `Mat3` and `IMat3` types are 3×3 matrices, stored row-major (`m[i][j]` is r
 - `inv3(m)` — inverse (`Mat3 → Mat3`); returns an error for a singular matrix (`|det| < 1e-12`). No integer counterpart — an integer inverse would need a rational type.
 - `to_mat3(m)` / `to_imat3(m)` — explicit `IMat3 ↔ Mat3` casts (the float→int direction truncates).
 
+**Array Literals:**
+
+- `[expr1, expr2, ..., exprN]` — non-empty array literal. The element type is inferred from the elements using the same promotion rules as other expressions (e.g. mixing `Int` and `Float` produces `Array[Float]`, mixing `IVec3` and `Vec3` produces `Array[Vec3]`). Trailing commas are not allowed. Nesting is supported (`[[1, 2], [3, 4]]`).
+- `[]TypeExpr` — empty array of the given element type. The leading `[]` marks the literal as empty; the trailing `TypeExpr` declares the element type. `TypeExpr` is either a concrete type name (e.g. `Int`, `IVec3`, `Structure`, `Crystal`) or `[InnerTypeExpr]` for nested array types.
+
+Type-name identifiers are only interpreted as types in the position immediately after `[]`. Everywhere else (including inside an element list `[a, b, c]`), an identifier resolves as a normal expression — so naming a parameter after a type (`structure: Structure`) is safe and `[structure]` is a 1-element array containing that parameter.
+
+The abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`), the `None` sentinel, and function types are not accepted as element types.
+
+Examples:
+
+```
+[1, 2, 3]                           // Array[Int]
+[1, 2.0, 3]                         // Array[Float]  (Int promoted)
+[true, false, true]                 // Array[Bool]
+[ivec3(1,2,3), ivec3(4,5,6)]        // Array[IVec3]
+[ivec3(1,2,3), vec3(0.5,0.5,0.5)]   // Array[Vec3]   (IVec3 promoted)
+[a, b, c]                           // Array[T] where T is the unified type of a, b, c
+[a*2 + 1, a*3 + 1, a*4 + 1]         // Array[Int]    (assuming a: Int)
+[]IVec3                             // empty Array[IVec3]
+[]Structure                         // empty Array[Structure]
+[][IVec3]                           // empty Array[Array[IVec3]]
+[][[Int]]                           // empty Array[Array[Array[Int]]]
+[[1, 2], [3, 4]]                    // Array[Array[Int]]
+[[]Int, []Int]                      // 2-element Array[Array[Int]], each inner empty
+```
+
+A common use is constructing an `Array[IVec3]` literal of defect positions inline, which can then be fed to a downstream node consuming an array. An `expr` node with zero parameters can be used as a pure literal node for this purpose.
+
 **Mathematical Functions:**
 
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions

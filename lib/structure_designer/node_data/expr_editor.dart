@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/inputs/data_type_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -145,22 +146,26 @@ class ExprEditorState extends State<ExprEditor> {
           const SizedBox(height: 8),
           
           // Expression text area
-          TextFormField(
-            controller: _expressionController,
-            focusNode: _expressionFocusNode,
-            decoration: const InputDecoration(
-              labelText: 'Expression',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              hintText: 'Enter mathematical expression (e.g., x * 2 + sin(y))',
-            ),
-            maxLines: 3,
-            minLines: 1,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.done,
-            onFieldSubmitted: (text) {
-              _updateExpressionFromText(text);
+          CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.enter, control: true):
+                  () => _updateExpressionFromText(_expressionController.text),
+              const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+                  () => _updateExpressionFromText(_expressionController.text),
             },
+            child: TextFormField(
+              controller: _expressionController,
+              focusNode: _expressionFocusNode,
+              decoration: const InputDecoration(
+                labelText: 'Expression',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                hintText: 'Enter mathematical expression (e.g., x * 2 + sin(y))',
+              ),
+              maxLines: 12,
+              minLines: 1,
+              keyboardType: TextInputType.multiline,
+            ),
           ),
           
           // Error message display
