@@ -429,7 +429,7 @@ the rest of the reference guide should read coherently in the new terminology
 before new nodes are added.
 
 ### 1.1 Lattice space refactoring (rename pass)
-- [ ] Apply rename throughout the document.
+- [x] Apply rename throughout the document.
 - Design doc: `doc/design_lattice_space_refactoring.md`
 - Representative commits: `9ebe36f4` (design), `6cce5588` (Geometry → Blueprint),
   `5b121eb6` (UnitCell → LatticeVecs), `5de95a86` (unit_cell → lattice_vecs),
@@ -445,7 +445,7 @@ before new nodes are added.
   (~line 862), `unit_cell`/`lattice_vecs` node entry, plus scattered prose.
 
 ### 1.2 Crystal / Molecule split (replaces single `Atomic` data type)
-- [ ] Update the data-types section and every node entry whose pin types
+- [x] Update the data-types section and every node entry whose pin types
       previously read `Atomic` to use `Crystal`, `Molecule`, or both.
 - Design doc: `doc/design_crystal_molecule_split.md`
 - Representative commits: `433890a9` (design), `5c4c4093`–`6bd724f0` (steps 1–7).
@@ -456,7 +456,7 @@ before new nodes are added.
   "Atomic structure nodes" (~line 1016).
 
 ### 1.3 Abstract types and pin coloring
-- [ ] Document the abstract-type concept and the visual coloring rules.
+- [x] Document the abstract-type concept and the visual coloring rules.
 - Representative commits: `acb10497` (abstract types rename),
   `eab55dd2` (abstract type pin coloring).
 - No dedicated design doc — agent must read the code in
@@ -466,7 +466,7 @@ before new nodes are added.
   possibly "Anatomy of a node" (~line 448) if pin coloring is described there.
 
 ### 1.4 Matrix types
-- [ ] Document the matrix data type, its operations, and any new nodes
+- [x] Document the matrix data type, its operations, and any new nodes
       introduced for matrix manipulation.
 - Design doc: `doc/design_matrix_types.md`
 - Representative commits: `6769d1c5` (design), `9fe77139`/`4a225305`/
@@ -475,7 +475,7 @@ before new nodes are added.
   programming nodes" (~line 574) for any matrix-specific nodes.
 
 ### 1.5 Multi-output pins (semantic change)
-- [ ] Document that nodes can have multiple output pins, how the per-pin
+- [x] Document that nodes can have multiple output pins, how the per-pin
       eye icon works in the UI, and how pin names are shown.
 - Design doc: `doc/design_multi_output_pins.md`
 - Representative commits: `de41ad97`–`a6fd4b41` (phases 0–6).

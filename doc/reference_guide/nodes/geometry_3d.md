@@ -2,7 +2,7 @@
 
 ← Back to [Reference Guide hub](../../atomCAD_reference_guide.md)
 
-These nodes output a 3D geometry which can be used later as an input to an `atom_fill` node to create an atomic structure.
+These nodes output a `Blueprint` — a 3D shape paired with a `Structure`, which can later be used as an input to an `atom_fill` node to materialize an atomic structure.
 Positions and sizes are usually discrete integer numbers meant in crystal lattice coordinates.
 
 
@@ -103,7 +103,7 @@ General (hkl) | 48             | All permutations of (±h, ±k, ±l) — the
 
 ## union
 
-Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values (array-typed input; you can connect multiple wires and they will be concatenated).
+Computes the Boolean union of any number of 3D blueprints. The `shapes` input accepts an array of `Blueprint` values (array-typed input; you can connect multiple wires and they will be concatenated).
 
 
 ![](../../atomCAD_images/union_node.png)
@@ -112,7 +112,7 @@ Computes the Boolean union of any number of 3D geometries. The `shapes` input ac
 
 ## intersect
 
-Computes the Boolean intersection of any number of 3D geometries. The `shapes` input accepts an array of `Geometry` values.
+Computes the Boolean intersection of any number of 3D blueprints. The `shapes` input accepts an array of `Blueprint` values.
 
 ![](../../atomCAD_images/intersect_node.png)
 
@@ -126,7 +126,7 @@ Computes the Boolean difference of two 3D geometries.
 
 ![](../../atomCAD_images/diff_viewport.png)
 
-We could have designed this node to have two single `Geometry` inputs but for convenience reasons (to avoid needing to use too many nodes) both of its input pins accept an array of `Geometry` values and first a union operation is done on the individual input pins before the diff operation.
+We could have designed this node to have two single `Blueprint` inputs but for convenience reasons (to avoid needing to use too many nodes) both of its input pins accept an array of `Blueprint` values and first a union operation is done on the individual input pins before the diff operation.
 The node expression is the following:
 
 ```

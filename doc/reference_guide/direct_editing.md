@@ -13,7 +13,7 @@ When you first launch atomCAD, you start in Direct Editing Mode. This mode hides
 
 ## The Atom Editor
 
-The atom editor is the central tool for building and modifying atomic structures in atomCAD. In Direct Editing Mode the atom editor occupies the left sidebar; in Node Network Mode the same editor appears in the Node Properties panel when an `atom_edit` node is selected. The tools and features described below work identically in both modes (with minor simplifications in Direct Editing Mode, such as hiding node-network-specific options like *Output diff*).
+The atom editor is the central tool for building and modifying atomic structures in atomCAD. In Direct Editing Mode the atom editor occupies the left sidebar; in Node Network Mode the same editor appears in the Node Properties panel when an `atom_edit` node is selected. The tools and features described below work identically in both modes (with minor simplifications in Direct Editing Mode, such as the hidden `diff` output pin and other node-network-specific affordances).
 
 The editor is based on **tools** — one tool can be active at a time. The active tool determines how you interact with the atomic structure in the viewport. You can switch tools using keyboard shortcuts: `F2` (Default tool), `F3` (Add atom tool), `F4` or `J` (Add bond tool).
 

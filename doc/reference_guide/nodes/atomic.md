@@ -4,7 +4,7 @@
 
 ## import_xyz
 
-Imports an atomic structure from an xyz file.
+Imports an atomic structure from an XYZ file. Outputs a `Molecule` — XYZ files carry no crystal-lattice information, so the result has no `Structure` association.
 
 ![](../../atomCAD_images/import_xyz.png)
 
@@ -22,7 +22,7 @@ This node will be most useful once we will support node network evaluation from 
 
 ## atom_fill
 
-Converts a 3D geometry into an atomic structure by carving out a crystal from an infinite crystal lattice using the geometry on its `shape` input.
+Converts a `Blueprint` into a `Crystal` by carving atoms out of the infinite crystal field using the blueprint's geometry as a cookie cutter. The output retains the `Structure`, so further structure-aligned operations remain available downstream.
 
 ![](../../atomCAD_images/atom_fill_node.png)
 
@@ -90,7 +90,7 @@ The gadget displays the pivot point and rotation axis. Drag the rotation axis to
 
 ## atom_union
 
-Merges multiple atomic structures into one. The `structures` input accepts an array of `Atomic` values (array-typed input; you can connect multiple wires and they will be concatenated).
+Merges multiple atomic structures into one. The `structures` input accepts an array of atomic structures (array-typed input; you can connect multiple wires and they will be concatenated). All elements of the array must be the same concrete type — either all `Crystal` or all `Molecule` — and the output preserves that type. Mixed `Crystal` + `Molecule` arrays are a validation error; insert an explicit `exit_structure` node first if you want a `Molecule` result.
 
 ![](../../atomCAD_images/atom_union.png)
 
@@ -113,30 +113,32 @@ Rotates an atomic structure in **lattice space** using discrete symmetry rotatio
 
 ## apply_diff
 
-Applies an atomic diff structure to a base atomic structure. This node is used in advanced parametric workflows where defect patches are created separately (e.g., using an `atom_edit` node with *Output diff* enabled) and then applied to different base structures or at different positions.
+Applies an atomic diff structure to a base atomic structure. This node is used in advanced parametric workflows where defect patches are created separately (e.g. by taking the `diff` output pin of an `atom_edit` node) and then applied to different base structures or at different positions.
 
 **Input pins**
 
-- `base` — The base `Atomic` structure.
-- `diff` — The diff `Atomic` structure to apply.
+- `base` — The base atomic structure (`Crystal` or `Molecule`).
+- `diff` — The diff atomic structure to apply (`Crystal` or `Molecule`).
+
+The output preserves the concrete type of `base` — a `Crystal` base produces a `Crystal` output, a `Molecule` base produces a `Molecule`.
 
 The diff structure encodes additions, deletions, and modifications of atoms. The node uses position-based matching to apply the diff to the base structure.
 
 ## relax
 
-Performs UFF (Universal Force Field) energy minimization on an atomic structure. Takes an `Atomic` input and outputs the minimized structure.
+Performs UFF (Universal Force Field) energy minimization on an atomic structure. Takes a `Crystal` or `Molecule` input and outputs the minimized structure, preserving the concrete input type.
 
 This node is useful in node-network workflows where you want to relax a structure non-destructively as part of a parametric pipeline. For interactive minimization during atom editing, use the energy minimization feature built into the `atom_edit` node instead.
 
 ## add_hydrogen
 
-Adds hydrogen atoms to satisfy valence requirements of undersaturated atoms. Takes an `Atomic` input and outputs a hydrogen-passivated structure.
+Adds hydrogen atoms to satisfy valence requirements of undersaturated atoms. Takes a `Crystal` or `Molecule` input and outputs a hydrogen-passivated structure, preserving the concrete input type.
 
 The algorithm detects hybridization (sp3, sp2, sp1) automatically and places hydrogen atoms at the correct bond lengths and angles. This is the node-network counterpart of the one-click hydrogen passivation in the `atom_edit` node.
 
 ## remove_hydrogen
 
-Removes all hydrogen atoms from an atomic structure. Takes an `Atomic` input and outputs the bare framework without hydrogens.
+Removes all hydrogen atoms from an atomic structure. Takes a `Crystal` or `Molecule` input and outputs the bare framework without hydrogens, preserving the concrete input type.
 
 Useful in workflows like: `remove_hydrogen` → transform/edit → `add_hydrogen`, allowing you to work with the bare framework and re-passivate afterward.
 
@@ -146,8 +148,8 @@ Cuts an atomic structure using cutter geometries. Unlike `atom_fill` which creat
 
 **Input pins**
 
-- `molecule` — The `Atomic` structure to be cut.
-- `cutters` — An array of `Geometry` values defining the region to keep (array-typed input; you can connect multiple wires).
+- `molecule` — The atomic structure to be cut (`Crystal` or `Molecule`). The output preserves the concrete input type.
+- `cutters` — An array of `Blueprint` values defining the region to keep (array-typed input; you can connect multiple wires).
 
 **Properties**
 
@@ -168,6 +170,15 @@ This section covers the additional aspects of `atom_edit` that are specific to n
 
 Internally, an `atom_edit` node stores a **diff** — an atomic structure that encodes additions, deletions, and modifications relative to the input (base) structure. When the node is evaluated, the diff is applied to the base to produce the output. This means the `atom_edit` node is non-destructive: the base structure flows in untouched, and the diff layer captures all your edits (added atoms, deleted atoms, moved atoms, element replacements). Multiple `atom_edit` nodes can be chained, each applying its own diff to the previous result.
 
-### Output diff mode
+### Output pins: result and diff
 
-The `atom_edit` node can output the raw diff structure instead of the applied result by enabling the *Output diff* checkbox. This makes diffs first-class values in the node network, enabling advanced workflows where defect patches are created once and then repositioned (via `atom_move`, `atom_lmove`, etc.) and applied to different base structures using the `apply_diff` node.
+`atom_edit` is a **multi-output** node. It exposes two output pins:
+
+- **`result`** (pin 0) — the applied result: the base structure with the diff applied. This is the primary output for normal editing workflows.
+- **`diff`** (pin 1) — the raw diff structure (additions, deletions, modifications relative to the base). The diff is itself an atomic structure, so it can be repositioned (via movement nodes) and re-applied to different base structures using the `apply_diff` node.
+
+Each pin has its own eye icon — display either or both in the 3D viewport. When both are displayed, atom selection and other tool interactions act on `result` (the lower-indexed displayed pin); the `diff` rendering is visual-only. Display only `diff` to interact directly with diff atoms (this replaces the legacy "Output diff" checkbox; old `.cnnd` files with `output_diff: true` are auto-migrated to display the `diff` pin instead).
+
+The `result` pin preserves the concrete input type — Crystal in / Crystal out, Molecule in / Molecule out. The `diff` pin is always a `Molecule` (a raw diff has no inherent lattice identity).
+
+In the text format, refer to a non-default output pin with `.pinname` after the source node, e.g. `apply_diff { base: input, diff: my_edit.diff }` to take the diff from `my_edit` rather than the default `result`. See the [Node Network Text Format](../../node_network_text_format.md) document for the full syntax.

@@ -8,9 +8,19 @@ A **node network** is a collection of nodes. A node may be either a built-in nod
 
 ![](../atomCAD_images/node_anatomy.png)
 
-A **node** may have zero or more *named input pins* (also called the node’s *parameters*). Each node has exactly one *regular output pin*, located at the right-center of the node, and one *function pin*, located at the upper-right corner (the function pin is described in the functional programming section).
+A **node** may have zero or more *named input pins* (also called the node’s *parameters*) on the left side, and one or more *named output pins* on the right side. Most nodes have exactly one output pin (the "result"); a few nodes are **multi-output** — they expose more than one named output pin, each independently connectable and displayable. The clearest example is `atom_edit`, which exposes both a `result` pin (the applied edit) and a `diff` pin (the raw diff structure).
+
+Each node also has one *function pin* in the upper-right corner (the function pin is described in the functional programming section).
 
 Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. (We will discuss implicit conversion soon.)
+
+### Output pins, eye icon, and display
+
+Every output pin has its own **eye icon** next to it that toggles whether that pin's value is rendered in the 3D viewport. This is true for single-output and multi-output nodes alike — the eye icon lives on the pin row, not in the title bar. Multiple pins of the same node can be displayed simultaneously, and they are independent of wiring (you can display a pin whether or not it is wired to anything downstream).
+
+For multi-output nodes the pin name (`result`, `diff`, …) is shown next to each output pin. For single-output nodes the pin name is omitted (there is nothing to disambiguate); hovering still shows the name as a tooltip.
+
+When more than one output pin of a node is displayed, only the lowest-indexed displayed pin is **interactive** — i.e. only it receives clicks, hover, and selection from viewport tools. The other displayed pins are visual-only. For example, when both pins of `atom_edit` are displayed, atom selection happens against the `result` pin (with provenance mapping back to the diff under the hood).
 
 ## Data types
 
@@ -24,11 +34,27 @@ Supported basic data types include:
 - `Vec3` — 3D vector
 - `IVec2` — 2D integer vector
 - `IVec3` — 3D integer vector
-- `UnitCell`
+- `Mat3` — 3×3 floating-point matrix (row-major)
+- `IMat3` — 3×3 integer matrix (row-major)
+- `LatticeVecs` — three lattice basis vectors `(a, b, c, α, β, γ)`
+- `Structure` — a crystal structure: lattice basis + motif + motif offset
 - `Geometry2D`
-- `Geometry` — 3D geometry
-- `Atomic` — atomic structure
+- `Blueprint` — a 3D **blueprint**: a `Structure` paired with a bounded geometry shape that acts as a "cookie cutter" in the infinite crystal field. Atoms are *latent*: they exist where the cutter overlaps the structure but have not been carved out yet.
+- `Crystal` — a materialized atomic structure that *retains* its `Structure` (lattice information). Produced by carving a `Blueprint` (e.g. via `atom_fill` / `materialize`). The atoms and the optional geometry shell move together under any transform.
+- `Molecule` — a free-floating atomic structure with **no** `Structure` association. Produced by importing an XYZ file or by stripping the structure off a `Crystal` (`exit_structure`). Can be moved arbitrarily.
 - `Motif`
+
+### The three phases
+
+The data types `Blueprint`, `Crystal`, and `Molecule` together form a **three-phase model**: the same designed object passes through these phases as it moves from design through construction to deployment.
+
+| Phase | Has structure | Has atoms | Role |
+|---|---|---|---|
+| **Blueprint** | yes | no (latent) | *Design.* Position the cookie cutter inside an infinite crystal; design boolean ops, surface cuts, alignment. |
+| **Crystal** | yes | yes | *Construction.* Atoms have been carved; the structure association is retained, so structure-aligned operations remain available. |
+| **Molecule** | no | yes | *Deployment.* Free-floating atoms, no longer tied to a structure. |
+
+Phase transitions are explicit nodes (`materialize`, `exit_structure`, and their inverses) — see the [Atomic structure nodes](./nodes/atomic.md) reference.
 
 Array types are supported. The type `[Int]` means an array of `Int` values.
 
@@ -40,10 +66,45 @@ Input pins can be array-typed. An array input pin is visually indicated with a s
 
 - `Int` and `Float` can be implicitly converted to each other in both directions. When converting a `Float` to an `Int` it is rounded to the nearest integer.
 - Similarly there is implicit conversion between `IVec2` and `Vec2`, and also between `IVec3` and `Vec3`.
-- If `T` is implicitly convertible to `S` then `T` is also implicitly convertible to `[S]`.
+- `IMat3` and `Mat3` are interconvertible (the `Mat3 → IMat3` direction truncates).
+- A concrete phase type (`Blueprint`, `Crystal`, `Molecule`) implicitly converts to any abstract type that contains it (see *Abstract types* below).
+- If `T` is implicitly convertible to `S` then `T` is also implicitly convertible to `[S]`. Element-wise array conversion `[T] → [S]` follows the same rule.
 - An essential feature for higher order functions is this: Function type `F` can be converted to function type `G` if:
   - `F` and `G` have the same return type
   - `F` contains all parameters of `G` as its first parameters. (`F` can have additional parameters)
+
+### Abstract types
+
+Some operations are naturally polymorphic over multiple phase types — e.g. `add_hydrogen` works on any atomic structure (`Crystal` or `Molecule`), while `structure_move` works on anything carrying a structure (`Blueprint` or `Crystal`). To express this without duplicating nodes, atomCAD has three **abstract types**, each naming a "two-out-of-three" combination of the concrete phases:
+
+| Abstract type | Members | Used by |
+|---|---|---|
+| `HasAtoms` | `Crystal`, `Molecule` | atom operations: `atom_edit`, `apply_diff`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `atom_union`, `atom_composediff` |
+| `HasStructure` | `Blueprint`, `Crystal` | structure-aligned operations: `structure_move`, `structure_rot`, `get_structure` |
+| `HasFreeLinOps` | `Blueprint`, `Molecule` | free movement: `free_move`, `free_rot` |
+
+Abstract types appear **only** as input-pin types on built-in polymorphic nodes. Every actual value flowing through a wire is concrete — a `Crystal`, a `Molecule`, a `Blueprint` — never an abstract type. Each concrete type implicitly converts to any abstract type that contains it; there is no implicit conversion in the other direction.
+
+**Type preservation.** When a value flows through a polymorphic node, the *concrete* type is preserved on the output. A `Crystal` fed into `add_hydrogen` comes out as a `Crystal`; a `Molecule` comes out as a `Molecule`. A chain like `Crystal → add_hydrogen → structure_move` therefore stays well-typed end to end — the `structure_move` (which needs `HasStructure`) still accepts the post-`add_hydrogen` result.
+
+### Pin coloring
+
+Pins are colored by their data type:
+
+| Type family | Color |
+|---|---|
+| `Bool`, `Int`, `Float` | warm orange |
+| `Vec2`, `Vec3`, `IVec2`, `IVec3`, `Mat3`, `IMat3` | cool blue |
+| `Blueprint`, `Geometry2D` | purple |
+| `Crystal`, `Molecule` | green |
+| `LatticeVecs`, `Structure`, `Motif` | teal / cyan |
+| Function types | amber |
+
+Array pins use the same color as their element type and are marked with a small dot.
+
+**Abstract-type input pins** are rendered as a pie-sliced circle, one slice per concrete type contained in the abstract type, each slice colored with that concrete type's color. So a `HasAtoms` input pin appears solid green (Crystal + Molecule are both green); a `HasStructure` input pin appears half purple (Blueprint) and half green (Crystal); a `HasFreeLinOps` input pin is half purple (Blueprint) and half green (Molecule). Output pins are always concrete and render single-colored. Wires take the color of their source's concrete type.
+
+![TODO(image): a node with HasStructure and HasFreeLinOps input pins shown as pie-sliced circles next to a node with concrete (single-colored) input pins for visual comparison](TODO)
 
 ## Node properties vs. input pins
 
@@ -78,7 +139,7 @@ Now that we created the `cube` subnetwork when adding a node in a different node
 
 ![](../atomCAD_images/add_cube.png)
 
-The cube node will have the `Int` typed `size` input pin and a `Geometry` typed output pin:
+The cube node will have the `Int` typed `size` input pin and a `Blueprint` typed output pin:
 
 ![](../atomCAD_images/cube_node.png)
 

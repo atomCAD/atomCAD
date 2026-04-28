@@ -49,4 +49,4 @@ We categorize nodes by their functionality and/or output pin data type. There ar
 - [Atomic structure nodes](./reference_guide/nodes/atomic.md)
 - [Other nodes](./reference_guide/nodes/other.md)
 
-You create 2D geometry to eventually use the **extrude** node to create 3D geometry from it. You create 3D geometry to eventually use the **atom_fill** node to create an atomic structure from it.
+You create 2D geometry to eventually use the **extrude** node to create a 3D `Blueprint` from it. You create a `Blueprint` to eventually use the **atom_fill** node to materialize an atomic structure from it.

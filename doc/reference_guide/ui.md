@@ -126,7 +126,7 @@ When multiple nodes are selected, the most recently selected/added node becomes 
 When you drag any selected node, all selected nodes move together.
 
 **Visibility vs selection**
-Selecting a node does *not* make its output visible. Node visibility is controlled independently by the eye icon in the node’s upper-right corner. The **Geometry Visualization** preferences panel also contains node display policies that may automatically change node visibility when selections change (see **Geometry Visualization** preferences).
+Selecting a node does *not* make its output visible. Visibility is controlled independently by an **eye icon next to each output pin**: a node with one output pin has one eye icon; a multi-output node such as `atom_edit` has one eye icon per pin, each toggling that pin's display in the 3D viewport independently. The **Geometry Visualization** preferences panel also contains node display policies that may automatically change node visibility when selections change (see **Geometry Visualization** preferences). Display policies operate at node level — they make pin 0 visible; additional pins of a multi-output node are only displayed via explicit toggle.
 
 **Copy, cut, paste, and duplicate**
 Selected nodes can be copied, cut, and pasted:
@@ -185,13 +185,13 @@ In **Surface Splatting** and **Solid** modes the outer surface is shown in green
 
 Choose how node output visibility is managed:
 
-- **Manual (User Selection)** — Visibility is controlled entirely by the eye icon on each node; selection changes do not affect visibility.
+- **Manual (User Selection)** — Visibility is controlled entirely by the eye icons on each output pin; selection changes do not affect visibility.
 - **Prefer Selected Nodes** *(default)* — Visibility is resolved per *node island* (a node island is a connected component of the network):
   - If an island contains the currently selected node, that selected node's output is made visible.
   - If there is no selected node in the island, the output of the island’s frontier nodes are made visible.
 - **Prefer Frontier Nodes** — In every island, the output of the frontier nodes are made visible. Frontier nodes are nodes whose output is not connected to any other node’s input — i.e., they represent the current “results” or outputs of that island.
 
-Even when a non-Manual policy is active, you can still toggle a node’s visibility manually using the eye icon; that manual visibility will persist until the selection or policy changes it.
+Even when a non-Manual policy is active, you can still toggle a pin's visibility manually using its eye icon; that manual visibility will persist until the selection or policy changes it.
 
 ### Atomic visualization
 

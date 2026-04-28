@@ -2,20 +2,20 @@
 
 ← Back to [Reference Guide hub](../../atomCAD_reference_guide.md)
 
-## unit_cell
+## lattice_vecs
 
-Produces a `UnitCell` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.
+Produces a `LatticeVecs` value representing the three lattice basis vectors defined by the lattice parameters `(a, b, c, α, β, γ)`.
 
 **Usage**
 
-- `UnitCell` values are carried by `Geometry2D` and `Geometry` objects and determine how geometry nodes interpret coordinates.
-- Primitive geometry nodes (e.g., `polygon`, `cuboid`, `half_space`) expose a `unit_cell` input pin so you can supply a `UnitCell`.
-- Boolean and other topology operations inherit the unit cell from their input geometries. A Boolean operation will error if its input geometries have different unit cells.
+- `LatticeVecs` values are part of a `Structure` and (together with the motif and motif offset) determine how geometry nodes interpret coordinates.
+- The `structure` node exposes a `lattice_vecs` input pin so you can supply a `LatticeVecs` value when constructing or modifying a structure.
+- Boolean and other topology operations inherit the structure from their input blueprints. A Boolean operation will error if its inputs carry incompatible lattice vectors.
 
 **Behavior / examples**
 
 - When a non-orthogonal unit cell is used, primitives adapt accordingly — e.g., `cuboid` produces a parallelepiped rather than an axis-aligned box.
-- If no unit cell is supplied, the default unit cell (cubic diamond) is used.
+- If no lattice vectors are supplied, the defaults (cubic diamond) are used.
 
 **Notes**
 

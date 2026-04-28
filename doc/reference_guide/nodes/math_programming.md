@@ -38,6 +38,48 @@ Outputs a Vec3 value.
 
 ![](../../atomCAD_images/vec3.png)
 
+## imat3_rows
+
+Outputs an `IMat3` (3×3 integer matrix) built from three row vectors.
+
+**Input pins** (all optional, default to identity rows)
+
+- `a: IVec3` — row 0 (default `(1, 0, 0)`)
+- `b: IVec3` — row 1 (default `(0, 1, 0)`)
+- `c: IVec3` — row 2 (default `(0, 0, 1)`)
+
+**Stored property**
+
+- 3×3 integer grid that supplies the row defaults when an input pin is unwired. Default is identity, so an unwired `imat3_rows` is the identity constant.
+
+The subtitle shows `det = N` for the resolved matrix, or `det = ?` when any row is wired (the determinant cannot be precomputed).
+
+## imat3_cols
+
+Same as `imat3_rows` but the three input vectors are interpreted as **columns** instead of rows: `m[i][j] = col_j[i]`.
+
+## imat3_diag
+
+Outputs a diagonal `IMat3` from a single `IVec3`.
+
+**Input pin**
+
+- `v: IVec3` (optional, default `(1, 1, 1)`)
+
+The result is `diag(v.x, v.y, v.z)`. This is the node to use when wiring an `IMat3` input pin (for example `supercell.matrix`) for the simple axis-aligned case.
+
+## mat3_rows
+
+Floating-point counterpart of `imat3_rows`: outputs a `Mat3` (3×3 float matrix) from three `Vec3` row vectors. Defaults are the float identity rows.
+
+## mat3_cols
+
+Floating-point counterpart of `imat3_cols`: three `Vec3` columns → `Mat3`.
+
+## mat3_diag
+
+Floating-point counterpart of `imat3_diag`: `Vec3 → Mat3` (`diag(v.x, v.y, v.z)`).
+
 ## bool
 
 Outputs a Bool value (`true` or `false`).
@@ -136,6 +178,35 @@ Integers and integer vectors automatically promote to floats and float vectors w
 - `idot3(ivec3, ivec3)` - 3D integer dot product (returns int)
 - `icross(ivec3, ivec3)` - 3D integer cross product (returns ivec3)
 
+**Matrix Operations:**
+
+The `Mat3` and `IMat3` types are 3×3 matrices, stored row-major (`m[i][j]` is row `i`, column `j`).
+
+*Matrix Constructors:*
+
+- `mat3_rows(a, b, c)` / `imat3_rows(a, b, c)` — build a matrix from three row vectors.
+- `mat3_cols(a, b, c)` / `imat3_cols(a, b, c)` — build a matrix from three column vectors.
+- `mat3_diag(v)` / `imat3_diag(v)` — diagonal matrix from a single vector.
+
+*Arithmetic:*
+
+- `Mat3 + Mat3`, `Mat3 - Mat3` — component-wise addition / subtraction (and the `IMat3` analogues).
+- `Mat3 * Mat3` — standard matrix product.
+- `Mat3 * Vec3` — matrix × vector (row-major: `result[i] = Σ_j m[i][j] · v[j]`). The reverse `Vec3 * Mat3` is rejected.
+- The integer analogues `IMat3 * IMat3` / `IMat3 * IVec3` work identically. `IVec3` and `IMat3` operands promote to their float counterparts when mixed with floats, just like the scalar/vector promotion rule.
+
+*Member Access:*
+
+- `m.m00`, `m.m01`, … `m.m22` — access the nine entries of a `Mat3` (returns `Float`) or `IMat3` (returns `Int`). `.mIJ` is row `I`, column `J`.
+
+*Matrix Functions:*
+
+- `transpose3(m)` / `itranspose3(m)` — transpose.
+- `det3(m)` — determinant (`Mat3 → Float`).
+- `idet3(m)` — determinant (`IMat3 → Int`).
+- `inv3(m)` — inverse (`Mat3 → Mat3`); returns an error for a singular matrix (`|det| < 1e-12`). No integer counterpart — an integer inverse would need a rational type.
+- `to_mat3(m)` / `to_imat3(m)` — explicit `IMat3 ↔ Mat3` casts (the float→int direction truncates).
+
 **Mathematical Functions:**
 
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
@@ -184,7 +255,7 @@ Takes an array of values (`xs`), applies the supplied `f` function on all of the
 
 To see the map node in action please check out the *Pattern* demo [in the demos document](../../../samples/demo_description.md).
 
-The above image shows the node network used in the Pattern demo. You can see that the input type chosen for the map node is `Int` and the output type is `Geoemtry`. The data type of the `f` input pin is therefore `Int -> Geometry`. You can see this if you hover over the `f` input pin with the mouse:
+The above image shows the node network used in the Pattern demo. You can see that the input type chosen for the map node is `Int` and the output type is `Blueprint`. The data type of the `f` input pin is therefore `Int -> Blueprint`. You can see this if you hover over the `f` input pin with the mouse:
 
 ![](../../atomCAD_images/map_input_pin_type.png)
 
