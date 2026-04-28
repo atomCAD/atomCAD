@@ -83,6 +83,18 @@ class PinViewWidget extends StatelessWidget {
   final APIAlignment? alignment;
   final String? alignmentReason;
 
+  /// For polymorphic output pins (`SameAsInput(...)` / abstract `Fixed`), this
+  /// is the declared type string while [dataType] holds the concrete type the
+  /// pin resolves to. The tooltip renders both so the polymorphism stays
+  /// visible after resolution. Null for non-polymorphic pins (or when
+  /// resolution didn't change the type).
+  final String? declaredDataType;
+
+  /// `true` when [dataType] came from a `SameAsInput` fallback because the
+  /// named input has zero connections. The tooltip surfaces this as
+  /// "default — no input connected".
+  final bool resolvedViaFallback;
+
   const PinViewWidget(
       {super.key,
       required this.dataType,
@@ -91,7 +103,9 @@ class PinViewWidget extends StatelessWidget {
       this.outputString,
       this.pinName,
       this.alignment,
-      this.alignmentReason});
+      this.alignmentReason,
+      this.declaredDataType,
+      this.resolvedViaFallback = false});
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +117,16 @@ class PinViewWidget extends StatelessWidget {
       typeLabel = '$dataType (${concretes.join(' or ')})';
     } else {
       sliceColors = [getDataTypeColor(dataType)];
-      typeLabel = dataType;
+      // For polymorphic output pins, show "Concrete (declared: SameAsInput(name))"
+      // and append "default — no input connected" when the concrete type came
+      // from the disconnected-input fallback.
+      if (declaredDataType != null && declaredDataType != dataType) {
+        final fallbackNote =
+            resolvedViaFallback ? ', default — no input connected' : '';
+        typeLabel = '$dataType  (declared: $declaredDataType$fallbackNote)';
+      } else {
+        typeLabel = dataType;
+      }
     }
 
     final List<InlineSpan> spans = [];
@@ -303,13 +326,25 @@ class PinWidget extends StatelessWidget {
   final String? pinName;
   final APIAlignment? alignment;
   final String? alignmentReason;
+
+  /// Declared type for polymorphic output pins (`SameAsInput(...)`/abstract
+  /// `Fixed`). Forwarded to [PinViewWidget] so the tooltip shows declared +
+  /// resolved together. Null for non-polymorphic pins.
+  final String? declaredDataType;
+
+  /// `true` when the resolved type came from a `SameAsInput` disconnected-input
+  /// fallback. Forwarded to [PinViewWidget] for tooltip annotation.
+  final bool resolvedViaFallback;
+
   PinWidget(
       {required this.pinReference,
       required this.multi,
       this.outputString,
       this.pinName,
       this.alignment,
-      this.alignmentReason})
+      this.alignmentReason,
+      this.declaredDataType,
+      this.resolvedViaFallback = false})
       : super(
             key: ValueKey(pinReference.pinIndex +
                 ((pinReference.pinType == PinType.output) ? 1000 : 0)));
@@ -348,7 +383,9 @@ class PinWidget extends StatelessWidget {
                     outputString: outputString,
                     pinName: pinName,
                     alignment: alignment,
-                    alignmentReason: alignmentReason),
+                    alignmentReason: alignmentReason,
+                    declaredDataType: declaredDataType,
+                    resolvedViaFallback: resolvedViaFallback),
               ),
             ),
             child: SizedBox(
@@ -362,7 +399,9 @@ class PinWidget extends StatelessWidget {
                     outputString: outputString,
                     pinName: pinName,
                     alignment: alignment,
-                    alignmentReason: alignmentReason),
+                    alignmentReason: alignmentReason,
+                    declaredDataType: declaredDataType,
+                    resolvedViaFallback: resolvedViaFallback),
               ),
             ),
             onDragUpdate: (details) {
@@ -638,6 +677,11 @@ class NodeWidget extends StatelessWidget {
           pinName: node.outputPins.length > 1 ? pin.name : null,
           alignment: pin.alignment,
           alignmentReason: pin.alignmentReason,
+          // Show the polymorphic declaration alongside the resolved type
+          // whenever they differ (e.g. `SameAsInput(molecule)` → `Molecule`).
+          declaredDataType:
+              pin.resolvedDataType != null ? pin.dataType : null,
+          resolvedViaFallback: pin.resolvedViaFallback,
         ),
       ],
     );

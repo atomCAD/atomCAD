@@ -19,12 +19,24 @@ pub struct Parameter {
 /// `Fixed` declares a static type. `SameAsInput` and `SameAsArrayElements` describe
 /// polymorphic pins whose concrete type is derived from an input pin at validation
 /// time (see `NodeTypeRegistry::resolve_output_type`).
+///
+/// `SameAsInput` may declare a `fallback_if_disconnected` concrete type that the
+/// resolver returns when the named input pin has zero connections. This is used
+/// by nodes whose evaluation produces meaningful intrinsic content with no input
+/// (e.g. `atom_edit` whose diff is itself a `Molecule`); without a fallback the
+/// pin remains unresolved when the input is disconnected, which is the right
+/// behavior for pure transformations (`atom_union`, `structure_move`, etc.).
 #[derive(Clone, Debug, PartialEq)]
 pub enum PinOutputType {
     /// Fixed, statically declared output type.
     Fixed(DataType),
     /// Output type mirrors the resolved concrete type of the named input pin.
-    SameAsInput(String),
+    /// When the input is disconnected, the optional `fallback_if_disconnected`
+    /// is used; otherwise the pin remains unresolved.
+    SameAsInput {
+        input_pin_name: String,
+        fallback_if_disconnected: Option<DataType>,
+    },
     /// Output type mirrors the element type of the named `Array[..]` input pin.
     SameAsArrayElements(String),
 }
@@ -43,7 +55,16 @@ impl fmt::Display for PinOutputType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PinOutputType::Fixed(t) => write!(f, "{}", t),
-            PinOutputType::SameAsInput(name) => write!(f, "SameAsInput({})", name),
+            PinOutputType::SameAsInput {
+                input_pin_name,
+                fallback_if_disconnected,
+            } => {
+                if let Some(fallback) = fallback_if_disconnected {
+                    write!(f, "SameAsInput({}, default={})", input_pin_name, fallback)
+                } else {
+                    write!(f, "SameAsInput({})", input_pin_name)
+                }
+            }
             PinOutputType::SameAsArrayElements(name) => {
                 write!(f, "SameAsArrayElements({})", name)
             }
@@ -79,7 +100,29 @@ impl OutputPinDefinition {
     pub fn same_as_input(name: &str, input_pin_name: &str) -> Self {
         Self {
             name: name.to_string(),
-            data_type: PinOutputType::SameAsInput(input_pin_name.to_string()),
+            data_type: PinOutputType::SameAsInput {
+                input_pin_name: input_pin_name.to_string(),
+                fallback_if_disconnected: None,
+            },
+        }
+    }
+
+    /// Output pin that mirrors the named input pin's resolved concrete type
+    /// when connected, and falls back to `fallback` when the input is
+    /// disconnected. Use this for nodes whose evaluation produces meaningful
+    /// intrinsic content with no input (e.g. `atom_edit` whose diff is itself
+    /// a `Molecule`).
+    pub fn same_as_input_or_default(
+        name: &str,
+        input_pin_name: &str,
+        fallback: DataType,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            data_type: PinOutputType::SameAsInput {
+                input_pin_name: input_pin_name.to_string(),
+                fallback_if_disconnected: Some(fallback),
+            },
         }
     }
 
@@ -104,6 +147,19 @@ impl OutputPinDefinition {
     /// Single-output node whose type mirrors the named input pin.
     pub fn single_same_as(input_pin_name: &str) -> Vec<OutputPinDefinition> {
         vec![OutputPinDefinition::same_as_input("result", input_pin_name)]
+    }
+
+    /// Single-output node whose type mirrors the named input pin, with a
+    /// disconnected-input fallback. See `same_as_input_or_default`.
+    pub fn single_same_as_or_default(
+        input_pin_name: &str,
+        fallback: DataType,
+    ) -> Vec<OutputPinDefinition> {
+        vec![OutputPinDefinition::same_as_input_or_default(
+            "result",
+            input_pin_name,
+            fallback,
+        )]
     }
 
     /// Single-output node whose type mirrors the element type of an `Array[..]` input pin.

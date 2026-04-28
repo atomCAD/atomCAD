@@ -2563,8 +2563,16 @@ class OutputPinView {
   /// The concrete type the pin resolves to in the current network, if it can be
   /// resolved. `Some` only when resolution succeeds and produces a concrete type
   /// that differs from `data_type`. The Flutter UI should prefer this over
-  /// `data_type` for tooltips and color-coding when present.
+  /// `data_type` for color-coding and the primary tooltip label when present.
   final String? resolvedDataType;
+
+  /// `true` only when `resolved_data_type` came from the pin's
+  /// `SameAsInput` `fallback_if_disconnected` because the named input had
+  /// zero connections. The Flutter UI surfaces this in the tooltip as
+  /// "default — no input connected" so users can distinguish a type that
+  /// was inferred from an upstream wire from one that was filled in by the
+  /// node's intrinsic content (e.g. `atom_edit` with no input → Molecule).
+  final bool resolvedViaFallback;
   final int index;
 
   /// Alignment of this pin's last-evaluated value. `None` for types without
@@ -2581,6 +2589,7 @@ class OutputPinView {
     required this.name,
     required this.dataType,
     this.resolvedDataType,
+    required this.resolvedViaFallback,
     required this.index,
     this.alignment,
     this.alignmentReason,
@@ -2591,6 +2600,7 @@ class OutputPinView {
       name.hashCode ^
       dataType.hashCode ^
       resolvedDataType.hashCode ^
+      resolvedViaFallback.hashCode ^
       index.hashCode ^
       alignment.hashCode ^
       alignmentReason.hashCode;
@@ -2603,6 +2613,7 @@ class OutputPinView {
           name == other.name &&
           dataType == other.dataType &&
           resolvedDataType == other.resolvedDataType &&
+          resolvedViaFallback == other.resolvedViaFallback &&
           index == other.index &&
           alignment == other.alignment &&
           alignmentReason == other.alignmentReason;

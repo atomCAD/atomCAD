@@ -389,14 +389,17 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                                 }
                                 _ => true,
                             };
-                            let resolved_data_type = if needs_resolution {
-                                cad_instance
+                            let (resolved_data_type, resolved_via_fallback) = if needs_resolution {
+                                match cad_instance
                                     .structure_designer
                                     .node_type_registry
-                                    .resolve_output_type(node, node_network, i as i32)
-                                    .map(|t| t.to_string())
+                                    .resolve_output_type_detailed(node, node_network, i as i32)
+                                {
+                                    Some(r) => (Some(r.data_type.to_string()), r.via_fallback),
+                                    None => (None, false),
+                                }
                             } else {
-                                None
+                                (None, false)
                             };
                             let pin_output = scene_node_data.and_then(|d| {
                                 d.pin_outputs.iter().find(|p| p.pin_index == i as i32)
@@ -409,6 +412,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                                 name: pin_def.name.clone(),
                                 data_type: pin_def.data_type.to_string(),
                                 resolved_data_type,
+                                resolved_via_fallback,
                                 index: i as i32,
                                 alignment,
                                 alignment_reason,

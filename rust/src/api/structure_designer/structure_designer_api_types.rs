@@ -61,8 +61,15 @@ pub struct OutputPinView {
     /// The concrete type the pin resolves to in the current network, if it can be
     /// resolved. `Some` only when resolution succeeds and produces a concrete type
     /// that differs from `data_type`. The Flutter UI should prefer this over
-    /// `data_type` for tooltips and color-coding when present.
+    /// `data_type` for color-coding and the primary tooltip label when present.
     pub resolved_data_type: Option<String>,
+    /// `true` only when `resolved_data_type` came from the pin's
+    /// `SameAsInput` `fallback_if_disconnected` because the named input had
+    /// zero connections. The Flutter UI surfaces this in the tooltip as
+    /// "default — no input connected" so users can distinguish a type that
+    /// was inferred from an upstream wire from one that was filled in by the
+    /// node's intrinsic content (e.g. `atom_edit` with no input → Molecule).
+    pub resolved_via_fallback: bool,
     pub index: i32,
     /// Alignment of this pin's last-evaluated value. `None` for types without
     /// alignment (Molecule, primitives, …) or when the pin has not been

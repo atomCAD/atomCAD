@@ -91,6 +91,17 @@ impl Default for NodeTypeRegistry {
     }
 }
 
+/// Result of `NodeTypeRegistry::resolve_output_type_detailed`. Carries the
+/// resolved concrete `DataType` along with `via_fallback`, which is `true`
+/// only when a `SameAsInput` pin resolved via its `fallback_if_disconnected`
+/// because the named input had zero connections. The Flutter UI uses this
+/// flag to label fallback-resolved types as "default — no input connected".
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResolvedOutputType {
+    pub data_type: DataType,
+    pub via_fallback: bool,
+}
+
 impl NodeTypeRegistry {
     pub fn new() -> Self {
         let mut ret = Self {
@@ -445,8 +456,9 @@ impl NodeTypeRegistry {
     ///
     /// - `output_pin_index == -1` returns the node's function type.
     /// - For a `Fixed(t)` pin, returns `Some(t)` (or `None` if `t` is abstract).
-    /// - For `SameAsInput(name)`, resolves the concrete type of the upstream
-    ///   wire feeding the named input pin (recursively).
+    /// - For `SameAsInput`, resolves the concrete type of the upstream wire
+    ///   feeding the named input pin (recursively). When the input pin has zero
+    ///   connections, the pin's `fallback_if_disconnected` is returned if set.
     /// - For `SameAsArrayElements(name)`, resolves the concrete element type
     ///   common to every source feeding the array input (`None` on mismatch,
     ///   disconnected, or unresolved upstream).
@@ -459,9 +471,26 @@ impl NodeTypeRegistry {
         network: &NodeNetwork,
         output_pin_index: i32,
     ) -> Option<DataType> {
+        self.resolve_output_type_detailed(node, network, output_pin_index)
+            .map(|r| r.data_type)
+    }
+
+    /// Same as `resolve_output_type`, but also reports whether the pin was
+    /// resolved via the `SameAsInput` disconnected-input fallback. The Flutter
+    /// API surfaces this so the UI can label fallback-resolved types as
+    /// "default — no input connected" in the pin tooltip.
+    pub fn resolve_output_type_detailed(
+        &self,
+        node: &Node,
+        network: &NodeNetwork,
+        output_pin_index: i32,
+    ) -> Option<ResolvedOutputType> {
         let node_type = self.get_node_type_for_node(node)?;
         if output_pin_index == -1 {
-            return Some(node_type.get_function_type());
+            return Some(ResolvedOutputType {
+                data_type: node_type.get_function_type(),
+                via_fallback: false,
+            });
         }
         let pin = node_type.output_pins.get(output_pin_index as usize)?;
         self.resolve_pin_output_type(&pin.data_type, node, node_type, network)
@@ -473,19 +502,41 @@ impl NodeTypeRegistry {
         node: &Node,
         node_type: &NodeType,
         network: &NodeNetwork,
-    ) -> Option<DataType> {
+    ) -> Option<ResolvedOutputType> {
         match pin_type {
             PinOutputType::Fixed(t) => {
                 if t.is_abstract() {
                     None
                 } else {
-                    Some(t.clone())
+                    Some(ResolvedOutputType {
+                        data_type: t.clone(),
+                        via_fallback: false,
+                    })
                 }
             }
-            PinOutputType::SameAsInput(input_pin_name) => {
-                let (src_node, src_pin_index) =
-                    self.single_source_for_input(node, node_type, input_pin_name, network)?;
-                self.resolve_output_type(src_node, network, src_pin_index)
+            PinOutputType::SameAsInput {
+                input_pin_name,
+                fallback_if_disconnected,
+            } => {
+                match self.single_source_for_input(node, node_type, input_pin_name, network) {
+                    Some((src_node, src_pin_index)) => {
+                        self.resolve_output_type_detailed(src_node, network, src_pin_index)
+                    }
+                    None => {
+                        // No single connected source. Apply the fallback if the
+                        // input pin is genuinely disconnected (zero connections);
+                        // a malformed pin name or multi-connection still yields
+                        // None so type errors stay visible.
+                        if self.input_is_disconnected(node, node_type, input_pin_name) {
+                            fallback_if_disconnected.as_ref().map(|t| ResolvedOutputType {
+                                data_type: t.clone(),
+                                via_fallback: true,
+                            })
+                        } else {
+                            None
+                        }
+                    }
+                }
             }
             PinOutputType::SameAsArrayElements(input_pin_name) => {
                 let arg_index = node_type
@@ -515,8 +566,35 @@ impl NodeTypeRegistry {
                         _ => return None,
                     }
                 }
-                common
+                common.map(|t| ResolvedOutputType {
+                    data_type: t,
+                    via_fallback: false,
+                })
             }
+        }
+    }
+
+    /// Returns `true` when the named input pin exists on this node and has
+    /// zero connections wired to it. Used to gate `SameAsInput` fallback
+    /// resolution: a malformed pin name or argument count mismatch yields
+    /// `false` so genuine errors aren't masked by the fallback.
+    fn input_is_disconnected(
+        &self,
+        node: &Node,
+        node_type: &NodeType,
+        input_pin_name: &str,
+    ) -> bool {
+        let arg_index = match node_type
+            .parameters
+            .iter()
+            .position(|p| p.name == input_pin_name)
+        {
+            Some(i) => i,
+            None => return false,
+        };
+        match node.arguments.get(arg_index) {
+            Some(argument) => argument.argument_output_pins.is_empty(),
+            None => false,
         }
     }
 

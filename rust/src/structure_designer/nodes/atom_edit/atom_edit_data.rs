@@ -1989,7 +1989,15 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: vec![
-            OutputPinDefinition::same_as_input("result", "molecule"),
+            // Fall back to `Molecule` when the `molecule` input is
+            // disconnected: an `atom_edit` with no input creates a molecule
+            // from scratch (`apply_diff(empty, diff)`), so the static type
+            // should match what the evaluator actually produces.
+            OutputPinDefinition::same_as_input_or_default(
+                "result",
+                "molecule",
+                DataType::Molecule,
+            ),
             OutputPinDefinition::fixed("diff", DataType::Molecule),
         ],
         public: true,

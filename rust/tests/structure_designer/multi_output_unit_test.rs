@@ -746,6 +746,55 @@ fn test_custom_network_no_return_node() {
     assert_eq!(*network.node_type.output_type(), DataType::None);
 }
 
+// ===== atom_edit Molecule fallback (registration-level integration) =====
+//
+// `atom_edit`'s `result` pin is `SameAsInput("molecule", default = Molecule)`.
+// With no input wired, the pin must resolve to `Molecule` so the node is
+// usable for "create a molecule from scratch" workflows. With a Crystal wired
+// in, the upstream concrete type still wins — the fallback is only a safety
+// net for the disconnected case.
+
+#[test]
+fn test_atom_edit_disconnected_resolves_to_molecule_via_fallback() {
+    let mut designer = setup_designer_with_network("inner");
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get("inner").unwrap();
+    let node = network.nodes.get(&atom_edit_id).unwrap();
+
+    let resolved = registry
+        .resolve_output_type_detailed(node, network, 0)
+        .expect("atom_edit pin 0 must resolve via fallback when input is disconnected");
+    assert_eq!(resolved.data_type, DataType::Molecule);
+    assert!(
+        resolved.via_fallback,
+        "atom_edit with no wired input must report via_fallback = true"
+    );
+}
+
+#[test]
+fn test_atom_edit_connected_resolves_via_wire_not_fallback() {
+    let mut designer = setup_designer_with_network("inner");
+    // import_xyz produces a concrete `Molecule`. Wire it into atom_edit.molecule.
+    let source_id = designer.add_node("import_xyz", DVec2::new(-200.0, 0.0));
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.connect_nodes(source_id, 0, atom_edit_id, 0);
+
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get("inner").unwrap();
+    let node = network.nodes.get(&atom_edit_id).unwrap();
+
+    let resolved = registry
+        .resolve_output_type_detailed(node, network, 0)
+        .expect("atom_edit pin 0 must resolve when input is wired");
+    assert_eq!(resolved.data_type, DataType::Molecule);
+    assert!(
+        !resolved.via_fallback,
+        "atom_edit with a wired input must report via_fallback = false"
+    );
+}
+
 /// Using a custom network as a node in another network: pin 0 evaluation works.
 #[test]
 fn test_custom_network_node_evaluate_pin0() {
@@ -1379,5 +1428,102 @@ mod resolve_output_type_tests {
             registry.resolve_output_type(&network.nodes[&1], &network, 99),
             None
         );
+    }
+
+    // ===== SameAsInput fallback_if_disconnected tests =====
+    //
+    // A pin declared as `SameAsInput { fallback_if_disconnected: Some(t) }`
+    // resolves to `t` when the named input has zero connections. The resolver
+    // also reports `via_fallback = true` so the API/UI can label the type as
+    // "default — no input connected".
+
+    /// Toy registry with a `poly_with_default` node type whose `mirror` pin is
+    /// `SameAsInput("in", default = Molecule)`. Used to exercise the fallback
+    /// path. Reuses `src_float` from `build_toy_registry` for connection tests.
+    fn build_fallback_registry() -> NodeTypeRegistry {
+        let mut registry = build_toy_registry();
+        registry.built_in_node_types.insert(
+            "poly_with_default".to_string(),
+            toy_node_type(
+                "poly_with_default",
+                vec![Parameter {
+                    id: None,
+                    name: "in".to_string(),
+                    data_type: DataType::HasAtoms,
+                }],
+                vec![OutputPinDefinition::same_as_input_or_default(
+                    "mirror",
+                    "in",
+                    DataType::Molecule,
+                )],
+            ),
+        );
+        registry
+    }
+
+    #[test]
+    fn fallback_resolves_when_input_disconnected() {
+        let registry = build_fallback_registry();
+        let mut network = empty_network();
+        let node = make_node(1, "poly_with_default", 1);
+        network.nodes.insert(1, node);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 0);
+        assert_eq!(resolved, Some(DataType::Molecule));
+    }
+
+    #[test]
+    fn fallback_reports_via_fallback_true() {
+        let registry = build_fallback_registry();
+        let mut network = empty_network();
+        let node = make_node(1, "poly_with_default", 1);
+        network.nodes.insert(1, node);
+
+        let detailed =
+            registry.resolve_output_type_detailed(&network.nodes[&1], &network, 0);
+        let detailed = detailed.expect("fallback should resolve");
+        assert_eq!(detailed.data_type, DataType::Molecule);
+        assert!(
+            detailed.via_fallback,
+            "via_fallback should be true for disconnected-input fallback"
+        );
+    }
+
+    #[test]
+    fn connected_input_takes_precedence_over_fallback() {
+        // When the input *is* wired, the upstream concrete type wins and
+        // via_fallback is false — the fallback is only a safety net.
+        let registry = build_fallback_registry();
+        let mut network = empty_network();
+
+        let src = make_node(1, "src_float", 0);
+        let mut poly = make_node(2, "poly_with_default", 1);
+        poly.arguments[0].argument_output_pins.insert(1, 0);
+        network.nodes.insert(1, src);
+        network.nodes.insert(2, poly);
+
+        let detailed =
+            registry.resolve_output_type_detailed(&network.nodes[&2], &network, 0);
+        let detailed = detailed.expect("connected upstream should resolve");
+        assert_eq!(detailed.data_type, DataType::Float);
+        assert!(
+            !detailed.via_fallback,
+            "via_fallback must be false when resolved via wire"
+        );
+    }
+
+    #[test]
+    fn pin_without_fallback_still_returns_none_when_disconnected() {
+        // Regression guard: the fallback feature is opt-in. A vanilla
+        // `SameAsInput` pin (no fallback) on a pure-transformation node
+        // (atom_union / structure_move semantics) keeps its existing
+        // unresolved-when-disconnected behavior.
+        let registry = build_toy_registry();
+        let mut network = empty_network();
+        let poly = make_node(1, "poly", 2);
+        network.nodes.insert(1, poly);
+
+        let resolved = registry.resolve_output_type(&network.nodes[&1], &network, 1);
+        assert_eq!(resolved, None);
     }
 }
