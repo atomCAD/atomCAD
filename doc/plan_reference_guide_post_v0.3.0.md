@@ -550,29 +550,29 @@ These features extend nodes that already have an entry in the reference guide.
 Find the existing section and amend it.
 
 ### 3.1 `atom_replace` extensions (phase 2)
-- [ ] Update existing `atom_replace` section with new capabilities.
+- [x] Update existing `atom_replace` section with new capabilities.
 - Design doc: `doc/design_atom_replace.md`
 - Representative commits: `290a1926`/`13177b1a` (phase 2).
 
 ### 3.2 `atom_edit` updates
-- [ ] Document tolerance property + input pin (commit `cdfc28d4`).
-- [ ] Document multi-output: `result` and `diff` pins (covered conceptually
+- [x] Document tolerance property + input pin (commit `cdfc28d4`).
+- [x] Document multi-output: `result` and `diff` pins (covered conceptually
       in 1.5; here add the specific node behavior).
-- [ ] Document the "add atom at position" tool (commit `40daeb78`) — this
+- [x] Document the "add atom at position" tool (commit `40daeb78`) — this
       goes under "Add atom tool" subsection (~line 92) of the Direct Editing
       Mode section, not the node section.
 - Section: existing `atom_edit` entry (~line 1172) and Direct Editing Mode
   (~line 32 onwards).
 
 ### 3.3 `atom_fill` UX/behavior updates
-- [ ] Document the improved parameter-override UI (commit `a232ee74`).
-- [ ] Document "effective atomic number" (commit `ddf1410b`).
-- [ ] Document parameter elements simulating their default replacements
+- [x] Document the improved parameter-override UI (commit `a232ee74`).
+- [x] Document "effective atomic number" (commit `ddf1410b`).
+- [x] Document parameter elements simulating their default replacements
       (commit `1de9f48b`).
 - Section: existing `atom_fill` entry (~line 1036).
 
 ### 3.4 `apply_diff` related — hybridization display
-- [ ] Document that inferred hybridization is shown when auto hybridization
+- [x] Document that inferred hybridization is shown when auto hybridization
       is in use (commit `73139119`), plus diff-view hybridization fix
       (`25d2c8fa`). May belong in atom_edit / direct editing mode rather
       than apply_diff — verify.

@@ -70,6 +70,7 @@ The Default tool includes one-click hydrogen passivation and depassivation:
   - A **Hybridization** dropdown (Auto / sp3 / sp2 / sp1) lets you override the auto-detected hybridization.
   - A **Bond Mode** toggle (Covalent / Dative) controls the saturation limit: Dative mode unlocks lone pair positions for coordinate bonding.
   - When an atom is placed near an existing atom, the atoms are merged automatically.
+- **Add atom at position:** When you need an atom at exact coordinates rather than picked from the viewport, the Add Atom panel exposes a *Position (Å)* vec3 input and an *Add atom at position* button. Type the X/Y/Z values and click the button to drop one atom of the currently selected element at that location, using the chosen hybridization override. Useful for reproducible placement (e.g. lattice-aligned coordinates copied from another source).
 - Press `Escape` or click empty space to cancel guided placement and return to idle.
 
 ### Add bond tool
@@ -91,7 +92,7 @@ When 2–4 atoms are selected the UI displays a measurement card. Measurements a
 
 A **Modify** button on the measurement card opens a dialog where you can enter a precise target value. Atoms are moved along bond axes, rotated around vertices, or rotated around torsion axes to achieve the target value. A "move connected atoms" option (on by default) moves the fragment attached to the moving atom rather than just the single atom.
 
-**Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it.
+**Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it. The tooltip also reports the atom's hybridization: when an explicit override is set the line reads e.g. *Hybridization: sp2 (override)*; when hybridization is left on auto the line shows the auto-inferred value in parentheses, e.g. *Hybridization: auto (sp3)*. For atoms whose displayed atomic number is a non-physical parameter element, an *Effective element: …* line shows the real element used for simulation, guided placement, and passivation (see the parameter element note in the [`atom_fill`](./nodes/atomic.md#atom_fill) section).
 
 ### Rim highlights
 

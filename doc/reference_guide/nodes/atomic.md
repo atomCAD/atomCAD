@@ -57,20 +57,13 @@ Converts a `Blueprint` into a `Crystal` by carving atoms out of the infinite cry
 
 The motif passed into the `motif` input pin is the motif used to fill the geometry. If no motif is passed in the cubic zincblende motif is used. (See also: `motif` node).
 
-In the Parameter *Element Value Definition* text area you can specify (override) the values of the parameter elements defined in the motif. If for the default (cubic zincblende motif) you specify the following:
+### Parameter element overrides
 
-```
-PRIMARY Si
-SECONDARY C
-```
-
-The primary element changes from carbon to silicon:
+Motifs declare *parameter elements* — placeholder slots like `PRIMARY` or `SECONDARY` that the `atom_fill` node substitutes with concrete elements when it materializes the crystal. The properties panel shows a *Parameter Element Overrides* table, populated automatically from the connected motif: one row per parameter, with the parameter's name on the left and an element dropdown on the right. Choose an element to override the parameter's default; leave a row at *Default (X)* to keep the motif's own default. For example, with the default cubic zincblende motif, switching `PRIMARY` from carbon to silicon yields the same silicon carbide as before — there is no longer a free-form text area to edit.
 
 ![](../../atomCAD_images/silicon_carbide.png)
 
-
-
-You can also change the fractional motif offset vector. (Each component should be between 0 and 1). This can be useful to finetune where the cuts should be made on the crystal to avoid unwanted features like the methyl groups.
+When a motif is edited inside `motif_edit`, parameter atoms (which carry non-physical atomic numbers) **simulate as their default element** for the purpose of force-field minimization, guided placement, and hydrogen passivation — a `PRIMARY` atom whose default is carbon will be treated as carbon for bond-length and hybridization calculations. This keeps the motif geometry realistic during interactive editing even before any concrete substitutions are chosen in `atom_fill`. Hovering over such an atom in the viewport shows an extra *Effective element: …* line in the tooltip whenever the displayed atomic number differs from the simulated one.
 
 If the geometry cut is done such a way that an atom has no bonds that is removed automatically. (Lone atom removal.)
 
@@ -196,6 +189,44 @@ Recomputes bonds in an atomic structure based on interatomic distances and coval
 
 The same `additive` and `bond_tolerance` values are also available as node properties for cases where you want a fixed setting without an extra wire.
 
+## atom_replace
+
+Substitutes atoms of one element for another (or removes them) in bulk, according to a list of replacement rules. The output preserves the concrete input type — a `Crystal` in produces a `Crystal` out, a `Molecule` in produces a `Molecule` out.
+
+![TODO(image): the `atom_replace` node selected with its properties panel showing two replacement rows (e.g. C→Si and H→Delete)](TODO)
+
+**Input pins**
+
+- `molecule` — the atomic structure to transform (`Crystal` or `Molecule`).
+
+**Properties**
+
+The replacement rules live as node properties, not wired inputs. The property panel shows a list of rows, each with `[source element] → [target element]` and a delete button, plus an *Add Replacement* button at the bottom.
+
+The **target dropdown** has an extra entry — *Delete* — at the top of the list. Choosing *Delete* removes every atom of the source element from the structure (and cleans up their bonds) instead of substituting them.
+
+**Behavior**
+
+- Each rule maps a source element to a target element (or to *Delete*).
+- Atoms whose element is not listed in any rule pass through unchanged.
+- Rules apply independently — each atom is matched against the rule list once.
+- If multiple rules name the same source element, the last rule wins.
+- Bond connectivity is preserved when an element is substituted; bonds attached to deleted atoms are removed.
+
+The node subtitle summarizes the active rules (e.g. `C→Si, O→S`, or `H→(del)` for a deletion rule), with a `… (+N more)` suffix when the list is longer than three entries.
+
+**Text format**
+
+The rule list serializes as an array of `(from_atomic_number, to_atomic_number)` pairs, with `0` representing *Delete*:
+
+```
+replace1 = atom_replace {
+    replacements: [(6, 14), (8, 16)]
+}
+```
+
+This replaces C→Si and O→S.
+
 ## atom_cut
 
 Cuts an atomic structure using cutter geometries. Unlike `atom_fill` which creates atoms from geometry, `atom_cut` removes atoms that lie outside the cutter shapes — effectively performing a Boolean intersection between an existing atomic structure and one or more 3D geometries.
@@ -236,6 +267,12 @@ Each pin has its own eye icon — display either or both in the 3D viewport. Whe
 The `result` pin preserves the concrete input type — Crystal in / Crystal out, Molecule in / Molecule out. The `diff` pin is always a `Molecule` (a raw diff has no inherent lattice identity).
 
 In the text format, refer to a non-default output pin with `.pinname` after the source node, e.g. `apply_diff { base: input, diff: my_edit.diff }` to take the diff from `my_edit` rather than the default `result`. See the [Node Network Text Format](../../node_network_text_format.md) document for the full syntax.
+
+### Tolerance
+
+`atom_edit` matches diff entries to base atoms by position. The match radius is controlled by a single `tolerance` value (in Ångströms), available both as a node property and as the optional `tolerance` input pin. A wired pin overrides the property; when the pin is unconnected, the property value is used. The current value is shown in the node subtitle as `tol=…` whenever the pin is not connected.
+
+Lower values make matching more strict (good when atoms are densely packed); higher values let the diff still apply after the base structure has been deformed slightly. The default works for typical atom-scale geometry; reach for the property when re-applying a saved diff to a relaxed or otherwise perturbed base.
 
 ## motif_edit
 
