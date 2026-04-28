@@ -32,10 +32,19 @@ We’d love to hear about your use case: what are you using — or planning to u
 
 ## Tutorials and Reference Guide
 
-If you are new to atomCAD check out the [atomCAD Basic Tutorial](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/atomCAD_basic_tutorial.md) and the [atomCAD Part Design Tutorial](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/part_design_tutorial.md) (in this order).
+If you are new to atomCAD, start with the Basic Tutorial, then the Part Design Tutorial.
 
+Use the **release docs** if you're running the v0.3.0 build. Use the **development docs** if you built atomCAD from `main` — it covers new nodes and behavior that v0.3.0 doesn't have.
 
-For more details see [atomCAD Reference Guide](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/atomCAD_reference_guide.md).
+**Latest release (v0.3.0):**
+- [Basic Tutorial](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/atomCAD_basic_tutorial.md)
+- [Part Design Tutorial](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/part_design_tutorial.md)
+- [Reference Guide](https://github.com/atomCAD/atomCAD/blob/v0.3.0-docs/doc/atomCAD_reference_guide.md)
+
+**Development version (`main`):**
+- [Basic Tutorial](./doc/atomCAD_basic_tutorial.md)
+- [Part Design Tutorial](./doc/part_design_tutorial.md)
+- [Reference Guide](./doc/atomCAD_reference_guide.md)
 
 ## Using with Claude Code
 
