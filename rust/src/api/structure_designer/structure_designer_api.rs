@@ -825,9 +825,15 @@ pub fn add_node_network_with_name(name: String) -> APIResult {
                         error_message: format!("Network '{}' already exists", name),
                     };
                 }
-                instance
+                if let Err(reason) = instance
                     .structure_designer
-                    .add_node_network_with_undo(&name);
+                    .add_node_network_with_undo(&name)
+                {
+                    return APIResult {
+                        success: false,
+                        error_message: format!("Invalid network name: {}", reason),
+                    };
+                }
                 // New networks don't have camera settings, but we still call the method
                 let camera_settings = instance
                     .structure_designer

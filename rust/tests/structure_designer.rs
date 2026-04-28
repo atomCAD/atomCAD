@@ -186,3 +186,9 @@ mod matrix_types_test;
 
 #[path = "structure_designer/imat3_nodes_test.rs"]
 mod imat3_nodes_test;
+
+#[path = "structure_designer/identifier_test.rs"]
+mod identifier_test;
+
+#[path = "structure_designer/relaxed_node_names_test.rs"]
+mod relaxed_node_names_test;

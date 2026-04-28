@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cad/structure_designer/identifier_validation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
@@ -242,15 +243,24 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
 
   void _commitRename() {
     if (_editingNetworkName != null) {
-      final newName = _renameController.text.trim();
+      final newName = _renameController.text;
       if (newName.isNotEmpty && newName != _editingNetworkName) {
-        final success =
-            widget.model.renameNodeNetwork(_editingNetworkName!, newName);
-        if (!success && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Rename failed: name already exists')),
-          );
+        final validationError = validateUserName(newName);
+        if (validationError != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Rename failed: $validationError')),
+            );
+          }
+        } else {
+          final success =
+              widget.model.renameNodeNetwork(_editingNetworkName!, newName);
+          if (!success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Rename failed: name already exists')),
+            );
+          }
         }
       }
       _renameFocusNode.unfocus();

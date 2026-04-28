@@ -3,6 +3,7 @@ import '../common/draggable_dialog.dart';
 import '../src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
 import '../src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'identifier_validation.dart';
 import 'structure_designer_model.dart';
 
 /// Dialog for factoring the current node selection into a reusable subnetwork.
@@ -49,19 +50,12 @@ class _FactorIntoSubnetworkDialogState
     super.dispose();
   }
 
-  /// Validates the subnetwork name
+  /// Validates the subnetwork name. Network names follow the relaxed
+  /// user-name rules (see `doc/design_relaxed_node_names.md`): nearly any
+  /// character is allowed except backticks, control characters, and edge
+  /// whitespace.
   String? _validateName(String name) {
-    if (name.isEmpty) {
-      return 'Name cannot be empty';
-    }
-
-    // Check for valid identifier (alphanumeric + underscore, not starting with digit)
-    final validIdentifier = RegExp(r'^[a-zA-Z_][a-zA-Z0-9_]*$');
-    if (!validIdentifier.hasMatch(name)) {
-      return 'Name must be a valid identifier (letters, numbers, underscore; cannot start with digit)';
-    }
-
-    return null;
+    return validateUserName(name);
   }
 
   /// Validates the parameter names

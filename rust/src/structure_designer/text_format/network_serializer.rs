@@ -12,10 +12,24 @@
 //! output union1
 //! ```
 
+use super::parser::Parser;
 use super::serializer::format_string;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use std::borrow::Cow;
 use std::collections::HashSet;
+
+/// Format a name for the text format: emit it bare if it lexes as a single
+/// bare identifier, otherwise wrap it in backticks. The name is assumed to
+/// already be valid (no embedded backticks); this is enforced by
+/// `is_valid_user_name` at every entry point.
+pub fn format_identifier(name: &str) -> Cow<'_, str> {
+    if Parser::needs_quoting(name) {
+        Cow::Owned(format!("`{}`", name))
+    } else {
+        Cow::Borrowed(name)
+    }
+}
 
 /// Serializes a node network to text format.
 pub struct NetworkSerializer<'a> {
@@ -91,7 +105,7 @@ impl<'a> NetworkSerializer<'a> {
         // Step 3: Output statement
         if let Some(return_node_id) = self.network.return_node_id {
             if let Some(return_name) = self.get_node_name(return_node_id) {
-                output.push_str(&format!("output {}\n", return_name));
+                output.push_str(&format!("output {}\n", format_identifier(return_name)));
             }
         }
 
@@ -258,40 +272,42 @@ impl<'a> NetworkSerializer<'a> {
             properties.push(("visible".to_string(), "true".to_string()));
         }
 
-        // Format the node
+        // Format the node. The LHS name and the RHS node type are both
+        // identifier positions and must be quoted if they contain reserved
+        // characters (relevant for custom networks with relaxed names used as
+        // node types).
+        let lhs = format_identifier(&node_name);
+        let rhs = format_identifier(&node.node_type_name);
         if properties.is_empty() {
-            format!("{} = {}", node_name, node.node_type_name)
+            format!("{} = {}", lhs, rhs)
         } else {
             let props_str: Vec<String> = properties
                 .iter()
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect();
-            format!(
-                "{} = {} {{ {} }}",
-                node_name,
-                node.node_type_name,
-                props_str.join(", ")
-            )
+            format!("{} = {} {{ {} }}", lhs, rhs, props_str.join(", "))
         }
     }
 
     /// Format a node reference, handling function pin references with @ prefix
     /// and multi-output pin references with `.pinname` suffix.
     fn format_reference(&self, source_name: &str, pin_index: i32, source_node_id: u64) -> String {
+        let formatted_name = format_identifier(source_name);
         if pin_index == -1 {
             // Function pin reference
-            format!("@{}", source_name)
+            format!("@{}", formatted_name)
         } else if pin_index > 0 {
-            // Multi-output pin: look up the pin name from the node type
+            // Multi-output pin: look up the pin name from the node type. Pin
+            // names are always simple identifiers (see design doc Non-Goals).
             if let Some(pin_name) = self.get_output_pin_name(source_node_id, pin_index) {
-                format!("{}.{}", source_name, pin_name)
+                format!("{}.{}", formatted_name, pin_name)
             } else {
                 // Fallback: use numeric index if pin name unavailable
-                format!("{}.pin{}", source_name, pin_index)
+                format!("{}.pin{}", formatted_name, pin_index)
             }
         } else {
             // Pin 0: regular output reference (no qualifier for backward compat)
-            source_name.to_string()
+            formatted_name.into_owned()
         }
     }
 

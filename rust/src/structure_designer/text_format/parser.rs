@@ -329,6 +329,43 @@ impl Lexer {
                 })
             }
 
+            Some('`') => {
+                // Backtick-quoted identifier: `<one or more non-backtick chars>`
+                self.advance(); // consume opening backtick
+                let mut content = String::new();
+                loop {
+                    match self.peek() {
+                        None => {
+                            return Err(ParseError::new(
+                                "Unterminated quoted identifier",
+                                line,
+                                column,
+                            ));
+                        }
+                        Some('`') => {
+                            self.advance(); // consume closing backtick
+                            break;
+                        }
+                        Some(ch) => {
+                            content.push(ch);
+                            self.advance();
+                        }
+                    }
+                }
+                if content.is_empty() {
+                    return Err(ParseError::new(
+                        "Empty quoted identifier",
+                        line,
+                        column,
+                    ));
+                }
+                Ok(TokenInfo {
+                    token: Token::Identifier(content),
+                    line,
+                    column,
+                })
+            }
+
             Some(ch)
                 if ch.is_ascii_digit()
                     || (ch == '-' && self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit())) =>
@@ -1082,6 +1119,46 @@ impl Parser {
 
         self.expect(&Token::RightBrace)?;
         Ok(TextValue::Object(entries))
+    }
+
+    /// Returns true iff `s` lexes as exactly one bare-identifier token followed by
+    /// EOF, with the token text equal to `s`. Anything else — multi-token splits,
+    /// keyword collisions, leading digit, embedded reserved character, leading
+    /// backtick, etc. — returns false.
+    pub fn lexes_as_single_bare_identifier(s: &str) -> bool {
+        if s.is_empty() {
+            return false;
+        }
+        // Reject backtick directly: a `-prefixed string would lex as a quoted
+        // identifier, which is not the bare form even when its content matches.
+        if s.starts_with('`') {
+            return false;
+        }
+        let tokens = match Lexer::tokenize(s) {
+            Ok(t) => t,
+            Err(_) => return false,
+        };
+        // Expect exactly two tokens: Identifier(t) followed by Eof.
+        if tokens.len() != 2 {
+            return false;
+        }
+        if !matches!(tokens[1].token, Token::Eof) {
+            return false;
+        }
+        match &tokens[0].token {
+            Token::Identifier(t) => t == s,
+            _ => false,
+        }
+    }
+
+    /// Returns true iff `s` must be emitted in backtick-quoted form to round-trip
+    /// through the text format. This includes: empty strings (defensively),
+    /// names that the lexer would split into multiple tokens, names that collide
+    /// with a keyword (`true`, `false`, `output`, `delete`, `description`,
+    /// `summary`), names beginning with a digit, and names containing reserved
+    /// characters.
+    pub fn needs_quoting(s: &str) -> bool {
+        !Self::lexes_as_single_bare_identifier(s)
     }
 
     /// Parse a literal value (for use in object literals)

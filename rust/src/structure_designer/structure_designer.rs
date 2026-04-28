@@ -724,7 +724,11 @@ impl StructureDesigner {
 
     /// Add a named node network and push an undo command.
     /// Used by the API layer for user-initiated "add network with name" actions.
-    pub fn add_node_network_with_undo(&mut self, node_network_name: &str) {
+    pub fn add_node_network_with_undo(
+        &mut self,
+        node_network_name: &str,
+    ) -> Result<(), super::identifier::InvalidNameReason> {
+        super::identifier::is_valid_user_name(node_network_name)?;
         let previous_active_network = self.active_node_network_name.clone();
         self.add_node_network(node_network_name);
         self.set_dirty(true);
@@ -733,6 +737,7 @@ impl StructureDesigner {
             network_name: node_network_name.to_string(),
             previous_active_network,
         });
+        Ok(())
     }
 
     pub fn add_node_network(&mut self, node_network_name: &str) {
@@ -753,6 +758,11 @@ impl StructureDesigner {
     }
 
     pub fn rename_node_network(&mut self, old_name: &str, new_name: &str) -> bool {
+        // Reject names that violate the user-name rules (empty, backtick,
+        // control chars, edge whitespace).
+        if super::identifier::is_valid_user_name(new_name).is_err() {
+            return false;
+        }
         // Check if the old network exists and the new name doesn't already exist
         if !self.node_type_registry.node_networks.contains_key(old_name) {
             return false;
@@ -4216,7 +4226,11 @@ impl StructureDesigner {
     ) -> Result<u64, String> {
         use super::selection_factoring;
 
-        // 1. Validate name doesn't exist
+        // 1. Validate the name itself (relaxed user-name rules) and that it
+        // does not already exist.
+        if let Err(reason) = super::identifier::is_valid_user_name(subnetwork_name) {
+            return Err(format!("Invalid subnetwork name: {}", reason));
+        }
         if self
             .node_type_registry
             .get_node_type(subnetwork_name)

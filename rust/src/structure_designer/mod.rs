@@ -5,6 +5,7 @@ pub mod cli_runner;
 pub mod common_constants;
 pub mod data_type;
 pub mod evaluator;
+pub mod identifier;
 pub mod implicit_eval;
 pub mod layout;
 pub mod navigation_history;

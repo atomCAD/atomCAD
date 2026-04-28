@@ -277,6 +277,12 @@ impl<'a> NetworkEditor<'a> {
         node_type_name: &str,
         properties: &[(String, PropertyValue)],
     ) -> Result<u64, String> {
+        // Validate the user-provided name before using it as a custom_name.
+        if let Err(reason) =
+            crate::structure_designer::identifier::is_valid_user_name(name)
+        {
+            return Err(format!("Invalid node name '{}': {}", name, reason));
+        }
         // Look up node type
         let node_type = self
             .registry
