@@ -2,7 +2,7 @@
 
 ← Back to [Reference Guide hub](../../atomCAD_reference_guide.md)
 
-These nodes output a `Blueprint` — a 3D shape paired with a `Structure`, which can later be used as an input to an `atom_fill` node to materialize an atomic structure.
+These nodes output a `Blueprint` — a 3D shape paired with a `Structure`, which can later be used as an input to a `materialize` node to carve an atomic structure out of the lattice.
 Positions and sizes are usually discrete integer numbers meant in crystal lattice coordinates.
 
 
@@ -133,23 +133,37 @@ The node expression is the following:
 diff(base, sub) = diff(union(...each base input...), union(...each sub input...))
 ```
 
-## lattice_move
+## structure_move
 
-**Moves** the geometry in the **discrete lattice space** with a relative vector.
+Translates a structure-bound object — a `Blueprint` or a `Crystal` — by a relative vector in **discrete lattice space**. The input pin accepts the abstract `HasStructure` type, and the concrete variant flows through unchanged: a `Blueprint` in produces a `Blueprint` out, a `Crystal` in produces a `Crystal` out. `Molecule` inputs are rejected — use `free_move` for free-space translation.
 
 ![](../../atomCAD_images/lattice_move.png)
 
+**Input pins**
 
+- `input: HasStructure` — the object to translate.
+- `translation: IVec3` — the translation vector in lattice coordinates.
+- `subdivision: Int` (optional) — divides the lattice spacing for finer-than-cell translations. The effective translation is `translation / subdivision`. Setting `subdivision = 1` (the default) gives whole-lattice-vector steps; larger values give fractional steps.
 
-*Continuous* transformation in the lattice space is not allowed (for continuous transformations use the `atom_move` and `atom_rot` nodes which are only available for atomic structures).
+The component-wise divisibility of `translation` by `subdivision` decides whether the result remains lattice-aligned (see [Blueprint alignment](../node_networks.md#blueprint-alignment)). When the translation is not divisible, the output is flagged `lattice_unaligned`.
 
-You can directly enter the translation vector or drag the axes of the gadget.
+For a `Blueprint`, only the geometry (the cookie cutter) moves; latent atoms remain anchored to the structure. For a `Crystal`, atoms and geometry move together rigidly.
 
-## lattice_rot
+You can directly enter the translation vector or drag the axes of the gadget. *Continuous* transformation in lattice space is not supported (use `free_move` for that).
 
-**Rotates** geometry in lattice space.
+## structure_rot
+
+Rotates a structure-bound object — a `Blueprint` or a `Crystal` — in lattice space. Like `structure_move`, the input pin is `HasStructure` and the concrete variant flows through unchanged. `Molecule` inputs are rejected.
 
 ![](../../atomCAD_images/lattice_rot.png)
 
-Only rotations that are symmetries of the currently selected unit cell are allowed — the node exposes only those valid lattice-symmetry rotations.
-You may provide a pivot point for the rotation; by default the pivot is the origin `(0,0,0)`.
+**Input pins**
+
+- `input: HasStructure` — the object to rotate.
+- `axis_index: Int` — index into the input structure's symmetry axes (only rotations that are symmetries of the unit cell are allowed; the node exposes those valid lattice-symmetry rotations).
+- `step: Int` — number of *n*-fold rotation steps to apply. For example, with a 4-fold axis, `step = 1` is a 90° rotation, `step = 2` is 180°.
+- `pivot_point: IVec3` — pivot in lattice coordinates. Defaults to the origin `(0, 0, 0)`.
+
+Lattice alignment is always preserved by the rotation itself, but the rotation may or may not be a symmetry of the motif (or, with a non-zero `motif_offset`, of the motif placement). When the rotation maps every motif site and bond to itself, the output stays `aligned`; otherwise it is flagged `motif_unaligned`. See [Blueprint alignment](../node_networks.md#blueprint-alignment).
+
+For a `Blueprint`, only the geometry rotates. For a `Crystal`, atoms and geometry rotate together.

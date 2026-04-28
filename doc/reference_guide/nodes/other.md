@@ -101,7 +101,7 @@ The new motif contains `|det(matrix)| × old_sites_count` sites — every old ce
 
 ## motif
 
-The `motif` node produces a `Motif` value which can be an input to an `atom_fill` node and determines the content which fills the provided geometry.
+The `motif` node produces a `Motif` value which can be wired into a `structure` node. The downstream `materialize` node then uses that motif to determine the content which fills the provided geometry.
 
 ![](../../atomCAD_images/motif_node.png)
 
@@ -122,7 +122,7 @@ PARAM PRIMARY C
 PARAM SECONDARY C
 ```
 
-Parameter elements are the ones that are replaced by concrete elements which the user chooses in the `atom_fill` node.
+Parameter elements are the ones that are replaced by concrete elements which the user chooses in the `materialize` node.
 
 **site**
 

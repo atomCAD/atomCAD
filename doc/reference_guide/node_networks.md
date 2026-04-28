@@ -40,7 +40,7 @@ Supported basic data types include:
 - `Structure` — a crystal structure: lattice basis + motif + motif offset
 - `Geometry2D`
 - `Blueprint` — a 3D **blueprint**: a `Structure` paired with a bounded geometry shape that acts as a "cookie cutter" in the infinite crystal field. Atoms are *latent*: they exist where the cutter overlaps the structure but have not been carved out yet.
-- `Crystal` — a materialized atomic structure that *retains* its `Structure` (lattice information). Produced by carving a `Blueprint` (e.g. via `atom_fill` / `materialize`). The atoms and the optional geometry shell move together under any transform.
+- `Crystal` — a materialized atomic structure that *retains* its `Structure` (lattice information). Produced by carving a `Blueprint` (via `materialize`). The atoms and the optional geometry shell move together under any transform.
 - `Molecule` — a free-floating atomic structure with **no** `Structure` association. Produced by importing an XYZ file or by stripping the structure off a `Crystal` (`exit_structure`). Can be moved arbitrarily.
 - `Motif`
 
@@ -87,6 +87,8 @@ Abstract types appear **only** as input-pin types on built-in polymorphic nodes.
 
 **Type preservation.** When a value flows through a polymorphic node, the *concrete* type is preserved on the output. A `Crystal` fed into `add_hydrogen` comes out as a `Crystal`; a `Molecule` comes out as a `Molecule`. A chain like `Crystal → add_hydrogen → structure_move` therefore stays well-typed end to end — the `structure_move` (which needs `HasStructure`) still accepts the post-`add_hydrogen` result.
 
+Internally, polymorphic output pins are declared with a *same as input* rule that points back at one of the node's input pins (visible in pin tooltips as e.g. `SameAsInput(molecule)`). The editor resolves that rule against the actually-wired source: the output pin then renders with the resolved concrete type's color, and any wire leaving it picks up the same color. If the input is unwired, the output falls back to its declared (possibly abstract) type for coloring purposes.
+
 ### Pin coloring
 
 Pins are colored by their data type:
@@ -105,6 +107,50 @@ Array pins use the same color as their element type and are marked with a small 
 **Abstract-type input pins** are rendered as a pie-sliced circle, one slice per concrete type contained in the abstract type, each slice colored with that concrete type's color. So a `HasAtoms` input pin appears solid green (Crystal + Molecule are both green); a `HasStructure` input pin appears half purple (Blueprint) and half green (Crystal); a `HasFreeLinOps` input pin is half purple (Blueprint) and half green (Molecule). Output pins are always concrete and render single-colored. Wires take the color of their source's concrete type.
 
 ![TODO(image): a node with HasStructure and HasFreeLinOps input pins shown as pie-sliced circles next to a node with concrete (single-colored) input pins for visual comparison](TODO)
+
+## Blueprint alignment
+
+A `Blueprint` (or a `Crystal` derived from one) is meaningful only insofar as its geometry is registered to the infinite crystal field of its `Structure`. Some operations break that registration — for example, `free_move` on a Blueprint translates the cookie cutter without moving the underlying lattice, and a `structure_rot` around an axis that is not a motif symmetry rotates atoms onto sites where the motif no longer maps to itself. Boolean CSG (`union`, `intersect`, `diff`), `materialize`, and `atom_edit` all assume their inputs share a common lattice registration; combining mis-registered values silently produces garbage atoms.
+
+atomCAD does **not** prevent these operations — they are useful for strained structures, defect studies, or carrying a molecule as a pseudo-Blueprint — but it surfaces the risk so you can see it in the editor. Every `Blueprint` and `Crystal` value carries an **alignment** flag with three levels:
+
+| Alignment | Meaning |
+|---|---|
+| `aligned` | Lattice and motif registration both preserved. Safe to combine with other `aligned` values of the same `Structure`. |
+| `motif-unaligned` | Lattice translational symmetry still holds, but the motif may not map to itself under the applied operations. Boolean combinations with other values are still safe *as long as the atoms are not yet materialized*; after materialization the atoms may not all sit on motif sites. |
+| `lattice-unaligned` | The value is no longer registered to any integer translation of the structure's lattice. This is a superset — anything lattice-unaligned is motif-unaligned by construction. |
+
+### How alignment propagates
+
+Alignment is a *derived* property — every node computes it from its inputs and operation, so values that flow through the network always carry an up-to-date flag. The propagation rules:
+
+| Operation | Alignment effect |
+|---|---|
+| Construction (any shape primitive, `import_cif`, `materialize`'s output) | `aligned` |
+| `structure_move`, when each `translation` component is divisible by `subdivision` | pass-through |
+| `structure_move`, when components are not divisible | promotes to at least `lattice-unaligned` |
+| `structure_rot`, when the rotation is also a motif symmetry | pass-through |
+| `structure_rot`, when the rotation is not a motif symmetry | promotes to at least `motif-unaligned` |
+| `free_move`, `free_rot` | promotes to at least `lattice-unaligned` |
+| `union`, `intersect`, `diff`, `atom_union` | the most-degraded input wins (max over inputs) |
+| `materialize`, `dematerialize` | pass-through |
+| `exit_structure` | dropped (Molecules have no alignment) |
+| `enter_structure` | always `lattice-unaligned` (atoms may not lie on motif sites) |
+| `atom_edit` and other atomic ops (`relax`, `add_hydrogen`, `atom_replace`, …) | pass-through |
+
+The `subdivision` parameter on geometry primitives (`half_space`, `extrude`, `drawing_plane`, `half_plane`, `facet_shell`) does **not** affect alignment — it controls where the cut sits, not where atoms end up. Only `structure_move`'s `subdivision` can break lattice alignment, because there it subdivides a translation.
+
+Some nodes record a short *reason* string when they degrade alignment (e.g. *"non-motif rotation"*, *"fractional translation by (1, 0, 0)/2"*); the reason appears in the pin tooltip below the alignment line.
+
+### Visual indicators in the editor
+
+- **Wire dashes.** Wires carrying a value with `motif-unaligned` alignment are drawn with **long dashes**; wires carrying `lattice-unaligned` values are drawn with **short dashes**. Aligned wires (and wires of types that have no alignment, e.g. `Int` or `Motif`) are solid. The mnemonic: more broken up = more broken.
+- **Output pin shape.** An output pin whose value is `motif-unaligned` or `lattice-unaligned` is rendered as a **filled warning triangle** instead of the usual filled circle. The triangle keeps the data-type color of the would-be circle, so the type-color channel is preserved. The two unaligned states share one shape — the wire dash style distinguishes them.
+- **Pin tooltip.** Hovering an unaligned output pin adds a colored *Alignment: motif-unaligned* or *Alignment: lattice-unaligned* line to the tooltip, optionally followed by the reason string in parentheses.
+
+These indicators are **information, not warnings** — workflows that deliberately want unaligned blueprints (e.g. strained-layer heterostructures, defect dynamics) are perfectly valid. The dashes and triangles tell you *why* a downstream consumer might misbehave when it expects aligned inputs.
+
+![TODO(image): a small node network with one solid wire, one long-dashed wire, and one short-dashed wire feeding into a `union` node, with the union output pin rendered as a warning triangle and a tooltip showing "Alignment: lattice-unaligned"](TODO)
 
 ## Node properties vs. input pins
 

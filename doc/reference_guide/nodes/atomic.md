@@ -38,14 +38,14 @@ Imports a crystal structure from a CIF (Crystallographic Information File) file 
 
 - `unit_cell: LatticeVecs` — the conventional unit cell read from the CIF.
 - `atoms: Molecule` — the expanded conventional unit cell as an atomic structure, in Cartesian coordinates.
-- `motif: Motif` — the same atom set expressed as a fractional `Motif` so it can be fed directly into `atom_fill` (typically together with `unit_cell`).
+- `motif: Motif` — the same atom set expressed as a fractional `Motif` so it can be fed directly into a `structure` node and downstream `materialize` (typically together with `unit_cell`).
 
 **Typical pipelines**
 
-- *Direct fill:* wire `motif` and `unit_cell` into an `atom_fill` (or `materialize`) node to use the imported crystal as a template for filling geometry.
-- *Edit then fill:* wire `atoms` and `unit_cell` into a `motif_edit` node, edit interactively in 3D, then feed the edited motif into `atom_fill`.
+- *Direct fill:* wire `motif` and `unit_cell` into a `materialize` node (via a `structure` node) to use the imported crystal as a template for filling geometry.
+- *Edit then fill:* wire `atoms` and `unit_cell` into a `motif_edit` node, edit interactively in 3D, then feed the edited motif into `materialize`.
 
-## atom_fill
+## materialize
 
 Converts a `Blueprint` into a `Crystal` by carving atoms out of the infinite crystal field using the blueprint's geometry as a cookie cutter. The output retains the `Structure`, so further structure-aligned operations remain available downstream.
 
@@ -55,15 +55,27 @@ Converts a `Blueprint` into a `Crystal` by carving atoms out of the infinite cry
 
 ![](../../atomCAD_images/atom_fill_viewport.png)
 
-The motif passed into the `motif` input pin is the motif used to fill the geometry. If no motif is passed in the cubic zincblende motif is used. (See also: `motif` node).
+The motif and motif offset used for filling come from the input Blueprint's `Structure` (which is built up by the `structure` / `motif` / `lattice_vecs` nodes upstream). If no upstream structure has been chosen, the default cubic zincblende motif is used. (See also: the `motif` and `structure` nodes.)
+
+**Input pins**
+
+- `shape: Blueprint` — the cookie-cutter geometry plus the structure that supplies the lattice and motif.
+- `passivate: Bool` (optional) — see *Hydrogen passivation* below.
+- `rm_single: Bool` (optional) — see *Remove single-bond atoms* below.
+- `surf_recon: Bool` (optional) — see *Surface reconstruction* below.
+- `invert_phase: Bool` (optional) — see *Invert phase* below.
+
+The four boolean inputs default to the values set on the node properties; wiring an input overrides the property.
+
+> **Note on the rename:** `materialize` was previously called `atom_fill`. The old `motif` and `m_offset` input pins are gone — both come from the input Blueprint's structure now. Older `.cnnd` files that still reference `atom_fill` will be migrated automatically.
 
 ### Parameter element overrides
 
-Motifs declare *parameter elements* — placeholder slots like `PRIMARY` or `SECONDARY` that the `atom_fill` node substitutes with concrete elements when it materializes the crystal. The properties panel shows a *Parameter Element Overrides* table, populated automatically from the connected motif: one row per parameter, with the parameter's name on the left and an element dropdown on the right. Choose an element to override the parameter's default; leave a row at *Default (X)* to keep the motif's own default. For example, with the default cubic zincblende motif, switching `PRIMARY` from carbon to silicon yields the same silicon carbide as before — there is no longer a free-form text area to edit.
+Motifs declare *parameter elements* — placeholder slots like `PRIMARY` or `SECONDARY` that the `materialize` node substitutes with concrete elements when it materializes the crystal. The properties panel shows a *Parameter Element Overrides* table, populated automatically from the connected motif: one row per parameter, with the parameter's name on the left and an element dropdown on the right. Choose an element to override the parameter's default; leave a row at *Default (X)* to keep the motif's own default. For example, with the default cubic zincblende motif, switching `PRIMARY` from carbon to silicon yields the same silicon carbide as before — there is no longer a free-form text area to edit.
 
 ![](../../atomCAD_images/silicon_carbide.png)
 
-When a motif is edited inside `motif_edit`, parameter atoms (which carry non-physical atomic numbers) **simulate as their default element** for the purpose of force-field minimization, guided placement, and hydrogen passivation — a `PRIMARY` atom whose default is carbon will be treated as carbon for bond-length and hybridization calculations. This keeps the motif geometry realistic during interactive editing even before any concrete substitutions are chosen in `atom_fill`. Hovering over such an atom in the viewport shows an extra *Effective element: …* line in the tooltip whenever the displayed atomic number differs from the simulated one.
+When a motif is edited inside `motif_edit`, parameter atoms (which carry non-physical atomic numbers) **simulate as their default element** for the purpose of force-field minimization, guided placement, and hydrogen passivation — a `PRIMARY` atom whose default is carbon will be treated as carbon for bond-length and hybridization calculations. This keeps the motif geometry realistic during interactive editing even before any concrete substitutions are chosen in `materialize`. Hovering over such an atom in the viewport shows an extra *Effective element: …* line in the tooltip whenever the displayed atomic number differs from the simulated one.
 
 If the geometry cut is done such a way that an atom has no bonds that is removed automatically. (Lone atom removal.)
 
@@ -76,31 +88,70 @@ You can switch on or off the following checkboxes:
 - *Invert phase*: Determines whether the phase of the dimer pattern should be inverted. 
 - *Hydrogen passivation:* Hydrogen atoms are added to passivate dangling bonds created by the cut.
 
-## atom_move
+## dematerialize
 
-Translates an atomic structure by a vector in world space. Unlike `lattice_move` which operates in discrete lattice coordinates, `atom_move` works in continuous Cartesian coordinates where one unit is one angstrom.
+Converts a `Crystal` back to a `Blueprint` by discarding its carved atoms. The geometry shell is preserved as the Blueprint's geometry. Useful when you want to roll back from a materialized state and reuse the cookie-cutter shape upstream of further structure-aligned operations.
+
+**Input pins**
+
+- `input: Crystal` — the Crystal to dematerialize.
+
+The operation is destructive: any atom edits applied to the Crystal (e.g. via `atom_edit`) are lost when the atoms are dropped. The Crystal must carry a geometry shell — Crystals that have lost their geometry (e.g. created via `enter_structure` from a free Molecule) cannot be dematerialized and produce an error.
+
+Alignment is propagated through unchanged.
+
+## exit_structure
+
+Converts a `Crystal` to a `Molecule` by dropping its structure association. Atoms and any geometry shell pass through unchanged; the resulting `Molecule` is free-floating and can be moved with `free_move` or `free_rot`.
+
+**Input pins**
+
+- `input: Crystal` — the Crystal whose structure should be discarded.
+
+This is the canonical step for breaking a Crystal out of its lattice context — for example, before exporting an unconstrained molecule, or before using free-space movement nodes that reject `Crystal` inputs.
+
+## enter_structure
+
+Converts a `Molecule` into a `Crystal` by re-associating it with a `Structure`. Pure packaging — atoms are not snapped to lattice positions; they stay exactly where they were.
+
+**Input pins**
+
+- `input: Molecule` — the free-floating atoms (and optional geometry shell) to wrap.
+- `structure: Structure` — the structure (lattice vectors + motif) to attach.
+
+Because the Molecule's atoms generally do not lie on the target structure's motif sites, the output Crystal is conservatively flagged `lattice_unaligned` (see [Blueprint alignment](../node_networks.md#blueprint-alignment)). Use this when you have arbitrary atoms (e.g. relaxed or imported) and want to bring them back into a structure-aware pipeline. Snapping atoms to the nearest lattice positions is a separate operation, not done by this node.
+
+## free_move
+
+Translates an unanchored object — a `Blueprint` or a `Molecule` — by a vector in world space (Cartesian coordinates). The input pin accepts the abstract `HasFreeLinOps` type; the concrete variant flows through unchanged. `Crystal` inputs are rejected — use `exit_structure` first to drop the lattice association, or use `structure_move` to stay in lattice space.
 
 ![](../../atomCAD_images/atom_move.png)
 
-**Properties**
+**Input pins**
 
-- `Translation` — 3D vector specifying the translation in angstroms.
+- `input: HasFreeLinOps` — the Blueprint or Molecule to translate.
+- `translation: Vec3` (optional) — the translation vector in ångströms.
+
+For a `Blueprint`, only the geometry (the cookie cutter) moves; the structure stays fixed. The cutter typically drifts off-lattice as a result, so the output is flagged `lattice_unaligned`. For a `Molecule`, atoms and geometry move together freely.
 
 **Gadget controls**
 
 Drag the gadget axes to adjust the translation vector interactively.
 
-## atom_rot
+## free_rot
 
-Rotates an atomic structure around an axis in world space by a specified angle.
+Rotates an unanchored object — a `Blueprint` or a `Molecule` — around an axis in world space. Like `free_move`, the input is `HasFreeLinOps`; `Crystal` inputs are rejected.
 
 ![](../../atomCAD_images/atom_rot.png)
 
-**Properties**
+**Input pins**
 
-- `Angle` — Rotation angle in radians.
-- `Rotation Axis` — 3D vector defining the axis of rotation (will be normalized).
-- `Pivot Point` — The point around which the rotation occurs, in angstroms.
+- `input: HasFreeLinOps` — the Blueprint or Molecule to rotate.
+- `angle: Float` (optional) — rotation angle in radians.
+- `rot_axis: Vec3` (optional) — axis of rotation (will be normalized).
+- `pivot_point: Vec3` (optional) — pivot point, in ångströms. Defaults to the origin.
+
+For a `Blueprint`, only the geometry rotates; the structure stays fixed, so the output is flagged `lattice_unaligned`. For a `Molecule`, atoms and geometry rotate together.
 
 **Gadget controls**
 
@@ -111,23 +162,6 @@ The gadget displays the pivot point and rotation axis. Drag the rotation axis to
 Merges multiple atomic structures into one. The `structures` input accepts an array of atomic structures (array-typed input; you can connect multiple wires and they will be concatenated). All elements of the array must be the same concrete type — either all `Crystal` or all `Molecule` — and the output preserves that type. Mixed `Crystal` + `Molecule` arrays are a validation error; insert an explicit `exit_structure` node first if you want a `Molecule` result.
 
 ![](../../atomCAD_images/atom_union.png)
-
-## atom_lmove
-
-Translates an atomic structure by a discrete vector in **lattice space** (integer lattice coordinates). This is the atomic-structure counterpart of the `lattice_move` geometry node.
-
-**Properties**
-
-- `Translation` — 3D integer vector specifying the translation in lattice coordinates.
-
-## atom_lrot
-
-Rotates an atomic structure in **lattice space** using discrete symmetry rotations. This is the atomic-structure counterpart of the `lattice_rot` geometry node. Only rotations that are symmetries of the unit cell are allowed.
-
-**Properties**
-
-- `Rotation` — A valid lattice symmetry rotation.
-- `Pivot` — 3D integer vector for the rotation pivot point.
 
 ## apply_diff
 
@@ -229,7 +263,7 @@ This replaces C→Si and O→S.
 
 ## atom_cut
 
-Cuts an atomic structure using cutter geometries. Unlike `atom_fill` which creates atoms from geometry, `atom_cut` removes atoms that lie outside the cutter shapes — effectively performing a Boolean intersection between an existing atomic structure and one or more 3D geometries.
+Cuts an atomic structure using cutter geometries. Unlike `materialize` which creates atoms from geometry, `atom_cut` removes atoms that lie outside the cutter shapes — effectively performing a Boolean intersection between an existing atomic structure and one or more 3D geometries.
 
 **Input pins**
 
@@ -288,7 +322,7 @@ A visual, interactive motif editor — the spatial counterpart of the textual `m
 
 **Output pins**
 
-- `result: Motif` (pin 0) — the constructed motif in fractional coordinates, ready to feed into `atom_fill`. While the wire carries a `Motif`, the viewport renders the corresponding 3D atomic structure (with ghost atoms and wireframe box) so the editing experience is fully visual.
+- `result: Motif` (pin 0) — the constructed motif in fractional coordinates, ready to feed into a `structure` node and downstream `materialize`. While the wire carries a `Motif`, the viewport renders the corresponding 3D atomic structure (with ghost atoms and wireframe box) so the editing experience is fully visual.
 - `diff: Molecule` (pin 1) — the raw diff structure (additions, deletions, modifications relative to the base) for inspection or for routing through `apply_diff` / `atom_composediff`.
 
 ### Working in Cartesian, exporting fractional
@@ -307,7 +341,7 @@ To create a bond that crosses a cell boundary, use the **Add Bond** tool to draw
 
 ### Parameter elements
 
-Motifs use *parameter elements* — placeholder slots like `PRIMARY` or `SECONDARY` that get substituted with concrete elements by the `atom_fill` node. `motif_edit` exposes parameter elements directly: define them in the node's properties (a list of `(name, default element)` pairs) and place them as atoms in the editor. Hover tooltips show the parameter name (e.g. *PRIMARY*) instead of *Unknown*, and minimization, guided placement, and hydrogen passivation use the parameter's default element so the geometry is realistic while editing.
+Motifs use *parameter elements* — placeholder slots like `PRIMARY` or `SECONDARY` that get substituted with concrete elements by the `materialize` node. `motif_edit` exposes parameter elements directly: define them in the node's properties (a list of `(name, default element)` pairs) and place them as atoms in the editor. Hover tooltips show the parameter name (e.g. *PRIMARY*) instead of *Unknown*, and minimization, guided placement, and hydrogen passivation use the parameter's default element so the geometry is realistic while editing.
 
 ### Typical workflows
 

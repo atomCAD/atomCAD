@@ -24,7 +24,7 @@ The editor is based on **tools** — one tool can be active at a time. The activ
 The Default tool is the primary editing tool in the atom editor. Most editing features are available only when this tool is active.
 
 **Selection and editing:**
-- **Select** atoms and bonds using the left mouse button. Simple click replaces the selection, Shift+click adds to the selection, and Ctrl+click toggles the selection of the clicked object. Rectangle (marquee) selection is also supported.
+- **Select** atoms and bonds using the left mouse button. Simple click replaces the selection, Shift+click adds to the selection, and Ctrl+click toggles the selection of the clicked object. Rectangle (marquee) selection is also supported and selects both atoms and bonds: every atom whose projection lands inside the rectangle is selected, and every bond whose two endpoints both fall inside the rectangle is selected as well.
 - **Delete selected** atoms and bonds (also available via the `Delete` or `Backspace` key).
 - **Replace** all selected atoms with a specific element.
 - **Quick element selection:** Type an element symbol (e.g., `C`, `N`, `O`, `Si`) on the keyboard to set the active element. The typed symbol is shown as a cursor overlay. This also works in the Add atom tool (for setting the element of the next atom to be placed).
@@ -92,7 +92,7 @@ When 2–4 atoms are selected the UI displays a measurement card. Measurements a
 
 A **Modify** button on the measurement card opens a dialog where you can enter a precise target value. Atoms are moved along bond axes, rotated around vertices, or rotated around torsion axes to achieve the target value. A "move connected atoms" option (on by default) moves the fragment attached to the moving atom rather than just the single atom.
 
-**Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it. The tooltip also reports the atom's hybridization: when an explicit override is set the line reads e.g. *Hybridization: sp2 (override)*; when hybridization is left on auto the line shows the auto-inferred value in parentheses, e.g. *Hybridization: auto (sp3)*. For atoms whose displayed atomic number is a non-physical parameter element, an *Effective element: …* line shows the real element used for simulation, guided placement, and passivation (see the parameter element note in the [`atom_fill`](./nodes/atomic.md#atom_fill) section).
+**Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it. The tooltip also reports the atom's hybridization: when an explicit override is set the line reads e.g. *Hybridization: sp2 (override)*; when hybridization is left on auto the line shows the auto-inferred value in parentheses, e.g. *Hybridization: auto (sp3)*. For atoms whose displayed atomic number is a non-physical parameter element, an *Effective element: …* line shows the real element used for simulation, guided placement, and passivation (see the parameter element note in the [`materialize`](./nodes/atomic.md#materialize) section).
 
 ### Rim highlights
 
@@ -102,6 +102,10 @@ The atom editor uses colored rim highlights to convey atom state while preservin
 - **Frozen atoms** — ice-blue rim
 - **Delete markers** — red rim on neutral-colored sphere
 - **Marked atoms** (for measurements) — yellow/blue rims
+
+### Bond colors
+
+Regular single, double, triple, and quadruple bonds are rendered in neutral grey. Specialized bond orders use distinguishing colors so they can be told apart at a glance: aromatic bonds are purple, dative bonds are teal, and metallic bonds are steel blue. Selected bonds keep their bond-order color but are tinted with the selection color (magenta), so the two channels do not collide.
 
 ### Import XYZ
 

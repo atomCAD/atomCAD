@@ -181,6 +181,8 @@ Choose how geometry node outputs are rendered:
 
 In **Surface Splatting** and **Solid** modes the outer surface is shown in green and the inner surface in red (inner = surface facing inward).
 
+A separate **Show geometry shell on Crystal and Molecule** toggle (next to the three rendering-mode buttons) controls whether the geometry shell carried by a Crystal or Molecule is rendered alongside its atoms. Crystals always have a shell (it is the cookie-cutter geometry that produced them); Molecules can also carry a shell when they were built from a Blueprint via `exit_structure`. Turn the toggle off when the shell would obscure the atoms; turn it on to see how the shell aligns with the atomic structure. The toggle persists in preferences.
+
 ### Node display policy
 
 Choose how node output visibility is managed:
@@ -230,6 +232,7 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 | Samples Per Unit Cell | Resolution for surface splatting tessellation. Higher values produce smoother surfaces. |
 | Sharpness Angle Threshold | Angle (in degrees) used to detect sharp edges during mesh generation. |
 | Mesh Rendering | Normal calculation method: *Smooth* (interpolated normals), *Sharp* (flat shading), or *Smart (detect sharp edges)* (smooth within groups, sharp at edges). |
+| Show geometry shell on Crystal and Molecule | When enabled, Crystal and Molecule outputs render their geometry shell together with the atoms. Disable to hide the shell when it would obscure the atomic structure. Mirrors the toggle in the Display Preferences panel. |
 
 ### Atomic Structure Visualization
 

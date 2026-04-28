@@ -584,15 +584,15 @@ Find the existing section and amend it.
 These changes affect general application behavior, not a single node.
 
 ### 4.1 Selection and visualization
-- [ ] Rectangle select now selects bonds too (commit `df08d6c0`). Update
+- [x] Rectangle select now selects bonds too (commit `df08d6c0`). Update
       Direct Editing Mode (~line 32) — selection behavior.
-- [ ] Better bond colors, distinct from selection color (commit `5a5ab52f`).
+- [x] Better bond colors, distinct from selection color (commit `5a5ab52f`).
       Update Atomic Structure Visualization (~line 385) or Direct Editing.
-- [ ] Toggle geometry display on crystals and molecules (commit `4b125fca`).
+- [x] Toggle geometry display on crystals and molecules (commit `4b125fca`).
       Update Geometry Visualization (~line 376) or Display Preferences (~line 319).
 
 ### 4.2 Phase transitions and movement
-- [ ] Document the phase-transition feature.
+- [x] Document the phase-transition feature.
 - Design doc: `doc/design_phase_transitions_and_movement.md`
 - Representative commits: `3e871b13`/`fa6fedd4`/`88f35dac`/`e7efd387`
   (phase 7a–d of lattice space refactoring).
@@ -600,14 +600,14 @@ These changes affect general application behavior, not a single node.
   should decide based on the design doc.
 
 ### 4.3 Blueprint alignment
-- [ ] Document the alignment feature. May add nodes, UI, or both —
+- [x] Document the alignment feature. May add nodes, UI, or both —
       verify against the design doc and code.
 - Design doc: `doc/design_blueprint_alignment.md`
 - Representative commits: `0953b7c6` (design), `25ac62de`/`1d6d47d6`/
   `d61260a9`/`3bdd0b82` (phases 1–3).
 
 ### 4.4 `SameAsInput` UI
-- [ ] Document the SameAsInput pin/type behavior in the UI.
+- [x] Document the SameAsInput pin/type behavior in the UI.
 - Representative commit: `1520b115`.
 - No design doc — read code (search for `SameAsInput` in
   `rust/src/structure_designer/`).
