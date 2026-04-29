@@ -244,6 +244,7 @@ A common use is constructing an `Array[IVec3]` literal of defect positions inlin
   - `[1, 2, 3][0]` — index a literal.
 - Out-of-bounds (`i < 0` or `i` past the end) produces an evaluation error. The index must be an `Int`; `Bool` and `Float` are rejected at validation time.
 - `len(arr)` — number of elements in `arr`. Returns `Int`. Works on any `Array[T]`, including empty arrays (`len([]Int)` is `0`).
+- `concat(a, b)` — concatenate two arrays. The result element type is the unification of the two element types under the standard promotion rules (e.g. `concat([]Int, [1,2,3])` is `[1,2,3]`; `concat([1,2], [3.5])` is `Array[Float]`). For more than two arrays, nest: `concat(a, concat(b, c))`.
 
 **Mathematical Functions:**
 

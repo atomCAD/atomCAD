@@ -271,6 +271,44 @@ impl Expr {
                     }
                 }
 
+                // Special-case `concat`: polymorphic over Array[T1] × Array[T2] → Array[unify(T1,T2)].
+                // Same rationale as `len` — the polymorphic shape doesn't fit FunctionSignature.
+                if name == "concat" {
+                    if args.len() != 2 {
+                        return Err(format!(
+                            "Function concat expects 2 arguments, got {}",
+                            args.len()
+                        ));
+                    }
+                    let a_ty = args[0].validate(variables, functions)?;
+                    let b_ty = args[1].validate(variables, functions)?;
+                    let elem_a = match a_ty {
+                        DataType::Array(t) => *t,
+                        other => {
+                            return Err(format!(
+                                "Function concat argument 1 expects an array type, got {}",
+                                other
+                            ));
+                        }
+                    };
+                    let elem_b = match b_ty {
+                        DataType::Array(t) => *t,
+                        other => {
+                            return Err(format!(
+                                "Function concat argument 2 expects an array type, got {}",
+                                other
+                            ));
+                        }
+                    };
+                    let elem = unify_array_element_types(&elem_a, &elem_b).map_err(|_| {
+                        format!(
+                            "concat arguments have incompatible element types: {} and {}",
+                            elem_a, elem_b
+                        )
+                    })?;
+                    return Ok(DataType::Array(Box::new(elem)));
+                }
+
                 // Validate function exists
                 let signature = functions
                     .get(name)

@@ -448,6 +448,10 @@ types in the position immediately after `[]`, so naming a parameter after a type
   evaluation error. For nested arrays, chain: `arr[i][j]`.
 - `len(arr)` — number of elements in `arr`. Returns Int. Works on arrays of
   any element type, including empty arrays (`len([]Int)` is 0).
+- `concat(a, b)` — concatenate two arrays. The result element type is the
+  unification of the two element types under the standard promotion rules
+  (e.g. `concat([]Int, [1,2,3])` is `[1,2,3]`; `concat([1,2], [3.0])` is
+  `Array[Float]`).
 
 ### Vector Math Functions
 - `length2(vec2)` - Calculate 2D vector magnitude

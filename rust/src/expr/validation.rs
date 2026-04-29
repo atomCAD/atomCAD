@@ -485,6 +485,30 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
         }) as EvaluationFunction,
     );
 
+    // Array concat: polymorphic over Array[T1] × Array[T2]. Validation is special-cased
+    // in Expr::Call::validate; this impl is the runtime side.
+    functions.insert(
+        "concat".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 2 {
+                return NetworkResult::Error("concat() requires exactly 2 arguments".to_string());
+            }
+            let mut out = match &args[0] {
+                NetworkResult::Array(v) => v.clone(),
+                _ => {
+                    return NetworkResult::Error("concat() requires array arguments".to_string());
+                }
+            };
+            match &args[1] {
+                NetworkResult::Array(v) => out.extend(v.iter().cloned()),
+                _ => {
+                    return NetworkResult::Error("concat() requires array arguments".to_string());
+                }
+            }
+            NetworkResult::Array(out)
+        }) as EvaluationFunction,
+    );
+
     functions.insert(
         "length3".to_string(),
         Box::new(|args: &[NetworkResult]| {
