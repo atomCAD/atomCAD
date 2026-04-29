@@ -236,6 +236,14 @@ Examples:
 
 A common use is constructing an `Array[IVec3]` literal of defect positions inline, which can then be fed to a downstream node consuming an array. An `expr` node with zero parameters can be used as a pure literal node for this purpose.
 
+**Array Access:**
+
+- `arr[i]` — element access; `i` is an `Int` expression. Indexing has the same precedence as function call and member access (highest), so it chains naturally:
+  - `arr[i].x` — index then read a member.
+  - `arr[i][j]` — chain for nested arrays.
+  - `[1, 2, 3][0]` — index a literal.
+- Out-of-bounds (`i < 0` or `i` past the end) produces an evaluation error. The index must be an `Int`; `Bool` and `Float` are rejected at validation time.
+
 **Mathematical Functions:**
 
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions

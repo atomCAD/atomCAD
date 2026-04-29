@@ -442,6 +442,11 @@ not accepted as element types. Type-name identifiers are only interpreted as
 types in the position immediately after `[]`, so naming a parameter after a type
 (e.g. `structure: Structure`) is safe.
 
+### Array Access
+
+- `arr[i]` — element access; `i` is an Int expression. Out-of-bounds is an
+  evaluation error. For nested arrays, chain: `arr[i][j]`.
+
 ### Vector Math Functions
 - `length2(vec2)` - Calculate 2D vector magnitude
 - `length3(vec3)` - Calculate 3D vector magnitude

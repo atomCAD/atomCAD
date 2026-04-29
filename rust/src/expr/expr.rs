@@ -43,6 +43,7 @@ pub enum Expr {
     MemberAccess(Box<Expr>, String),              // expr.member (e.g., vec.x, vec.y, vec.z)
     Array(Vec<Expr>),                             // non-empty array literal: [e1, e2, ...]
     EmptyArray(DataType),                         // typed empty array: []Type
+    Index(Box<Expr>, Box<Expr>),                  // arr[index]
 }
 
 impl Expr {
@@ -336,6 +337,20 @@ impl Expr {
                 }
             }
             Expr::EmptyArray(t) => Ok(DataType::Array(Box::new(t.clone()))),
+            Expr::Index(arr, idx) => {
+                let arr_ty = arr.validate(variables, functions)?;
+                let idx_ty = idx.validate(variables, functions)?;
+                let elem_ty = match arr_ty {
+                    DataType::Array(inner) => *inner,
+                    other => {
+                        return Err(format!("cannot index into non-array type {}", other));
+                    }
+                };
+                if !matches!(idx_ty, DataType::Int) {
+                    return Err(format!("array index must be Int, got {}", idx_ty));
+                }
+                Ok(elem_ty)
+            }
             Expr::Array(elements) => {
                 // elements is non-empty by construction (parser produces this only
                 // when at least one element was parsed).
@@ -493,6 +508,33 @@ impl Expr {
                 }
             }
             Expr::EmptyArray(_) => NetworkResult::Array(vec![]),
+            Expr::Index(arr, idx) => {
+                let arr_v = arr.evaluate(variables, functions);
+                if let NetworkResult::Error(_) = arr_v {
+                    return arr_v;
+                }
+                let idx_v = idx.evaluate(variables, functions);
+                if let NetworkResult::Error(_) = idx_v {
+                    return idx_v;
+                }
+
+                let elements = match arr_v {
+                    NetworkResult::Array(v) => v,
+                    _ => return NetworkResult::Error("indexing non-array value".into()),
+                };
+                let i = match idx_v {
+                    NetworkResult::Int(n) => n,
+                    _ => return NetworkResult::Error("array index must be Int".into()),
+                };
+                if i < 0 || (i as usize) >= elements.len() {
+                    return NetworkResult::Error(format!(
+                        "array index {} out of bounds for array of length {}",
+                        i,
+                        elements.len()
+                    ));
+                }
+                elements.into_iter().nth(i as usize).unwrap()
+            }
             Expr::Array(elements) => {
                 let mut out = Vec::with_capacity(elements.len());
                 for e in elements {
@@ -854,6 +896,11 @@ impl Expr {
                 format!("(array {})", elems_str)
             }
             Expr::EmptyArray(t) => format!("(empty-array {})", t),
+            Expr::Index(arr, idx) => format!(
+                "(index {} {})",
+                arr.to_prefix_string(),
+                idx.to_prefix_string()
+            ),
         }
     }
 

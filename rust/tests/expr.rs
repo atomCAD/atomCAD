@@ -15,3 +15,6 @@ mod matrix_expr_test;
 
 #[path = "expr/array_literal_test.rs"]
 mod array_literal_test;
+
+#[path = "expr/array_index_test.rs"]
+mod array_index_test;

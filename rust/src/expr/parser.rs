@@ -88,6 +88,10 @@ impl Parser {
     fn infix_binding_power(op: &Token) -> Option<(u8, u8)> {
         match op {
             Token::Dot => Some((110, 111)), // highest precedence, higher than unary (100)
+            // Postfix `[` (index) at the same precedence level as member access.
+            // Right-bp is unused (index has its own bracketed body) but we keep
+            // the slot non-empty to participate in the Pratt loop.
+            Token::LBracket => Some((110, 111)),
             Token::Caret => Some((70, 69)), // right-assoc: use lower rbp
             Token::Star | Token::Slash | Token::Percent => Some((60, 61)),
             Token::Plus | Token::Minus => Some((50, 51)),
@@ -222,6 +226,26 @@ impl Parser {
                         }
                         other => {
                             return Err(format!("Expected identifier after '.', got {:?}", other));
+                        }
+                    }
+                } else if let Token::LBracket = op {
+                    // Postfix indexing: `[` already consumed. Parse index expression
+                    // then require a closing `]`. Empty `[]` and comma-separated lists
+                    // are rejected to keep indexing single-argument.
+                    if matches!(self.peek(), Token::RBracket) {
+                        return Err("Empty index '[]' is not allowed".to_string());
+                    }
+                    let index = self.parse_bp(0)?;
+                    match self.bump() {
+                        Token::RBracket => {
+                            lhs = Expr::Index(Box::new(lhs), Box::new(index));
+                            continue;
+                        }
+                        Token::Comma => {
+                            return Err("Index expression takes a single Int argument".to_string());
+                        }
+                        other => {
+                            return Err(format!("Expected ']' to close index, got {:?}", other));
                         }
                     }
                 } else {
