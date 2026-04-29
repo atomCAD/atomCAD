@@ -1,6 +1,7 @@
 use super::node_type::{NodeType, PinOutputType};
 use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
+use super::nodes::array_at::get_node_type as array_at_get_node_type;
 use super::nodes::atom_composediff::get_node_type as atom_composediff_get_node_type;
 use super::nodes::atom_cut::get_node_type as atom_cut_get_node_type;
 use super::nodes::atom_edit::atom_edit::get_node_type as atom_edit_get_node_type;
@@ -135,6 +136,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(mat3_cols_get_node_type());
         ret.add_node_type(mat3_diag_get_node_type());
         ret.add_node_type(range_get_node_type());
+        ret.add_node_type(array_at_get_node_type());
         ret.add_node_type(lattice_vecs_get_node_type());
 
         ret.add_node_type(rect_get_node_type());

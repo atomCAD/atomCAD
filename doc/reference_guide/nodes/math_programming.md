@@ -288,6 +288,25 @@ Creates an array of integers starting from an integer value and having a specifi
 
 Collects a fixed number of inputs into an ordered array. Use `sequence` when you want to build an array from inputs that come from different upstream nodes and you care about their order, or when you want each element to appear on its own labeled pin in the network — `range` and `map` produce arrays from rules, but `sequence` lets you wire up the elements explicitly one at a time.
 
+## array_at
+
+Reads one element from an array at a given integer index. The expression-language equivalent is `arr[i]`.
+
+**Properties**
+
+- `Element type` — the element type of the input array (and of the output). All array element types accepted by `sequence` are accepted here.
+
+**Input pins**
+
+- `array: Array[ElementType]` — the array to read from.
+- `index: Int` — the zero-based index.
+
+**Behavior**
+
+If either input is unconnected, the output is `None` (propagates as a missing-input). Otherwise the node returns the element at `index`. An `index < 0` or `index >= len(array)` produces an evaluation error of the form `array index {i} out of bounds for array of length {n}`.
+
+For nested arrays, chain two `array_at` nodes (`arr[i][j]` becomes two nodes connected in series).
+
 ![TODO(image): a `sequence` node configured with element type Blueprint and three input pins, with three different geometry nodes wired into pins 0, 1, 2](TODO)
 
 **Properties**
