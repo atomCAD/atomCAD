@@ -18,3 +18,6 @@ mod array_literal_test;
 
 #[path = "expr/array_index_test.rs"]
 mod array_index_test;
+
+#[path = "expr/array_length_test.rs"]
+mod array_length_test;

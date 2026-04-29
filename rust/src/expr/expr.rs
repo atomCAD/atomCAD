@@ -250,6 +250,27 @@ impl Expr {
                 }
             }
             Expr::Call(name, args) => {
+                // Special-case `len`: polymorphic over any Array[T], cannot be expressed
+                // by FunctionSignature's fixed parameter_types model.
+                if name == "len" {
+                    if args.len() != 1 {
+                        return Err(format!(
+                            "Function len expects 1 argument, got {}",
+                            args.len()
+                        ));
+                    }
+                    let arg_type = args[0].validate(variables, functions)?;
+                    match arg_type {
+                        DataType::Array(_) => return Ok(DataType::Int),
+                        other => {
+                            return Err(format!(
+                                "Function len argument 1 expects an array type, got {}",
+                                other
+                            ));
+                        }
+                    }
+                }
+
                 // Validate function exists
                 let signature = functions
                     .get(name)

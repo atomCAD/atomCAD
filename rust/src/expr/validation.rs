@@ -470,6 +470,21 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
         }) as EvaluationFunction,
     );
 
+    // Array length: polymorphic over any Array[T]. Validation is special-cased
+    // in Expr::Call::validate; this impl is the runtime side.
+    functions.insert(
+        "len".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("len() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Array(items) => NetworkResult::Int(items.len() as i32),
+                _ => NetworkResult::Error("len() requires an array argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
     functions.insert(
         "length3".to_string(),
         Box::new(|args: &[NetworkResult]| {

@@ -446,6 +446,8 @@ types in the position immediately after `[]`, so naming a parameter after a type
 
 - `arr[i]` — element access; `i` is an Int expression. Out-of-bounds is an
   evaluation error. For nested arrays, chain: `arr[i][j]`.
+- `len(arr)` — number of elements in `arr`. Returns Int. Works on arrays of
+  any element type, including empty arrays (`len([]Int)` is 0).
 
 ### Vector Math Functions
 - `length2(vec2)` - Calculate 2D vector magnitude

@@ -243,6 +243,7 @@ A common use is constructing an `Array[IVec3]` literal of defect positions inlin
   - `arr[i][j]` — chain for nested arrays.
   - `[1, 2, 3][0]` — index a literal.
 - Out-of-bounds (`i < 0` or `i` past the end) produces an evaluation error. The index must be an `Int`; `Bool` and `Float` are rejected at validation time.
+- `len(arr)` — number of elements in `arr`. Returns `Int`. Works on any `Array[T]`, including empty arrays (`len([]Int)` is `0`).
 
 **Mathematical Functions:**
 
