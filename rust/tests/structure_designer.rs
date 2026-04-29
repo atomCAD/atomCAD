@@ -195,3 +195,6 @@ mod relaxed_node_names_test;
 
 #[path = "structure_designer/expr_array_literal_test.rs"]
 mod expr_array_literal_test;
+
+#[path = "structure_designer/function_evaluator_test.rs"]
+mod function_evaluator_test;

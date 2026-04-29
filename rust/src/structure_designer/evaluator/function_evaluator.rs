@@ -68,7 +68,6 @@ impl FunctionEvaluator {
 
         let node_data = network.get_node_network_data(closure.node_id);
 
-        //TODO: pass custom node type too.
         let cloned_node_data = node_data.map(|data| data.clone_box());
 
         let main_node_id = ret.node_network.add_node(
@@ -78,6 +77,17 @@ impl FunctionEvaluator {
             cloned_node_data
                 .unwrap_or_else(|| Box::new(crate::structure_designer::node_data::NoData {})),
         );
+
+        // Populate the dynamic node-type cache so that nodes with dynamic
+        // parameters (expr, parameter, sequence, map, ...) report their real
+        // parameter list instead of the empty base parameter list.
+        if let Some(main_node) = ret.node_network.nodes.get_mut(&main_node_id) {
+            NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+                &registry.built_in_node_types,
+                main_node,
+                false,
+            );
+        }
 
         // Add value nodes corresponding to parameters.
         for i in 0..closure.captured_argument_values.len() {
