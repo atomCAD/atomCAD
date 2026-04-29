@@ -142,6 +142,9 @@ mod sequence_node_test;
 #[path = "structure_designer/array_at_test.rs"]
 mod array_at_test;
 
+#[path = "structure_designer/array_len_test.rs"]
+mod array_len_test;
+
 #[path = "structure_designer/motif_edit_test.rs"]
 mod motif_edit_test;
 

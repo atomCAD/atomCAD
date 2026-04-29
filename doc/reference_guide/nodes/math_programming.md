@@ -308,6 +308,22 @@ If either input is unconnected, the output is `None` (propagates as a missing-in
 
 For nested arrays, chain two `array_at` nodes (`arr[i][j]` becomes two nodes connected in series).
 
+## array_len
+
+Returns the length of the input array as an `Int`. The expression-language equivalent is `len(arr)`.
+
+**Properties**
+
+- `Element type` — the element type of the input array. The output is always `Int` regardless. This property is required because the input pin must be typed; pick the element type that matches the array you are wiring in.
+
+**Input pins**
+
+- `array: Array[ElementType]` — the array to measure.
+
+**Behavior**
+
+If `array` is unconnected, the output is `None` (propagates as a missing-input). Otherwise the node returns the number of elements in the array as an `Int`. Empty arrays produce `Int(0)`.
+
 ![TODO(image): a `sequence` node configured with element type Blueprint and three input pins, with three different geometry nodes wired into pins 0, 1, 2](TODO)
 
 **Properties**
