@@ -338,6 +338,25 @@ The output is the array of values from connected pins, in pin-index order. Uncon
 
 This node is also how the `Display array outputs` workflow is built up by hand: feed several outputs you want to view side-by-side into a `sequence` node, mark its output pin as displayed, and the array's elements render together in the viewport.
 
+## array_concat
+
+Concatenates two arrays of the same element type into a single array. The expression-language equivalent is `concat(a, b)`.
+
+**Properties**
+
+- `Element type` — the element type shared by both inputs and the output. Unlike the expression-level `concat`, the node form does not perform cross-element promotion: both input pins are typed `Array[ElementType]`, so the standard wire-time array-element conversion rules already handle compatibility (e.g. wiring an `Array[IVec3]` into an `Array[Vec3]` pin promotes element-wise).
+
+**Input pins**
+
+- `a: Array[ElementType]` — left array.
+- `b: Array[ElementType]` — right array, appended after `a`.
+
+**Behavior**
+
+If either input is unconnected, the output is `None` (propagates as a missing-input). Otherwise the node returns a new array containing every element of `a` followed by every element of `b`, preserving order. Empty arrays are handled with no special case: `concat([], [1, 2])` is `[1, 2]`.
+
+To concatenate three or more arrays, chain `array_concat` nodes (e.g. wire `array_concat(a, b)` into the `a` pin of a second `array_concat` whose `b` pin is `c`).
+
 ## map
 
 Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.
