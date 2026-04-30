@@ -452,6 +452,10 @@ types in the position immediately after `[]`, so naming a parameter after a type
   unification of the two element types under the standard promotion rules
   (e.g. `concat([]Int, [1,2,3])` is `[1,2,3]`; `concat([1,2], [3.0])` is
   `Array[Float]`).
+- `append(arr, elem)` — return a new array with `elem` appended at the end.
+  The result element type is the unification of `arr`'s element type and
+  `elem`'s type under standard promotion rules (so `append([1,2], 3.0)` is
+  `Array[Float]`).
 
 ### Vector Math Functions
 - `length2(vec2)` - Calculate 2D vector magnitude

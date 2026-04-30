@@ -801,6 +801,15 @@ pub struct APIMapData {
     pub output_type: APIDataType,
 }
 
+pub struct APIFilterData {
+    pub element_type: APIDataType,
+}
+
+pub struct APIFoldData {
+    pub element_type: APIDataType,
+    pub accumulator_type: APIDataType,
+}
+
 pub struct APISequenceData {
     pub element_type: APIDataType,
     pub input_count: i32,

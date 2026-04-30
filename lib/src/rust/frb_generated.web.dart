@@ -136,7 +136,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFacetShellData dco_decode_api_facet_shell_data(dynamic raw);
 
   @protected
+  APIFilterData dco_decode_api_filter_data(dynamic raw);
+
+  @protected
   APIFloatData dco_decode_api_float_data(dynamic raw);
+
+  @protected
+  APIFoldData dco_decode_api_fold_data(dynamic raw);
 
   @protected
   APIFreeMoveData dco_decode_api_free_move_data(dynamic raw);
@@ -390,7 +396,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFacetShellData dco_decode_box_autoadd_api_facet_shell_data(dynamic raw);
 
   @protected
+  APIFilterData dco_decode_box_autoadd_api_filter_data(dynamic raw);
+
+  @protected
   APIFloatData dco_decode_box_autoadd_api_float_data(dynamic raw);
+
+  @protected
+  APIFoldData dco_decode_box_autoadd_api_fold_data(dynamic raw);
 
   @protected
   APIFreeMoveData dco_decode_box_autoadd_api_free_move_data(dynamic raw);
@@ -768,7 +780,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIFilterData? dco_decode_opt_box_autoadd_api_filter_data(dynamic raw);
+
+  @protected
   APIFloatData? dco_decode_opt_box_autoadd_api_float_data(dynamic raw);
+
+  @protected
+  APIFoldData? dco_decode_opt_box_autoadd_api_fold_data(dynamic raw);
 
   @protected
   APIFreeMoveData? dco_decode_opt_box_autoadd_api_free_move_data(dynamic raw);
@@ -1123,7 +1141,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFilterData sse_decode_api_filter_data(SseDeserializer deserializer);
+
+  @protected
   APIFloatData sse_decode_api_float_data(SseDeserializer deserializer);
+
+  @protected
+  APIFoldData sse_decode_api_fold_data(SseDeserializer deserializer);
 
   @protected
   APIFreeMoveData sse_decode_api_free_move_data(SseDeserializer deserializer);
@@ -1415,7 +1439,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFilterData sse_decode_box_autoadd_api_filter_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIFloatData sse_decode_box_autoadd_api_float_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFoldData sse_decode_box_autoadd_api_fold_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1870,7 +1902,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFilterData? sse_decode_opt_box_autoadd_api_filter_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIFloatData? sse_decode_opt_box_autoadd_api_float_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFoldData? sse_decode_opt_box_autoadd_api_fold_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2278,7 +2318,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIFacetShellData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_filter_data(APIFilterData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_float_data(APIFloatData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_fold_data(APIFoldData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_free_move_data(
@@ -2590,8 +2636,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIFacetShellData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_filter_data(
+      APIFilterData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_float_data(
       APIFloatData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_fold_data(
+      APIFoldData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_free_move_data(
@@ -3054,8 +3108,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIFacetShellData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_filter_data(
+      APIFilterData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_float_data(
       APIFloatData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_fold_data(
+      APIFoldData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_free_move_data(

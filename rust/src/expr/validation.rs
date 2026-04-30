@@ -509,6 +509,25 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
         }) as EvaluationFunction,
     );
 
+    // Array append: polymorphic over Array[T] × U. Validation is special-cased
+    // in Expr::Call::validate; this impl is the runtime side.
+    functions.insert(
+        "append".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 2 {
+                return NetworkResult::Error("append() requires exactly 2 arguments".to_string());
+            }
+            let mut out = match &args[0] {
+                NetworkResult::Array(v) => v.clone(),
+                _ => {
+                    return NetworkResult::Error("append() first arg must be an array".to_string());
+                }
+            };
+            out.push(args[1].clone());
+            NetworkResult::Array(out)
+        }) as EvaluationFunction,
+    );
+
     functions.insert(
         "length3".to_string(),
         Box::new(|args: &[NetworkResult]| {

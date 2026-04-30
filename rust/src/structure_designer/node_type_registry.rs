@@ -1,6 +1,7 @@
 use super::node_type::{NodeType, PinOutputType};
 use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
+use super::nodes::array_append::get_node_type as array_append_get_node_type;
 use super::nodes::array_at::get_node_type as array_at_get_node_type;
 use super::nodes::array_concat::get_node_type as array_concat_get_node_type;
 use super::nodes::array_len::get_node_type as array_len_get_node_type;
@@ -25,7 +26,9 @@ use super::nodes::export_xyz::get_node_type as export_xyz_get_node_type;
 use super::nodes::expr::get_node_type as expr_get_node_type;
 use super::nodes::extrude::get_node_type as extrude_get_node_type;
 use super::nodes::facet_shell::get_node_type as facet_shell_get_node_type;
+use super::nodes::filter::get_node_type as filter_get_node_type;
 use super::nodes::float::get_node_type as float_get_node_type;
+use super::nodes::fold::get_node_type as fold_get_node_type;
 use super::nodes::free_move::get_node_type as free_move_get_node_type;
 use super::nodes::free_rot::get_node_type as free_rot_get_node_type;
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
@@ -121,6 +124,8 @@ impl NodeTypeRegistry {
         ret.add_node_type(expr_get_node_type());
         ret.add_node_type(value_get_node_type());
         ret.add_node_type(map_get_node_type());
+        ret.add_node_type(filter_get_node_type());
+        ret.add_node_type(fold_get_node_type());
         ret.add_node_type(sequence_get_node_type());
         ret.add_node_type(string_get_node_type());
         ret.add_node_type(bool_get_node_type());
@@ -141,6 +146,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(array_at_get_node_type());
         ret.add_node_type(array_len_get_node_type());
         ret.add_node_type(array_concat_get_node_type());
+        ret.add_node_type(array_append_get_node_type());
         ret.add_node_type(lattice_vecs_get_node_type());
 
         ret.add_node_type(rect_get_node_type());

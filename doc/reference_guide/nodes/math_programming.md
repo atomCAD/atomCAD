@@ -245,6 +245,7 @@ A common use is constructing an `Array[IVec3]` literal of defect positions inlin
 - Out-of-bounds (`i < 0` or `i` past the end) produces an evaluation error. The index must be an `Int`; `Bool` and `Float` are rejected at validation time.
 - `len(arr)` — number of elements in `arr`. Returns `Int`. Works on any `Array[T]`, including empty arrays (`len([]Int)` is `0`).
 - `concat(a, b)` — concatenate two arrays. The result element type is the unification of the two element types under the standard promotion rules (e.g. `concat([]Int, [1,2,3])` is `[1,2,3]`; `concat([1,2], [3.5])` is `Array[Float]`). For more than two arrays, nest: `concat(a, concat(b, c))`.
+- `append(arr, elem)` — return a new array with `elem` appended at the end. The result element type is the unification of `arr`'s element type and `elem`'s type under the standard promotion rules (so `append([1,2], 3.5)` is `Array[Float]`). Chain calls to append multiple elements: `append(append([1], 2), 3)`.
 
 **Mathematical Functions:**
 
@@ -357,6 +358,25 @@ If either input is unconnected, the output is `None` (propagates as a missing-in
 
 To concatenate three or more arrays, chain `array_concat` nodes (e.g. wire `array_concat(a, b)` into the `a` pin of a second `array_concat` whose `b` pin is `c`).
 
+## array_append
+
+Appends one element to the end of an array, returning a new array. The expression-language equivalent is `append(arr, elem)`.
+
+**Properties**
+
+- `Element type` — the element type of the input array and of the appended element. Unlike the expression-level `append`, the node form does not perform cross-element promotion: the element pin is typed `ElementType` and the array pin is typed `Array[ElementType]`, so the standard wire-time conversion rules already handle compatibility (e.g. wiring an `Array[IVec3]` into an `Array[Vec3]` pin promotes element-wise).
+
+**Input pins**
+
+- `array: Array[ElementType]` — the array to extend.
+- `element: ElementType` — the element to append.
+
+**Behavior**
+
+If either input is unconnected, the output is `None` (propagates as a missing-input). Otherwise the node returns a new array containing every element of `array` followed by `element`, preserving order. Appending to an empty array produces a length-1 array.
+
+To append multiple elements, chain `array_append` nodes (or wire an `array_concat` node when the right-hand operand is itself an array).
+
 ## map
 
 Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.
@@ -370,3 +390,46 @@ The above image shows the node network used in the Pattern demo. You can see tha
 ![](../../atomCAD_images/map_input_pin_type.png)
 
 You can see that the `pattern` custom node in this case has an additional input pin in addition to the required one `Int` input pin: the `gap` pin. As discussed in the functional programming chapter, additional inputs are bound when the function value is supplied to the `map` node (this can be seen as a partial function application): this is the case with the `gap` input pin in this case and so this way the gap of the pattern can be parameterized.
+
+## filter
+
+Returns the elements of `xs` for which the predicate `f` returns `true`, preserving order.
+
+**Properties**
+
+- `Element type` — the element type T of the input and output arrays.
+
+**Input pins**
+
+- `xs: Array[ElementType]` — the array to filter.
+- `f: ElementType -> Bool` — the predicate.
+
+**Behavior**
+
+If either input is unconnected, the node produces an error (`xs input is missing` / `f input is missing`); both inputs must be wired even when `xs` would have been empty. Otherwise the node returns a new array containing every element of `xs` for which `f(elem)` evaluated to `true`, in the original order. An empty `xs` produces an empty array; `f` is never called. If `f` returns anything other than `Bool` (including `None` because a deeper input inside `f` is unwired), the node produces `Error("filter: f returned non-Bool")`.
+
+The `f` function is supplied via the function pin (typically a small subnetwork or an `expr` node). Any extra parameters of `f` beyond the first are pre-bound at the time the function pin is wired — this is partial application, the same convention `map` uses (see the `map` section).
+
+## fold
+
+Reduces `xs` to a single value by repeatedly applying `f(acc, elem)`, starting from `init`, left-to-right:
+
+- `fold([], init, f)        == init`
+- `fold([a, b, c], init, f) == f(f(f(init, a), b), c)`
+
+**Properties**
+
+- `Element type` — the element type T of the input array.
+- `Accumulator type` — the accumulator and output type Acc. Acc may differ from T; the closure's parameter pins use the same `Int ↔ Float` (and similar) conversions that any other pin connection does, so e.g. folding an `Array[Float]` into an `Int` accumulator works exactly because Float→Int truncation is already a supported pin conversion.
+
+**Input pins**
+
+- `xs: Array[ElementType]` — the array to reduce.
+- `init: AccumulatorType` — the initial accumulator value.
+- `f: (AccumulatorType, ElementType) -> AccumulatorType` — the combining function. Argument 0 is the accumulator, argument 1 is the current element.
+
+**Behavior**
+
+If any input is unconnected, the node produces an error (`xs input is missing` / `init input is missing` / `f input is missing`); all three inputs must be wired even when `xs` would have been empty. With everything wired, an empty `xs` returns `init` unchanged (`f` is never called). Otherwise the node walks `xs` left-to-right, replacing the accumulator with `f(acc, elem)` at each step, and returns the final accumulator value. If `f` errors on any iteration, the error propagates immediately and remaining elements are skipped.
+
+`fold` is the universal aggregator: sum, product, min, max, "all true", "any true", and chained CSG (e.g. unioning a list of blueprints) are all special cases.

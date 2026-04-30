@@ -826,6 +826,24 @@ class APIFacetShellData {
           selectedFacetIndex == other.selectedFacetIndex;
 }
 
+class APIFilterData {
+  final APIDataType elementType;
+
+  const APIFilterData({
+    required this.elementType,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFilterData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType;
+}
+
 class APIFloatData {
   final double value;
 
@@ -842,6 +860,27 @@ class APIFloatData {
       other is APIFloatData &&
           runtimeType == other.runtimeType &&
           value == other.value;
+}
+
+class APIFoldData {
+  final APIDataType elementType;
+  final APIDataType accumulatorType;
+
+  const APIFoldData({
+    required this.elementType,
+    required this.accumulatorType,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode ^ accumulatorType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFoldData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType &&
+          accumulatorType == other.accumulatorType;
 }
 
 class APIFreeMoveData {

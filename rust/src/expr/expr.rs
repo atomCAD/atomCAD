@@ -309,6 +309,36 @@ impl Expr {
                     return Ok(DataType::Array(Box::new(elem)));
                 }
 
+                // Special-case `append`: polymorphic over Array[T] × U → Array[unify(T, U)].
+                // Same rationale as `len` and `concat` — the polymorphic shape doesn't fit
+                // FunctionSignature.
+                if name == "append" {
+                    if args.len() != 2 {
+                        return Err(format!(
+                            "Function append expects 2 arguments, got {}",
+                            args.len()
+                        ));
+                    }
+                    let arr_ty = args[0].validate(variables, functions)?;
+                    let elem_ty = args[1].validate(variables, functions)?;
+                    let arr_elem = match arr_ty {
+                        DataType::Array(t) => *t,
+                        other => {
+                            return Err(format!(
+                                "Function append argument 1 expects an array type, got {}",
+                                other
+                            ));
+                        }
+                    };
+                    let unified = unify_array_element_types(&arr_elem, &elem_ty).map_err(|_| {
+                        format!(
+                            "append element type {} is incompatible with array element type {}",
+                            elem_ty, arr_elem
+                        )
+                    })?;
+                    return Ok(DataType::Array(Box::new(unified)));
+                }
+
                 // Validate function exists
                 let signature = functions
                     .get(name)

@@ -511,6 +511,12 @@ APIExprData? getExprData({required BigInt nodeId}) => RustLib.instance.api
 APIMapData? getMapData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetMapData(nodeId: nodeId);
 
+APIFilterData? getFilterData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetFilterData(nodeId: nodeId);
+
+APIFoldData? getFoldData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetFoldData(nodeId: nodeId);
+
 APISequenceData? getSequenceData({required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiGetSequenceData(
@@ -755,6 +761,16 @@ void setParameterData(
 void setMapData({required BigInt nodeId, required APIMapData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMapData(
+            nodeId: nodeId, data: data);
+
+void setFilterData({required BigInt nodeId, required APIFilterData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetFilterData(
+            nodeId: nodeId, data: data);
+
+void setFoldData({required BigInt nodeId, required APIFoldData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetFoldData(
             nodeId: nodeId, data: data);
 
 void setSequenceData({required BigInt nodeId, required APISequenceData data}) =>

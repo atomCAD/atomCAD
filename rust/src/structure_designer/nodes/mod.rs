@@ -1,5 +1,6 @@
 pub mod add_hydrogen;
 pub mod apply_diff;
+pub mod array_append;
 pub mod array_at;
 pub mod array_concat;
 pub mod array_len;
@@ -23,7 +24,9 @@ pub mod export_xyz;
 pub mod expr;
 pub mod extrude;
 pub mod facet_shell;
+pub mod filter;
 pub mod float;
+pub mod fold;
 pub mod free_move;
 pub mod free_rot;
 pub mod geo_trans;

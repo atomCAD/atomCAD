@@ -148,6 +148,15 @@ mod array_len_test;
 #[path = "structure_designer/array_concat_test.rs"]
 mod array_concat_test;
 
+#[path = "structure_designer/array_append_test.rs"]
+mod array_append_test;
+
+#[path = "structure_designer/filter_test.rs"]
+mod filter_test;
+
+#[path = "structure_designer/fold_test.rs"]
+mod fold_test;
+
 #[path = "structure_designer/motif_edit_test.rs"]
 mod motif_edit_test;
 

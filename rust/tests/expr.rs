@@ -24,3 +24,6 @@ mod array_length_test;
 
 #[path = "expr/array_concat_test.rs"]
 mod array_concat_test;
+
+#[path = "expr/array_append_test.rs"]
+mod array_append_test;

@@ -9,6 +9,8 @@ use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
+use super::structure_designer_api_types::APIFilterData;
+use super::structure_designer_api_types::APIFoldData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIImportCIFData;
@@ -113,7 +115,9 @@ use crate::structure_designer::nodes::export_xyz::ExportXYZData;
 use crate::structure_designer::nodes::expr::ExprData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
+use crate::structure_designer::nodes::filter::FilterData;
 use crate::structure_designer::nodes::float::FloatData;
+use crate::structure_designer::nodes::fold::FoldData;
 use crate::structure_designer::nodes::free_move::FreeMoveData;
 use crate::structure_designer::nodes::free_rot::FreeRotData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
@@ -3084,6 +3088,45 @@ pub fn get_map_data(node_id: u64) -> Option<APIMapData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_filter_data(node_id: u64) -> Option<APIFilterData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let filter_data = node_data.as_any_ref().downcast_ref::<FilterData>()?;
+
+                Some(APIFilterData {
+                    element_type: data_type_to_api_data_type(&filter_data.element_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_fold_data(node_id: u64) -> Option<APIFoldData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let fold_data = node_data.as_any_ref().downcast_ref::<FoldData>()?;
+
+                Some(APIFoldData {
+                    element_type: data_type_to_api_data_type(&fold_data.element_type),
+                    accumulator_type: data_type_to_api_data_type(&fold_data.accumulator_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_sequence_data(node_id: u64) -> Option<APISequenceData> {
     unsafe {
         with_cad_instance_or(
@@ -3912,6 +3955,52 @@ pub fn set_map_data(node_id: u64, data: APIMapData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, map_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_filter_data(node_id: u64, data: APIFilterData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let element_type = match api_data_type_to_data_type(&data.element_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            let filter_data = Box::new(FilterData { element_type });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, filter_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_fold_data(node_id: u64, data: APIFoldData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let element_type = match api_data_type_to_data_type(&data.element_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            let accumulator_type = match api_data_type_to_data_type(&data.accumulator_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            let fold_data = Box::new(FoldData {
+                element_type,
+                accumulator_type,
+            });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, fold_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

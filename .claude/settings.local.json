@@ -194,7 +194,8 @@
       "Bash(awk 'NR>=952 && NR<=959' doc/_atomCAD_reference_guide_pre_phase_0a.md)",
       "Bash(awk 'NR>100' doc/reference_guide/nodes/geometry_3d.md)",
       "Bash(RUST_MIN_STACK=33554432 cargo test --test structure_designer --no-run)",
-      "Bash(gh issue *)"
+      "Bash(gh issue *)",
+      "Bash(rust)"
     ]
   }
 }

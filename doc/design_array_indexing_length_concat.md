@@ -2,15 +2,16 @@
 
 ## Scope
 
-Array literals already exist (see `doc/design_array_literals_in_expr.md`). This document adds the three most basic array-access primitives that are still missing, in both the expression language (the `expr` node) and as dedicated nodes:
+Array literals already exist (see `doc/design_array_literals_in_expr.md`). This document adds the four most basic array primitives that are still missing, in both the expression language (the `expr` node) and as dedicated nodes:
 
-| Primitive       | expr syntax    | Node type        |
-| --------------- | -------------- | ---------------- |
-| Element access  | `arr[i]`       | `array_at`       |
-| Length          | `len(arr)`     | `array_len`      |
-| Concatenation   | `concat(a, b)` | `array_concat`   |
+| Primitive       | expr syntax        | Node type        |
+| --------------- | ------------------ | ---------------- |
+| Element access  | `arr[i]`           | `array_at`       |
+| Length          | `len(arr)`         | `array_len`      |
+| Concatenation   | `concat(a, b)`     | `array_concat`   |
+| Append element  | `append(arr, e)`   | `array_append`   |
 
-Together these cover read-only random access, size queries, and combination — the minimum set needed to do anything non-trivial with arrays once they exist.
+Together these cover read-only random access, size queries, combination, and single-element extension — the minimum set needed to do anything non-trivial with arrays once they exist.
 
 Explicitly out of scope (deferred):
 
@@ -29,12 +30,14 @@ Explicitly out of scope (deferred):
 | expr indexing syntax                                  | `arr[i]` postfix, highest precedence (alongside member access and call)                   |
 | expr length function name                             | `len(arr)` — short, no ambiguity inside expr (vector magnitudes use `length2` / `length3`) |
 | expr concat function name                             | `concat(a, b)` — function call, not an operator                                           |
-| Node names                                            | `array_at`, `array_len`, `array_concat` — type-prefixed, matching the `atom_*` / `imat3_*` precedent for the global node namespace |
+| Node names                                            | `array_at`, `array_len`, `array_concat`, `array_append` — type-prefixed, matching the `atom_*` / `imat3_*` precedent for the global node namespace |
 | Index type                                            | `Int` only. Nested arrays require chaining (`a[i][j]`)                                    |
 | Out-of-bounds policy                                  | **Error.** Consistent with `inv3` on a singular matrix and with the existing array-literal "incompatible element" error. Users wanting a defaulted access can write `if i >= 0 && i < len(a) then a[i] else fallback` |
 | Concat element-type rule                              | The two arrays must agree on element type after the standard promotion rules — same algorithm used by array-literal element unification |
-| `array_len`, `array_concat`, `array_at` configuration | A user-selected `element_type` property, exactly like `sequence`. The element type fully determines the input and output pin types; no polymorphism. `array_len` outputs `Int` regardless |
+| `array_len`, `array_concat`, `array_at`, `array_append` configuration | A user-selected `element_type` property, exactly like `sequence`. The element type fully determines the input and output pin types; no polymorphism. `array_len` outputs `Int` regardless |
 | Concat empty-array handling                           | `concat([]T, [1,2,3])` ≡ `[1,2,3]`. No special case — falls out of unification |
+| expr append function name                             | `append(arr, elem)` — function call. Rejected `push` (mutation connotation; our arrays are values) and `add` (too generic in the global node namespace) |
+| Append element-type rule                              | Same as concat: arg 0's element type and arg 1's type unify under the standard promotion rules. Node form has no cross-promotion (wire-time conversion handles it). |
 
 ### Naming asymmetry rationale
 
@@ -581,14 +584,192 @@ New file `rust/tests/structure_designer/array_concat_test.rs`:
 
 ---
 
+## Phase 7 — Append in expr (`append`)
+
+### Syntax
+
+`append(arr, elem)` — function call. The first argument must be `Array[T]` for any `T`; the second argument is any `U` that unifies with `T` under the standard promotion rules. The result is `Array[unify(T, U)]`.
+
+```
+append([1, 2], 3)                               // Array[Int],   [1, 2, 3]
+append([1, 2], 3.0)                             // Array[Float], promotion across the boundary
+append([]Int, 5)                                // Array[Int],   [5]
+append([ivec3(1,2,3)], vec3(0.5, 0.5, 0.5))     // Array[Vec3]   (IVec3 promoted)
+append(append([1], 2), 3)                       // Array[Int],   [1, 2, 3]   (chains)
+```
+
+`append` is the array-element companion to `concat` (which takes two arrays). Wrapping a single element in a literal just to concat — `concat(arr, [elem])` — is verbose enough that a dedicated primitive earns its place.
+
+### Validation
+
+Same approach as `concat` from Phase 5: special-case `name == "append"` in `Expr::Call::validate`, before the registry lookup. Arity must be 2; arg 0 must be `DataType::Array(_)`; arg 1 may be any type. Element type unification reuses `unify_array_element_types`.
+
+```rust
+// Inside the special-case for append in Expr::Call validation
+let arr_ty = args[0].validate(...)?;
+let elem_ty = args[1].validate(...)?;
+let arr_elem = match arr_ty {
+    DataType::Array(t) => *t,
+    other => return Err(format!("append arg 0 must be Array, got {:?}", other)),
+};
+let unified = unify_array_element_types(&arr_elem, &elem_ty)
+    .map_err(|_| format!(
+        "append element type {} is incompatible with array element type {}",
+        elem_ty, arr_elem
+    ))?;
+Ok(DataType::Array(Box::new(unified)))
+```
+
+Same rationale as `len` and `concat` for not adding `append` to `FUNCTION_SIGNATURES`: the polymorphic argument shape (any `Array[T]` plus any `U` unifiable with `T`) does not fit `FunctionSignature`'s fixed-types model, while the runtime registry accepts polymorphic impls without changes.
+
+### Evaluation
+
+Register `append` in `FUNCTION_IMPLEMENTATIONS` alongside `concat`, `length2`, etc. Argument-evaluation error-propagation is already handled by `Expr::Call::evaluate` — it short-circuits on any `Error` arg before invoking the registered impl — so the impl receives `&[NetworkResult]` whose entries are guaranteed non-`Error`, and only needs to dispatch on `Array` for arg 0 (the latter is defensive — validation already rejected non-array arg 0):
+
+```rust
+"append".to_string(),
+Box::new(|args: &[NetworkResult]| -> NetworkResult {
+    if args.len() != 2 {
+        return NetworkResult::Error("append() requires exactly 2 arguments".to_string());
+    }
+    let mut out = match &args[0] {
+        NetworkResult::Array(v) => v.clone(),
+        _ => return NetworkResult::Error("append() first arg must be an array".to_string()),
+    };
+    out.push(args[1].clone());
+    NetworkResult::Array(out)
+})
+```
+
+`None`-propagation rationale matches Phase 5's `concat` and Phase 1's `Expr::Index`: the expr node converts unconnected inputs to error outputs before any `Expr::*` arm runs, and no `Expr::*` arm produces `None`. The `_ =>` fall-through covers genuine type bugs only.
+
+### Help text
+
+Append to the "Array Access" section of the expr-node help text:
+
+```
+- `append(arr, elem)` — return a new array with `elem` appended at the end.
+  The result element type is the unification of `arr`'s element type and
+  `elem`'s type under standard promotion rules (so `append([1,2], 3.0)` is
+  `Array[Float]`).
+```
+
+### Phase 7 tests
+
+New file `rust/tests/expr/array_append_test.rs`, registered in `rust/tests/expr.rs`.
+
+**Validation:**
+
+| Expression                                       | Variables                | Expected output type |
+| ------------------------------------------------ | ------------------------ | -------------------- |
+| `append([1, 2], 3)`                              | —                        | `Array[Int]`         |
+| `append([1, 2], 3.0)`                            | —                        | `Array[Float]`       |
+| `append([]Int, 5)`                               | —                        | `Array[Int]`         |
+| `append([ivec3(1,2,3)], vec3(1.0, 2.0, 3.0))`    | —                        | `Array[Vec3]`        |
+| `append([[1,2]], [3,4])`                         | —                        | `Array[Array[Int]]`  |
+| `append(a, x)`                                   | a: Array[IVec3], x: IVec3 | `Array[IVec3]`      |
+| `append([1, 2], ivec3(1,2,3))`                   | —                        | error (incompatible) |
+| `append(5, 3)`                                   | —                        | error (non-array)    |
+| `append([1, 2])`                                 | —                        | error (arity)        |
+| `append([1], 2, 3)`                              | —                        | error (arity)        |
+
+**Evaluation:**
+
+| Expression                            | Expected                                                         |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| `append([1, 2], 3)`                   | `Array([Int(1), Int(2), Int(3)])`                                |
+| `append([]Int, 5)`                    | `Array([Int(5)])`                                                |
+| `append(append([1], 2), 3)`           | `Array([Int(1), Int(2), Int(3)])`                                |
+| `len(append([1, 2], 3))`              | `Int(3)` (composes with `len`)                                   |
+| `append([1, 2], 3)[2]`                | `Int(3)` (composes with indexing)                                |
+| `concat(append([1], 2), [3, 4])`      | `Array([Int(1), Int(2), Int(3), Int(4)])` (composes with `concat`) |
+
+### Phase 7 implementation checklist
+
+1. [ ] Add `name == "append"` guard at the top of `Expr::Call::validate` (`rust/src/expr/expr.rs`), alongside the `len` and `concat` guards.
+2. [ ] Register `append` runtime impl in `FUNCTION_IMPLEMENTATIONS` (`rust/src/expr/validation.rs`).
+3. [ ] Reuse `unify_array_element_types` in the validate guard.
+4. [ ] Help-text update in `rust/src/structure_designer/nodes/expr.rs`.
+5. [ ] Tests in `rust/tests/expr/array_append_test.rs`.
+6. [ ] `cd rust && cargo fmt && cargo clippy && cargo test`.
+7. [ ] Reference-guide doc update.
+
+---
+
+## Phase 8 — `array_append` node
+
+### Behavior
+
+Appends one element to the end of an array.
+
+**Properties**
+
+- `Element type` — both the array's element type and the appended element's type. (Same convention as `array_at` / `array_len` / `array_concat`.)
+
+**Input pins**
+
+- `array: Array[ElementType]`
+- `element: ElementType`
+
+**Output pin**
+
+- `out: Array[ElementType]` via `OutputPinDefinition::single_fixed(DataType::Array(Box::new(self.element_type.clone())))`.
+
+**Behavior**
+
+If either input is unconnected, evaluation yields `NetworkResult::None`. This matches `array_at`, `array_len`, and `array_concat` — missing required inputs propagate as `None` rather than being silently substituted with a default.
+
+Like `array_concat`, the node form does **not** perform cross-element promotion. Both pins are typed against `element_type`, so wire-time `DataType::can_be_converted_to` rules already handle compatible types (e.g. an `Array[IVec3]` value flowing into an `Array[Vec3]` pin via the existing array-element promotion path). Doing further unification inside the node would be redundant.
+
+### Implementation sketch
+
+New file `rust/src/structure_designer/nodes/array_append.rs`. Mirrors `array_concat.rs` (Phase 6) with the second input pin typed as `ElementType` instead of `Array[ElementType]`. The `eval` function:
+
+1. Evaluate both args. If either is `None`, return `EvalOutput::single(NetworkResult::None)`. Errors propagate the usual way.
+2. Clone `array`'s items, push `element`.
+3. Return `EvalOutput::single(NetworkResult::Array(combined))`.
+
+### Phase 8 tests
+
+New file `rust/tests/structure_designer/array_append_test.rs`, registered in `rust/tests/structure_designer.rs`.
+
+| Scenario                                                       | Expected                          |
+| -------------------------------------------------------------- | --------------------------------- |
+| element_type `Int`, array=`[1,2]`, element=`3`                 | `[1, 2, 3]`                       |
+| element_type `Int`, array=`[]`, element=`5`                    | `[5]`                             |
+| element_type `IVec3`, array of one ivec3 + ivec3               | length-2 array, order preserved   |
+| element_type `Crystal`, array of crystals + crystal            | append preserves order            |
+| Unconnected `array` pin                                        | `None`                            |
+| Unconnected `element` pin                                      | `None`                            |
+| Both unconnected                                               | `None`                            |
+
+Plus:
+
+- **Snapshot test** — add `array_append` to `rust/tests/structure_designer/node_snapshot_test.rs`.
+- **Text-format roundtrip** — verify `element_type` property and pin wiring serialize/deserialize via the existing `text_format_test.rs` pattern. Add a case for `array_append` with `element_type: Int` and one with `element_type: IVec3`.
+- **`.cnnd` roundtrip** — fixture under `rust/tests/fixtures/` containing an `array_append` node; assert load → save → reload is stable.
+
+### Phase 8 implementation checklist
+
+1. [ ] `rust/src/structure_designer/nodes/array_append.rs`.
+2. [ ] Register in `rust/src/structure_designer/nodes/mod.rs`.
+3. [ ] Register in `rust/src/structure_designer/node_type_registry.rs::create_built_in_node_types()`.
+4. [ ] Tests in `rust/tests/structure_designer/array_append_test.rs`.
+5. [ ] Snapshot in `node_snapshot_test.rs` + `cargo insta review`.
+6. [ ] Text-format and `.cnnd` roundtrip cases.
+7. [ ] Reference-guide entry for `array_append` in `doc/reference_guide/nodes/math_programming.md` (next to `array_concat`).
+8. [ ] No FRB regen (no API surface change beyond new node type).
+
+---
+
 ## Reference-guide updates (cumulative)
 
 Each phase touches `doc/reference_guide/nodes/math_programming.md`:
 
-- **Phase 1 / 3 / 5** add to the "Array Access" subsection in the expr-node section (extending the existing "Array Literals" section).
-- **Phases 2, 4, 6** add three new top-level entries — `array_at`, `array_len`, `array_concat` — between `sequence` and `map` to keep array-related nodes co-located.
+- **Phases 1 / 3 / 5 / 7** add to the "Array Access" subsection in the expr-node section (extending the existing "Array Literals" section).
+- **Phases 2, 4, 6, 8** add four new top-level entries — `array_at`, `array_len`, `array_concat`, `array_append` — between `sequence` and `map` to keep array-related nodes co-located.
 
-Snippet for the expr-node "Array Access" subsection (final form after all three expr phases):
+Snippet for the expr-node "Array Access" subsection (final form after all four expr phases):
 
 ```markdown
 **Array Access:**
@@ -598,6 +779,9 @@ Snippet for the expr-node "Array Access" subsection (final form after all three 
 - `len(arr)` — number of elements; returns Int. Works on any `Array[T]`.
 - `concat(a, b)` — concatenate two arrays. The result element type is the
   unification of the two element types under standard promotion rules.
+- `append(arr, elem)` — return a new array with `elem` appended at the end.
+  The result element type is the unification of `arr`'s element type and
+  `elem`'s type under standard promotion rules.
 ```
 
 ## Out of scope (recap)
@@ -608,7 +792,8 @@ Snippet for the expr-node "Array Access" subsection (final form after all three 
 - `index_of` / `contains`.
 - Negative indexing or wrap/clamp out-of-bounds modes.
 - Multi-argument `concat(a, b, c, ...)`.
-- A separate "any array" abstract type that would let `array_len` / `array_concat` skip the `element_type` property. The element-type property matches `sequence`'s convention; introducing an abstract array type just to remove one property is not worth the type-system complexity.
+- `prepend(arr, elem)` / `array_prepend` and `insert(arr, i, elem)` / `array_insert`. Workarounds (`concat([elem], arr)`, two `concat` calls) are tolerable for now. Revisit if real usage shows otherwise.
+- A separate "any array" abstract type that would let `array_len` / `array_concat` / `array_append` skip the `element_type` property. The element-type property matches `sequence`'s convention; introducing an abstract array type just to remove one property is not worth the type-system complexity.
 
 ## Open question
 
