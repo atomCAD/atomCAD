@@ -203,11 +203,12 @@ impl DataType {
 
     /// Checks if a source data type can be converted to a destination data type.
     ///
-    /// Phase 1 of the record types rollout adds a `&NodeTypeRegistry`
-    /// parameter so future phases can resolve `RecordType::Named` references
-    /// via the registry. In Phase 1 the registry is only consulted for the
-    /// same-name short-circuit (`Named(n) → Named(n)`); full record subtyping
-    /// (width + structural depth) lands in Phase 4.
+    /// `&NodeTypeRegistry` is threaded through so `RecordType::Named` references
+    /// can be resolved against `record_type_defs`. Records are subtyped
+    /// structurally (width + depth) using canonical-order linear merge; field
+    /// positions accept only **tag-only widenings** (see
+    /// `is_tag_only_widening`), never value-converting widenings such as
+    /// `Int → Float`. See `doc/design_record_types.md` Phase 4.
     ///
     /// # Parameters
     /// * `source_type` - The source data type
@@ -226,23 +227,43 @@ impl DataType {
             return true;
         }
 
-        // Records: Phase 1 only handles the same-name short-circuit. Two
-        // `Named(n)` references resolve to the same def, hence the same
-        // fields, by definition. Full structural subtyping (width + depth,
-        // tag-only widenings at field level, anonymous/named compatibility) is
-        // intentionally deferred to Phase 4 of the record-types rollout.
+        // Records: full width + structural depth subtyping. Two `Named(n)`
+        // references resolve to the same def, hence the same fields, by
+        // definition — short-circuit to avoid a registry lookup. Otherwise
+        // resolve both sides to canonical-ordered field lists and walk the
+        // destination forward, advancing the source by linear merge. Each
+        // matched field is checked under `can_be_structurally_converted_to`,
+        // which permits only tag-only widenings at leaf positions (no Int→Float
+        // and friends) — necessary for pass-through coercion to be sound (see
+        // `doc/design_record_types.md`, Subtyping section). A dangling
+        // `Named(_)` reference (missing from the registry) is incompatible
+        // with anything.
         if let (DataType::Record(src), DataType::Record(dst)) = (source_type, dest_type) {
             if let (RecordType::Named(s), RecordType::Named(d)) = (src, dst) {
                 if s == d {
                     return true;
                 }
             }
-            // Phase 1: any other record-to-record combination is not yet
-            // accepted. The covariant fall-through paths below (array
-            // broadcast / element-wise / function partial application) still
-            // apply if the surrounding context wraps the records, but the
-            // record arm itself returns false here.
-            return false;
+            let Some(src_fields) = src.resolve_fields(registry) else {
+                return false;
+            };
+            let Some(dst_fields) = dst.resolve_fields(registry) else {
+                return false;
+            };
+            let mut si = 0usize;
+            for (dst_field, dst_ty) in dst_fields.iter() {
+                while si < src_fields.len() && src_fields[si].0.as_str() < dst_field.as_str() {
+                    si += 1;
+                }
+                if si == src_fields.len() || src_fields[si].0 != *dst_field {
+                    return false;
+                }
+                if !can_be_structurally_converted_to(&src_fields[si].1, dst_ty, registry) {
+                    return false;
+                }
+                si += 1;
+            }
+            return true;
         }
 
         // Check if we can convert T to [T] (single element to array)
@@ -323,20 +344,69 @@ impl DataType {
             // LatticeVecs -> DrawingPlane conversion (backward compatibility for old .cnnd files)
             (DataType::LatticeVecs, DataType::DrawingPlane) => true,
 
-            // Concrete phase types upcast to the abstract supertypes that contain them.
-            // No abstract -> concrete conversion. No cross-abstract conversion.
-            // No abstract -> abstract identity edges: abstract types only appear as
-            // declared input-pin types and sources are always concrete after resolution.
-            (DataType::Crystal, DataType::HasAtoms) => true,
-            (DataType::Crystal, DataType::HasStructure) => true,
-            (DataType::Molecule, DataType::HasAtoms) => true,
-            (DataType::Molecule, DataType::HasFreeLinOps) => true,
-            (DataType::Blueprint, DataType::HasStructure) => true,
-            (DataType::Blueprint, DataType::HasFreeLinOps) => true,
-
-            // All other combinations are not compatible
-            _ => false,
+            // Concrete phase types upcast to the abstract supertypes that contain them
+            // (no abstract -> concrete, no cross-abstract). Funneled through
+            // `is_tag_only_widening` so the same predicate is reused at record
+            // leaf positions in `can_be_structurally_converted_to`.
+            _ => is_tag_only_widening(source_type, dest_type),
         }
+    }
+}
+
+/// True when `src` widens to `dst` without any runtime value conversion.
+/// Today: identity, plus concrete phase types upcasting to their abstract
+/// supertypes (`Crystal → HasAtoms`, …) — these are pure tag-level widenings
+/// where the runtime variant doesn't change. Distinct from
+/// `DataType::can_be_converted_to`, which also accepts value-converting
+/// widenings (`Int↔Float`, `IVec3↔Vec3`, `IMat3↔Mat3`,
+/// `LatticeVecs→DrawingPlane`).
+///
+/// Used at record-field leaf positions in
+/// `can_be_structurally_converted_to`: pass-through coercion requires that a
+/// destructure read the runtime payload as-is, so only widenings that need no
+/// per-field conversion are admissible.
+pub fn is_tag_only_widening(src: &DataType, dst: &DataType) -> bool {
+    if src == dst {
+        return true;
+    }
+    matches!(
+        (src, dst),
+        (DataType::Crystal, DataType::HasAtoms)
+            | (DataType::Crystal, DataType::HasStructure)
+            | (DataType::Molecule, DataType::HasAtoms)
+            | (DataType::Molecule, DataType::HasFreeLinOps)
+            | (DataType::Blueprint, DataType::HasStructure)
+            | (DataType::Blueprint, DataType::HasFreeLinOps)
+    )
+}
+
+/// Like `DataType::can_be_converted_to`, but at leaf positions accepts only
+/// tag-only widenings (identity plus concrete-to-abstract phase upcasts) —
+/// never value-converting widenings such as `Int → Float` or `IVec3 → Vec3`,
+/// no single-value-to-array broadcasting, no function partial application.
+///
+/// The no-promotion guarantee is cooperative: the record arm here delegates to
+/// `can_be_converted_to`, whose record arm in turn recurses through *this*
+/// function for field types. Keep the two record arms in sync — if either side
+/// changes its field-level dispatch, scalar promotion can leak into records.
+pub fn can_be_structurally_converted_to(
+    src: &DataType,
+    dst: &DataType,
+    registry: &NodeTypeRegistry,
+) -> bool {
+    match (src, dst) {
+        // Records: same width + depth structural rule as the record arm of
+        // `can_be_converted_to` (which itself uses the strict variant for
+        // field-level checks, so this is safe to delegate).
+        (DataType::Record(_), DataType::Record(_)) => {
+            DataType::can_be_converted_to(src, dst, registry)
+        }
+        // Arrays: element-wise, stays strict.
+        (DataType::Array(s), DataType::Array(d)) => {
+            can_be_structurally_converted_to(s, d, registry)
+        }
+        // Leaf position: identity + concrete→abstract phase upcasts only.
+        _ => is_tag_only_widening(src, dst),
     }
 }
 

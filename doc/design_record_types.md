@@ -555,7 +555,7 @@ Each phase is shippable on its own. Phases 1–4 are the core; 5–9 layer featu
 
 Rust phases (1–4, 7, 8) ship automated tests in `rust/tests/structure_designer/` (per AGENTS.md — never inline `#[cfg(test)]`). Use `cargo insta`-style snapshot tests (alongside `node_snapshots`) wherever a pin layout is derived from a record def, so authored-order vs canonical-order regressions are caught. Any new undo command follows the do/undo/redo snapshot-equality pattern from `rust/tests/structure_designer/undo_test.rs`. `.cnnd` round-trip tests live alongside the existing `cnnd_roundtrip` family.
 
-Flutter phases (5, 6, 9) have **no automated tests** — the project does not test the Flutter UI in CI. Each of these phases lists a `Manual verification:` section instead, enumerating the click-paths an implementor should walk through before declaring the phase done.
+Flutter UI work — covered in Phases 5, 6, and 9, plus the `product` node-property dropdown in Phase 8 — has **no automated tests** in this project. Each affected phase lists a `Manual verification:` section enumerating the click-paths an implementor should walk through before declaring the phase done.
 
 ### Phase 1 — Type and value plumbing
 
@@ -649,17 +649,23 @@ Tests (automated, `rust/tests/structure_designer/`):
 - Refactor regression: re-run the full pre-existing `can_be_converted_to` test set after the `is_tag_only_widening` extraction and confirm zero behavior delta on non-record types.
 - Empty record `{}` is top of the lattice — every record is assignable to it, including across named/anonymous and through arrays.
 
-### Phase 5 — Flutter type-selector record branch
+### Phase 5 — Flutter type selector and node-property UI
 
 - Generic Record branch in the type selector widget: dropdown of named `RecordTypeDef`s. New defs are created from the user-types panel (Phase 6); the type selector itself does not create them.
 - Used at every existing type-selector site.
 - The widget exposes named records only; anonymous record types are reachable only from the expression language (Phase 7), not from the Flutter UI.
+- **Per-node property UI for `record_construct` and `record_destructure`:** a record-name dropdown bound to the `schema: String` property. Pulls from the same project record-def list as the type-selector Record branch, but writes the bare def name (no `RecordType::Named(...)` wrapper). Empty / dangling state renders as a clearly empty selection so the user notices the node is unconfigured. The "Edit definition…" affordance lands in Phase 9 (it depends on the user-types panel from Phase 6). The `product` node's `target` property uses the same dropdown pattern; it ships alongside the node in Phase 8.
 
 Manual verification (no automated UI tests in this project):
-- Open a project with at least two record defs. At each existing type-selector site (`array_at.element_type`, `sequence.element_type`, `map.input_type` / `output_type`, `filter.element_type`, `fold.element_type` / `accumulator_type`, `expr` parameter type, `array_concat` / `array_append` / `array_len` element types), confirm the **Record** branch appears, the dropdown lists every def alphabetically, and selecting a def sets the pin type to `Record(Named(...))`.
-- Open a project with no record defs: the **Record** branch shows an empty dropdown and offers no inline-create affordance.
-- Pick a record type at one site and connect a wire whose source is a structurally-compatible record — confirm the wire is allowed (subtyping wired in via Phase 4).
+
+**Setup:** Phase 5 has no UI for creating record defs — that lands in Phase 6. To exercise the steps below, prepare a fixture `.cnnd` with two pre-authored defs (e.g. `Point = {x: Int, y: Int}` and `Point3 = {x: Int, y: Int, z: Int}`) by hand-editing the JSON, and load that file. Phase 2's serialization already supports this. Tests that depend on deleting or editing a def from the UI belong in Phase 6 and are not duplicated here.
+
+- Open the fixture project. At each existing type-selector site (`array_at.element_type`, `sequence.element_type`, `map.input_type` / `output_type`, `filter.element_type`, `fold.element_type` / `accumulator_type`, `expr` parameter type, `array_concat` / `array_append` / `array_len` element types), confirm the **Record** branch appears, the dropdown lists every def alphabetically, and selecting a def sets the pin type to `Record(Named(...))`.
+- Open a fresh project with no record defs: the **Record** branch shows an empty dropdown and offers no inline-create affordance.
+- Pick a record type at one site and connect a wire whose source is a structurally-compatible record (e.g. a `record_construct` from Phase 3 with the matching schema) — confirm the wire is allowed (subtyping wired in via Phase 4).
 - Anonymous records are not offered anywhere in the type-selector UI (sanity check that the widget hasn't grown an inline schema editor).
+- Drop a `record_construct` and a `record_destructure` node, pick a def from each node's `schema` dropdown, and confirm the input/output pins re-derive in the def's authored order.
+- Set `schema` to empty on a freshly placed `record_construct` and confirm the dropdown shows the empty state and the node's pins reflect "no schema chosen yet."
 
 ### Phase 6 — Flutter user-types panel
 
@@ -698,6 +704,7 @@ Tests (automated, `rust/tests/structure_designer/` and `rust/src/expr/` integrat
 - `target: String` property (a record def name; wrapped as `RecordType::Named(_)` at use time).
 - Pin layout derived from the resolved target def.
 - Output: `Array[Record(target)]`.
+- **Per-node property UI:** the same record-name dropdown introduced in Phase 5, bound to the `target` property. Empty / dangling state rendered the same way; the "Edit definition…" affordance comes in Phase 9.
 
 Tests (automated, `rust/tests/structure_designer/`):
 - 2-field product (smallest non-trivial case).
@@ -707,6 +714,11 @@ Tests (automated, `rust/tests/structure_designer/`):
 - Product whose target def has a field of type `Array[T]` (records of arrays, *not* recursive defs — cycles are rejected; see "No Recursive Definitions").
 - Dangling `target` (empty string or a deleted def): output type fails subtyping; downstream wires are disconnected by `repair_node_network`.
 - **Pin-layout snapshot test** (`cargo insta`): node view for a `product` whose target has non-alphabetical authored order — assert input pins follow authored order; assert output type is `Array[Record(Named(target))]`.
+
+Manual verification (no automated UI tests in this project):
+- Drop a `product` node, pick a def from the `target` dropdown, and confirm the input pins re-derive in the def's authored order, each typed `Array[FieldType]`, and the output pin reads `Array[Record(Named(target))]`.
+- Leave `target` unset on a freshly placed `product` and confirm the dropdown's empty state.
+- Delete the chosen def from the user-types panel; the property goes dangling and `repair_node_network` disconnects dependent downstream wires.
 
 ### Phase 9 — Polish
 

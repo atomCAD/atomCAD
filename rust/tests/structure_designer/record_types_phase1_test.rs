@@ -103,10 +103,13 @@ fn can_be_converted_to_rejects_named_pairs_with_different_names_in_phase_1() {
 }
 
 #[test]
-fn can_be_converted_to_rejects_anonymous_to_anonymous_in_phase_1() {
-    // Even structurally-identical anonymous records are not accepted in
-    // Phase 1 (Phase 4 adds the full structural rule); equality short-circuit
-    // still fires for *identical* schemas, of course.
+fn can_be_converted_to_anonymous_to_anonymous_uses_width_subtyping_post_phase_4() {
+    // Phase 1 deliberately rejected anonymous→anonymous with mismatched
+    // schemas; Phase 4 enabled width subtyping, so `b = {x, y}` is now
+    // assignable to `a = {x}` (extra fields on the source pass through under
+    // pass-through coercion). The Phase 1 negative form has been flipped to
+    // match the Phase 4 rule. The full structural-subtyping table lives in
+    // `record_types_phase4_test.rs`.
     let registry = NodeTypeRegistry::new();
     let a = DataType::Record(RecordType::anonymous(vec![(
         "x".to_string(),
@@ -116,9 +119,10 @@ fn can_be_converted_to_rejects_anonymous_to_anonymous_in_phase_1() {
         ("x".to_string(), DataType::Int),
         ("y".to_string(), DataType::Int),
     ]));
-    // Different schemas — Phase 4 width subtyping would accept (b -> a) but
-    // Phase 1 deliberately does not.
-    assert!(!DataType::can_be_converted_to(&b, &a, &registry));
+    assert!(DataType::can_be_converted_to(&b, &a, &registry));
+    // Narrowing in the other direction is still rejected — `a` is missing the
+    // `y` field that `b` requires.
+    assert!(!DataType::can_be_converted_to(&a, &b, &registry));
 
     // Same schema (width-equal): the early `source == dest` identity check
     // still returns true, which is correct in any phase.
