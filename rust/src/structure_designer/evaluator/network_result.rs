@@ -8,7 +8,8 @@ use crate::crystolecule::motif::Motif;
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, RecordType};
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform2D;
 use glam::f64::DMat3;
 use glam::f64::DVec2;
@@ -245,12 +246,42 @@ pub enum NetworkResult {
     Structure(Structure),
     Array(Vec<NetworkResult>),
     Function(Closure),
+    /// Record value: a list of `(field_name, value)` pairs. Stored in
+    /// **canonical (sorted-by-name)** order. Construct via
+    /// `NetworkResult::record(...)` to enforce the invariant. Carries no type
+    /// name — the name lives only on `DataType::Record::Named`. See
+    /// `doc/design_record_types.md`.
+    Record(Vec<(String, NetworkResult)>),
     Error(String),
 }
 
 impl NetworkResult {
+    /// Construct a record value. Fields are sorted ascending by name to satisfy
+    /// the canonical-order invariant. Caller is responsible for ensuring field
+    /// names are distinct.
+    pub fn record(mut fields: Vec<(String, NetworkResult)>) -> NetworkResult {
+        fields.sort_by(|(a, _), (b, _)| a.cmp(b));
+        NetworkResult::Record(fields)
+    }
+
+    /// Look up a field on a record by name. Returns `None` if `self` is not a
+    /// record or the field is absent. Uses binary search on the canonical
+    /// (sorted) field list.
+    pub fn extract_record_field(&self, name: &str) -> Option<&NetworkResult> {
+        if let NetworkResult::Record(fs) = self {
+            fs.binary_search_by(|(n, _)| n.as_str().cmp(name))
+                .ok()
+                .map(|i| &fs[i].1)
+        } else {
+            None
+        }
+    }
+
     /// Returns the DataType corresponding to this result's variant,
     /// or None for variants without a clear single type (None, Error, Function, Array).
+    /// For `Record(fields)`, returns `DataType::Record(RecordType::Anonymous(...))`
+    /// reflecting each field's inferred type. Returns `None` if any field's
+    /// type cannot be inferred (matching the existing rule for arrays).
     pub fn infer_data_type(&self) -> Option<DataType> {
         match self {
             NetworkResult::Bool(_) => Some(DataType::Bool),
@@ -271,6 +302,15 @@ impl NetworkResult {
             NetworkResult::Molecule(_) => Some(DataType::Molecule),
             NetworkResult::Motif(_) => Some(DataType::Motif),
             NetworkResult::Structure(_) => Some(DataType::Structure),
+            NetworkResult::Record(fields) => {
+                let mut inferred = Vec::with_capacity(fields.len());
+                for (name, value) in fields {
+                    inferred.push((name.clone(), value.infer_data_type()?));
+                }
+                // Canonicalize defensively: a `NetworkResult::Record(..)` built
+                // outside the `record(..)` constructor may not be sorted.
+                Some(DataType::Record(RecordType::anonymous(inferred)))
+            }
             _ => None,
         }
         .map(|t| {
@@ -511,15 +551,25 @@ impl NetworkResult {
     /// # Parameters
     /// * `source_type` - The data type of this NetworkResult
     /// * `target_type` - The desired target data type
-    pub fn convert_to(self, source_type: &DataType, target_type: &DataType) -> NetworkResult {
+    /// * `registry` - The node type registry (used for record name resolution
+    ///   in subtyping checks; threaded through for symmetry with
+    ///   `DataType::can_be_converted_to`)
+    pub fn convert_to(
+        self,
+        source_type: &DataType,
+        target_type: &DataType,
+        registry: &NodeTypeRegistry,
+    ) -> NetworkResult {
         // If types already match, return self
-        if DataType::can_be_converted_to(source_type, target_type) && source_type == target_type {
+        if DataType::can_be_converted_to(source_type, target_type, registry)
+            && source_type == target_type
+        {
             return self;
         }
 
         // If conversion is possible and both types are functions, return self unmodified
         // Function values don't need runtime conversion - partial evaluation happens at type level
-        if DataType::can_be_converted_to(source_type, target_type) {
+        if DataType::can_be_converted_to(source_type, target_type, registry) {
             if let (DataType::Function(_), DataType::Function(_)) = (source_type, target_type) {
                 return self;
             }
@@ -533,9 +583,9 @@ impl NetworkResult {
 
         // Check if we can convert T to [T] (single element to array)
         if let DataType::Array(target_element_type) = target_type {
-            if DataType::can_be_converted_to(source_type, target_element_type) {
+            if DataType::can_be_converted_to(source_type, target_element_type, registry) {
                 // Convert the single element to the target element type, then wrap in array
-                let converted_element = self.convert_to(source_type, target_element_type);
+                let converted_element = self.convert_to(source_type, target_element_type, registry);
                 return NetworkResult::Array(vec![converted_element]);
             }
         }
@@ -547,7 +597,9 @@ impl NetworkResult {
             if let NetworkResult::Array(elements) = self {
                 let converted_elements: Vec<NetworkResult> = elements
                     .into_iter()
-                    .map(|element| element.convert_to(source_element_type, target_element_type))
+                    .map(|element| {
+                        element.convert_to(source_element_type, target_element_type, registry)
+                    })
                     .collect();
                 return NetworkResult::Array(converted_elements);
             }
@@ -722,6 +774,13 @@ impl NetworkResult {
                     structure.motif_offset.y,
                     structure.motif_offset.z,
                 )
+            }
+            NetworkResult::Record(fields) => {
+                let field_strings: Vec<String> = fields
+                    .iter()
+                    .map(|(name, value)| format!("{}: {}", name, value.to_display_string()))
+                    .collect();
+                format!("{{{}}}", field_strings.join(", "))
             }
             NetworkResult::Error(_) => "Error".to_string(),
         }

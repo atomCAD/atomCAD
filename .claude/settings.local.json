@@ -195,7 +195,8 @@
       "Bash(awk 'NR>100' doc/reference_guide/nodes/geometry_3d.md)",
       "Bash(RUST_MIN_STACK=33554432 cargo test --test structure_designer --no-run)",
       "Bash(gh issue *)",
-      "Bash(rust)"
+      "Bash(rust)",
+      "Bash(RUST_MIN_STACK=33554432 cargo test --no-run --lib --message-format=short)"
     ]
   }
 }

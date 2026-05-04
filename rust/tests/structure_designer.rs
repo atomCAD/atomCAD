@@ -219,3 +219,6 @@ mod expr_array_index_test;
 
 #[path = "structure_designer/function_evaluator_test.rs"]
 mod function_evaluator_test;
+
+#[path = "structure_designer/record_types_phase1_test.rs"]
+mod record_types_phase1_test;

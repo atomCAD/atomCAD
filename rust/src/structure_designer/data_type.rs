@@ -1,13 +1,16 @@
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::fmt;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub struct FunctionType {
     pub parameter_types: Vec<DataType>,
     pub output_type: Box<DataType>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub enum DataType {
     None,
     Bool,
@@ -33,6 +36,60 @@ pub enum DataType {
     Structure,
     Array(Box<DataType>),
     Function(FunctionType),
+    Record(RecordType),
+}
+
+/// A record type — either a reference to a named def in the registry, or an
+/// inline anonymous schema (e.g. produced by an `expr` literal). See
+/// `doc/design_record_types.md`.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+pub enum RecordType {
+    /// References a registered record type def by name. The schema is resolved
+    /// via `NodeTypeRegistry::record_type_defs` at use time. A reference whose
+    /// name is missing from the registry is *dangling* and is treated as a
+    /// type error wherever it appears.
+    Named(String),
+
+    /// Inline anonymous record. Fields are stored in **canonical (sorted-by-name)
+    /// order**; field names are distinct. The empty record `{}` is
+    /// `Anonymous(vec![])`. Construct via `RecordType::anonymous` to enforce
+    /// the invariant.
+    Anonymous(Vec<(String, DataType)>),
+}
+
+impl RecordType {
+    pub fn named(name: String) -> Self {
+        RecordType::Named(name)
+    }
+
+    /// Construct an anonymous record from an arbitrary field list. Fields are
+    /// sorted ascending by name to satisfy the canonical-order invariant. The
+    /// caller is responsible for ensuring field names are distinct; duplicates
+    /// are kept in their relative input order (a defensive caller should
+    /// validate).
+    pub fn anonymous(mut fields: Vec<(String, DataType)>) -> Self {
+        fields.sort_by(|(a, _), (b, _)| a.cmp(b));
+        RecordType::Anonymous(fields)
+    }
+
+    /// Resolve to the canonical field schema. For `Named`, looks up the def in
+    /// the registry and returns its fields in canonical (sorted) order;
+    /// returns `None` if the name is dangling. For `Anonymous`, returns the
+    /// inline fields (already canonical).
+    ///
+    /// Phase 1 note: `record_type_defs` does not exist on `NodeTypeRegistry`
+    /// yet (added in Phase 2), so `Named` always resolves to `None` here.
+    /// Same-name `Named(n) → Named(n)` checks are short-circuited in
+    /// `can_be_converted_to` and don't go through this method.
+    pub fn resolve_fields<'a>(
+        &'a self,
+        _registry: &'a NodeTypeRegistry,
+    ) -> Option<Cow<'a, [(String, DataType)]>> {
+        match self {
+            RecordType::Anonymous(fs) => Some(Cow::Borrowed(fs.as_slice())),
+            RecordType::Named(_) => None,
+        }
+    }
 }
 
 impl fmt::Display for DataType {
@@ -82,6 +139,19 @@ impl fmt::Display for DataType {
                     write!(f, "({}) -> {}", params, func_type.output_type)
                 }
             }
+            DataType::Record(record_type) => match record_type {
+                RecordType::Named(name) => write!(f, "{}", name),
+                RecordType::Anonymous(fields) => {
+                    write!(f, "{{")?;
+                    for (i, (name, ty)) in fields.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}: {}", name, ty)?;
+                    }
+                    write!(f, "}}")
+                }
+            },
         }
     }
 }
@@ -101,23 +171,53 @@ impl DataType {
         )
     }
 
-    /// Checks if a source data type can be converted to a destination data type
+    /// Checks if a source data type can be converted to a destination data type.
+    ///
+    /// Phase 1 of the record types rollout adds a `&NodeTypeRegistry`
+    /// parameter so future phases can resolve `RecordType::Named` references
+    /// via the registry. In Phase 1 the registry is only consulted for the
+    /// same-name short-circuit (`Named(n) → Named(n)`); full record subtyping
+    /// (width + structural depth) lands in Phase 4.
     ///
     /// # Parameters
     /// * `source_type` - The source data type
     /// * `dest_type` - The destination data type
+    /// * `registry` - The node type registry (used for record name resolution)
     ///
     /// # Returns
     /// True if the source type can be converted to the destination type
-    pub fn can_be_converted_to(source_type: &DataType, dest_type: &DataType) -> bool {
+    pub fn can_be_converted_to(
+        source_type: &DataType,
+        dest_type: &DataType,
+        registry: &NodeTypeRegistry,
+    ) -> bool {
         // Same types are always compatible
         if source_type == dest_type {
             return true;
         }
 
+        // Records: Phase 1 only handles the same-name short-circuit. Two
+        // `Named(n)` references resolve to the same def, hence the same
+        // fields, by definition. Full structural subtyping (width + depth,
+        // tag-only widenings at field level, anonymous/named compatibility) is
+        // intentionally deferred to Phase 4 of the record-types rollout.
+        if let (DataType::Record(src), DataType::Record(dst)) = (source_type, dest_type) {
+            if let (RecordType::Named(s), RecordType::Named(d)) = (src, dst) {
+                if s == d {
+                    return true;
+                }
+            }
+            // Phase 1: any other record-to-record combination is not yet
+            // accepted. The covariant fall-through paths below (array
+            // broadcast / element-wise / function partial application) still
+            // apply if the surrounding context wraps the records, but the
+            // record arm itself returns false here.
+            return false;
+        }
+
         // Check if we can convert T to [T] (single element to array)
         if let DataType::Array(target_element_type) = dest_type {
-            if DataType::can_be_converted_to(source_type, target_element_type) {
+            if DataType::can_be_converted_to(source_type, target_element_type, registry) {
                 return true;
             }
         }
@@ -129,7 +229,7 @@ impl DataType {
         if let (DataType::Array(source_element_type), DataType::Array(target_element_type)) =
             (source_type, dest_type)
         {
-            if DataType::can_be_converted_to(source_element_type, target_element_type) {
+            if DataType::can_be_converted_to(source_element_type, target_element_type, registry) {
                 return true;
             }
         }
@@ -143,7 +243,11 @@ impl DataType {
             (source_type, dest_type)
         {
             // Check if return types are compatible
-            if !DataType::can_be_converted_to(&source_func.output_type, &dest_func.output_type) {
+            if !DataType::can_be_converted_to(
+                &source_func.output_type,
+                &dest_func.output_type,
+                registry,
+            ) {
                 return false;
             }
 
@@ -155,7 +259,11 @@ impl DataType {
             // Check if the first N parameters of source match destination parameters
             // where N is the number of parameters in destination function
             for (i, dest_param) in dest_func.parameter_types.iter().enumerate() {
-                if !DataType::can_be_converted_to(&source_func.parameter_types[i], dest_param) {
+                if !DataType::can_be_converted_to(
+                    &source_func.parameter_types[i],
+                    dest_param,
+                    registry,
+                ) {
                     return false;
                 }
             }

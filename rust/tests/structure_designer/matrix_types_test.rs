@@ -11,6 +11,7 @@ use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     NetworkResult, dmat3_to_rows, imat3_rows_to_dmat3, rows_to_dmat3,
 };
+use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::text_format::{
     Lexer, Parser, PropertyValue, Statement, TextValue,
 };
@@ -33,44 +34,54 @@ fn data_type_display_round_trip_mat3() {
 
 #[test]
 fn imat3_can_convert_to_mat3_and_back() {
+    let registry = NodeTypeRegistry::new();
     assert!(DataType::can_be_converted_to(
         &DataType::IMat3,
-        &DataType::Mat3
+        &DataType::Mat3,
+        &registry
     ));
     assert!(DataType::can_be_converted_to(
         &DataType::Mat3,
-        &DataType::IMat3
+        &DataType::IMat3,
+        &registry
     ));
 }
 
 #[test]
 fn imat3_does_not_freely_convert_from_ivec3_or_other_types() {
+    let registry = NodeTypeRegistry::new();
     // D4: no auto-promotion from IVec3 to diagonal IMat3.
     assert!(!DataType::can_be_converted_to(
         &DataType::IVec3,
-        &DataType::IMat3
+        &DataType::IMat3,
+        &registry
     ));
     assert!(!DataType::can_be_converted_to(
         &DataType::Vec3,
-        &DataType::Mat3
+        &DataType::Mat3,
+        &registry
     ));
     assert!(!DataType::can_be_converted_to(
         &DataType::Float,
-        &DataType::Mat3
+        &DataType::Mat3,
+        &registry
     ));
     assert!(!DataType::can_be_converted_to(
         &DataType::Int,
-        &DataType::IMat3
+        &DataType::IMat3,
+        &registry
     ));
 }
 
 #[test]
 fn matrix_to_array_broadcast_works() {
+    let registry = NodeTypeRegistry::new();
     // Standard `T -> [T]` broadcasting still applies to matrices.
     let array_of_imat3 = DataType::Array(Box::new(DataType::IMat3));
     assert!(DataType::can_be_converted_to(
         &DataType::IMat3,
-        &array_of_imat3
+        &array_of_imat3,
+        &registry
     ));
 }
 
@@ -110,8 +121,9 @@ fn imat3_rows_to_dmat3_preserves_row_major_semantics() {
 
 #[test]
 fn network_result_convert_imat3_to_mat3_lossless() {
+    let registry = NodeTypeRegistry::new();
     let m = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
-    let r = NetworkResult::IMat3(m).convert_to(&DataType::IMat3, &DataType::Mat3);
+    let r = NetworkResult::IMat3(m).convert_to(&DataType::IMat3, &DataType::Mat3, &registry);
     let dmat = r.extract_mat3().expect("should be Mat3");
     let rows = dmat3_to_rows(&dmat);
     for i in 0..3 {
@@ -123,9 +135,10 @@ fn network_result_convert_imat3_to_mat3_lossless() {
 
 #[test]
 fn network_result_convert_mat3_to_imat3_truncates() {
+    let registry = NodeTypeRegistry::new();
     let rows = [[1.7, 2.3, 3.5], [-1.6, 0.9, 4.99], [10.1, -5.5, 0.0]];
     let dmat = rows_to_dmat3(&rows);
-    let r = NetworkResult::Mat3(dmat).convert_to(&DataType::Mat3, &DataType::IMat3);
+    let r = NetworkResult::Mat3(dmat).convert_to(&DataType::Mat3, &DataType::IMat3, &registry);
     let imat = r.extract_imat3().expect("should be IMat3");
     // `as i32` truncates toward zero.
     assert_eq!(imat[0], [1, 2, 3]);
@@ -135,8 +148,9 @@ fn network_result_convert_mat3_to_imat3_truncates() {
 
 #[test]
 fn network_result_convert_identity_when_target_matches() {
+    let registry = NodeTypeRegistry::new();
     let m = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    let r = NetworkResult::IMat3(m).convert_to(&DataType::IMat3, &DataType::IMat3);
+    let r = NetworkResult::IMat3(m).convert_to(&DataType::IMat3, &DataType::IMat3, &registry);
     assert_eq!(r.extract_imat3(), Some(m));
 }
 

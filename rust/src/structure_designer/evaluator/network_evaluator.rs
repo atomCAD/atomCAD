@@ -844,7 +844,7 @@ impl NetworkEvaluator {
                 // convert_to handles conversion to array types, so we can convert directly.
                 // The result is guaranteed to be an array, containing one or more elements.
                 let converted_result =
-                    result.convert_to(&input_node_output_type, &expected_type.clone());
+                    result.convert_to(&input_node_output_type, &expected_type.clone(), registry);
 
                 if let NetworkResult::Array(array_data) = converted_result {
                     merged_items.extend(array_data);
@@ -888,7 +888,7 @@ impl NetworkEvaluator {
 
                 // Convert the result to the expected type
 
-                result.convert_to(&input_node_output_type, &expected_type)
+                result.convert_to(&input_node_output_type, &expected_type, registry)
             } else {
                 NetworkResult::None // Nothing is connected
             }

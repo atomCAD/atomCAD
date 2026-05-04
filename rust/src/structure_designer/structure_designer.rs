@@ -1650,7 +1650,11 @@ impl StructureDesigner {
                 // Find first compatible input parameter on target node
                 let mut compatible_param_index: Option<usize> = None;
                 for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
-                    if DataType::can_be_converted_to(&source_output_type, &param.data_type) {
+                    if DataType::can_be_converted_to(
+                        &source_output_type,
+                        &param.data_type,
+                        &self.node_type_registry,
+                    ) {
                         compatible_param_index = Some(param_idx);
                         break;
                     }
@@ -1673,7 +1677,11 @@ impl StructureDesigner {
                     .node_type_registry
                     .get_node_param_data_type(source_node, source_pin_index as usize);
 
-                if DataType::can_be_converted_to(&target_output_type, &source_param_type) {
+                if DataType::can_be_converted_to(
+                    &target_output_type,
+                    &source_param_type,
+                    &self.node_type_registry,
+                ) {
                     // Connect target output (pin 0) to source input
                     Some((target_node_id, 0, source_node_id, source_pin_index as usize))
                 } else {
@@ -1752,7 +1760,11 @@ impl StructureDesigner {
             };
 
             for (param_idx, param) in target_node_type.parameters.iter().enumerate() {
-                if DataType::can_be_converted_to(&source_output_type, &param.data_type) {
+                if DataType::can_be_converted_to(
+                    &source_output_type,
+                    &param.data_type,
+                    &self.node_type_registry,
+                ) {
                     compatible_pins.push((
                         param_idx as i32,
                         param.name.clone(),
@@ -1775,7 +1787,11 @@ impl StructureDesigner {
                 .node_type_registry
                 .get_node_param_data_type(source_node, source_pin_index as usize);
 
-            if DataType::can_be_converted_to(&target_output_type, &source_param_type) {
+            if DataType::can_be_converted_to(
+                &target_output_type,
+                &source_param_type,
+                &self.node_type_registry,
+            ) {
                 // Output pin is always index 0 with name "output"
                 compatible_pins.push((0, "output".to_string(), target_output_type.to_string()));
             }

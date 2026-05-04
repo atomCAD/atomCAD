@@ -1,4 +1,5 @@
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
 /// All phase types plus a non-phase control (Float). Used to construct the
 /// conversion matrix for the phase split.
@@ -36,10 +37,11 @@ fn expected_conversion(src: &DataType, dst: &DataType) -> bool {
 
 #[test]
 fn phase_conversion_matrix_matches_design_doc() {
+    let registry = NodeTypeRegistry::new();
     let types = phase_grid_types();
     for src in &types {
         for dst in &types {
-            let actual = DataType::can_be_converted_to(src, dst);
+            let actual = DataType::can_be_converted_to(src, dst, &registry);
             let expected = expected_conversion(src, dst);
             assert_eq!(
                 actual, expected,
@@ -52,6 +54,7 @@ fn phase_conversion_matrix_matches_design_doc() {
 
 #[test]
 fn no_abstract_to_concrete_conversions() {
+    let registry = NodeTypeRegistry::new();
     let abstracts = [
         DataType::HasAtoms,
         DataType::HasStructure,
@@ -61,7 +64,7 @@ fn no_abstract_to_concrete_conversions() {
     for src in &abstracts {
         for dst in &concretes {
             assert!(
-                !DataType::can_be_converted_to(src, dst),
+                !DataType::can_be_converted_to(src, dst, &registry),
                 "abstract {:?} should not convert to concrete {:?}",
                 src,
                 dst
@@ -72,6 +75,7 @@ fn no_abstract_to_concrete_conversions() {
 
 #[test]
 fn no_cross_abstract_conversions() {
+    let registry = NodeTypeRegistry::new();
     let abstracts = [
         DataType::HasAtoms,
         DataType::HasStructure,
@@ -83,7 +87,7 @@ fn no_cross_abstract_conversions() {
                 continue;
             }
             assert!(
-                !DataType::can_be_converted_to(src, dst),
+                !DataType::can_be_converted_to(src, dst, &registry),
                 "cross-abstract conversion {:?} -> {:?} must be rejected",
                 src,
                 dst
@@ -111,6 +115,7 @@ fn is_abstract_truth_table() {
 
 #[test]
 fn array_elementwise_conversion_follows_element_rule() {
+    let registry = NodeTypeRegistry::new();
     // Each permitted concrete -> abstract upcast must also be permitted
     // when both sides are wrapped in a single Array layer.
     let pairs = [
@@ -127,7 +132,7 @@ fn array_elementwise_conversion_follows_element_rule() {
         let arr_src = DataType::Array(Box::new(src.clone()));
         let arr_dst = DataType::Array(Box::new(dst.clone()));
         assert!(
-            DataType::can_be_converted_to(&arr_src, &arr_dst),
+            DataType::can_be_converted_to(&arr_src, &arr_dst, &registry),
             "[{:?}] -> [{:?}] should be permitted because {:?} -> {:?} is",
             src,
             dst,
@@ -139,15 +144,24 @@ fn array_elementwise_conversion_follows_element_rule() {
     // Nested arrays: [[Molecule]] -> [[HasAtoms]] should also work.
     let nested_src = DataType::Array(Box::new(DataType::Array(Box::new(DataType::Molecule))));
     let nested_dst = DataType::Array(Box::new(DataType::Array(Box::new(DataType::HasAtoms))));
-    assert!(DataType::can_be_converted_to(&nested_src, &nested_dst));
+    assert!(DataType::can_be_converted_to(
+        &nested_src,
+        &nested_dst,
+        &registry
+    ));
 }
 
 #[test]
 fn array_elementwise_conversion_rejects_forbidden_element_pairs() {
+    let registry = NodeTypeRegistry::new();
     // Abstract -> concrete must not be rescued by array wrapping.
     let arr_abstract = DataType::Array(Box::new(DataType::HasAtoms));
     let arr_concrete = DataType::Array(Box::new(DataType::Crystal));
-    assert!(!DataType::can_be_converted_to(&arr_abstract, &arr_concrete));
+    assert!(!DataType::can_be_converted_to(
+        &arr_abstract,
+        &arr_concrete,
+        &registry
+    ));
 
     // Cross-abstract upcasts are forbidden, and array wrapping must not
     // rescue them either.
@@ -155,14 +169,16 @@ fn array_elementwise_conversion_rejects_forbidden_element_pairs() {
     let arr_has_structure = DataType::Array(Box::new(DataType::HasStructure));
     assert!(!DataType::can_be_converted_to(
         &arr_has_atoms,
-        &arr_has_structure
+        &arr_has_structure,
+        &registry
     ));
 
     // An array cannot be narrowed to a single element.
     let arr_molecule = DataType::Array(Box::new(DataType::Molecule));
     assert!(!DataType::can_be_converted_to(
         &arr_molecule,
-        &DataType::HasAtoms
+        &DataType::HasAtoms,
+        &registry
     ));
 }
 

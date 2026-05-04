@@ -230,12 +230,11 @@ impl NodeTypeRegistry {
             .chain(custom_iter)
             .filter(|(node_type, _)| {
                 if dragging_from_output {
-                    node_type
-                        .parameters
-                        .iter()
-                        .any(|param| DataType::can_be_converted_to(source_type, &param.data_type))
+                    node_type.parameters.iter().any(|param| {
+                        DataType::can_be_converted_to(source_type, &param.data_type, self)
+                    })
                 } else {
-                    DataType::can_be_converted_to(node_type.output_type(), source_type)
+                    DataType::can_be_converted_to(node_type.output_type(), source_type, self)
                 }
             })
             .map(|(node_type, category)| APINodeTypeView {

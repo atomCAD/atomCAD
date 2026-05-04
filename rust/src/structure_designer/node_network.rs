@@ -564,7 +564,7 @@ impl NodeNetwork {
         };
 
         // Check if the data types are compatible using conversion rules
-        DataType::can_be_converted_to(&source_output_type, &dest_param_type)
+        DataType::can_be_converted_to(&source_output_type, &dest_param_type, node_type_registry)
     }
 
     pub fn connect_nodes(

@@ -234,17 +234,18 @@ fn test_array_literal_connection_to_array_consumer() {
     // Validate that the output type Array[IVec3] from a zero-param expr literal
     // would be accepted by a downstream Array[IVec3] input pin via DataType
     // conversion rules.
+    let registry = NodeTypeRegistry::new();
     let source_type = DataType::Array(Box::new(DataType::IVec3));
     let dest_type = DataType::Array(Box::new(DataType::IVec3));
     assert!(
-        DataType::can_be_converted_to(&source_type, &dest_type),
+        DataType::can_be_converted_to(&source_type, &dest_type, &registry),
         "Array[IVec3] -> Array[IVec3] should be a permitted connection"
     );
 
     // And that a permitted element-wise upcast also flows: Array[IVec3] -> Array[Vec3].
     let promoted = DataType::Array(Box::new(DataType::Vec3));
     assert!(
-        DataType::can_be_converted_to(&source_type, &promoted),
+        DataType::can_be_converted_to(&source_type, &promoted, &registry),
         "Array[IVec3] should convert element-wise to Array[Vec3]"
     );
 }

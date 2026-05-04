@@ -487,6 +487,12 @@ mod element_type_eligibility_tests {
                     output_type: Box::new(DataType::Int),
                 },
             ),
+            DataType::Record(
+                rust_lib_flutter_cad::structure_designer::data_type::RecordType::anonymous(vec![(
+                    "x".to_string(),
+                    DataType::Int,
+                )]),
+            ),
         ];
 
         // Ensure every DataType variant is represented in `variants`. The
@@ -516,7 +522,8 @@ mod element_type_eligibility_tests {
                 | DataType::Motif
                 | DataType::Structure
                 | DataType::Array(_)
-                | DataType::Function(_) => {}
+                | DataType::Function(_)
+                | DataType::Record(_) => {}
             }
         }
 
@@ -534,13 +541,17 @@ mod element_type_eligibility_tests {
         };
 
         // For each name-bearing variant, check that `parse_concrete_type_name`
-        // matches the documented policy. The Array and Function variants are
-        // not directly produced by the type-name path (`parse_concrete_type_name`
-        // is only called on a single identifier), so we skip them here — the
-        // recursive `[T]` and the function rejection are exercised by other
-        // tests.
+        // matches the documented policy. The Array, Function, and Record
+        // variants are not directly produced by the type-name path
+        // (`parse_concrete_type_name` is only called on a single identifier),
+        // so we skip them here — the recursive `[T]`, function rejection, and
+        // (Phase 7) inline `{...}` record-literal type expressions are
+        // exercised by other tests.
         for v in &variants {
-            if matches!(v, DataType::Array(_) | DataType::Function(_)) {
+            if matches!(
+                v,
+                DataType::Array(_) | DataType::Function(_) | DataType::Record(_)
+            ) {
                 continue;
             }
             let name = format!("{}", v);

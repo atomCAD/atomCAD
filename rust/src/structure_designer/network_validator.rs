@@ -470,7 +470,11 @@ fn validate_wires(
                 };
                 let dest_data_type =
                     node_type_registry.get_node_param_data_type(dest_node, arg_index);
-                if !DataType::can_be_converted_to(&source_data_type, &dest_data_type) {
+                if !DataType::can_be_converted_to(
+                    &source_data_type,
+                    &dest_data_type,
+                    node_type_registry,
+                ) {
                     network.validation_errors.push(ValidationError::new(
                         format!(
                             "Data type mismatch: input expects {:?}, but source outputs {:?}",
