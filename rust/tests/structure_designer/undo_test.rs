@@ -51,6 +51,7 @@ fn snapshot_all_networks(registry: &mut NodeTypeRegistry) -> Value {
         version: 2,
         direct_editing_mode: false,
         cli_access_rules: std::collections::HashMap::new(),
+        record_type_defs: Vec::new(),
     };
 
     let mut value = serde_json::to_value(&container).unwrap();

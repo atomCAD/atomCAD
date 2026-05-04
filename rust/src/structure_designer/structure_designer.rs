@@ -1069,6 +1069,148 @@ impl StructureDesigner {
         Ok(())
     }
 
+    // ---------------------------------------------------------------
+    // Record type defs (see doc/design_record_types.md, Phase 2)
+    // ---------------------------------------------------------------
+
+    /// Add a new record type def. Validates name uniqueness, distinct field
+    /// names, and acyclic references. Pushes an undo command on success.
+    /// Marks the design dirty and triggers a full refresh so the active
+    /// network's validation re-runs against the new registry contents.
+    pub fn add_record_type_def(
+        &mut self,
+        def: super::node_type_registry::RecordTypeDef,
+    ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        let def_clone = def.clone();
+        self.node_type_registry.add_record_type_def(def)?;
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        self.push_command(
+            super::undo::commands::add_record_type_def::AddRecordTypeDefCommand { def: def_clone },
+        );
+        Ok(())
+    }
+
+    /// Delete a record type def. Snapshots every network beforehand so undo
+    /// can restore wires that get disconnected by the post-delete repair pass.
+    /// Errors out if the def doesn't exist.
+    pub fn delete_record_type_def(
+        &mut self,
+        name: &str,
+    ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        if !self.node_type_registry.record_type_defs.contains_key(name) {
+            return Err(super::node_type_registry::RecordTypeDefError::NotFound(
+                name.to_string(),
+            ));
+        }
+
+        // Snapshot every network before delete (the conservative choice — any
+        // network may carry a `Record(Named(name))` reference at any depth).
+        let snapshots =
+            super::undo::commands::delete_record_type_def::snapshot_all_networks_for_record_def_change(
+                &mut self.node_type_registry,
+            );
+
+        // Remove the def, then run repair on every network so wires whose
+        // pin-types now resolve via a dangling reference are disconnected.
+        let def = self
+            .node_type_registry
+            .delete_record_type_def(name)
+            .expect("contains_key checked above");
+
+        let names: Vec<String> = self.node_type_registry.node_networks.keys().cloned().collect();
+        for n in names {
+            if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
+                self.node_type_registry.repair_node_network(&mut network);
+                self.node_type_registry.node_networks.insert(n, network);
+            }
+        }
+
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        self.push_command(
+            super::undo::commands::delete_record_type_def::DeleteRecordTypeDefCommand {
+                def,
+                affected_network_snapshots: snapshots,
+            },
+        );
+
+        Ok(())
+    }
+
+    /// Rename a record type def. The registry-level call validates uniqueness
+    /// and walks every embedded `Named(old)` reference. No wires are
+    /// disconnected by a rename — every reference resolves to the same
+    /// schema, just under a new name — so no per-network snapshot is needed.
+    pub fn rename_record_type_def(
+        &mut self,
+        old_name: &str,
+        new_name: &str,
+    ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        self.node_type_registry
+            .rename_record_type_def(old_name, new_name)?;
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        self.push_command(
+            super::undo::commands::rename_record_type_def::RenameRecordTypeDefCommand {
+                old_name: old_name.to_string(),
+                new_name: new_name.to_string(),
+            },
+        );
+        Ok(())
+    }
+
+    /// Replace the field list of an existing record type def. Snapshots every
+    /// network beforehand and re-runs repair afterward, just like delete.
+    pub fn update_record_type_def(
+        &mut self,
+        name: &str,
+        new_fields: Vec<(String, DataType)>,
+    ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        // Capture old fields for undo *before* the update overwrites them.
+        let old_fields = match self.node_type_registry.record_type_defs.get(name) {
+            Some(def) => def.fields.clone(),
+            None => {
+                return Err(super::node_type_registry::RecordTypeDefError::NotFound(
+                    name.to_string(),
+                ));
+            }
+        };
+
+        // Snapshot every network before the update — wires whose source type
+        // no longer satisfies a retyped field will be disconnected by the
+        // repair pass below.
+        let snapshots =
+            super::undo::commands::delete_record_type_def::snapshot_all_networks_for_record_def_change(
+                &mut self.node_type_registry,
+            );
+
+        let new_fields_clone = new_fields.clone();
+        self.node_type_registry
+            .update_record_type_def(name, new_fields)?;
+
+        let names: Vec<String> = self.node_type_registry.node_networks.keys().cloned().collect();
+        for n in names {
+            if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
+                self.node_type_registry.repair_node_network(&mut network);
+                self.node_type_registry.node_networks.insert(n, network);
+            }
+        }
+
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        self.push_command(
+            super::undo::commands::update_record_type_def::UpdateRecordTypeDefCommand {
+                name: name.to_string(),
+                old_fields,
+                new_fields: new_fields_clone,
+                network_snapshots_before: snapshots,
+            },
+        );
+
+        Ok(())
+    }
+
     pub fn add_node(&mut self, node_type_name: &str, position: DVec2) -> u64 {
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {

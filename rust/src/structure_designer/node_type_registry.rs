@@ -79,15 +79,55 @@ use crate::api::structure_designer::structure_designer_api_types::APINetworkWith
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{
+    DataType, RecordType, walk_data_type_record_names_mut,
+};
 use crate::structure_designer::node_network::Argument;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use thiserror::Error;
+
+/// Top-level definition of a named record type. Lives in
+/// `NodeTypeRegistry::record_type_defs` alongside `node_networks` (single user-type
+/// namespace). Field order is **authored** — driven by the schema editor and used
+/// for `record_construct` / `record_destructure` / `product` pin layouts. The
+/// canonical (sorted) view used for subtyping is derived on demand by
+/// `RecordType::resolve_fields`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RecordTypeDef {
+    pub name: String,
+    /// Authored field order. Names are unique within this list (enforced by the
+    /// edit-time validator). Field types may reference other record defs by
+    /// name; the dependency graph must be acyclic (also enforced).
+    pub fields: Vec<(String, DataType)>,
+}
+
+/// Reasons an `add_record_type_def` / `update_record_type_def` /
+/// `rename_record_type_def` operation can fail. The carried `String` typically
+/// names the offending def or field for display in UI errors.
+#[derive(Debug, Clone, Error, PartialEq)]
+pub enum RecordTypeDefError {
+    #[error("name '{0}' is already taken by a record type def, node network, or built-in type")]
+    NameCollision(String),
+    #[error("record type def '{0}' does not exist")]
+    NotFound(String),
+    #[error("duplicate field name '{1}' in record type def '{0}'")]
+    DuplicateField(String, String),
+    #[error("cycle introduced: {description}")]
+    CycleDetected { description: String },
+    #[error("name '{0}' is invalid: {1}")]
+    InvalidName(String, String),
+}
 
 pub struct NodeTypeRegistry {
     pub built_in_node_types: HashMap<String, NodeType>,
     pub node_networks: HashMap<String, NodeNetwork>,
+    /// Named record type defs. Shares the user-type namespace with `node_networks`
+    /// (collisions are rejected at add/rename time). See
+    /// `doc/design_record_types.md`.
+    pub record_type_defs: HashMap<String, RecordTypeDef>,
     pub design_file_name: Option<String>,
 }
 
@@ -113,6 +153,7 @@ impl NodeTypeRegistry {
         let mut ret = Self {
             built_in_node_types: HashMap::new(),
             node_networks: HashMap::new(),
+            record_type_defs: HashMap::new(),
             design_file_name: None,
         };
 
@@ -642,6 +683,133 @@ impl NodeTypeRegistry {
             .insert(node_network.node_type.name.clone(), node_network);
     }
 
+    /// True iff `name` is in use by a record type def, a custom node network,
+    /// or a built-in node type. Used as the namespace-collision check before
+    /// adding or renaming a user-defined type.
+    pub fn name_is_taken(&self, name: &str) -> bool {
+        self.record_type_defs.contains_key(name)
+            || self.node_networks.contains_key(name)
+            || self.built_in_node_types.contains_key(name)
+    }
+
+    /// Adds a new record type def. Validates: name not already taken, field
+    /// names within the def are distinct, and the def's transitive references
+    /// do not form a cycle. On success, the def is inserted into
+    /// `record_type_defs`.
+    ///
+    /// Note: this does not validate that referenced record types exist —
+    /// dangling references resolve to `None` at use time and are surfaced by
+    /// network validation.
+    pub fn add_record_type_def(&mut self, def: RecordTypeDef) -> Result<(), RecordTypeDefError> {
+        if self.name_is_taken(&def.name) {
+            return Err(RecordTypeDefError::NameCollision(def.name.clone()));
+        }
+        validate_distinct_fields(&def.name, &def.fields)?;
+        self.check_no_cycle(&def.name, &def.fields)?;
+        self.record_type_defs.insert(def.name.clone(), def);
+        Ok(())
+    }
+
+    /// Removes a record type def, returning the removed def. Every
+    /// `RecordType::Named(name)` reference now resolves to `None` (dangling)
+    /// and is reported as a validation error wherever it appears. Callers that
+    /// own a `StructureDesigner` should also call `repair_node_network` on
+    /// every affected network.
+    pub fn delete_record_type_def(&mut self, name: &str) -> Option<RecordTypeDef> {
+        self.record_type_defs.remove(name)
+    }
+
+    /// Renames a record type def in place. Updates the registry key, every
+    /// `DataType` reference (parameter types, pin types, return-node output
+    /// types, and DataType fields embedded in node data), and every bare-name
+    /// schema property on `record_construct` / `record_destructure` / `product`
+    /// nodes (the latter is a no-op until those nodes ship in Phase 3 — the
+    /// walker is wired up early so the rename pass is complete).
+    pub fn rename_record_type_def(
+        &mut self,
+        old_name: &str,
+        new_name: &str,
+    ) -> Result<(), RecordTypeDefError> {
+        if old_name == new_name {
+            return Ok(());
+        }
+        if !self.record_type_defs.contains_key(old_name) {
+            return Err(RecordTypeDefError::NotFound(old_name.to_string()));
+        }
+        if self.name_is_taken(new_name) {
+            return Err(RecordTypeDefError::NameCollision(new_name.to_string()));
+        }
+        // Move the def under the new key, updating its `name` field.
+        let mut def = self.record_type_defs.remove(old_name).unwrap();
+        def.name = new_name.to_string();
+        self.record_type_defs.insert(new_name.to_string(), def);
+
+        // Walk every DataType reachable from the registry and rewrite
+        // `RecordType::Named(old_name)` to `RecordType::Named(new_name)`.
+        rewrite_record_name_in_registry(self, old_name, new_name);
+
+        Ok(())
+    }
+
+    /// Replaces the field list of an existing record type def. Validates field
+    /// names are distinct and that the new field list does not introduce a
+    /// cycle (the rest of the registry plus the new fields must remain
+    /// acyclic). Authored field order is preserved.
+    ///
+    /// Field-level edits to a def need no `DataType` rewrite — every
+    /// `Named(name)` reference automatically sees the new schema. Callers should
+    /// run `repair_node_network` on every affected network so
+    /// `record_construct` / `record_destructure` / `product` pin layouts
+    /// re-derive and now-incompatible wires are disconnected.
+    pub fn update_record_type_def(
+        &mut self,
+        name: &str,
+        new_fields: Vec<(String, DataType)>,
+    ) -> Result<(), RecordTypeDefError> {
+        if !self.record_type_defs.contains_key(name) {
+            return Err(RecordTypeDefError::NotFound(name.to_string()));
+        }
+        validate_distinct_fields(name, &new_fields)?;
+        self.check_no_cycle(name, &new_fields)?;
+        if let Some(def) = self.record_type_defs.get_mut(name) {
+            def.fields = new_fields;
+        }
+        Ok(())
+    }
+
+    /// Returns true when `def_name` would, under the candidate `fields`, refer
+    /// back to itself directly or via any chain of named record references.
+    /// Visits other record defs through the current registry (excluding
+    /// `def_name`'s old fields, which are about to be replaced).
+    fn check_no_cycle(
+        &self,
+        def_name: &str,
+        fields: &[(String, DataType)],
+    ) -> Result<(), RecordTypeDefError> {
+        // Treat the def-being-validated as if its fields were `fields` (not
+        // whatever is currently in the registry — this also handles the
+        // add-new-def case where the registry has no entry yet).
+        // DFS from each direct dependency, marking visited names. If we ever
+        // reach `def_name`, report a cycle with the path.
+        let mut path: Vec<String> = Vec::new();
+        let mut visited: HashSet<String> = HashSet::new();
+        let direct_refs = collect_named_record_refs(fields);
+        for r in direct_refs {
+            path.clear();
+            visited.clear();
+            path.push(r.clone());
+            if dfs_cycle_check(self, def_name, &r, &mut path, &mut visited) {
+                let description = if path.is_empty() {
+                    format!("'{}' references itself", def_name)
+                } else {
+                    format!("'{}' references itself via {}", def_name, path.join(" -> "))
+                };
+                return Err(RecordTypeDefError::CycleDetected { description });
+            }
+        }
+        Ok(())
+    }
+
     fn add_node_type(&mut self, node_type: NodeType) {
         self.built_in_node_types
             .insert(node_type.name.clone(), node_type);
@@ -866,4 +1034,228 @@ impl NodeTypeRegistry {
         // Add to result AFTER visiting all dependencies (post-order)
         result.push(network_name.to_string());
     }
+}
+
+// ---------------------------------------------------------------------------
+// Record type def helpers (free functions, not methods on NodeTypeRegistry).
+// See `doc/design_record_types.md` Phase 2 for the design.
+// ---------------------------------------------------------------------------
+
+/// Validates that field names within `fields` are distinct. Returns
+/// `DuplicateField` on the first repeated name.
+fn validate_distinct_fields(
+    def_name: &str,
+    fields: &[(String, DataType)],
+) -> Result<(), RecordTypeDefError> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    for (name, _) in fields {
+        if !seen.insert(name.as_str()) {
+            return Err(RecordTypeDefError::DuplicateField(
+                def_name.to_string(),
+                name.clone(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Collects every `RecordType::Named(N)` reference reachable from a field
+/// list. Recurses through `Array`, `Function`, and nested `Record::Anonymous`
+/// shapes; `Record::Named` references are leaves (the def itself is followed
+/// by `dfs_cycle_check`).
+fn collect_named_record_refs(fields: &[(String, DataType)]) -> Vec<String> {
+    let mut refs = Vec::new();
+    for (_, ty) in fields {
+        collect_named_record_refs_in_type(ty, &mut refs);
+    }
+    refs
+}
+
+fn collect_named_record_refs_in_type(t: &DataType, out: &mut Vec<String>) {
+    match t {
+        DataType::Array(inner) => collect_named_record_refs_in_type(inner, out),
+        DataType::Function(func) => {
+            for p in &func.parameter_types {
+                collect_named_record_refs_in_type(p, out);
+            }
+            collect_named_record_refs_in_type(&func.output_type, out);
+        }
+        DataType::Record(RecordType::Named(name)) => out.push(name.clone()),
+        DataType::Record(RecordType::Anonymous(fs)) => {
+            for (_, ty) in fs {
+                collect_named_record_refs_in_type(ty, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Returns `true` if a DFS from `current` (a referenced record name) revisits
+/// `def_name` (the def being validated). `path` accumulates the chain of names
+/// for error reporting.
+fn dfs_cycle_check(
+    registry: &NodeTypeRegistry,
+    def_name: &str,
+    current: &str,
+    path: &mut Vec<String>,
+    visited: &mut HashSet<String>,
+) -> bool {
+    if current == def_name {
+        return true;
+    }
+    if !visited.insert(current.to_string()) {
+        return false;
+    }
+    let Some(def) = registry.record_type_defs.get(current) else {
+        // Dangling reference — ignore for cycle detection. Validation will
+        // surface dangling refs separately.
+        return false;
+    };
+    for r in collect_named_record_refs(&def.fields) {
+        path.push(r.clone());
+        if dfs_cycle_check(registry, def_name, &r, path, visited) {
+            return true;
+        }
+        path.pop();
+    }
+    false
+}
+
+/// Walks every `DataType` reachable through the registry — every network's
+/// node-type signature (parameters, output pins), every node's per-data-type
+/// field, and every existing record def's field types — and rewrites
+/// `RecordType::Named(old_name)` to `RecordType::Named(new_name)`.
+///
+/// The walker is feature-complete the moment Phase 3 lands its
+/// `record_construct` / `record_destructure` / `product` nodes (which carry a
+/// bare-name `schema` / `target` `String` property). Adding the corresponding
+/// downcasts to those node-data types is the only change required there.
+fn rewrite_record_name_in_registry(
+    registry: &mut NodeTypeRegistry,
+    old_name: &str,
+    new_name: &str,
+) {
+    use crate::structure_designer::nodes::array_append::ArrayAppendData;
+    use crate::structure_designer::nodes::array_at::ArrayAtData;
+    use crate::structure_designer::nodes::array_concat::ArrayConcatData;
+    use crate::structure_designer::nodes::array_len::ArrayLenData;
+    use crate::structure_designer::nodes::expr::ExprData;
+    use crate::structure_designer::nodes::filter::FilterData;
+    use crate::structure_designer::nodes::fold::FoldData;
+    use crate::structure_designer::nodes::map::MapData;
+    use crate::structure_designer::nodes::parameter::ParameterData;
+    use crate::structure_designer::nodes::sequence::SequenceData;
+
+    let mut rename = |name: &mut String| {
+        if name == old_name {
+            *name = new_name.to_string();
+        }
+    };
+
+    // Walk every record def's fields too — `Box = { p: Record(Old) }` should
+    // see the rename. The def being renamed itself is updated by the caller.
+    for def in registry.record_type_defs.values_mut() {
+        for (_, ty) in def.fields.iter_mut() {
+            walk_data_type_record_names_mut(ty, &mut rename);
+        }
+    }
+
+    for network in registry.node_networks.values_mut() {
+        // Custom-network signature: parameter types and output pin types.
+        for param in network.node_type.parameters.iter_mut() {
+            walk_data_type_record_names_mut(&mut param.data_type, &mut rename);
+        }
+        for pin in network.node_type.output_pins.iter_mut() {
+            if let crate::structure_designer::node_type::PinOutputType::Fixed(t) =
+                &mut pin.data_type
+            {
+                walk_data_type_record_names_mut(t, &mut rename);
+            }
+        }
+
+        for node in network.nodes.values_mut() {
+            // Per-node data containers that embed a DataType.
+            let data: &mut dyn crate::structure_designer::node_data::NodeData = node.data.as_mut();
+            if let Some(d) = data.as_any_mut().downcast_mut::<ParameterData>() {
+                walk_data_type_record_names_mut(&mut d.data_type, &mut rename);
+                // Refresh the cached display string so save round-trips agree
+                // with the in-memory type.
+                if d.data_type_str.is_some() {
+                    d.data_type_str = Some(d.data_type.to_string());
+                }
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ExprData>() {
+                for p in d.parameters.iter_mut() {
+                    walk_data_type_record_names_mut(&mut p.data_type, &mut rename);
+                    if p.data_type_str.is_some() {
+                        p.data_type_str = Some(p.data_type.to_string());
+                    }
+                }
+                if let Some(out) = d.output_type.as_mut() {
+                    walk_data_type_record_names_mut(out, &mut rename);
+                }
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<MapData>() {
+                walk_data_type_record_names_mut(&mut d.input_type, &mut rename);
+                walk_data_type_record_names_mut(&mut d.output_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<SequenceData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<FilterData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<FoldData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+                walk_data_type_record_names_mut(&mut d.accumulator_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAtData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAppendData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayConcatData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayLenData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+            }
+
+            // Cached `custom_node_type` is regenerated on next type-resolution
+            // call from the (now-renamed) inputs; clear it defensively so any
+            // stale `Named(old)` reference is not observable in the meantime.
+            node.custom_node_type = None;
+        }
+    }
+}
+
+/// Validates the entire registry: re-runs the cycle check on every record def
+/// and reports every dangling `RecordType::Named(N)` reference (i.e., names
+/// referenced from a record def's fields but missing from `record_type_defs`).
+///
+/// This is intended for on-load (post-deserialize) defense against hand-edited
+/// files that smuggle in cycles or dangling refs. It does **not** walk node
+/// networks for dangling references — those surface naturally during the
+/// per-network validation pass that runs after load.
+///
+/// Returns a list of error strings; empty when the registry is consistent.
+pub fn validate_record_type_defs(registry: &NodeTypeRegistry) -> Vec<String> {
+    let mut errors = Vec::new();
+
+    // Cycle check: walk each def's references through the rest of the
+    // registry and look for a path back to the def itself.
+    for (name, def) in &registry.record_type_defs {
+        if let Err(RecordTypeDefError::CycleDetected { description }) =
+            registry.check_no_cycle(name, &def.fields)
+        {
+            errors.push(format!("record type def {}", description));
+        }
+    }
+
+    // Dangling reference check: every `Named(N)` inside any def's fields must
+    // point at an existing record def in the registry.
+    for (name, def) in &registry.record_type_defs {
+        for r in collect_named_record_refs(&def.fields) {
+            if !registry.record_type_defs.contains_key(&r) {
+                errors.push(format!(
+                    "record type def '{}' has dangling reference to '{}'",
+                    name, r
+                ));
+            }
+        }
+    }
+
+    errors
 }

@@ -6,7 +6,7 @@ use super::super::node_network::{Argument, Node, NodeNetwork};
 use super::super::node_network::{NodeDisplayState, NodeDisplayType};
 use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
-use super::super::node_type_registry::NodeTypeRegistry;
+use super::super::node_type_registry::{NodeTypeRegistry, RecordTypeDef, validate_record_type_defs};
 use super::super::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::data_type::DataType;
 use crate::util::serialization_utils::{dvec2_serializer, dvec3_serializer};
@@ -165,6 +165,12 @@ pub struct SerializableNodeTypeRegistryNetworks {
     /// Missing field defaults to empty map (all access allowed) for backward compatibility.
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub cli_access_rules: std::collections::HashMap<String, bool>,
+    /// Named record type defs. Backward-compat: missing field deserializes to
+    /// an empty list, so pre-record `.cnnd` files load unchanged. Emitted
+    /// sorted by name on save for deterministic on-disk order. See
+    /// `doc/design_record_types.md` Phase 2.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub record_type_defs: Vec<RecordTypeDef>,
 }
 
 /// Converts a NodeType to its serializable counterpart
@@ -558,12 +564,19 @@ pub fn save_node_networks_to_file(
         serializable_networks.push((name.clone(), serializable_network));
     }
 
+    // Collect record type defs sorted by name for deterministic output across
+    // saves (HashMap iteration order is not stable).
+    let mut record_type_defs: Vec<RecordTypeDef> =
+        registry.record_type_defs.values().cloned().collect();
+    record_type_defs.sort_by(|a, b| a.name.cmp(&b.name));
+
     // Create the container with version information
     let serializable_registry = SerializableNodeTypeRegistryNetworks {
         node_networks: serializable_networks,
         version: SERIALIZATION_VERSION,
         direct_editing_mode,
         cli_access_rules: cli_access_rules.clone(),
+        record_type_defs,
     };
 
     // Serialize to JSON
@@ -656,6 +669,24 @@ pub fn load_node_networks_from_file(
     let cli_access_rules = serializable_registry.cli_access_rules;
 
     registry.node_networks.clear();
+    registry.record_type_defs.clear();
+
+    // Load record type defs first so any networks referencing them can resolve
+    // schemas during validation. Defensive: a hand-edited file can carry a
+    // duplicate name or a cycle that the in-memory editor would have rejected.
+    // We accept the data here (so the user isn't locked out of opening the
+    // file) and let the post-load validation pass surface errors.
+    for def in serializable_registry.record_type_defs {
+        registry.record_type_defs.insert(def.name.clone(), def);
+    }
+
+    // Re-run cycle + dangling-reference checks on the loaded record_type_defs
+    // (defensive against hand-edited `.cnnd` files). Errors are non-fatal at
+    // load — they're logged so the user can fix them in the schema editor and
+    // surface in network validation as the related wires get checked.
+    for err in validate_record_type_defs(registry) {
+        eprintln!("Warning: {}", err);
+    }
 
     // Track the first network name
     let mut first_network_name = String::new();

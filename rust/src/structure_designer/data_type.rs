@@ -57,6 +57,33 @@ pub enum RecordType {
     Anonymous(Vec<(String, DataType)>),
 }
 
+/// Walks `t` and applies `f` to every `RecordType::Named(_)` name string
+/// reachable through `Array`, `Function`, and nested `Record::Anonymous`
+/// shapes. Used by the rename-record-type-def pass to rewrite `Named(old)` in
+/// place. Anonymous record fields recurse so a rename inside `Box.fields[0]`
+/// updates a nested `{ p: Foo }` literal too.
+pub fn walk_data_type_record_names_mut<F>(t: &mut DataType, f: &mut F)
+where
+    F: FnMut(&mut String),
+{
+    match t {
+        DataType::Array(inner) => walk_data_type_record_names_mut(inner, f),
+        DataType::Function(func) => {
+            for p in &mut func.parameter_types {
+                walk_data_type_record_names_mut(p, f);
+            }
+            walk_data_type_record_names_mut(&mut func.output_type, f);
+        }
+        DataType::Record(RecordType::Named(name)) => f(name),
+        DataType::Record(RecordType::Anonymous(fields)) => {
+            for (_, ty) in fields {
+                walk_data_type_record_names_mut(ty, f);
+            }
+        }
+        _ => {}
+    }
+}
+
 impl RecordType {
     pub fn named(name: String) -> Self {
         RecordType::Named(name)
@@ -76,18 +103,17 @@ impl RecordType {
     /// the registry and returns its fields in canonical (sorted) order;
     /// returns `None` if the name is dangling. For `Anonymous`, returns the
     /// inline fields (already canonical).
-    ///
-    /// Phase 1 note: `record_type_defs` does not exist on `NodeTypeRegistry`
-    /// yet (added in Phase 2), so `Named` always resolves to `None` here.
-    /// Same-name `Named(n) → Named(n)` checks are short-circuited in
-    /// `can_be_converted_to` and don't go through this method.
     pub fn resolve_fields<'a>(
         &'a self,
-        _registry: &'a NodeTypeRegistry,
+        registry: &'a NodeTypeRegistry,
     ) -> Option<Cow<'a, [(String, DataType)]>> {
         match self {
             RecordType::Anonymous(fs) => Some(Cow::Borrowed(fs.as_slice())),
-            RecordType::Named(_) => None,
+            RecordType::Named(n) => registry.record_type_defs.get(n).map(|def| {
+                let mut canonical = def.fields.clone();
+                canonical.sort_by(|(a, _), (b, _)| a.cmp(b));
+                Cow::Owned(canonical)
+            }),
         }
     }
 }
@@ -140,7 +166,11 @@ impl fmt::Display for DataType {
                 }
             }
             DataType::Record(record_type) => match record_type {
-                RecordType::Named(name) => write!(f, "{}", name),
+                // Named records are emitted as `Record(Name)` so the string
+                // round-trips through `DataType::from_string` without colliding
+                // with built-in type names or with bare-identifier node
+                // references in the text-format parser.
+                RecordType::Named(name) => write!(f, "Record({})", name),
                 RecordType::Anonymous(fields) => {
                     write!(f, "{{")?;
                     for (i, (name, ty)) in fields.iter().enumerate() {
@@ -400,6 +430,28 @@ impl DataTypeParser {
         match self.peek().clone() {
             DataTypeToken::Identifier(name) => {
                 self.bump();
+                // Explicit named-record syntax: `Record(Name)`. Disambiguates
+                // record references from built-ins and from bare-identifier
+                // node references in the text-format parser. Anonymous record
+                // syntax (`{x: Int, y: Int}`) is reserved for Phase 7 (the
+                // expression language) and is not parsed here.
+                if name == "Record" {
+                    self.expect(DataTypeToken::LeftParen)?;
+                    let inner_name = match self.peek().clone() {
+                        DataTypeToken::Identifier(n) => {
+                            self.bump();
+                            n
+                        }
+                        other => {
+                            return Err(format!(
+                                "Expected record name after `Record(`, found {:?}",
+                                other
+                            ));
+                        }
+                    };
+                    self.expect(DataTypeToken::RightParen)?;
+                    return Ok(DataType::Record(RecordType::Named(inner_name)));
+                }
                 match name.as_str() {
                     "None" => Ok(DataType::None),
                     "Bool" => Ok(DataType::Bool),
@@ -423,6 +475,14 @@ impl DataTypeParser {
                     "HasFreeLinOps" => Ok(DataType::HasFreeLinOps),
                     "Motif" => Ok(DataType::Motif),
                     "Structure" => Ok(DataType::Structure),
+                    // Plain unknown identifiers are NOT silently treated as
+                    // record names: the text-format parser uses this as a
+                    // probe to distinguish "is this a built-in type" from
+                    // "is this a node reference", and a permissive fallback
+                    // would make every node-reference identifier look like a
+                    // dangling record. Record types in DataType strings must
+                    // use the explicit `Record(name)` syntax handled
+                    // separately by the parser.
                     _ => Err(format!("Unknown data type: {}", name)),
                 }
             }
