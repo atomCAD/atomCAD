@@ -57,6 +57,7 @@ use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
 use super::nodes::polygon::get_node_type as polygon_get_node_type;
+use super::nodes::product::get_node_type as product_get_node_type;
 use super::nodes::range::get_node_type as range_get_node_type;
 use super::nodes::record_construct::get_node_type as record_construct_get_node_type;
 use super::nodes::record_destructure::get_node_type as record_destructure_get_node_type;
@@ -186,6 +187,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(range_get_node_type());
         ret.add_node_type(record_construct_get_node_type());
         ret.add_node_type(record_destructure_get_node_type());
+        ret.add_node_type(product_get_node_type());
         ret.add_node_type(array_at_get_node_type());
         ret.add_node_type(array_len_get_node_type());
         ret.add_node_type(array_concat_get_node_type());
@@ -479,8 +481,9 @@ impl NodeTypeRegistry {
     /// Returns whether a custom node type was populated or not
     ///
     /// `record_type_defs` is consulted only by record-typed nodes
-    /// (`record_construct`, `record_destructure`) — every other node derives
-    /// its custom type from per-node data via `calculate_custom_node_type`.
+    /// (`record_construct`, `record_destructure`, `product`) — every other
+    /// node derives its custom type from per-node data via
+    /// `calculate_custom_node_type`.
     pub fn populate_custom_node_type_cache_with_types(
         built_in_types: &std::collections::HashMap<String, NodeType>,
         record_type_defs: &std::collections::HashMap<String, RecordTypeDef>,
@@ -520,6 +523,21 @@ impl NodeTypeRegistry {
                 let custom = crate::structure_designer::nodes::record_destructure::build_node_type_for_schema_with_defs(
                     base_node_type,
                     &schema,
+                    record_type_defs,
+                );
+                node.set_custom_node_type(Some(custom), refresh_args);
+                return true;
+            }
+        } else if node.node_type_name == "product" {
+            if let Some(data) = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<crate::structure_designer::nodes::product::ProductData>()
+            {
+                let target = data.target.clone();
+                let custom = crate::structure_designer::nodes::product::build_node_type_for_target_with_defs(
+                    base_node_type,
+                    &target,
                     record_type_defs,
                 );
                 node.set_custom_node_type(Some(custom), refresh_args);
@@ -905,7 +923,7 @@ impl NodeTypeRegistry {
         for node in network.nodes.values_mut() {
             if matches!(
                 node.node_type_name.as_str(),
-                "record_construct" | "record_destructure"
+                "record_construct" | "record_destructure" | "product"
             ) {
                 Self::populate_custom_node_type_cache_with_types(
                     &self.built_in_node_types,
@@ -1209,6 +1227,7 @@ fn rewrite_record_name_in_registry(
     use crate::structure_designer::nodes::fold::FoldData;
     use crate::structure_designer::nodes::map::MapData;
     use crate::structure_designer::nodes::parameter::ParameterData;
+    use crate::structure_designer::nodes::product::ProductData;
     use crate::structure_designer::nodes::record_construct::RecordConstructData;
     use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
     use crate::structure_designer::nodes::sequence::SequenceData;
@@ -1286,6 +1305,11 @@ fn rewrite_record_name_in_registry(
             } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordDestructureData>() {
                 if d.schema == old_name {
                     d.schema = new_name.to_string();
+                }
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ProductData>() {
+                // `target` is a bare record-def name; rewrite if it matches.
+                if d.target == old_name {
+                    d.target = new_name.to_string();
                 }
             }
 

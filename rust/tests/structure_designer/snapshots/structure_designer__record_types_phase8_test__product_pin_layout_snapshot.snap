@@ -1,0 +1,10 @@
+---
+source: tests/structure_designer/record_types_phase8_test.rs
+expression: s
+---
+inputs:
+  year: [Int]
+  month: [Int]
+  day: [Int]
+outputs:
+  result: [Record(Date)]

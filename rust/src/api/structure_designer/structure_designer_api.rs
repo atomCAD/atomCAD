@@ -146,6 +146,7 @@ use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::range::RangeData;
+use crate::structure_designer::nodes::product::ProductData;
 use crate::structure_designer::nodes::record_construct::RecordConstructData;
 use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
 use crate::structure_designer::nodes::rect::RectData;
@@ -1840,6 +1841,27 @@ pub fn get_record_destructure_data(node_id: u64) -> Option<APIRecordSchemaData> 
     }
 }
 
+/// Reads the `target` property of a `product` node. Surfaced through
+/// `APIRecordSchemaData` (the API's `schema` field carries the target's
+/// def-name, since the Flutter dropdown is the same widget).
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_product_data(node_id: u64) -> Option<APIRecordSchemaData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let data = node_data.as_any_ref().downcast_ref::<ProductData>()?;
+                Some(APIRecordSchemaData {
+                    schema: data.target.clone(),
+                })
+            },
+            None,
+        )
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_string_data(node_id: u64) -> Option<APIStringData> {
     unsafe {
@@ -3498,6 +3520,26 @@ pub fn set_record_destructure_data(node_id: u64, data: APIRecordSchemaData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, record_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Writes the `target` property of a `product` node. The API's `schema`
+/// field is mapped onto the underlying `ProductData.target`. After the
+/// write, the registry-aware cache populator rebuilds the per-field
+/// `Array[FieldType]` input pins and the `Array[Record(Named(target))]`
+/// output pin from the chosen def.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_product_data(node_id: u64, data: APIRecordSchemaData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let product_data = Box::new(ProductData {
+                target: data.schema,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, product_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

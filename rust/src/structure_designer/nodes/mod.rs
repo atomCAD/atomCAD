@@ -55,6 +55,7 @@ pub mod motif;
 pub mod motif_sub;
 pub mod parameter;
 pub mod polygon;
+pub mod product;
 pub mod range;
 pub mod record_construct;
 pub mod record_destructure;

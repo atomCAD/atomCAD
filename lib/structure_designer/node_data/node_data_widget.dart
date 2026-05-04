@@ -32,6 +32,7 @@ import 'package:flutter_cad/structure_designer/node_data/ivec2_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/vec3_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/int_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/range_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/product_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/record_construct_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/record_destructure_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/string_editor.dart';
@@ -484,6 +485,13 @@ class NodeDataWidget extends StatelessWidget {
         return RecordDestructureEditor(
           nodeId: selectedNode.id,
           data: recordDestructureData,
+          model: model,
+        );
+      case 'product':
+        final productData = getProductData(nodeId: selectedNode.id);
+        return ProductEditor(
+          nodeId: selectedNode.id,
+          data: productData,
           model: model,
         );
       case 'string':

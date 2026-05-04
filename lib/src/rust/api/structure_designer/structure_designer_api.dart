@@ -406,6 +406,14 @@ APIRecordSchemaData? getRecordDestructureData({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiGetRecordDestructureData(
             nodeId: nodeId);
 
+/// Reads the `target` property of a `product` node. Surfaced through
+/// `APIRecordSchemaData` (the API's `schema` field carries the target's
+/// def-name, since the Flutter dropdown is the same widget).
+APIRecordSchemaData? getProductData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetProductData(
+            nodeId: nodeId);
+
 APIStringData? getStringData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetStringData(nodeId: nodeId);
 
@@ -612,6 +620,17 @@ void setRecordDestructureData(
         {required BigInt nodeId, required APIRecordSchemaData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
+            nodeId: nodeId, data: data);
+
+/// Writes the `target` property of a `product` node. The API's `schema`
+/// field is mapped onto the underlying `ProductData.target`. After the
+/// write, the registry-aware cache populator rebuilds the per-field
+/// `Array[FieldType]` input pins and the `Array[Record(Named(target))]`
+/// output pin from the chosen def.
+void setProductData(
+        {required BigInt nodeId, required APIRecordSchemaData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetProductData(
             nodeId: nodeId, data: data);
 
 void setBoolData({required BigInt nodeId, required APIBoolData data}) =>
