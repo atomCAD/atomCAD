@@ -58,6 +58,8 @@ use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
 use super::nodes::polygon::get_node_type as polygon_get_node_type;
 use super::nodes::range::get_node_type as range_get_node_type;
+use super::nodes::record_construct::get_node_type as record_construct_get_node_type;
+use super::nodes::record_destructure::get_node_type as record_destructure_get_node_type;
 use super::nodes::rect::get_node_type as rect_get_node_type;
 use super::nodes::reg_poly::get_node_type as reg_poly_get_node_type;
 use super::nodes::relax::get_node_type as relax_get_node_type;
@@ -184,6 +186,8 @@ impl NodeTypeRegistry {
         ret.add_node_type(mat3_cols_get_node_type());
         ret.add_node_type(mat3_diag_get_node_type());
         ret.add_node_type(range_get_node_type());
+        ret.add_node_type(record_construct_get_node_type());
+        ret.add_node_type(record_destructure_get_node_type());
         ret.add_node_type(array_at_get_node_type());
         ret.add_node_type(array_len_get_node_type());
         ret.add_node_type(array_concat_get_node_type());
@@ -475,25 +479,67 @@ impl NodeTypeRegistry {
 
     /// Static helper function to populate custom node type cache without borrowing conflicts
     /// Returns whether a custom node type was populated or not
+    ///
+    /// `record_type_defs` is consulted only by record-typed nodes
+    /// (`record_construct`, `record_destructure`) — every other node derives
+    /// its custom type from per-node data via `calculate_custom_node_type`.
     pub fn populate_custom_node_type_cache_with_types(
         built_in_types: &std::collections::HashMap<String, NodeType>,
+        record_type_defs: &std::collections::HashMap<String, RecordTypeDef>,
         node: &mut Node,
         refresh_args: bool,
     ) -> bool {
-        if let Some(base_node_type) = built_in_types.get(&node.node_type_name) {
-            let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
-            let has_custom_node_type = custom_node_type.is_some();
-            node.set_custom_node_type(custom_node_type, refresh_args);
-            has_custom_node_type
-        } else {
-            false
+        let Some(base_node_type) = built_in_types.get(&node.node_type_name) else {
+            return false;
+        };
+
+        // Record nodes derive their custom node type from the registry (the
+        // schema's authored fields), not from per-node data alone. We use a
+        // wrapper registry here that exposes only the record_type_defs slice
+        // — `build_node_type_for_schema` reads only that field.
+        if node.node_type_name == "record_construct" {
+            if let Some(data) = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<crate::structure_designer::nodes::record_construct::RecordConstructData>()
+            {
+                let schema = data.schema.clone();
+                let custom = crate::structure_designer::nodes::record_construct::build_node_type_for_schema_with_defs(
+                    base_node_type,
+                    &schema,
+                    record_type_defs,
+                );
+                node.set_custom_node_type(Some(custom), refresh_args);
+                return true;
+            }
+        } else if node.node_type_name == "record_destructure" {
+            if let Some(data) = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<crate::structure_designer::nodes::record_destructure::RecordDestructureData>()
+            {
+                let schema = data.schema.clone();
+                let custom = crate::structure_designer::nodes::record_destructure::build_node_type_for_schema_with_defs(
+                    base_node_type,
+                    &schema,
+                    record_type_defs,
+                );
+                node.set_custom_node_type(Some(custom), refresh_args);
+                return true;
+            }
         }
+
+        let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
+        let has_custom_node_type = custom_node_type.is_some();
+        node.set_custom_node_type(custom_node_type, refresh_args);
+        has_custom_node_type
     }
 
     /// Populates the custom node type cache for nodes with dynamic node types
     pub fn populate_custom_node_type_cache(&self, node: &mut Node, refresh_args: bool) -> bool {
         Self::populate_custom_node_type_cache_with_types(
             &self.built_in_node_types,
+            &self.record_type_defs,
             node,
             refresh_args,
         )
@@ -851,6 +897,27 @@ impl NodeTypeRegistry {
     /// # Parameters
     /// * `network` - A mutable reference to the node network to repair
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
+        // Refresh record-node pin layouts FIRST so the parameter / output-pin
+        // counts derived from the registry are visible to the arg-count and
+        // wire-pin repair passes below. record_construct / record_destructure
+        // schemas resolve through `record_type_defs` rather than from per-node
+        // data, so this is the only place a schema change reaches them. Other
+        // node types' caches are unaffected (refresh_args=true preserves
+        // wires when parameters match by name/id).
+        for node in network.nodes.values_mut() {
+            if matches!(
+                node.node_type_name.as_str(),
+                "record_construct" | "record_destructure"
+            ) {
+                Self::populate_custom_node_type_cache_with_types(
+                    &self.built_in_node_types,
+                    &self.record_type_defs,
+                    node,
+                    true,
+                );
+            }
+        }
+
         let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
 
         // Build a map of node_id -> output_pin_count for wire validation
@@ -1144,6 +1211,8 @@ fn rewrite_record_name_in_registry(
     use crate::structure_designer::nodes::fold::FoldData;
     use crate::structure_designer::nodes::map::MapData;
     use crate::structure_designer::nodes::parameter::ParameterData;
+    use crate::structure_designer::nodes::record_construct::RecordConstructData;
+    use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
     use crate::structure_designer::nodes::sequence::SequenceData;
 
     let mut rename = |name: &mut String| {
@@ -1211,6 +1280,15 @@ fn rewrite_record_name_in_registry(
                 walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayLenData>() {
                 walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordConstructData>() {
+                // `schema` is a bare record-def name; rewrite if it matches.
+                if d.schema == old_name {
+                    d.schema = new_name.to_string();
+                }
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<RecordDestructureData>() {
+                if d.schema == old_name {
+                    d.schema = new_name.to_string();
+                }
             }
 
             // Cached `custom_node_type` is regenerated on next type-resolution

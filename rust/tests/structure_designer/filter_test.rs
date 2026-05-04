@@ -48,6 +48,7 @@ fn set_node_data(
     node.data = data;
     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
         &registry.built_in_node_types,
+        &registry.record_type_defs,
         node,
         true,
     );

@@ -225,3 +225,6 @@ mod record_types_phase1_test;
 
 #[path = "structure_designer/record_types_phase2_test.rs"]
 mod record_types_phase2_test;
+
+#[path = "structure_designer/record_types_phase3_test.rs"]
+mod record_types_phase3_test;

@@ -84,6 +84,7 @@ impl FunctionEvaluator {
         if let Some(main_node) = ret.node_network.nodes.get_mut(&main_node_id) {
             NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                 &registry.built_in_node_types,
+                &registry.record_type_defs,
                 main_node,
                 false,
             );

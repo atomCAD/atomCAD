@@ -1142,6 +1142,9 @@ impl StructureDesigner {
     /// and walks every embedded `Named(old)` reference. No wires are
     /// disconnected by a rename — every reference resolves to the same
     /// schema, just under a new name — so no per-network snapshot is needed.
+    /// We still run `repair_node_network` on every network so that record
+    /// nodes whose `custom_node_type` was cleared by the rename walker get
+    /// their pin layouts repopulated against the renamed def.
     pub fn rename_record_type_def(
         &mut self,
         old_name: &str,
@@ -1149,6 +1152,15 @@ impl StructureDesigner {
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
         self.node_type_registry
             .rename_record_type_def(old_name, new_name)?;
+
+        let names: Vec<String> = self.node_type_registry.node_networks.keys().cloned().collect();
+        for n in names {
+            if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
+                self.node_type_registry.repair_node_network(&mut network);
+                self.node_type_registry.node_networks.insert(n, network);
+            }
+        }
+
         self.set_dirty(true);
         self.mark_full_refresh();
         self.push_command(
@@ -1275,8 +1287,9 @@ impl StructureDesigner {
         // If we successfully added a node, initialize custom node type if needed
         if node_id != 0 {
             // Split the borrow to avoid conflicts
-            let (built_in_types, node_networks) = (
+            let (built_in_types, record_type_defs, node_networks) = (
                 &self.node_type_registry.built_in_node_types,
+                &self.node_type_registry.record_type_defs,
                 &mut self.node_type_registry.node_networks,
             );
             if let Some(network) = node_networks.get_mut(&node_network_name) {
@@ -1284,6 +1297,7 @@ impl StructureDesigner {
                     // Call the populate function with the split borrows
                     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                         built_in_types,
+                        record_type_defs,
                         node,
                         true,
                     );
@@ -2008,8 +2022,9 @@ impl StructureDesigner {
         }
 
         // Cache custom NodeType if needed after data is set
-        let (built_in_types, node_networks) = (
+        let (built_in_types, record_type_defs, node_networks) = (
             &self.node_type_registry.built_in_node_types,
+            &self.node_type_registry.record_type_defs,
             &mut self.node_type_registry.node_networks,
         );
         let custom_node_type_populated = if let Some(network) = node_networks.get_mut(&network_name)
@@ -2018,6 +2033,7 @@ impl StructureDesigner {
                 // Call the populate function with the split borrows
                 NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                     built_in_types,
+                    record_type_defs,
                     node,
                     true,
                 )
