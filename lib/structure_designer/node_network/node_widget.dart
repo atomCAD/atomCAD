@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
@@ -117,15 +119,21 @@ class PinViewWidget extends StatelessWidget {
       typeLabel = '$dataType (${concretes.join(' or ')})';
     } else {
       sliceColors = [getDataTypeColor(dataType)];
+      // For record types, expand the type label to include the resolved
+      // schema. Named records get authored-order fields (`Name { f: T, ...}`);
+      // anonymous records keep the inline canonical form (`{x: Int, y: Int}`)
+      // already produced by Rust's Display impl.
+      final expandedDataType = _expandRecordTypeLabel(dataType);
       // For polymorphic output pins, show "Concrete (declared: SameAsInput(name))"
       // and append "default — no input connected" when the concrete type came
       // from the disconnected-input fallback.
       if (declaredDataType != null && declaredDataType != dataType) {
         final fallbackNote =
             resolvedViaFallback ? ', default — no input connected' : '';
-        typeLabel = '$dataType  (declared: $declaredDataType$fallbackNote)';
+        typeLabel =
+            '$expandedDataType  (declared: $declaredDataType$fallbackNote)';
       } else {
-        typeLabel = dataType;
+        typeLabel = expandedDataType;
       }
     }
 
@@ -160,7 +168,11 @@ class PinViewWidget extends StatelessWidget {
     if (outputString != null && outputString!.isNotEmpty) {
       const maxLines = 15;
       const maxChars = 500;
-      var preview = outputString!;
+      // For named-record pins, reorder the top-level fields of the runtime
+      // value to match the def's authored field order so the preview lines
+      // up with the schema shown in the type label. Anonymous and non-record
+      // pins use the runtime string as-is.
+      var preview = _reorderRecordPreview(dataType, outputString!);
       var truncated = false;
       if (preview.length > maxChars) {
         preview = preview.substring(0, maxChars);
@@ -317,6 +329,223 @@ class _WarningTrianglePinPainter extends CustomPainter {
   bool shouldRepaint(covariant _WarningTrianglePinPainter oldDelegate) {
     return oldDelegate.color != color;
   }
+}
+
+/// Stringifies a top-level [APIDataType] for tooltip display. Named records
+/// are emitted as `Record(Name)` (no recursive expansion — one level is enough
+/// for a tooltip; users can hover the next pin to drill down). Anonymous
+/// record fields are wrapped through `Custom` and round-trip through their
+/// `customDataType` string.
+String _apiDataTypeToString(APIDataType dt) {
+  String base;
+  switch (dt.dataTypeBase) {
+    case APIDataTypeBase.none:
+      base = 'None';
+      break;
+    case APIDataTypeBase.bool:
+      base = 'Bool';
+      break;
+    case APIDataTypeBase.string:
+      base = 'String';
+      break;
+    case APIDataTypeBase.int:
+      base = 'Int';
+      break;
+    case APIDataTypeBase.float:
+      base = 'Float';
+      break;
+    case APIDataTypeBase.vec2:
+      base = 'Vec2';
+      break;
+    case APIDataTypeBase.vec3:
+      base = 'Vec3';
+      break;
+    case APIDataTypeBase.iVec2:
+      base = 'IVec2';
+      break;
+    case APIDataTypeBase.iVec3:
+      base = 'IVec3';
+      break;
+    case APIDataTypeBase.iMat3:
+      base = 'IMat3';
+      break;
+    case APIDataTypeBase.mat3:
+      base = 'Mat3';
+      break;
+    case APIDataTypeBase.latticeVecs:
+      base = 'LatticeVecs';
+      break;
+    case APIDataTypeBase.drawingPlane:
+      base = 'DrawingPlane';
+      break;
+    case APIDataTypeBase.geometry2D:
+      base = 'Geometry2D';
+      break;
+    case APIDataTypeBase.blueprint:
+      base = 'Blueprint';
+      break;
+    case APIDataTypeBase.hasAtoms:
+      base = 'HasAtoms';
+      break;
+    case APIDataTypeBase.crystal:
+      base = 'Crystal';
+      break;
+    case APIDataTypeBase.molecule:
+      base = 'Molecule';
+      break;
+    case APIDataTypeBase.hasStructure:
+      base = 'HasStructure';
+      break;
+    case APIDataTypeBase.hasFreeLinOps:
+      base = 'HasFreeLinOps';
+      break;
+    case APIDataTypeBase.motif:
+      base = 'Motif';
+      break;
+    case APIDataTypeBase.structure:
+      base = 'Structure';
+      break;
+    case APIDataTypeBase.record:
+      base = 'Record(${dt.customDataType ?? ''})';
+      break;
+    case APIDataTypeBase.custom:
+      // Custom carries the full type string in customDataType (already
+      // includes any array brackets). Return it verbatim and ignore the
+      // outer `array` flag, matching the behavior of
+      // `data_type_to_api_data_type` on the Rust side.
+      return dt.customDataType ?? 'Custom';
+  }
+  return dt.array ? '[$base]' : base;
+}
+
+/// If [typeName] denotes a record type (named, anonymous, or array-wrapped
+/// either way), returns a tooltip-friendly string with the schema expanded:
+/// `Name { f: T, ... }` in authored order for named, `{x: Int, y: Int}` in
+/// canonical order for anonymous. Non-record types are returned unchanged.
+///
+/// Dangling named references render as `Name (missing)`.
+String _expandRecordTypeLabel(String typeName) {
+  if (typeName.startsWith('[') && typeName.endsWith(']')) {
+    return '[${_expandRecordTypeLabel(typeName.substring(1, typeName.length - 1))}]';
+  }
+  if (typeName.startsWith('{')) {
+    // Anonymous — already canonical.
+    return typeName;
+  }
+  const prefix = 'Record(';
+  if (typeName.startsWith(prefix) && typeName.endsWith(')')) {
+    final name = typeName.substring(prefix.length, typeName.length - 1);
+    if (name.isEmpty) {
+      return '(no record type chosen)';
+    }
+    final def = sd_api.getRecordTypeDef(name: name);
+    if (def == null) {
+      return '$name (missing)';
+    }
+    if (def.fields.isEmpty) {
+      return '$name {}';
+    }
+    final fieldStrs = def.fields
+        .map((f) => '${f.name}: ${_apiDataTypeToString(f.dataType)}')
+        .join(', ');
+    return '$name { $fieldStrs }';
+  }
+  return typeName;
+}
+
+/// Splits a record-value string `{a: 1, b: 2, c: {x: 3, y: 4}}` into a list
+/// of `(fieldName, valueString)` pairs at the top level only. Nested
+/// `{...}`, `[...]`, and `(...)` are passed through untouched. The input
+/// must be the entire record value (the leading `{` and trailing `}` are
+/// stripped by this function).
+///
+/// Returns null if [s] is not a balanced record literal — the caller falls
+/// back to leaving the string unchanged.
+List<MapEntry<String, String>>? _splitTopLevelRecordFields(String s) {
+  if (!s.startsWith('{') || !s.endsWith('}')) {
+    return null;
+  }
+  final body = s.substring(1, s.length - 1);
+  final result = <MapEntry<String, String>>[];
+  var depth = 0;
+  var fieldStart = 0;
+  var nameEnd = -1;
+  for (var i = 0; i < body.length; i++) {
+    final c = body[i];
+    if (depth == 0) {
+      if (c == ':' && nameEnd == -1) {
+        nameEnd = i;
+        continue;
+      }
+      if (c == ',') {
+        if (nameEnd == -1) return null; // malformed
+        final name = body.substring(fieldStart, nameEnd).trim();
+        final value = body.substring(nameEnd + 1, i).trim();
+        result.add(MapEntry(name, value));
+        fieldStart = i + 1;
+        nameEnd = -1;
+        continue;
+      }
+    }
+    if (c == '{' || c == '[' || c == '(') {
+      depth++;
+    } else if (c == '}' || c == ']' || c == ')') {
+      depth--;
+      if (depth < 0) return null;
+    }
+  }
+  if (depth != 0) return null;
+  if (fieldStart < body.length) {
+    if (nameEnd == -1) {
+      // No `:` in the trailing segment; not a record literal, just one
+      // value (e.g. an empty record `{}` would have fieldStart >= length).
+      final tail = body.substring(fieldStart).trim();
+      if (tail.isEmpty) return result;
+      return null;
+    }
+    final name = body.substring(fieldStart, nameEnd).trim();
+    final value = body.substring(nameEnd + 1).trim();
+    result.add(MapEntry(name, value));
+  }
+  return result;
+}
+
+/// If [typeName] denotes a named-record type and [preview] is a record
+/// literal that matches that schema, returns a new preview with top-level
+/// fields reordered to authored order. Otherwise returns [preview] unchanged.
+///
+/// Only the top-level fields are reordered; nested record values keep their
+/// own (canonical) field order, since the type names that would justify
+/// reordering them are not in scope at this hover. Extras carried by
+/// pass-through width subtyping (fields on the value but not on the schema)
+/// are preserved in their original order, after the schema fields.
+String _reorderRecordPreview(String typeName, String preview) {
+  final defName = extractNamedRecordDefName(typeName);
+  if (defName == null) return preview;
+  final def = sd_api.getRecordTypeDef(name: defName);
+  if (def == null || def.fields.isEmpty) return preview;
+  final fields = _splitTopLevelRecordFields(preview);
+  if (fields == null) return preview;
+  final schemaNames = {for (final f in def.fields) f.name};
+  final valueByName = <String, String>{for (final e in fields) e.key: e.value};
+  final orderedParts = <String>[];
+  for (final f in def.fields) {
+    final v = valueByName[f.name];
+    if (v == null) {
+      // Schema field missing from the runtime value — defensive guard, not
+      // expected under pass-through. Bail out rather than emit a confusing
+      // preview.
+      return preview;
+    }
+    orderedParts.add('${f.name}: $v');
+  }
+  // Extras (width subtyping pass-through): append in the value's original
+  // field order, after the schema fields.
+  for (final e in fields) {
+    if (schemaNames.contains(e.key)) continue;
+    orderedParts.add('${e.key}: ${e.value}');
+  }
+  return '{${orderedParts.join(', ')}}';
 }
 
 class PinWidget extends StatelessWidget {

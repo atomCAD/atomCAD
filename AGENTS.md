@@ -50,7 +50,7 @@ atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enab
 ## Key Concepts
 
 - **Node Network:** The core editing paradigm. Nodes form a DAG with typed pins (input/output). Wire connections define data flow.
-- **Data Types:** `Geometry` (2D/3D shapes), `Atomic` (atoms and bonds), primitives (Float, Int, Vec3, etc.)
+- **Data Types:** `Geometry` (2D/3D shapes), `Atomic` (atoms and bonds), primitives (Float, Int, Vec3, etc.), and structurally-typed `Record`s (named or anonymous; see `doc/design_record_types.md`)
 - **Non-destructive Editing:** All edits are parametric; the node network can be modified without losing work.
 - **Crystolecule:** Atomic structures defined on crystal lattices with unit cells, motifs, and symmetry operations.
 

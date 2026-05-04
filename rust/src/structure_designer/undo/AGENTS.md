@@ -16,6 +16,8 @@ undo/
     ├── duplicate_node.rs, paste_nodes.rs
     ├── add_network.rs, delete_network.rs, rename_network.rs
     ├── text_edit_network.rs, factor_selection.rs
+    ├── add_record_type_def.rs, delete_record_type_def.rs,
+    │   rename_record_type_def.rs, update_record_type_def.rs  # Record type def lifecycle
     ├── atom_edit_mutation.rs      # Incremental diff deltas (includes flag changes)
     └── atom_edit_toggle_flag.rs   # Boolean flag toggles
 ```

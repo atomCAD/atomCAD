@@ -114,6 +114,11 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   // Function types (amber family - computational operations)
   '->': Color(0xFFFFA726), // Amber
 };
+
+// Records use a single neutral color regardless of named/anonymous so the
+// visual reflects compatibility (structural), not identity (the def name).
+// See `doc/design_record_types.md` Phase 9.
+const Color RECORD_DATA_TYPE_COLOR = Color(0xFFB0BEC5); // Neutral blue-grey
 const Color WIRE_COLOR_SELECTED = Color(0xFFD84315);
 
 /// Converts a position from logical space to screen space.
@@ -197,6 +202,35 @@ const Map<String, List<String>> ABSTRACT_TYPE_CONCRETES = {
 bool isAbstractDataType(String typeName) =>
     ABSTRACT_TYPE_CONCRETES.containsKey(typeName);
 
+/// True when the (possibly array-wrapped) type string is a record type, in
+/// either its named (`Record(Foo)`) or anonymous (`{x: Int, y: Int}`) form.
+/// Includes wrapped array types like `[Record(Foo)]` and `[{x: Int}]`.
+///
+/// Records render in a single neutral color regardless of which named def
+/// they reference: the visual encodes structural compatibility, not the
+/// identity of the def. See `doc/design_record_types.md` Phase 9.
+bool isRecordDataType(String typeName) {
+  return typeName.contains('Record(') || typeName.contains('{');
+}
+
+/// If [typeName] denotes a named record (or array of named records),
+/// returns the def name. Otherwise null. Anonymous records and non-record
+/// types both return null.
+String? extractNamedRecordDefName(String typeName) {
+  // Strip leading `[` for array-wrapped types so both `Record(Foo)` and
+  // `[Record(Foo)]` work. We don't bother with deeper nesting — record
+  // types appear at most one array level deep on pins in v1.
+  final stripped =
+      typeName.startsWith('[') && typeName.endsWith(']')
+          ? typeName.substring(1, typeName.length - 1)
+          : typeName;
+  const prefix = 'Record(';
+  if (!stripped.startsWith(prefix) || !stripped.endsWith(')')) {
+    return null;
+  }
+  return stripped.substring(prefix.length, stripped.length - 1);
+}
+
 /// Gets the appropriate color for a data type based on its name.
 ///
 /// If the type name contains '->' it's treated as a function type.
@@ -206,6 +240,12 @@ Color getDataTypeColor(String typeName) {
   // Check for function types first
   if (typeName.contains('->')) {
     return DATA_TYPE_COLORS['->']!;
+  }
+
+  // Records (named or anonymous, possibly array-wrapped) all render in
+  // the same neutral color.
+  if (isRecordDataType(typeName)) {
+    return RECORD_DATA_TYPE_COLOR;
   }
 
   // Check for exact matches and partial matches in the type name

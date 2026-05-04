@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/common/ui_common.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
-    as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/record_def_dropdown.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Property editor for `record_construct` nodes. Single property: a record
@@ -36,8 +34,11 @@ class RecordConstructEditor extends StatelessWidget {
             nodeTypeName: 'record_construct',
           ),
           const SizedBox(height: 8),
-          _RecordSchemaDropdown(
+          RecordDefDropdown(
             value: data!.schema,
+            label: 'Schema',
+            emptyHint: '— No schema chosen —',
+            model: model,
             onChanged: (newName) {
               model.setRecordConstructData(
                 nodeId,
@@ -47,59 +48,6 @@ class RecordConstructEditor extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _RecordSchemaDropdown extends StatelessWidget {
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  const _RecordSchemaDropdown({
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final names = sd_api.getRecordTypeDefNames() ?? <String>[];
-    final danglingButNotEmpty = value.isNotEmpty && !names.contains(value);
-
-    final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem<String>(
-        value: '',
-        child: Text(
-          '— No schema chosen —',
-          style: TextStyle(fontStyle: FontStyle.italic),
-        ),
-      ),
-      ...names.map(
-        (name) => DropdownMenuItem<String>(
-          value: name,
-          child: Text(name),
-        ),
-      ),
-      if (danglingButNotEmpty)
-        DropdownMenuItem<String>(
-          value: value,
-          child: Text(
-            '$value (missing)',
-            style: const TextStyle(color: Colors.red),
-          ),
-        ),
-    ];
-
-    return DropdownButtonFormField<String>(
-      value: value,
-      decoration: AppInputDecorations.standard.copyWith(
-        labelText: 'Schema',
-      ),
-      items: items,
-      onChanged: (newValue) {
-        if (newValue != null) {
-          onChanged(newValue);
-        }
-      },
     );
   }
 }

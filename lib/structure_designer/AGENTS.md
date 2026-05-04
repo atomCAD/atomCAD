@@ -14,7 +14,8 @@ structure_designer/
 ├── structure_designer.dart           # Main widget: menu bar + 3-panel layout
 ├── structure_designer_model.dart     # StructureDesignerModel: central state
 ├── structure_designer_viewport.dart  # 3D viewport with ray-cast interaction
-├── main_content_area.dart            # Resizable split: viewport + node editor
+├── main_content_area.dart            # Resizable split: viewport + (network editor | schema editor)
+├── schema_editor.dart                # Record-def field editor (active when activeRecordDefName != null)
 ├── camera_control_widget.dart        # Camera view selector (ortho/perspective)
 ├── node_display_widget.dart          # Display policy buttons (Manual/Selected/Frontier)
 ├── atomic_structure_visualization_widget.dart  # Atom/bond 3D display
@@ -22,10 +23,11 @@ structure_designer/
 ├── preferences_window.dart           # Settings dialog
 ├── factor_into_subnetwork_dialog.dart # Extract selection to subnetwork
 ├── import_cnnd_library_dialog.dart   # Import from .cnnd library
-├── namespace_utils.dart              # Network name validation
+├── identifier_validation.dart        # Field/identifier validation rules
+├── namespace_utils.dart              # User-type-name validation (networks + record defs share one namespace)
 ├── node_network/                     # Node graph editor
 ├── node_data/                        # Per-node-type property editors
-└── node_networks_list/               # Network list/tree panels
+└── node_networks_list/               # Unified user-types panel (networks + record defs)
 ```
 
 ## Key Files
@@ -96,6 +98,18 @@ When overlapping outputs are detected (within 0.1 Å), a disambiguation overlay 
 
 Design doc: `doc/design_click_to_activate_node.md`.
 
+## Record Types
+
+The user-types panel and main content area handle two kinds of user-defined types: node networks and record type defs.
+
+- **`StructureDesignerModel.activeRecordDefName: String?`** — when non-null, `MainContentArea` swaps the network editor out for `SchemaEditor` (the record-def field list editor). Activating a network clears it; activating a record def sets it.
+- **API types:** `APIDataTypeBase::Record` + `APIRecordSchemaData` carry record-typed pin info to the UI; `APIRecordTypeDef` / `APIRecordTypeDefField` carry schema definitions. Model methods: `addRecordTypeDef`, `deleteRecordTypeDef`, `renameRecordTypeDef`, `updateRecordTypeDef`, plus `setActiveRecordDefName`.
+- **Per-node editors** for `record_construct`, `record_destructure`, `product` use the shared `RecordDefDropdown` (`node_data/record_def_dropdown.dart`) — a name-only dropdown bound to the node's `schema` / `target` `String` property, with an "Edit definition…" affordance that activates the bound def and switches to the schema editor.
+- **DataTypeInput** (`lib/inputs/data_type_input.dart`) gains a Record branch that lists named record defs only. Anonymous record types exist in the type system (via `expr` literals) but are never authored from the Flutter UI.
+- The user-types panel rejects names that collide across networks, record defs, or built-ins (single namespace).
+
+Design doc: `doc/design_record_types.md`.
+
 ## Multi-Output Pin UI
 
 - **Eye icon** is per output pin, not in the title bar. Each output pin row has its own eye toggle.
@@ -120,8 +134,10 @@ Model methods: `StructureDesignerModel.beginMoveNodes()` / `endMoveNodes()`.
 
 ## node_networks_list/ Subdirectory
 
-Network management panel with:
+Unified user-types panel — lists both node networks and record type defs:
 - `node_networks_panel.dart` - Tab container (List/Tree views) + action bar
-- `node_network_list_view.dart` - Flat list with rename, validation error indicators
-- `node_network_tree_view.dart` - Hierarchical tree view
-- `node_networks_action_bar.dart` - Add/delete/navigate buttons
+- `node_network_list_view.dart` - Flat list with rename, validation error indicators; shows kind icon (network vs record def)
+- `node_network_tree_view.dart` - Hierarchical tree view (networks + record defs in one tree)
+- `node_networks_action_bar.dart` - Add/delete/navigate buttons; the "Add" action offers both "new network" and "new record def"
+
+Selecting an entry sets it active in the model — networks set `activeNetworkName`, record defs set `activeRecordDefName`. `MainContentArea` swaps the editor accordingly.

@@ -247,6 +247,27 @@ A common use is constructing an `Array[IVec3]` literal of defect positions inlin
 - `concat(a, b)` — concatenate two arrays. The result element type is the unification of the two element types under the standard promotion rules (e.g. `concat([]Int, [1,2,3])` is `[1,2,3]`; `concat([1,2], [3.5])` is `Array[Float]`). For more than two arrays, nest: `concat(a, concat(b, c))`.
 - `append(arr, elem)` — return a new array with `elem` appended at the end. The result element type is the unification of `arr`'s element type and `elem`'s type under the standard promotion rules (so `append([1,2], 3.5)` is `Array[Float]`). Chain calls to append multiple elements: `append(append([1], 2), 3)`.
 
+**Record Literals and Field Access:**
+
+The expression language can construct and read [record values](#record-types) inline.
+
+- `{name1: expr1, name2: expr2, ..., nameN: exprN}` — non-empty record literal. Field names must be distinct; trailing commas are not allowed (consistent with array literals). Each value expression is type-checked independently; the literal's type is an inline anonymous record `{name1: T1, name2: T2, ..., nameN: TN}` whose fields participate in structural subtyping like any other record type. There is no type name on the literal, so a literal flowing into a pin declared `Record(Foo)` matches by structural compatibility — the anonymous schema must be width-compatible with `Foo`'s schema (extras allowed; missing fields rejected).
+- `r.<field>` — field access on a record. If `r`'s static type is a record type, `.<field>` is resolved against that record's schema and produces the field's declared type. The receiver type disambiguates record fields from vector / matrix members: a record with a field named `x` does **not** conflict with the `Vec3.x` rule, because the parser checks the receiver type and only falls back to the vector/matrix rules when the receiver is not a record.
+- **Type expressions** in `expr` parameter type positions accept record types in two forms:
+  - A bare identifier — `Foo` — resolves first as a built-in type, then as a named record def in the project, then as an error if neither matches. So an `expr` parameter typed `Foo` (where `Foo` is a record def) accepts `Record(Foo)` values.
+  - An inline `{x: Int, y: Int}` literal in type position produces an anonymous record type. The same type-identifier scoping rule that gates `[]TypeExpr` applies: type-name identifiers are only interpreted as types in type-position contexts, so `{x: Int}` inside an element-list expression is a value literal, not a type expression.
+
+Examples:
+
+```
+{x: 1, y: 2}                        // anonymous Record({x: Int, y: Int})
+{x: 1, y: 2.0}                      // anonymous Record({x: Int, y: Float})
+{x: 1, y: 2, label: "p"}            // mixed-type record value
+{outer: {inner: 1}}.outer.inner     // nested record literal + chained access
+{x: 1, y: 2}.x + 1                  // field access in arithmetic (Int)
+[{x: 1, y: 2}, {x: 3, y: 4}]        // array of records (anonymous schema)
+```
+
 **Mathematical Functions:**
 
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
@@ -433,3 +454,83 @@ Reduces `xs` to a single value by repeatedly applying `f(acc, elem)`, starting f
 If any input is unconnected, the node produces an error (`xs input is missing` / `init input is missing` / `f input is missing`); all three inputs must be wired even when `xs` would have been empty. With everything wired, an empty `xs` returns `init` unchanged (`f` is never called). Otherwise the node walks `xs` left-to-right, replacing the accumulator with `f(acc, elem)` at each step, and returns the final accumulator value. If `f` errors on any iteration, the error propagates immediately and remaining elements are skipped.
 
 `fold` is the universal aggregator: sum, product, min, max, "all true", "any true", and chained CSG (e.g. unioning a list of blueprints) are all special cases.
+
+## Record types
+
+A **record type** bundles a fixed set of named, heterogeneously-typed fields into a single value that travels along one wire. Records are the CAD equivalent of a struct: rather than fan a small payload out into N parallel pins (or N parallel arrays), you declare the shape once and the network passes records through unchanged.
+
+Define record types from the **User Types** panel on the left. Each project keeps its named record defs alongside its custom node networks; both kinds share one namespace and show up in the same list. A new def starts with zero fields — empty record types are valid (`{}` is the top of the record subtype lattice). Use the **+ Add field** button to append a field; each field row has a name, a type, a drag-handle for reorder, and a delete button. The order you author fields in is the order pins appear on `record_construct`, `record_destructure`, and `product` nodes that reference the def.
+
+Records are **structurally subtyped** — compatibility between two record types is decided by their field shape, not by their names. A `Record(Foo)` whose schema is `{x: Int, y: Int}` is interchangeable with an inline anonymous `{x: Int, y: Int}` everywhere. They are also **width-subtyped**: a value with fields `{x, y, z}` flows freely into any pin that only declares `{x, y}`, and the extra `z` rides along at runtime untouched. Field-level subtyping accepts only *tag-only widenings* — exact equality plus the concrete-to-abstract phase upcasts (`Crystal → HasAtoms`, `Molecule → HasFreeLinOps`, …). Value-converting widenings such as `Int → Float` or `IVec3 → Vec3` are **not** applied inside record fields; insert an explicit conversion node before `record_construct` if you need one.
+
+Record-typed pins render in a single neutral color (no per-name hashing — the visual reflects structural compatibility, not the def name). Hovering a record-typed pin shows the resolved schema in the def's authored field order.
+
+Record defs may freely contain other record types as field types, but the dependency graph among defs must be acyclic. `Tree = { children: [Record(Tree)] }` is rejected; build recursive shapes by linking records via integer IDs in arrays instead.
+
+## record_construct
+
+Bundles N input values into a single record value of the target schema.
+
+**Property**
+
+- `Schema` — the name of a record type def in the project's User Types panel. The dropdown lists every existing def alphabetically; pick *Edit definition…* to jump to the schema editor for the selected def. New defs are created from the User Types panel, not from this dropdown.
+
+**Input pins**
+
+- One pin per field of the chosen schema, named after the field and typed to the field's declared type. Pins appear in the def's **authored field order** (the order shown in the schema editor) — they do not re-sort alphabetically.
+
+**Output (single pin)**
+
+- `Record(Schema)`.
+
+**Behavior**
+
+If any required field input is unconnected, the output is `None` (propagates as a missing-input). Otherwise the node assembles a record value carrying every field. Editing the schema (renaming a field, retyping one, adding or removing fields) immediately re-derives this node's pin layout; wires whose source type no longer matches the corresponding field's type are disconnected.
+
+If the `Schema` property is empty (`— No schema chosen —`) or names a deleted def, the node's output type is dangling and downstream wires are disconnected by the network's repair pass.
+
+## record_destructure
+
+Splits a record value into its constituent fields, one per output pin.
+
+**Property**
+
+- `Schema` — the name of a record type def. Same dropdown as `record_construct`, including the *Edit definition…* affordance.
+
+**Input pin**
+
+- `record: Record(Schema)`.
+
+**Output pins**
+
+- One pin per field of the chosen schema, named after the field and typed to the field's declared type. Pins appear in the def's **authored field order**.
+
+**Behavior**
+
+Reads each field by name. Because compatibility is width-subtyped, the runtime record may carry extra fields beyond the declared schema; those extras are simply not surfaced as output pins. If the input record happens to be missing a declared field (an unreachable case under pass-through, but defensive), the corresponding output pin emits `None`.
+
+## product
+
+Cartesian product of N input arrays into an `Array[Record(Target)]`. Use `product` to enumerate every combination of inputs as a structured payload — the motivating use case for record types, and the easiest path from "I have these N axes of variation" to "I have an array of records I can `map` or `filter` over."
+
+**Property**
+
+- `Target` — the name of a record type def. The target's field list drives both the input pin layout and the output element type. Same dropdown as the other record nodes, with the *Edit definition…* affordance.
+
+**Input pins**
+
+- One pin per field of the target def, named after the field and typed `Array[FieldType]`. Pins appear in the target's **authored field order**.
+
+**Output (single pin)**
+
+- `Array[Record(Target)]`.
+
+**Behavior**
+
+For `Target = { f_0: T_0, …, f_{N-1}: T_{N-1} }` and inputs `xs_0: Array[T_0], …, xs_{N-1}: Array[T_{N-1}]`, the output is the cartesian product:
+
+```
+[ {f_0: a_0, …, f_{N-1}: a_{N-1}} | a_0 in xs_0, …, a_{N-1} in xs_{N-1} ]
+```
+
+The **rightmost field varies fastest** (matches the natural reading of nested for-loops). The output cardinality is `∏ |xs_i|`; if any input array is empty, the output is empty. If any input pin is unconnected, the output is `None`.

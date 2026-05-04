@@ -13,7 +13,7 @@ JSON-based persistence for `.cnnd` project files.
 ## .cnnd File Format
 
 JSON with versioned schema (`SERIALIZATION_VERSION = 2`):
-- Top-level: array of `SerializableNodeNetwork`
+- Top-level: array of `SerializableNodeNetwork` plus `record_type_defs` (record schemas)
 - Each network: name, node_type, nodes, return_node_id, camera_settings
 - Each node: id, type_name, custom_name, position, arguments (wires), data
 - Node data is polymorphic: `node_data_saver`/`node_data_loader` fns on `NodeType`
@@ -28,6 +28,13 @@ Key entry points:
 - `Node.custom_name` assigned during migration if missing (uses type name)
 - Camera settings persisted per network (optional)
 - Version field enables forward-compatible migrations
+
+## Record Type Defs
+
+- **`record_type_defs`** (project root) — array of `{ name, fields: [{name, type}, ...] }`, fields preserved in **authored order**. Uses `#[serde(default)]`, so pre-record `.cnnd` files load with an empty registry — purely additive, no version bump, no migration code. On save, entries are emitted sorted by name for deterministic output despite `HashMap` iteration order.
+- **`DataType::Record`** serializes as a `RecordType` enum: `{"Named": "Point"}` for registry references (no schema duplication — the schema lives in `record_type_defs`) and `{"Anonymous": [...fields...]}` for inline schemas (e.g. `expr` literal types).
+- **`record_construct.schema` / `record_destructure.schema` / `product.target`** are bare-string node properties holding the def name, not embedded `RecordType` values.
+- **On-load validation:** re-runs the cycle check on the registry and flags any `Named(N)` whose `N` is missing — defensive against hand-edited files.
 
 ## Multi-Output Pin Serialization
 

@@ -12,6 +12,7 @@ Built-in node type implementations. Each file defines one node type's behavior v
 - **Phase transitions:** `materialize` (Blueprint → Crystal), `dematerialize` (Crystal → Blueprint), `exit_structure` (Crystal → Molecule), `enter_structure` (Molecule + Structure → Crystal)
 - **Atomic ops (HasAtoms-polymorphic):** `edit_atom/`, `atom_edit/` (plus `motif_edit` sibling node type defined in the same module), `atom_union`, `atom_cut`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `apply_diff`, `atom_composediff`
 - **Movement (polymorphic over abstract inputs):** `structure_move`, `structure_rot` on `HasStructure`; `free_move`, `free_rot` on `HasFreeLinOps`; `lattice_symop`. All four movement nodes use `OutputPinDefinition::single_same_as("input")` so the concrete type flows through.
+- **Records:** `record_construct` (one parameter pin per field → `Record(schema)`), `record_destructure` (multi-output, one pin per field), `product` (cartesian product of `Array[T_i]` inputs → `Array[Record(target)]`, rightmost field varies fastest). All three take a `schema` / `target` `String` property naming a `RecordTypeDef`. Pin layout follows the def's **authored** field order; emitted `NetworkResult::Record` values are stored in **canonical** (sorted-by-name) order — the conversion is local to each node. Pin layouts re-derive via `repair_node_network` when the def changes. See `doc/design_record_types.md`.
 - **I/O:** `import_xyz` (Molecule), `import_cif` (Blueprint), `export_xyz`
 - **Annotation:** `comment`
 

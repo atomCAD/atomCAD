@@ -59,8 +59,9 @@ structure_designer/
 | `EvalOutput` | `node_data.rs` | Multi-output eval result (Vec of NetworkResult) |
 | `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
-| `DataType` | `data_type.rs` | Pin type system: primitives (incl. `IMat3`/`Mat3` 3x3 matrices), `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`) |
-| `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types |
+| `DataType` | `data_type.rs` | Pin type system: primitives (incl. `IMat3`/`Mat3` 3x3 matrices), `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`), and `Record(RecordType)` where `RecordType` is either `Named(String)` (registry reference) or `Anonymous(Vec<(String, DataType)>)` (inline schema, sorted by field name) |
+| `RecordTypeDef` | `node_type_registry.rs` | User-declared named record schema. Fields are stored in **authored order** (drives pin layouts on `record_construct` / `record_destructure` / `product`); subtyping/equality canonicalize on demand |
+| `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types and `record_type_defs` (named record schemas). Networks and record defs share one user-type namespace |
 | `NetworkResult` | `evaluator/network_result.rs` | Evaluated node output value |
 
 ## Data Flow
@@ -83,6 +84,8 @@ User Action → StructureDesigner method
 - Concrete phase type → its abstract supertypes (Crystal/Molecule → HasAtoms; Blueprint/Crystal → HasStructure; Blueprint/Molecule → HasFreeLinOps). No abstract → concrete downcasts, no cross-abstract edges.
 
 Note: IVec3 does **not** auto-promote to a diagonal IMat3 — wire through an `imat3_diag` node when you want axis-aligned matrix semantics. See `doc/design_matrix_types.md` D4.
+
+Records are **structurally** typed (names don't gate compatibility) with **width + structural depth subtyping**. At leaf field positions only **tag-only widenings** (identity + concrete-to-abstract phase upcasts, factored into `is_tag_only_widening`) are accepted — value-converting widenings like `Int → Float` are rejected at field level so destructure pins can pass the runtime payload through unchanged. Subtyping requires `&NodeTypeRegistry` to resolve `Named` references; threaded through `can_be_converted_to`. See `doc/design_record_types.md`.
 
 Check `DataType::can_be_converted_to()` for the complete rules. `DataType::is_abstract()` identifies the three abstract supertypes.
 
@@ -126,6 +129,10 @@ Design doc: `doc/design_multi_output_pins.md`.
 ## Node Networks as Custom Types
 
 A `NodeNetwork` can itself become a node type usable in other networks. The `NodeTypeRegistry` manages both built-in node types and user-defined network-as-node types. Parameter nodes in a network become the custom type's input pins. The return node's full `output_pins` are propagated to the custom node type (multi-output passthrough).
+
+## Record Type Defs
+
+`RecordTypeDef`s live alongside custom networks in `NodeTypeRegistry::record_type_defs` and share one user-type namespace with networks (and built-ins). `RecordType::Named(N)` references resolve through the registry on every lookup, so field-level edits to a def are visible everywhere immediately — only renames need a `DataType` walk (see `rename_record_type_def`, modeled on `rename_node_network`). The `record_type_def` dependency graph must stay acyclic; the cycle check runs on add/update. Schema or deletion changes trigger `repair_node_network` to disconnect now-incompatible wires and refresh `record_construct` / `record_destructure` / `product` pin layouts. Design doc: `doc/design_record_types.md`.
 
 ## Change Tracking & Refresh
 

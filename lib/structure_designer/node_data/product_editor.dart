@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/common/ui_common.dart';
-import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
-    as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/record_def_dropdown.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Property editor for `product` nodes. Single property: a record type def
@@ -38,8 +36,11 @@ class ProductEditor extends StatelessWidget {
             nodeTypeName: 'product',
           ),
           const SizedBox(height: 8),
-          _RecordTargetDropdown(
+          RecordDefDropdown(
             value: data!.schema,
+            label: 'Target',
+            emptyHint: '— No target chosen —',
+            model: model,
             onChanged: (newName) {
               model.setProductData(
                 nodeId,
@@ -49,59 +50,6 @@ class ProductEditor extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _RecordTargetDropdown extends StatelessWidget {
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  const _RecordTargetDropdown({
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final names = sd_api.getRecordTypeDefNames() ?? <String>[];
-    final danglingButNotEmpty = value.isNotEmpty && !names.contains(value);
-
-    final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem<String>(
-        value: '',
-        child: Text(
-          '— No target chosen —',
-          style: TextStyle(fontStyle: FontStyle.italic),
-        ),
-      ),
-      ...names.map(
-        (name) => DropdownMenuItem<String>(
-          value: name,
-          child: Text(name),
-        ),
-      ),
-      if (danglingButNotEmpty)
-        DropdownMenuItem<String>(
-          value: value,
-          child: Text(
-            '$value (missing)',
-            style: const TextStyle(color: Colors.red),
-          ),
-        ),
-    ];
-
-    return DropdownButtonFormField<String>(
-      value: value,
-      decoration: AppInputDecorations.standard.copyWith(
-        labelText: 'Target',
-      ),
-      items: items,
-      onChanged: (newValue) {
-        if (newValue != null) {
-          onChanged(newValue);
-        }
-      },
     );
   }
 }

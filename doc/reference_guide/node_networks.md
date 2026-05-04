@@ -43,6 +43,7 @@ Supported basic data types include:
 - `Crystal` — a materialized atomic structure that *retains* its `Structure` (lattice information). Produced by carving a `Blueprint` (via `materialize`). The atoms and the optional geometry shell move together under any transform.
 - `Molecule` — a free-floating atomic structure with **no** `Structure` association. Produced by importing an XYZ file or by stripping the structure off a `Crystal` (`exit_structure`). Can be moved arbitrarily.
 - `Motif`
+- `Record(Name)` — a user-defined record type bundling a fixed set of named, heterogeneously-typed fields into a single value. Defined from the **User Types** panel and consumed by the `record_construct`, `record_destructure`, and `product` nodes — see [Record types](./nodes/math_programming.md#record-types) for details. Records are structurally subtyped (compatibility is decided by field shape, not by name) with width subtyping (extra fields ride through unchanged).
 
 ### The three phases
 
@@ -101,6 +102,7 @@ Pins are colored by their data type:
 | `Crystal`, `Molecule` | green |
 | `LatticeVecs`, `Structure`, `Motif` | teal / cyan |
 | Function types | amber |
+| Record types | neutral grey (single color regardless of def name — visual reflects structural compatibility, not identity) |
 
 Array pins use the same color as their element type and are marked with a small dot.
 

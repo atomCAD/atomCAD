@@ -9,6 +9,7 @@ Per-node-type property editor widgets. Each node type has a corresponding editor
 - `node_description_button.dart` - Shows node description tooltip
 - `network_description_editor.dart` - Editor for network-level description/summary
 - `matrix_cell.dart` - Shared `IntMatrixCell` / `FloatMatrixCell` widgets (compact numeric input + scroll-to-step) used by the 3x3 matrix editors (`imat3_*_editor.dart`, `mat3_*_editor.dart`)
+- `record_def_dropdown.dart` - Shared `RecordDefDropdown` widget: name-only dropdown of project record defs + "Edit definition…" affordance. Used by `record_construct_editor.dart`, `record_destructure_editor.dart`, `product_editor.dart` to bind their `schema` / `target` `String` properties.
 - `*_editor.dart` - One file per node type (40+ editors)
 
 ## Adding a New Node Editor

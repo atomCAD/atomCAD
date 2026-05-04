@@ -45,7 +45,8 @@ LatticeVecs(UnitCellStruct), DrawingPlane(DrawingPlane),
 Geometry2D(GeometrySummary2D), Blueprint(BlueprintData),
 Crystal(CrystalData), Molecule(MoleculeData),
 Motif(Motif), Structure(Structure),
-Array(Vec<NetworkResult>), Function(Closure), Error(String)
+Array(Vec<NetworkResult>), Record(Vec<(String, NetworkResult)>),
+Function(Closure), Error(String)
 ```
 
 - **Three-phase payload structs** (lattice-space refactoring):
@@ -55,6 +56,7 @@ Array(Vec<NetworkResult>), Function(Closure), Error(String)
 - **No abstract variants at runtime**: every `NetworkResult` carries a concrete phase (Blueprint/Crystal/Molecule). Abstract `DataType`s (HasAtoms/HasStructure/HasFreeLinOps) are pin-level only. `infer_data_type` debug-asserts this.
 - **No `frame_transform`** on `BlueprintData` or `AtomicStructure`. Movement nodes (`structure_move`, `free_move`, etc.) bake transforms into atom positions and wrap `geo_tree_root` in `GeoNode::transform`. `GeometrySummary2D` still carries `frame_transform` (2D-only, unrelated to the refactoring).
 - `Structure` bundles lattice_vecs + motif + motif_offset; emitted by the `structure` node and flowed into primitives.
+- `Record` carries fields only — **no type name** at runtime. Field list is stored in **canonical (sorted-by-name) order** — `NetworkResult::record(...)` sorts on construction, so derived `PartialEq` is structural and `extract_record_field()` does binary search by name. Pass-through coercion: a record value flowing into a pin declared with a smaller schema is **not** projected — the runtime value carries any extra fields through unchanged. See `doc/design_record_types.md`.
 - `Closure` captures a function node's network for deferred evaluation.
 - Type conversion via `convert_to(source_type, target_type)` follows `DataType` rules.
 - Accessor methods: `extract_float()`, `extract_crystal()`, `extract_molecule()`, `extract_atomic()` (accepts both Crystal and Molecule and returns their `AtomicStructure`), `extract_structure()`, etc. `get_unit_cell()` extracts the `UnitCellStruct` from LatticeVecs/DrawingPlane/Geometry2D/Blueprint/Crystal/Structure results.

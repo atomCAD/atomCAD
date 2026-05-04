@@ -13,8 +13,9 @@ lib/
 ├── inputs/                # Input handling
 ├── structure_designer/    # Main Structure Designer UI (see structure_designer/AGENTS.md)
 │   ├── node_network/      # Node network editor
-│   ├── node_data/         # Node property editors
-│   └── node_networks_list/# Network list panel
+│   ├── node_data/         # Node property editors (incl. record_construct/destructure/product)
+│   ├── node_networks_list/# Unified user-types panel (networks + record defs)
+│   └── schema_editor.dart # Record-def field editor (swaps in for the network editor)
 └── src/rust/              # Generated FRB bindings (DO NOT EDIT)
 ```
 
