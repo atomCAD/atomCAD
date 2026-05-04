@@ -109,7 +109,9 @@ fn box_def_referencing_point() -> RecordTypeDef {
 #[test]
 fn record_construct_registered() {
     let registry = NodeTypeRegistry::new();
-    let nt = registry.get_node_type("record_construct").expect("registered");
+    let nt = registry
+        .get_node_type("record_construct")
+        .expect("registered");
     assert_eq!(nt.name, "record_construct");
     assert!(nt.public);
     // Base type has zero parameters; the cache populator fills them in
@@ -254,8 +256,16 @@ fn construct_destructure_round_trip() {
     // Output pins on destructure are in authored order [y, x]: pin 0 = y, pin 1 = x.
     let y_out = evaluate_node_pin(&designer, "test", destructure, 0);
     let x_out = evaluate_node_pin(&designer, "test", destructure, 1);
-    assert!(matches!(y_out, NetworkResult::Int(42)), "y_out = {:?}", y_out.to_display_string());
-    assert!(matches!(x_out, NetworkResult::Int(7)), "x_out = {:?}", x_out.to_display_string());
+    assert!(
+        matches!(y_out, NetworkResult::Int(42)),
+        "y_out = {:?}",
+        y_out.to_display_string()
+    );
+    assert!(
+        matches!(x_out, NetworkResult::Int(7)),
+        "x_out = {:?}",
+        x_out.to_display_string()
+    );
 }
 
 // ============================================================================
@@ -408,7 +418,11 @@ fn missing_input_makes_construct_output_none() {
     designer.connect_nodes(y, 0, construct, 0);
 
     let result = evaluate_node_pin(&designer, "test", construct, 0);
-    assert!(matches!(result, NetworkResult::None), "got {:?}", result.to_display_string());
+    assert!(
+        matches!(result, NetworkResult::None),
+        "got {:?}",
+        result.to_display_string()
+    );
 }
 
 #[test]
@@ -515,7 +529,11 @@ fn destructure_passes_through_extra_fields() {
     match (&y_out, &x_out) {
         (NetworkResult::Int(5), NetworkResult::Int(6)) => {}
         (NetworkResult::None, NetworkResult::None) => {}
-        other => panic!("unexpected ({:?}, {:?})", other.0.to_display_string(), other.1.to_display_string()),
+        other => panic!(
+            "unexpected ({:?}, {:?})",
+            other.0.to_display_string(),
+            other.1.to_display_string()
+        ),
     }
 }
 
@@ -585,7 +603,11 @@ fn dangling_schema_after_delete_disconnects_downstream() {
 
     // Sanity: both wires are present pre-delete.
     let pre_arg_count: usize = {
-        let net = designer.node_type_registry.node_networks.get("test").unwrap();
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
         net.nodes
             .get(&construct)
             .unwrap()
@@ -601,11 +623,19 @@ fn dangling_schema_after_delete_disconnects_downstream() {
     // After delete, the construct's pin layout collapses to no parameters
     // (the schema is dangling). The pre-existing wire entries get truncated
     // when arguments are reset to match the new (empty) parameter list.
-    let net = designer.node_type_registry.node_networks.get("test").unwrap();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
     let construct_node = net.nodes.get(&construct).unwrap();
     let registry = &designer.node_type_registry;
     let nt = registry.get_node_type_for_node(construct_node).unwrap();
-    assert_eq!(nt.parameters.len(), 0, "construct should have no params after schema delete");
+    assert_eq!(
+        nt.parameters.len(),
+        0,
+        "construct should have no params after schema delete"
+    );
 }
 
 // ============================================================================
@@ -654,7 +684,11 @@ fn field_rename_disconnects_old_pin_wires() {
     // After update + repair, the construct's parameters are still [y, xx]
     // in authored order. The wire to the old "x" pin is gone; the new "xx"
     // pin is unconnected.
-    let net = designer.node_type_registry.node_networks.get("test").unwrap();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
     let construct_node = net.nodes.get(&construct).unwrap();
     let registry = &designer.node_type_registry;
     let nt = registry.get_node_type_for_node(construct_node).unwrap();
@@ -715,7 +749,11 @@ fn retyping_field_disconnects_now_incompatible_wire() {
         .unwrap();
     designer.validate_active_network();
 
-    let net = designer.node_type_registry.node_networks.get("test").unwrap();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
     let construct_node = net.nodes.get(&construct).unwrap();
     let registry = &designer.node_type_registry;
     let nt = registry.get_node_type_for_node(construct_node).unwrap();
@@ -753,7 +791,11 @@ fn rename_def_updates_record_node_pin_layout() {
 
     designer.rename_record_type_def("Point", "Pt").unwrap();
 
-    let net = designer.node_type_registry.node_networks.get("test").unwrap();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
     let node = net.nodes.get(&id).unwrap();
 
     // The schema property string was rewritten by the rename walker.

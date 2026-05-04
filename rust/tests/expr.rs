@@ -27,3 +27,6 @@ mod array_concat_test;
 
 #[path = "expr/array_append_test.rs"]
 mod array_append_test;
+
+#[path = "expr/record_literal_test.rs"]
+mod record_literal_test;

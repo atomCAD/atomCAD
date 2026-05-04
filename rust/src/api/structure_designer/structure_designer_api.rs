@@ -889,7 +889,10 @@ pub fn update_record_type_def(name: String, fields: Vec<APIRecordTypeField>) -> 
                         Err(e) => {
                             return APIResult {
                                 success: false,
-                                error_message: format!("Field '{}' has invalid type: {}", f.name, e),
+                                error_message: format!(
+                                    "Field '{}' has invalid type: {}",
+                                    f.name, e
+                                ),
                             };
                         }
                     }

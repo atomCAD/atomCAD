@@ -1,7 +1,8 @@
 use crate::expr::validation::{EvaluationFunction, FunctionSignature};
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UnOp {
@@ -44,6 +45,13 @@ pub enum Expr {
     Array(Vec<Expr>),                             // non-empty array literal: [e1, e2, ...]
     EmptyArray(DataType),                         // typed empty array: []Type
     Index(Box<Expr>, Box<Expr>),                  // arr[index]
+    /// Record literal: `{x: e1, y: e2, ...}`. Field order is preserved as
+    /// authored (so error messages can point back to the source spelling);
+    /// canonicalization to sorted-by-name happens when validating into a
+    /// `RecordType::Anonymous` and when evaluating into a
+    /// `NetworkResult::Record`. The empty record `{}` is `RecordLiteral(vec![])`.
+    /// Field names must be distinct (enforced at validation).
+    RecordLiteral(Vec<(String, Expr)>),
 }
 
 impl Expr {
@@ -406,6 +414,28 @@ impl Expr {
             }
             Expr::MemberAccess(expr, member) => {
                 let expr_type = expr.validate(variables, functions)?.clone();
+                // Records take precedence over the vector/matrix rules: a
+                // `Record(_)` receiver always resolves `.<ident>` against its
+                // schema (or errors), even when the field name happens to be
+                // `x`/`y`/`z`/`mIJ`. See doc/design_record_types.md
+                // "Field-name conflicts with reserved identifiers."
+                if let DataType::Record(rec) = &expr_type {
+                    return match rec {
+                        RecordType::Anonymous(fields) => fields
+                            .iter()
+                            .find(|(n, _)| n == member)
+                            .map(|(_, t)| t.clone())
+                            .ok_or_else(|| {
+                                format!("Record {} has no field '{}'", expr_type, member)
+                            }),
+                        RecordType::Named(name) => Err(format!(
+                            "Cannot resolve field '{}' on named record `{}` in this context — \
+                             record name resolution requires a registry. Use destructure or \
+                             pass the record through a record_destructure node first.",
+                            member, name
+                        )),
+                    };
+                }
                 match (expr_type.clone(), member.as_str()) {
                     // Vec2 components
                     (DataType::Vec2, "x" | "y") => Ok(DataType::Float),
@@ -454,6 +484,21 @@ impl Expr {
                     })?;
                 }
                 Ok(DataType::Array(Box::new(unified)))
+            }
+            Expr::RecordLiteral(fields) => {
+                let mut seen: HashSet<&str> = HashSet::with_capacity(fields.len());
+                let mut typed = Vec::with_capacity(fields.len());
+                for (name, value_expr) in fields {
+                    if !seen.insert(name.as_str()) {
+                        return Err(format!("Record literal has duplicate field '{}'", name));
+                    }
+                    let ty = value_expr.validate(variables, functions)?;
+                    typed.push((name.clone(), ty));
+                }
+                // RecordType::anonymous canonicalizes field order on
+                // construction, satisfying the invariant for derived `PartialEq`
+                // / `Hash` even though we accepted them in author order here.
+                Ok(DataType::Record(RecordType::anonymous(typed)))
             }
         }
     }
@@ -558,6 +603,17 @@ impl Expr {
                     return value;
                 }
 
+                // Records take precedence over the vector/matrix rules at
+                // runtime too — same rationale as in `validate`. A field named
+                // `x` on a record value resolves through the record's field
+                // list, not as a vector component.
+                if let NetworkResult::Record(fields) = &value {
+                    return match fields.binary_search_by(|(n, _)| n.as_str().cmp(member.as_str())) {
+                        Ok(i) => fields[i].1.clone(),
+                        Err(_) => NetworkResult::Error(format!("Record has no field '{}'", member)),
+                    };
+                }
+
                 match (value, member.as_str()) {
                     // Vec2 components
                     (NetworkResult::Vec2(vec), "x") => NetworkResult::Float(vec.x),
@@ -634,6 +690,20 @@ impl Expr {
                     out.push(v);
                 }
                 NetworkResult::Array(out)
+            }
+            Expr::RecordLiteral(fields) => {
+                let mut out = Vec::with_capacity(fields.len());
+                for (name, value_expr) in fields {
+                    let v = value_expr.evaluate(variables, functions);
+                    if let NetworkResult::Error(_) = v {
+                        return v;
+                    }
+                    out.push((name.clone(), v));
+                }
+                // Canonicalize (sort by field name) — `NetworkResult::record`
+                // enforces the invariant required for derived `PartialEq` and
+                // for binary-search lookup in `extract_record_field`.
+                NetworkResult::record(out)
             }
         }
     }
@@ -990,6 +1060,14 @@ impl Expr {
                 arr.to_prefix_string(),
                 idx.to_prefix_string()
             ),
+            Expr::RecordLiteral(fields) => {
+                let parts = fields
+                    .iter()
+                    .map(|(name, e)| format!("({} {})", name, e.to_prefix_string()))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(record {})", parts)
+            }
         }
     }
 

@@ -6,7 +6,9 @@ use super::super::node_network::{Argument, Node, NodeNetwork};
 use super::super::node_network::{NodeDisplayState, NodeDisplayType};
 use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
-use super::super::node_type_registry::{NodeTypeRegistry, RecordTypeDef, validate_record_type_defs};
+use super::super::node_type_registry::{
+    NodeTypeRegistry, RecordTypeDef, validate_record_type_defs,
+};
 use super::super::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::data_type::DataType;
 use crate::util::serialization_utils::{dvec2_serializer, dvec3_serializer};

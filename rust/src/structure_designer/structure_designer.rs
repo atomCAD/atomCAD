@@ -1118,7 +1118,12 @@ impl StructureDesigner {
             .delete_record_type_def(name)
             .expect("contains_key checked above");
 
-        let names: Vec<String> = self.node_type_registry.node_networks.keys().cloned().collect();
+        let names: Vec<String> = self
+            .node_type_registry
+            .node_networks
+            .keys()
+            .cloned()
+            .collect();
         for n in names {
             if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
                 self.node_type_registry.repair_node_network(&mut network);
@@ -1153,7 +1158,12 @@ impl StructureDesigner {
         self.node_type_registry
             .rename_record_type_def(old_name, new_name)?;
 
-        let names: Vec<String> = self.node_type_registry.node_networks.keys().cloned().collect();
+        let names: Vec<String> = self
+            .node_type_registry
+            .node_networks
+            .keys()
+            .cloned()
+            .collect();
         for n in names {
             if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
                 self.node_type_registry.repair_node_network(&mut network);
@@ -1201,7 +1211,12 @@ impl StructureDesigner {
         self.node_type_registry
             .update_record_type_def(name, new_fields)?;
 
-        let names: Vec<String> = self.node_type_registry.node_networks.keys().cloned().collect();
+        let names: Vec<String> = self
+            .node_type_registry
+            .node_networks
+            .keys()
+            .cloned()
+            .collect();
         for n in names {
             if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
                 self.node_type_registry.repair_node_network(&mut network);

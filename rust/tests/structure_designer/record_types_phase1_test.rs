@@ -41,7 +41,10 @@ fn anonymous_record_type_canonicalizes_field_order_on_construction() {
         ("x".to_string(), DataType::Int),
         ("y".to_string(), DataType::Int),
     ]);
-    assert_eq!(a, b, "differently-ordered anon records should compare equal");
+    assert_eq!(
+        a, b,
+        "differently-ordered anon records should compare equal"
+    );
     assert_eq!(
         hash_of(&a),
         hash_of(&b),
@@ -202,9 +205,18 @@ fn extract_record_field_finds_each_field_regardless_of_construction_order() {
         ("x".to_string(), NetworkResult::Int(1)),
         ("y".to_string(), NetworkResult::Int(2)),
     ]);
-    assert!(matches!(r.extract_record_field("x"), Some(NetworkResult::Int(1))));
-    assert!(matches!(r.extract_record_field("y"), Some(NetworkResult::Int(2))));
-    assert!(matches!(r.extract_record_field("z"), Some(NetworkResult::Int(3))));
+    assert!(matches!(
+        r.extract_record_field("x"),
+        Some(NetworkResult::Int(1))
+    ));
+    assert!(matches!(
+        r.extract_record_field("y"),
+        Some(NetworkResult::Int(2))
+    ));
+    assert!(matches!(
+        r.extract_record_field("z"),
+        Some(NetworkResult::Int(3))
+    ));
     assert!(r.extract_record_field("missing").is_none());
 }
 

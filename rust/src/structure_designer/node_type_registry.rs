@@ -81,9 +81,7 @@ use crate::api::structure_designer::structure_designer_api_types::APINetworkWith
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::{
-    DataType, RecordType, walk_data_type_record_names_mut,
-};
+use crate::structure_designer::data_type::{DataType, RecordType, walk_data_type_record_names_mut};
 use crate::structure_designer::node_network::Argument;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;

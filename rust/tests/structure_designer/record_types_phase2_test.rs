@@ -16,11 +16,11 @@ use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDef
 use rust_lib_flutter_cad::structure_designer::node_type_registry::{
     NodeTypeRegistry, RecordTypeDef, RecordTypeDefError, validate_record_type_defs,
 };
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-use rust_lib_flutter_cad::structure_designer::undo::{UndoContext, UndoStack};
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
     SerializableNodeTypeRegistryNetworks, node_network_to_serializable,
 };
+use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use rust_lib_flutter_cad::structure_designer::undo::{UndoContext, UndoStack};
 
 // Helpers --------------------------------------------------------------------
 
@@ -229,8 +229,10 @@ fn field_update_is_visible_through_resolve_fields() {
         .resolve_fields(&registry)
         .expect("Point exists")
         .into_owned();
-    assert_eq!(before.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
-               vec!["x", "y"]);
+    assert_eq!(
+        before.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+        vec!["x", "y"]
+    );
 
     // Update the def: add field z.
     registry
@@ -250,8 +252,10 @@ fn field_update_is_visible_through_resolve_fields() {
         .into_owned();
     // Returned canonical (sorted) — same as before the update for these names,
     // but the new `z` is now present.
-    assert_eq!(after.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
-               vec!["x", "y", "z"]);
+    assert_eq!(
+        after.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(),
+        vec!["x", "y", "z"]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -344,7 +348,11 @@ fn rename_walker_rewrites_parameter_pin_and_array_at_and_record_def_field() {
     designer.rename_record_type_def("Old", "New").unwrap();
 
     // 1. Custom-network parameter type rewritten.
-    let net = designer.node_type_registry.node_networks.get("Net1").unwrap();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("Net1")
+        .unwrap();
     match &net.node_type.parameters[0].data_type {
         DataType::Record(RecordType::Named(n)) => assert_eq!(n, "New"),
         other => panic!("expected Record(Named(New)), got {:?}", other),
@@ -378,7 +386,11 @@ fn rename_walker_rewrites_parameter_pin_and_array_at_and_record_def_field() {
     }
 
     // 4. `Box.fields[0]` (another record def's field type) rewritten.
-    let box_def = designer.node_type_registry.record_type_defs.get("Box").unwrap();
+    let box_def = designer
+        .node_type_registry
+        .record_type_defs
+        .get("Box")
+        .unwrap();
     match &box_def.fields[0].1 {
         DataType::Record(RecordType::Named(n)) => assert_eq!(n, "New"),
         other => panic!("expected Record(Named(New)), got {:?}", other),
@@ -391,10 +403,12 @@ fn rename_walker_rewrites_parameter_pin_and_array_at_and_record_def_field() {
         .get("New")
         .unwrap();
     assert_eq!(new_def.name, "New");
-    assert!(!designer
-        .node_type_registry
-        .record_type_defs
-        .contains_key("Old"));
+    assert!(
+        !designer
+            .node_type_registry
+            .record_type_defs
+            .contains_key("Old")
+    );
 }
 
 #[test]
@@ -426,7 +440,7 @@ fn rename_walker_does_not_touch_unrelated_networks() {
 }
 
 fn snapshot_one_network(registry: &mut NodeTypeRegistry, name: &str)
--> rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::SerializableNodeNetwork {
+-> rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::SerializableNodeNetwork{
     let mut net = registry.node_networks.remove(name).unwrap();
     let snap = node_network_to_serializable(&mut net, &registry.built_in_node_types, None).unwrap();
     registry.node_networks.insert(name.to_string(), net);
@@ -505,9 +519,11 @@ fn validate_record_type_defs_flags_dangling_reference() {
         },
     );
     let errors = validate_record_type_defs(&registry);
-    assert!(errors.iter().any(|e| e.contains("dangling")
-        && e.contains("Bad")
-        && e.contains("Missing")));
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("dangling") && e.contains("Bad") && e.contains("Missing"))
+    );
 }
 
 #[test]
@@ -552,7 +568,11 @@ fn registry_snapshot(designer: &mut StructureDesigner) -> serde_json::Value {
     net_names.sort();
     let mut nets = Vec::new();
     for n in net_names {
-        let net = designer.node_type_registry.node_networks.get_mut(&n).unwrap();
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut(&n)
+            .unwrap();
         nets.push((
             n,
             node_network_to_serializable(
@@ -614,7 +634,10 @@ fn add_record_type_def_undo_redo_round_trip() {
 
     run_redo_cycle(&mut designer);
     let after_redo = registry_snapshot(&mut designer);
-    assert_eq!(after_do, after_redo, "redo should re-establish post-add state");
+    assert_eq!(
+        after_do, after_redo,
+        "redo should re-establish post-add state"
+    );
 }
 
 #[test]
@@ -634,7 +657,10 @@ fn rename_record_type_def_undo_redo_round_trip() {
 
     run_undo_redo_cycle(&mut designer);
     let after_undo = registry_snapshot(&mut designer);
-    assert_eq!(before, after_undo, "undo should restore Old name everywhere");
+    assert_eq!(
+        before, after_undo,
+        "undo should restore Old name everywhere"
+    );
 
     run_redo_cycle(&mut designer);
     let after_redo = registry_snapshot(&mut designer);

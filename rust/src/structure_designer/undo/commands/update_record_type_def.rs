@@ -74,9 +74,7 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
         for name in names {
             if let Some(mut network) = ctx.node_type_registry.node_networks.remove(&name) {
                 ctx.node_type_registry.repair_node_network(&mut network);
-                ctx.node_type_registry
-                    .node_networks
-                    .insert(name, network);
+                ctx.node_type_registry.node_networks.insert(name, network);
             }
         }
     }

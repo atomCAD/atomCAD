@@ -2,7 +2,8 @@ use crate::expr::expr::BinOp;
 use crate::expr::expr::Expr;
 use crate::expr::expr::UnOp;
 use crate::expr::lexer::Token;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, RecordType};
+use std::collections::HashSet;
 
 // Pratt parser
 struct Parser {
@@ -68,7 +69,15 @@ impl Parser {
     }
 
     /// Parse a concrete `TypeExpr` used after the empty-array marker `[]`:
-    ///   TypeExpr := TypeName | "[" TypeExpr "]"
+    ///   TypeExpr := TypeName
+    ///             | "[" TypeExpr "]"
+    ///             | "{" Field ("," Field)* "}"           // anonymous record
+    ///             | "{" "}"                              // empty record (top of lattice)
+    /// where `TypeName` is a built-in type identifier (handled by
+    /// `parse_concrete_type_name`) or — phase 7 — any other identifier, which
+    /// is treated as a reference to a named record type (`Record(Named(_))`).
+    /// Resolution of the named reference (and the dangling-name check) happens
+    /// at the network layer via `RecordType::resolve_fields(registry)`.
     fn parse_type_expr(&mut self) -> Result<DataType, String> {
         match self.bump() {
             Token::LBracket => {
@@ -78,10 +87,156 @@ impl Parser {
                     other => Err(format!("Expected ']' to close array type, got {:?}", other)),
                 }
             }
-            Token::Ident(name) => parse_concrete_type_name(&name)
-                .ok_or_else(|| format!("Unknown or non-concrete type '{}'", name)),
-            other => Err(format!("Expected type name or '[', got {:?}", other)),
+            Token::LBrace => self.parse_anonymous_record_type(),
+            Token::Ident(name) => {
+                // Built-in concrete types take priority. `parse_concrete_type_name`
+                // also enforces the documented rejection set (None, abstract
+                // supertypes, function types).
+                if let Some(dt) = parse_concrete_type_name(&name) {
+                    return Ok(dt);
+                }
+                // The name failed `parse_concrete_type_name` either because it
+                // is unknown or because it parsed to a rejected type (None,
+                // HasAtoms, HasStructure, HasFreeLinOps, Function). Reject the
+                // explicit-rejection cases here with a clear message; treat
+                // everything else as a named record reference (resolved /
+                // checked at the network layer).
+                if matches!(
+                    name.as_str(),
+                    "None" | "HasAtoms" | "HasStructure" | "HasFreeLinOps"
+                ) {
+                    return Err(format!("'{}' is not allowed as element type", name));
+                }
+                Ok(DataType::Record(RecordType::Named(name)))
+            }
+            other => Err(format!(
+                "Expected type name or '[' or '{{', got {:?}",
+                other
+            )),
         }
+    }
+
+    /// Parse the body of an anonymous record literal. The leading `{` has
+    /// already been consumed. Empty `{}` is a valid (empty) record literal.
+    /// Fields are emitted in source (authored) order; canonicalization to
+    /// sorted-by-name happens later when validation builds the
+    /// `RecordType::Anonymous` and when evaluation builds the
+    /// `NetworkResult::Record`.
+    fn parse_record_literal(&mut self) -> Result<Expr, String> {
+        if matches!(self.peek(), Token::RBrace) {
+            self.bump();
+            return Ok(Expr::RecordLiteral(Vec::new()));
+        }
+        let mut fields = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        loop {
+            let name = match self.bump() {
+                Token::Ident(n) => n,
+                other => {
+                    return Err(format!(
+                        "Expected field name in record literal, got {:?}",
+                        other
+                    ));
+                }
+            };
+            match self.bump() {
+                Token::Colon => {}
+                other => {
+                    return Err(format!(
+                        "Expected ':' after field name '{}' in record literal, got {:?}",
+                        name, other
+                    ));
+                }
+            }
+            let value_expr = self.parse_bp(0)?;
+            if !seen.insert(name.clone()) {
+                return Err(format!("Record literal has duplicate field '{}'", name));
+            }
+            fields.push((name, value_expr));
+            match self.peek() {
+                Token::Comma => {
+                    self.bump();
+                    // Reject trailing comma — same convention as array
+                    // literals (`[1, 2,]` is an error).
+                    if matches!(self.peek(), Token::RBrace) {
+                        return Err("Trailing comma not allowed in record literal".to_string());
+                    }
+                    continue;
+                }
+                Token::RBrace => {
+                    self.bump();
+                    break;
+                }
+                other => {
+                    return Err(format!(
+                        "Expected ',' or '}}' in record literal, got {:?}",
+                        other
+                    ));
+                }
+            }
+        }
+        Ok(Expr::RecordLiteral(fields))
+    }
+
+    /// Parse the body of an anonymous record-type expression. The leading `{`
+    /// has already been consumed. Empty `{}` is the top of the record-subtype
+    /// lattice — every record is assignable to it.
+    fn parse_anonymous_record_type(&mut self) -> Result<DataType, String> {
+        if matches!(self.peek(), Token::RBrace) {
+            self.bump();
+            return Ok(DataType::Record(RecordType::anonymous(Vec::new())));
+        }
+        let mut fields: Vec<(String, DataType)> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        loop {
+            let name = match self.bump() {
+                Token::Ident(n) => n,
+                other => {
+                    return Err(format!(
+                        "Expected field name in record type, got {:?}",
+                        other
+                    ));
+                }
+            };
+            match self.bump() {
+                Token::Colon => {}
+                other => {
+                    return Err(format!(
+                        "Expected ':' after field name '{}' in record type, got {:?}",
+                        name, other
+                    ));
+                }
+            }
+            let field_type = self.parse_type_expr()?;
+            if !seen.insert(name.clone()) {
+                return Err(format!("Record type has duplicate field '{}'", name));
+            }
+            fields.push((name, field_type));
+            match self.peek() {
+                Token::Comma => {
+                    self.bump();
+                    if matches!(self.peek(), Token::RBrace) {
+                        return Err("Trailing comma not allowed in record type".to_string());
+                    }
+                    continue;
+                }
+                Token::RBrace => {
+                    self.bump();
+                    break;
+                }
+                other => {
+                    return Err(format!(
+                        "Expected ',' or '}}' in record type, got {:?}",
+                        other
+                    ));
+                }
+            }
+        }
+        // Canonicalize on construction (sort by name) so derived `PartialEq` /
+        // `Hash` work as expected; authored order is not preserved on
+        // anonymous record types (named defs are the only place authored
+        // order matters in the type system).
+        Ok(DataType::Record(RecordType::anonymous(fields)))
     }
 
     // binding powers: (left_bp, right_bp)
@@ -157,6 +312,7 @@ impl Parser {
                 }
             }
             Token::LBracket => self.parse_array_literal()?,
+            Token::LBrace => self.parse_record_literal()?,
             Token::Plus => {
                 // unary plus
                 let rhs = self.parse_bp(100)?;

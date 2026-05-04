@@ -37,11 +37,8 @@ fn def(name: &str, fields: &[(&str, DataType)]) -> RecordTypeDef {
 fn examples_registry() -> NodeTypeRegistry {
     let mut r = NodeTypeRegistry::new();
     // Point = {x: Int, y: Int}
-    r.add_record_type_def(def(
-        "Point",
-        &[("x", DataType::Int), ("y", DataType::Int)],
-    ))
-    .expect("Point");
+    r.add_record_type_def(def("Point", &[("x", DataType::Int), ("y", DataType::Int)]))
+        .expect("Point");
     // Point3 = {x: Int, y: Int, z: Int}
     r.add_record_type_def(def(
         "Point3",
@@ -61,40 +58,37 @@ fn examples_registry() -> NodeTypeRegistry {
     // Box = {p: Point3}
     r.add_record_type_def(def(
         "Box",
-        &[("p", DataType::Record(RecordType::Named("Point3".to_string())))],
+        &[(
+            "p",
+            DataType::Record(RecordType::Named("Point3".to_string())),
+        )],
     ))
     .expect("Box");
     // BoxXY = {p: Point}
     r.add_record_type_def(def(
         "BoxXY",
-        &[("p", DataType::Record(RecordType::Named("Point".to_string())))],
+        &[(
+            "p",
+            DataType::Record(RecordType::Named("Point".to_string())),
+        )],
     ))
     .expect("BoxXY");
     // Tagged = {a: Crystal, label: String}
     r.add_record_type_def(def(
         "Tagged",
-        &[
-            ("a", DataType::Crystal),
-            ("label", DataType::String),
-        ],
+        &[("a", DataType::Crystal), ("label", DataType::String)],
     ))
     .expect("Tagged");
     // Abstract = {a: HasAtoms, label: String}
     r.add_record_type_def(def(
         "Abstract",
-        &[
-            ("a", DataType::HasAtoms),
-            ("label", DataType::String),
-        ],
+        &[("a", DataType::HasAtoms), ("label", DataType::String)],
     ))
     .expect("Abstract");
     // Foo = {x: Int, y: Int} — same shape as Point, different name. Used by the
     // "structural — names ignored" example row.
-    r.add_record_type_def(def(
-        "Foo",
-        &[("x", DataType::Int), ("y", DataType::Int)],
-    ))
-    .expect("Foo");
+    r.add_record_type_def(def("Foo", &[("x", DataType::Int), ("y", DataType::Int)]))
+        .expect("Foo");
     r
 }
 
@@ -196,7 +190,10 @@ fn is_tag_only_widening_rejects_value_converting_widenings() {
 #[test]
 fn is_tag_only_widening_rejects_abstract_to_concrete_and_cross_abstract() {
     // No abstract → concrete.
-    assert!(!is_tag_only_widening(&DataType::HasAtoms, &DataType::Crystal));
+    assert!(!is_tag_only_widening(
+        &DataType::HasAtoms,
+        &DataType::Crystal
+    ));
     assert!(!is_tag_only_widening(
         &DataType::HasFreeLinOps,
         &DataType::Molecule
@@ -335,8 +332,7 @@ fn every_record_is_assignable_to_empty_anonymous_record() {
         );
     }
     // Anonymous record.
-    let anon =
-        rec_anon(vec![("x", DataType::Int), ("y", DataType::Float)]);
+    let anon = rec_anon(vec![("x", DataType::Int), ("y", DataType::Float)]);
     assert!(DataType::can_be_converted_to(&anon, &empty, &r));
     // Through arrays.
     assert!(DataType::can_be_converted_to(

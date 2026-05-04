@@ -141,8 +141,20 @@ mod parser_tests {
 
     #[test]
     fn test_parse_unknown_type_after_empty_marker() {
-        let res = parse("[]Foo");
-        assert!(res.is_err());
+        // Phase 7 (doc/design_record_types.md): an unknown identifier in
+        // type position now resolves to `Record(Named(_))`. The dangling-name
+        // check happens at the network layer when the registry is available,
+        // not here.
+        let expr = parse("[]Foo").expect("parse should succeed");
+        match expr {
+            Expr::EmptyArray(DataType::Record(rec)) => match rec {
+                rust_lib_flutter_cad::structure_designer::data_type::RecordType::Named(n) => {
+                    assert_eq!(n, "Foo");
+                }
+                other => panic!("expected Record(Named(\"Foo\")), got Record({:?})", other),
+            },
+            other => panic!("expected EmptyArray of named record, got {:?}", other),
+        }
     }
 
     #[test]

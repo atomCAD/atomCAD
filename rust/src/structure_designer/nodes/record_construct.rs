@@ -60,8 +60,13 @@ impl NodeData for RecordConstructData {
         // matches that order (set by the registry-aware cache populator).
         let mut fields: Vec<(String, NetworkResult)> = Vec::with_capacity(def.fields.len());
         for (param_index, (field_name, _)) in def.fields.iter().enumerate() {
-            let value =
-                network_evaluator.evaluate_arg(network_stack, node_id, registry, context, param_index);
+            let value = network_evaluator.evaluate_arg(
+                network_stack,
+                node_id,
+                registry,
+                context,
+                param_index,
+            );
             match &value {
                 NetworkResult::None => return EvalOutput::single(NetworkResult::None),
                 NetworkResult::Error(_) => return EvalOutput::single(value),
