@@ -418,11 +418,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
             expand: false,
           ),
           const SizedBox(height: 8),
-          // Node networks section
+          // User types section (node networks + record type defs)
           Expanded(
             flex: 5,
             child: Section(
-              title: 'Node networks',
+              title: 'User types',
               content: NodeNetworksPanel(model: graphModel),
               expand: true,
             ),

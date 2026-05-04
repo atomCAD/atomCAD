@@ -163,6 +163,19 @@ pub struct APIRecordSchemaData {
     pub schema: String,
 }
 
+/// One field of a record type def, surfaced for the schema editor UI.
+pub struct APIRecordTypeField {
+    pub name: String,
+    pub data_type: APIDataType,
+}
+
+/// Full record type def (name plus authored field list). Used by the
+/// schema editor in the user-types panel.
+pub struct APIRecordTypeDef {
+    pub name: String,
+    pub fields: Vec<APIRecordTypeField>,
+}
+
 pub struct APIBoolData {
     pub value: bool,
 }

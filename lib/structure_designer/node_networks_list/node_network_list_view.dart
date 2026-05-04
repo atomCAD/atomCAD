@@ -5,7 +5,24 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
-/// List view widget for node networks with rename functionality.
+/// Discriminator between the two kinds of user-defined types listed in this
+/// view: node networks and record type defs.
+enum _UserTypeKind { network, recordDef }
+
+class _UserTypeEntry {
+  final String name;
+  final _UserTypeKind kind;
+  final String? validationErrors; // only meaningful for networks
+
+  _UserTypeEntry.network(this.name, this.validationErrors)
+      : kind = _UserTypeKind.network;
+  _UserTypeEntry.recordDef(this.name)
+      : kind = _UserTypeKind.recordDef,
+        validationErrors = null;
+}
+
+/// List view widget for user types (node networks + record defs) with rename
+/// functionality and per-row activation.
 class NodeNetworkListView extends StatefulWidget {
   final StructureDesignerModel model;
 
@@ -17,8 +34,10 @@ class NodeNetworkListView extends StatefulWidget {
 
 class _NodeNetworkListViewState extends State<NodeNetworkListView>
     with AutomaticKeepAliveClientMixin {
-  // Track which node network is being renamed (if any)
-  String? _editingNetworkName;
+  // Track which entry is being renamed (if any). The kind is needed because
+  // networks and record defs route their rename through different APIs.
+  String? _editingName;
+  _UserTypeKind? _editingKind;
   final TextEditingController _renameController = TextEditingController();
   final FocusNode _renameFocusNode = FocusNode();
 
@@ -40,7 +59,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
   }
 
   void _onFocusChange() {
-    if (!_renameFocusNode.hasFocus && _editingNetworkName != null) {
+    if (!_renameFocusNode.hasFocus && _editingName != null) {
       _commitRename();
     }
   }
@@ -49,23 +68,34 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
-    final nodeNetworks = widget.model.nodeNetworkNames;
     final activeNetworkName = widget.model.nodeNetworkView?.name;
+    final activeRecordDef = widget.model.activeRecordDefName;
 
-    if (nodeNetworks.isEmpty) {
+    // Build the unified entry list: networks first (alphabetical preserved
+    // from the kernel), then record defs (alphabetical from the kernel).
+    final entries = <_UserTypeEntry>[
+      ...widget.model.nodeNetworkNames
+          .map((n) => _UserTypeEntry.network(n.name, n.validationErrors)),
+      ...widget.model.recordTypeDefNames.map(_UserTypeEntry.recordDef),
+    ];
+
+    if (entries.isEmpty) {
       return const Center(
-        child: Text('No node networks available'),
+        child: Text('No user types defined'),
       );
     }
 
     return ListView.builder(
-      itemCount: nodeNetworks.length,
+      itemCount: entries.length,
       itemBuilder: (context, index) {
-        final network = nodeNetworks[index];
-        final networkName = network.name;
-        final bool isActive = networkName == activeNetworkName;
-        final bool isEditing = _editingNetworkName == networkName;
-        final bool hasValidationErrors = network.validationErrors != null;
+        final entry = entries[index];
+        final entryName = entry.name;
+        final bool isActive = entry.kind == _UserTypeKind.network
+            ? (activeRecordDef == null && entryName == activeNetworkName)
+            : (entryName == activeRecordDef);
+        final bool isEditing =
+            _editingName == entryName && _editingKind == entry.kind;
+        final bool hasValidationErrors = entry.validationErrors != null;
 
         return Builder(
           builder: (BuildContext itemContext) {
@@ -99,17 +129,17 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                   ],
                 ).then((value) {
                   if (value == 'rename') {
-                    _startRenaming(networkName);
+                    _startRenaming(entryName, entry.kind);
                   } else if (value == 'delete') {
-                    _handleDelete(context, networkName);
+                    _handleDelete(context, entryName, entry.kind);
                   }
                 });
               },
               onDoubleTap: () {
-                _startRenaming(networkName);
+                _startRenaming(entryName, entry.kind);
               },
               child: Tooltip(
-                message: hasValidationErrors ? network.validationErrors! : '',
+                message: hasValidationErrors ? entry.validationErrors! : '',
                 child: Container(
                   decoration: hasValidationErrors
                       ? BoxDecoration(
@@ -136,11 +166,21 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                             )
                           : null,
                   child: ListTile(
-                    key: Key('network_item_$networkName'),
+                    key: Key(
+                        '${entry.kind == _UserTypeKind.network ? 'network' : 'record_def'}_item_$entryName'),
                     dense: true,
                     visualDensity: AppSpacing.compactVerticalDensity,
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    leading: Icon(
+                      entry.kind == _UserTypeKind.network
+                          ? Icons.account_tree
+                          : Icons.data_object,
+                      size: 16,
+                      color: isActive
+                          ? AppColors.selectionForeground
+                          : Colors.grey,
+                    ),
                     title: isEditing
                         ? CallbackShortcuts(
                             bindings: {
@@ -209,13 +249,17 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                               ),
                             ),
                           )
-                        : Text(networkName, style: AppTextStyles.regular),
+                        : Text(entryName, style: AppTextStyles.regular),
                     selected: isActive,
                     selectedTileColor: AppColors.selectionBackground,
                     selectedColor: AppColors.selectionForeground,
                     onTap: () {
                       if (isEditing) return;
-                      widget.model.setActiveNodeNetwork(networkName);
+                      if (entry.kind == _UserTypeKind.network) {
+                        widget.model.setActiveNodeNetwork(entryName);
+                      } else {
+                        widget.model.setActiveRecordDef(entryName);
+                      }
                     },
                   ),
                 ),
@@ -227,10 +271,11 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
     );
   }
 
-  void _startRenaming(String networkName) {
+  void _startRenaming(String name, _UserTypeKind kind) {
     setState(() {
-      _editingNetworkName = networkName;
-      _renameController.text = networkName;
+      _editingName = name;
+      _editingKind = kind;
+      _renameController.text = name;
     });
     _renameController.selection = TextSelection(
       baseOffset: 0,
@@ -242,49 +287,63 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
   }
 
   void _commitRename() {
-    if (_editingNetworkName != null) {
-      final newName = _renameController.text;
-      if (newName.isNotEmpty && newName != _editingNetworkName) {
-        final validationError = validateUserName(newName);
-        if (validationError != null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Rename failed: $validationError')),
-            );
-          }
-        } else {
-          final success =
-              widget.model.renameNodeNetwork(_editingNetworkName!, newName);
-          if (!success && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Rename failed: name already exists')),
-            );
-          }
+    if (_editingName == null || _editingKind == null) return;
+    final oldName = _editingName!;
+    final kind = _editingKind!;
+    final newName = _renameController.text;
+    if (newName.isNotEmpty && newName != oldName) {
+      final validationError = validateUserName(newName);
+      if (validationError != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Rename failed: $validationError')),
+          );
+        }
+      } else if (kind == _UserTypeKind.network) {
+        final success = widget.model.renameNodeNetwork(oldName, newName);
+        if (!success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Rename failed: name already exists')),
+          );
+        }
+      } else {
+        final error = widget.model.renameRecordTypeDef(oldName, newName);
+        if (error != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Rename failed: $error')),
+          );
         }
       }
-      _renameFocusNode.unfocus();
-      setState(() {
-        _editingNetworkName = null;
-      });
     }
+    _renameFocusNode.unfocus();
+    setState(() {
+      _editingName = null;
+      _editingKind = null;
+    });
   }
 
   void _cancelRename() {
-    if (_editingNetworkName != null) {
+    if (_editingName != null) {
       _renameFocusNode.unfocus();
       setState(() {
-        _editingNetworkName = null;
+        _editingName = null;
+        _editingKind = null;
       });
     }
   }
 
-  Future<void> _handleDelete(BuildContext context, String networkName) async {
+  Future<void> _handleDelete(
+      BuildContext context, String name, _UserTypeKind kind) async {
+    final kindLabel =
+        kind == _UserTypeKind.network ? 'node network' : 'record type def';
+    final titleLabel =
+        kind == _UserTypeKind.network ? 'Network' : 'Record Type Def';
     final confirmed = await showDraggableAlertDialog<bool>(
       context: context,
-      title: const Text('Delete Network'),
+      title: Text('Delete $titleLabel'),
       content: Text(
-        'Are you sure you want to remove the node network "$networkName"?',
+        'Are you sure you want to remove the $kindLabel "$name"?',
       ),
       actions: [
         TextButton(
@@ -299,11 +358,13 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
     );
 
     if (confirmed == true && context.mounted) {
-      final errorMessage = widget.model.deleteNodeNetwork(networkName);
+      final errorMessage = kind == _UserTypeKind.network
+          ? widget.model.deleteNodeNetwork(name)
+          : widget.model.deleteRecordTypeDef(name);
       if (errorMessage != null && context.mounted) {
         await showDraggableAlertDialog(
           context: context,
-          title: const Text('Cannot Delete Network'),
+          title: Text('Cannot Delete $titleLabel'),
           content: Text(errorMessage),
           actions: [
             TextButton(

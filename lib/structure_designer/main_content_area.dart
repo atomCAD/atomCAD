@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_resizable_container/flutter_resizable_container.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_viewport.dart';
 import 'package:flutter_cad/structure_designer/node_network/network_editor_tabs.dart';
+import 'package:flutter_cad/structure_designer/schema_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
 
@@ -61,41 +63,67 @@ class MainContentArea extends StatelessWidget {
     );
   }
 
-  /// Builds the NetworkEditorTabs widget (Graph/Text tabs) with the global key
-  Widget _buildNodeNetwork() {
-    return NetworkEditorTabs(
-      graphModel: graphModel,
-      nodeNetworkKey: nodeNetworkKey,
+  /// Builds the bottom-of-main-area editor: either the network editor tabs
+  /// or the schema editor for the active record def. The choice is driven
+  /// by `model.activeRecordDefName`; when non-null, the schema editor takes
+  /// over (the node-data side panel is hidden because record defs have no
+  /// per-node properties).
+  Widget _buildBottomEditor() {
+    return Consumer<StructureDesignerModel>(
+      builder: (context, model, _) {
+        if (model.activeRecordDefName != null) {
+          return SchemaEditor(
+            model: model,
+            defName: model.activeRecordDefName!,
+          );
+        }
+        return NetworkEditorTabs(
+          graphModel: graphModel,
+          nodeNetworkKey: nodeNetworkKey,
+        );
+      },
     );
   }
 
   /// Builds the network panel for vertical layout (side-by-side network and data)
   Widget _buildVerticalNetworkPanel() {
-    return Row(
-      key: const ValueKey('vertical_layout'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          flex: 4,
-          child: _buildNodeNetwork(),
-        ),
-        _buildNodeDataPanel(isVertical: true),
-      ],
+    return Consumer<StructureDesignerModel>(
+      builder: (context, model, _) {
+        final isSchemaEditor = model.activeRecordDefName != null;
+        return Row(
+          key: const ValueKey('vertical_layout'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 4,
+              child: _buildBottomEditor(),
+            ),
+            // Hide the node-data side panel while the schema editor is shown
+            // — record defs have no per-node properties to edit there.
+            if (!isSchemaEditor) _buildNodeDataPanel(isVertical: true),
+          ],
+        );
+      },
     );
   }
 
   /// Builds the network panel for horizontal layout (stacked network and data)
   Widget _buildHorizontalNetworkPanel() {
-    return Column(
-      key: const ValueKey('horizontal_layout'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          flex: 4,
-          child: _buildNodeNetwork(),
-        ),
-        _buildNodeDataPanel(isVertical: false),
-      ],
+    return Consumer<StructureDesignerModel>(
+      builder: (context, model, _) {
+        final isSchemaEditor = model.activeRecordDefName != null;
+        return Column(
+          key: const ValueKey('horizontal_layout'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 4,
+              child: _buildBottomEditor(),
+            ),
+            if (!isSchemaEditor) _buildNodeDataPanel(isVertical: false),
+          ],
+        );
+      },
     );
   }
 

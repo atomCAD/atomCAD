@@ -74,6 +74,8 @@ use crate::api::structure_designer::structure_designer_api_types::APIMat3DiagDat
 use crate::api::structure_designer::structure_designer_api_types::APIMat3RowsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
 use crate::api::structure_designer::structure_designer_api_types::APIRecordSchemaData;
+use crate::api::structure_designer::structure_designer_api_types::APIRecordTypeDef;
+use crate::api::structure_designer::structure_designer_api_types::APIRecordTypeField;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIStringData;
 use crate::api::structure_designer::structure_designer_api_types::APISupercellData;
@@ -743,6 +745,174 @@ pub fn get_record_type_def_names() -> Option<Vec<String>> {
                 Some(names)
             },
             None,
+        )
+    }
+}
+
+/// Returns the full record type def for `name`, or `None` if the name is
+/// not registered. Used by the schema editor in the user-types panel.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_record_type_def(name: String) -> Option<APIRecordTypeDef> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .node_type_registry
+                    .record_type_defs
+                    .get(&name)
+                    .map(|def| APIRecordTypeDef {
+                        name: def.name.clone(),
+                        fields: def
+                            .fields
+                            .iter()
+                            .map(|(fname, ftype)| APIRecordTypeField {
+                                name: fname.clone(),
+                                data_type: data_type_to_api_data_type(ftype),
+                            })
+                            .collect(),
+                    })
+            },
+            None,
+        )
+    }
+}
+
+/// Adds a new record type def with `name` and an empty field list.
+/// Empty record defs are valid (top of the subtype lattice).
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_record_type_def(name: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let def = crate::structure_designer::node_type_registry::RecordTypeDef {
+                    name: name.clone(),
+                    fields: Vec::new(),
+                };
+                let result = instance.structure_designer.add_record_type_def(def);
+                refresh_structure_designer_auto(instance);
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e.to_string(),
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+/// Deletes the record type def with the given name. Wires that depended on
+/// the now-dangling references are disconnected by `repair_node_network`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn delete_record_type_def(name: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let result = instance.structure_designer.delete_record_type_def(&name);
+                refresh_structure_designer_auto(instance);
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e.to_string(),
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+/// Renames a record type def. Walks every embedded `Named(old_name)`
+/// reference in the project and rewrites it to `Named(new_name)`. No wires
+/// are disconnected — every reference resolves to the same schema, just
+/// under a new name.
+#[flutter_rust_bridge::frb(sync)]
+pub fn rename_record_type_def(old_name: String, new_name: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let result = instance
+                    .structure_designer
+                    .rename_record_type_def(&old_name, &new_name);
+                refresh_structure_designer_auto(instance);
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e.to_string(),
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+/// Replaces the field list of an existing record type def. Authored field
+/// order is preserved; cycle introduction is rejected. Networks are
+/// repaired afterward so `record_construct` / `record_destructure` /
+/// `product` pin layouts re-derive and now-incompatible wires are dropped.
+#[flutter_rust_bridge::frb(sync)]
+pub fn update_record_type_def(name: String, fields: Vec<APIRecordTypeField>) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                // Convert API fields to (String, DataType). Bail with a clear
+                // error if any field's APIDataType cannot be parsed (e.g. a
+                // malformed Custom string).
+                let mut converted: Vec<(String, DataType)> = Vec::with_capacity(fields.len());
+                for f in &fields {
+                    match api_data_type_to_data_type(&f.data_type) {
+                        Ok(dt) => converted.push((f.name.clone(), dt)),
+                        Err(e) => {
+                            return APIResult {
+                                success: false,
+                                error_message: format!("Field '{}' has invalid type: {}", f.name, e),
+                            };
+                        }
+                    }
+                }
+                let result = instance
+                    .structure_designer
+                    .update_record_type_def(&name, converted);
+                refresh_structure_designer_auto(instance);
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e.to_string(),
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
         )
     }
 }

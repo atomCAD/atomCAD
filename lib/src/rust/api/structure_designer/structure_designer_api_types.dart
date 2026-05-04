@@ -1834,6 +1834,51 @@ class APIRecordSchemaData {
           schema == other.schema;
 }
 
+/// Full record type def (name plus authored field list). Used by the
+/// schema editor in the user-types panel.
+class APIRecordTypeDef {
+  final String name;
+  final List<APIRecordTypeField> fields;
+
+  const APIRecordTypeDef({
+    required this.name,
+    required this.fields,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ fields.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordTypeDef &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          fields == other.fields;
+}
+
+/// One field of a record type def, surfaced for the schema editor UI.
+class APIRecordTypeField {
+  final String name;
+  final APIDataType dataType;
+
+  const APIRecordTypeField({
+    required this.name,
+    required this.dataType,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ dataType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordTypeField &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          dataType == other.dataType;
+}
+
 class APIRectData {
   final APIIVec2 minCorner;
   final APIIVec2 extent;

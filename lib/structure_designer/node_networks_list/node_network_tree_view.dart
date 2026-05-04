@@ -6,30 +6,41 @@ import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
-/// Tree node representing either a namespace (folder) or a node network (leaf).
+/// Discriminator between the two kinds of leaves in the user-types tree.
+enum _LeafKind { network, recordDef }
+
+/// Tree node representing either a namespace (folder) or a leaf
+/// (a node network or record type def).
 class _NodeNetworkTreeNode {
   final String label; // Simple name (last segment)
   final String?
       fullName; // Qualified name for leafs, namespace path for namespaces
   final List<_NodeNetworkTreeNode> children;
-  final bool isLeaf; // True if this is an actual node network
+  final bool isLeaf;
+  /// Only meaningful when `isLeaf == true`. Determines which API path is
+  /// used for activation/rename/delete.
+  final _LeafKind? leafKind;
 
   _NodeNetworkTreeNode({
     required this.label,
     this.fullName,
     this.children = const [],
     required this.isLeaf,
+    this.leafKind,
   });
 }
 
-/// Builds a tree structure from a flat list of qualified names.
-List<_NodeNetworkTreeNode> _buildTreeFromNames(List<String> qualifiedNames) {
+/// Builds a tree from networks (with namespace dots) and record def names
+/// (always flat at the root). Record defs do not participate in the
+/// namespace hierarchy in v1.
+List<_NodeNetworkTreeNode> _buildTreeFromNames(
+    List<String> networkQualifiedNames, List<String> recordDefNames) {
   // Map to track namespace nodes: full namespace path -> node
   final Map<String, _NodeNetworkTreeNode> namespaceNodes = {};
   final List<_NodeNetworkTreeNode> roots = [];
 
   // Sort names to process parent namespaces before children
-  final sortedNames = List<String>.from(qualifiedNames)..sort();
+  final sortedNames = List<String>.from(networkQualifiedNames)..sort();
 
   for (final qualifiedName in sortedNames) {
     final segments = getSegments(qualifiedName);
@@ -66,6 +77,7 @@ List<_NodeNetworkTreeNode> _buildTreeFromNames(List<String> qualifiedNames) {
       fullName: qualifiedName,
       children: [],
       isLeaf: true,
+      leafKind: _LeafKind.network,
     );
 
     // Add leaf to its parent or roots
@@ -76,6 +88,18 @@ List<_NodeNetworkTreeNode> _buildTreeFromNames(List<String> qualifiedNames) {
       final parentNode = namespaceNodes[parentPath]!;
       (parentNode.children as List).add(leafNode);
     }
+  }
+
+  // Record defs appear flat at the root, alphabetical.
+  final sortedRecordDefs = List<String>.from(recordDefNames)..sort();
+  for (final defName in sortedRecordDefs) {
+    roots.add(_NodeNetworkTreeNode(
+      label: defName,
+      fullName: defName,
+      children: const [],
+      isLeaf: true,
+      leafKind: _LeafKind.recordDef,
+    ));
   }
 
   return roots;
@@ -118,8 +142,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   void didUpdateWidget(NodeNetworkTreeView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final currentNames =
-        widget.model.nodeNetworkNames.map((n) => n.name).toList();
+    // Compose a single list keyed by kind so it changes whenever either
+    // networks or record defs are added/removed/renamed.
+    final currentNames = _composeKeyedNames();
     final currentActiveNetwork = widget.model.nodeNetworkView?.name;
 
     // Check if active network changed - expand ancestors if so
@@ -141,6 +166,19 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     _updateTree();
   }
 
+  /// Returns a single list of "kind-prefixed" names so equality checks
+  /// detect changes in either the network or record-def collection.
+  List<String> _composeKeyedNames() {
+    final out = <String>[];
+    for (final n in widget.model.nodeNetworkNames) {
+      out.add('n:${n.name}');
+    }
+    for (final r in widget.model.recordTypeDefNames) {
+      out.add('r:$r');
+    }
+    return out;
+  }
+
   bool _listsEqual(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) {
@@ -152,9 +190,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   void _updateTree() {
     final qualifiedNames =
         widget.model.nodeNetworkNames.map((n) => n.name).toList();
-    _lastNetworkNames = List.from(qualifiedNames);
+    final recordDefs = widget.model.recordTypeDefNames;
+    _lastNetworkNames = _composeKeyedNames();
 
-    final roots = _buildTreeFromNames(qualifiedNames);
+    final roots = _buildTreeFromNames(qualifiedNames, recordDefs);
 
     _treeController = TreeController<_NodeNetworkTreeNode>(
       roots: roots,
@@ -285,13 +324,25 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
     final oldFullName = _editingNodeFullName!;
     bool success = true;
+    String? errorMessage;
 
     if (_editingIsLeaf) {
-      // Leaf node rename
-      final namespace = getNamespace(oldFullName);
-      final newFullName = combineQualifiedName(namespace, newSegment);
-      if (newFullName != oldFullName) {
-        success = widget.model.renameNodeNetwork(oldFullName, newFullName);
+      // Find the kind of leaf so we route to the correct API.
+      final leafKind = _findLeafKind(oldFullName);
+      if (leafKind == _LeafKind.recordDef) {
+        // Record defs are flat — no namespace handling.
+        if (newSegment != oldFullName) {
+          errorMessage =
+              widget.model.renameRecordTypeDef(oldFullName, newSegment);
+          success = errorMessage == null;
+        }
+      } else {
+        // Network leaf — preserve namespace.
+        final namespace = getNamespace(oldFullName);
+        final newFullName = combineQualifiedName(namespace, newSegment);
+        if (newFullName != oldFullName) {
+          success = widget.model.renameNodeNetwork(oldFullName, newFullName);
+        }
       }
     } else {
       // Namespace node rename
@@ -309,7 +360,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Rename failed: name already exists')),
+        SnackBar(
+            content:
+                Text('Rename failed: ${errorMessage ?? 'name already exists'}')),
       );
     }
 
@@ -317,6 +370,25 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     setState(() {
       _editingNodeFullName = null;
     });
+  }
+
+  /// Walks the live tree to find a leaf's kind by name. Returns null if not
+  /// found (defensive — the leaf usually still exists when committing).
+  _LeafKind? _findLeafKind(String fullName) {
+    _LeafKind? found;
+    void traverse(List<_NodeNetworkTreeNode> nodes) {
+      for (final n in nodes) {
+        if (n.isLeaf && n.fullName == fullName) {
+          found = n.leafKind;
+          return;
+        }
+        if (n.children.isNotEmpty) traverse(n.children);
+        if (found != null) return;
+      }
+    }
+
+    traverse(_treeController.roots.toList());
+    return found;
   }
 
   void _migrateExpansionState(String oldPrefix, String newPrefix) {
@@ -345,7 +417,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   void _handleDelete(BuildContext context, _NodeNetworkTreeNode node) {
     if (node.isLeaf) {
-      _showDeleteConfirmation(context, node.fullName!);
+      _showDeleteConfirmation(context, node.fullName!,
+          node.leafKind ?? _LeafKind.network);
     } else {
       final affectedNetworks = _collectLeafNames(node);
       _showNamespaceDeleteConfirmation(
@@ -366,12 +439,16 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   }
 
   Future<void> _showDeleteConfirmation(
-      BuildContext context, String networkName) async {
+      BuildContext context, String name, _LeafKind kind) async {
+    final kindLabel =
+        kind == _LeafKind.network ? 'node network' : 'record type def';
+    final titleLabel =
+        kind == _LeafKind.network ? 'Network' : 'Record Type Def';
     final confirmed = await showDraggableAlertDialog<bool>(
       context: context,
-      title: const Text('Delete Network'),
+      title: Text('Delete $titleLabel'),
       content: Text(
-        'Are you sure you want to remove the node network "$networkName"?',
+        'Are you sure you want to remove the $kindLabel "$name"?',
       ),
       actions: [
         TextButton(
@@ -386,11 +463,13 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     );
 
     if (confirmed == true && context.mounted) {
-      final errorMessage = widget.model.deleteNodeNetwork(networkName);
+      final errorMessage = kind == _LeafKind.network
+          ? widget.model.deleteNodeNetwork(name)
+          : widget.model.deleteRecordTypeDef(name);
       if (errorMessage != null && context.mounted) {
         await showDraggableAlertDialog(
           context: context,
-          title: const Text('Cannot Delete Network'),
+          title: Text('Cannot Delete $titleLabel'),
           content: Text(errorMessage),
           actions: [
             TextButton(
@@ -532,10 +611,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
     final nodeNetworks = widget.model.nodeNetworkNames;
+    final recordDefs = widget.model.recordTypeDefNames;
 
-    if (nodeNetworks.isEmpty) {
+    if (nodeNetworks.isEmpty && recordDefs.isEmpty) {
       return const Center(
-        child: Text('No node networks available'),
+        child: Text('No user types defined'),
       );
     }
 
@@ -544,12 +624,22 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       nodeBuilder: (context, entry) {
         final node = entry.node;
         final activeNetworkName = widget.model.nodeNetworkView?.name;
-        final isActive = node.isLeaf && node.fullName == activeNetworkName;
+        final activeRecordDef = widget.model.activeRecordDefName;
+        final isActiveNetwork = node.isLeaf &&
+            node.leafKind == _LeafKind.network &&
+            activeRecordDef == null &&
+            node.fullName == activeNetworkName;
+        final isActiveRecordDef = node.isLeaf &&
+            node.leafKind == _LeafKind.recordDef &&
+            node.fullName == activeRecordDef;
+        final isActive = isActiveNetwork || isActiveRecordDef;
         final isEditing = _editingNodeFullName == node.fullName;
 
         return GestureDetector(
           key: Key(node.isLeaf
-              ? 'network_tree_item_${node.fullName}'
+              ? (node.leafKind == _LeafKind.recordDef
+                  ? 'record_def_tree_item_${node.fullName}'
+                  : 'network_tree_item_${node.fullName}')
               : 'namespace_tree_item_${node.fullName}'),
           onSecondaryTapDown: (details) {
             _showContextMenu(context, node, details.globalPosition);
@@ -561,8 +651,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
             onTap: () {
               if (isEditing) return;
               if (node.isLeaf) {
-                // Leaf node - activate the network
-                widget.model.setActiveNodeNetwork(node.fullName!);
+                if (node.leafKind == _LeafKind.recordDef) {
+                  widget.model.setActiveRecordDef(node.fullName!);
+                } else {
+                  widget.model.setActiveNodeNetwork(node.fullName!);
+                }
               } else {
                 // Namespace node - toggle expansion (with state tracking)
                 _onFolderToggled(node);
@@ -603,7 +696,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
                             // Icon for leaf nodes (inside the selection container)
                             if (node.isLeaf) ...[
                               Icon(
-                                Icons.account_tree,
+                                node.leafKind == _LeafKind.recordDef
+                                    ? Icons.data_object
+                                    : Icons.account_tree,
                                 size: 16,
                                 color: isActive
                                     ? AppColors.selectionForeground

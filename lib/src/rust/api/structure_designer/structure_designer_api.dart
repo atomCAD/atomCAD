@@ -111,6 +111,43 @@ List<String>? getNodeNetworkNames() => RustLib.instance.api
 List<String>? getRecordTypeDefNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetRecordTypeDefNames();
 
+/// Returns the full record type def for `name`, or `None` if the name is
+/// not registered. Used by the schema editor in the user-types panel.
+APIRecordTypeDef? getRecordTypeDef({required String name}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetRecordTypeDef(name: name);
+
+/// Adds a new record type def with `name` and an empty field list.
+/// Empty record defs are valid (top of the subtype lattice).
+APIResult addRecordTypeDef({required String name}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddRecordTypeDef(name: name);
+
+/// Deletes the record type def with the given name. Wires that depended on
+/// the now-dangling references are disconnected by `repair_node_network`.
+APIResult deleteRecordTypeDef({required String name}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiDeleteRecordTypeDef(
+        name: name);
+
+/// Renames a record type def. Walks every embedded `Named(old_name)`
+/// reference in the project and rewrites it to `Named(new_name)`. No wires
+/// are disconnected — every reference resolves to the same schema, just
+/// under a new name.
+APIResult renameRecordTypeDef(
+        {required String oldName, required String newName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiRenameRecordTypeDef(
+            oldName: oldName, newName: newName);
+
+/// Replaces the field list of an existing record type def. Authored field
+/// order is preserved; cycle introduction is rejected. Networks are
+/// repaired afterward so `record_construct` / `record_destructure` /
+/// `product` pin layouts re-derive and now-incompatible wires are dropped.
+APIResult updateRecordTypeDef(
+        {required String name, required List<APIRecordTypeField> fields}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiUpdateRecordTypeDef(
+            name: name, fields: fields);
+
 /// Checks if a node type name corresponds to a custom node (i.e., a user-defined node network).
 /// Returns false if the CAD instance is not available.
 bool isCustomNodeType({required String nodeTypeName}) => RustLib.instance.api

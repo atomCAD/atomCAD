@@ -237,6 +237,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRecordSchemaData dco_decode_api_record_schema_data(dynamic raw);
 
   @protected
+  APIRecordTypeDef dco_decode_api_record_type_def(dynamic raw);
+
+  @protected
+  APIRecordTypeField dco_decode_api_record_type_field(dynamic raw);
+
+  @protected
   APIRectData dco_decode_api_rect_data(dynamic raw);
 
   @protected
@@ -477,6 +483,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIRecordTypeDef dco_decode_box_autoadd_api_record_type_def(dynamic raw);
+
+  @protected
   APIRectData dco_decode_box_autoadd_api_rect_data(dynamic raw);
 
   @protected
@@ -654,6 +663,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIParameterElement> dco_decode_list_api_parameter_element(dynamic raw);
+
+  @protected
+  List<APIRecordTypeField> dco_decode_list_api_record_type_field(dynamic raw);
 
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
@@ -867,6 +879,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIRecordSchemaData? dco_decode_opt_box_autoadd_api_record_schema_data(
       dynamic raw);
+
+  @protected
+  APIRecordTypeDef? dco_decode_opt_box_autoadd_api_record_type_def(dynamic raw);
 
   @protected
   APIRectData? dco_decode_opt_box_autoadd_api_rect_data(dynamic raw);
@@ -1264,6 +1279,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIRecordTypeDef sse_decode_api_record_type_def(SseDeserializer deserializer);
+
+  @protected
+  APIRecordTypeField sse_decode_api_record_type_field(
+      SseDeserializer deserializer);
+
+  @protected
   APIRectData sse_decode_api_rect_data(SseDeserializer deserializer);
 
   @protected
@@ -1554,6 +1576,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIRecordTypeDef sse_decode_box_autoadd_api_record_type_def(
+      SseDeserializer deserializer);
+
+  @protected
   APIRectData sse_decode_box_autoadd_api_rect_data(
       SseDeserializer deserializer);
 
@@ -1761,6 +1787,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIParameterElement> sse_decode_list_api_parameter_element(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIRecordTypeField> sse_decode_list_api_record_type_field(
       SseDeserializer deserializer);
 
   @protected
@@ -2020,6 +2050,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRecordSchemaData? sse_decode_opt_box_autoadd_api_record_schema_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRecordTypeDef? sse_decode_opt_box_autoadd_api_record_type_def(
       SseDeserializer deserializer);
 
   @protected
@@ -2468,6 +2502,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRecordSchemaData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_record_type_def(
+      APIRecordTypeDef self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_record_type_field(
+      APIRecordTypeField self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_rect_data(APIRectData self, SseSerializer serializer);
 
   @protected
@@ -2765,6 +2807,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRecordSchemaData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_record_type_def(
+      APIRecordTypeDef self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_rect_data(
       APIRectData self, SseSerializer serializer);
 
@@ -2975,6 +3021,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_parameter_element(
       List<APIParameterElement> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_record_type_field(
+      List<APIRecordTypeField> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_rotational_symmetry(
@@ -3239,6 +3289,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_record_schema_data(
       APIRecordSchemaData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_record_type_def(
+      APIRecordTypeDef? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_rect_data(
