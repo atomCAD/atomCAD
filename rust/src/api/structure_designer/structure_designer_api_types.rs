@@ -37,12 +37,21 @@ pub enum APIDataTypeBase {
     HasFreeLinOps,
     Motif,
     Structure,
+    /// Named record type. `custom_data_type` carries the record def name
+    /// (empty string when no schema chosen yet — a dangling reference). The
+    /// Flutter type-selector exposes this as a separate "Record" branch
+    /// with a dropdown of named defs; anonymous record types are not
+    /// reachable from the UI in v1 and round-trip through `Custom` instead.
+    Record,
     Custom,
 }
 
 pub struct APIDataType {
     pub data_type_base: APIDataTypeBase,
-    pub custom_data_type: Option<String>, // Not None if and only if data_type_base == APIDataTypeBase::Custom
+    /// Carries the inner string for both `Custom` (a free-form `DataType`
+    /// string) and `Record` (the record def name). `Some` iff the base is
+    /// one of those two; `None` otherwise.
+    pub custom_data_type: Option<String>,
     pub array: bool, // combined with built_in_data_type, but only redundant with custom_data_type as the outermost array is within the string in that case.
 }
 
@@ -144,6 +153,14 @@ pub struct APIIntData {
 
 pub struct APIStringData {
     pub value: String,
+}
+
+/// Shared payload for `record_construct` and `record_destructure` node
+/// properties. Both nodes hold a single `schema: String` (the name of a
+/// record type def in the project's registry; empty when no schema is
+/// chosen yet).
+pub struct APIRecordSchemaData {
+    pub schema: String,
 }
 
 pub struct APIBoolData {

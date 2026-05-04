@@ -73,6 +73,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIMat3ColsDat
 use crate::api::structure_designer::structure_designer_api_types::APIMat3DiagData;
 use crate::api::structure_designer::structure_designer_api_types::APIMat3RowsData;
 use crate::api::structure_designer::structure_designer_api_types::APIRangeData;
+use crate::api::structure_designer::structure_designer_api_types::APIRecordSchemaData;
 use crate::api::structure_designer::structure_designer_api_types::APISphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIStringData;
 use crate::api::structure_designer::structure_designer_api_types::APISupercellData;
@@ -94,7 +95,7 @@ use crate::crystolecule::unit_cell_symmetries::{
     CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
 };
 use crate::structure_designer::cli_runner;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::layout;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
@@ -143,6 +144,8 @@ use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::range::RangeData;
+use crate::structure_designer::nodes::record_construct::RecordConstructData;
+use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
 use crate::structure_designer::nodes::rect::RectData;
 use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::sequence::SequenceData;
@@ -187,6 +190,22 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
         APIDataTypeBase::HasFreeLinOps => DataType::HasFreeLinOps,
         APIDataTypeBase::Motif => DataType::Motif,
         APIDataTypeBase::Structure => DataType::Structure,
+        APIDataTypeBase::Record => {
+            // Empty name is intentionally accepted: a freshly-placed record
+            // node with no schema yet round-trips through the API with
+            // `custom_data_type: Some("")`. The dangling `Named("")` reference
+            // is surfaced by validation, not by this conversion.
+            let name = api_data_type
+                .custom_data_type
+                .clone()
+                .ok_or_else(|| "Record data type name is missing".to_string())?;
+            let record = DataType::Record(RecordType::Named(name));
+            return Ok(if api_data_type.array {
+                DataType::Array(Box::new(record))
+            } else {
+                record
+            });
+        }
         APIDataTypeBase::Custom => {
             if let Some(custom_str) = &api_data_type.custom_data_type {
                 return DataType::from_string(custom_str);
@@ -209,6 +228,17 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
     } else {
         (data_type, false)
     };
+
+    // Named records get a first-class `Record` base with the def name in
+    // `custom_data_type`. Anonymous records fall through to `Custom` (no
+    // UI in v1; only the expression language can produce them).
+    if let DataType::Record(RecordType::Named(name)) = base_data_type {
+        return APIDataType {
+            data_type_base: APIDataTypeBase::Record,
+            custom_data_type: Some(name.clone()),
+            array: is_array,
+        };
+    }
 
     let data_type_base = match base_data_type {
         DataType::None => APIDataTypeBase::None,
@@ -688,6 +718,29 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
                         .node_type_registry
                         .get_node_network_names(),
                 )
+            },
+            None,
+        )
+    }
+}
+
+/// Returns every record type def name in the project, sorted alphabetically.
+/// Used by the Flutter type-selector and by `record_construct` /
+/// `record_destructure` node-property dropdowns.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_record_type_def_names() -> Option<Vec<String>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let mut names: Vec<String> = cad_instance
+                    .structure_designer
+                    .node_type_registry
+                    .record_type_defs
+                    .keys()
+                    .cloned()
+                    .collect();
+                names.sort();
+                Some(names)
             },
             None,
         )
@@ -1561,6 +1614,52 @@ pub fn get_int_data(node_id: u64) -> Option<APIIntData> {
                 };
                 Some(APIIntData {
                     value: int_data.value,
+                })
+            },
+            None,
+        )
+    }
+}
+
+/// Reads the `schema` property of a `record_construct` node — the name of
+/// the record type def its pin layout is bound to. An empty string means
+/// "no schema chosen yet". Returns `None` if the node does not exist or is
+/// not a `record_construct`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_record_construct_data(node_id: u64) -> Option<APIRecordSchemaData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let data = node_data
+                    .as_any_ref()
+                    .downcast_ref::<RecordConstructData>()?;
+                Some(APIRecordSchemaData {
+                    schema: data.schema.clone(),
+                })
+            },
+            None,
+        )
+    }
+}
+
+/// Reads the `schema` property of a `record_destructure` node — same shape
+/// and semantics as `get_record_construct_data`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_record_destructure_data(node_id: u64) -> Option<APIRecordSchemaData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let data = node_data
+                    .as_any_ref()
+                    .downcast_ref::<RecordDestructureData>()?;
+                Some(APIRecordSchemaData {
+                    schema: data.schema.clone(),
                 })
             },
             None,
@@ -3188,6 +3287,44 @@ pub fn set_string_data(node_id: u64, data: APIStringData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, string_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Writes the `schema` property of a `record_construct` node. After the
+/// write, the node-network refresh re-runs the registry-aware cache
+/// populator, which rebuilds the per-field input pin layout from the chosen
+/// def. An empty string clears the schema.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_record_construct_data(node_id: u64, data: APIRecordSchemaData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let record_data = Box::new(RecordConstructData {
+                schema: data.schema,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, record_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Writes the `schema` property of a `record_destructure` node. Same
+/// post-write behavior as `set_record_construct_data` — pin layout is
+/// re-derived from the chosen def, dangling references leave the node with
+/// a placeholder layout and broken downstream wires.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_record_destructure_data(node_id: u64, data: APIRecordSchemaData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let record_data = Box::new(RecordDestructureData {
+                schema: data.schema,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, record_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

@@ -234,6 +234,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRangeData dco_decode_api_range_data(dynamic raw);
 
   @protected
+  APIRecordSchemaData dco_decode_api_record_schema_data(dynamic raw);
+
+  @protected
   APIRectData dco_decode_api_rect_data(dynamic raw);
 
   @protected
@@ -468,6 +471,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRangeData dco_decode_box_autoadd_api_range_data(dynamic raw);
+
+  @protected
+  APIRecordSchemaData dco_decode_box_autoadd_api_record_schema_data(
+      dynamic raw);
 
   @protected
   APIRectData dco_decode_box_autoadd_api_rect_data(dynamic raw);
@@ -856,6 +863,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRangeData? dco_decode_opt_box_autoadd_api_range_data(dynamic raw);
+
+  @protected
+  APIRecordSchemaData? dco_decode_opt_box_autoadd_api_record_schema_data(
+      dynamic raw);
 
   @protected
   APIRectData? dco_decode_opt_box_autoadd_api_rect_data(dynamic raw);
@@ -1249,6 +1260,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRangeData sse_decode_api_range_data(SseDeserializer deserializer);
 
   @protected
+  APIRecordSchemaData sse_decode_api_record_schema_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIRectData sse_decode_api_rect_data(SseDeserializer deserializer);
 
   @protected
@@ -1532,6 +1547,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRangeData sse_decode_box_autoadd_api_range_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRecordSchemaData sse_decode_box_autoadd_api_record_schema_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2000,6 +2019,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIRecordSchemaData? sse_decode_opt_box_autoadd_api_record_schema_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIRectData? sse_decode_opt_box_autoadd_api_rect_data(
       SseDeserializer deserializer);
 
@@ -2441,6 +2464,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_range_data(APIRangeData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_record_schema_data(
+      APIRecordSchemaData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_rect_data(APIRectData self, SseSerializer serializer);
 
   @protected
@@ -2732,6 +2759,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_range_data(
       APIRangeData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_record_schema_data(
+      APIRecordSchemaData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_rect_data(
@@ -3204,6 +3235,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_range_data(
       APIRangeData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_record_schema_data(
+      APIRecordSchemaData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_rect_data(

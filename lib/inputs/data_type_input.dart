@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
+    as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// A widget for editing APIDataType values, allowing selection between built-in and custom data types
@@ -40,13 +42,24 @@ class _DataTypeInputState extends State<DataTypeInput> {
           }).toList(),
           onChanged: (newValue) {
             if (newValue != null) {
+              // When switching to a base, seed the inner string. Custom keeps
+              // any prior free-form string; Record starts empty (the user
+              // picks a def from the dropdown below); other bases drop the
+              // string entirely.
+              String? customDataType;
+              if (newValue == APIDataTypeBase.custom) {
+                customDataType = widget.value.customDataType ?? '';
+              } else if (newValue == APIDataTypeBase.record) {
+                customDataType = widget.value.dataTypeBase ==
+                        APIDataTypeBase.record
+                    ? widget.value.customDataType ?? ''
+                    : '';
+              }
               widget.onChanged(APIDataType(
                 dataTypeBase: newValue,
-                // Reset custom string if not custom, maintain if it is
-                customDataType: newValue == APIDataTypeBase.custom
-                    ? widget.value.customDataType ?? ''
-                    : null,
-                // Reset array status if switching to custom
+                customDataType: customDataType,
+                // Custom owns its own array semantics inside the string;
+                // Record participates in the array checkbox like built-ins.
                 array: newValue == APIDataTypeBase.custom
                     ? false
                     : widget.value.array,
@@ -68,6 +81,24 @@ class _DataTypeInputState extends State<DataTypeInput> {
                   customDataType: newCustomType,
                   array:
                       false, // Custom types handle their own array logic via string parsing
+                ));
+              },
+            ),
+          ),
+
+        // Conditional record def dropdown (named records only — anonymous
+        // record types are reachable from the expression language, not the
+        // type-selector UI).
+        if (widget.value.dataTypeBase == APIDataTypeBase.record)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: _RecordDefDropdown(
+              value: widget.value.customDataType ?? '',
+              onChanged: (newName) {
+                widget.onChanged(APIDataType(
+                  dataTypeBase: APIDataTypeBase.record,
+                  customDataType: newName,
+                  array: widget.value.array,
                 ));
               },
             ),
@@ -141,8 +172,70 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'Motif';
       case APIDataTypeBase.structure:
         return 'Structure';
+      case APIDataTypeBase.record:
+        return 'Record';
       case APIDataTypeBase.custom:
         return 'Custom...';
     }
+  }
+}
+
+/// Dropdown of named record type defs in the project. Used by
+/// `DataTypeInput`'s Record branch and by the per-node property editors for
+/// `record_construct` / `record_destructure`. New defs are created from the
+/// user-types panel (Phase 6) — this widget never creates them.
+class _RecordDefDropdown extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _RecordDefDropdown({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final names = sd_api.getRecordTypeDefNames() ?? <String>[];
+    final danglingButNotEmpty = value.isNotEmpty && !names.contains(value);
+    // The dropdown's value must be one of its items. We always include the
+    // empty-state sentinel; a dangling reference shows up as a synthetic
+    // entry so the user sees the broken state rather than silently snapping
+    // to a different def.
+    final entries = <DropdownMenuItem<String>>[
+      const DropdownMenuItem<String>(
+        value: '',
+        child: Text(
+          '— No record type chosen —',
+          style: TextStyle(fontStyle: FontStyle.italic),
+        ),
+      ),
+      ...names.map(
+        (name) => DropdownMenuItem<String>(
+          value: name,
+          child: Text(name),
+        ),
+      ),
+      if (danglingButNotEmpty)
+        DropdownMenuItem<String>(
+          value: value,
+          child: Text(
+            '$value (missing)',
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+    ];
+
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: AppInputDecorations.standard.copyWith(
+        labelText: 'Record Type',
+      ),
+      items: entries,
+      onChanged: (newValue) {
+        if (newValue != null) {
+          onChanged(newValue);
+        }
+      },
+    );
   }
 }

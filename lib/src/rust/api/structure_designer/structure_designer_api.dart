@@ -105,6 +105,12 @@ List<APINodeCategoryView>? getCompatibleNodeTypes(
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
 
+/// Returns every record type def name in the project, sorted alphabetically.
+/// Used by the Flutter type-selector and by `record_construct` /
+/// `record_destructure` node-property dropdowns.
+List<String>? getRecordTypeDefNames() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetRecordTypeDefNames();
+
 /// Checks if a node type name corresponds to a custom node (i.e., a user-defined node network).
 /// Returns false if the CAD instance is not available.
 bool isCustomNodeType({required String nodeTypeName}) => RustLib.instance.api
@@ -347,6 +353,22 @@ APIIVec3? getExtrudeDrawingPlaneMillerDirection({required BigInt nodeId}) =>
 APIIntData? getIntData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetIntData(nodeId: nodeId);
 
+/// Reads the `schema` property of a `record_construct` node — the name of
+/// the record type def its pin layout is bound to. An empty string means
+/// "no schema chosen yet". Returns `None` if the node does not exist or is
+/// not a `record_construct`.
+APIRecordSchemaData? getRecordConstructData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetRecordConstructData(
+            nodeId: nodeId);
+
+/// Reads the `schema` property of a `record_destructure` node — same shape
+/// and semantics as `get_record_construct_data`.
+APIRecordSchemaData? getRecordDestructureData({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetRecordDestructureData(
+            nodeId: nodeId);
+
 APIStringData? getStringData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetStringData(nodeId: nodeId);
 
@@ -533,6 +555,26 @@ void setIntData({required BigInt nodeId, required APIIntData data}) =>
 void setStringData({required BigInt nodeId, required APIStringData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetStringData(
+            nodeId: nodeId, data: data);
+
+/// Writes the `schema` property of a `record_construct` node. After the
+/// write, the node-network refresh re-runs the registry-aware cache
+/// populator, which rebuilds the per-field input pin layout from the chosen
+/// def. An empty string clears the schema.
+void setRecordConstructData(
+        {required BigInt nodeId, required APIRecordSchemaData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetRecordConstructData(
+            nodeId: nodeId, data: data);
+
+/// Writes the `schema` property of a `record_destructure` node. Same
+/// post-write behavior as `set_record_construct_data` — pin layout is
+/// re-derived from the chosen def, dangling references leave the node with
+/// a placeholder layout and broken downstream wires.
+void setRecordDestructureData(
+        {required BigInt nodeId, required APIRecordSchemaData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
             nodeId: nodeId, data: data);
 
 void setBoolData({required BigInt nodeId, required APIBoolData data}) =>

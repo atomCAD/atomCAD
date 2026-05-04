@@ -465,6 +465,10 @@ class APICuboidData {
 
 class APIDataType {
   final APIDataTypeBase dataTypeBase;
+
+  /// Carries the inner string for both `Custom` (a free-form `DataType`
+  /// string) and `Record` (the record def name). `Some` iff the base is
+  /// one of those two; `None` otherwise.
   final String? customDataType;
   final bool array;
 
@@ -511,6 +515,13 @@ enum APIDataTypeBase {
   hasFreeLinOps,
   motif,
   structure,
+
+  /// Named record type. `custom_data_type` carries the record def name
+  /// (empty string when no schema chosen yet — a dangling reference). The
+  /// Flutter type-selector exposes this as a separate "Record" branch
+  /// with a dropdown of named defs; anonymous record types are not
+  /// reachable from the UI in v1 and round-trip through `Custom` instead.
+  record,
   custom,
   ;
 }
@@ -1799,6 +1810,28 @@ class APIRangeData {
           start == other.start &&
           step == other.step &&
           count == other.count;
+}
+
+/// Shared payload for `record_construct` and `record_destructure` node
+/// properties. Both nodes hold a single `schema: String` (the name of a
+/// record type def in the project's registry; empty when no schema is
+/// chosen yet).
+class APIRecordSchemaData {
+  final String schema;
+
+  const APIRecordSchemaData({
+    required this.schema,
+  });
+
+  @override
+  int get hashCode => schema.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRecordSchemaData &&
+          runtimeType == other.runtimeType &&
+          schema == other.schema;
 }
 
 class APIRectData {
