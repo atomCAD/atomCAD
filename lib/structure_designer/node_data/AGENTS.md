@@ -41,3 +41,15 @@ Editor files follow: `{node_type_name}_editor.dart`
 ## Node Types Without Custom Editors
 
 Some nodes (like boolean operations: Union, Intersect, Diff) have no editable properties — they only receive wired inputs. These don't need dedicated editor files; `node_data_widget.dart` shows the default header only.
+
+## "Disable on wired input" Pattern
+
+For nodes whose stored property is overridden when an input pin is wired (`imat3_diag`, `mat3_diag`, `supercell`, `atom_replace`, …), the editor must render in a disabled state when that pin is connected — but **must not** clear the stored values, so they re-activate on disconnect. Use this shape:
+
+1. **Detect connection** by walking `model.nodeNetworkView.wires` for `wire.destNodeId == nodeId && wire.destParamIndex == BigInt.from(<pin_index>)`. Cache the result locally in `build()` — don't store it on the widget.
+2. **Wrap the editable region** in `Opacity(opacity: connected ? 0.5 : 1.0)` + `IgnorePointer(ignoring: connected, child: ...)`. This works for any inner widget, even ones that don't expose an `enabled` parameter (`SelectElementWidget`, etc.) — preferred over threading a new `enabled` parameter through shared widgets.
+3. **Null out `onPressed`** on add/delete/edit buttons when connected (so they visibly disable rather than just ignore taps).
+4. **Show an italic annotation** above the disabled region: `'<Property> supplied by \`<pin_name>\` input. Disconnect to edit inline.'`
+5. **Never call the model's setter** to clear stored values when connecting. The Rust eval side handles "wired replaces stored"; the editor only owns the UI affordance.
+
+The matching backend convention is documented in `rust/src/structure_designer/nodes/AGENTS.md` (matrix nodes' "wired input pin overrides the corresponding row/column/diagonal at eval"); the corresponding Rust subtitle drop is `get_subtitle()` returning `None` when `connected_input_pins.contains("<pin_name>")`.

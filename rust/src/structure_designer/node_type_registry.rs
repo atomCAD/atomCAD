@@ -112,6 +112,8 @@ pub struct RecordTypeDef {
 pub enum RecordTypeDefError {
     #[error("name '{0}' is already taken by a record type def, node network, or built-in type")]
     NameCollision(String),
+    #[error("'{0}' is a built-in record type")]
+    BuiltIn(String),
     #[error("record type def '{0}' does not exist")]
     NotFound(String),
     #[error("duplicate field name '{1}' in record type def '{0}'")]
@@ -125,10 +127,18 @@ pub enum RecordTypeDefError {
 pub struct NodeTypeRegistry {
     pub built_in_node_types: HashMap<String, NodeType>,
     pub node_networks: HashMap<String, NodeNetwork>,
-    /// Named record type defs. Shares the user-type namespace with `node_networks`
-    /// (collisions are rejected at add/rename time). See
-    /// `doc/design_record_types.md`.
+    /// User-declared named record type defs. Shares the user-type namespace
+    /// with `node_networks` and with `built_in_record_type_defs` (collisions
+    /// are rejected at add/rename time). See `doc/design_record_types.md` and
+    /// `doc/design_atom_replace_rules_input.md` Phase A.
     pub record_type_defs: HashMap<String, RecordTypeDef>,
+    /// Built-in named record type defs. Registered once at construction time
+    /// and never mutated, never serialized. Looked up alongside
+    /// `record_type_defs` via `lookup_record_type_def`. Built-in names are
+    /// reserved — `add/delete/rename/update_record_type_def` and
+    /// `name_is_taken` consult this map. See
+    /// `doc/design_atom_replace_rules_input.md` Phase A.
+    pub built_in_record_type_defs: HashMap<String, RecordTypeDef>,
     pub design_file_name: Option<String>,
 }
 
@@ -155,8 +165,24 @@ impl NodeTypeRegistry {
             built_in_node_types: HashMap::new(),
             node_networks: HashMap::new(),
             record_type_defs: HashMap::new(),
+            built_in_record_type_defs: HashMap::new(),
             design_file_name: None,
         };
+
+        // Built-in record type defs. Registered before any node type so that
+        // node types referencing them (e.g. `atom_replace.rules` →
+        // `Array[Record(Named("ElementMapping"))]`) resolve consistently.
+        // See `doc/design_atom_replace_rules_input.md` Phase A.
+        ret.built_in_record_type_defs.insert(
+            "ElementMapping".to_string(),
+            RecordTypeDef {
+                name: "ElementMapping".to_string(),
+                fields: vec![
+                    ("from".to_string(), DataType::Int),
+                    ("to".to_string(), DataType::Int),
+                ],
+            },
+        );
 
         // Annotation nodes
         ret.add_node_type(comment_get_node_type());
@@ -480,13 +506,15 @@ impl NodeTypeRegistry {
     /// Static helper function to populate custom node type cache without borrowing conflicts
     /// Returns whether a custom node type was populated or not
     ///
-    /// `record_type_defs` is consulted only by record-typed nodes
-    /// (`record_construct`, `record_destructure`, `product`) — every other
-    /// node derives its custom type from per-node data via
-    /// `calculate_custom_node_type`.
+    /// `record_type_defs` and `built_in_record_type_defs` are consulted only
+    /// by record-typed nodes (`record_construct`, `record_destructure`,
+    /// `product`) — every other node derives its custom type from per-node
+    /// data via `calculate_custom_node_type`. The two maps are looked up
+    /// user-first then built-in (matching `lookup_record_type_def`).
     pub fn populate_custom_node_type_cache_with_types(
         built_in_types: &std::collections::HashMap<String, NodeType>,
         record_type_defs: &std::collections::HashMap<String, RecordTypeDef>,
+        built_in_record_type_defs: &std::collections::HashMap<String, RecordTypeDef>,
         node: &mut Node,
         refresh_args: bool,
     ) -> bool {
@@ -496,8 +524,8 @@ impl NodeTypeRegistry {
 
         // Record nodes derive their custom node type from the registry (the
         // schema's authored fields), not from per-node data alone. We use a
-        // wrapper registry here that exposes only the record_type_defs slice
-        // — `build_node_type_for_schema` reads only that field.
+        // wrapper registry here that exposes only the record-type-defs slices
+        // — `build_node_type_for_schema` reads only those fields.
         if node.node_type_name == "record_construct" {
             if let Some(data) = node
                 .data
@@ -509,6 +537,7 @@ impl NodeTypeRegistry {
                     base_node_type,
                     &schema,
                     record_type_defs,
+                    built_in_record_type_defs,
                 );
                 node.set_custom_node_type(Some(custom), refresh_args);
                 return true;
@@ -524,22 +553,25 @@ impl NodeTypeRegistry {
                     base_node_type,
                     &schema,
                     record_type_defs,
+                    built_in_record_type_defs,
                 );
                 node.set_custom_node_type(Some(custom), refresh_args);
                 return true;
             }
         } else if node.node_type_name == "product" {
-            if let Some(data) = node
-                .data
-                .as_any_ref()
-                .downcast_ref::<crate::structure_designer::nodes::product::ProductData>()
+            if let Some(data) =
+                node.data
+                    .as_any_ref()
+                    .downcast_ref::<crate::structure_designer::nodes::product::ProductData>()
             {
                 let target = data.target.clone();
-                let custom = crate::structure_designer::nodes::product::build_node_type_for_target_with_defs(
-                    base_node_type,
-                    &target,
-                    record_type_defs,
-                );
+                let custom =
+                    crate::structure_designer::nodes::product::build_node_type_for_target_with_defs(
+                        base_node_type,
+                        &target,
+                        record_type_defs,
+                        built_in_record_type_defs,
+                    );
                 node.set_custom_node_type(Some(custom), refresh_args);
                 return true;
             }
@@ -556,6 +588,7 @@ impl NodeTypeRegistry {
         Self::populate_custom_node_type_cache_with_types(
             &self.built_in_node_types,
             &self.record_type_defs,
+            &self.built_in_record_type_defs,
             node,
             refresh_args,
         )
@@ -745,13 +778,32 @@ impl NodeTypeRegistry {
             .insert(node_network.node_type.name.clone(), node_network);
     }
 
-    /// True iff `name` is in use by a record type def, a custom node network,
-    /// or a built-in node type. Used as the namespace-collision check before
-    /// adding or renaming a user-defined type.
+    /// True iff `name` is in use by a user record type def, a built-in record
+    /// type def, a custom node network, or a built-in node type. Used as the
+    /// namespace-collision check before adding or renaming a user-defined
+    /// type.
     pub fn name_is_taken(&self, name: &str) -> bool {
         self.record_type_defs.contains_key(name)
+            || self.built_in_record_type_defs.contains_key(name)
             || self.node_networks.contains_key(name)
             || self.built_in_node_types.contains_key(name)
+    }
+
+    /// Resolves a record type def by name, consulting user-declared defs first
+    /// and then the built-in defs. The single lookup point used by every
+    /// type-resolution / pin-layout / dropdown-population call site so that
+    /// built-ins are uniformly visible. See
+    /// `doc/design_atom_replace_rules_input.md` Phase A.
+    pub fn lookup_record_type_def(&self, name: &str) -> Option<&RecordTypeDef> {
+        self.record_type_defs
+            .get(name)
+            .or_else(|| self.built_in_record_type_defs.get(name))
+    }
+
+    /// True iff `name` names a built-in record type def. Used by mutation
+    /// guards to reject attempts to add/delete/rename/update a built-in.
+    pub fn is_built_in_record_type_def(&self, name: &str) -> bool {
+        self.built_in_record_type_defs.contains_key(name)
     }
 
     /// Adds a new record type def. Validates: name not already taken, field
@@ -763,6 +815,9 @@ impl NodeTypeRegistry {
     /// dangling references resolve to `None` at use time and are surfaced by
     /// network validation.
     pub fn add_record_type_def(&mut self, def: RecordTypeDef) -> Result<(), RecordTypeDefError> {
+        if self.is_built_in_record_type_def(&def.name) {
+            return Err(RecordTypeDefError::BuiltIn(def.name.clone()));
+        }
         if self.name_is_taken(&def.name) {
             return Err(RecordTypeDefError::NameCollision(def.name.clone()));
         }
@@ -777,7 +832,15 @@ impl NodeTypeRegistry {
     /// and is reported as a validation error wherever it appears. Callers that
     /// own a `StructureDesigner` should also call `repair_node_network` on
     /// every affected network.
+    ///
+    /// Built-in record type defs are immutable — calls naming a built-in are
+    /// silently a no-op (return `None`); the guarded entry point at
+    /// `StructureDesigner::delete_record_type_def` reports an error to the
+    /// user.
     pub fn delete_record_type_def(&mut self, name: &str) -> Option<RecordTypeDef> {
+        if self.is_built_in_record_type_def(name) {
+            return None;
+        }
         self.record_type_defs.remove(name)
     }
 
@@ -795,8 +858,14 @@ impl NodeTypeRegistry {
         if old_name == new_name {
             return Ok(());
         }
+        if self.is_built_in_record_type_def(old_name) {
+            return Err(RecordTypeDefError::BuiltIn(old_name.to_string()));
+        }
         if !self.record_type_defs.contains_key(old_name) {
             return Err(RecordTypeDefError::NotFound(old_name.to_string()));
+        }
+        if self.is_built_in_record_type_def(new_name) {
+            return Err(RecordTypeDefError::BuiltIn(new_name.to_string()));
         }
         if self.name_is_taken(new_name) {
             return Err(RecordTypeDefError::NameCollision(new_name.to_string()));
@@ -828,6 +897,9 @@ impl NodeTypeRegistry {
         name: &str,
         new_fields: Vec<(String, DataType)>,
     ) -> Result<(), RecordTypeDefError> {
+        if self.is_built_in_record_type_def(name) {
+            return Err(RecordTypeDefError::BuiltIn(name.to_string()));
+        }
         if !self.record_type_defs.contains_key(name) {
             return Err(RecordTypeDefError::NotFound(name.to_string()));
         }
@@ -928,6 +1000,7 @@ impl NodeTypeRegistry {
                 Self::populate_custom_node_type_cache_with_types(
                     &self.built_in_node_types,
                     &self.record_type_defs,
+                    &self.built_in_record_type_defs,
                     node,
                     true,
                 );
@@ -1189,7 +1262,12 @@ fn dfs_cycle_check(
     if !visited.insert(current.to_string()) {
         return false;
     }
-    let Some(def) = registry.record_type_defs.get(current) else {
+    // Built-in defs are visited too: they may contain `Named` references to
+    // other built-ins or (defensively) to user defs. Built-ins themselves
+    // never reference the def-being-validated (they're added before any user
+    // def exists), so cycles cannot reach back via a built-in — but the walk
+    // is still well-defined.
+    let Some(def) = registry.lookup_record_type_def(current) else {
         // Dangling reference — ignore for cycle detection. Validation will
         // surface dangling refs separately.
         return false;
@@ -1345,10 +1423,12 @@ pub fn validate_record_type_defs(registry: &NodeTypeRegistry) -> Vec<String> {
     }
 
     // Dangling reference check: every `Named(N)` inside any def's fields must
-    // point at an existing record def in the registry.
+    // point at an existing record def in the registry. Built-in defs are
+    // resolved through `lookup_record_type_def`, so a user def referencing
+    // a built-in (e.g. `ElementMapping`) is not dangling.
     for (name, def) in &registry.record_type_defs {
         for r in collect_named_record_refs(&def.fields) {
-            if !registry.record_type_defs.contains_key(&r) {
+            if registry.lookup_record_type_def(&r).is_none() {
                 errors.push(format!(
                     "record type def '{}' has dangling reference to '{}'",
                     name, r

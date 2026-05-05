@@ -4,8 +4,14 @@ import 'package:flutter_cad/common/select_element_widget.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
+/// Index of the `rules` input pin on `atom_replace`. 0 = molecule, 1 = rules.
+const int _RULES_PIN_INDEX = 1;
+
 /// Editor widget for atom_replace nodes.
 /// Displays a list of element replacement rules with add/remove controls.
+/// When the `rules` input pin is wired, the editor renders in a disabled
+/// state — the wired value entirely replaces the stored list at eval, but
+/// the stored values are preserved so they become live again on disconnect.
 class AtomReplaceEditor extends StatelessWidget {
   final BigInt nodeId;
   final APIAtomReplaceData? data;
@@ -19,6 +25,18 @@ class AtomReplaceEditor extends StatelessWidget {
   });
 
   List<APIAtomReplaceRule> get _rules => data?.replacements ?? [];
+
+  bool _isRulesPinConnected() {
+    final view = model.nodeNetworkView;
+    if (view == null) return false;
+    for (final wire in view.wires) {
+      if (wire.destNodeId == nodeId &&
+          wire.destParamIndex == BigInt.from(_RULES_PIN_INDEX)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   void _updateRules(List<APIAtomReplaceRule> rules) {
     model.setAtomReplaceData(
@@ -64,6 +82,8 @@ class AtomReplaceEditor extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final rulesConnected = _isRulesPinConnected();
+
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
@@ -75,8 +95,17 @@ class AtomReplaceEditor extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
+          if (rulesConnected)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                'Rules supplied by `rules` input. Disconnect to edit inline.',
+                style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+              ),
+            ),
+
           // Replacement rules list
-          if (_rules.isEmpty)
+          if (_rules.isEmpty && !rulesConnected)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8.0),
               child: Text(
@@ -89,6 +118,7 @@ class AtomReplaceEditor extends StatelessWidget {
             _ReplacementRuleRow(
               key: ValueKey('rule_$i'),
               rule: _rules[i],
+              enabled: !rulesConnected,
               onFromChanged: (value) => _updateFrom(i, value),
               onToChanged: (value) => _updateTo(i, value),
               onDelete: () => _removeRule(i),
@@ -102,7 +132,7 @@ class AtomReplaceEditor extends StatelessWidget {
             child: OutlinedButton.icon(
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add Replacement'),
-              onPressed: _addRule,
+              onPressed: rulesConnected ? null : _addRule,
             ),
           ),
         ],
@@ -114,6 +144,7 @@ class AtomReplaceEditor extends StatelessWidget {
 /// A single replacement rule row: [source dropdown] → [target dropdown] [delete]
 class _ReplacementRuleRow extends StatelessWidget {
   final APIAtomReplaceRule rule;
+  final bool enabled;
   final ValueChanged<int> onFromChanged;
   final ValueChanged<int> onToChanged;
   final VoidCallback onDelete;
@@ -121,6 +152,7 @@ class _ReplacementRuleRow extends StatelessWidget {
   const _ReplacementRuleRow({
     super.key,
     required this.rule,
+    required this.enabled,
     required this.onFromChanged,
     required this.onToChanged,
     required this.onDelete,
@@ -128,44 +160,50 @@ class _ReplacementRuleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fromDropdown = SelectElementWidget(
+      value: rule.fromAtomicNumber,
+      required: true,
+      onChanged: (value) {
+        if (value != null) onFromChanged(value);
+      },
+    );
+    final toDropdown = SelectElementWidget(
+      value: rule.toAtomicNumber == 0 ? null : rule.toAtomicNumber,
+      required: false,
+      nullLabel: 'Delete',
+      onChanged: (value) {
+        onToChanged(value ?? 0);
+      },
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          // Source element dropdown
-          Expanded(
-            child: SelectElementWidget(
-              value: rule.fromAtomicNumber,
-              required: true,
-              onChanged: (value) {
-                if (value != null) onFromChanged(value);
-              },
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.5,
+        child: Row(
+          children: [
+            // Source element dropdown
+            Expanded(
+              child: IgnorePointer(ignoring: !enabled, child: fromDropdown),
             ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4.0),
-            child: Text('→', style: TextStyle(fontSize: 16)),
-          ),
-          // Target element dropdown (with Delete option at atomic number 0)
-          Expanded(
-            child: SelectElementWidget(
-              value: rule.toAtomicNumber == 0 ? null : rule.toAtomicNumber,
-              required: false,
-              nullLabel: 'Delete',
-              onChanged: (value) {
-                onToChanged(value ?? 0);
-              },
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4.0),
+              child: Text('→', style: TextStyle(fontSize: 16)),
             ),
-          ),
-          // Delete button
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: onDelete,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            tooltip: 'Remove rule',
-          ),
-        ],
+            // Target element dropdown (with Delete option at atomic number 0)
+            Expanded(
+              child: IgnorePointer(ignoring: !enabled, child: toDropdown),
+            ),
+            // Delete button
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: enabled ? onDelete : null,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Remove rule',
+            ),
+          ],
+        ),
       ),
     );
   }

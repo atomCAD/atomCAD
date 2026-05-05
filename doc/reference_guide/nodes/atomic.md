@@ -232,12 +232,15 @@ Substitutes atoms of one element for another (or removes them) in bulk, accordin
 **Input pins**
 
 - `molecule` — the atomic structure to transform (`Crystal` or `Molecule`).
+- `rules: Array[Record(ElementMapping)]` (optional) — a programmatically-built list of replacement rules. `ElementMapping` is a built-in record def with two `Int` fields, `from` and `to` (atomic numbers; `0` on `to` means *Delete*).
 
 **Properties**
 
-The replacement rules live as node properties, not wired inputs. The property panel shows a list of rows, each with `[source element] → [target element]` and a delete button, plus an *Add Replacement* button at the bottom.
+When `rules` is unwired, the replacement rules live as node properties instead. The property panel shows a list of rows, each with `[source element] → [target element]` and a delete button, plus an *Add Replacement* button at the bottom.
 
 The **target dropdown** has an extra entry — *Delete* — at the top of the list. Choosing *Delete* removes every atom of the source element from the structure (and cleans up their bonds) instead of substituting them.
+
+When `rules` is wired, the wired array entirely replaces the property list — the editor renders disabled (existing rows stay visible at half opacity so you can read what would come back on disconnect), and the node subtitle is suppressed (the upstream source carries its own subtitle). The stored property values are not cleared by connecting the pin; disconnect to edit inline again.
 
 **Behavior**
 
@@ -246,8 +249,9 @@ The **target dropdown** has an extra entry — *Delete* — at the top of the li
 - Rules apply independently — each atom is matched against the rule list once.
 - If multiple rules name the same source element, the last rule wins.
 - Bond connectivity is preserved when an element is substituted; bonds attached to deleted atoms are removed.
+- For wired rules, `from` is validated to `-1..=118` (the `-1` and `0` sentinels are silently ignored, matching the property-driven path) and `to` to `0..=118`; out-of-range values produce an evaluation error rather than a silent skip.
 
-The node subtitle summarizes the active rules (e.g. `C→Si, O→S`, or `H→(del)` for a deletion rule), with a `… (+N more)` suffix when the list is longer than three entries.
+The node subtitle summarizes the active rules (e.g. `C→Si, O→S`, or `H→(del)` for a deletion rule), with a `… (+N more)` suffix when the list is longer than three entries. Suppressed when `rules` is wired.
 
 **Text format**
 

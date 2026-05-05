@@ -145,8 +145,8 @@ use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::structure_designer::nodes::range::RangeData;
 use crate::structure_designer::nodes::product::ProductData;
+use crate::structure_designer::nodes::range::RangeData;
 use crate::structure_designer::nodes::record_construct::RecordConstructData;
 use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
 use crate::structure_designer::nodes::rect::RectData;
@@ -727,9 +727,11 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
     }
 }
 
-/// Returns every record type def name in the project, sorted alphabetically.
-/// Used by the Flutter type-selector and by `record_construct` /
-/// `record_destructure` node-property dropdowns.
+/// Returns every **user-declared** record type def name in the project,
+/// sorted alphabetically. Used by the user-types panel so built-in defs are
+/// not listed there. Dropdowns (type selector, `record_construct` /
+/// `record_destructure` / `product` editors) should call
+/// `get_all_record_type_def_names` instead so they see built-ins too.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_record_type_def_names() -> Option<Vec<String>> {
     unsafe {
@@ -739,6 +741,56 @@ pub fn get_record_type_def_names() -> Option<Vec<String>> {
                     .structure_designer
                     .node_type_registry
                     .record_type_defs
+                    .keys()
+                    .cloned()
+                    .collect();
+                names.sort();
+                Some(names)
+            },
+            None,
+        )
+    }
+}
+
+/// Returns every record type def name in the project (user-declared plus
+/// built-in), sorted alphabetically. Used by the Flutter type-selector
+/// Record branch and by the `record_construct` / `record_destructure` /
+/// `product` node-property dropdowns. See
+/// `doc/design_atom_replace_rules_input.md` Phase A.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_all_record_type_def_names() -> Option<Vec<String>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let registry = &cad_instance.structure_designer.node_type_registry;
+                let mut names: Vec<String> = registry
+                    .record_type_defs
+                    .keys()
+                    .chain(registry.built_in_record_type_defs.keys())
+                    .cloned()
+                    .collect();
+                names.sort();
+                names.dedup();
+                Some(names)
+            },
+            None,
+        )
+    }
+}
+
+/// Returns every built-in record type def name, sorted alphabetically.
+/// Used by Flutter-side namespace-collision checks so the UI can pre-validate
+/// before round-tripping to Rust. See
+/// `doc/design_atom_replace_rules_input.md` Phase A.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_built_in_record_type_def_names() -> Option<Vec<String>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let mut names: Vec<String> = cad_instance
+                    .structure_designer
+                    .node_type_registry
+                    .built_in_record_type_defs
                     .keys()
                     .cloned()
                     .collect();
@@ -1044,16 +1096,17 @@ pub fn add_node_network_with_name(name: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                // Check if name already exists
+                // Check if name already exists across the whole user-type
+                // namespace (networks, user record defs, built-in record
+                // defs, built-in node types).
                 if instance
                     .structure_designer
                     .node_type_registry
-                    .node_networks
-                    .contains_key(&name)
+                    .name_is_taken(&name)
                 {
                     return APIResult {
                         success: false,
-                        error_message: format!("Network '{}' already exists", name),
+                        error_message: format!("Name '{}' is already taken", name),
                     };
                 }
                 if let Err(reason) = instance

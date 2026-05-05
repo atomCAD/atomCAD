@@ -195,7 +195,9 @@ class _RecordDefDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final names = sd_api.getRecordTypeDefNames() ?? <String>[];
+    // Includes built-in record defs alongside user defs so e.g.
+    // `ElementMapping` is selectable without manual setup.
+    final names = sd_api.getAllRecordTypeDefNames() ?? <String>[];
     final danglingButNotEmpty = value.isNotEmpty && !names.contains(value);
     // The dropdown's value must be one of its items. We always include the
     // empty-state sentinel; a dangling reference shows up as a synthetic

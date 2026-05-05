@@ -698,10 +698,13 @@ impl StructureDesigner {
     // node network methods
 
     pub fn add_new_node_network(&mut self) {
-        // Generate a unique name for the new node network
+        // Generate a unique name. Skip any name already taken anywhere in the
+        // user-type namespace (networks, user record defs, built-in record
+        // defs, built-in node types) so the auto-generated name is never a
+        // collision.
         let mut name = "UNTITLED".to_string();
         let mut i = 1;
-        while self.node_type_registry.node_networks.contains_key(&name) {
+        while self.node_type_registry.name_is_taken(&name) {
             name = format!("UNTITLED{}", i);
             i += 1;
         }
@@ -767,14 +770,10 @@ impl StructureDesigner {
         if !self.node_type_registry.node_networks.contains_key(old_name) {
             return false;
         }
-        if self.node_type_registry.node_networks.contains_key(new_name) {
-            return false;
-        }
-        if self
-            .node_type_registry
-            .built_in_node_types
-            .contains_key(new_name)
-        {
+        // The new name must not collide across the whole user-type namespace
+        // (networks, user record defs, built-in record defs, built-in node
+        // types). See `doc/design_atom_replace_rules_input.md` Phase A.
+        if self.node_type_registry.name_is_taken(new_name) {
             return false;
         }
 
@@ -1302,9 +1301,10 @@ impl StructureDesigner {
         // If we successfully added a node, initialize custom node type if needed
         if node_id != 0 {
             // Split the borrow to avoid conflicts
-            let (built_in_types, record_type_defs, node_networks) = (
+            let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
                 &self.node_type_registry.built_in_node_types,
                 &self.node_type_registry.record_type_defs,
+                &self.node_type_registry.built_in_record_type_defs,
                 &mut self.node_type_registry.node_networks,
             );
             if let Some(network) = node_networks.get_mut(&node_network_name) {
@@ -1313,6 +1313,7 @@ impl StructureDesigner {
                     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                         built_in_types,
                         record_type_defs,
+                        built_in_record_type_defs,
                         node,
                         true,
                     );
@@ -2037,9 +2038,10 @@ impl StructureDesigner {
         }
 
         // Cache custom NodeType if needed after data is set
-        let (built_in_types, record_type_defs, node_networks) = (
+        let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
             &self.node_type_registry.built_in_node_types,
             &self.node_type_registry.record_type_defs,
+            &self.node_type_registry.built_in_record_type_defs,
             &mut self.node_type_registry.node_networks,
         );
         let custom_node_type_populated = if let Some(network) = node_networks.get_mut(&network_name)
@@ -2049,6 +2051,7 @@ impl StructureDesigner {
                 NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                     built_in_types,
                     record_type_defs,
+                    built_in_record_type_defs,
                     node,
                     true,
                 )

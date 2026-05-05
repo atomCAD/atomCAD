@@ -60,8 +60,8 @@ structure_designer/
 | `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
 | `DataType` | `data_type.rs` | Pin type system: primitives (incl. `IMat3`/`Mat3` 3x3 matrices), `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`), and `Record(RecordType)` where `RecordType` is either `Named(String)` (registry reference) or `Anonymous(Vec<(String, DataType)>)` (inline schema, sorted by field name) |
-| `RecordTypeDef` | `node_type_registry.rs` | User-declared named record schema. Fields are stored in **authored order** (drives pin layouts on `record_construct` / `record_destructure` / `product`); subtyping/equality canonicalize on demand |
-| `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types and `record_type_defs` (named record schemas). Networks and record defs share one user-type namespace |
+| `RecordTypeDef` | `node_type_registry.rs` | Named record schema (user-declared *or* built-in). Fields are stored in **authored order** (drives pin layouts on `record_construct` / `record_destructure` / `product`); subtyping/equality canonicalize on demand |
+| `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types, `record_type_defs` (user-declared schemas), and `built_in_record_type_defs` (application-supplied schemas like `ElementMapping`). Networks and record defs share one user-type namespace |
 | `NetworkResult` | `evaluator/network_result.rs` | Evaluated node output value |
 
 ## Data Flow
@@ -132,7 +132,9 @@ A `NodeNetwork` can itself become a node type usable in other networks. The `Nod
 
 ## Record Type Defs
 
-`RecordTypeDef`s live alongside custom networks in `NodeTypeRegistry::record_type_defs` and share one user-type namespace with networks (and built-ins). `RecordType::Named(N)` references resolve through the registry on every lookup, so field-level edits to a def are visible everywhere immediately — only renames need a `DataType` walk (see `rename_record_type_def`, modeled on `rename_node_network`). The `record_type_def` dependency graph must stay acyclic; the cycle check runs on add/update. Schema or deletion changes trigger `repair_node_network` to disconnect now-incompatible wires and refresh `record_construct` / `record_destructure` / `product` pin layouts. Design doc: `doc/design_record_types.md`.
+User-declared `RecordTypeDef`s live alongside custom networks in `NodeTypeRegistry::record_type_defs` and share one user-type namespace with networks (and built-ins). `RecordType::Named(N)` references resolve through the registry on every lookup, so field-level edits to a def are visible everywhere immediately — only renames need a `DataType` walk (see `rename_record_type_def`, modeled on `rename_node_network`). The `record_type_def` dependency graph must stay acyclic; the cycle check runs on add/update. Schema or deletion changes trigger `repair_node_network` to disconnect now-incompatible wires and refresh `record_construct` / `record_destructure` / `product` pin layouts. Design doc: `doc/design_record_types.md`.
+
+**Built-in record defs** (`NodeTypeRegistry::built_in_record_type_defs`) are application-supplied schemas like `ElementMapping = {from: Int, to: Int}` (consumed by `atom_replace.rules`). They share the user-type namespace with user defs and networks — `name_is_taken` consults this map, and `add_record_type_def` / `rename_record_type_def` reject collisions with built-in names. **Always look up named record defs through the unified accessor `NodeTypeRegistry::lookup_record_type_def(name)`** — it tries `record_type_defs` first, then falls back to `built_in_record_type_defs`. Direct indexing into `record_type_defs` silently misses built-ins. The same pattern applies to the `populate_custom_node_type_cache_with_types` helpers, which take both maps as parameters. Design doc: `doc/design_atom_replace_rules_input.md` (Phase A).
 
 ## Change Tracking & Refresh
 

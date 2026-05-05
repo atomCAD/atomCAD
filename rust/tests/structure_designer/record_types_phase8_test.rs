@@ -68,6 +68,7 @@ fn set_node_data(
     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
         &registry.built_in_node_types,
         &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
         node,
         true,
     );
@@ -438,7 +439,10 @@ fn product_target_with_array_field() {
             ),
         ],
     };
-    designer.node_type_registry.add_record_type_def(bag).unwrap();
+    designer
+        .node_type_registry
+        .add_record_type_def(bag)
+        .unwrap();
 
     let prod = designer.add_node("product", DVec2::new(0.0, 0.0));
     set_node_data(

@@ -49,7 +49,7 @@ impl NodeData for ProductData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let Some(def) = registry.record_type_defs.get(&self.target) else {
+        let Some(def) = registry.lookup_record_type_def(&self.target) else {
             return EvalOutput::single(NetworkResult::None);
         };
 
@@ -159,22 +159,32 @@ pub fn build_node_type_for_target(
     target: &str,
     registry: &NodeTypeRegistry,
 ) -> NodeType {
-    build_node_type_for_target_with_defs(base_node_type, target, &registry.record_type_defs)
+    build_node_type_for_target_with_defs(
+        base_node_type,
+        target,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+    )
 }
 
-/// Same as `build_node_type_for_target`, but takes the record-type-defs map
+/// Same as `build_node_type_for_target`, but takes the record-type-defs maps
 /// directly so the cache populator can call it without conflicting with a
-/// concurrent `&mut node_networks` borrow on the registry.
+/// concurrent `&mut node_networks` borrow on the registry. Looks up the
+/// target name in `record_type_defs` first, then `built_in_record_type_defs`.
 pub fn build_node_type_for_target_with_defs(
     base_node_type: &NodeType,
     target: &str,
     record_type_defs: &HashMap<String, RecordTypeDef>,
+    built_in_record_type_defs: &HashMap<String, RecordTypeDef>,
 ) -> NodeType {
     let mut custom = base_node_type.clone();
     custom.output_pins = OutputPinDefinition::single_fixed(DataType::Array(Box::new(
         DataType::Record(RecordType::Named(target.to_string())),
     )));
-    if let Some(def) = record_type_defs.get(target) {
+    if let Some(def) = record_type_defs
+        .get(target)
+        .or_else(|| built_in_record_type_defs.get(target))
+    {
         custom.parameters = def
             .fields
             .iter()

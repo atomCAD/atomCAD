@@ -1,6 +1,6 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_constants::ATOM_INFO;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -71,7 +71,26 @@ impl NodeData for AtomReplaceData {
             return EvalOutput::single(molecule_input_val);
         }
 
-        let replacements = self.replacements.clone();
+        // Optional `rules` pin (param index 1). Disconnected → fall back to
+        // stored replacements. Connected → wired rules entirely replace the
+        // stored list (see design_atom_replace_rules_input.md §4).
+        let rules_input =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
+        let replacements = match rules_input {
+            NetworkResult::None => self.replacements.clone(),
+            NetworkResult::Error(_) => return EvalOutput::single(rules_input),
+            NetworkResult::Array(items) => match parse_rules_from_records(items) {
+                Ok(r) => r,
+                Err(e) => return EvalOutput::single(NetworkResult::Error(e)),
+            },
+            other => {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "atom_replace.rules: expected Array[Record], got {:?}",
+                    other.infer_data_type()
+                )));
+            }
+        };
+
         EvalOutput::single(map_atomic(molecule_input_val, move |mut structure| {
             if replacements.is_empty() {
                 return structure;
@@ -119,8 +138,15 @@ impl NodeData for AtomReplaceData {
 
     fn get_subtitle(
         &self,
-        _connected_input_pins: &std::collections::HashSet<String>,
+        connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
+        // When the `rules` pin is wired the stored list is overridden;
+        // suppress the subtitle entirely (project convention — the upstream
+        // source carries its own subtitle).
+        if connected_input_pins.contains("rules") {
+            return None;
+        }
+
         if self.replacements.is_empty() {
             return Some("(no replacements)".to_string());
         }
@@ -171,8 +197,57 @@ impl NodeData for AtomReplaceData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("molecule".to_string(), (true, None));
+        m.insert("rules".to_string(), (false, None));
         m
     }
+}
+
+/// Parse a runtime `Array[Record]` value into the `(from, to)` rule list.
+/// Each record must carry `from` and `to` `Int` fields whose values fit in
+/// `i16` and lie in `0..=118` (atomic-number range).
+fn parse_rules_from_records(items: Vec<NetworkResult>) -> Result<Vec<(i16, i16)>, String> {
+    let mut out = Vec::with_capacity(items.len());
+    for (i, item) in items.into_iter().enumerate() {
+        let from = item
+            .extract_record_field("from")
+            .ok_or_else(|| format!("atom_replace.rules[{}]: missing 'from' field", i))?
+            .clone()
+            .extract_int()
+            .ok_or_else(|| format!("atom_replace.rules[{}].from: not an Int", i))?;
+        let to = item
+            .extract_record_field("to")
+            .ok_or_else(|| format!("atom_replace.rules[{}]: missing 'to' field", i))?
+            .clone()
+            .extract_int()
+            .ok_or_else(|| format!("atom_replace.rules[{}].to: not an Int", i))?;
+        out.push((narrow_source(from, i)?, narrow_target(to, i)?));
+    }
+    Ok(out)
+}
+
+/// Narrow a source-side atomic number. Allows the unchanged-marker sentinel
+/// `-1` and the delete-marker `0` in addition to the real range — these are
+/// silently filtered out at apply time, matching the stored-rule path.
+fn narrow_source(value: i32, index: usize) -> Result<i16, String> {
+    if !(-1..=118).contains(&value) {
+        return Err(format!(
+            "atom_replace.rules[{}].from: atomic number {} out of range (expected -1..=118)",
+            index, value
+        ));
+    }
+    Ok(value as i16)
+}
+
+/// Narrow a target-side atomic number. Strict `0..=118`; `0` is the delete
+/// sentinel, anything else outside the table is a user-visible bug.
+fn narrow_target(value: i32, index: usize) -> Result<i16, String> {
+    if !(0..=118).contains(&value) {
+        return Err(format!(
+            "atom_replace.rules[{}].to: atomic number {} out of range (expected 0..=118)",
+            index, value
+        ));
+    }
+    Ok(value as i16)
 }
 
 pub fn get_node_type() -> NodeType {
@@ -184,11 +259,20 @@ pub fn get_node_type() -> NodeType {
             .to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
-        parameters: vec![Parameter {
-            id: None,
-            name: "molecule".to_string(),
-            data_type: DataType::HasAtoms,
-        }],
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "molecule".to_string(),
+                data_type: DataType::HasAtoms,
+            },
+            Parameter {
+                id: None,
+                name: "rules".to_string(),
+                data_type: DataType::Array(Box::new(DataType::Record(RecordType::Named(
+                    "ElementMapping".to_string(),
+                )))),
+            },
+        ],
         output_pins: OutputPinDefinition::single_same_as("molecule"),
         public: true,
         node_data_creator: || Box::new(AtomReplaceData::default()),

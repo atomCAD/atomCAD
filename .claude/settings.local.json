@@ -196,7 +196,15 @@
       "Bash(RUST_MIN_STACK=33554432 cargo test --test structure_designer --no-run)",
       "Bash(gh issue *)",
       "Bash(rust)",
-      "Bash(RUST_MIN_STACK=33554432 cargo test --no-run --lib --message-format=short)"
+      "Bash(RUST_MIN_STACK=33554432 cargo test --no-run --lib --message-format=short)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo test --no-run --test util)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo test --no-run --test expr --test integration --test geo_tree)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo test --test structure_designer)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo build)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo test --test structure_designer atom_replace_rules_phase_a)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo test --test integration)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo clippy --tests)",
+      "Bash(CARGO_BUILD_JOBS=2 cargo clippy --tests -- -A clippy::all)"
     ]
   }
 }

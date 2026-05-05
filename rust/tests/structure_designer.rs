@@ -234,3 +234,9 @@ mod record_types_phase4_test;
 
 #[path = "structure_designer/record_types_phase8_test.rs"]
 mod record_types_phase8_test;
+
+#[path = "structure_designer/atom_replace_rules_phase_a_test.rs"]
+mod atom_replace_rules_phase_a_test;
+
+#[path = "structure_designer/atom_replace_rules_phase_b_test.rs"]
+mod atom_replace_rules_phase_b_test;

@@ -467,6 +467,8 @@ Record-typed pins render in a single neutral color (no per-name hashing — the 
 
 Record defs may freely contain other record types as field types, but the dependency graph among defs must be acyclic. `Tree = { children: [Record(Tree)] }` is rejected; build recursive shapes by linking records via integer IDs in arrays instead.
 
+Some node types ship with **built-in record defs** — schemas baked into the application that you don't have to author yourself. The first example is `ElementMapping = {from: Int, to: Int}`, which is the element type of `atom_replace`'s optional `rules` input. Built-in defs share one namespace with user defs and participate in the same bare-identifier lookup (so `ElementMapping` works as a type expression in `expr` parameters and in the schema dropdowns), but they cannot be edited or deleted from the User Types panel, and the User Types panel will reject attempts to create, rename, or delete a user def with the same name.
+
 ## record_construct
 
 Bundles N input values into a single record value of the target schema.

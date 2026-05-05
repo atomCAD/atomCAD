@@ -100,16 +100,17 @@ impl RecordType {
     }
 
     /// Resolve to the canonical field schema. For `Named`, looks up the def in
-    /// the registry and returns its fields in canonical (sorted) order;
-    /// returns `None` if the name is dangling. For `Anonymous`, returns the
-    /// inline fields (already canonical).
+    /// the registry (user defs first, then built-in defs) and returns its
+    /// fields in canonical (sorted) order; returns `None` if the name is
+    /// dangling. For `Anonymous`, returns the inline fields (already
+    /// canonical).
     pub fn resolve_fields<'a>(
         &'a self,
         registry: &'a NodeTypeRegistry,
     ) -> Option<Cow<'a, [(String, DataType)]>> {
         match self {
             RecordType::Anonymous(fs) => Some(Cow::Borrowed(fs.as_slice())),
-            RecordType::Named(n) => registry.record_type_defs.get(n).map(|def| {
+            RecordType::Named(n) => registry.lookup_record_type_def(n).map(|def| {
                 let mut canonical = def.fields.clone();
                 canonical.sort_by(|(a, _), (b, _)| a.cmp(b));
                 Cow::Owned(canonical)

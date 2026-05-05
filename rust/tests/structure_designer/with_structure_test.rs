@@ -38,6 +38,7 @@ fn set_node_data<T: NodeData + 'static>(
     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
         &registry.built_in_node_types,
         &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
         node,
         true,
     );

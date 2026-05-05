@@ -49,7 +49,7 @@ impl NodeData for RecordConstructData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let Some(def) = registry.record_type_defs.get(&self.schema) else {
+        let Some(def) = registry.lookup_record_type_def(&self.schema) else {
             // Empty or dangling schema. The output type fails subtyping
             // against any consumer — produce None so downstream destructure
             // / consumer nodes don't see a partial value.
@@ -119,21 +119,31 @@ pub fn build_node_type_for_schema(
     schema: &str,
     registry: &NodeTypeRegistry,
 ) -> NodeType {
-    build_node_type_for_schema_with_defs(base_node_type, schema, &registry.record_type_defs)
+    build_node_type_for_schema_with_defs(
+        base_node_type,
+        schema,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+    )
 }
 
-/// Same as `build_node_type_for_schema`, but takes the record-type-defs map
+/// Same as `build_node_type_for_schema`, but takes the record-type-defs maps
 /// directly so the cache populator can call it without conflicting with a
-/// concurrent `&mut node_networks` borrow on the registry.
+/// concurrent `&mut node_networks` borrow on the registry. Looks up the
+/// schema name in `record_type_defs` first, then `built_in_record_type_defs`.
 pub fn build_node_type_for_schema_with_defs(
     base_node_type: &NodeType,
     schema: &str,
     record_type_defs: &HashMap<String, RecordTypeDef>,
+    built_in_record_type_defs: &HashMap<String, RecordTypeDef>,
 ) -> NodeType {
     let mut custom = base_node_type.clone();
     custom.output_pins =
         OutputPinDefinition::single_fixed(DataType::Record(RecordType::Named(schema.to_string())));
-    if let Some(def) = record_type_defs.get(schema) {
+    if let Some(def) = record_type_defs
+        .get(schema)
+        .or_else(|| built_in_record_type_defs.get(schema))
+    {
         // Pin order = authored field order.
         custom.parameters = def
             .fields

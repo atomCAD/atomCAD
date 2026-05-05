@@ -105,11 +105,28 @@ List<APINodeCategoryView>? getCompatibleNodeTypes(
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
 
-/// Returns every record type def name in the project, sorted alphabetically.
-/// Used by the Flutter type-selector and by `record_construct` /
-/// `record_destructure` node-property dropdowns.
+/// Returns every **user-declared** record type def name in the project,
+/// sorted alphabetically. Used by the user-types panel so built-in defs are
+/// not listed there. Dropdowns (type selector, `record_construct` /
+/// `record_destructure` / `product` editors) should call
+/// `get_all_record_type_def_names` instead so they see built-ins too.
 List<String>? getRecordTypeDefNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetRecordTypeDefNames();
+
+/// Returns every record type def name in the project (user-declared plus
+/// built-in), sorted alphabetically. Used by the Flutter type-selector
+/// Record branch and by the `record_construct` / `record_destructure` /
+/// `product` node-property dropdowns. See
+/// `doc/design_atom_replace_rules_input.md` Phase A.
+List<String>? getAllRecordTypeDefNames() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetAllRecordTypeDefNames();
+
+/// Returns every built-in record type def name, sorted alphabetically.
+/// Used by Flutter-side namespace-collision checks so the UI can pre-validate
+/// before round-tripping to Rust. See
+/// `doc/design_atom_replace_rules_input.md` Phase A.
+List<String>? getBuiltInRecordTypeDefNames() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetBuiltInRecordTypeDefNames();
 
 /// Returns the full record type def for `name`, or `None` if the name is
 /// not registered. Used by the schema editor in the user-types panel.

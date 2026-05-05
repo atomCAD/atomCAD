@@ -27,7 +27,9 @@ class RecordDefDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final names = sd_api.getRecordTypeDefNames() ?? <String>[];
+    // Includes built-in record defs alongside user defs so e.g.
+    // `ElementMapping` is selectable without manual setup.
+    final names = sd_api.getAllRecordTypeDefNames() ?? <String>[];
     final danglingButNotEmpty = value.isNotEmpty && !names.contains(value);
     final boundToValidDef = value.isNotEmpty && names.contains(value);
 
