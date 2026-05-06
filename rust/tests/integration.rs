@@ -9,3 +9,6 @@ mod inline_metadata_migration_test;
 
 #[path = "integration/lattice_space_migration_test.rs"]
 mod lattice_space_migration_test;
+
+#[path = "integration/iterator_migration_test.rs"]
+mod iterator_migration_test;

@@ -1,6 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::common_constants::CONNECTED_PIN_SYMBOL;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -86,15 +87,7 @@ impl NodeData for RangeData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        // Create a vector of integers from the range
-        let mut result_vec = Vec::new();
-
-        for i in 0..count {
-            let value = start + (i * step);
-            result_vec.push(NetworkResult::Int(value));
-        }
-
-        EvalOutput::single(NetworkResult::Array(result_vec))
+        EvalOutput::single(NetworkResult::Iterator(Walker::range(start, step, count)))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -185,7 +178,7 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Int,
         },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Array(Box::new(DataType::Int))),
+      output_pins: OutputPinDefinition::single(DataType::Iterator(Box::new(DataType::Int))),
       public: true,
       node_data_creator: || Box::new(RangeData {
         start: 0,

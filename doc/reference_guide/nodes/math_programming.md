@@ -398,6 +398,24 @@ If either input is unconnected, the output is `None` (propagates as a missing-in
 
 To append multiple elements, chain `array_append` nodes (or wire an `array_concat` node when the right-hand operand is itself an array).
 
+## collect
+
+Materializes a lazy iterator (`Iter[T]`) into an array (`Array[T]`) by exhausting the stream. This is the explicit escape hatch when a downstream array consumer really does want the whole vector. Iterators are produced by stream-fusing nodes (`range`, `map`, `filter`, `product`) once they are flipped to lazy evaluation in later phases of the iterator rollout; until then `collect` happily passes an array source through unchanged thanks to the implicit `[T] → Iter[T]` wire conversion.
+
+**Properties**
+
+- `Element type` — the element type T. Drives both the iterator-input pin (`Iter[T]`) and the array-output pin (`Array[T]`).
+
+**Input pins**
+
+- `iter: Iter[ElementType]` — the iterator to drain. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion (eagerly wrapped) and a single `ElementType` value via the single-element broadcast rule.
+
+**Behavior**
+
+If `iter` is unconnected the output is `None` (propagates as a missing input). Otherwise `collect` pulls elements from the walker until it ends, accumulating them into a new array in iteration order. An iterator that yields an `Error` value mid-stream causes `collect` to abort and propagate that error; subsequent elements are not pulled.
+
+There is no built-in size cap. If you wire a 10⁹-element iterator into `collect` you will run out of memory — that is the contract: `collect` is the explicit, expensive step that turns a fused stream back into a fully materialized array.
+
 ## map
 
 Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.

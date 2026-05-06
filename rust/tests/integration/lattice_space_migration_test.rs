@@ -211,8 +211,8 @@ fn test_roundtrip_pure_rename() {
     // Re-save is v3: second load goes through the v3 no-op path.
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 3"),
-        "saved file should be tagged version: 3"
+        saved.contains("\"version\": 4"),
+        "saved file should be tagged version: 4"
     );
     assert!(
         !saved.contains("\"unit_cell\""),
@@ -591,8 +591,8 @@ fn test_roundtrip_atom_trans_and_lattice_symop_dropped() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 3"),
-        "saved file should be tagged version: 3"
+        saved.contains("\"version\": 4"),
+        "saved file should be tagged version: 4"
     );
     assert!(
         !saved.contains("\"atom_trans\""),
@@ -772,8 +772,8 @@ fn test_roundtrip_primitive_with_lattice() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 3"),
-        "saved file should be tagged version: 3"
+        saved.contains("\"version\": 4"),
+        "saved file should be tagged version: 4"
     );
     assert!(
         !saved.contains("\"unit_cell\""),
@@ -1043,8 +1043,8 @@ fn test_roundtrip_atom_fill_split() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 3"),
-        "saved file should be tagged version: 3"
+        saved.contains("\"version\": 4"),
+        "saved file should be tagged version: 4"
     );
     assert!(
         !saved.contains("\"atom_fill\""),
@@ -1271,8 +1271,8 @@ fn test_roundtrip_shared_unit_cell() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 3"),
-        "saved file should be tagged version: 3"
+        saved.contains("\"version\": 4"),
+        "saved file should be tagged version: 4"
     );
     assert!(
         !saved.contains("\"atom_fill\""),
@@ -1364,8 +1364,8 @@ fn test_roundtrip_frame_transform_dropped() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 3"),
-        "saved file should be tagged version: 3"
+        saved.contains("\"version\": 4"),
+        "saved file should be tagged version: 4"
     );
     assert!(
         !saved.contains("frame_transform"),
@@ -1516,8 +1516,8 @@ fn real_sample_roundtrip_smoke(fixture_name: &str) {
 
     let first_bytes = std::fs::read_to_string(&first_save).expect("read first save");
     assert!(
-        first_bytes.contains("\"version\": 3"),
-        "{}: saved file should be tagged version: 3",
+        first_bytes.contains("\"version\": 4"),
+        "{}: saved file should be tagged version: 4",
         fixture_name
     );
     // Every migration change class should have erased its v2 tokens. The

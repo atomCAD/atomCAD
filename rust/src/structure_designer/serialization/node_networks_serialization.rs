@@ -20,7 +20,7 @@ use std::io::{self, Read};
 use std::path::Path;
 
 // The current version of the serialization format
-const SERIALIZATION_VERSION: u32 = 3;
+const SERIALIZATION_VERSION: u32 = 4;
 
 /// Camera settings that are saved per node network
 #[derive(Serialize, Deserialize, Clone)]
@@ -646,15 +646,28 @@ pub fn load_node_networks_from_file(
         ));
     }
 
-    // Historical up-converter for pre-v3 files. v3 and later skip this entirely.
-    if version < SERIALIZATION_VERSION {
+    // Chained historical up-converters. Each pass runs only if the loaded
+    // file pre-dates the version after that pass. A v2 file chains through
+    // both passes; a v3 file runs only v3→v4; a v4 file runs neither.
+    if version < 3 {
         super::migrate_v2_to_v3::migrate_v2_to_v3(&mut root_value).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("v2→v3 migration failed: {}", e),
             )
         })?;
-        // Reflect the new version in the in-memory value so any downstream reader sees v3.
+    }
+    if version < 4 {
+        super::migrate_v3_to_v4::migrate_v3_to_v4(&mut root_value).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("v3→v4 migration failed: {}", e),
+            )
+        })?;
+    }
+    if version < SERIALIZATION_VERSION {
+        // Reflect the new version in the in-memory value so any downstream
+        // reader (deserializer, validator) sees the current version.
         if let Some(obj) = root_value.as_object_mut() {
             obj.insert(
                 "version".to_string(),

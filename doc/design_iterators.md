@@ -821,25 +821,44 @@ Each phase is independently testable and shippable.
 4. **Create `serialization/migrate_v3_to_v4.rs`** with the full structure laid out in §"Backward compatibility": entry point, `compute_iterator_producer_set`, `insert_collect_for_iter_to_array_wires`, `ITERATOR_PINS_V4` table, helper builders. Predicate (A) handles `range` as source in this phase; the `match` arms for `map` / `filter` / `product` are stubbed to return `None` and filled in by phases 4 and 6 below.
 5. Hook the new pass into `load_node_networks_from_file` after `migrate_v2_to_v3` (chained dispatch as in §"Version dispatch").
 6. Fixture: `iterator_migration/old_range_to_array_len.cnnd`.
-7. **Test scope for this phase**: existing `range` tests pass via implicit conversions; new fixture asserting `range → fold` works without an explicit `collect`; v3→v4 migration smoke for the `range` arm of predicate (A); chained-dispatch v2→v3→v4 verified end-to-end on a v2 fixture containing `range`.
-8. **Manual smoke**: open a v3 project containing `range`; verify it loads, evaluates, and the tooltip on `range`'s output reads `Iter[Int]`. Open a v3 file with `range → array_at`: post-load a synthesised `collect` should sit between them. Wire `range → fold` in a fresh project: should work without a manual `collect`.
+7. **Test scope for this phase**: v3→v4 migration smoke for the `range` arm of predicate (A); chained-dispatch v2→v3→v4 verified end-to-end on a v2 fixture; idempotence (running `migrate_v3_to_v4` twice is byte-identical); `range`'s declared output type is `Iter[Int]`.
+8. **Manual smoke**: open a v3 project containing `range`; verify it loads, evaluates, and the tooltip on `range`'s output reads `Iter[Int]`. Open a v3 file with `range → array_at`: post-load a synthesised `collect` should sit between them.
+
+#### Expected in-memory test breakage during Phase 3
+
+Phase 3 introduces a **temporary, expected regression** in any in-memory test that wires `range` directly into an `Array[T]`-typed pin. There is **no** implicit `Iter[T] → [T]` conversion (by design), and the consumer-side flips that make these wires valid don't land until Phases 4–6.
+
+The breakage falls into three buckets:
+
+| Bucket | Files (approximate count after Phase 3) | Self-heals at | Action |
+|---|---|---|---|
+| `range → fold` / `filter` / `map` chains | `fold_test`, `filter_test`, `function_evaluator_test::test_map_with_expr_function_evaluates_without_panic` (~16) | Phases 4 (filter/map) and 5 (fold) — once those pins flip to `Iter[T]`, `range → consumer` is `Iter[T] → Iter[T]` (identity) and the wires re-validate without test changes | **Do not "fix" these in Phase 3.** Phase 4/5 implementors: when you flip the consumer, simply re-run the affected suite — the tests should turn green automatically. If they don't, that's a real regression. |
+| `range → array_at` / `array_len` / `array_concat` / `array_append` | `array_at_test`, `array_len_test`, `array_concat_test`, `array_append_test` (~12) | Never — these consumers stay `Array[T]` permanently | Update each affected test to insert an explicit `collect` between `range` and the array consumer. This matches the `.cnnd` migration's behaviour for the same shape. |
+| `iter_type_test::function_pin_rejects_iter_t_capture_via_value_pin` | `iter_type_test` (1) | Never under current validator order | The test wires `range → map.xs` only as scaffolding for a closure-capture check on `expr.f → map.f`. With `range` now `Iter[Int]` and `map.xs` defaulting to `Array[Float]`, the wire-mismatch error fires *before* the closure-capture validator. Fix by either (a) dropping the unrelated `range → map.xs` wire from the test setup, or (b) updating the validator to emit a `collect`-mentioning hint for `Iter[T] → [T]` wire mismatches. The latter is the cleaner fix — it also satisfies the wire-validation test row "`Iter[Int] → [Int]` wire | Rejected at validation; error points the user at `collect`" in §"Tests / Type system / wire validation tests". |
+
+The integration / migration suite (`tests/integration/iterator_migration_test.rs`, `lattice_space_migration_test.rs`, `cnnd_roundtrip_test.rs`) stays fully green throughout.
+
+The version-string assertions in `lattice_space_migration_test.rs` (seven sites of `"\"version\": 3"`) must be updated to `"\"version\": 4"` as part of Phase 3 — this is mechanical and unrelated to the breakage above.
 
 ### Phase 4: Flip `map` and `filter`
 
 1. Update `map.rs::eval` / `filter.rs::eval` to build walkers (`Walker::map(..)` / `Walker::filter(..)`).
 2. Update `calculate_custom_node_type` for both to declare `Iter[T]` pins.
 3. Extend `migrate_v3_to_v4` predicate (A): fill in the `map` and `filter` arms of `produces_iter` (use `MapData.output_type` / `FilterData.element_type` for the element type of the synthesized `collect`).
-4. Add fixtures: `iterator_migration/old_map_to_array_at.cnnd`, `old_filter_to_array_concat.cnnd`, `old_double_fanout.cnnd`.
-5. **Test scope for this phase**: existing `map` / `filter` correctness tests pass via auto-conversion at the consumer end; the three new migration fixtures from step 4; the `range → map → fold` fusion test (asserts O(1) live elements via a counter inside the test FE); a `map → map` chain test (no intermediate materialisation).
-6. **Manual smoke**: build `range → map → array_at` in a fresh project — auto-conversion handles the `Iter[T] → ...` boundary at the array consumer end. Open `old_double_fanout.cnnd`; verify two separate `collect` nodes are inserted, one per consumer (not a shared one).
+4. Add `("map", 0)` and `("filter", 0)` to `ITERATOR_PINS_V4` so predicate (B) recognises those pins as iterator-accepting (otherwise the migration would synthesise a `collect` on every `<old-iter-source> → map/filter` wire — wrong, those wires are now identity-valid).
+5. Add fixtures: `iterator_migration/old_map_to_array_at.cnnd`, `old_filter_to_array_concat.cnnd`, `old_double_fanout.cnnd`.
+6. **Test scope for this phase**: existing `map` / `filter` correctness tests pass via auto-conversion at the consumer end; the three new migration fixtures from step 5; the `range → map → fold` fusion test (asserts O(1) live elements via a counter inside the test FE); a `map → map` chain test (no intermediate materialisation).
+7. **Phase 3 self-healing**: Phase 3 left ~9 `filter_test` and ~1 `function_evaluator_test::test_map_with_expr_function_evaluates_without_panic` in-memory tests broken because `range → filter.xs` / `range → map.xs` was `Iter[Int] → Array[Float]`. Once `filter.xs` and `map.xs` flip to `Iter[T]` in this phase, those wires become `Iter[T] → Iter[T]` (identity) and re-validate. **Do not edit the tests in question to "fix" them** — re-run the suite first; they should turn green untouched. If any do not, that points to a real regression in this phase's changes (suspect: `calculate_custom_node_type` not flipping the pin type as expected, or the implicit `[T] → Iter[T]` wrap not firing in the eval path).
+8. **Manual smoke**: build `range → map → array_at` in a fresh project — auto-conversion handles the `Iter[T] → ...` boundary at the array consumer end. Open `old_double_fanout.cnnd`; verify two separate `collect` nodes are inserted, one per consumer (not a shared one).
 
 ### Phase 5: Flip `fold` to consume iterators
 
 1. Update `fold.rs::eval` to walker-based consumption.
 2. Update `calculate_custom_node_type` to declare `Iter[T]` for `xs`.
 3. Add `("fold", 0)` to `ITERATOR_PINS_V4` (predicate (B) recognises `fold.xs` as Iter-accepting; existing `[T] → fold` wires keep working via implicit `[T] → Iter[T]` and need no migration).
-4. **Test scope for this phase**: existing `fold` tests pass via implicit `[T] → Iter[T]`; new fusion correctness test (`range(0,1,N) → map(double) → fold(sum)` produces the expected sum); `[1,2,3] → fold(sum)` legacy-syntax test.
-5. **Manual smoke**: build `[1,2,3] → fold(sum)` in the UI — the old-style array literal still evaluates correctly; build `range(0,1,1000) → map(double) → fold(sum)` and verify the numeric result.
+4. **Test scope for this phase**: existing `fold` tests pass via implicit `[T] → Iter[T]` and via `Iter[T] → Iter[T]` identity; new fusion correctness test (`range(0,1,N) → map(double) → fold(sum)` produces the expected sum); `[1,2,3] → fold(sum)` legacy-syntax test.
+5. **Phase 3 self-healing**: Phase 3 left ~7 `fold_test` in-memory tests broken because `range → fold.xs` was `Iter[Int] → Array[Int]`. Once `fold.xs` flips to `Iter[T]` in this phase, those wires become `Iter[T] → Iter[T]` (identity) and re-validate. **Do not edit `fold_test` to "fix" them** — re-run first; they should turn green untouched.
+6. **Manual smoke**: build `[1,2,3] → fold(sum)` in the UI — the old-style array literal still evaluates correctly; build `range(0,1,1000) → map(double) → fold(sum)` and verify the numeric result.
 
 ### Phase 6: Flip `product` to lazy
 
