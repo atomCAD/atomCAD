@@ -8,6 +8,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Network
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::array_len::ArrayLenData;
+use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::ivec3::IVec3Data;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
 use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
@@ -158,10 +159,21 @@ fn test_array_len_int_three_elements() {
         }),
     );
 
+    let collect_id = designer.add_node("collect", DVec2::new(100.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        collect_id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+        }),
+    );
+
     let len_id = designer.add_node("array_len", DVec2::new(200.0, 0.0));
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, len_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, len_id, 0);
 
     let result = evaluate_node(&designer, "test", len_id);
     match result {

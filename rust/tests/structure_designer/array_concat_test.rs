@@ -8,6 +8,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Network
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::array_concat::ArrayConcatData;
+use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::ivec3::IVec3Data;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
 use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
@@ -59,6 +60,22 @@ fn set_node_data(
 
 fn props_to_hashmap(props: Vec<(String, TextValue)>) -> HashMap<String, TextValue> {
     props.into_iter().collect()
+}
+
+/// Inserts a `collect[Int]` between an `Iter[Int]` source and an array
+/// consumer pin, since v4 has no implicit `Iter[T] → [T]` conversion. See
+/// `doc/design_iterators.md` Phase 3 "Expected in-memory test breakage".
+fn add_collect_int(designer: &mut StructureDesigner, network_name: &str, x: f64, y: f64) -> u64 {
+    let id = designer.add_node("collect", DVec2::new(x, y));
+    set_node_data(
+        designer,
+        network_name,
+        id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+        }),
+    );
+    id
 }
 
 // ============================================================================
@@ -194,10 +211,14 @@ fn test_array_concat_int_two_non_empty() {
     );
 
     let concat_id = designer.add_node("array_concat", DVec2::new(200.0, 0.0));
+    let collect_a = add_collect_int(&mut designer, "test", 100.0, 0.0);
+    let collect_b = add_collect_int(&mut designer, "test", 100.0, 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_a, 0, concat_id, 0);
-    designer.connect_nodes(range_b, 0, concat_id, 1);
+    designer.connect_nodes(range_a, 0, collect_a, 0);
+    designer.connect_nodes(collect_a, 0, concat_id, 0);
+    designer.connect_nodes(range_b, 0, collect_b, 0);
+    designer.connect_nodes(collect_b, 0, concat_id, 1);
 
     let result = evaluate_node(&designer, "test", concat_id);
     match result {
@@ -246,10 +267,12 @@ fn test_array_concat_empty_left_non_empty_right() {
     );
 
     let concat_id = designer.add_node("array_concat", DVec2::new(200.0, 0.0));
+    let collect_b = add_collect_int(&mut designer, "test", 100.0, 100.0);
     designer.validate_active_network();
 
     designer.connect_nodes(seq_a, 0, concat_id, 0);
-    designer.connect_nodes(range_b, 0, concat_id, 1);
+    designer.connect_nodes(range_b, 0, collect_b, 0);
+    designer.connect_nodes(collect_b, 0, concat_id, 1);
 
     let result = evaluate_node(&designer, "test", concat_id);
     match result {
@@ -425,9 +448,11 @@ fn test_array_concat_unconnected_b_yields_none() {
     );
 
     let concat_id = designer.add_node("array_concat", DVec2::new(200.0, 0.0));
+    let collect_a = add_collect_int(&mut designer, "test", 100.0, 0.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_a, 0, concat_id, 0);
+    designer.connect_nodes(range_a, 0, collect_a, 0);
+    designer.connect_nodes(collect_a, 0, concat_id, 0);
 
     let result = evaluate_node(&designer, "test", concat_id);
     match result {

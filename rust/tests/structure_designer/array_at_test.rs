@@ -8,6 +8,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Network
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::array_at::ArrayAtData;
+use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::ivec3::IVec3Data;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
@@ -60,6 +61,23 @@ fn set_node_data(
 
 fn props_to_hashmap(props: Vec<(String, TextValue)>) -> HashMap<String, TextValue> {
     props.into_iter().collect()
+}
+
+/// Adds a `collect` node with `element_type=Int` to the active network.
+/// `range`'s output is `Iter[Int]` from Phase 3 of `doc/design_iterators.md`
+/// onward, so wiring it into an array-typed consumer requires an explicit
+/// `collect` between them — `Iter[T] → [T]` has no implicit conversion.
+fn add_collect_int(designer: &mut StructureDesigner, network_name: &str, x: f64) -> u64 {
+    let id = designer.add_node("collect", DVec2::new(x, 0.0));
+    set_node_data(
+        designer,
+        network_name,
+        id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+        }),
+    );
+    id
 }
 
 // ============================================================================
@@ -170,9 +188,11 @@ fn test_array_at_int_in_bounds_first() {
     );
 
     let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, at_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
     designer.connect_nodes(index_id, 0, at_id, 1);
 
     let result = evaluate_node(&designer, "test", at_id);
@@ -207,9 +227,11 @@ fn test_array_at_int_in_bounds_middle() {
     );
 
     let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, at_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
     designer.connect_nodes(index_id, 0, at_id, 1);
 
     let result = evaluate_node(&designer, "test", at_id);
@@ -244,9 +266,11 @@ fn test_array_at_int_in_bounds_last() {
     );
 
     let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, at_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
     designer.connect_nodes(index_id, 0, at_id, 1);
 
     let result = evaluate_node(&designer, "test", at_id);
@@ -352,9 +376,11 @@ fn test_array_at_negative_index_errors() {
     );
 
     let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, at_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
     designer.connect_nodes(index_id, 0, at_id, 1);
 
     let result = evaluate_node(&designer, "test", at_id);
@@ -396,9 +422,11 @@ fn test_array_at_index_past_end_errors() {
     );
 
     let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, at_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
     designer.connect_nodes(index_id, 0, at_id, 1);
 
     let result = evaluate_node(&designer, "test", at_id);
@@ -509,9 +537,11 @@ fn test_array_at_unconnected_index_pin_yields_none() {
     );
 
     let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, at_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
 
     let result = evaluate_node(&designer, "test", at_id);
     match result {

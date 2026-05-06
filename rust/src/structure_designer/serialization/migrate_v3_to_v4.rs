@@ -10,19 +10,21 @@
 //! `collect` node on every such wire so v3 files load with their original
 //! semantics intact.
 //!
-//! Phase 6 scope (this drop, on top of Phase 5): the `product` arm of
-//! `produces_iter` is filled in — `product` instances now report
-//! `Iter[Record(Named(<target>))]` so wires from `product` into a
-//! non-iterator pin (e.g. `array_at.array`) get a `collect` synthesised
-//! on them. `product` was already special-cased in `is_iterator_pin_v4`
-//! so wires *into* `product` (every parameter index) skip insertion.
-//! Transitive custom-network detection is still stubbed (filled in by
-//! Phase 7 — `compute_iterator_producer_set` returns an empty map for
-//! now).
+//! Phase 7 scope (this drop, on top of Phase 6): transitive custom-network
+//! detection is wired up. `compute_iterator_producer_set` does a memoised
+//! recursive walk over all networks; a custom network whose return node
+//! transitively reaches one of the four built-in producers (`range`/`map`/
+//! `filter`/`product`) shows up in the resulting map and is then recognised
+//! as an iterator source by predicate (A). Predicate (B) is also extended
+//! to accept custom-network destinations whose declared parameter type
+//! parses as `Iter[..]` — the design-doc-mandated check for v4 files (or
+//! hand-edited v3 files) that already use iterator pins on user networks.
 
 use serde_json::Value;
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use crate::structure_designer::data_type::DataType;
 
 use super::migrate_v2_to_v3::MigrationError;
 
@@ -96,6 +98,7 @@ pub fn migrate_v3_to_v4(root: &mut Value) -> Result<(), MigrationError> {
     MIGRATION_CALL_COUNT.with(|c| c.set(c.get() + 1));
 
     let iter_producers = compute_iterator_producer_set(root);
+    let custom_param_types = compute_custom_param_types(root);
 
     let Some(node_networks) = root.get_mut("node_networks").and_then(|v| v.as_array_mut()) else {
         return Ok(());
@@ -107,10 +110,36 @@ pub fn migrate_v3_to_v4(root: &mut Value) -> Result<(), MigrationError> {
         let Some(network) = entry_arr.get_mut(1) else {
             continue;
         };
-        insert_collect_for_iter_to_array_wires(network, &iter_producers)?;
+        insert_collect_for_iter_to_array_wires(network, &iter_producers, &custom_param_types)?;
     }
 
     Ok(())
+}
+
+/// Build a `network_name → &network_value` lookup from the root JSON value.
+///
+/// Both `compute_iterator_producer_set` and `compute_custom_param_types`
+/// need this map; the helper exists so each pass independently rebuilds it
+/// from the immutable root view (the maps must outlive the mutation pass on
+/// `node_networks`, which would conflict with a borrow on `root`).
+fn build_networks_by_name(root: &Value) -> HashMap<String, &Value> {
+    let mut by_name = HashMap::new();
+    let Some(networks_arr) = root.get("node_networks").and_then(|v| v.as_array()) else {
+        return by_name;
+    };
+    for entry in networks_arr {
+        let Some(arr) = entry.as_array() else {
+            continue;
+        };
+        let Some(name) = arr.first().and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(network) = arr.get(1) else {
+            continue;
+        };
+        by_name.insert(name.to_string(), network);
+    }
+    by_name
 }
 
 // ---------------------------------------------------------------------------
@@ -122,48 +151,174 @@ pub fn migrate_v3_to_v4(root: &mut Value) -> Result<(), MigrationError> {
 /// custom network whose return node is one of the four built-in producers,
 /// or another custom network in this map, is an iterator source.
 ///
-/// Phase 7 fills in this fixed-point pass. Phase 3 ships an empty map —
-/// only built-in producers are recognised.
-fn compute_iterator_producer_set(_root: &Value) -> HashMap<String, Value> {
-    HashMap::new()
+/// Phase 7: fixed-point pass over all networks. The recursive resolver
+/// memoises per-network results in a `HashMap<String, Option<Value>>` so
+/// the worst-case cost is O(networks). Cycles in the network table are
+/// defensively handled (custom-network cycles are normally rejected at
+/// network creation but possible in hand-edited files): if the resolver
+/// re-enters a network it is currently resolving, the recursive call
+/// returns `None` (no iterator output) and the outer call keeps walking.
+fn compute_iterator_producer_set(root: &Value) -> HashMap<String, Value> {
+    let networks_by_name = build_networks_by_name(root);
+    let names: Vec<String> = networks_by_name.keys().cloned().collect();
+
+    let mut memo: HashMap<String, Option<Value>> = HashMap::new();
+    for name in &names {
+        let mut visited = HashSet::new();
+        resolve_network_iter_element_type(name, &networks_by_name, &mut memo, &mut visited);
+    }
+
+    let mut producers = HashMap::new();
+    for (name, opt) in memo {
+        if let Some(t) = opt {
+            producers.insert(name, t);
+        }
+    }
+    producers
 }
 
-/// If `(network_name, return_node_type_name)` identifies an iterator
-/// producer, returns the element type T as a `DataType` JSON value.
+/// Recursive resolver backing [`compute_iterator_producer_set`]. Returns the
+/// element type T (as a `DataType` JSON value) iff the named network's v4
+/// output type is `Iter[T]`, otherwise `None`. Memoises per-network results
+/// to keep the fixed-point pass O(networks).
+fn resolve_network_iter_element_type(
+    network_name: &str,
+    networks_by_name: &HashMap<String, &Value>,
+    memo: &mut HashMap<String, Option<Value>>,
+    visited: &mut HashSet<String>,
+) -> Option<Value> {
+    if let Some(cached) = memo.get(network_name) {
+        return cached.clone();
+    }
+    if visited.contains(network_name) {
+        // Cycle: defensive — return `None` from this call so the outer
+        // resolver can settle the rest of the graph. The cycle network
+        // itself ends up memoised as `None` once the outer call writes
+        // its result.
+        return None;
+    }
+    visited.insert(network_name.to_string());
+
+    let result = (|| -> Option<Value> {
+        let network = networks_by_name.get(network_name)?;
+        let ret_id = network.get("return_node_id").and_then(|v| v.as_u64())?;
+        let nodes = network.get("nodes").and_then(|v| v.as_array())?;
+        let ret_node = nodes
+            .iter()
+            .find(|n| n.get("id").and_then(|v| v.as_u64()) == Some(ret_id))?;
+        let type_name = ret_node.get("node_type_name").and_then(|v| v.as_str())?;
+
+        match type_name {
+            "range" => Some(Value::String("Int".to_string())),
+            "map" => ret_node
+                .get("data")
+                .and_then(|d| d.get("output_type"))
+                .cloned(),
+            "filter" => ret_node
+                .get("data")
+                .and_then(|d| d.get("element_type"))
+                .cloned(),
+            "product" => {
+                let target = ret_node
+                    .get("data")
+                    .and_then(|d| d.get("target"))?
+                    .as_str()?;
+                Some(serde_json::json!({"Record": {"Named": target}}))
+            }
+            custom_name if networks_by_name.contains_key(custom_name) => {
+                resolve_network_iter_element_type(custom_name, networks_by_name, memo, visited)
+            }
+            _ => None,
+        }
+    })();
+
+    visited.remove(network_name);
+    memo.insert(network_name.to_string(), result.clone());
+    result
+}
+
+/// Per-network parameter type strings, indexed by network name. Used by
+/// predicate (B) to detect custom-network destinations whose declared
+/// parameter type is `Iter[..]` — those pins natively accept iterators and
+/// must skip `collect` insertion. The map outlives the mutation pass on
+/// `node_networks`, so it is built upfront with owned strings (not borrowed
+/// `&Value`s into the same JSON value that the mutation pass needs to mutate).
+fn compute_custom_param_types(root: &Value) -> HashMap<String, Vec<String>> {
+    let mut by_name = HashMap::new();
+    let Some(networks_arr) = root.get("node_networks").and_then(|v| v.as_array()) else {
+        return by_name;
+    };
+    for entry in networks_arr {
+        let Some(arr) = entry.as_array() else {
+            continue;
+        };
+        let Some(name) = arr.first().and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(network) = arr.get(1) else {
+            continue;
+        };
+        let params: Vec<String> = network
+            .get("node_type")
+            .and_then(|nt| nt.get("parameters"))
+            .and_then(|p| p.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|p| {
+                        p.get("data_type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        by_name.insert(name.to_string(), params);
+    }
+    by_name
+}
+
+/// If `node` is an iterator producer in v4, returns the element type T as a
+/// `DataType` JSON value (so the synthesised `collect`'s `element_type`
+/// field can be set directly).
+///
+/// Per the design doc's error policy (Phase 7), the `map.output_type` and
+/// `filter.element_type` JSON values are validated by attempting to
+/// deserialize them as a `DataType`. Unparseable shapes (e.g. an unknown
+/// variant name or a shape mismatch) fall back to `DataType::None` —
+/// strict deserialization of the synthesised `collect` then succeeds, and
+/// the validator drops the now-mistyped wire on the destination side. The
+/// user sees a broken wire rather than a failed load.
 ///
 /// Phase 3 wires up the `range` arm; Phase 4 fills in `map`/`filter`;
 /// Phase 6 fills in `product`; Phase 7 enables transitive custom-network
-/// resolution by reading from `iter_producers`.
+/// resolution by reading from `iter_producers` and adds the defensive
+/// parsing fallback.
 fn produces_iter(node: &Value, iter_producers: &HashMap<String, Value>) -> Option<Value> {
     let type_name = node.get("node_type_name").and_then(|v| v.as_str())?;
     match type_name {
         "range" => Some(Value::String("Int".to_string())),
-        "map" => {
-            // `MapData.output_type` is already a serialized `DataType` JSON
-            // value (e.g. the string `"Int"`, or a tagged object like
-            // `{"Array": "Int"}`); the synthesised `collect` consumes it as
-            // its `element_type` directly. Defensive validation against
-            // malformed values is added in Phase 7 per the design doc's
-            // error policy.
-            node.get("data").and_then(|d| d.get("output_type")).cloned()
-        }
-        "filter" => {
-            // `FilterData.element_type` plays the same role for `filter`'s
-            // output element type as `MapData.output_type` does for `map`.
-            node.get("data")
-                .and_then(|d| d.get("element_type"))
-                .cloned()
-        }
+        "map" => Some(validate_data_type_or_none(
+            node.get("data").and_then(|d| d.get("output_type")),
+        )),
+        "filter" => Some(validate_data_type_or_none(
+            node.get("data").and_then(|d| d.get("element_type")),
+        )),
         "product" => {
             // `ProductData.target` holds the target def name; the v4 element
             // type is `Record(Named(target))`. Encode it as a serialized
-            // `DataType` JSON value (matching how `DataType::Record` derives
-            // serde): `{"Record": {"Named": "<target>"}}`. An empty/missing
-            // target is preserved verbatim — the resulting `collect` will
-            // dangle, the validator will drop the wire, and the user sees a
-            // broken wire instead of a failed load (per the design doc's
-            // error policy).
-            let target = node.get("data").and_then(|d| d.get("target"))?.as_str()?;
+            // `DataType` JSON value: `{"Record": {"Named": "<target>"}}`.
+            // A missing/non-string target is treated as the malformed case
+            // and falls back to `DataType::None` so a `collect` is still
+            // synthesised — the validator drops the resulting mistyped wire
+            // on load, per the design doc's error policy.
+            let Some(target) = node
+                .get("data")
+                .and_then(|d| d.get("target"))
+                .and_then(|v| v.as_str())
+            else {
+                return Some(Value::String("None".to_string()));
+            };
             Some(serde_json::json!({
                 "Record": { "Named": target }
             }))
@@ -172,6 +327,25 @@ fn produces_iter(node: &Value, iter_producers: &HashMap<String, Value>) -> Optio
             // Phase 7: transitive custom-network resolution.
             iter_producers.get(type_name).cloned()
         }
+    }
+}
+
+/// Returns the JSON value if it deserializes cleanly as a `DataType`,
+/// otherwise returns `Value::String("None".to_string())` (which is the
+/// `DataType::None` JSON representation under serde's default tagging).
+///
+/// The validation goes through `serde_json::from_value::<DataType>` so any
+/// shape the strict deserializer would reject is caught here too — this
+/// guarantees the synthesised `collect.element_type` survives strict
+/// deserialization on load.
+fn validate_data_type_or_none(value: Option<&Value>) -> Value {
+    let Some(v) = value else {
+        return Value::String("None".to_string());
+    };
+    if serde_json::from_value::<DataType>(v.clone()).is_ok() {
+        v.clone()
+    } else {
+        Value::String("None".to_string())
     }
 }
 
@@ -207,6 +381,7 @@ struct WireRewrite {
 fn insert_collect_for_iter_to_array_wires(
     network_json: &mut Value,
     iter_producers: &HashMap<String, Value>,
+    custom_param_types: &HashMap<String, Vec<String>>,
 ) -> Result<(), MigrationError> {
     let Some(next_id_val) = network_json.get("next_node_id").and_then(|v| v.as_u64()) else {
         return Ok(());
@@ -266,7 +441,7 @@ fn insert_collect_for_iter_to_array_wires(
 
                     // Predicate (B): does the destination NOT natively accept
                     // `Iter[T]` on this pin?
-                    if pin_accepts_iter_v4(dst_type_name, dst_param_index, dst_node) {
+                    if pin_accepts_iter_v4(dst_type_name, dst_param_index, custom_param_types) {
                         continue;
                     }
 
@@ -373,38 +548,34 @@ fn insert_collect_for_iter_to_array_wires(
 /// inserted on a wire feeding it).
 ///
 /// For built-in destinations this is a hardcoded table lookup. For custom-
-/// network destinations the check reads the pin's declared `data_type` from
-/// the file's stored `node_type.parameters[dst_param_index].data_type`
-/// string and returns `true` iff that string parses as `Iter[..]`. The
-/// stored strings are unchanged by v4 — custom networks declare their pin
-/// types as the user-authored `DataType`.
-fn pin_accepts_iter_v4(dst_type_name: &str, dst_param_index: usize, dst_node: &Value) -> bool {
+/// network destinations (Phase 7) the check reads the network's stored
+/// `node_type.parameters[dst_param_index].data_type` string from
+/// `custom_param_types` and returns `true` iff that string starts with
+/// `"Iter["`. The stored strings are the user-authored `DataType` text —
+/// unchanged by v4 — so a v3 file (which can never have an `Iter[..]`
+/// parameter) always returns `false` here, while a hand-edited or
+/// already-v4 file with iterator pins on a user network is correctly
+/// recognised.
+fn pin_accepts_iter_v4(
+    dst_type_name: &str,
+    dst_param_index: usize,
+    custom_param_types: &HashMap<String, Vec<String>>,
+) -> bool {
     if is_iterator_pin_v4(dst_type_name, dst_param_index) {
         return true;
     }
-
-    // Custom-network destination: peek at the declared parameter type. The
-    // `node_type` blob on a custom-network instance is not present in the
-    // saved file — only on `NodeNetwork.node_type`. Custom-network
-    // *instances* in the saved file have `data_type == "custom"` and
-    // resolve their pin types via the network registry at load time. So
-    // we look up the destination type's parameters from the JSON's network
-    // table.
-    //
-    // The lookup is done in `pin_accepts_iter_v4_with_registry` which
-    // takes the parsed network table; the wrapper here is for the common
-    // case where we're checking a built-in.
-    //
-    // For Phase 3 there is no custom-network resolution because no
-    // built-in produces a non-trivial `Iter[T]` yet whose downstream
-    // could be a custom network with an `Iter[T]`-typed parameter — but
-    // the safety guarantee still holds: a v3 custom network never
-    // declared `Iter[T]` on any pin, so the predicate must answer
-    // `false` for any custom destination, which is what this fallback
-    // does (we don't have the registry threaded in; built-in lookup
-    // already returned `false`).
-    let _ = dst_node; // suppress unused warning until Phase 7 plumbing arrives
-    false
+    let Some(params) = custom_param_types.get(dst_type_name) else {
+        return false;
+    };
+    let Some(param_type) = params.get(dst_param_index) else {
+        return false;
+    };
+    // `Iter[..]` is the only DataType prefix that begins with `Iter[`. The
+    // check is intentionally a string-prefix test rather than a
+    // `DataType::from_string` parse — keeps the migration module free of
+    // that dependency and matches the design doc's "frozen at the v4
+    // release" stance for any registry-shaped lookup.
+    param_type.starts_with("Iter[")
 }
 
 /// Reads a node's `position` array and snaps both coordinates to integers.

@@ -697,3 +697,222 @@ fn test_chained_v2_v3_v4_dispatch() {
         "Main network missing after chained migration"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Phase 7: transitive custom-network detection.
+// A custom network whose return node is one of the four built-in producers
+// (range/map/filter/product), or transitively another such custom network,
+// is itself an iterator source and gets a `collect` synthesised on its
+// outgoing wires into non-iterator pins.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_load_old_custom_iter_producer_to_array_at_inserts_collect() {
+    let registry = load_and_validate(&format!(
+        "{}/old_custom_iter_producer_to_array_at.cnnd",
+        FIXTURE_DIR
+    ));
+
+    let main = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // Originals (3): MakeRange instance, int, array_at. Plus 1 synthesised
+    // collect between MakeRange and array_at.
+    assert_eq!(
+        main.nodes.len(),
+        4,
+        "expected 4 nodes (3 originals + synthesised collect); got {:?}",
+        main.nodes
+            .values()
+            .map(|n| n.node_type_name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    let make_range_id = find_node_id_by_type(&registry, "Main", "MakeRange");
+    let array_at_id = find_node_id_by_type(&registry, "Main", "array_at");
+    let collect_id = find_node_id_by_type(&registry, "Main", "collect");
+
+    // collect ← MakeRange (predicate (A) hit via transitive resolution).
+    let collect_node = main.nodes.get(&collect_id).unwrap();
+    assert_eq!(
+        collect_node.arguments[0]
+            .argument_output_pins
+            .get(&make_range_id)
+            .copied(),
+        Some(0),
+        "collect must be wired to MakeRange's pin 0"
+    );
+
+    // array_at.array now wires to collect, not directly to MakeRange.
+    let array_at_node = main.nodes.get(&array_at_id).unwrap();
+    assert_eq!(
+        array_at_node.arguments[0]
+            .argument_output_pins
+            .get(&collect_id)
+            .copied(),
+        Some(0),
+        "array_at.array must point at the synthesised collect"
+    );
+    assert!(
+        !array_at_node.arguments[0]
+            .argument_output_pins
+            .contains_key(&make_range_id),
+        "array_at must no longer wire directly to MakeRange"
+    );
+
+    // The `MakeRange` network itself stays at one node — synthesised
+    // collects only sit at the *outer* boundary, not inside the producing
+    // custom network.
+    let mr = registry.node_networks.get("MakeRange").unwrap();
+    assert_eq!(
+        mr.nodes.len(),
+        1,
+        "MakeRange should still contain only its `range` node — collects sit at the outer boundary"
+    );
+}
+
+#[test]
+fn test_migrate_v3_to_v4_idempotent_on_custom_iter_fixture() {
+    let raw = std::fs::read_to_string(format!(
+        "{}/old_custom_iter_producer_to_array_at.cnnd",
+        FIXTURE_DIR
+    ))
+    .expect("fixture missing");
+    let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
+
+    migrate_v3_to_v4(&mut value).expect("first migration failed");
+    let after_first = serde_json::to_string(&value).unwrap();
+    migrate_v3_to_v4(&mut value).expect("second migration failed");
+    let after_second = serde_json::to_string(&value).unwrap();
+
+    assert_eq!(
+        after_first, after_second,
+        "v3→v4 migration must be idempotent on the transitive-custom fixture"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: chained v2 → v3 → v4 dispatch on a v2 file containing an
+// iterator-producer chain. The v3→v4 pass must run after v2→v3 and insert
+// a collect on the `range → array_len` wire.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_chained_v2_v3_v4_dispatch_with_iterator_chain() {
+    let registry = load_and_validate(&format!("{}/old_v2_with_iterator_chain.cnnd", FIXTURE_DIR));
+
+    let main = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // Original 2 (range, array_len) + 1 synthesised collect = 3.
+    assert_eq!(
+        main.nodes.len(),
+        3,
+        "expected 3 nodes (range + collect + array_len) after chained v2→v3→v4 migration; got {:?}",
+        main.nodes
+            .values()
+            .map(|n| n.node_type_name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    let collect_id = find_node_id_by_type(&registry, "Main", "collect");
+    let array_len_id = find_node_id_by_type(&registry, "Main", "array_len");
+    let array_len_node = main.nodes.get(&array_len_id).unwrap();
+    assert_eq!(
+        array_len_node.arguments[0]
+            .argument_output_pins
+            .get(&collect_id)
+            .copied(),
+        Some(0),
+        "array_len.array must point at the synthesised collect after chained migration"
+    );
+
+    // Evaluate the chain end-to-end: range(0,1,5) → collect → array_len → 5.
+    let result = evaluate_node(&registry, "Main", array_len_id);
+    match result {
+        NetworkResult::Int(n) => assert_eq!(n, 5),
+        other => panic!("expected Int(5); got {:?}", other.to_display_string()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: defensive parsing — a `MapData.output_type` that does not parse
+// as a `DataType` falls back to `DataType::None` on the synthesised
+// `collect`, and the validator drops the now-mistyped wire on load.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_migrate_v3_to_v4_defensive_on_malformed_map_output_type() {
+    let raw = std::fs::read_to_string(format!(
+        "{}/old_malformed_map_output_type.cnnd",
+        FIXTURE_DIR
+    ))
+    .expect("fixture missing");
+    let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
+
+    migrate_v3_to_v4(&mut value).expect("migration failed on malformed fixture");
+
+    // Find the synthesised collect node in the migrated JSON and check its
+    // element_type fell back to `None`. We assert on the migration's JSON
+    // output rather than the post-load `NodeNetwork`: the source `map`
+    // node's own malformed `output_type` field still fails strict
+    // deserialization (the migration scope is the synthesised wire, not
+    // the source node's stored data), so the file as a whole won't load
+    // — but the migration must still defensively produce a valid
+    // `collect.element_type` so the rest of the file is well-formed
+    // wherever the malformed source isn't directly involved.
+    let main_network = value
+        .get("node_networks")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e.as_array().unwrap()[0].as_str().unwrap() == "Main")
+        .expect("Main missing")
+        .as_array()
+        .unwrap()[1]
+        .clone();
+    let collect_node = main_network
+        .get("nodes")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n.get("node_type_name").unwrap().as_str().unwrap() == "collect")
+        .expect("synthesised collect node missing");
+    let element_type = collect_node
+        .get("data")
+        .unwrap()
+        .get("element_type")
+        .unwrap();
+    assert_eq!(
+        element_type,
+        &serde_json::Value::String("None".to_string()),
+        "malformed `MapData.output_type` must fall back to `DataType::None` on the synthesised collect"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: defensive parsing — a node whose `arguments` shape is broken
+// (non-object inside the `argument_output_pins` map slot) is silently
+// skipped during migration. The wire fails post-load validation, but the
+// migration itself does not error.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_migrate_v3_to_v4_skips_malformed_arguments() {
+    let mut registry = NodeTypeRegistry::new();
+    // The fixture has a `range → array_at.array` wire whose `arguments`
+    // shape is malformed. Migration must not panic; the file must load.
+    load_node_networks_from_file(
+        &mut registry,
+        &format!("{}/old_malformed_arguments.cnnd", FIXTURE_DIR),
+    )
+    .expect("malformed-arguments v3 file failed to load through migration");
+
+    assert!(registry.node_networks.contains_key("Main"));
+}

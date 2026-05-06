@@ -8,6 +8,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Network
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::array_append::ArrayAppendData;
+use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::ivec3::IVec3Data;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
@@ -60,6 +61,22 @@ fn set_node_data(
 
 fn props_to_hashmap(props: Vec<(String, TextValue)>) -> HashMap<String, TextValue> {
     props.into_iter().collect()
+}
+
+/// Inserts a `collect[Int]` between an `Iter[Int]` source and an array
+/// consumer pin, since v4 has no implicit `Iter[T] → [T]` conversion. See
+/// `doc/design_iterators.md` Phase 3 "Expected in-memory test breakage".
+fn add_collect_int(designer: &mut StructureDesigner, network_name: &str, x: f64) -> u64 {
+    let id = designer.add_node("collect", DVec2::new(x, 0.0));
+    set_node_data(
+        designer,
+        network_name,
+        id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+        }),
+    );
+    id
 }
 
 // ============================================================================
@@ -182,9 +199,11 @@ fn test_array_append_int_to_non_empty_array() {
     );
 
     let append_id = designer.add_node("array_append", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, append_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, append_id, 0);
     designer.connect_nodes(int_id, 0, append_id, 1);
 
     let result = evaluate_node(&designer, "test", append_id);
@@ -378,9 +397,11 @@ fn test_array_append_unconnected_element_yields_none() {
     );
 
     let append_id = designer.add_node("array_append", DVec2::new(200.0, 0.0));
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
     designer.validate_active_network();
 
-    designer.connect_nodes(range_id, 0, append_id, 0);
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, append_id, 0);
 
     let result = evaluate_node(&designer, "test", append_id);
     match result {
