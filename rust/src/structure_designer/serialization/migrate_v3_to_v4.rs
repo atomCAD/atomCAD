@@ -10,12 +10,13 @@
 //! `collect` node on every such wire so v3 files load with their original
 //! semantics intact.
 //!
-//! Phase 4 scope (this drop, on top of Phase 3): the `map` and `filter`
-//! source arms are filled in; `("map", 0)` and `("filter", 0)` join the
-//! `ITERATOR_PINS_V4` table so wires from one iterator producer into another's
-//! `xs` pin do not get a `collect` synthesised on them. The `product` arm
-//! still returns `None` (filled in by Phase 6) and the transitive custom-
-//! network detection is still stubbed (filled in by Phase 7 —
+//! Phase 5 scope (this drop, on top of Phase 4): `("fold", 0)` joins the
+//! `ITERATOR_PINS_V4` table so wires from an iterator producer (range / map /
+//! filter / product) into `fold.xs` do not get a `collect` synthesised on
+//! them — `fold.xs` is now natively `Iter[T]`. No new `produces_iter` arm:
+//! `fold` is a terminal consumer, never a producer. The `product` arm still
+//! returns `None` (filled in by Phase 6) and the transitive custom-network
+//! detection is still stubbed (filled in by Phase 7 —
 //! `compute_iterator_producer_set` returns an empty map for now).
 
 use serde_json::Value;
@@ -55,12 +56,12 @@ pub fn reset_migration_call_count() {
 /// Entries are added by phase. Phase 3 ships `("collect", 0)` (the synthesis
 /// target). Phase 4 adds `("map", 0)` and `("filter", 0)` (so wires from one
 /// iterator producer into another's `xs` pin do not get a `collect` inserted
-/// on them). Phase 5 will add `("fold", 0)`. The variable-arity `product`
-/// pin is special-cased separately.
+/// on them). Phase 5 adds `("fold", 0)`. The variable-arity `product` pin is
+/// special-cased separately.
 const ITERATOR_PINS_V4: &[(&str, usize)] = &[
-    ("map", 0),    // xs — Phase 4
-    ("filter", 0), // xs — Phase 4
-    // ("fold", 0),   // xs — added by Phase 5
+    ("map", 0),     // xs — Phase 4
+    ("filter", 0),  // xs — Phase 4
+    ("fold", 0),    // xs — Phase 5
     ("collect", 0), // iter
 ];
 

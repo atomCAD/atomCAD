@@ -163,7 +163,7 @@ fn test_fold_custom_type_int_int() {
 
     assert_eq!(
         custom.parameters[0].data_type,
-        DataType::Array(Box::new(DataType::Int))
+        DataType::Iterator(Box::new(DataType::Int))
     );
     assert_eq!(custom.parameters[1].data_type, DataType::Int);
     assert_eq!(
@@ -190,7 +190,7 @@ fn test_fold_custom_type_ivec3_int() {
 
     assert_eq!(
         custom.parameters[0].data_type,
-        DataType::Array(Box::new(DataType::IVec3))
+        DataType::Iterator(Box::new(DataType::IVec3))
     );
     assert_eq!(custom.parameters[1].data_type, DataType::Int);
     assert_eq!(
@@ -731,6 +731,105 @@ fn test_fold_combine_with_prebound_factor() {
 
     let fold_id = find_node_id(&designer, "main", "fold");
     assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 60);
+}
+
+// ============================================================================
+// Evaluation: lazy fusion (range → map → fold)
+// ============================================================================
+
+#[test]
+fn test_fold_fusion_range_map_fold() {
+    // range(0, 1, 1000) → map(double) → fold(sum) → 2 * (0+1+…+999) = 999000.
+    // The intermediate `Iter[Int]` from map is never materialised; fold drains
+    // it one element at a time. Correctness here is the load-bearing assertion
+    // — the lazy walker tree is exercised end-to-end on a non-trivial N.
+    let mut designer = setup_designer_with_network("main");
+
+    let result = edit_designer_network(
+        &mut designer,
+        "main",
+        r#"
+            r = range { start: 0, step: 1, count: 1000 }
+            doubler = expr {
+                expression: "x * 2",
+                parameters: [
+                    { name: "x", data_type: Int }
+                ]
+            }
+            m = map { input_type: Int, output_type: Int, xs: r, f: @doubler }
+            i = int { value: 0 }
+            combine = expr {
+                expression: "acc + elem",
+                parameters: [
+                    { name: "acc", data_type: Int },
+                    { name: "elem", data_type: Int }
+                ]
+            }
+            fld = fold { element_type: Int, accumulator_type: Int, xs: m, init: i, f: @combine }
+        "#,
+        true,
+    );
+    assert!(result.success, "edit should succeed: {:?}", result.errors);
+
+    let fold_id = find_node_id(&designer, "main", "fold");
+    assert_eq!(
+        extract_int(evaluate_node(&designer, "main", fold_id)),
+        999_000
+    );
+}
+
+#[test]
+fn test_fold_legacy_array_literal_via_implicit_conversion() {
+    use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
+    use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
+
+    // [1,2,3] → fold(sum, init=0) ⇒ 6. The wire from `sequence` (Array[Int])
+    // into `fold.xs` (Iter[Int]) exercises the implicit `[T] → Iter[T]`
+    // conversion, ensuring v3 files with the old shape still evaluate.
+    let mut designer = setup_designer_with_network("main");
+
+    let values = [1, 2, 3];
+    let mut int_ids: Vec<u64> = Vec::new();
+    for (idx, &v) in values.iter().enumerate() {
+        let id = designer.add_node("int", DVec2::new(0.0, 60.0 * idx as f64));
+        set_node_data(&mut designer, "main", id, Box::new(IntData { value: v }));
+        int_ids.push(id);
+    }
+    let seq_id = designer.add_node("sequence", DVec2::new(120.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        seq_id,
+        Box::new(SequenceData {
+            element_type: DataType::Int,
+            input_count: values.len(),
+        }),
+    );
+    designer.validate_active_network();
+    for (i, &nid) in int_ids.iter().enumerate() {
+        designer.connect_nodes(nid, 0, seq_id, i);
+    }
+
+    let result = edit_designer_network(
+        &mut designer,
+        "main",
+        r#"
+            init0 = int { value: 0 }
+            combine = expr {
+                expression: "acc + elem",
+                parameters: [
+                    { name: "acc", data_type: Int },
+                    { name: "elem", data_type: Int }
+                ]
+            }
+            fld = fold { element_type: Int, accumulator_type: Int, xs: sequence1, init: init0, f: @combine }
+        "#,
+        false,
+    );
+    assert!(result.success, "edit should succeed: {:?}", result.errors);
+
+    let fold_id = find_node_id(&designer, "main", "fold");
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 6);
 }
 
 // ============================================================================

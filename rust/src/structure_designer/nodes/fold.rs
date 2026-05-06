@@ -2,6 +2,7 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
 use crate::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
+use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -42,7 +43,7 @@ impl NodeData for FoldData {
 
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
         let mut custom = base_node_type.clone();
-        custom.parameters[0].data_type = DataType::Array(Box::new(self.element_type.clone()));
+        custom.parameters[0].data_type = DataType::Iterator(Box::new(self.element_type.clone()));
         custom.parameters[1].data_type = self.accumulator_type.clone();
         custom.parameters[2].data_type = DataType::Function(FunctionType {
             parameter_types: vec![self.accumulator_type.clone(), self.element_type.clone()],
@@ -63,15 +64,19 @@ impl NodeData for FoldData {
     ) -> EvalOutput {
         let xs_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
-        if let NetworkResult::Error(_) = xs_val {
-            return EvalOutput::single(xs_val);
-        }
-        let xs = if let NetworkResult::Array(items) = xs_val {
-            items
-        } else {
-            return EvalOutput::single(NetworkResult::Error(
-                "Expected array of elements".to_string(),
-            ));
+
+        let mut walker = match xs_val {
+            NetworkResult::Iterator(w) => w,
+            // Belt-and-braces: the implicit `[T] → Iter[T]` wire conversion
+            // normally wraps any incoming array as `Iterator(_)` already.
+            NetworkResult::Array(items) => Walker::from_array(items),
+            err @ NetworkResult::Error(_) => return EvalOutput::single(err),
+            other => {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "fold: xs is not an iterator (got {})",
+                    other.to_display_string()
+                )));
+            }
         };
 
         let init_val =
@@ -82,25 +87,41 @@ impl NodeData for FoldData {
 
         let f_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 2);
-        if let NetworkResult::Error(_) = f_val {
-            return EvalOutput::single(f_val);
-        }
-        let closure = if let NetworkResult::Function(c) = f_val {
-            c
-        } else {
-            return EvalOutput::single(NetworkResult::Error("Expected a closure".to_string()));
+
+        let closure = match f_val {
+            NetworkResult::Function(c) => c,
+            err @ NetworkResult::Error(_) => return EvalOutput::single(err),
+            _ => {
+                return EvalOutput::single(NetworkResult::Error(
+                    "fold: f is not a function".to_string(),
+                ));
+            }
         };
 
-        let mut function_evaluator = FunctionEvaluator::new(closure, registry);
-        let mut acc = init_val;
-        for elem in xs {
-            function_evaluator.set_argument_value(0, acc);
-            function_evaluator.set_argument_value(1, elem);
-            let next = function_evaluator.evaluate(network_evaluator, registry);
-            if let NetworkResult::Error(_) = next {
-                return EvalOutput::single(next);
+        let mut function_evaluator = match FunctionEvaluator::try_build(closure, registry) {
+            Ok(fe) => fe,
+            Err(msg) => {
+                return EvalOutput::single(NetworkResult::Error(format!("fold: {}", msg)));
             }
-            acc = next;
+        };
+
+        let mut acc = init_val;
+        loop {
+            match walker.next(network_evaluator, registry) {
+                None => break,
+                Some(NetworkResult::Error(e)) => {
+                    return EvalOutput::single(NetworkResult::Error(e));
+                }
+                Some(elem) => {
+                    function_evaluator.set_argument_value(0, acc);
+                    function_evaluator.set_argument_value(1, elem);
+                    let next = function_evaluator.evaluate(network_evaluator, registry);
+                    if let NetworkResult::Error(_) = next {
+                        return EvalOutput::single(next);
+                    }
+                    acc = next;
+                }
+            }
         }
 
         EvalOutput::single(acc)
@@ -167,7 +188,7 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "xs".to_string(),
-                data_type: DataType::Array(Box::new(DataType::Float)),
+                data_type: DataType::Iterator(Box::new(DataType::Float)),
             },
             Parameter {
                 id: None,
