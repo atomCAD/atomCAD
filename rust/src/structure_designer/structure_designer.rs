@@ -31,6 +31,7 @@ use crate::structure_designer::implicit_eval::ray_tracing::{
     raytrace_geometries, raytrace_geometry,
 };
 use crate::structure_designer::node_data::CustomNodeData;
+use crate::structure_designer::node_data::DragDirection;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
 use crate::structure_designer::node_type::{generic_node_data_loader, generic_node_data_saver};
@@ -49,6 +50,16 @@ use std::collections::{HashMap, HashSet};
 pub struct PerNodeRayHit {
     pub node_id: u64,
     pub distance: f64,
+}
+
+/// Drag-source context propagated from the add-node popup to `add_node`.
+/// Drives `NodeData::adapt_for_drag_source` so type-parameterized nodes are
+/// instantiated with their type properties already set to make the
+/// just-completed wire drag connect. See `doc/design_drag_aware_add_node.md`.
+#[derive(Debug, Clone)]
+pub struct DragSource {
+    pub source_type: DataType,
+    pub direction: DragDirection,
 }
 
 pub struct StructureDesigner {
@@ -1238,6 +1249,25 @@ impl StructureDesigner {
     }
 
     pub fn add_node(&mut self, node_type_name: &str, position: DVec2) -> u64 {
+        self.add_node_with_drag_source(node_type_name, position, None)
+    }
+
+    /// Variant of `add_node` that pre-configures the new node's type
+    /// properties to match a dragged source pin.
+    ///
+    /// Behavior on `drag_source = None` is identical to `add_node`. With a
+    /// drag source, the node's stored data is asked to adapt via
+    /// `NodeData::adapt_for_drag_source`; the adapter's claim is verified by
+    /// re-running the static-pin compatibility check against the resolved
+    /// node type, so an over-promising adapter is silently dropped to
+    /// default data rather than producing a mis-typed node. See
+    /// `doc/design_drag_aware_add_node.md`.
+    pub fn add_node_with_drag_source(
+        &mut self,
+        node_type_name: &str,
+        position: DVec2,
+        drag_source: Option<DragSource>,
+    ) -> u64 {
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -1252,6 +1282,32 @@ impl StructureDesigner {
                 }
                 None => return 0,
             };
+
+        // Drag-source adapter: only applied when the adapted node still
+        // statically matches the drag (mirrors the popup filter's
+        // verification). Protects callers that bypass the popup (CLI,
+        // direct API, stale popups after concurrent network mutations).
+        if let Some(drag) = drag_source.as_ref() {
+            if let Some(node_type) = self.node_type_registry.get_node_type(node_type_name) {
+                if let Some(adapted) = node_data.adapt_for_drag_source(
+                    &drag.source_type,
+                    drag.direction,
+                    &self.node_type_registry,
+                ) {
+                    let resolved = adapted
+                        .calculate_custom_node_type(node_type)
+                        .unwrap_or_else(|| node_type.clone());
+                    if crate::structure_designer::node_type_registry::static_match(
+                        &resolved,
+                        &drag.source_type,
+                        drag.direction,
+                        &self.node_type_registry,
+                    ) {
+                        node_data = adapted;
+                    }
+                }
+            }
+        }
 
         // Capture counters before node creation (for undo)
         let (next_node_id_before, next_param_id_before) = self

@@ -4,7 +4,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -112,6 +112,25 @@ impl NodeData for CollectData {
                 .clone();
         }
         Ok(())
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // collect is meant for streams — no scalar-broadcast on either side.
+        // FromOutput: input pin is `Iter[T]`; we need `Iter[T]` / `Array[T]`.
+        // FromInput:  output pin is `Array[T]`; we need `Array[T]`.
+        let elem = match direction {
+            DragDirection::FromOutput => source_type.drag_element_type_from_input_strict()?,
+            DragDirection::FromInput => match source_type {
+                DataType::Array(t) => (**t).clone(),
+                _ => return None,
+            },
+        };
+        Some(Box::new(CollectData { element_type: elem }))
     }
 }
 

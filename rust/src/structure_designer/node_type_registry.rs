@@ -286,6 +286,12 @@ impl NodeTypeRegistry {
         source_type: &DataType,
         dragging_from_output: bool,
     ) -> Vec<APINodeCategoryView> {
+        let direction = if dragging_from_output {
+            crate::structure_designer::node_data::DragDirection::FromOutput
+        } else {
+            crate::structure_designer::node_data::DragDirection::FromInput
+        };
+
         // Create iterator of (node_type, category) for all public nodes
         let built_in_iter = self
             .built_in_node_types
@@ -298,17 +304,30 @@ impl NodeTypeRegistry {
             .values()
             .map(|network| (&network.node_type, NodeTypeCategory::Custom));
 
-        // Filter by compatibility and collect views
+        // Two-step compatibility check per candidate node type:
+        // 1. Static fast path — covers every node with no type properties.
+        // 2. Adapter slow path — only allocates for type-parameterized nodes
+        //    whose static defaults didn't match. The adapter's claim is
+        //    verified by re-running the static match against the resolved
+        //    node type after applying `calculate_custom_node_type` to the
+        //    adapted data, so over-promising adapters are silently dropped.
+        // See `doc/design_drag_aware_add_node.md`.
         let all_views: Vec<APINodeTypeView> = built_in_iter
             .chain(custom_iter)
             .filter(|(node_type, _)| {
-                if dragging_from_output {
-                    node_type.parameters.iter().any(|param| {
-                        DataType::can_be_converted_to(source_type, &param.data_type, self)
-                    })
-                } else {
-                    DataType::can_be_converted_to(node_type.output_type(), source_type, self)
+                if static_match(node_type, source_type, direction, self) {
+                    return true;
                 }
+                let default_data = (node_type.node_data_creator)();
+                let Some(adapted) =
+                    default_data.adapt_for_drag_source(source_type, direction, self)
+                else {
+                    return false;
+                };
+                let resolved = adapted
+                    .calculate_custom_node_type(node_type)
+                    .unwrap_or_else(|| (*node_type).clone());
+                static_match(&resolved, source_type, direction, self)
             })
             .map(|(node_type, category)| APINodeTypeView {
                 name: node_type.name.clone(),
@@ -1440,4 +1459,34 @@ pub fn validate_record_type_defs(registry: &NodeTypeRegistry) -> Vec<String> {
     }
 
     errors
+}
+
+/// Pure static-pin compatibility check for the drag-aware add-node popup.
+///
+/// `FromOutput`: the user dragged from an output pin of `source_type`; we
+/// want a node type that has at least one input pin accepting `source_type`.
+/// `FromInput`: the user dragged from an input pin of `source_type`; we
+/// want a node type whose pin-0 output can be converted to `source_type`.
+///
+/// This is exactly the predicate `get_compatible_node_types` used before
+/// drag-aware adapters were introduced. The same helper is run at create
+/// time inside `StructureDesigner::add_node` to verify an adapter's claim
+/// before adopting its output, so over-promising adapters are silently
+/// dropped to default data. See `doc/design_drag_aware_add_node.md`.
+pub fn static_match(
+    node_type: &NodeType,
+    source_type: &DataType,
+    direction: crate::structure_designer::node_data::DragDirection,
+    registry: &NodeTypeRegistry,
+) -> bool {
+    use crate::structure_designer::node_data::DragDirection;
+    match direction {
+        DragDirection::FromOutput => node_type
+            .parameters
+            .iter()
+            .any(|param| DataType::can_be_converted_to(source_type, &param.data_type, registry)),
+        DragDirection::FromInput => {
+            DataType::can_be_converted_to(node_type.output_type(), source_type, registry)
+        }
+    }
 }

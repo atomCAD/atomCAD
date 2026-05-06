@@ -755,6 +755,17 @@ pub struct APINodeTypeView {
     pub category: NodeTypeCategory,
 }
 
+/// Source pin context for the drag-aware add-node popup. When the user drags
+/// a wire from a pin and drops on empty space, the selected node type is
+/// instantiated with type properties pre-configured to match the source pin.
+/// `source_pin_type` is `DataType::Display` (round-trips through
+/// `DataType::from_string`); a string that fails to parse is treated as if
+/// no drag source were supplied. See `doc/design_drag_aware_add_node.md`.
+pub struct APIDragSource {
+    pub source_pin_type: String,
+    pub dragging_from_output: bool,
+}
+
 #[derive(Clone)]
 pub struct APINodeCategoryView {
     pub category: NodeTypeCategory,

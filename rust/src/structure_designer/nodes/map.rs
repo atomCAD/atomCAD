@@ -7,7 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -141,6 +141,22 @@ impl NodeData for MapData {
         m.insert("xs".to_string(), (true, None)); // required
         m.insert("f".to_string(), (true, None)); // required
         m
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // Both directions accept the same shape: peel `Iter[T]` / `Array[T]` /
+        // `T`. The over-promised case (e.g. `FromInput` with a scalar `T`) is
+        // caught by the filter's static-match verification step.
+        let elem = source_type.drag_element_type_from_output()?;
+        Some(Box::new(MapData {
+            input_type: elem.clone(),
+            output_type: elem,
+        }))
     }
 }
 

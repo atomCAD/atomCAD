@@ -603,6 +603,33 @@ class APIDiffStats {
           unchangedReferences == other.unchangedReferences;
 }
 
+/// Source pin context for the drag-aware add-node popup. When the user drags
+/// a wire from a pin and drops on empty space, the selected node type is
+/// instantiated with type properties pre-configured to match the source pin.
+/// `source_pin_type` is `DataType::Display` (round-trips through
+/// `DataType::from_string`); a string that fails to parse is treated as if
+/// no drag source were supplied. See `doc/design_drag_aware_add_node.md`.
+class APIDragSource {
+  final String sourcePinType;
+  final bool draggingFromOutput;
+
+  const APIDragSource({
+    required this.sourcePinType,
+    required this.draggingFromOutput,
+  });
+
+  @override
+  int get hashCode => sourcePinType.hashCode ^ draggingFromOutput.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDragSource &&
+          runtimeType == other.runtimeType &&
+          sourcePinType == other.sourcePinType &&
+          draggingFromOutput == other.draggingFromOutput;
+}
+
 class APIDrawingPlaneData {
   final int maxMillerIndex;
   final APIIVec3 millerIndex;

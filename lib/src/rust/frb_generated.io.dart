@@ -110,6 +110,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDiffStats dco_decode_api_diff_stats(dynamic raw);
 
   @protected
+  APIDragSource dco_decode_api_drag_source(dynamic raw);
+
+  @protected
   APIDrawingPlaneData dco_decode_api_drawing_plane_data(dynamic raw);
 
   @protected
@@ -382,6 +385,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType dco_decode_box_autoadd_api_data_type(dynamic raw);
+
+  @protected
+  APIDragSource dco_decode_box_autoadd_api_drag_source(dynamic raw);
 
   @protected
   APIDrawingPlaneData dco_decode_box_autoadd_api_drawing_plane_data(
@@ -783,6 +789,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDataType? dco_decode_opt_box_autoadd_api_data_type(dynamic raw);
 
   @protected
+  APIDragSource? dco_decode_opt_box_autoadd_api_drag_source(dynamic raw);
+
+  @protected
   APIDrawingPlaneData? dco_decode_opt_box_autoadd_api_drawing_plane_data(
       dynamic raw);
 
@@ -1148,6 +1157,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDiffStats sse_decode_api_diff_stats(SseDeserializer deserializer);
 
   @protected
+  APIDragSource sse_decode_api_drag_source(SseDeserializer deserializer);
+
+  @protected
   APIDrawingPlaneData sse_decode_api_drawing_plane_data(
       SseDeserializer deserializer);
 
@@ -1456,6 +1468,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType sse_decode_box_autoadd_api_data_type(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDragSource sse_decode_box_autoadd_api_drag_source(
       SseDeserializer deserializer);
 
   @protected
@@ -1941,6 +1957,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIDragSource? sse_decode_opt_box_autoadd_api_drag_source(
+      SseDeserializer deserializer);
+
+  @protected
   APIDrawingPlaneData? sse_decode_opt_box_autoadd_api_drawing_plane_data(
       SseDeserializer deserializer);
 
@@ -2363,6 +2383,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_diff_stats(APIDiffStats self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_drag_source(APIDragSource self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_drawing_plane_data(
       APIDrawingPlaneData self, SseSerializer serializer);
 
@@ -2697,6 +2720,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_data_type(
       APIDataType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_drag_source(
+      APIDragSource self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_drawing_plane_data(
@@ -3189,6 +3216,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_data_type(
       APIDataType? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_drag_source(
+      APIDragSource? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_drawing_plane_data(

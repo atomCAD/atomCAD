@@ -18,9 +18,12 @@ void moveNode({required BigInt nodeId, required APIVec2 position}) =>
     RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiMoveNode(
         nodeId: nodeId, position: position);
 
-BigInt addNode({required String nodeTypeName, required APIVec2 position}) =>
+BigInt addNode(
+        {required String nodeTypeName,
+        required APIVec2 position,
+        APIDragSource? dragSource}) =>
     RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiAddNode(
-        nodeTypeName: nodeTypeName, position: position);
+        nodeTypeName: nodeTypeName, position: position, dragSource: dragSource);
 
 BigInt duplicateNode({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDuplicateNode(nodeId: nodeId);

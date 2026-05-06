@@ -7,7 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -173,6 +173,22 @@ impl NodeData for FoldData {
         m.insert("init".to_string(), (true, None));
         m.insert("f".to_string(), (true, None));
         m
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // FromOutput: source `Iter[T]` / `Array[T]` / `T` → both T.
+        // FromInput:  source `T` → both T (fold's output is the accumulator
+        //             type, its `init` input is also T).
+        let elem = source_type.drag_element_type_from_output()?;
+        Some(Box::new(FoldData {
+            element_type: elem.clone(),
+            accumulator_type: elem,
+        }))
     }
 }
 

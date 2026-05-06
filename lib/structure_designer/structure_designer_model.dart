@@ -1185,11 +1185,16 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  BigInt createNode(String nodeTypeName, Offset position) {
+  BigInt createNode(
+    String nodeTypeName,
+    Offset position, {
+    APIDragSource? dragSource,
+  }) {
     if (nodeNetworkView == null) return BigInt.zero;
     final nodeId = structure_designer_api.addNode(
       nodeTypeName: nodeTypeName,
       position: APIVec2(x: position.dx, y: position.dy),
+      dragSource: dragSource,
     );
     refreshFromKernel();
     return nodeId;

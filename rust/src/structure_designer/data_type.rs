@@ -211,6 +211,29 @@ impl DataType {
         )
     }
 
+    /// For drag-from-output: extract the "element type" from a value-producing pin.
+    /// Used by adapters that want to set a stored `element_type` to match the source.
+    /// Peels `Iter[T]` / `Array[T]` to `T`; otherwise treats the source as a
+    /// single-element broadcast (`T` → `T`). Rejects abstract types and
+    /// `Function(_)` (neither makes sense as an element).
+    pub fn drag_element_type_from_output(&self) -> Option<DataType> {
+        match self {
+            DataType::Iterator(t) | DataType::Array(t) => Some((**t).clone()),
+            DataType::Function(_) => None,
+            t if t.is_abstract() => None,
+            t => Some(t.clone()),
+        }
+    }
+
+    /// For drag-from-input: same extraction, but rejecting scalar broadcast where the
+    /// adapter's downstream connection wouldn't make sense (e.g. `collect`).
+    pub fn drag_element_type_from_input_strict(&self) -> Option<DataType> {
+        match self {
+            DataType::Iterator(t) | DataType::Array(t) => Some((**t).clone()),
+            _ => None,
+        }
+    }
+
     /// Checks if a source data type can be converted to a destination data type.
     ///
     /// `&NodeTypeRegistry` is threaded through so `RecordType::Named` references

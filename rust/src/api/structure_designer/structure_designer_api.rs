@@ -6,6 +6,7 @@ use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
+use super::structure_designer_api_types::APIDragSource;
 use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
@@ -536,13 +537,33 @@ pub fn move_node(node_id: u64, position: APIVec2) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_node(node_type_name: &str, position: APIVec2) -> u64 {
+pub fn add_node(
+    node_type_name: &str,
+    position: APIVec2,
+    drag_source: Option<APIDragSource>,
+) -> u64 {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                let drag = drag_source.and_then(|ds| {
+                    // String that fails to round-trip through `DataType::from_string`
+                    // (e.g. anonymous-record syntax `{x: Int, y: Int}`) is treated
+                    // as if no drag source were supplied. See
+                    // `doc/design_drag_aware_add_node.md` "Known limitation".
+                    let parsed = DataType::from_string(&ds.source_pin_type).ok()?;
+                    let direction = if ds.dragging_from_output {
+                        crate::structure_designer::node_data::DragDirection::FromOutput
+                    } else {
+                        crate::structure_designer::node_data::DragDirection::FromInput
+                    };
+                    Some(crate::structure_designer::structure_designer::DragSource {
+                        source_type: parsed,
+                        direction,
+                    })
+                });
                 let ret = cad_instance
                     .structure_designer
-                    .add_node(node_type_name, from_api_vec2(&position));
+                    .add_node_with_drag_source(node_type_name, from_api_vec2(&position), drag);
                 refresh_structure_designer_auto(cad_instance);
                 ret
             },

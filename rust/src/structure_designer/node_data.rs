@@ -1,4 +1,5 @@
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -12,6 +13,21 @@ use crate::util::as_any::AsAny;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
+
+/// Direction the user dragged a wire from when opening the add-node popup.
+/// Drives `NodeData::adapt_for_drag_source`: an adapter must arrange for an
+/// input pin (`FromOutput`) or the output pin (`FromInput`) of the new node
+/// to be compatible with the source pin type. See
+/// `doc/design_drag_aware_add_node.md`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragDirection {
+    /// User dragged from an *output* pin of `source_type`.
+    /// Adapter must arrange for at least one of this node's *input* pins to accept it.
+    FromOutput,
+    /// User dragged from an *input* pin of `source_type`.
+    /// Adapter must arrange for this node's *output* (pin 0) to satisfy it.
+    FromInput,
+}
 
 /// Return type for `NodeData::eval()`. Wraps one or more results, one per output pin.
 #[derive(Clone)]
@@ -149,6 +165,29 @@ pub trait NodeData: Any + AsAny {
     /// Default implementation returns empty HashMap (assumes all non-property parameters are required).
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         HashMap::new()
+    }
+
+    /// Adapt this node's stored data so its pins line up with a dragged source pin.
+    ///
+    /// Called by the drag-aware add-node popup when this node's static-pin
+    /// signature did not already match. The implementation typically clones
+    /// `self`, overwrites any type properties (e.g. `MapData::input_type`),
+    /// and returns the new boxed `NodeData`. Returning `None` means the node
+    /// cannot be adapted to accept this drag — the candidate is silently
+    /// skipped.
+    ///
+    /// Default: returns `None`. Drag filtering and create-time plumbing fall
+    /// back to a static-pin check for nodes that don't override this — the
+    /// same path as before this hook existed.
+    ///
+    /// See `doc/design_drag_aware_add_node.md`.
+    fn adapt_for_drag_source(
+        &self,
+        _source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        None
     }
 }
 

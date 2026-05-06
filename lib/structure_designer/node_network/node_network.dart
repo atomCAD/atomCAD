@@ -430,9 +430,17 @@ class NodeNetworkState extends State<NodeNetwork> {
     final scale = getZoomScale(_zoomLevel);
     final logicalPosition = screenToLogical(dropPosition, _panOffset, scale);
 
-    // Create the new node
-    final newNodeId =
-        widget.graphModel.createNode(selectedNodeType, logicalPosition);
+    // Create the new node, passing the drag source so the popup-filter's
+    // adapter (e.g. `map.input_type` set to match the dragged source) is
+    // applied at create time too. See `doc/design_drag_aware_add_node.md`.
+    final newNodeId = widget.graphModel.createNode(
+      selectedNodeType,
+      logicalPosition,
+      dragSource: APIDragSource(
+        sourcePinType: dataType,
+        draggingFromOutput: isOutput,
+      ),
+    );
     if (newNodeId == BigInt.zero) return;
 
     // Get compatible pins on the target node

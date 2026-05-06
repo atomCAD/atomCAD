@@ -119,7 +119,9 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
 
   BigInt crateApiStructureDesignerStructureDesignerApiAddNode(
-      {required String nodeTypeName, required APIVec2 position});
+      {required String nodeTypeName,
+      required APIVec2 position,
+      APIDragSource? dragSource});
 
   APIResult crateApiStructureDesignerStructureDesignerApiAddNodeNetworkWithName(
       {required String name});
@@ -1379,12 +1381,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   BigInt crateApiStructureDesignerStructureDesignerApiAddNode(
-      {required String nodeTypeName, required APIVec2 position}) {
+      {required String nodeTypeName,
+      required APIVec2 position,
+      APIDragSource? dragSource}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(nodeTypeName, serializer);
         sse_encode_box_autoadd_api_vec_2(position, serializer);
+        sse_encode_opt_box_autoadd_api_drag_source(dragSource, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
       },
       codec: SseCodec(
@@ -1392,7 +1397,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta: kCrateApiStructureDesignerStructureDesignerApiAddNodeConstMeta,
-      argValues: [nodeTypeName, position],
+      argValues: [nodeTypeName, position, dragSource],
       apiImpl: this,
     ));
   }
@@ -1401,7 +1406,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiAddNodeConstMeta =>
           const TaskConstMeta(
             debugName: "add_node",
-            argNames: ["nodeTypeName", "position"],
+            argNames: ["nodeTypeName", "position", "dragSource"],
           );
 
   @override
@@ -11023,6 +11028,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIDragSource dco_decode_api_drag_source(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return APIDragSource(
+      sourcePinType: dco_decode_String(arr[0]),
+      draggingFromOutput: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
   APIDrawingPlaneData dco_decode_api_drawing_plane_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -12118,6 +12135,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIDragSource dco_decode_box_autoadd_api_drag_source(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_drag_source(raw);
+  }
+
+  @protected
   APIDrawingPlaneData dco_decode_box_autoadd_api_drawing_plane_data(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -13034,6 +13057,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIDataType? dco_decode_opt_box_autoadd_api_data_type(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_api_data_type(raw);
+  }
+
+  @protected
+  APIDragSource? dco_decode_opt_box_autoadd_api_drag_source(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_api_drag_source(raw);
   }
 
   @protected
@@ -14044,6 +14073,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         unmatchedDeleteMarkers: var_unmatchedDeleteMarkers,
         orphanedBonds: var_orphanedBonds,
         unchangedReferences: var_unchangedReferences);
+  }
+
+  @protected
+  APIDragSource sse_decode_api_drag_source(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sourcePinType = sse_decode_String(deserializer);
+    var var_draggingFromOutput = sse_decode_bool(deserializer);
+    return APIDragSource(
+        sourcePinType: var_sourcePinType,
+        draggingFromOutput: var_draggingFromOutput);
   }
 
   @protected
@@ -15094,6 +15133,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_data_type(deserializer));
+  }
+
+  @protected
+  APIDragSource sse_decode_box_autoadd_api_drag_source(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_drag_source(deserializer));
   }
 
   @protected
@@ -16289,6 +16335,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_api_data_type(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIDragSource? sse_decode_opt_box_autoadd_api_drag_source(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_drag_source(deserializer));
     } else {
       return null;
     }
@@ -17553,6 +17611,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_drag_source(
+      APIDragSource self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.sourcePinType, serializer);
+    sse_encode_bool(self.draggingFromOutput, serializer);
+  }
+
+  @protected
   void sse_encode_api_drawing_plane_data(
       APIDrawingPlaneData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -18402,6 +18468,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIDataType self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_data_type(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_drag_source(
+      APIDragSource self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_drag_source(self, serializer);
   }
 
   @protected
@@ -19468,6 +19541,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_data_type(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_drag_source(
+      APIDragSource? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_drag_source(self, serializer);
     }
   }
 
