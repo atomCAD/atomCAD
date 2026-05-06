@@ -149,6 +149,13 @@ impl NodeData for ArrayAtData {
                 source_type.clone()
             }
         };
+        // Reject Iter element types: Array[Iter[T]] is technically valid
+        // but virtually never the user's intent, and surfacing array_at for
+        // an Iter[T] drag-from-input renders the output pin as Iter[T],
+        // misleading users into thinking array_at is iterator-aware.
+        if matches!(elem, DataType::Iterator(_)) {
+            return None;
+        }
         Some(Box::new(ArrayAtData { element_type: elem }))
     }
 }

@@ -144,6 +144,10 @@ impl NodeData for SequenceData {
             //            peel.
             DragDirection::FromInput => source_type.drag_element_type_from_input_strict()?,
         };
+        // Reject Iter element types — see array_at.rs.
+        if matches!(elem, DataType::Iterator(_)) {
+            return None;
+        }
         Some(Box::new(SequenceData {
             element_type: elem,
             input_count: self.input_count,

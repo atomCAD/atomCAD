@@ -132,6 +132,10 @@ impl NodeData for ArrayConcatData {
         // both sides.
         let elem = source_type.drag_element_type_from_input_strict()?;
         let _ = direction; // both directions use the strict peel
+        // Reject Iter element types — see array_at.rs.
+        if matches!(elem, DataType::Iterator(_)) {
+            return None;
+        }
         Some(Box::new(ArrayConcatData { element_type: elem }))
     }
 }

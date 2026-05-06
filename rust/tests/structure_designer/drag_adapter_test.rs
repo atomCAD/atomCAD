@@ -493,6 +493,29 @@ fn array_at_adapter_rejects_abstract_from_input() {
     assert!(adapt_array_at(DataType::HasAtoms, DragDirection::FromInput).is_none());
 }
 
+#[test]
+fn array_at_adapter_rejects_iter_element_type() {
+    // Drag from an `Iter[T]`-typed input pin would otherwise set
+    // `element_type = Iter[T]` and render the output pin as `Iter[T]`,
+    // misleading users into thinking array_at produces an iterator.
+    assert!(
+        adapt_array_at(
+            DataType::Iterator(Box::new(DataType::Int)),
+            DragDirection::FromInput
+        )
+        .is_none()
+    );
+    // Same rejection on the FromOutput side when the source is
+    // `Array[Iter[T]]` (peel yields `Iter[T]` as element type).
+    assert!(
+        adapt_array_at(
+            DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int)))),
+            DragDirection::FromOutput
+        )
+        .is_none()
+    );
+}
+
 // --- array_len ------------------------------------------------------------
 
 #[test]
@@ -510,6 +533,18 @@ fn array_len_adapter_from_input_returns_none() {
     // Output is always Int — static-match handles drag from an Int
     // consumer pin; the adapter must not return Some.
     assert!(adapt_array_len(DataType::Int, DragDirection::FromInput).is_none());
+}
+
+#[test]
+fn array_len_adapter_rejects_iter_element_type() {
+    // `Array[Iter[T]]` source would otherwise set element_type = Iter[T].
+    assert!(
+        adapt_array_len(
+            DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int)))),
+            DragDirection::FromOutput
+        )
+        .is_none()
+    );
 }
 
 // --- array_concat ---------------------------------------------------------
@@ -539,6 +574,26 @@ fn array_concat_adapter_rejects_scalar() {
     // Strict on both sides — array_concat is for arrays.
     assert!(adapt_array_concat(DataType::Int, DragDirection::FromOutput).is_none());
     assert!(adapt_array_concat(DataType::Int, DragDirection::FromInput).is_none());
+}
+
+#[test]
+fn array_concat_adapter_rejects_iter_element_type() {
+    // `Array[Iter[T]]` source on either side would otherwise set
+    // element_type = Iter[T].
+    assert!(
+        adapt_array_concat(
+            DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int)))),
+            DragDirection::FromOutput
+        )
+        .is_none()
+    );
+    assert!(
+        adapt_array_concat(
+            DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int)))),
+            DragDirection::FromInput
+        )
+        .is_none()
+    );
 }
 
 // --- array_append ---------------------------------------------------------
@@ -577,6 +632,26 @@ fn array_append_adapter_from_input_array() {
 fn array_append_adapter_rejects_scalar_from_input() {
     // Output is `Array[T]` — a scalar consumer doesn't take an array.
     assert!(adapt_array_append(DataType::Float, DragDirection::FromInput).is_none());
+}
+
+#[test]
+fn array_append_adapter_rejects_iter_element_type() {
+    // FromOutput: `Iter[T]` source peels to `T` — fine — but
+    // `Array[Iter[T]]` source peels to `Iter[T]`, which we reject.
+    assert!(
+        adapt_array_append(
+            DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int)))),
+            DragDirection::FromOutput
+        )
+        .is_none()
+    );
+    assert!(
+        adapt_array_append(
+            DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int)))),
+            DragDirection::FromInput
+        )
+        .is_none()
+    );
 }
 
 // --- sequence -------------------------------------------------------------
@@ -625,6 +700,28 @@ fn sequence_adapter_from_input_array() {
 #[test]
 fn sequence_adapter_from_input_rejects_scalar() {
     assert!(adapt_sequence(DataType::Float, DragDirection::FromInput).is_none());
+}
+
+#[test]
+fn sequence_adapter_rejects_iter_element_type() {
+    // FromOutput: sequence's input pins are typed `T` directly (not
+    // peeled), so an `Iter[T]` source would otherwise set
+    // element_type = Iter[T].
+    assert!(
+        adapt_sequence(
+            DataType::Iterator(Box::new(DataType::Int)),
+            DragDirection::FromOutput
+        )
+        .is_none()
+    );
+    // FromInput: `Array[Iter[T]]` consumer peels to `Iter[T]`.
+    assert!(
+        adapt_sequence(
+            DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int)))),
+            DragDirection::FromInput
+        )
+        .is_none()
+    );
 }
 
 // --- Filter (popup) integration -------------------------------------------

@@ -129,6 +129,10 @@ impl NodeData for ArrayAppendData {
             //            peel — scalar broadcast doesn't apply here.
             DragDirection::FromInput => source_type.drag_element_type_from_input_strict()?,
         };
+        // Reject Iter element types — see array_at.rs.
+        if matches!(elem, DataType::Iterator(_)) {
+            return None;
+        }
         Some(Box::new(ArrayAppendData { element_type: elem }))
     }
 }

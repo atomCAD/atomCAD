@@ -113,6 +113,10 @@ impl NodeData for ArrayLenData {
         match direction {
             DragDirection::FromOutput => {
                 let elem = source_type.drag_element_type_from_output()?;
+                // Reject Iter element types — see array_at.rs.
+                if matches!(elem, DataType::Iterator(_)) {
+                    return None;
+                }
                 Some(Box::new(ArrayLenData { element_type: elem }))
             }
             DragDirection::FromInput => None,
