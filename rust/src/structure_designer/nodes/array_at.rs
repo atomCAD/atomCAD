@@ -4,7 +4,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -125,6 +125,31 @@ impl NodeData for ArrayAtData {
                 .clone();
         }
         Ok(())
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        let elem = match direction {
+            // FromOutput: source plugs into the `array: Array[T]` input.
+            //             Peel `Array[T]`/`Iter[T]` or broadcast scalar `T`
+            //             (the implicit `T → [T]` rule); static-match catches
+            //             over-promised cases (e.g. `Iter[T]` source).
+            DragDirection::FromOutput => source_type.drag_element_type_from_output()?,
+            // FromInput: source is the consumer pin's declared type, which
+            //            equals array_at's output (the element type T).
+            //            Direct copy — peeling would mis-type the output.
+            DragDirection::FromInput => {
+                if matches!(source_type, DataType::Function(_)) || source_type.is_abstract() {
+                    return None;
+                }
+                source_type.clone()
+            }
+        };
+        Some(Box::new(ArrayAtData { element_type: elem }))
     }
 }
 

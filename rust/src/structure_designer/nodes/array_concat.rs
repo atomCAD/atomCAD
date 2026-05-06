@@ -4,7 +4,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -116,6 +116,23 @@ impl NodeData for ArrayConcatData {
                 .clone();
         }
         Ok(())
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // Both inputs and the output share `Array[T]`, so both directions
+        // strictly peel an array from the source. Scalar broadcast onto an
+        // `Array[T]` pin is technically allowed (`T → [T]`) — but for a node
+        // whose explicit role is to operate on arrays, popping it into the
+        // popup for a scalar drag adds noise; require an actual array on
+        // both sides.
+        let elem = source_type.drag_element_type_from_input_strict()?;
+        let _ = direction; // both directions use the strict peel
+        Some(Box::new(ArrayConcatData { element_type: elem }))
     }
 }
 

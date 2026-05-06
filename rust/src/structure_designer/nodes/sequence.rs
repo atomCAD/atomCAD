@@ -4,7 +4,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -122,6 +122,32 @@ impl NodeData for SequenceData {
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         HashMap::new()
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        let elem = match direction {
+            // FromOutput: sequence's input pins are typed `T` directly (not
+            //             `Array[T]`), so don't peel — set element_type to
+            //             the source type as-is. Reject abstract / function.
+            DragDirection::FromOutput => {
+                if matches!(source_type, DataType::Function(_)) || source_type.is_abstract() {
+                    return None;
+                }
+                source_type.clone()
+            }
+            // FromInput: consumer expects `Array[T]` (the output). Strict
+            //            peel.
+            DragDirection::FromInput => source_type.drag_element_type_from_input_strict()?,
+        };
+        Some(Box::new(SequenceData {
+            element_type: elem,
+            input_count: self.input_count,
+        }))
     }
 }
 

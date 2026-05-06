@@ -4,7 +4,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -111,6 +111,25 @@ impl NodeData for ArrayAppendData {
                 .clone();
         }
         Ok(())
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        let elem = match direction {
+            // FromOutput: source either matches the `array: Array[T]` pin
+            //             (peel) or the `element: T` pin (broadcast). The
+            //             auto-connect picker disambiguates which pin gets
+            //             wired afterwards.
+            DragDirection::FromOutput => source_type.drag_element_type_from_output()?,
+            // FromInput: consumer expects `Array[T]` (the output). Strict
+            //            peel — scalar broadcast doesn't apply here.
+            DragDirection::FromInput => source_type.drag_element_type_from_input_strict()?,
+        };
+        Some(Box::new(ArrayAppendData { element_type: elem }))
     }
 }
 

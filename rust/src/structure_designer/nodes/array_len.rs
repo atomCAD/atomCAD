@@ -4,7 +4,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -99,6 +99,24 @@ impl NodeData for ArrayLenData {
                 .clone();
         }
         Ok(())
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // FromInput: output is always Int — the static-match path already
+        // surfaces array_len for a drag from an `Int` consumer pin. No
+        // adapter needed; default `None`.
+        match direction {
+            DragDirection::FromOutput => {
+                let elem = source_type.drag_element_type_from_output()?;
+                Some(Box::new(ArrayLenData { element_type: elem }))
+            }
+            DragDirection::FromInput => None,
+        }
     }
 }
 
