@@ -561,9 +561,11 @@ pub fn add_node(
                         direction,
                     })
                 });
-                let ret = cad_instance
-                    .structure_designer
-                    .add_node_with_drag_source(node_type_name, from_api_vec2(&position), drag);
+                let ret = cad_instance.structure_designer.add_node_with_drag_source(
+                    node_type_name,
+                    from_api_vec2(&position),
+                    drag,
+                );
                 refresh_structure_designer_auto(cad_instance);
                 ret
             },

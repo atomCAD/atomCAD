@@ -21,6 +21,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData;
 use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
+use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
 use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::{DragSource, StructureDesigner};
@@ -144,8 +145,7 @@ fn map_adapter_from_output_array_float() {
 
 #[test]
 fn map_adapter_from_output_broadcast_vec3() {
-    let adapted =
-        adapt_map(DataType::Vec3, DragDirection::FromOutput).expect("scalar broadcast");
+    let adapted = adapt_map(DataType::Vec3, DragDirection::FromOutput).expect("scalar broadcast");
     assert_eq!(adapted.input_type, DataType::Vec3);
     assert_eq!(adapted.output_type, DataType::Vec3);
 }
@@ -234,11 +234,13 @@ fn collect_adapter_from_input_array() {
 fn collect_adapter_from_input_iter_rejected() {
     // Output of collect is `Array[T]`, not `Iter[T]` — pulling from an
     // `Iter[T]` consumer pin doesn't make sense for collect.
-    assert!(adapt_collect(
-        DataType::Iterator(Box::new(DataType::Float)),
-        DragDirection::FromInput
-    )
-    .is_none());
+    assert!(
+        adapt_collect(
+            DataType::Iterator(Box::new(DataType::Float)),
+            DragDirection::FromInput
+        )
+        .is_none()
+    );
 }
 
 #[test]
@@ -480,7 +482,10 @@ fn array_at_adapter_from_input_array_preserved() {
         DragDirection::FromInput,
     )
     .expect("array as element type");
-    assert_eq!(adapted.element_type, DataType::Array(Box::new(DataType::Int)));
+    assert_eq!(
+        adapted.element_type,
+        DataType::Array(Box::new(DataType::Int))
+    );
 }
 
 #[test]
@@ -580,8 +585,8 @@ fn array_append_adapter_rejects_scalar_from_input() {
 fn sequence_adapter_from_output_scalar() {
     // sequence's input pins are typed `T` directly; setting element_type
     // to the source as-is is the right move.
-    let adapted = adapt_sequence(DataType::Float, DragDirection::FromOutput)
-        .expect("scalar source");
+    let adapted =
+        adapt_sequence(DataType::Float, DragDirection::FromOutput).expect("scalar source");
     assert_eq!(adapted.element_type, DataType::Float);
     assert_eq!(adapted.input_count, 2, "input_count default preserved");
 }
@@ -631,8 +636,8 @@ fn array_int_from_output_surfaces_all_array_nodes_via_adapter() {
     // care about is that after Phase 2 adapters, all of them surface in
     // the popup for an `Array[Int]` drag from an output pin.
     let registry = NodeTypeRegistry::new();
-    let categories = registry
-        .get_compatible_node_types(&DataType::Array(Box::new(DataType::Int)), true);
+    let categories =
+        registry.get_compatible_node_types(&DataType::Array(Box::new(DataType::Int)), true);
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -716,4 +721,110 @@ fn add_node_with_drag_source_configures_sequence() {
     let data = get_sequence_data(&designer, node_id);
     assert_eq!(data.element_type, DataType::Float);
     assert_eq!(data.input_count, 2);
+}
+
+// ============================================================================
+// Phase 3: parameter-node adapter
+// ============================================================================
+
+fn adapt_parameter(source: DataType, dir: DragDirection) -> Option<ParameterData> {
+    let registry = NodeTypeRegistry::new();
+    let data: Box<dyn NodeData> = Box::new(ParameterData {
+        param_id: None,
+        param_index: 0,
+        param_name: "param".to_string(),
+        data_type: DataType::Int,
+        sort_order: 0,
+        data_type_str: None,
+        error: None,
+    });
+    let adapted = data.adapt_for_drag_source(&source, dir, &registry)?;
+    adapted
+        .as_any_ref()
+        .downcast_ref::<ParameterData>()
+        .cloned()
+}
+
+#[test]
+fn parameter_adapter_from_input_concrete() {
+    // The motivating case: drag from a consumer pin of type T → spawn a
+    // parameter whose output is T.
+    let adapted =
+        adapt_parameter(DataType::Crystal, DragDirection::FromInput).expect("should adapt");
+    assert_eq!(adapted.data_type, DataType::Crystal);
+}
+
+#[test]
+fn parameter_adapter_from_output_concrete() {
+    // Drag from a value pin of type T → spawn a parameter whose `default`
+    // input pin (and therefore output pin) is typed T.
+    let adapted = adapt_parameter(DataType::Int, DragDirection::FromOutput).expect("should adapt");
+    assert_eq!(adapted.data_type, DataType::Int);
+}
+
+#[test]
+fn parameter_adapter_rejects_abstract() {
+    // Abstract phase supertypes can't be a parameter declaration — no
+    // concrete value would ever satisfy the pin.
+    assert!(adapt_parameter(DataType::HasAtoms, DragDirection::FromInput).is_none());
+    assert!(adapt_parameter(DataType::HasStructure, DragDirection::FromInput).is_none());
+    assert!(adapt_parameter(DataType::HasFreeLinOps, DragDirection::FromOutput).is_none());
+}
+
+#[test]
+fn parameter_adapter_rejects_function() {
+    let f = DataType::Function(FunctionType {
+        parameter_types: vec![DataType::Int],
+        output_type: Box::new(DataType::Int),
+    });
+    assert!(adapt_parameter(f, DragDirection::FromInput).is_none());
+}
+
+// --- Create-time test -----------------------------------------------------
+
+fn get_parameter_data(designer: &StructureDesigner, node_id: u64) -> ParameterData {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    let node = net.nodes.get(&node_id).unwrap();
+    node.data
+        .as_any_ref()
+        .downcast_ref::<ParameterData>()
+        .cloned()
+        .expect("ParameterData")
+}
+
+#[test]
+fn add_node_with_drag_source_configures_parameter() {
+    // Verifies the instantiation order: the adapter sets `data_type`, then
+    // the existing parameter special-case in `add_node` overwrites
+    // `param_id` / `param_name` / `sort_order` on top — both passes
+    // compose cleanly because they touch disjoint fields.
+    let mut designer = setup_designer();
+    let node_id = designer.add_node_with_drag_source(
+        "parameter",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: DataType::Crystal,
+            direction: DragDirection::FromInput,
+        }),
+    );
+    assert_ne!(node_id, 0);
+    let data = get_parameter_data(&designer, node_id);
+    assert_eq!(
+        data.data_type,
+        DataType::Crystal,
+        "adapter-set data_type must survive the parameter special-case"
+    );
+    assert!(
+        data.param_id.is_some(),
+        "parameter special-case must assign a param_id"
+    );
+    assert_eq!(
+        data.param_name, "param0",
+        "first parameter in a fresh network gets param0"
+    );
+    assert_eq!(data.sort_order, 0);
 }

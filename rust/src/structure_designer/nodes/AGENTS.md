@@ -40,8 +40,16 @@ pub trait NodeData: Send + Sync {
     fn get_text_properties(&self) -> Option<Vec<(&str, TextValue)>>;
     fn set_text_properties(&mut self, props: &[(&str, TextValue)]) -> Result<()>;
     fn get_parameter_metadata(&self) -> Option<Vec<ParameterMetadata>>;
+    fn adapt_for_drag_source(&self, source: &DataType, dir: DragDirection,
+                             registry: &NodeTypeRegistry) -> Option<Box<dyn NodeData>>;
 }
 ```
+
+### Drag-Aware Add Node
+
+If your new node has user-configurable type properties that drive its pin types via `calculate_custom_node_type` (e.g. `MapData::input_type`, `ArrayAtData::element_type`, `ParameterData::data_type`), implement `adapt_for_drag_source`. The drag-aware add-node popup invokes it on each candidate node when the user drags a wire from a pin and drops on empty space — without it, the candidate is filtered using only the static (default) pin signature and won't surface for sources that *could* match after configuring its type properties.
+
+The implementation pattern is short: clone `self`, overwrite the type properties to match the drag source (typically via `DataType::drag_element_type_from_output` to peel `Iter[T]`/`Array[T]` or broadcast a scalar), and return the adapted data. Return `None` for inputs that can't yield a valid configuration (abstract types, `Function(_)`, or — for nodes like `collect` — scalar broadcast that doesn't make semantic sense). The popup filter and `add_node_with_drag_source` both verify the adapter's claim by re-running the static-pin check against the resolved node type, so over-promising is silently dropped to default data rather than producing a mis-typed node — adapters can be loose. See `map.rs` / `array_at.rs` / `parameter.rs` for reference and `doc/design_drag_aware_add_node.md` for the full design.
 
 ### NodeType Registration
 

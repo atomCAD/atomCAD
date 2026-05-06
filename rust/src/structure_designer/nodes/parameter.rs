@@ -5,7 +5,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::CustomNodeData;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -185,6 +185,23 @@ impl NodeData for ParameterData {
             );
         }
         Ok(())
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // Both directions adapt identically: a parameter's output and its
+        // `default` input are both typed by `data_type`, so setting
+        // `data_type = source_type` covers both drag directions.
+        if source_type.is_abstract() || matches!(source_type, DataType::Function(_)) {
+            return None;
+        }
+        let mut adapted = self.clone();
+        adapted.data_type = source_type.clone();
+        Some(Box::new(adapted))
     }
 }
 
