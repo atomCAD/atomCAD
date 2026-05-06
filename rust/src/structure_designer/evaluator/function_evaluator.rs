@@ -30,6 +30,7 @@ use glam::f64::DVec2;
  * without building a node network first. We need to think thorugh though: is it not too
  * restricting? Are there nodes which need to decide which input pins they evaluate and how many times?
  */
+#[derive(Clone)]
 pub struct FunctionEvaluator {
     node_network: NodeNetwork,
     main_node_id: u64,

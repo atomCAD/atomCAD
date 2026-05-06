@@ -1,4 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::{BatchCliConfig, CliConfig};
+use crate::structure_designer::data_type::contains_iterator;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use std::collections::HashMap;
@@ -226,6 +227,24 @@ fn parse_cli_parameters(
                     param_name, network_name
                 )
             })?;
+
+        // Iterator-typed top-level parameters are disallowed (v1 of the
+        // iterators design). Iterator lifetime is required to stay inside a
+        // single network evaluation; an externally supplied walker would be
+        // cloned dozens of times across the body's fan-out and is awkward to
+        // construct from a CLI string anyway. The workaround is to pass an
+        // `Array[T]` and wire it through the network with implicit
+        // `[T] → Iter[T]` conversion at the consumer pin.
+        if contains_iterator(&param_def.data_type) {
+            return Err(format!(
+                "Parameter '{}' has type {} which contains `Iter[T]`. \
+                 Iterator-typed top-level parameters are not supported. \
+                 Pass an `Array[T]` instead — `[T] → Iter[T]` is implicit at \
+                 iterator-accepting pins, or wire a `collect` node where an \
+                 array is genuinely needed.",
+                param_name, param_def.data_type
+            ));
+        }
 
         // Parse the string value into NetworkResult
         let param_value = NetworkResult::from_string(value_str, &param_def.data_type)?;

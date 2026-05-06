@@ -1,4 +1,4 @@
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, contains_iterator};
 use crate::structure_designer::node_network::{Argument, NodeNetwork, ValidationError};
 use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOutputType};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -468,6 +468,37 @@ fn validate_wires(
                     Some(t) => t,
                     None => continue,
                 };
+
+                // Closure-capture restriction (`doc/design_iterators.md`):
+                // a function pin captures upstream value-pin types into the
+                // closure. If any captured type contains `Iter[T]`, the
+                // closure would alias a single walker across every
+                // invocation and corrupt under repeated use. Reject the wire
+                // and point the user at `collect`.
+                if *output_pin_index == -1 {
+                    let source_node = network.nodes.get(source_node_id).unwrap();
+                    if let Some(source_node_type) =
+                        node_type_registry.get_node_type_for_node(source_node)
+                    {
+                        if let Some(bad_param) = source_node_type
+                            .parameters
+                            .iter()
+                            .find(|p| contains_iterator(&p.data_type))
+                        {
+                            network.validation_errors.push(ValidationError::new(
+                                format!(
+                                    "Function pin captures `Iter[T]` value via parameter '{}' \
+                                     of source node '{}'. Iterator values cannot be captured \
+                                     into closures — wire `collect` upstream of the value-pin \
+                                     and capture the resulting array.",
+                                    bad_param.name, source_node.node_type_name
+                                ),
+                                Some(*dest_node_id),
+                            ));
+                            return false;
+                        }
+                    }
+                }
                 let dest_data_type =
                     node_type_registry.get_node_param_data_type(dest_node, arg_index);
                 if !DataType::can_be_converted_to(

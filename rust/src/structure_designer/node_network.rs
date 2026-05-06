@@ -141,6 +141,7 @@ pub struct DeletionInfo {
     pub is_node_deletion: bool,
 }
 
+#[derive(Clone)]
 pub struct Node {
     pub id: u64,
     pub node_type_name: String,
@@ -235,6 +236,7 @@ impl Node {
  * A node network can also be an implementation of a non-built-in node type.
  * In this case it might or might not have parameters.
  */
+#[derive(Clone)]
 pub struct NodeNetwork {
     pub next_node_id: u64,
     pub next_param_id: u64, // Counter for generating unique parameter IDs within this network

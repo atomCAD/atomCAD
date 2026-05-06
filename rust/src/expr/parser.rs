@@ -456,6 +456,11 @@ pub fn parse_concrete_type_name(name: &str) -> Option<DataType> {
             None
         }
         DataType::Function(_) => None,
+        // `Iter[T]` is not a valid expression-language array element type:
+        // expressions are eager, and no `expr` operator advances or
+        // materializes a walker. See `doc/design_iterators.md` ("Out of
+        // scope: Iterator support inside the `expr` expression language").
+        DataType::Iterator(_) => None,
         _ => Some(dt),
     }
 }

@@ -493,6 +493,7 @@ mod element_type_eligibility_tests {
             DataType::Motif,
             DataType::Structure,
             DataType::Array(Box::new(DataType::Int)),
+            DataType::Iterator(Box::new(DataType::Int)),
             DataType::Function(
                 rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
                     parameter_types: vec![DataType::Int],
@@ -534,13 +535,15 @@ mod element_type_eligibility_tests {
                 | DataType::Motif
                 | DataType::Structure
                 | DataType::Array(_)
+                | DataType::Iterator(_)
                 | DataType::Function(_)
                 | DataType::Record(_) => {}
             }
         }
 
-        // Documented rejection set: None, the three abstract supertypes, and
-        // any function type.
+        // Documented rejection set: None, the three abstract supertypes,
+        // any function type, and `Iter[T]` (eager-only `expr` language —
+        // see `doc/design_iterators.md`).
         let is_rejected = |dt: &DataType| -> bool {
             matches!(
                 dt,
@@ -549,6 +552,7 @@ mod element_type_eligibility_tests {
                     | DataType::HasStructure
                     | DataType::HasFreeLinOps
                     | DataType::Function(_)
+                    | DataType::Iterator(_)
             )
         };
 

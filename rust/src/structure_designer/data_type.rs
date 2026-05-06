@@ -35,6 +35,11 @@ pub enum DataType {
     Motif,
     Structure,
     Array(Box<DataType>),
+    /// Lazy stream of `T`. Wire-time conversions allow `[T] → Iter[T]` and
+    /// `T → Iter[T]` (eager wraps); `Iter[T] → Iter[T]` identity. There is
+    /// **no** implicit `Iter[T] → [T]` rule — use a `collect` node. See
+    /// `doc/design_iterators.md`.
+    Iterator(Box<DataType>),
     Function(FunctionType),
     Record(RecordType),
 }
@@ -68,6 +73,7 @@ where
 {
     match t {
         DataType::Array(inner) => walk_data_type_record_names_mut(inner, f),
+        DataType::Iterator(inner) => walk_data_type_record_names_mut(inner, f),
         DataType::Function(func) => {
             for p in &mut func.parameter_types {
                 walk_data_type_record_names_mut(p, f);
@@ -146,6 +152,9 @@ impl fmt::Display for DataType {
             DataType::Structure => write!(f, "Structure"),
             DataType::Array(element_type) => {
                 write!(f, "[{}]", element_type)
+            }
+            DataType::Iterator(element_type) => {
+                write!(f, "Iter[{}]", element_type)
             }
             DataType::Function(func_type) => {
                 if func_type.parameter_types.is_empty() {
@@ -267,6 +276,47 @@ impl DataType {
             return true;
         }
 
+        // Iterator destination rules (see `doc/design_iterators.md`).
+        //
+        // Three rules apply, in this order:
+        //   1. `[S] → Iter[T]` when `S → T` (eager wrap; element conversion at
+        //      wrap time).
+        //   2. `Iter[T] → Iter[T]` identity only — `Iter[S] → Iter[T]` with
+        //      `S ≠ T` is **disallowed in v1** (lazy element conversion is a
+        //      follow-up). The identity case is already handled by the
+        //      `source == dest` short-circuit at the top of this function;
+        //      reaching here with two `Iterator(_)` types means inner types
+        //      differ, so we explicitly reject.
+        //   3. `S → Iter[T]` (single-element broadcast) when `S → T`.
+        //
+        // There is **no** `Iter[T] → [T]` and **no** `Iter[T] → T` rule. Both
+        // would force iterator consumption inside a wire-time conversion;
+        // users wire an explicit `collect` node instead.
+        if let DataType::Iterator(target_element_type) = dest_type {
+            // Rule 1: array source, iterator destination → eager wrap.
+            if let DataType::Array(source_element_type) = source_type {
+                return DataType::can_be_converted_to(
+                    source_element_type,
+                    target_element_type,
+                    registry,
+                );
+            }
+            // Rule 2 (negative): different iterator element types are not
+            // implicitly convertible.
+            if matches!(source_type, DataType::Iterator(_)) {
+                return false;
+            }
+            // Rule 3: scalar broadcast.
+            return DataType::can_be_converted_to(source_type, target_element_type, registry);
+        }
+
+        // No `Iter[T] → [T]` and no `Iter[T] → T`. Reject any conversion whose
+        // source is an iterator and destination is anything but `Iter[T]`
+        // (handled above) — including arrays, scalars, records, and functions.
+        if matches!(source_type, DataType::Iterator(_)) {
+            return false;
+        }
+
         // Check if we can convert T to [T] (single element to array)
         if let DataType::Array(target_element_type) = dest_type {
             if DataType::can_be_converted_to(source_type, target_element_type, registry) {
@@ -351,6 +401,27 @@ impl DataType {
             // leaf positions in `can_be_structurally_converted_to`.
             _ => is_tag_only_widening(source_type, dest_type),
         }
+    }
+}
+
+/// True when `t` is `Iter[..]` itself, or contains an `Iter[..]` reachable
+/// through `Array`, `Function` (parameter or return), or nested
+/// `Record::Anonymous` shapes. `Record::Named(_)` is not followed: a named
+/// record def's fields are walked through its registry entry by callers that
+/// have a registry handle. See `doc/design_iterators.md` ("Iterator values
+/// cannot be captured into closures").
+pub fn contains_iterator(t: &DataType) -> bool {
+    match t {
+        DataType::Iterator(_) => true,
+        DataType::Array(inner) => contains_iterator(inner),
+        DataType::Function(func) => {
+            func.parameter_types.iter().any(contains_iterator)
+                || contains_iterator(&func.output_type)
+        }
+        DataType::Record(RecordType::Anonymous(fields)) => {
+            fields.iter().any(|(_, ty)| contains_iterator(ty))
+        }
+        _ => false,
     }
 }
 
@@ -522,6 +593,17 @@ impl DataTypeParser {
                     };
                     self.expect(DataTypeToken::RightParen)?;
                     return Ok(DataType::Record(RecordType::Named(inner_name)));
+                }
+                // Iterator type: `Iter[T]`. The bare identifier `Iter` is
+                // reserved as a type-name keyword (only legal in
+                // type-expression positions; the text-format parser uses
+                // separate identifiers for node references). Anything other
+                // than `Iter[..]` after consuming `Iter` is a parse error.
+                if name == "Iter" {
+                    self.expect(DataTypeToken::LeftBracket)?;
+                    let element_type = self.parse_data_type()?;
+                    self.expect(DataTypeToken::RightBracket)?;
+                    return Ok(DataType::Iterator(Box::new(element_type)));
                 }
                 match name.as_str() {
                     "None" => Ok(DataType::None),

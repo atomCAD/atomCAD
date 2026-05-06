@@ -240,3 +240,9 @@ mod atom_replace_rules_phase_a_test;
 
 #[path = "structure_designer/atom_replace_rules_phase_b_test.rs"]
 mod atom_replace_rules_phase_b_test;
+
+#[path = "structure_designer/iterator_walker_test.rs"]
+mod iterator_walker_test;
+
+#[path = "structure_designer/iter_type_test.rs"]
+mod iter_type_test;

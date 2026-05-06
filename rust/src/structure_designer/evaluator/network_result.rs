@@ -9,6 +9,7 @@ use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::{DataType, RecordType};
+use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform2D;
 use glam::f64::DMat3;
@@ -245,6 +246,12 @@ pub enum NetworkResult {
     Motif(Motif),
     Structure(Structure),
     Array(Vec<NetworkResult>),
+    /// Lazy stream value (`Iter[T]`). The enclosed `Walker` is the runtime
+    /// state machine produced by iterator-aware nodes (`range`, `map`,
+    /// `filter`, `product`) and consumed by `fold` / `collect` / the display
+    /// path. `Walker::clone()` produces an independent walker — see Invariant
+    /// 2 in `doc/design_iterators.md` and the `Walker` doc comment.
+    Iterator(Walker),
     Function(Closure),
     /// Record value: a list of `(field_name, value)` pairs. Stored in
     /// **canonical (sorted-by-name)** order. Construct via
@@ -581,6 +588,37 @@ impl NetworkResult {
             _ => {}
         }
 
+        // Iterator destination conversions (matching `can_be_converted_to`):
+        //   `[S] → Iter[T]` — eager element conversion, then wrap.
+        //   `S   → Iter[T]` — single-element broadcast, eager conversion.
+        // The `Iter[T] → Iter[T]` identity is already handled by the
+        // source == dest short-circuit at the top of this function. There is
+        // no `Iter[T] → [T]` rule (validation would have rejected the wire);
+        // if we somehow get here with an iterator source and a non-iterator
+        // dest, we fall through to the trailing `(original, _) => original`
+        // arm below.
+        if let DataType::Iterator(target_element_type) = target_type {
+            if let (DataType::Array(source_element_type), NetworkResult::Array(elements)) =
+                (source_type, &self)
+            {
+                let converted_items: Vec<NetworkResult> = elements
+                    .clone()
+                    .into_iter()
+                    .map(|element| {
+                        element.convert_to(source_element_type, target_element_type, registry)
+                    })
+                    .collect();
+                return NetworkResult::Iterator(Walker::from_array(converted_items));
+            }
+            // Single-value broadcast. Skip if source is itself an iterator —
+            // the only valid Iter→Iter form is identity (already handled), and
+            // anything else is rejected at validation; fall through.
+            if !matches!(source_type, DataType::Iterator(_)) {
+                let converted = self.convert_to(source_type, target_element_type, registry);
+                return NetworkResult::Iterator(Walker::from_array(vec![converted]));
+            }
+        }
+
         // Check if we can convert T to [T] (single element to array)
         if let DataType::Array(target_element_type) = target_type {
             if DataType::can_be_converted_to(source_type, target_element_type, registry) {
@@ -721,6 +759,7 @@ impl NetworkResult {
                     .collect();
                 format!("[{}]", element_strings.join(", "))
             }
+            NetworkResult::Iterator(_) => "Iterator".to_string(),
             NetworkResult::Function(closure) => format!(
                 "network: {} node: {}",
                 closure.node_network_name, closure.node_id

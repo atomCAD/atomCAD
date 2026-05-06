@@ -73,6 +73,19 @@ impl EvalOutput {
     }
 }
 
+/// Forward `Clone for Box<dyn NodeData>` to `clone_box`. This makes `Node` and
+/// `NodeNetwork` derivable as `Clone`, which is needed so `FunctionEvaluator`
+/// (which owns a `NodeNetwork`) can derive `Clone` — required by the iterator
+/// runtime: `Walker::Map`/`Walker::Filter` carry an FE that is cloned every
+/// time the enclosing `NetworkResult::Iterator(_)` is cloned (Invariant 2 in
+/// `doc/design_iterators.md`). The wrapped `dyn NodeData` is local to this
+/// crate, so this `impl` does not run afoul of orphan rules.
+impl Clone for Box<dyn NodeData> {
+    fn clone(&self) -> Box<dyn NodeData> {
+        self.clone_box()
+    }
+}
+
 pub trait NodeData: Any + AsAny {
     fn provide_gadget(
         &self,
