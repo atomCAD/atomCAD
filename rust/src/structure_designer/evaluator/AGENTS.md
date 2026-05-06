@@ -9,6 +9,7 @@ Network evaluation engine. Processes the node DAG to produce displayable output.
 | `network_evaluator.rs` | Main evaluator: traverses DAG, evaluates nodes, builds scene |
 | `network_result.rs` | `NetworkResult` enum: all possible node output values |
 | `function_evaluator.rs` | Evaluates closures by constructing temporary networks |
+| `iterator_walker.rs` | `Walker` tree: lazy stream runtime for `Iter[T]` (carried by `NetworkResult::Iterator`) |
 
 ## NetworkEvaluator
 
@@ -46,7 +47,7 @@ Geometry2D(GeometrySummary2D), Blueprint(BlueprintData),
 Crystal(CrystalData), Molecule(MoleculeData),
 Motif(Motif), Structure(Structure),
 Array(Vec<NetworkResult>), Record(Vec<(String, NetworkResult)>),
-Function(Closure), Error(String)
+Iterator(Walker), Function(Closure), Error(String)
 ```
 
 - **Three-phase payload structs** (lattice-space refactoring):
@@ -61,12 +62,29 @@ Function(Closure), Error(String)
 - Type conversion via `convert_to(source_type, target_type)` follows `DataType` rules.
 - Accessor methods: `extract_float()`, `extract_crystal()`, `extract_molecule()`, `extract_atomic()` (accepts both Crystal and Molecule and returns their `AtomicStructure`), `extract_structure()`, etc. `get_unit_cell()` extracts the `UnitCellStruct` from LatticeVecs/DrawingPlane/Geometry2D/Blueprint/Crystal/Structure results.
 
+## Walker (iterator runtime)
+
+`Walker` is the runtime representation of `Iter[T]`. One unified tree (no separate immutable recipe), carried by `NetworkResult::Iterator(Walker)`.
+
+- **Variants** (all in `iterator_walker.rs`): `FromArray { items: Arc<Vec<NetworkResult>>, idx }`, `Range { start, step, count, emitted }`, `Map { source, fe }`, `Filter { source, fe }`, `Product { axes, field_names, current, primed, done }`.
+- **API**: `next(&mut self, evaluator, registry) -> Option<NetworkResult>` advances; `reset(&mut self)` rewinds. `None` = stream end; `Some(NetworkResult::Error(_))` = error mid-stream.
+- **Outer fuse**: `Walker { kind, fused }` — variants yield `Some(Error(_))` once and the outer wrapper flips `fused` so subsequent calls return `None`. Individual variants do **not** track their own error fuse.
+- **`Product`** primes by pulling one element from every axis on first `next`; subsequent `next` advances rightmost-first with mixed-radix carry. Empty axis → empty product. The `done` flag tracks natural odometer exhaustion, **not** error state.
+- **Construction-time errors** (closure FE can't be built — source network missing, source node missing) must be detected by `map.eval()` / `filter.eval()` and returned as `EvalOutput::single(NetworkResult::Error(_))` — do **not** construct a degenerate walker, or errors multiply per element.
+
+### Invariant 2: clone independence (load-bearing)
+
+`NetworkResult` is cloned on multiple hot paths — `EvalOutput::get` (`node_data.rs:50`, `.cloned()`), `EvalOutput::get_display`, `evaluate_required` (`network_evaluator.rs:751`), `parameter::eval` (`parameter.rs:63`). Every one of these clones any enclosed `Walker`. **`Walker::clone()` must therefore produce a walker whose `next()` advances independently of the original** — anyone adding a new walker variant must preserve this. The current design satisfies it naturally: per-walker `idx`/`emitted`/`current` state is owned, `FromArray::items` is `Arc`-shared so cloning is O(1) regardless of array length, and `FunctionEvaluator` derives `Clone` with no shared mutable state.
+
+The evaluator does **not** memoize pin results, so for an `Iter[T]` pin with fan-out N the producing node's `eval()` runs N times in one pass — each call constructs a fresh walker. Two consumers of the same iterator pin therefore drain *different* walkers; one cannot starve the other. The display path is one such consumer (it auto-collects up to `ITER_DISPLAY_CAP = 256` elements over a clone of the displayed pin's walker).
+
 ## FunctionEvaluator
 
-Evaluates `Closure` values (from Map node's function input):
+Evaluates `Closure` values (used by `map`/`filter` per-element function inputs and `fold`'s combining function):
 - Builds a temporary `NodeNetwork` from the closure's captured network
 - Creates `Value` nodes as placeholders for function arguments
 - `set_argument_value()` allows reuse with different inputs
+- **Derives `Clone`** — required because `WalkerKind::Map` / `Filter` carry an FE and walker clones propagate. Each clone is an independent FE (no `Rc`/`Arc` interior); `set_argument_value` on a clone does not disturb the original. Construction (`FunctionEvaluator::new`) is "somewhat expensive" — `map`/`filter` pay this once per `eval()` call and store the FE in the walker so the per-element hot path is just `set_argument_value` + `evaluate`.
 
 ## Scene Output Types
 

@@ -302,15 +302,41 @@ vec2(x, y).x + vec2(z, w).y        // Member access
 distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 ```
 
+## Iterator types
+
+An **iterator type** `Iter[T]` represents a lazily-evaluated stream of `T` values. Iterators travel along wires the same way arrays do, but downstream nodes pull elements one at a time rather than allocating the full payload upfront. This is the backbone of the `range → map → filter → fold` pipeline: a million-element `range` followed by a `map` and a `fold` keeps only one element alive at a time, regardless of stream length.
+
+`range`, `map`, `filter`, and `product` are the four iterator producers — their output pins are `Iter[T]`, not `Array[T]`. `fold` is an iterator consumer; it walks the stream to a single accumulator value. `collect` is the explicit bridge from `Iter[T]` back to `Array[T]`.
+
+**Implicit conversions**
+
+- `Array[T] → Iter[T]` is allowed and applied automatically at wire time. The array is wrapped as a stream that yields each element in order; element-level conversions (`Int → Float`, `IVec3 → Vec3`, …) run eagerly at wrap time, just like the `Array[S] → Array[T]` rule. A literal `[1, 2, 3]` flowing into a `fold.xs` pin keeps working with no edit.
+- `T → Iter[T]` is the single-element broadcast: a scalar value flowing into an `Iter[T]` pin is wrapped as a one-element stream. Mirrors the existing `T → Array[T]` rule.
+- `Iter[T] → Iter[T]` is the identity passthrough — the walker is handed through unchanged.
+
+**Explicit `collect`**
+
+The reverse direction `Iter[T] → Array[T]` is **not** an implicit conversion: turning a fused stream into a fully materialized array is exactly the operation iterators are designed to avoid, so the conversion is rejected at wire-time validation. To feed an iterator into an array consumer (`array_at`, `array_len`, `array_concat`, `array_append`, `sequence`, or any other pin declared `Array[T]`), insert a `collect` node between them. The error message on the rejected wire points at `collect`.
+
+**Restrictions**
+
+- Lazy element conversion across iterator boundaries (`Iter[S] → Iter[T]` with `S ≠ T`) is not implicit; insert a `map` with the conversion, or `collect` and rebuild explicitly.
+- `Iter[T]` cannot appear as a record field type, and cannot be captured into a closure as a function pin's value-pin payload (the captured walker would be aliased and corrupt across invocations). Both restrictions point users at `collect`.
+- Iterator-typed top-level parameters (CLI/API-bound) are not accepted; pass an `Array[T]` instead.
+
+**Display**
+
+A node whose displayed pin output is `Iter[T]` auto-collects up to **256 elements** for visualization and tags the subtitle with `Iter[T] (showing first 256)` if the walker yielded more, or `Iter[T] (N elements)` if it exhausted before the cap. To inspect a longer slice, wire `collect` and display the resulting array.
+
 ## range
 
-Creates an array of integers starting from an integer value and having a specified step between them. The number of integers in the array can also be specified (count).
+Produces a lazily-evaluated stream of integers (`Iter[Int]`) starting from an integer value and having a specified step between them. The number of integers in the stream is set by the `count` property. The stream materializes one element at a time when downstream nodes pull from it; chaining `range → map → fold` keeps live-element memory at O(1) regardless of `count`. To consume the stream as an `Array[Int]`, insert a `collect` node after `range` — the `Iter[Int] → Array[Int]` boundary is rejected at validation, with an error pointing at `collect`.
 
 ![](../../atomCAD_images/range_node_props.png)
 
 ## sequence
 
-Collects a fixed number of inputs into an ordered array. Use `sequence` when you want to build an array from inputs that come from different upstream nodes and you care about their order, or when you want each element to appear on its own labeled pin in the network — `range` and `map` produce arrays from rules, but `sequence` lets you wire up the elements explicitly one at a time.
+Collects a fixed number of inputs into an ordered array. Use `sequence` when you want to build an array from inputs that come from different upstream nodes and you care about their order, or when you want each element to appear on its own labeled pin in the network — `range`, `map`, `filter`, and `product` produce iterator streams from rules, but `sequence` lets you wire up the elements explicitly one at a time, and the result is an `Array[T]` rather than an `Iter[T]`.
 
 ## array_at
 
@@ -400,7 +426,7 @@ To append multiple elements, chain `array_append` nodes (or wire an `array_conca
 
 ## collect
 
-Materializes a lazy iterator (`Iter[T]`) into an array (`Array[T]`) by exhausting the stream. This is the explicit escape hatch when a downstream array consumer really does want the whole vector. Iterators are produced by stream-fusing nodes (`range`, `map`, `filter`, `product`) once they are flipped to lazy evaluation in later phases of the iterator rollout; until then `collect` happily passes an array source through unchanged thanks to the implicit `[T] → Iter[T]` wire conversion.
+Materializes a lazy iterator (`Iter[T]`) into an array (`Array[T]`) by exhausting the stream. This is the explicit escape hatch when a downstream array consumer really does want the whole vector. Iterators are produced by the stream-fusing nodes `range`, `map`, `filter`, and `product`; an `Array[T]` source wired into `collect.iter` is also accepted thanks to the implicit `[T] → Iter[T]` wire conversion (in which case `collect` is a no-op pass-through).
 
 **Properties**
 
@@ -418,7 +444,21 @@ There is no built-in size cap. If you wire a 10⁹-element iterator into `collec
 
 ## map
 
-Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.
+Takes a stream of values (`xs: Iter[T]`), applies the supplied `f: T -> U` function to each element, and produces a transformed stream (`Iter[U]`). The transformation is **lazy**: `f` is invoked one element at a time, only when a downstream consumer pulls from `map`'s output. Wire an `Array[T]` into `xs` and the implicit `Array[T] → Iter[T]` conversion handles the wrapping automatically; wire `map`'s output into an `Array[U]` consumer and you'll need an explicit `collect` to materialize the result.
+
+**Properties**
+
+- `Input type` — the element type T of the input stream.
+- `Output type` — the element type U of the output stream.
+
+**Input pins**
+
+- `xs: Iter[InputType]` — the stream to transform. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
+- `f: InputType -> OutputType` — the per-element function.
+
+**Output (single pin)**
+
+- `Iter[OutputType]`.
 
 ![](../../atomCAD_images/map_node_props_viewport.png)
 
@@ -432,20 +472,24 @@ You can see that the `pattern` custom node in this case has an additional input 
 
 ## filter
 
-Returns the elements of `xs` for which the predicate `f` returns `true`, preserving order.
+Returns a stream containing the elements of `xs` for which the predicate `f` returned `true`, preserving order. The filter is **lazy**: `f` is invoked one element at a time, only when a downstream consumer pulls from `filter`'s output, and rejected elements are simply skipped over without buffering.
 
 **Properties**
 
-- `Element type` — the element type T of the input and output arrays.
+- `Element type` — the element type T of the input and output streams.
 
 **Input pins**
 
-- `xs: Array[ElementType]` — the array to filter.
+- `xs: Iter[ElementType]` — the stream to filter. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion.
 - `f: ElementType -> Bool` — the predicate.
+
+**Output (single pin)**
+
+- `Iter[ElementType]`.
 
 **Behavior**
 
-If either input is unconnected, the node produces an error (`xs input is missing` / `f input is missing`); both inputs must be wired even when `xs` would have been empty. Otherwise the node returns a new array containing every element of `xs` for which `f(elem)` evaluated to `true`, in the original order. An empty `xs` produces an empty array; `f` is never called. If `f` returns anything other than `Bool` (including `None` because a deeper input inside `f` is unwired), the node produces `Error("filter: f returned non-Bool")`.
+If either input is unconnected, the node produces an error (`xs input is missing` / `f input is missing`); both inputs must be wired even when `xs` would have been empty. Otherwise downstream pulls from the output stream advance the upstream `xs` walker until `f(elem)` returns `true`, then yield `elem`; consumers see only the kept elements, in their original order. An empty `xs` produces an empty stream; `f` is never called. If `f` returns anything other than `Bool` (including `None` because a deeper input inside `f` is unwired), the stream yields `Error("filter: f returned non-Bool")` and then ends — same fuse semantics as the rest of the iterator pipeline.
 
 The `f` function is supplied via the function pin (typically a small subnetwork or an `expr` node). Any extra parameters of `f` beyond the first are pre-bound at the time the function pin is wired — this is partial application, the same convention `map` uses (see the `map` section).
 
@@ -453,23 +497,25 @@ The `f` function is supplied via the function pin (typically a small subnetwork 
 
 Reduces `xs` to a single value by repeatedly applying `f(acc, elem)`, starting from `init`, left-to-right:
 
-- `fold([], init, f)        == init`
-- `fold([a, b, c], init, f) == f(f(f(init, a), b), c)`
+- `fold(<empty stream>, init, f)         == init`
+- `fold(<a, b, c>, init, f)              == f(f(f(init, a), b), c)`
+
+`fold` is the primary **iterator consumer**: it drains the input stream one element at a time, so a `range → map → filter → fold` pipeline keeps memory at O(1) regardless of stream length. The output is a single accumulator value, not an iterator.
 
 **Properties**
 
-- `Element type` — the element type T of the input array.
-- `Accumulator type` — the accumulator and output type Acc. Acc may differ from T; the closure's parameter pins use the same `Int ↔ Float` (and similar) conversions that any other pin connection does, so e.g. folding an `Array[Float]` into an `Int` accumulator works exactly because Float→Int truncation is already a supported pin conversion.
+- `Element type` — the element type T of the input stream.
+- `Accumulator type` — the accumulator and output type Acc. Acc may differ from T; the closure's parameter pins use the same `Int ↔ Float` (and similar) conversions that any other pin connection does, so e.g. folding an `Iter[Float]` into an `Int` accumulator works exactly because Float→Int truncation is already a supported pin conversion.
 
 **Input pins**
 
-- `xs: Array[ElementType]` — the array to reduce.
+- `xs: Iter[ElementType]` — the stream to reduce. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion, so the legacy `[1, 2, 3] → fold` shape keeps working with no edit.
 - `init: AccumulatorType` — the initial accumulator value.
 - `f: (AccumulatorType, ElementType) -> AccumulatorType` — the combining function. Argument 0 is the accumulator, argument 1 is the current element.
 
 **Behavior**
 
-If any input is unconnected, the node produces an error (`xs input is missing` / `init input is missing` / `f input is missing`); all three inputs must be wired even when `xs` would have been empty. With everything wired, an empty `xs` returns `init` unchanged (`f` is never called). Otherwise the node walks `xs` left-to-right, replacing the accumulator with `f(acc, elem)` at each step, and returns the final accumulator value. If `f` errors on any iteration, the error propagates immediately and remaining elements are skipped.
+If any input is unconnected, the node produces an error (`xs input is missing` / `init input is missing` / `f input is missing`); all three inputs must be wired even when `xs` would have been empty. With everything wired, an empty `xs` returns `init` unchanged (`f` is never called). Otherwise the node walks `xs` left-to-right, replacing the accumulator with `f(acc, elem)` at each step, and returns the final accumulator value. If `f` errors on any iteration, the error propagates immediately and remaining elements are not pulled from the stream.
 
 `fold` is the universal aggregator: sum, product, min, max, "all true", "any true", and chained CSG (e.g. unioning a list of blueprints) are all special cases.
 
@@ -531,7 +577,7 @@ Reads each field by name. Because compatibility is width-subtyped, the runtime r
 
 ## product
 
-Cartesian product of N input arrays into an `Array[Record(Target)]`. Use `product` to enumerate every combination of inputs as a structured payload — the motivating use case for record types, and the easiest path from "I have these N axes of variation" to "I have an array of records I can `map` or `filter` over."
+Cartesian product of N input streams into an `Iter[Record(Target)]`. Use `product` to enumerate every combination of inputs as a structured payload — the motivating use case for record types, and the easiest path from "I have these N axes of variation" to "I have a stream of records I can `map` or `filter` over." Like the other iterator nodes, `product` is **lazy**: the cartesian space is never materialized; downstream pulls advance the rightmost axis one step at a time, with mixed-radix carries up the axes as they exhaust.
 
 **Property**
 
@@ -539,18 +585,18 @@ Cartesian product of N input arrays into an `Array[Record(Target)]`. Use `produc
 
 **Input pins**
 
-- One pin per field of the target def, named after the field and typed `Array[FieldType]`. Pins appear in the target's **authored field order**.
+- One pin per field of the target def, named after the field and typed `Iter[FieldType]`. Pins appear in the target's **authored field order**. Each pin accepts an `Array[FieldType]` source via the implicit `[T] → Iter[T]` wire conversion.
 
 **Output (single pin)**
 
-- `Array[Record(Target)]`.
+- `Iter[Record(Target)]`.
 
 **Behavior**
 
-For `Target = { f_0: T_0, …, f_{N-1}: T_{N-1} }` and inputs `xs_0: Array[T_0], …, xs_{N-1}: Array[T_{N-1}]`, the output is the cartesian product:
+For `Target = { f_0: T_0, …, f_{N-1}: T_{N-1} }` and inputs `xs_0: Iter[T_0], …, xs_{N-1}: Iter[T_{N-1}]`, the output stream yields the cartesian product:
 
 ```
-[ {f_0: a_0, …, f_{N-1}: a_{N-1}} | a_0 in xs_0, …, a_{N-1} in xs_{N-1} ]
+{f_0: a_0, …, f_{N-1}: a_{N-1}}   for each (a_0, …, a_{N-1}) in xs_0 × … × xs_{N-1}
 ```
 
-The **rightmost field varies fastest** (matches the natural reading of nested for-loops). The output cardinality is `∏ |xs_i|`; if any input array is empty, the output is empty. If any input pin is unconnected, the output is `None`.
+The **rightmost field varies fastest** (matches the natural reading of nested for-loops). The output cardinality is `∏ |xs_i|`; if any input stream is empty, the output stream is empty. If any input pin is unconnected, the output is `None`. To materialize the full enumeration as an `Array[Record(Target)]`, wire `product` into a `collect` node — note that this is what costs gigabytes for large products, and is precisely the cost the lazy stream is designed to avoid.

@@ -6,13 +6,15 @@ JSON-based persistence for `.cnnd` project files.
 
 | File | Purpose |
 |------|---------|
-| `node_networks_serialization.rs` | Save/load entire projects (.cnnd files) |
+| `node_networks_serialization.rs` | Save/load entire projects (.cnnd files); chained version dispatch |
+| `migrate_v2_to_v3.rs` | One-shot JSON pre-pass for v2 files (atom_fill split, etc.) |
+| `migrate_v3_to_v4.rs` | One-shot JSON pre-pass for v3 files: insert `collect` between iterator producers (`range`/`map`/`filter`/`product` and transitively-iterator custom networks) and `Array[T]`-typed consumers |
 | `atom_edit_data_serialization.rs` | Save/load atom_edit node diff data (inline flags + backward-compat migration) |
 | `edit_atom_data_serialization.rs` | Save/load EditAtom node command history (legacy) |
 
 ## .cnnd File Format
 
-JSON with versioned schema (`SERIALIZATION_VERSION = 2`):
+JSON with versioned schema (`SERIALIZATION_VERSION = 4`):
 - Top-level: array of `SerializableNodeNetwork` plus `record_type_defs` (record schemas)
 - Each network: name, node_type, nodes, return_node_id, camera_settings
 - Each node: id, type_name, custom_name, position, arguments (wires), data
@@ -28,6 +30,17 @@ Key entry points:
 - `Node.custom_name` assigned during migration if missing (uses type name)
 - Camera settings persisted per network (optional)
 - Version field enables forward-compatible migrations
+
+## Version Migrations (chained dispatch)
+
+`load_node_networks_from_file` runs a chained sequence of one-way JSON pre-passes against `serde_json::Value` *before* strict deserialization, then bumps the in-memory version to `SERIALIZATION_VERSION`:
+
+```text
+if version < 3 { migrate_v2_to_v3(&mut root_value)?; }
+if version < 4 { migrate_v3_to_v4(&mut root_value)?; }
+```
+
+A v2 file chains both passes; a v3 file runs only v3→v4; a v4 file runs neither. Migrations are pre-deserialization because they synthesize new nodes (atom_fill split, `collect` insertion) — serde-level field defaults can't express that. Each migration is **frozen at its release version** (constants like `migrate_v3_to_v4::ITERATOR_PINS_V4` are hardcoded, not read from the live `NodeTypeRegistry`) so future registry changes don't retroactively alter how an old file gets up-converted. ID and position allocation is deterministic (read-only pre-pass + sorted mutation pass) for byte-identical re-runs and idempotent double-migration. Design doc: `doc/design_iterators.md` §"Backward compatibility" (and `doc/design_cnnd_migration_v2_to_v3.md` for the older pass).
 
 ## Record Type Defs
 

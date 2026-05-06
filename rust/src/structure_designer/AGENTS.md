@@ -59,7 +59,7 @@ structure_designer/
 | `EvalOutput` | `node_data.rs` | Multi-output eval result (Vec of NetworkResult) |
 | `NodeDisplayState` | `node_network.rs` | Per-node display type + displayed pins set |
 | `NodeData` (trait) | `node_data.rs` | Per-node behavior: evaluation, gadgets, properties |
-| `DataType` | `data_type.rs` | Pin type system: primitives (incl. `IMat3`/`Mat3` 3x3 matrices), `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`), and `Record(RecordType)` where `RecordType` is either `Named(String)` (registry reference) or `Anonymous(Vec<(String, DataType)>)` (inline schema, sorted by field name) |
+| `DataType` | `data_type.rs` | Pin type system: primitives (incl. `IMat3`/`Mat3` 3x3 matrices), `LatticeVecs`, `Structure`, the three phase types (`Blueprint`, `Crystal`, `Molecule`) and their abstract supertypes (`HasAtoms`, `HasStructure`, `HasFreeLinOps`), `Record(RecordType)` where `RecordType` is either `Named(String)` (registry reference) or `Anonymous(Vec<(String, DataType)>)` (inline schema, sorted by field name), `Array(Box<DataType>)` and `Iterator(Box<DataType>)` (`Iter[T]`, lazily-evaluated stream — see `evaluator/AGENTS.md` for the runtime walker) |
 | `RecordTypeDef` | `node_type_registry.rs` | Named record schema (user-declared *or* built-in). Fields are stored in **authored order** (drives pin layouts on `record_construct` / `record_destructure` / `product`); subtyping/equality canonicalize on demand |
 | `NodeTypeRegistry` | `node_type_registry.rs` | Registry of built-in + custom (user-defined) node types, `record_type_defs` (user-declared schemas), and `built_in_record_type_defs` (application-supplied schemas like `ElementMapping`). Networks and record defs share one user-type namespace |
 | `NetworkResult` | `evaluator/network_result.rs` | Evaluated node output value |
@@ -82,6 +82,7 @@ User Action → StructureDesigner method
 - Function partial application
 - LatticeVecs → DrawingPlane (legacy)
 - Concrete phase type → its abstract supertypes (Crystal/Molecule → HasAtoms; Blueprint/Crystal → HasStructure; Blueprint/Molecule → HasFreeLinOps). No abstract → concrete downcasts, no cross-abstract edges.
+- **Iterator rules** (`Iter[T]`): `Array[S] → Iter[T]` (eager element conversion at wrap time, wraps as `Walker::from_array`), `S → Iter[T]` (single-element broadcast), `Iter[T] → Iter[T]` (identity passthrough only — `Iter[S] → Iter[T]` with `S ≠ T` is **disallowed in v1**). The reverse `Iter[T] → Array[T]` is **deliberately not** an implicit conversion: turning a fused stream back into a materialized array is exactly the operation iterators avoid, so it's rejected at validation and users must insert a `collect` node. Iterator-typed values cannot be captured into closures (the walker would alias across invocations) and `Iter[T]` is not allowed as a record field type. Design doc: `doc/design_iterators.md`.
 
 Note: IVec3 does **not** auto-promote to a diagonal IMat3 — wire through an `imat3_diag` node when you want axis-aligned matrix semantics. See `doc/design_matrix_types.md` D4.
 
