@@ -11,6 +11,7 @@ pub mod atom_replace;
 pub mod atom_union;
 pub mod bool;
 pub mod circle;
+pub mod collect;
 pub mod comment;
 pub mod cuboid;
 pub mod dematerialize;

@@ -151,6 +151,9 @@ mod array_concat_test;
 #[path = "structure_designer/array_append_test.rs"]
 mod array_append_test;
 
+#[path = "structure_designer/collect_test.rs"]
+mod collect_test;
+
 #[path = "structure_designer/filter_test.rs"]
 mod filter_test;
 

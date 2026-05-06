@@ -13,6 +13,7 @@ use super::nodes::atom_replace::get_node_type as atom_replace_get_node_type;
 use super::nodes::atom_union::get_node_type as atom_union_get_node_type;
 use super::nodes::bool::get_node_type as bool_get_node_type;
 use super::nodes::circle::get_node_type as circle_get_node_type;
+use super::nodes::collect::get_node_type as collect_get_node_type;
 use super::nodes::comment::get_node_type as comment_get_node_type;
 use super::nodes::cuboid::get_node_type as cuboid_get_node_type;
 use super::nodes::dematerialize::get_node_type as dematerialize_get_node_type;
@@ -218,6 +219,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(array_len_get_node_type());
         ret.add_node_type(array_concat_get_node_type());
         ret.add_node_type(array_append_get_node_type());
+        ret.add_node_type(collect_get_node_type());
         ret.add_node_type(lattice_vecs_get_node_type());
 
         ret.add_node_type(rect_get_node_type());
