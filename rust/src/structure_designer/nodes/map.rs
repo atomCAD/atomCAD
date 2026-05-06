@@ -2,6 +2,7 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
 use crate::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
+use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -35,13 +36,13 @@ impl NodeData for MapData {
         let mut custom_node_type = base_node_type.clone();
 
         custom_node_type.parameters[0].data_type =
-            DataType::Array(Box::new(self.input_type.clone()));
+            DataType::Iterator(Box::new(self.input_type.clone()));
         custom_node_type.parameters[1].data_type = DataType::Function(FunctionType {
             parameter_types: vec![self.input_type.clone()],
             output_type: Box::new(self.output_type.clone()),
         });
         custom_node_type.output_pins =
-            OutputPinDefinition::single(DataType::Array(Box::new(self.output_type.clone())));
+            OutputPinDefinition::single(DataType::Iterator(Box::new(self.output_type.clone())));
 
         Some(custom_node_type)
     }
@@ -58,56 +59,41 @@ impl NodeData for MapData {
         let xs_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
-        if let NetworkResult::Error(_) = xs_val {
-            return EvalOutput::single(xs_val);
-        }
-
-        // Extract the array elements from xs_val
-        let xs = if let NetworkResult::Array(array_elements) = xs_val {
-            array_elements
-        } else {
-            return EvalOutput::single(NetworkResult::Error(
-                "Expected array of elements".to_string(),
-            ));
+        let xs_walker = match xs_val {
+            NetworkResult::Iterator(w) => w,
+            // Belt-and-braces: the implicit `[T] → Iter[T]` wire conversion
+            // normally wraps any incoming array as `Iterator(_)` already.
+            NetworkResult::Array(items) => Walker::from_array(items),
+            err @ NetworkResult::Error(_) => return EvalOutput::single(err),
+            other => {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "map: xs is not an iterator (got {})",
+                    other.to_display_string()
+                )));
+            }
         };
 
         let f_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 1);
 
-        if let NetworkResult::Error(_) = f_val {
-            return EvalOutput::single(f_val);
-        }
-
-        // Extract the f closure from f_val
-        let f = if let NetworkResult::Function(closure) = f_val {
-            closure
-        } else {
-            return EvalOutput::single(NetworkResult::Error("Expected a closure".to_string()));
+        let closure = match f_val {
+            NetworkResult::Function(c) => c,
+            err @ NetworkResult::Error(_) => return EvalOutput::single(err),
+            _ => {
+                return EvalOutput::single(NetworkResult::Error(
+                    "map: f is not a function".to_string(),
+                ));
+            }
         };
 
-        // Create a function evaluator for the closure
-        let mut function_evaluator = FunctionEvaluator::new(f, registry);
-
-        // Iterate through all elements in the xs array
-        let mut results = Vec::new();
-        for element in xs {
-            // Set the current element as the first input pin of function_evaluator
-            function_evaluator.set_argument_value(0, element);
-
-            // Call the evaluate method on function_evaluator
-            let result = function_evaluator.evaluate(network_evaluator, registry);
-
-            // If there's an error in evaluation, propagate it immediately
-            if let NetworkResult::Error(_) = result {
-                return EvalOutput::single(result);
+        let fe = match FunctionEvaluator::try_build(closure, registry) {
+            Ok(fe) => fe,
+            Err(msg) => {
+                return EvalOutput::single(NetworkResult::Error(format!("map: {}", msg)));
             }
+        };
 
-            // Collect the result
-            results.push(result);
-        }
-
-        // Return the collected results as a NetworkResult::Array
-        EvalOutput::single(NetworkResult::Array(results))
+        EvalOutput::single(NetworkResult::Iterator(Walker::map(xs_walker, fe)))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -161,14 +147,14 @@ impl NodeData for MapData {
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "map".to_string(),
-      description: "Takes an array of values (`xs`), applies the supplied `f` function on all of them and produces an array of the output values.".to_string(),
+      description: "Lazily applies the supplied `f` function to every element pulled from `xs`, producing an iterator of the resulting values. The intermediate sequence is never materialised — downstream consumers (`fold`, `collect`, …) drive the stream one element at a time.".to_string(),
       summary: None,
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![
         Parameter {
           id: None,
           name: "xs".to_string(),
-          data_type: DataType::Array(Box::new(DataType::Float)), // will change based on  ParameterData::data_type.
+          data_type: DataType::Iterator(Box::new(DataType::Float)), // will change based on  ParameterData::data_type.
         },
         Parameter {
           id: None,
@@ -179,7 +165,7 @@ pub fn get_node_type() -> NodeType {
           }), // will change based on  ParameterData::data_type.
         },
       ],
-      output_pins: OutputPinDefinition::single(DataType::Array(Box::new(DataType::Float))), // will change based on the output type
+      output_pins: OutputPinDefinition::single(DataType::Iterator(Box::new(DataType::Float))), // will change based on the output type
       public: true,
       node_data_creator: || Box::new(MapData {
         input_type: DataType::Float,

@@ -93,7 +93,7 @@ fn find_node_id(designer: &StructureDesigner, network_name: &str, node_type_name
     *id
 }
 
-fn extract_int_array(result: NetworkResult) -> Vec<i32> {
+fn extract_int_array(designer: &StructureDesigner, result: NetworkResult) -> Vec<i32> {
     match result {
         NetworkResult::Array(items) => items
             .into_iter()
@@ -102,7 +102,28 @@ fn extract_int_array(result: NetworkResult) -> Vec<i32> {
                 other => panic!("expected Int element, got {}", other.to_display_string()),
             })
             .collect(),
-        other => panic!("expected Array, got {}", other.to_display_string()),
+        // Phase 4: `filter` now produces `Iter[T]`. Drain the walker for
+        // the test assertion. Same pattern as `collect.eval`.
+        NetworkResult::Iterator(mut walker) => {
+            let registry = &designer.node_type_registry;
+            let evaluator = NetworkEvaluator::new();
+            let mut out: Vec<i32> = Vec::new();
+            loop {
+                match walker.next(&evaluator, registry) {
+                    None => break,
+                    Some(NetworkResult::Int(v)) => out.push(v),
+                    Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
+                    Some(other) => {
+                        panic!("expected Int element, got {}", other.to_display_string())
+                    }
+                }
+            }
+            out
+        }
+        other => panic!(
+            "expected Array or Iterator, got {}",
+            other.to_display_string()
+        ),
     }
 }
 
@@ -146,9 +167,10 @@ fn test_filter_registered_in_registry() {
     assert_eq!(nt.parameters[0].name, "xs");
     assert_eq!(nt.parameters[1].name, "f");
     assert_eq!(nt.output_pins.len(), 1);
+    // Phase 4: filter declares Iter[T] inputs and outputs.
     assert_eq!(
         *nt.output_type(),
-        DataType::Array(Box::new(DataType::Float))
+        DataType::Iterator(Box::new(DataType::Float))
     );
 }
 
@@ -167,9 +189,10 @@ fn test_filter_custom_type_int() {
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
+    // Phase 4: filter pins are Iter[T].
     assert_eq!(
         custom.parameters[0].data_type,
-        DataType::Array(Box::new(DataType::Int))
+        DataType::Iterator(Box::new(DataType::Int))
     );
     assert_eq!(
         custom.parameters[1].data_type,
@@ -180,7 +203,7 @@ fn test_filter_custom_type_int() {
     );
     assert_eq!(
         *custom.output_type(),
-        DataType::Array(Box::new(DataType::Int))
+        DataType::Iterator(Box::new(DataType::Int))
     );
 }
 
@@ -195,9 +218,10 @@ fn test_filter_custom_type_ivec3() {
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
+    // Phase 4: filter pins are Iter[T].
     assert_eq!(
         custom.parameters[0].data_type,
-        DataType::Array(Box::new(DataType::IVec3))
+        DataType::Iterator(Box::new(DataType::IVec3))
     );
     assert_eq!(
         custom.parameters[1].data_type,
@@ -208,7 +232,7 @@ fn test_filter_custom_type_ivec3() {
     );
     assert_eq!(
         *custom.output_type(),
-        DataType::Array(Box::new(DataType::IVec3))
+        DataType::Iterator(Box::new(DataType::IVec3))
     );
 }
 
@@ -236,7 +260,7 @@ fn test_filter_int_greater_than() {
     assert!(result.success, "edit should succeed: {:?}", result.errors);
 
     let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(evaluate_node(&designer, "main", filter_id));
+    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
     assert_eq!(values, vec![3, 4, 5]);
 }
 
@@ -260,7 +284,7 @@ fn test_filter_int_even_predicate() {
     assert!(result.success, "edit should succeed: {:?}", result.errors);
 
     let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(evaluate_node(&designer, "main", filter_id));
+    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
     assert_eq!(values, vec![2, 4]);
 }
 
@@ -284,7 +308,7 @@ fn test_filter_always_true_keeps_all() {
     assert!(result.success, "edit should succeed: {:?}", result.errors);
 
     let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(evaluate_node(&designer, "main", filter_id));
+    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
     assert_eq!(values, vec![1, 2, 3]);
 }
 
@@ -308,7 +332,7 @@ fn test_filter_always_false_yields_empty() {
     assert!(result.success, "edit should succeed: {:?}", result.errors);
 
     let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(evaluate_node(&designer, "main", filter_id));
+    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
     assert!(values.is_empty(), "expected empty array, got {:?}", values);
 }
 
@@ -333,7 +357,7 @@ fn test_filter_empty_array_input() {
     assert!(result.success, "edit should succeed: {:?}", result.errors);
 
     let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(evaluate_node(&designer, "main", filter_id));
+    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
     assert!(values.is_empty(), "expected empty array, got {:?}", values);
 }
 
@@ -402,19 +426,23 @@ fn test_filter_ivec3_z_positive() {
     // simpler to find via node_type_name.
     let filter_id = find_node_id(&designer, "main", "filter");
     let result = evaluate_node(&designer, "main", filter_id);
-    match result {
-        NetworkResult::Array(items) => {
-            let vecs: Vec<IVec3> = items
-                .into_iter()
-                .map(|r| match r {
-                    NetworkResult::IVec3(v) => v,
-                    other => panic!("expected IVec3, got {}", other.to_display_string()),
-                })
-                .collect();
-            assert_eq!(vecs, vec![IVec3::new(0, 0, 1), IVec3::new(2, 2, 2)]);
+    // Phase 4: filter produces Iter[T]. Drain the walker.
+    let mut walker = match result {
+        NetworkResult::Iterator(w) => w,
+        other => panic!("expected Iterator, got {}", other.to_display_string()),
+    };
+    let registry = &designer.node_type_registry;
+    let evaluator = NetworkEvaluator::new();
+    let mut vecs: Vec<IVec3> = Vec::new();
+    loop {
+        match walker.next(&evaluator, registry) {
+            None => break,
+            Some(NetworkResult::IVec3(v)) => vecs.push(v),
+            Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
+            Some(other) => panic!("expected IVec3, got {}", other.to_display_string()),
         }
-        other => panic!("expected Array, got {}", other.to_display_string()),
     }
+    assert_eq!(vecs, vec![IVec3::new(0, 0, 1), IVec3::new(2, 2, 2)]);
 }
 
 // ============================================================================
@@ -540,12 +568,34 @@ fn test_filter_predicate_error_propagates() {
     );
     assert!(result.success, "edit should succeed: {:?}", result.errors);
 
+    // Phase 4: filter is lazy; errors surface during walker drain rather
+    // than at `eval()` time. Drain and look for an `Error` element.
     let filter_id = find_node_id(&designer, "main", "filter");
     let result = evaluate_node(&designer, "main", filter_id);
+    let mut walker = match result {
+        NetworkResult::Iterator(w) => w,
+        NetworkResult::Error(_) => return, // eager error is acceptable too
+        other => panic!(
+            "expected Iterator or Error, got {}",
+            other.to_display_string()
+        ),
+    };
+    let registry = &designer.node_type_registry;
+    let evaluator = NetworkEvaluator::new();
+    let mut saw_error = false;
+    loop {
+        match walker.next(&evaluator, registry) {
+            None => break,
+            Some(NetworkResult::Error(_)) => {
+                saw_error = true;
+                break;
+            }
+            Some(_) => {}
+        }
+    }
     assert!(
-        matches!(result, NetworkResult::Error(_)),
-        "expected error, got {}",
-        result.to_display_string()
+        saw_error,
+        "expected the predicate error to surface during walker drain"
     );
 }
 
@@ -581,7 +631,7 @@ fn test_filter_predicate_with_prebound_threshold() {
     assert!(result.success, "edit should succeed: {:?}", result.errors);
 
     let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(evaluate_node(&designer, "main", filter_id));
+    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
     assert_eq!(values, vec![4, 5]);
 }
 

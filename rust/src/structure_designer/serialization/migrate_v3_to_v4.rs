@@ -10,10 +10,13 @@
 //! `collect` node on every such wire so v3 files load with their original
 //! semantics intact.
 //!
-//! Phase 3 scope (this drop): the `range` source arm is filled in; the
-//! `map`/`filter`/`product` arms return `None` (filled in by Phases 4 and 6).
-//! The transitive custom-network detection is also stubbed (filled in by
-//! Phase 7 — `compute_iterator_producer_set` returns an empty map for now).
+//! Phase 4 scope (this drop, on top of Phase 3): the `map` and `filter`
+//! source arms are filled in; `("map", 0)` and `("filter", 0)` join the
+//! `ITERATOR_PINS_V4` table so wires from one iterator producer into another's
+//! `xs` pin do not get a `collect` synthesised on them. The `product` arm
+//! still returns `None` (filled in by Phase 6) and the transitive custom-
+//! network detection is still stubbed (filled in by Phase 7 —
+//! `compute_iterator_producer_set` returns an empty map for now).
 
 use serde_json::Value;
 use std::cell::Cell;
@@ -49,12 +52,14 @@ pub fn reset_migration_call_count() {
 /// new iterator pins) don't retroactively alter how a v3 file gets up-
 /// converted. Mirrors `migrate_v2_to_v3::PRIMITIVE_LATTICE_PIN`'s rationale.
 ///
-/// Entries are added by phase. Phase 3 ships only `("collect", 0)` since
-/// `collect` is the synthesis target. Phases 4 and 5 fill in `map`/`filter`/
-/// `fold`. The variable-arity `product` pin is special-cased separately.
+/// Entries are added by phase. Phase 3 ships `("collect", 0)` (the synthesis
+/// target). Phase 4 adds `("map", 0)` and `("filter", 0)` (so wires from one
+/// iterator producer into another's `xs` pin do not get a `collect` inserted
+/// on them). Phase 5 will add `("fold", 0)`. The variable-arity `product`
+/// pin is special-cased separately.
 const ITERATOR_PINS_V4: &[(&str, usize)] = &[
-    // ("map", 0),    // xs — added by Phase 4
-    // ("filter", 0), // xs — added by Phase 4
+    ("map", 0),    // xs — Phase 4
+    ("filter", 0), // xs — Phase 4
     // ("fold", 0),   // xs — added by Phase 5
     ("collect", 0), // iter
 ];
@@ -64,11 +69,9 @@ const ITERATOR_PINS_V4: &[(&str, usize)] = &[
 /// inserted on the wire feeding it.
 fn is_iterator_pin_v4(node_type_name: &str, param_index: usize) -> bool {
     // `product` is special: variable axis count, every parameter is an
-    // iterator pin. Phase 6 enables the special case; Phase 3 leaves the
-    // arm closed because no `product` arm of `produces_iter` is wired up
-    // yet — but the predicate is harmless to gate on the type name alone
-    // (it returns `true` for product; predicate (A) just won't fire for
-    // product sources until Phase 6 fills `produces_iter`).
+    // iterator pin. Phase 6 wires up the matching `produces_iter` arm; the
+    // predicate is harmless to gate on the type name alone — predicate (A)
+    // just won't fire for product sources until Phase 6.
     if node_type_name == "product" {
         return true;
     }
@@ -123,22 +126,28 @@ fn compute_iterator_producer_set(_root: &Value) -> HashMap<String, Value> {
 /// If `(network_name, return_node_type_name)` identifies an iterator
 /// producer, returns the element type T as a `DataType` JSON value.
 ///
-/// Phase 3 wires up the `range` arm; Phases 4 and 6 fill in `map`/`filter`/
-/// `product`; Phase 7 enables transitive custom-network resolution by
-/// reading from `iter_producers`.
+/// Phase 3 wires up the `range` arm; Phase 4 fills in `map`/`filter`;
+/// Phase 6 fills in `product`; Phase 7 enables transitive custom-network
+/// resolution by reading from `iter_producers`.
 fn produces_iter(node: &Value, iter_producers: &HashMap<String, Value>) -> Option<Value> {
     let type_name = node.get("node_type_name").and_then(|v| v.as_str())?;
     match type_name {
         "range" => Some(Value::String("Int".to_string())),
         "map" => {
-            // Phase 4 will fill this in:
-            //   node.data.output_type → element type T.
-            None
+            // `MapData.output_type` is already a serialized `DataType` JSON
+            // value (e.g. the string `"Int"`, or a tagged object like
+            // `{"Array": "Int"}`); the synthesised `collect` consumes it as
+            // its `element_type` directly. Defensive validation against
+            // malformed values is added in Phase 7 per the design doc's
+            // error policy.
+            node.get("data").and_then(|d| d.get("output_type")).cloned()
         }
         "filter" => {
-            // Phase 4 will fill this in:
-            //   node.data.element_type → element type T.
-            None
+            // `FilterData.element_type` plays the same role for `filter`'s
+            // output element type as `MapData.output_type` does for `map`.
+            node.get("data")
+                .and_then(|d| d.get("element_type"))
+                .cloned()
         }
         "product" => {
             // Phase 6 will fill this in:

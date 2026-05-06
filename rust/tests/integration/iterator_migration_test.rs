@@ -239,6 +239,304 @@ fn test_range_output_type_is_iter_int() {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 4: `map → array_at` is rewritten as `map → collect → array_at`.
+// `range → map.xs` stays direct because `map.xs` accepts `Iter[T]` natively.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_load_old_map_to_array_at_inserts_collect() {
+    let registry = load_and_validate(&format!("{}/old_map_to_array_at.cnnd", FIXTURE_DIR));
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // Five nodes after migration: range, map, int, array_at, collect.
+    assert_eq!(
+        network.nodes.len(),
+        5,
+        "expected 5 nodes (4 originals + synthesised collect); got {:?}",
+        network
+            .nodes
+            .values()
+            .map(|n| n.node_type_name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    let map_id = find_node_id_by_type(&registry, "Main", "map");
+    let array_at_id = find_node_id_by_type(&registry, "Main", "array_at");
+    let collect_id = find_node_id_by_type(&registry, "Main", "collect");
+
+    // Synthesised collect wires range/map → collect → array_at.
+    let collect_node = network.nodes.get(&collect_id).unwrap();
+    assert_eq!(collect_node.arguments.len(), 1);
+    assert_eq!(
+        collect_node.arguments[0]
+            .argument_output_pins
+            .get(&map_id)
+            .copied(),
+        Some(0),
+        "collect must be wired to map's pin 0"
+    );
+
+    // array_at's `array` arg now points at collect, not map.
+    let array_at_node = network.nodes.get(&array_at_id).unwrap();
+    assert_eq!(
+        array_at_node.arguments[0]
+            .argument_output_pins
+            .get(&collect_id)
+            .copied(),
+        Some(0),
+        "array_at.array must point at the synthesised collect"
+    );
+    assert!(
+        !array_at_node.arguments[0]
+            .argument_output_pins
+            .contains_key(&map_id),
+        "array_at must no longer wire directly to map"
+    );
+
+    // range → map.xs stays direct: map.xs is now Iter[Int], so the wire is
+    // identity-valid; no collect inserted on it.
+    let map_node = network.nodes.get(&map_id).unwrap();
+    let range_id = find_node_id_by_type(&registry, "Main", "range");
+    assert_eq!(
+        map_node.arguments[0]
+            .argument_output_pins
+            .get(&range_id)
+            .copied(),
+        Some(0),
+        "range → map.xs wire must be preserved unchanged (Iter[Int] → Iter[Int] identity)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: `filter → array_concat` is rewritten as
+// `filter → collect → array_concat`. `range → filter.xs` stays direct.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_load_old_filter_to_array_concat_inserts_collect() {
+    let registry = load_and_validate(&format!("{}/old_filter_to_array_concat.cnnd", FIXTURE_DIR));
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    assert_eq!(
+        network.nodes.len(),
+        4,
+        "expected 4 nodes (3 originals + synthesised collect); got {:?}",
+        network
+            .nodes
+            .values()
+            .map(|n| n.node_type_name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    let filter_id = find_node_id_by_type(&registry, "Main", "filter");
+    let array_concat_id = find_node_id_by_type(&registry, "Main", "array_concat");
+    let collect_id = find_node_id_by_type(&registry, "Main", "collect");
+
+    let collect_node = network.nodes.get(&collect_id).unwrap();
+    assert_eq!(
+        collect_node.arguments[0]
+            .argument_output_pins
+            .get(&filter_id)
+            .copied(),
+        Some(0),
+        "collect must be wired to filter's pin 0"
+    );
+
+    let array_concat_node = network.nodes.get(&array_concat_id).unwrap();
+    assert_eq!(
+        array_concat_node.arguments[0]
+            .argument_output_pins
+            .get(&collect_id)
+            .copied(),
+        Some(0),
+        "array_concat.a must point at the synthesised collect"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: fan-out from one `map` source pin to two non-iterator consumers
+// synthesises **one collect per consumer** (per-consumer adapters, not a
+// shared collect) — matches v2→v3's policy and the design doc's
+// "Fan-out from one source pin to multiple non-iterator destinations" rule.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_load_old_double_fanout_inserts_one_collect_per_consumer() {
+    let registry = load_and_validate(&format!("{}/old_double_fanout.cnnd", FIXTURE_DIR));
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // Original 5 + 2 synthesised collects = 7.
+    assert_eq!(
+        network.nodes.len(),
+        7,
+        "expected 7 nodes (5 originals + 2 synthesised collects, one per consumer); got {:?}",
+        network
+            .nodes
+            .values()
+            .map(|n| n.node_type_name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    // Two collects.
+    let collect_ids: Vec<u64> = network
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "collect")
+        .map(|n| n.id)
+        .collect();
+    assert_eq!(
+        collect_ids.len(),
+        2,
+        "expected exactly two collect nodes (one per fan-out consumer); got {}",
+        collect_ids.len()
+    );
+
+    let map_id = find_node_id_by_type(&registry, "Main", "map");
+    let array_at_id = find_node_id_by_type(&registry, "Main", "array_at");
+    let array_len_id = find_node_id_by_type(&registry, "Main", "array_len");
+
+    // Both collects must be wired to map's pin 0.
+    for &cid in &collect_ids {
+        let cnode = network.nodes.get(&cid).unwrap();
+        assert_eq!(
+            cnode.arguments[0]
+                .argument_output_pins
+                .get(&map_id)
+                .copied(),
+            Some(0),
+            "collect {} must be wired to map's pin 0",
+            cid
+        );
+    }
+
+    // array_at and array_len each point at *some* collect; the consumers must
+    // not share the same collect.
+    let at_target = *array_at_node_array_target(network, array_at_id, &collect_ids);
+    let len_target = *array_len_node_array_target(network, array_len_id, &collect_ids);
+    assert_ne!(
+        at_target, len_target,
+        "fan-out must produce a per-consumer collect; got the same collect for both consumers"
+    );
+}
+
+fn array_at_node_array_target<'a>(
+    network: &'a rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork,
+    array_at_id: u64,
+    collect_ids: &'a [u64],
+) -> &'a u64 {
+    let node = network.nodes.get(&array_at_id).unwrap();
+    let pins = &node.arguments[0].argument_output_pins;
+    collect_ids
+        .iter()
+        .find(|cid| pins.contains_key(cid))
+        .expect("array_at.array must point at one of the synthesised collects")
+}
+
+fn array_len_node_array_target<'a>(
+    network: &'a rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork,
+    array_len_id: u64,
+    collect_ids: &'a [u64],
+) -> &'a u64 {
+    let node = network.nodes.get(&array_len_id).unwrap();
+    let pins = &node.arguments[0].argument_output_pins;
+    collect_ids
+        .iter()
+        .find(|cid| pins.contains_key(cid))
+        .expect("array_len.array must point at one of the synthesised collects")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: predicate (B) recognises `map.xs` and `filter.xs` as iterator
+// pins, so a v3 file with `map → map` (or `filter → filter`) is loaded
+// without inserting any collect.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_iter_to_iter_xs_pin_skips_collect_insertion() {
+    // We don't ship a dedicated fixture for this; reuse `old_map_to_array_at`
+    // which has a `range → map.xs` wire in it. Because `map.xs` is in
+    // `ITERATOR_PINS_V4` after Phase 4, no collect should sit between range
+    // and map.
+    let registry = load_and_validate(&format!("{}/old_map_to_array_at.cnnd", FIXTURE_DIR));
+    let network = registry.node_networks.get("Main").unwrap();
+
+    // No collect feeds map.xs; map.xs feeds direct from range.
+    let map_id = find_node_id_by_type(&registry, "Main", "map");
+    let range_id = find_node_id_by_type(&registry, "Main", "range");
+    let map_node = network.nodes.get(&map_id).unwrap();
+    let xs_pins = &map_node.arguments[0].argument_output_pins;
+    assert_eq!(xs_pins.len(), 1, "map.xs must have exactly one source");
+    assert!(
+        xs_pins.contains_key(&range_id),
+        "map.xs must wire directly to range, not via a collect"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: idempotence on the new fixtures (re-running `migrate_v3_to_v4`
+// directly on a value that has already been migrated must be a no-op).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_migrate_v3_to_v4_idempotent_on_map_fanout() {
+    let raw = std::fs::read_to_string(format!("{}/old_double_fanout.cnnd", FIXTURE_DIR))
+        .expect("fixture missing");
+    let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
+
+    migrate_v3_to_v4(&mut value).expect("first migration failed");
+    let after_first = serde_json::to_string(&value).unwrap();
+    migrate_v3_to_v4(&mut value).expect("second migration failed");
+    let after_second = serde_json::to_string(&value).unwrap();
+
+    assert_eq!(
+        after_first, after_second,
+        "v3→v4 migration must be idempotent on a fan-out fixture"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: declared output type of `map` and `filter` is `Iter[T]`.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_map_output_type_is_iter() {
+    let registry = NodeTypeRegistry::new();
+    let map_node_type = registry
+        .get_node_type("map")
+        .expect("map node type missing");
+    assert_eq!(
+        *map_node_type.output_type(),
+        DataType::Iterator(Box::new(DataType::Float)),
+        "map's default output must be Iter[Float] after Phase 4"
+    );
+}
+
+#[test]
+fn test_filter_output_type_is_iter() {
+    let registry = NodeTypeRegistry::new();
+    let filter_node_type = registry
+        .get_node_type("filter")
+        .expect("filter node type missing");
+    assert_eq!(
+        *filter_node_type.output_type(),
+        DataType::Iterator(Box::new(DataType::Float)),
+        "filter's default output must be Iter[Float] after Phase 4"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Phase 3: chained dispatch v2 → v3 → v4.
 // A v2 fixture (`pure_rename.cnnd` from the lattice-space migration tests)
 // should chain through both passes and reach v4 cleanly.

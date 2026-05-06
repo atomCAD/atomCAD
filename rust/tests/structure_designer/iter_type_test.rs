@@ -261,15 +261,19 @@ mod closure_capture_validation {
             .insert(src_node_id, src_pin_index);
     }
 
-    /// `range → map.xs`, plus an `expr` whose parameter is `Iter[Int]`.
-    /// Wire the `expr`'s function pin (-1) into `map.f`. The validator
-    /// should reject the function-pin wire because the captured value-pin
-    /// type contains `Iter[T]`.
+    /// An `expr` whose parameter is `Iter[Int]`. Wire the `expr`'s function
+    /// pin (-1) into `map.f`. The validator should reject the function-pin
+    /// wire because the captured value-pin type contains `Iter[T]`.
+    ///
+    /// Phase 4 note: prior to flipping `map.xs` to `Iter[T]`, the test also
+    /// wired `range → map.xs` as scaffolding. Post-Phase 4, that wire would
+    /// be a different type mismatch (`Iter[Int] → Iter[Float]`) which fires
+    /// before the closure-capture check; we drop it so the closure-capture
+    /// error is the one that surfaces.
     #[test]
     fn function_pin_rejects_iter_t_capture_via_value_pin() {
         let mut designer = setup_designer_with_network("net_iter_capture");
 
-        let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
         let expr_id = designer.add_node("expr", DVec2::new(100.0, 0.0));
         let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
 
@@ -283,9 +287,8 @@ mod closure_capture_validation {
             DataType::Iterator(Box::new(DataType::Int)),
         );
 
-        // Connect range → map.xs (param 0).
-        connect(&mut designer, "net_iter_capture", range_id, 0, map_id, 0);
-        // Connect expr's function pin (-1) → map.f (param 1).
+        // Connect expr's function pin (-1) → map.f (param 1). map.xs is left
+        // unconnected on purpose (see header comment).
         connect(&mut designer, "net_iter_capture", expr_id, -1, map_id, 1);
 
         designer.validate_active_network();

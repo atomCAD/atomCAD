@@ -38,6 +38,37 @@ pub struct FunctionEvaluator {
 }
 
 impl FunctionEvaluator {
+    /// Construct a `FunctionEvaluator` after verifying the closure's source
+    /// network and source node both resolve in `registry`. Returns `Err` with
+    /// a human-readable message otherwise.
+    ///
+    /// `FunctionEvaluator::new` silently builds a degenerate FE on a missing
+    /// source — fine for eager nodes that fail once and stop, but for lazy
+    /// iterator pipelines a degenerate FE would multiply the same error
+    /// across every pulled element. Callers in `map.eval()` / `filter.eval()`
+    /// use `try_build` so that construction-time failures surface as a single
+    /// `EvalOutput::single(Error(_))` instead of an exhausted-but-erroring
+    /// walker. See `doc/design_iterators.md` ("Construction-time error
+    /// handling").
+    pub fn try_build(closure: Closure, registry: &NodeTypeRegistry) -> Result<Self, String> {
+        let network = registry
+            .node_networks
+            .get(&closure.node_network_name)
+            .ok_or_else(|| {
+                format!(
+                    "source network '{}' not found in registry",
+                    closure.node_network_name
+                )
+            })?;
+        if !network.nodes.contains_key(&closure.node_id) {
+            return Err(format!(
+                "source node {} missing in network '{}'",
+                closure.node_id, closure.node_network_name
+            ));
+        }
+        Ok(Self::new(closure, registry))
+    }
+
     pub fn new(closure: Closure, registry: &NodeTypeRegistry) -> Self {
         let mut ret = Self {
       node_network: NodeNetwork::new(NodeType {

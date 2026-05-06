@@ -99,24 +99,29 @@ fn test_map_with_expr_function_evaluates_without_panic() {
 
     let map_id = find_node_id(&designer, "main", "map");
 
+    // Phase 4: `map` produces `Iter[T]`, not `Array[T]`. Drain the walker to
+    // collect the values for the assertion.
     let result = evaluate_node(&designer, "main", map_id);
-    match result {
-        NetworkResult::Array(items) => {
-            let values: Vec<i32> = items
-                .iter()
-                .map(|r| match r {
-                    NetworkResult::Int(v) => *v,
-                    other => panic!(
-                        "expected Int element from map, got {}",
-                        other.to_display_string()
-                    ),
-                })
-                .collect();
-            assert_eq!(values, vec![1, 3, 5, 7, 9], "expected i * 2 + 1 over 0..5");
-        }
+    let mut walker = match result {
+        NetworkResult::Iterator(w) => w,
         other => panic!(
-            "expected Array result from map, got {}",
+            "expected Iterator result from map, got {}",
             other.to_display_string()
         ),
+    };
+    let registry = &designer.node_type_registry;
+    let evaluator = NetworkEvaluator::new();
+    let mut values: Vec<i32> = Vec::new();
+    loop {
+        match walker.next(&evaluator, registry) {
+            None => break,
+            Some(NetworkResult::Int(v)) => values.push(v),
+            Some(NetworkResult::Error(e)) => panic!("map walker yielded Error: {}", e),
+            Some(other) => panic!(
+                "expected Int element from map, got {}",
+                other.to_display_string()
+            ),
+        }
     }
+    assert_eq!(values, vec![1, 3, 5, 7, 9], "expected i * 2 + 1 over 0..5");
 }
