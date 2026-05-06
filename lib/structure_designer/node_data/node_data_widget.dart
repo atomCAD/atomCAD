@@ -24,6 +24,7 @@ import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/collect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/fold_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sequence_editor.dart';
@@ -395,6 +396,16 @@ class NodeDataWidget extends StatelessWidget {
         return FilterEditor(
           nodeId: selectedNode.id,
           data: filterData,
+          model: model,
+        );
+      case 'collect':
+        final collectData = getCollectData(
+          nodeId: selectedNode.id,
+        );
+
+        return CollectEditor(
+          nodeId: selectedNode.id,
+          data: collectData,
           model: model,
         );
       case 'fold':

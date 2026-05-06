@@ -835,6 +835,10 @@ pub struct APIFilterData {
     pub element_type: APIDataType,
 }
 
+pub struct APICollectData {
+    pub element_type: APIDataType,
+}
+
 pub struct APIFoldData {
     pub element_type: APIDataType,
     pub accumulator_type: APIDataType,

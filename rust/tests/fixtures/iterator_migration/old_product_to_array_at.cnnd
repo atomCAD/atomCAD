@@ -1,0 +1,162 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 6,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Record(Pair)"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "range",
+            "custom_name": "ra",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 2
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "range",
+            "custom_name": "rb",
+            "position": [
+              100.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 10,
+              "step": 1,
+              "count": 2
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "product",
+            "custom_name": "p",
+            "position": [
+              300.0,
+              150.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              }
+            ],
+            "data_type": "product",
+            "data": {
+              "target": "Pair"
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "int",
+            "custom_name": "i",
+            "position": [
+              300.0,
+              300.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 0
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "array_at",
+            "custom_name": "at",
+            "position": [
+              500.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              }
+            ],
+            "data_type": "array_at",
+            "data": {
+              "element_type": {
+                "Record": {
+                  "Named": "Pair"
+                }
+              }
+            }
+          }
+        ],
+        "return_node_id": 5,
+        "displayed_node_ids": [
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "record_type_defs": [
+    {
+      "name": "Pair",
+      "fields": [
+        ["a", "Int"],
+        ["b", "Int"]
+      ]
+    }
+  ],
+  "version": 3
+}

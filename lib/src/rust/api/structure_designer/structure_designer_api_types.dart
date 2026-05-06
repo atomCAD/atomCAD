@@ -414,6 +414,24 @@ class APICircleData {
           radius == other.radius;
 }
 
+class APICollectData {
+  final APIDataType elementType;
+
+  const APICollectData({
+    required this.elementType,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICollectData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType;
+}
+
 class APICommentData {
   final String label;
   final String text;

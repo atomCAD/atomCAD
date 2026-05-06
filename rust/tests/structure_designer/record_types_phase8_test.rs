@@ -20,6 +20,32 @@ use rust_lib_flutter_cad::structure_designer::nodes::product::ProductData;
 use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
+/// Phase 6: `product` produces `Iter[Record(target)]`. Drain the walker into a
+/// concrete `Vec<NetworkResult>` for assertions. Mirrors the pattern used in
+/// `filter_test::extract_int_array`.
+fn drain_iter(designer: &StructureDesigner, result: NetworkResult) -> Vec<NetworkResult> {
+    match result {
+        NetworkResult::Iterator(mut walker) => {
+            let registry = &designer.node_type_registry;
+            let evaluator = NetworkEvaluator::new();
+            let mut out = Vec::new();
+            loop {
+                match walker.next(&evaluator, registry) {
+                    None => break,
+                    Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
+                    Some(v) => out.push(v),
+                }
+            }
+            out
+        }
+        NetworkResult::Array(items) => items,
+        other => panic!(
+            "expected Iterator or Array, got {}",
+            other.to_display_string()
+        ),
+    }
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -185,12 +211,12 @@ fn product_pin_layout_follows_authored_order() {
     // Pin order = authored order, NOT alphabetical.
     let names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, vec!["year", "month", "day"]);
-    // Each input pin is Array[FieldType].
+    // Phase 6: each input pin is Iter[FieldType].
     for p in &nt.parameters {
-        assert!(matches!(p.data_type, DataType::Array(ref el) if **el == DataType::Int));
+        assert!(matches!(p.data_type, DataType::Iterator(ref el) if **el == DataType::Int));
     }
-    // Output is Array[Record(Named("Date"))].
-    let expected_out = DataType::Array(Box::new(DataType::Record(RecordType::Named(
+    // Phase 6: output is Iter[Record(Named("Date"))].
+    let expected_out = DataType::Iterator(Box::new(DataType::Record(RecordType::Named(
         "Date".to_string(),
     ))));
     assert_eq!(nt.output_pins[0].fixed_type(), Some(&expected_out));
@@ -268,10 +294,7 @@ fn product_two_fields_smallest_case() {
     designer.connect_nodes(xs_a, 0, prod, 0); // pin 0 = a
     designer.connect_nodes(xs_b, 0, prod, 1); // pin 1 = b
 
-    let result = evaluate_node_pin(&designer, "test", prod, 0);
-    let NetworkResult::Array(items) = result else {
-        panic!("expected Array, got {}", result.to_display_string());
-    };
+    let items = drain_iter(&designer, evaluate_node_pin(&designer, "test", prod, 0));
     // 2 × 2 = 4 records. Rightmost (b) varies fastest, so the order is:
     // (a=1,b=10), (a=1,b=20), (a=2,b=10), (a=2,b=20).
     assert_eq!(items.len(), 4);
@@ -313,10 +336,7 @@ fn product_three_fields_rightmost_varies_fastest() {
     designer.connect_nodes(months, 0, prod, 1);
     designer.connect_nodes(days, 0, prod, 2); // day (rightmost — varies fastest)
 
-    let result = evaluate_node_pin(&designer, "test", prod, 0);
-    let NetworkResult::Array(items) = result else {
-        panic!("expected Array, got {}", result.to_display_string());
-    };
+    let items = drain_iter(&designer, evaluate_node_pin(&designer, "test", prod, 0));
     // 2 × 2 × 2 = 8 records. Day (rightmost) varies fastest.
     assert_eq!(items.len(), 8);
     let triples: Vec<(i32, i32, i32)> = items
@@ -373,10 +393,7 @@ fn product_empty_input_yields_empty_output() {
     designer.connect_nodes(xs_a, 0, prod, 0);
     designer.connect_nodes(xs_b, 0, prod, 1);
 
-    let result = evaluate_node_pin(&designer, "test", prod, 0);
-    let NetworkResult::Array(items) = result else {
-        panic!("expected Array, got {}", result.to_display_string());
-    };
+    let items = drain_iter(&designer, evaluate_node_pin(&designer, "test", prod, 0));
     assert!(items.is_empty());
 }
 
@@ -412,10 +429,7 @@ fn product_large_cardinality() {
     designer.connect_nodes(months, 0, prod, 1);
     designer.connect_nodes(days, 0, prod, 2);
 
-    let result = evaluate_node_pin(&designer, "test", prod, 0);
-    let NetworkResult::Array(items) = result else {
-        panic!("expected Array, got {}", result.to_display_string());
-    };
+    let items = drain_iter(&designer, evaluate_node_pin(&designer, "test", prod, 0));
     assert_eq!(items.len(), 5 * 4 * 3);
 }
 
@@ -459,16 +473,16 @@ fn product_target_with_array_field() {
     let node = network.nodes.get(&prod).unwrap();
     let nt = registry.get_node_type_for_node(node).unwrap();
 
-    // Pin `tag` is Array[Int]; pin `items` is Array[Array[Int]].
+    // Phase 6: pin `tag` is Iter[Int]; pin `items` is Iter[Array[Int]].
     let names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, vec!["tag", "items"]);
     assert_eq!(
         nt.parameters[0].data_type,
-        DataType::Array(Box::new(DataType::Int))
+        DataType::Iterator(Box::new(DataType::Int))
     );
     assert_eq!(
         nt.parameters[1].data_type,
-        DataType::Array(Box::new(DataType::Array(Box::new(DataType::Int))))
+        DataType::Iterator(Box::new(DataType::Array(Box::new(DataType::Int))))
     );
 }
 
@@ -495,11 +509,11 @@ fn product_with_empty_target_has_no_input_pins() {
     let node = network.nodes.get(&prod).unwrap();
     let nt = registry.get_node_type_for_node(node).unwrap();
     assert_eq!(nt.parameters.len(), 0);
-    // Output type is dangling Array[Record(Named(""))] — fails subtyping
+    // Output type is dangling Iter[Record(Named(""))] — fails subtyping
     // against any real consumer.
     assert_eq!(
         nt.output_pins[0].fixed_type(),
-        Some(&DataType::Array(Box::new(DataType::Record(
+        Some(&DataType::Iterator(Box::new(DataType::Record(
             RecordType::Named(String::new())
         ))))
     );
@@ -547,11 +561,11 @@ fn product_after_deleting_target_def_has_no_input_pins() {
     let node = network.nodes.get(&prod).unwrap();
     let nt = registry.get_node_type_for_node(node).unwrap();
     // Dangling target — pins gone, output type still references the missing
-    // name (will fail subtyping against any consumer).
+    // name (will fail subtyping against any consumer). Phase 6: now Iter[..].
     assert_eq!(nt.parameters.len(), 0);
     assert_eq!(
         nt.output_pins[0].fixed_type(),
-        Some(&DataType::Array(Box::new(DataType::Record(
+        Some(&DataType::Iterator(Box::new(DataType::Record(
             RecordType::Named("Pair".to_string())
         ))))
     );
@@ -626,10 +640,7 @@ fn product_broadcasts_single_value_input() {
     designer.connect_nodes(int_a, 0, prod, 0);
     designer.connect_nodes(xs_b, 0, prod, 1);
 
-    let result = evaluate_node_pin(&designer, "test", prod, 0);
-    let NetworkResult::Array(items) = result else {
-        panic!("expected Array, got {}", result.to_display_string());
-    };
+    let items = drain_iter(&designer, evaluate_node_pin(&designer, "test", prod, 0));
     assert_eq!(items.len(), 2);
     let pairs: Vec<(i32, i32)> = items
         .iter()

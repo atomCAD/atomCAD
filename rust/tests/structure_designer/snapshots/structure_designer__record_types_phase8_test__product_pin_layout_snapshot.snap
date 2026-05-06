@@ -3,8 +3,8 @@ source: tests/structure_designer/record_types_phase8_test.rs
 expression: s
 ---
 inputs:
-  year: [Int]
-  month: [Int]
-  day: [Int]
+  year: Iter[Int]
+  month: Iter[Int]
+  day: Iter[Int]
 outputs:
-  result: [Record(Date)]
+  result: Iter[Record(Date)]

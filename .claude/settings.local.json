@@ -204,7 +204,8 @@
       "Bash(CARGO_BUILD_JOBS=2 cargo test --test structure_designer atom_replace_rules_phase_a)",
       "Bash(CARGO_BUILD_JOBS=2 cargo test --test integration)",
       "Bash(CARGO_BUILD_JOBS=2 cargo clippy --tests)",
-      "Bash(CARGO_BUILD_JOBS=2 cargo clippy --tests -- -A clippy::all)"
+      "Bash(CARGO_BUILD_JOBS=2 cargo clippy --tests -- -A clippy::all)",
+      "Bash(wait)"
     ]
   }
 }

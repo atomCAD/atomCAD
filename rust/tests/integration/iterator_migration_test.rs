@@ -537,6 +537,143 @@ fn test_filter_output_type_is_iter() {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 6: `product → array_at` is rewritten as
+// `product → collect → array_at`. Wires from `range → product.<axis>` stay
+// direct because every `product` parameter pin is an iterator pin in v4.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_load_old_product_to_array_at_inserts_collect() {
+    let registry = load_and_validate(&format!("{}/old_product_to_array_at.cnnd", FIXTURE_DIR));
+
+    let network = registry
+        .node_networks
+        .get("Main")
+        .expect("Main network missing");
+
+    // Original 5 (range, range, product, int, array_at) + 1 synthesised
+    // collect = 6.
+    assert_eq!(
+        network.nodes.len(),
+        6,
+        "expected 6 nodes (5 originals + synthesised collect); got {:?}",
+        network
+            .nodes
+            .values()
+            .map(|n| n.node_type_name.as_str())
+            .collect::<Vec<_>>()
+    );
+
+    let product_id = find_node_id_by_type(&registry, "Main", "product");
+    let array_at_id = find_node_id_by_type(&registry, "Main", "array_at");
+    let collect_id = find_node_id_by_type(&registry, "Main", "collect");
+
+    // Synthesised collect wires product → collect → array_at.
+    let collect_node = network.nodes.get(&collect_id).unwrap();
+    assert_eq!(collect_node.arguments.len(), 1);
+    assert_eq!(
+        collect_node.arguments[0]
+            .argument_output_pins
+            .get(&product_id)
+            .copied(),
+        Some(0),
+        "collect must be wired to product's pin 0"
+    );
+
+    // array_at's `array` arg now points at collect, not product.
+    let array_at_node = network.nodes.get(&array_at_id).unwrap();
+    assert_eq!(
+        array_at_node.arguments[0]
+            .argument_output_pins
+            .get(&collect_id)
+            .copied(),
+        Some(0),
+        "array_at.array must point at the synthesised collect"
+    );
+    assert!(
+        !array_at_node.arguments[0]
+            .argument_output_pins
+            .contains_key(&product_id),
+        "array_at must no longer wire directly to product"
+    );
+
+    // range → product.<axis> wires stay direct: every product parameter pin
+    // is `Iter[T_i]` in v4, so the wires are identity-valid.
+    let product_node = network.nodes.get(&product_id).unwrap();
+    assert_eq!(product_node.arguments.len(), 2);
+    for (axis_index, arg) in product_node.arguments.iter().enumerate() {
+        assert_eq!(
+            arg.argument_output_pins.len(),
+            1,
+            "product axis {} should have exactly one upstream wire",
+            axis_index
+        );
+        // Each axis is wired to a `range` node directly (no collect inserted).
+        let upstream_id = *arg.argument_output_pins.keys().next().unwrap();
+        let upstream = network.nodes.get(&upstream_id).unwrap();
+        assert_eq!(
+            upstream.node_type_name, "range",
+            "product.axis[{}] must wire directly to a range, not via a collect",
+            axis_index
+        );
+    }
+}
+
+#[test]
+fn test_product_output_type_is_iter_record() {
+    use rust_lib_flutter_cad::structure_designer::data_type::RecordType;
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::RecordTypeDef;
+    use rust_lib_flutter_cad::structure_designer::nodes::product::build_node_type_for_target;
+
+    let mut registry = NodeTypeRegistry::new();
+    registry
+        .add_record_type_def(RecordTypeDef {
+            name: "Pair".to_string(),
+            fields: vec![
+                ("a".to_string(), DataType::Int),
+                ("b".to_string(), DataType::Int),
+            ],
+        })
+        .unwrap();
+
+    let base = registry.get_node_type("product").unwrap();
+    let nt = build_node_type_for_target(base, "Pair", &registry);
+    let expected = DataType::Iterator(Box::new(DataType::Record(RecordType::Named(
+        "Pair".to_string(),
+    ))));
+    assert_eq!(
+        nt.output_pins[0].fixed_type(),
+        Some(&expected),
+        "product output must be Iter[Record(Pair)] after Phase 6"
+    );
+    // Each axis pin is Iter[Int].
+    for p in &nt.parameters {
+        assert_eq!(
+            p.data_type,
+            DataType::Iterator(Box::new(DataType::Int)),
+            "product axis pins must be Iter[T] after Phase 6"
+        );
+    }
+}
+
+#[test]
+fn test_migrate_v3_to_v4_idempotent_on_product_fixture() {
+    let raw = std::fs::read_to_string(format!("{}/old_product_to_array_at.cnnd", FIXTURE_DIR))
+        .expect("fixture missing");
+    let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
+
+    migrate_v3_to_v4(&mut value).expect("first migration failed");
+    let after_first = serde_json::to_string(&value).unwrap();
+    migrate_v3_to_v4(&mut value).expect("second migration failed");
+    let after_second = serde_json::to_string(&value).unwrap();
+
+    assert_eq!(
+        after_first, after_second,
+        "v3→v4 migration must be idempotent on the product fixture"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Phase 3: chained dispatch v2 → v3 → v4.
 // A v2 fixture (`pure_rename.cnnd` from the lattice-space migration tests)
 // should chain through both passes and reach v4 cleanly.

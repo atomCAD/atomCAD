@@ -69,10 +69,12 @@ typedef WireDropCallback = void Function(
 /// Manages the entire node graph.
 class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
+
   /// Names of every record type def in the project, sorted alphabetically.
   /// Mirrors `getRecordTypeDefNames()` and is refreshed from the kernel
   /// alongside `nodeNetworkNames`.
   List<String> recordTypeDefNames = [];
+
   /// Name of the record type def currently being edited in the main content
   /// area's bottom panel. When non-null, the schema editor replaces the
   /// network editor; the active node network (for the 3D viewport) is
@@ -521,10 +523,9 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Replaces the field list of an existing record type def. Returns null on
   /// success, or an error message (e.g. a cycle would be introduced).
-  String? updateRecordTypeDef(
-      String name, List<APIRecordTypeField> fields) {
-    final result = structure_designer_api.updateRecordTypeDef(
-        name: name, fields: fields);
+  String? updateRecordTypeDef(String name, List<APIRecordTypeField> fields) {
+    final result =
+        structure_designer_api.updateRecordTypeDef(name: name, fields: fields);
     if (result.success) {
       refreshFromKernel();
       return null;
@@ -1398,6 +1399,11 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setFilterData(BigInt nodeId, APIFilterData data) {
     structure_designer_api.setFilterData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setCollectData(BigInt nodeId, APICollectData data) {
+    structure_designer_api.setCollectData(nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

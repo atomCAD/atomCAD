@@ -10,14 +10,15 @@
 //! `collect` node on every such wire so v3 files load with their original
 //! semantics intact.
 //!
-//! Phase 5 scope (this drop, on top of Phase 4): `("fold", 0)` joins the
-//! `ITERATOR_PINS_V4` table so wires from an iterator producer (range / map /
-//! filter / product) into `fold.xs` do not get a `collect` synthesised on
-//! them — `fold.xs` is now natively `Iter[T]`. No new `produces_iter` arm:
-//! `fold` is a terminal consumer, never a producer. The `product` arm still
-//! returns `None` (filled in by Phase 6) and the transitive custom-network
-//! detection is still stubbed (filled in by Phase 7 —
-//! `compute_iterator_producer_set` returns an empty map for now).
+//! Phase 6 scope (this drop, on top of Phase 5): the `product` arm of
+//! `produces_iter` is filled in — `product` instances now report
+//! `Iter[Record(Named(<target>))]` so wires from `product` into a
+//! non-iterator pin (e.g. `array_at.array`) get a `collect` synthesised
+//! on them. `product` was already special-cased in `is_iterator_pin_v4`
+//! so wires *into* `product` (every parameter index) skip insertion.
+//! Transitive custom-network detection is still stubbed (filled in by
+//! Phase 7 — `compute_iterator_producer_set` returns an empty map for
+//! now).
 
 use serde_json::Value;
 use std::cell::Cell;
@@ -57,7 +58,9 @@ pub fn reset_migration_call_count() {
 /// target). Phase 4 adds `("map", 0)` and `("filter", 0)` (so wires from one
 /// iterator producer into another's `xs` pin do not get a `collect` inserted
 /// on them). Phase 5 adds `("fold", 0)`. The variable-arity `product` pin is
-/// special-cased separately.
+/// special-cased separately and accepts `Iter[T]` on every parameter index
+/// (Phase 6 — wired up to predicate (A) so wires *out of* `product` into
+/// non-iterator pins now get a `collect` inserted).
 const ITERATOR_PINS_V4: &[(&str, usize)] = &[
     ("map", 0),     // xs — Phase 4
     ("filter", 0),  // xs — Phase 4
@@ -70,9 +73,10 @@ const ITERATOR_PINS_V4: &[(&str, usize)] = &[
 /// inserted on the wire feeding it.
 fn is_iterator_pin_v4(node_type_name: &str, param_index: usize) -> bool {
     // `product` is special: variable axis count, every parameter is an
-    // iterator pin. Phase 6 wires up the matching `produces_iter` arm; the
-    // predicate is harmless to gate on the type name alone — predicate (A)
-    // just won't fire for product sources until Phase 6.
+    // iterator pin. Phase 6 wires up the matching `produces_iter` arm so
+    // predicate (A) now fires for product sources too; this predicate (B)
+    // entry keeps `<iter source> → product.<axis>` wires direct (no collect
+    // inserted) since every product axis is `Iter[T_i]` in v4.
     if node_type_name == "product" {
         return true;
     }
@@ -151,9 +155,18 @@ fn produces_iter(node: &Value, iter_producers: &HashMap<String, Value>) -> Optio
                 .cloned()
         }
         "product" => {
-            // Phase 6 will fill this in:
-            //   Record(Named(node.data.target)) → element type T.
-            None
+            // `ProductData.target` holds the target def name; the v4 element
+            // type is `Record(Named(target))`. Encode it as a serialized
+            // `DataType` JSON value (matching how `DataType::Record` derives
+            // serde): `{"Record": {"Named": "<target>"}}`. An empty/missing
+            // target is preserved verbatim — the resulting `collect` will
+            // dangle, the validator will drop the wire, and the user sees a
+            // broken wire instead of a failed load (per the design doc's
+            // error policy).
+            let target = node.get("data").and_then(|d| d.get("target"))?.as_str()?;
+            Some(serde_json::json!({
+                "Record": { "Named": target }
+            }))
         }
         _ => {
             // Phase 7: transitive custom-network resolution.
