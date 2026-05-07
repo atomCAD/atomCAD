@@ -33,7 +33,36 @@ pub enum Token {
     If,
     Then,
     Else,
+    /// Whole template literal, scanned in one go from `` ` `` to matching `` ` ``.
+    /// On success, carries the parsed parts; each interpolation's *raw inner
+    /// source* is preserved as a string and the parser re-tokenizes and
+    /// parses it on demand. On failure, carries a structured error that the
+    /// parser converts to a user-facing message.
+    Template(Result<Vec<TokenTemplatePart>, TemplateLexError>),
     Eof,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenTemplatePart {
+    /// Already-decoded literal text (escapes resolved).
+    Text(String),
+    /// Raw inner source of one `${...}` (without the `${` `}` delimiters).
+    Expr(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TemplateLexError {
+    /// Reached end of input before the closing backtick.
+    Unterminated,
+    /// Inside `${...}`, reached end of input before the matching `}`.
+    UnterminatedInterpolation,
+    /// `${}` — the interpolation has no source.
+    EmptyInterpolation,
+    /// `\X` where X is not one of the supported escapes.
+    UnknownEscape(char),
+    /// Backtick encountered inside `${...}`. Nested template literals are
+    /// intentionally unsupported.
+    NestedTemplateNotSupported,
 }
 
 pub struct Lexer<'a> {
@@ -72,6 +101,81 @@ impl<'a> Lexer<'a> {
             }
         }
         s
+    }
+
+    /// Scan a template literal. The opening backtick has already been consumed.
+    /// Walks character-by-character; on entering `${...}` delegates to
+    /// `scan_interpolation_inner` which tracks brace depth so inner record
+    /// literals like `${ {x: 1} }` work without prematurely terminating.
+    fn scan_template_literal(&mut self) -> Token {
+        let mut parts: Vec<TokenTemplatePart> = Vec::new();
+        let mut text = String::new();
+
+        loop {
+            match self.bump() {
+                None => return Token::Template(Err(TemplateLexError::Unterminated)),
+                Some('`') => break,
+                Some('\\') => {
+                    let escaped = match self.bump() {
+                        Some('`') => '`',
+                        Some('\\') => '\\',
+                        Some('$') => '$',
+                        Some('n') => '\n',
+                        Some('t') => '\t',
+                        Some('r') => '\r',
+                        Some(c) => return Token::Template(Err(TemplateLexError::UnknownEscape(c))),
+                        None => return Token::Template(Err(TemplateLexError::Unterminated)),
+                    };
+                    text.push(escaped);
+                }
+                Some('$') if self.peek() == Some('{') => {
+                    self.bump(); // consume '{'
+                    if !text.is_empty() {
+                        parts.push(TokenTemplatePart::Text(std::mem::take(&mut text)));
+                    }
+                    match self.scan_interpolation_inner() {
+                        Err(e) => return Token::Template(Err(e)),
+                        Ok(s) => {
+                            if s.trim().is_empty() {
+                                return Token::Template(Err(TemplateLexError::EmptyInterpolation));
+                            }
+                            parts.push(TokenTemplatePart::Expr(s));
+                        }
+                    }
+                }
+                Some(c) => text.push(c),
+            }
+        }
+
+        if !text.is_empty() {
+            parts.push(TokenTemplatePart::Text(text));
+        }
+        Token::Template(Ok(parts))
+    }
+
+    /// Scan the inner source of a `${...}` interpolation. The opening `${`
+    /// has already been consumed; this routine consumes characters up to and
+    /// including the matching closing `}`. Backticks inside the body reject
+    /// nested template literals at lex time.
+    fn scan_interpolation_inner(&mut self) -> Result<String, TemplateLexError> {
+        let mut buf = String::new();
+        let mut depth: u32 = 0;
+        loop {
+            match self.bump() {
+                None => return Err(TemplateLexError::UnterminatedInterpolation),
+                Some('}') if depth == 0 => return Ok(buf),
+                Some('}') => {
+                    depth -= 1;
+                    buf.push('}');
+                }
+                Some('{') => {
+                    depth += 1;
+                    buf.push('{');
+                }
+                Some('`') => return Err(TemplateLexError::NestedTemplateNotSupported),
+                Some(c) => buf.push(c),
+            }
+        }
     }
 
     fn next_token(&mut self) -> Token {
@@ -241,6 +345,10 @@ impl<'a> Lexer<'a> {
                     // Single '|' is not valid in our language
                     Token::Eof
                 }
+            }
+            Some('`') => {
+                self.i += 1; // consume opening backtick
+                self.scan_template_literal()
             }
             Some(_other) => {
                 self.i += 1;

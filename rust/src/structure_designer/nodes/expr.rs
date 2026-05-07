@@ -442,6 +442,30 @@ not accepted as element types. Type-name identifiers are only interpreted as
 types in the position immediately after `[]`, so naming a parameter after a type
 (e.g. `structure: Structure`) is safe.
 
+### String Template Literals
+
+Build a String value with optional interpolation:
+
+  `text-only literal`                      // String
+  `${x}`                                   // stringification of x
+  `prefix-${x}-suffix`                     // mixed
+  `${a.species}_${a.size}.xyz`             // record-field interpolation
+
+Interpolation `${expr}` accepts String, Int, Float, or Bool. Anything else
+is a validation error.
+
+Stringification:
+  String → passthrough
+  Int    → decimal (e.g. -7, 42)
+  Float  → Rust default Display (e.g. 0.1, 3.14, 1)
+  Bool   → true / false
+
+Non-finite Float values (NaN, +inf, -inf) are rejected at evaluation time.
+
+Escapes: \` \\ \$ \n \t \r. Bare $ not followed by { is literal, so
+`cost: $5` works without escaping. To write a literal ${...}, escape the
+dollar: `\${literal}`.
+
 ### Array Access
 
 - `arr[i]` — element access; `i` is an Int expression. Out-of-bounds is an

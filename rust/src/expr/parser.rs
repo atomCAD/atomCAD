@@ -1,7 +1,8 @@
 use crate::expr::expr::BinOp;
 use crate::expr::expr::Expr;
+use crate::expr::expr::TemplatePart;
 use crate::expr::expr::UnOp;
-use crate::expr::lexer::Token;
+use crate::expr::lexer::{TemplateLexError, Token, TokenTemplatePart};
 use crate::structure_designer::data_type::{DataType, RecordType};
 use std::collections::HashSet;
 
@@ -313,6 +314,22 @@ impl Parser {
             }
             Token::LBracket => self.parse_array_literal()?,
             Token::LBrace => self.parse_record_literal()?,
+            Token::Template(Err(e)) => return Err(format_template_lex_error(&e)),
+            Token::Template(Ok(parts)) => {
+                let mut ast_parts: Vec<TemplatePart> = Vec::with_capacity(parts.len());
+                for p in parts {
+                    match p {
+                        TokenTemplatePart::Text(s) => ast_parts.push(TemplatePart::Text(s)),
+                        TokenTemplatePart::Expr(src) => {
+                            let inner = parse(&src).map_err(|e| {
+                                format!("in template interpolation `${{{}}}`: {}", src, e)
+                            })?;
+                            ast_parts.push(TemplatePart::Expr(Box::new(inner)));
+                        }
+                    }
+                }
+                Expr::Template(ast_parts)
+            }
             Token::Plus => {
                 // unary plus
                 let rhs = self.parse_bp(100)?;
@@ -440,6 +457,22 @@ pub fn parse(input: &str) -> Result<Expr, String> {
     let tokens = crate::expr::lexer::tokenize(input);
     let mut parser = Parser::new(tokens);
     parser.parse()
+}
+
+fn format_template_lex_error(e: &TemplateLexError) -> String {
+    match e {
+        TemplateLexError::Unterminated => "unterminated template literal".to_string(),
+        TemplateLexError::UnterminatedInterpolation => {
+            "unterminated `${...}` in template literal".to_string()
+        }
+        TemplateLexError::EmptyInterpolation => "empty `${}` in template literal".to_string(),
+        TemplateLexError::UnknownEscape(c) => {
+            format!("unknown escape sequence `\\{}` in template literal", c)
+        }
+        TemplateLexError::NestedTemplateNotSupported => {
+            "nested template literals are not supported inside `${...}`".to_string()
+        }
+    }
 }
 
 /// Maps a type-name identifier to a concrete `DataType` for use as an

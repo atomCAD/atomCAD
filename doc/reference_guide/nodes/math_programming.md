@@ -268,6 +268,47 @@ Examples:
 [{x: 1, y: 2}, {x: 3, y: 4}]        // array of records (anonymous schema)
 ```
 
+**String Template Literals:**
+
+Backtick-delimited literals (`` `…` ``) build a `String` value with optional inline interpolation. They cover both the pure-string case (no interpolations) and string composition (one or more interpolations), which is the easiest path from "I have these record fields" to "I have a per-variant filename." The motivating use case is systematic file-path assembly for batch export — e.g. mapping a `product` stream of variant records into an `export_xyz.file_name` pin.
+
+- `` `text` `` — a literal `String`. Empty `` `` `` is the empty string.
+- `` `${expr}` `` — interpolation. `expr` is the full expression grammar — arithmetic, member access, conditionals, function calls, record literals, etc. all work inside `${…}`.
+- Adjacent interpolations need no separator: `` `${a}${b}` `` concatenates two values directly.
+- A bare `$` not followed by `{` is literal, so `` `cost: $5` `` works without escaping.
+
+**Stringification rules.** Each `${expr}` is validated to produce one of `String`, `Int`, `Float`, or `Bool`; anything else (including `Vec3`, `Record`, `Array`, `Iter`, the phase types) is rejected at validation time. To stringify a compound type, pull components out (`` `${v.x}_${v.y}_${v.z}` ``).
+
+| Type     | Format                                                                  | Examples                       |
+|----------|-------------------------------------------------------------------------|--------------------------------|
+| `String` | passthrough, no quotes                                                  | `hello`                        |
+| `Int`    | decimal, no padding                                                     | `42`, `-7`                     |
+| `Float`  | Rust default `Display` — full precision, trims trailing zeros            | `1`, `3.14`, `0.1`, `-7.5`     |
+| `Bool`   | `true` / `false`                                                        | `true`                         |
+
+Non-finite Floats (`NaN`, `+inf`, `-inf`) are rejected at evaluation time — they would produce filesystem-hostile filenames like `dose_NaN.xyz`.
+
+**Escapes.** `\` `\\ \$ \n \t \r` are recognized inside template text. Use `\$` to write a literal `${...}` without triggering interpolation; use `` \` `` to embed a backtick. Raw newlines inside the literal are also allowed (the body can span multiple lines).
+
+**Out of scope.** Nested template literals are rejected at lex time — a backtick inside `${…}` is an error. Use adjacent interpolations (`` `prefix-${x}-suffix` ``) instead. Plain `"…"` string literals, a `+` overload for string concatenation, and format specifiers (zero-padding, width, precision) are not provided; templates compose strings inline well enough that these have not been needed.
+
+Examples:
+
+```
+`hello world`                                    // "hello world"
+`${x}`                                           // String value of x
+`prefix-${x}`                                    // "prefix-" + str(x)
+`${a}${b}`                                       // adjacent interpolations
+`${variant.species}_size${variant.size}.xyz`     // record-field interpolation
+`cost: $5`                                       // literal "$" — '$' not followed by '{' is literal
+`literal \${x}`                                  // literal "${x}" — \$ disables interpolation
+`a backtick: \``                                 // literal "a backtick: `"
+`line1\nline2`                                   // embedded newline (escape)
+`line1
+line2`                                           // also two lines — raw newline is allowed
+`${if x > 0 then 1 else 2}`                      // any expr inside ${...}
+```
+
 **Mathematical Functions:**
 
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions

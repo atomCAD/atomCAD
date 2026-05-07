@@ -217,6 +217,9 @@ mod relaxed_node_names_test;
 #[path = "structure_designer/expr_array_literal_test.rs"]
 mod expr_array_literal_test;
 
+#[path = "structure_designer/expr_template_literal_test.rs"]
+mod expr_template_literal_test;
+
 #[path = "structure_designer/expr_array_index_test.rs"]
 mod expr_array_index_test;
 

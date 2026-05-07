@@ -52,6 +52,16 @@ pub enum Expr {
     /// `NetworkResult::Record`. The empty record `{}` is `RecordLiteral(vec![])`.
     /// Field names must be distinct (enforced at validation).
     RecordLiteral(Vec<(String, Expr)>),
+    /// String template literal `` `text${expr}…` ``. `parts` is a flat list of
+    /// literal text segments and embedded expressions, in source order. Empty
+    /// `parts` means the empty string literal `` `` ``.
+    Template(Vec<TemplatePart>),
+}
+
+#[derive(Debug, Clone)]
+pub enum TemplatePart {
+    Text(String),
+    Expr(Box<Expr>),
 }
 
 impl Expr {
@@ -500,6 +510,24 @@ impl Expr {
                 // / `Hash` even though we accepted them in author order here.
                 Ok(DataType::Record(RecordType::anonymous(typed)))
             }
+            Expr::Template(parts) => {
+                for part in parts {
+                    if let TemplatePart::Expr(e) = part {
+                        let t = e.validate(variables, functions)?;
+                        match t {
+                            DataType::String | DataType::Int | DataType::Float | DataType::Bool => {
+                            }
+                            other => {
+                                return Err(format!(
+                                    "template interpolation `${{...}}` must produce String, Int, Float, or Bool; got {}",
+                                    other
+                                ));
+                            }
+                        }
+                    }
+                }
+                Ok(DataType::String)
+            }
         }
     }
 
@@ -704,6 +732,45 @@ impl Expr {
                 // enforces the invariant required for derived `PartialEq` and
                 // for binary-search lookup in `extract_record_field`.
                 NetworkResult::record(out)
+            }
+            Expr::Template(parts) => {
+                let mut out = String::new();
+                for part in parts {
+                    match part {
+                        TemplatePart::Text(s) => out.push_str(s),
+                        TemplatePart::Expr(e) => {
+                            let v = e.evaluate(variables, functions);
+                            if let NetworkResult::Error(_) = v {
+                                return v;
+                            }
+                            // Path-friendly Float formatting uses Rust's default
+                            // `Display` (trims trailing zeros). Non-finite values
+                            // are filesystem-hostile (`dose_NaN.xyz` etc.) so we
+                            // reject them at evaluation time.
+                            match v {
+                                NetworkResult::String(s) => out.push_str(&s),
+                                NetworkResult::Int(n) => out.push_str(&n.to_string()),
+                                NetworkResult::Float(f) if f.is_finite() => {
+                                    out.push_str(&f.to_string())
+                                }
+                                NetworkResult::Float(f) => {
+                                    return NetworkResult::Error(format!(
+                                        "template interpolation produced non-finite Float ({}); refusing to embed in string",
+                                        f
+                                    ));
+                                }
+                                NetworkResult::Bool(b) => out.push_str(&b.to_string()),
+                                other => {
+                                    return NetworkResult::Error(format!(
+                                        "template interpolation produced non-stringable value of type {:?}",
+                                        other.infer_data_type()
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                NetworkResult::String(out)
             }
         }
     }
@@ -1067,6 +1134,17 @@ impl Expr {
                     .collect::<Vec<_>>()
                     .join(" ");
                 format!("(record {})", parts)
+            }
+            Expr::Template(parts) => {
+                let body = parts
+                    .iter()
+                    .map(|p| match p {
+                        TemplatePart::Text(s) => format!("(text {:?})", s),
+                        TemplatePart::Expr(e) => format!("(expr {})", e.to_prefix_string()),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("(template {})", body)
             }
         }
     }

@@ -30,3 +30,6 @@ mod array_append_test;
 
 #[path = "expr/record_literal_test.rs"]
 mod record_literal_test;
+
+#[path = "expr/template_literal_test.rs"]
+mod template_literal_test;
