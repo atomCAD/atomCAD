@@ -255,3 +255,6 @@ mod iter_type_test;
 
 #[path = "structure_designer/drag_adapter_test.rs"]
 mod drag_adapter_test;
+
+#[path = "structure_designer/unit_type_test.rs"]
+mod unit_type_test;

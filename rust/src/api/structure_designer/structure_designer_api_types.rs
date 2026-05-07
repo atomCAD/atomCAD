@@ -37,6 +37,9 @@ pub enum APIDataTypeBase {
     HasFreeLinOps,
     Motif,
     Structure,
+    /// The type with exactly one value. Produced by effect nodes; carries no
+    /// payload. See `doc/design_node_execution.md`.
+    Unit,
     /// Named record type. `custom_data_type` carries the record def name
     /// (empty string when no schema chosen yet — a dangling reference). The
     /// Flutter type-selector exposes this as a separate "Record" branch

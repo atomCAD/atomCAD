@@ -34,6 +34,12 @@ pub enum DataType {
     HasFreeLinOps,
     Motif,
     Structure,
+    /// The type with exactly one value — return type of effect nodes
+    /// (`export_xyz`, `foreach`, …). A universal `T → Unit` widening is
+    /// added at field-level so any sub-network output can be consumed by an
+    /// effect-typed pin. Reverse `Unit → T` is forbidden. See
+    /// `doc/design_node_execution.md`.
+    Unit,
     Array(Box<DataType>),
     /// Lazy stream of `T`. Wire-time conversions allow `[T] → Iter[T]` and
     /// `T → Iter[T]` (eager wraps); `Iter[T] → Iter[T]` identity. There is
@@ -150,6 +156,7 @@ impl fmt::Display for DataType {
             DataType::HasFreeLinOps => write!(f, "HasFreeLinOps"),
             DataType::Motif => write!(f, "Motif"),
             DataType::Structure => write!(f, "Structure"),
+            DataType::Unit => write!(f, "Unit"),
             DataType::Array(element_type) => {
                 write!(f, "[{}]", element_type)
             }
@@ -257,6 +264,15 @@ impl DataType {
     ) -> bool {
         // Same types are always compatible
         if source_type == dest_type {
+            return true;
+        }
+
+        // Universal `T → Unit` widening (the "discard" rule). Any source type —
+        // including iterators, functions, records, and Unit itself — coerces to
+        // `Unit`. The reverse `Unit → T` is rejected by falling through to the
+        // pair-table at the bottom (no Unit arm is added there).
+        // See `doc/design_node_execution.md` ("The Unit type").
+        if matches!(dest_type, DataType::Unit) {
             return true;
         }
 
@@ -651,6 +667,7 @@ impl DataTypeParser {
                     "HasFreeLinOps" => Ok(DataType::HasFreeLinOps),
                     "Motif" => Ok(DataType::Motif),
                     "Structure" => Ok(DataType::Structure),
+                    "Unit" => Ok(DataType::Unit),
                     // Plain unknown identifiers are NOT silently treated as
                     // record names: the text-format parser uses this as a
                     // probe to distinguish "is this a built-in type" from

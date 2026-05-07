@@ -494,6 +494,10 @@ pub fn parse_concrete_type_name(name: &str) -> Option<DataType> {
         // materializes a walker. See `doc/design_iterators.md` ("Out of
         // scope: Iterator support inside the `expr` expression language").
         DataType::Iterator(_) => None,
+        // `Unit` has no `expr` literal (no syntax produces a Unit value), so
+        // it is not a valid element type. See `doc/design_node_execution.md`
+        // ("Out-of-scope follow-ups").
+        DataType::Unit => None,
         _ => Some(dt),
     }
 }

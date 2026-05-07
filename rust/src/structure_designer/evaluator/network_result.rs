@@ -259,6 +259,10 @@ pub enum NetworkResult {
     /// name — the name lives only on `DataType::Record::Named`. See
     /// `doc/design_record_types.md`.
     Record(Vec<(String, NetworkResult)>),
+    /// The single value of `DataType::Unit`. Produced by effect nodes
+    /// (`export_xyz`, `foreach`) and by the universal `T → Unit` widening
+    /// applied at wire conversion time. See `doc/design_node_execution.md`.
+    Unit,
     Error(String),
 }
 
@@ -309,6 +313,7 @@ impl NetworkResult {
             NetworkResult::Molecule(_) => Some(DataType::Molecule),
             NetworkResult::Motif(_) => Some(DataType::Motif),
             NetworkResult::Structure(_) => Some(DataType::Structure),
+            NetworkResult::Unit => Some(DataType::Unit),
             NetworkResult::Record(fields) => {
                 let mut inferred = Vec::with_capacity(fields.len());
                 for (name, value) in fields {
@@ -588,6 +593,14 @@ impl NetworkResult {
             _ => {}
         }
 
+        // Universal `T → Unit` "discard" widening. Any non-Error source
+        // collapses to `NetworkResult::Unit` when the target is `Unit`,
+        // including iterator sources (the walker is dropped without being
+        // drained). See `doc/design_node_execution.md` ("NetworkResult::Unit").
+        if matches!(target_type, DataType::Unit) {
+            return NetworkResult::Unit;
+        }
+
         // Iterator destination conversions (matching `can_be_converted_to`):
         //   `[S] → Iter[T]` — eager element conversion, then wrap.
         //   `S   → Iter[T]` — single-element broadcast, eager conversion.
@@ -821,6 +834,7 @@ impl NetworkResult {
                     .collect();
                 format!("{{{}}}", field_strings.join(", "))
             }
+            NetworkResult::Unit => "()".to_string(),
             NetworkResult::Error(_) => "Error".to_string(),
         }
     }

@@ -113,6 +113,10 @@ const Map<String, Color> DATA_TYPE_COLORS = {
 
   // Function types (amber family - computational operations)
   '->': Color(0xFFFFA726), // Amber
+
+  // Unit (the discard / effect-only type) — dim grey, deliberately
+  // visually quiet because Unit pins carry no value.
+  'Unit': Color(0xFF757575),
 };
 
 // Records use a single neutral color regardless of named/anonymous so the

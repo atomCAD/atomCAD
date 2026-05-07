@@ -104,6 +104,7 @@ fn is_wire_only_type(data_type: &DataType) -> bool {
             | DataType::Structure
             | DataType::LatticeVecs
             | DataType::DrawingPlane
+            | DataType::Unit
             | DataType::Array(_)
             | DataType::Function(_)
     )

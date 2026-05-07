@@ -172,6 +172,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'Motif';
       case APIDataTypeBase.structure:
         return 'Structure';
+      case APIDataTypeBase.unit:
+        return 'Unit';
       case APIDataTypeBase.record:
         return 'Record';
       case APIDataTypeBase.custom:

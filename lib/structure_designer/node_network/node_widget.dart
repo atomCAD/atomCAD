@@ -405,6 +405,9 @@ String _apiDataTypeToString(APIDataType dt) {
     case APIDataTypeBase.structure:
       base = 'Structure';
       break;
+    case APIDataTypeBase.unit:
+      base = 'Unit';
+      break;
     case APIDataTypeBase.record:
       base = 'Record(${dt.customDataType ?? ''})';
       break;

@@ -492,6 +492,7 @@ mod element_type_eligibility_tests {
             DataType::HasFreeLinOps,
             DataType::Motif,
             DataType::Structure,
+            DataType::Unit,
             DataType::Array(Box::new(DataType::Int)),
             DataType::Iterator(Box::new(DataType::Int)),
             DataType::Function(
@@ -534,6 +535,7 @@ mod element_type_eligibility_tests {
                 | DataType::HasFreeLinOps
                 | DataType::Motif
                 | DataType::Structure
+                | DataType::Unit
                 | DataType::Array(_)
                 | DataType::Iterator(_)
                 | DataType::Function(_)
@@ -553,6 +555,7 @@ mod element_type_eligibility_tests {
                     | DataType::HasFreeLinOps
                     | DataType::Function(_)
                     | DataType::Iterator(_)
+                    | DataType::Unit
             )
         };
 
