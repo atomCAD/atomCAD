@@ -1210,6 +1210,32 @@ class StructureDesignerModel extends ChangeNotifier {
     return newNodeId;
   }
 
+  /// Run an explicit Execute pass on `nodeId` in the active network.
+  ///
+  /// Synchronous FFI call (the `with_*_cad_instance` helpers require
+  /// single-threaded UI access — see `doc/design_node_execution.md`
+  /// "Why not async (worker thread) FFI"). The call blocks until the Rust
+  /// side completes; the caller is responsible for showing a modal placard
+  /// before the call so the user gets visual feedback.
+  ///
+  /// Returns `null` if no network is active. Otherwise returns the
+  /// `APIExecuteResult` (with `ok` flag and optional `error` message), or
+  /// throws on FFI / Rust panic.
+  APIExecuteResult? executeNode(BigInt nodeId) {
+    final networkName = nodeNetworkView?.name;
+    if (networkName == null) return null;
+    final result = structure_designer_api.executeNode(
+      networkName: networkName,
+      nodeId: nodeId,
+    );
+    // An Execute pass might mutate displayed iterators / record state
+    // through side effects, but more importantly, recorded node errors and
+    // pin display strings are written into the per-pass context. A
+    // refresh keeps the node-graph error indicators and subtitles current.
+    refreshFromKernel();
+    return result;
+  }
+
   void setIntData(BigInt nodeId, APIIntData data) {
     structure_designer_api.setIntData(nodeId: nodeId, data: data);
     refreshFromKernel();

@@ -30,6 +30,7 @@ use super::nodes::facet_shell::get_node_type as facet_shell_get_node_type;
 use super::nodes::filter::get_node_type as filter_get_node_type;
 use super::nodes::float::get_node_type as float_get_node_type;
 use super::nodes::fold::get_node_type as fold_get_node_type;
+use super::nodes::foreach::get_node_type as foreach_get_node_type;
 use super::nodes::free_move::get_node_type as free_move_get_node_type;
 use super::nodes::free_rot::get_node_type as free_rot_get_node_type;
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
@@ -195,6 +196,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(map_get_node_type());
         ret.add_node_type(filter_get_node_type());
         ret.add_node_type(fold_get_node_type());
+        ret.add_node_type(foreach_get_node_type());
         ret.add_node_type(sequence_get_node_type());
         ret.add_node_type(string_get_node_type());
         ret.add_node_type(bool_get_node_type());
@@ -1324,6 +1326,7 @@ fn rewrite_record_name_in_registry(
     use crate::structure_designer::nodes::expr::ExprData;
     use crate::structure_designer::nodes::filter::FilterData;
     use crate::structure_designer::nodes::fold::FoldData;
+    use crate::structure_designer::nodes::foreach::ForeachData;
     use crate::structure_designer::nodes::map::MapData;
     use crate::structure_designer::nodes::parameter::ParameterData;
     use crate::structure_designer::nodes::product::ProductData;
@@ -1388,6 +1391,8 @@ fn rewrite_record_name_in_registry(
             } else if let Some(d) = data.as_any_mut().downcast_mut::<FoldData>() {
                 walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
                 walk_data_type_record_names_mut(&mut d.accumulator_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ForeachData>() {
+                walk_data_type_record_names_mut(&mut d.input_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAtData>() {
                 walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAppendData>() {

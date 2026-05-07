@@ -81,7 +81,8 @@ class AtomTooltip extends StatelessWidget {
           ),
           // Line 3: hybridization override
           Text(
-            _hybridizationText(info.hybridizationOverride, info.inferredHybridization),
+            _hybridizationText(
+                info.hybridizationOverride, info.inferredHybridization),
             style: const TextStyle(
               color: Color(0xCCFFFFFF),
               fontSize: 11,

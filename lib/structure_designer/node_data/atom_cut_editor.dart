@@ -35,9 +35,9 @@ class AtomCutEditorState extends State<AtomCutEditor> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const NodeEditorHeader(
-            title: 'Atom Cut Properties',
-            nodeTypeName: 'atom_cut',
-          ),
+              title: 'Atom Cut Properties',
+              nodeTypeName: 'atom_cut',
+            ),
             const SizedBox(height: 8),
             FloatInput(
               label: 'Cut SDF Value',

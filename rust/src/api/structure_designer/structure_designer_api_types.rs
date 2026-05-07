@@ -920,6 +920,24 @@ pub struct BatchCliConfig {
     pub batch_file: String,
 }
 
+/// Result of an explicit Execute pass triggered from the UI on a single node.
+///
+/// Side-effect nodes (`export_xyz`, `print` with `execute_only`, future effect
+/// nodes) only fire under `context.execute == true`; the Execute action sets
+/// that flag for the duration of one evaluation pass on the targeted node.
+/// Phase 4 will extend this struct with a `logs: Vec<APIPrintLogEntry>` field
+/// carrying the prints emitted by *this* pass; the field is intentionally
+/// absent in Phase 3 so the print plumbing lands in one piece. See
+/// `doc/design_node_execution.md` (Phase 3 / Phase 4).
+#[derive(Debug, Clone)]
+pub struct APIExecuteResult {
+    /// True when the Execute pass completed without surfacing a top-level
+    /// `NetworkResult::Error` from the targeted node.
+    pub ok: bool,
+    /// Populated with the error message when `ok == false`; None otherwise.
+    pub error: Option<String>,
+}
+
 /// Result of evaluating a single node via CLI
 #[derive(Debug, Clone)]
 pub struct APINodeEvaluationResult {

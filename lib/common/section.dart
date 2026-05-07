@@ -21,7 +21,7 @@ class Section extends StatelessWidget {
     final titleWidget = Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.medium, 
+        horizontal: AppSpacing.medium,
         vertical: AppSpacing.small,
       ),
       decoration: BoxDecoration(
@@ -43,15 +43,15 @@ class Section extends StatelessWidget {
         ),
       ),
     );
-    
+
     final contentPadding = SizedBox(height: AppSpacing.small);
     // Smaller bottom spacing or none if disabled
-    final bottomSpacing = addBottomPadding 
+    final bottomSpacing = addBottomPadding
         ? SizedBox(height: AppSpacing.small)
         : SizedBox.shrink();
-    
+
     // If expand is true, wrap content in Flexible
-    final contentWidget = expand 
+    final contentWidget = expand
         ? Flexible(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,7 +69,7 @@ class Section extends StatelessWidget {
               bottomSpacing,
             ],
           );
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

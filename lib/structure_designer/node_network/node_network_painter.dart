@@ -85,8 +85,8 @@ class NodeNetworkPainter extends CustomPainter {
         continue;
       }
 
-      final alignment = _getSourcePinAlignment(
-          wire.sourceNodeId, wire.sourceOutputPinIndex);
+      final alignment =
+          _getSourcePinAlignment(wire.sourceNodeId, wire.sourceOutputPinIndex);
       _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected,
           alignment);
     }

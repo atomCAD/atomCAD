@@ -50,10 +50,10 @@ class _DataTypeInputState extends State<DataTypeInput> {
               if (newValue == APIDataTypeBase.custom) {
                 customDataType = widget.value.customDataType ?? '';
               } else if (newValue == APIDataTypeBase.record) {
-                customDataType = widget.value.dataTypeBase ==
-                        APIDataTypeBase.record
-                    ? widget.value.customDataType ?? ''
-                    : '';
+                customDataType =
+                    widget.value.dataTypeBase == APIDataTypeBase.record
+                        ? widget.value.customDataType ?? ''
+                        : '';
               }
               widget.onChanged(APIDataType(
                 dataTypeBase: newValue,

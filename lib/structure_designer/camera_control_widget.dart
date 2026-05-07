@@ -27,17 +27,17 @@ class CameraControlWidget extends StatelessWidget {
                       model.setCameraCanonicalView(newValue);
                     }
                   },
-                  items: APICameraCanonicalView.values.map<DropdownMenuItem<APICameraCanonicalView>>(
-                    (APICameraCanonicalView view) {
-                      return DropdownMenuItem<APICameraCanonicalView>(
-                        value: view,
-                        child: Text(
-                          _getViewName(view),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }
-                  ).toList(),
+                  items: APICameraCanonicalView.values
+                      .map<DropdownMenuItem<APICameraCanonicalView>>(
+                          (APICameraCanonicalView view) {
+                    return DropdownMenuItem<APICameraCanonicalView>(
+                      value: view,
+                      child: Text(
+                        _getViewName(view),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
               const SizedBox(width: 8),
@@ -46,7 +46,9 @@ class CameraControlWidget extends StatelessWidget {
                 key: const Key('camera_perspective_button'),
                 icon: const Icon(Icons.panorama_horizontal),
                 tooltip: 'Perspective View',
-                color: model.isOrthographic ? Colors.grey : Theme.of(context).primaryColor,
+                color: model.isOrthographic
+                    ? Colors.grey
+                    : Theme.of(context).primaryColor,
                 onPressed: () {
                   if (model.isOrthographic) {
                     model.setOrthographicMode(false);
@@ -58,7 +60,9 @@ class CameraControlWidget extends StatelessWidget {
                 key: const Key('camera_orthographic_button'),
                 icon: const Icon(Icons.border_all_outlined),
                 tooltip: 'Orthographic View',
-                color: model.isOrthographic ? Theme.of(context).primaryColor : Colors.grey,
+                color: model.isOrthographic
+                    ? Theme.of(context).primaryColor
+                    : Colors.grey,
                 onPressed: () {
                   if (!model.isOrthographic) {
                     model.setOrthographicMode(true);

@@ -1101,6 +1101,27 @@ APINodeEvaluationResult evaluateNode(
         .crateApiStructureDesignerStructureDesignerApiEvaluateNode(
             nodeIdentifier: nodeIdentifier, verbose: verbose);
 
+/// Run an explicit Execute pass on a node — the right-click → Execute action
+/// in the node-graph UI. Sets `execute = true` for one evaluation pass on the
+/// targeted node, which is what gates side-effect nodes (`export_xyz`,
+/// `foreach`, future effect nodes) to actually fire. See
+/// `doc/design_node_execution.md` (Phase 3 — Triggering execute mode from
+/// the UI).
+///
+/// # Arguments
+/// * `network_name` - Network containing the node to execute
+/// * `node_id` - Numeric node id of the node to execute
+///
+/// # Returns
+/// * `Ok(APIExecuteResult)` on a successful pass (with `ok` indicating whether
+///   the node itself produced an error)
+/// * `Err(String)` on structural problems (missing network/node, invalid network)
+APIExecuteResult executeNode(
+        {required String networkName, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiExecuteNode(
+            networkName: networkName, nodeId: nodeId);
+
 /// Apply auto-layout to the active node network.
 ///
 /// This function recomputes positions for all nodes in the active network

@@ -7,6 +7,7 @@ use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
 use super::structure_designer_api_types::APIDragSource;
+use super::structure_designer_api_types::APIExecuteResult;
 use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
@@ -5402,6 +5403,35 @@ pub fn evaluate_node(
                     .ok_or_else(|| format!("Node not found: {}", node_identifier))?;
 
                 designer.evaluate_node_for_cli(node_id, verbose)
+            },
+            Err("CAD instance not available".to_string()),
+        )
+    }
+}
+
+/// Run an explicit Execute pass on a node — the right-click → Execute action
+/// in the node-graph UI. Sets `execute = true` for one evaluation pass on the
+/// targeted node, which is what gates side-effect nodes (`export_xyz`,
+/// `foreach`, future effect nodes) to actually fire. See
+/// `doc/design_node_execution.md` (Phase 3 — Triggering execute mode from
+/// the UI).
+///
+/// # Arguments
+/// * `network_name` - Network containing the node to execute
+/// * `node_id` - Numeric node id of the node to execute
+///
+/// # Returns
+/// * `Ok(APIExecuteResult)` on a successful pass (with `ok` indicating whether
+///   the node itself produced an error)
+/// * `Err(String)` on structural problems (missing network/node, invalid network)
+#[flutter_rust_bridge::frb(sync)]
+pub fn execute_node(network_name: String, node_id: u64) -> Result<APIExecuteResult, String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .execute_node(&network_name, node_id)
             },
             Err("CAD instance not available".to_string()),
         )

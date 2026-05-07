@@ -17,6 +17,7 @@ class _NodeNetworkTreeNode {
       fullName; // Qualified name for leafs, namespace path for namespaces
   final List<_NodeNetworkTreeNode> children;
   final bool isLeaf;
+
   /// Only meaningful when `isLeaf == true`. Determines which API path is
   /// used for activation/rename/delete.
   final _LeafKind? leafKind;
@@ -361,8 +362,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content:
-                Text('Rename failed: ${errorMessage ?? 'name already exists'}')),
+            content: Text(
+                'Rename failed: ${errorMessage ?? 'name already exists'}')),
       );
     }
 
@@ -417,8 +418,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   void _handleDelete(BuildContext context, _NodeNetworkTreeNode node) {
     if (node.isLeaf) {
-      _showDeleteConfirmation(context, node.fullName!,
-          node.leafKind ?? _LeafKind.network);
+      _showDeleteConfirmation(
+          context, node.fullName!, node.leafKind ?? _LeafKind.network);
     } else {
       final affectedNetworks = _collectLeafNames(node);
       _showNamespaceDeleteConfirmation(
@@ -563,8 +564,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     );
 
     // Check current CLI lock state for this node
-    final isLocked = node.fullName != null &&
-        widget.model.isCliWriteLocked(node.fullName!);
+    final isLocked =
+        node.fullName != null && widget.model.isCliWriteLocked(node.fullName!);
 
     final items = <PopupMenuEntry<String>>[
       const PopupMenuItem(

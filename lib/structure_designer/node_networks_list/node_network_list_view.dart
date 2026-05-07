@@ -194,7 +194,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                                       isActive ? Colors.white : Colors.black,
                                   selectionColor: isActive
                                       ? Colors.white.withValues(alpha: 0.3)
-                                                                             : Colors.blue.withValues(alpha: 0.3),
+                                      : Colors.blue.withValues(alpha: 0.3),
                                   selectionHandleColor:
                                       isActive ? Colors.white : Colors.blue,
                                 ),
@@ -303,8 +303,7 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
         final success = widget.model.renameNodeNetwork(oldName, newName);
         if (!success && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Rename failed: name already exists')),
+            const SnackBar(content: Text('Rename failed: name already exists')),
           );
         }
       } else {

@@ -2,8 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
@@ -880,25 +882,30 @@ class NodeWidget extends StatelessWidget {
   /// Pin name is shown in the hover tooltip, not inline.
   Widget _buildOutputPin(BuildContext context, OutputPinView pin) {
     final bool isPinDisplayed = node.displayedPins.contains(pin.index);
+    // Unit pins carry no displayable value (effect-node return type), so the
+    // visibility toggle is hidden — they can never be the lowest displayed
+    // pin for hit testing either. See `doc/design_node_execution.md`
+    // ("Display semantics" of the Unit type).
+    final bool isUnitPin = pin.effectiveDataType == 'Unit';
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Eye icon for pin display toggle
-        GestureDetector(
-          key: NodeWidgetKeys.outputPinVisibility(node.id, pin.index),
-          onTap: () {
-            final model =
-                Provider.of<StructureDesignerModel>(context, listen: false);
-            model.toggleOutputPinDisplay(node.id, pin.index);
-          },
-          child: Icon(
-            isPinDisplayed ? Icons.visibility : Icons.visibility_off,
-            color: Colors.white70,
-            size: 16,
+        if (!isUnitPin)
+          GestureDetector(
+            key: NodeWidgetKeys.outputPinVisibility(node.id, pin.index),
+            onTap: () {
+              final model =
+                  Provider.of<StructureDesignerModel>(context, listen: false);
+              model.toggleOutputPinDisplay(node.id, pin.index);
+            },
+            child: Icon(
+              isPinDisplayed ? Icons.visibility : Icons.visibility_off,
+              color: Colors.white70,
+              size: 16,
+            ),
           ),
-        ),
-        const SizedBox(width: 2),
+        if (!isUnitPin) const SizedBox(width: 2),
         PinWidget(
           pinReference: PinReference(
               node.id, PinType.output, pin.index, pin.effectiveDataType),
@@ -911,8 +918,7 @@ class NodeWidget extends StatelessWidget {
           alignmentReason: pin.alignmentReason,
           // Show the polymorphic declaration alongside the resolved type
           // whenever they differ (e.g. `SameAsInput(molecule)` → `Molecule`).
-          declaredDataType:
-              pin.resolvedDataType != null ? pin.dataType : null,
+          declaredDataType: pin.resolvedDataType != null ? pin.dataType : null,
           resolvedViaFallback: pin.resolvedViaFallback,
         ),
       ],
@@ -1107,6 +1113,17 @@ class NodeWidget extends StatelessWidget {
             child: Text('Go to Definition'),
           ),
         PopupMenuItem(
+          value: 'execute',
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.play_arrow, size: 18),
+              SizedBox(width: 8),
+              Text('Execute'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
           value: 'return',
           child: Text(
               node.returnNode ? 'Unset as return node' : 'Set as return node'),
@@ -1135,6 +1152,10 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.setActiveNodeNetwork(node.nodeTypeName);
+      } else if (value == 'execute') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        runExecuteWithPlacard(context, model, node.id);
       } else if (value == 'return') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
@@ -1161,5 +1182,98 @@ class NodeWidget extends StatelessWidget {
         showFactorIntoSubnetworkDialog(context, model);
       }
     });
+  }
+}
+
+/// Runs an Execute pass on the given node behind a modal "Executing…" placard.
+///
+/// Recipe (per `doc/design_node_execution.md`, Phase 3 — UX during execution):
+/// 1. Show a non-dismissable `DraggableDialog` placard.
+/// 2. Yield via `endOfFrame` so the dialog actually paints before the
+///    synchronous FFI call begins (otherwise the UI thread is blocked
+///    before the dialog reaches the screen).
+/// 3. Run the FFI call inside `try { … } finally { Navigator.pop }` so the
+///    placard is always dismissed — including on a thrown FFI error or a
+///    Rust panic surfaced through FRB. Without the `finally`, those failure
+///    paths would leave the user staring at an undismissable dialog.
+/// 4. Surface error / failure messages via SnackBar **after** the dialog is
+///    gone.
+///
+/// No `CircularProgressIndicator` — the UI thread is blocked during the FFI
+/// call, so any animated widget would freeze mid-frame and look broken.
+Future<void> runExecuteWithPlacard(
+  BuildContext context,
+  StructureDesignerModel model,
+  BigInt nodeId,
+) async {
+  // Capture the messenger before we await — looking it up off `context`
+  // afterward is racy (the context may be unmounted by the time we surface
+  // the result).
+  final messenger = ScaffoldMessenger.maybeOf(context);
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const DraggableDialog(
+      width: 320,
+      dismissible: false,
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.hourglass_empty),
+            SizedBox(width: 16),
+            Text('Executing…'),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  // Let the dialog frame paint before we hand the UI thread off to the
+  // synchronous FFI call.
+  await SchedulerBinding.instance.endOfFrame;
+
+  APIExecuteResult? result;
+  Object? thrown;
+  try {
+    result = model.executeNode(nodeId);
+  } catch (e) {
+    thrown = e;
+  } finally {
+    if (context.mounted) Navigator.of(context).pop();
+  }
+
+  if (messenger == null) return;
+  if (thrown != null) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Execute failed: $thrown'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
+  }
+  if (result == null) {
+    messenger.showSnackBar(
+      const SnackBar(content: Text('No active network for Execute')),
+    );
+    return;
+  }
+  if (!result.ok) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(result.error ?? 'Execute failed'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } else {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Execute complete'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 }

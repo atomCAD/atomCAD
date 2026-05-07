@@ -28,6 +28,7 @@ pub mod facet_shell;
 pub mod filter;
 pub mod float;
 pub mod fold;
+pub mod foreach;
 pub mod free_move;
 pub mod free_rot;
 pub mod geo_trans;

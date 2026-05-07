@@ -25,10 +25,13 @@ class AtomicStructureVisualizationWidget extends StatelessWidget {
               // Ball and Stick Button
               _buildIconButton(
                 context,
-                Icons.hub, // Using hub icon to represent atoms (circles) connected by bonds (lines)
+                Icons
+                    .hub, // Using hub icon to represent atoms (circles) connected by bonds (lines)
                 'Atomic visualization: Ball and Stick',
                 key: const Key('atomic_vis_ball_and_stick'),
-                isSelected: model.preferences?.atomicStructureVisualizationPreferences
+                isSelected: model
+                        .preferences
+                        ?.atomicStructureVisualizationPreferences
                         .visualization ==
                     AtomicStructureVisualization.ballAndStick,
                 onPressed: () {
@@ -45,7 +48,9 @@ class AtomicStructureVisualizationWidget extends StatelessWidget {
                 Icons.circle, // Using circle to represent space filling spheres
                 'Atomic visualization: Space Filling',
                 key: const Key('atomic_vis_space_filling'),
-                isSelected: model.preferences?.atomicStructureVisualizationPreferences
+                isSelected: model
+                        .preferences
+                        ?.atomicStructureVisualizationPreferences
                         .visualization ==
                     AtomicStructureVisualization.spaceFilling,
                 onPressed: () {

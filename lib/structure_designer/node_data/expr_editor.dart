@@ -31,7 +31,8 @@ class ExprEditorState extends State<ExprEditor> {
   @override
   void initState() {
     super.initState();
-    _expressionController = TextEditingController(text: widget.data?.expression ?? '');
+    _expressionController =
+        TextEditingController(text: widget.data?.expression ?? '');
     _expressionFocusNode = FocusNode();
     _expressionFocusNode.addListener(() {
       if (!_expressionFocusNode.hasFocus) {
@@ -85,14 +86,38 @@ class ExprEditorState extends State<ExprEditor> {
     if (index == 0) return 'x';
     if (index == 1) return 'y';
     if (index == 2) return 'z';
-    
+
     // After x, y, z, use w, u, v, s, t, then a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r
-    const additionalNames = ['w', 'u', 'v', 's', 't', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r'];
-    
+    const additionalNames = [
+      'w',
+      'u',
+      'v',
+      's',
+      't',
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+      'g',
+      'h',
+      'i',
+      'j',
+      'k',
+      'l',
+      'm',
+      'n',
+      'o',
+      'p',
+      'q',
+      'r'
+    ];
+
     if (index - 3 < additionalNames.length) {
       return additionalNames[index - 3];
     }
-    
+
     // If we run out of single letters, use param pattern
     return 'param${index + 1}';
   }
@@ -102,7 +127,10 @@ class ExprEditorState extends State<ExprEditor> {
     final newParameters = List<APIExprParameter>.from(currentParameters)
       ..add(APIExprParameter(
         name: _generateParameterName(currentParameters.length),
-        dataType: const APIDataType(dataTypeBase: APIDataTypeBase.float, customDataType: null, array: false),
+        dataType: const APIDataType(
+            dataTypeBase: APIDataTypeBase.float,
+            customDataType: null,
+            array: false),
       ));
     _updateExprData(newParameters);
   }
@@ -125,7 +153,6 @@ class ExprEditorState extends State<ExprEditor> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
@@ -144,14 +171,14 @@ class ExprEditorState extends State<ExprEditor> {
             nodeTypeName: 'expr',
           ),
           const SizedBox(height: 8),
-          
+
           // Expression text area
           CallbackShortcuts(
             bindings: {
               const SingleActivator(LogicalKeyboardKey.enter, control: true):
                   () => _updateExpressionFromText(_expressionController.text),
-              const SingleActivator(LogicalKeyboardKey.enter, meta: true):
-                  () => _updateExpressionFromText(_expressionController.text),
+              const SingleActivator(LogicalKeyboardKey.enter, meta: true): () =>
+                  _updateExpressionFromText(_expressionController.text),
             },
             child: TextFormField(
               controller: _expressionController,
@@ -159,15 +186,17 @@ class ExprEditorState extends State<ExprEditor> {
               decoration: const InputDecoration(
                 labelText: 'Expression',
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                hintText: 'Enter mathematical expression (e.g., x * 2 + sin(y))',
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                hintText:
+                    'Enter mathematical expression (e.g., x * 2 + sin(y))',
               ),
               maxLines: 12,
               minLines: 1,
               keyboardType: TextInputType.multiline,
             ),
           ),
-          
+
           // Error message display
           if (widget.data?.error != null)
             Padding(
@@ -192,9 +221,9 @@ class ExprEditorState extends State<ExprEditor> {
                 ),
               ),
             ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Parameters section
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -205,7 +234,8 @@ class ExprEditorState extends State<ExprEditor> {
                 icon: const Icon(Icons.add),
                 label: const Text('Add Parameter'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               ),
             ],
@@ -220,8 +250,8 @@ class ExprEditorState extends State<ExprEditor> {
                 child: Text(
                   'No parameters defined. Click "Add Parameter" to get started.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ),
             )
@@ -229,7 +259,7 @@ class ExprEditorState extends State<ExprEditor> {
             ...parameters.asMap().entries.map((entry) {
               final index = entry.key;
               final parameter = entry.value;
-              
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 4.0),
                 child: Row(
@@ -252,7 +282,7 @@ class ExprEditorState extends State<ExprEditor> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    
+
                     // Data type input
                     Expanded(
                       flex: 3,
@@ -271,7 +301,7 @@ class ExprEditorState extends State<ExprEditor> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    
+
                     // Delete button - more compact
                     SizedBox(
                       width: 36,
@@ -288,7 +318,7 @@ class ExprEditorState extends State<ExprEditor> {
                 ),
               );
             }),
-          
+
           // Output type display
           if (widget.data?.outputType != null)
             Padding(

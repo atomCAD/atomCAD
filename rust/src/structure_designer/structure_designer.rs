@@ -15,6 +15,7 @@ use super::preferences::load_preferences;
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
 use super::undo::snapshot::PendingMove;
 use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
+use crate::api::structure_designer::structure_designer_api_types::APIExecuteResult;
 use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluationResult;
 use crate::api::structure_designer::structure_designer_preferences::{
     AtomicStructureVisualization, StructureDesignerPreferences,
@@ -4442,6 +4443,73 @@ impl StructureDesigner {
             success,
             error_message,
         })
+    }
+
+    /// Run an explicit **Execute** pass on a single node.
+    ///
+    /// Triggered from the right-click context menu in the node-graph UI. Sets
+    /// `context.execute = true` for one evaluation pass through
+    /// `with_eval_context`, which is what gates side-effect nodes
+    /// (`export_xyz`, `foreach`, `print` with `execute_only`, …) to actually
+    /// fire. Independent of display state: whether the node is visible or
+    /// not, the targeted node and its transitive inputs are evaluated fresh.
+    /// One-shot: no subscription, no recurring trigger — the user must invoke
+    /// it again to re-fire. See `doc/design_node_execution.md` (Phase 3).
+    ///
+    /// Errors during the pass surface as `APIExecuteResult::error`; structural
+    /// problems (missing network, missing node) surface as `Err(String)`.
+    pub fn execute_node(
+        &mut self,
+        network_name: &str,
+        node_id: u64,
+    ) -> Result<APIExecuteResult, String> {
+        // Verify the network and node exist before launching the pass — keeps
+        // the orchestrator honest about what an empty `Ok(_)` means.
+        let network = self
+            .node_type_registry
+            .node_networks
+            .get(network_name)
+            .ok_or_else(|| format!("Network '{}' not found", network_name))?;
+        if !network.valid {
+            return Err(format!(
+                "Network '{}' is invalid and cannot be executed",
+                network_name
+            ));
+        }
+        if !network.nodes.contains_key(&node_id) {
+            return Err(format!(
+                "Node {} not found in network '{}'",
+                node_id, network_name
+            ));
+        }
+
+        let network_name_owned = network_name.to_string();
+        // Run the pass with `execute = true`. The central skip rule in the
+        // evaluator only invokes `eval` on a Unit-returning node when this
+        // flag is set; that is what lets `export_xyz` / `foreach` /
+        // `print(execute_only)` fire here while staying inert during display.
+        let result = self.with_eval_context(true, |evaluator, registry, _prefs, context| {
+            let network = registry.node_networks.get(&network_name_owned).unwrap();
+            let network_stack = vec![NetworkStackElement {
+                node_network: network,
+                node_id: 0,
+            }];
+            evaluator.evaluate(
+                &network_stack,
+                node_id,
+                0, // Execute always targets pin 0 — the right-click menu fires on the node, not a pin.
+                registry,
+                false, // decorate
+                context,
+            )
+        });
+
+        let (ok, error) = match result {
+            NetworkResult::Error(msg) => (false, Some(msg)),
+            _ => (true, None),
+        };
+
+        Ok(APIExecuteResult { ok, error })
     }
 
     /// Find a node ID by its display name in the active network.

@@ -83,9 +83,8 @@ class RecordDefDropdown extends StatelessWidget {
           child: TextButton.icon(
             icon: const Icon(Icons.edit_outlined, size: 16),
             label: const Text('Edit definition…'),
-            onPressed: boundToValidDef
-                ? () => model.setActiveRecordDef(value)
-                : null,
+            onPressed:
+                boundToValidDef ? () => model.setActiveRecordDef(value) : null,
           ),
         ),
       ],

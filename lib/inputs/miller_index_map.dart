@@ -190,7 +190,8 @@ class _MillerIndexMapState extends State<MillerIndexMap> {
   // List of unique Miller indices and their positions
   late List<APIIVec3> _uniqueIndices;
   final Map<APIIVec3, Offset> _dotPositions = {};
-  late final GlobalKey _mapKey = GlobalKey(debugLabel: 'MillerIndexMap_${widget.hashCode}');
+  late final GlobalKey _mapKey =
+      GlobalKey(debugLabel: 'MillerIndexMap_${widget.hashCode}');
   Offset? _hoverPosition;
   APIIVec3? _hoveredIndex;
   OverlayEntry? _tooltipOverlay;

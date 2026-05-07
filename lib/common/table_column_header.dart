@@ -20,7 +20,7 @@ class TableColumnHeader extends StatelessWidget {
     return Container(
       width: width,
       padding: EdgeInsets.symmetric(
-        vertical: AppSpacing.small, 
+        vertical: AppSpacing.small,
         horizontal: AppSpacing.small,
       ),
       decoration: BoxDecoration(

@@ -8,7 +8,6 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/table_column_header.dart';
 
-
 /// Editor widget for facet_shell nodes
 class FacetShellEditor extends StatefulWidget {
   final BigInt nodeId;
@@ -133,102 +132,104 @@ class FacetShellEditorState extends State<FacetShellEditor> {
                           controller: _facetListController,
                           thumbVisibility: true,
                           child: ListView.builder(
-                          controller: _facetListController,
-                          itemCount: widget.data!.facets.length,
-                          itemBuilder: (context, index) {
-                            final facet = widget.data!.facets[index];
-                            final isSelected =
-                                widget.data!.selectedFacetIndex ==
-                                    BigInt.from(index);
+                            controller: _facetListController,
+                            itemCount: widget.data!.facets.length,
+                            itemBuilder: (context, index) {
+                              final facet = widget.data!.facets[index];
+                              final isSelected =
+                                  widget.data!.selectedFacetIndex ==
+                                      BigInt.from(index);
 
-                            return InkWell(
-                              onTap: () {
-                                // Toggle selection
-                                widget.model.selectFacet(
-                                  widget.nodeId,
-                                  isSelected ? null : BigInt.from(index),
-                                );
-                              },
-                              child: Container(
-                                color: isSelected
-                                    ? Colors.lightBlue.withValues(alpha: 0.1)
-                                    : Colors.transparent,
-                                child: Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 4.0),
-                                  child: Row(
-                                    children: [
-                                      // Miller index - use {hkl} for symmetrized, (h,k,l) for individual
-                                      SizedBox(
-                                        width: 120,
-                                        child: Text(
-                                          facet.symmetrize
-                                              ? '{${facet.millerIndex.x} ${facet.millerIndex.y} ${facet.millerIndex.z}}'
-                                              : '(${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z})',
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                      // Shift
-                                      SizedBox(
-                                        width: 60,
-                                        child: Text(
-                                          '${facet.shift}',
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                      // Symmetrize
-                                      SizedBox(
-                                        width: 60,
-                                        child: Icon(
-                                          facet.symmetrize
-                                              ? Icons.check_circle_outline
-                                              : Icons.cancel_outlined,
-                                          size: 18,
-                                          color: facet.symmetrize
-                                              ? Colors.green
-                                              : Colors.red.withValues(alpha: 0.7),
-                                        ),
-                                      ),
-                                      // Visibility toggle
-                                      SizedBox(
-                                        width: 60,
-                                        child: IconButton(
-                                          icon: Icon(
-                                            facet.visible
-                                                ? Icons.visibility
-                                                : Icons.visibility_off,
-                                            size: 18,
-                                            color: facet.visible
-                                                ? Colors.blue
-                                                : Colors.grey,
+                              return InkWell(
+                                onTap: () {
+                                  // Toggle selection
+                                  widget.model.selectFacet(
+                                    widget.nodeId,
+                                    isSelected ? null : BigInt.from(index),
+                                  );
+                                },
+                                child: Container(
+                                  color: isSelected
+                                      ? Colors.lightBlue.withValues(alpha: 0.1)
+                                      : Colors.transparent,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4.0),
+                                    child: Row(
+                                      children: [
+                                        // Miller index - use {hkl} for symmetrized, (h,k,l) for individual
+                                        SizedBox(
+                                          width: 120,
+                                          child: Text(
+                                            facet.symmetrize
+                                                ? '{${facet.millerIndex.x} ${facet.millerIndex.y} ${facet.millerIndex.z}}'
+                                                : '(${facet.millerIndex.x}, ${facet.millerIndex.y}, ${facet.millerIndex.z})',
+                                            textAlign: TextAlign.center,
                                           ),
-                                          onPressed: () {
-                                            // Toggle visibility
-                                            widget.model.updateFacet(
-                                              widget.nodeId,
-                                              BigInt.from(index),
-                                              APIFacet(
-                                                millerIndex: facet.millerIndex,
-                                                shift: facet.shift,
-                                                symmetrize: facet.symmetrize,
-                                                visible: !facet.visible,
-                                              ),
-                                            );
-                                          },
-                                          padding: EdgeInsets.zero,
-                                          constraints: const BoxConstraints(),
-                                          splashRadius: 18,
                                         ),
-                                      ),
-                                      // Spacer
-                                      Expanded(child: Container()),
-                                    ],
+                                        // Shift
+                                        SizedBox(
+                                          width: 60,
+                                          child: Text(
+                                            '${facet.shift}',
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                        // Symmetrize
+                                        SizedBox(
+                                          width: 60,
+                                          child: Icon(
+                                            facet.symmetrize
+                                                ? Icons.check_circle_outline
+                                                : Icons.cancel_outlined,
+                                            size: 18,
+                                            color: facet.symmetrize
+                                                ? Colors.green
+                                                : Colors.red
+                                                    .withValues(alpha: 0.7),
+                                          ),
+                                        ),
+                                        // Visibility toggle
+                                        SizedBox(
+                                          width: 60,
+                                          child: IconButton(
+                                            icon: Icon(
+                                              facet.visible
+                                                  ? Icons.visibility
+                                                  : Icons.visibility_off,
+                                              size: 18,
+                                              color: facet.visible
+                                                  ? Colors.blue
+                                                  : Colors.grey,
+                                            ),
+                                            onPressed: () {
+                                              // Toggle visibility
+                                              widget.model.updateFacet(
+                                                widget.nodeId,
+                                                BigInt.from(index),
+                                                APIFacet(
+                                                  millerIndex:
+                                                      facet.millerIndex,
+                                                  shift: facet.shift,
+                                                  symmetrize: facet.symmetrize,
+                                                  visible: !facet.visible,
+                                                ),
+                                              );
+                                            },
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            splashRadius: 18,
+                                          ),
+                                        ),
+                                        // Spacer
+                                        Expanded(child: Container()),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],

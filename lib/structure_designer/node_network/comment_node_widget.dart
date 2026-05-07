@@ -83,7 +83,8 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
             boxShadow: widget.node.selected
                 ? [
                     BoxShadow(
-                      color: COMMENT_SELECTED_BORDER_COLOR.withValues(alpha: 0.3),
+                      color:
+                          COMMENT_SELECTED_BORDER_COLOR.withValues(alpha: 0.3),
                       blurRadius: 8.0,
                       spreadRadius: 2.0,
                     )
@@ -151,14 +152,14 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
                       onPanUpdate: (details) => _updateResize(context, details),
                       onPanEnd: (details) => _endResize(context),
                       child: Container(
-                      width: COMMENT_RESIZE_HANDLE_SIZE * scale,
-                      height: COMMENT_RESIZE_HANDLE_SIZE * scale,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.5),
-                        borderRadius: const BorderRadius.only(
-                          bottomRight: Radius.circular(3.0),
+                        width: COMMENT_RESIZE_HANDLE_SIZE * scale,
+                        height: COMMENT_RESIZE_HANDLE_SIZE * scale,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.5),
+                          borderRadius: const BorderRadius.only(
+                            bottomRight: Radius.circular(3.0),
+                          ),
                         ),
-                      ),
                         child: Icon(
                           Icons.open_in_full,
                           size: 8.0 * scale,
@@ -239,8 +240,8 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
 
     final newWidth =
         (_resizeStartWidth + delta.dx / scale).clamp(COMMENT_MIN_WIDTH, 1000.0);
-    final newHeight =
-        (_resizeStartHeight + delta.dy / scale).clamp(COMMENT_MIN_HEIGHT, 1000.0);
+    final newHeight = (_resizeStartHeight + delta.dy / scale)
+        .clamp(COMMENT_MIN_HEIGHT, 1000.0);
 
     sd_api.resizeCommentNode(
       nodeId: widget.node.id,

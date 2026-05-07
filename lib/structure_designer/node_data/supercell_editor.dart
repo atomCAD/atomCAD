@@ -272,8 +272,8 @@ class _IntCellState extends State<_IntCell> {
     final parsed = int.tryParse(text);
     if (parsed == null) {
       _controller.text = widget.value.toString();
-      _controller.selection =
-          TextSelection.fromPosition(TextPosition(offset: _controller.text.length));
+      _controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: _controller.text.length));
       return;
     }
     if (parsed != widget.value) {

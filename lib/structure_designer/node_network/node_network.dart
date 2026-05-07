@@ -224,10 +224,9 @@ String? extractNamedRecordDefName(String typeName) {
   // Strip leading `[` for array-wrapped types so both `Record(Foo)` and
   // `[Record(Foo)]` work. We don't bother with deeper nesting — record
   // types appear at most one array level deep on pins in v1.
-  final stripped =
-      typeName.startsWith('[') && typeName.endsWith(']')
-          ? typeName.substring(1, typeName.length - 1)
-          : typeName;
+  final stripped = typeName.startsWith('[') && typeName.endsWith(']')
+      ? typeName.substring(1, typeName.length - 1)
+      : typeName;
   const prefix = 'Record(';
   if (!stripped.startsWith(prefix) || !stripped.endsWith(')')) {
     return null;

@@ -78,10 +78,9 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
       if (!_frozenSnackbarShown &&
           result.frozenDragStatus != DragFrozenStatus.noneFrozen) {
         _frozenSnackbarShown = true;
-        final message =
-            result.frozenDragStatus == DragFrozenStatus.allFrozen
-                ? 'All selected atoms are frozen \u2014 nothing moved'
-                : 'Some frozen atoms in selection were not moved';
+        final message = result.frozenDragStatus == DragFrozenStatus.allFrozen
+            ? 'All selected atoms are frozen \u2014 nothing moved'
+            : 'Some frozen atoms in selection were not moved';
         ScaffoldMessenger.of(_viewport.context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
@@ -1277,7 +1276,8 @@ class _DisambiguationRow extends StatelessWidget {
             child: InkWell(
               onTap: onActivate,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Text(
                   candidate.nodeName,
                   style: const TextStyle(color: Colors.white, fontSize: 13),

@@ -98,8 +98,7 @@ class _SchemaEditorState extends State<SchemaEditor> {
   /// Commit the current `_fields` list to the registry. On failure, show a
   /// snackbar with the error and revert by re-fetching.
   void _commit() {
-    final error =
-        widget.model.updateRecordTypeDef(widget.defName, _fields);
+    final error = widget.model.updateRecordTypeDef(widget.defName, _fields);
     if (error != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -255,7 +254,9 @@ class _SchemaEditorState extends State<SchemaEditor> {
         children: [
           const Icon(Icons.data_object, size: 18),
           const SizedBox(width: 8),
-          Text(widget.defName, style: AppTextStyles.regular.copyWith(fontWeight: FontWeight.w600)),
+          Text(widget.defName,
+              style:
+                  AppTextStyles.regular.copyWith(fontWeight: FontWeight.w600)),
           const Spacer(),
           Text(
             '${_fields.length} field${_fields.length == 1 ? '' : 's'}',
@@ -292,8 +293,7 @@ class _SchemaEditorState extends State<SchemaEditor> {
     final focusNode = _nameFocusNodes[index]!;
     final nameValid = _isFieldNameValid(index);
     final tooltipMessage = !nameValid
-        ? (validateUserName(f.name) ??
-            'Field "${f.name}" is already declared')
+        ? (validateUserName(f.name) ?? 'Field "${f.name}" is already declared')
         : '';
     return Padding(
       key: ValueKey('field_row_$index:${f.name}'),

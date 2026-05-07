@@ -216,7 +216,8 @@ class _AddNodePopupState extends State<AddNodePopup> {
                                     }
                                   },
                                   child: ListTile(
-                                    key: AddNodePopupKeys.nodeItem(nodeView.name),
+                                    key: AddNodePopupKeys.nodeItem(
+                                        nodeView.name),
                                     contentPadding: EdgeInsets.symmetric(
                                         vertical: 0, horizontal: 8),
                                     dense: true,

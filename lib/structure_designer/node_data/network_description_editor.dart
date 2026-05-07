@@ -72,8 +72,7 @@ class _NetworkDescriptionEditorState extends State<NetworkDescriptionEditor> {
     try {
       setActiveNetworkDescription(description: newDescription);
       // Pass null for empty summary to clear it
-      setActiveNetworkSummary(
-          summary: newSummary.isEmpty ? null : newSummary);
+      setActiveNetworkSummary(summary: newSummary.isEmpty ? null : newSummary);
       setState(() {
         _hasChanges = false;
         _errorMessage = null;

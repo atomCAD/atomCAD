@@ -21,7 +21,7 @@ class BlockingAwareSingleChildScrollView extends StatefulWidget {
 
   /// How the scroll view should respond to user input.
   ///
-  /// This will be overridden with [NeverScrollableScrollPhysics] when 
+  /// This will be overridden with [NeverScrollableScrollPhysics] when
   /// scroll blocking is active.
   final ScrollPhysics? physics;
 
@@ -58,10 +58,10 @@ class _BlockingAwareSingleChildScrollViewState
   Widget build(BuildContext context) {
     // Watch the MouseWheelBlockService to rebuild when isBlocked changes
     final blockService = context.watch<MouseWheelBlockService>();
-    
+
     // Use NeverScrollableScrollPhysics when blocked, otherwise use provided physics
-    final ScrollPhysics effectivePhysics = blockService.isBlocked 
-        ? const NeverScrollableScrollPhysics() 
+    final ScrollPhysics effectivePhysics = blockService.isBlocked
+        ? const NeverScrollableScrollPhysics()
         : widget.physics ?? const ClampingScrollPhysics();
 
     final scrollView = SingleChildScrollView(

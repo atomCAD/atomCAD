@@ -43,10 +43,11 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
 
   void _initializeFromData() {
     if (widget.data == null) return;
-    
+
     setState(() {
       // Find matching symmetry from available symmetries
-      if (widget.data!.rotationAxis != null && widget.data!.rotationalSymmetries.isNotEmpty) {
+      if (widget.data!.rotationAxis != null &&
+          widget.data!.rotationalSymmetries.isNotEmpty) {
         final currentAxis = widget.data!.rotationAxis!;
         _selectedSymmetry = widget.data!.rotationalSymmetries.firstWhere(
           (sym) => _vectorsAreClose(sym.axis, currentAxis),
@@ -59,28 +60,28 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
 
       // Set angle, defaulting to 0 if not in valid options for the selected symmetry
       final validAngles = _getValidAnglesForSymmetry(_selectedSymmetry);
-      _selectedAngle = validAngles.contains(widget.data!.rotationAngleDegrees) 
-          ? widget.data!.rotationAngleDegrees 
+      _selectedAngle = validAngles.contains(widget.data!.rotationAngleDegrees)
+          ? widget.data!.rotationAngleDegrees
           : 0.0;
     });
   }
 
   bool _vectorsAreClose(APIVec3 a, APIVec3 b, {double tolerance = 1e-6}) {
     return (a.x - b.x).abs() < tolerance &&
-           (a.y - b.y).abs() < tolerance &&
-           (a.z - b.z).abs() < tolerance;
+        (a.y - b.y).abs() < tolerance &&
+        (a.z - b.z).abs() < tolerance;
   }
 
   /// Calculate valid rotation angles for a given symmetry
   /// For an n-fold rotation, valid angles are: 0°, 360°/n, 2×360°/n, ..., (n-1)×360°/n
   List<double> _getValidAnglesForSymmetry(APIRotationalSymmetry? symmetry) {
     if (symmetry == null) return [0.0];
-    
+
     final nFold = symmetry.nFold;
     if (nFold <= 0) return [0.0]; // Safety check
-    
+
     final angleStep = 360.0 / nFold;
-    
+
     return List.generate(nFold, (i) => i * angleStep);
   }
 
@@ -94,8 +95,10 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
         rotationAxis: _selectedSymmetry?.axis,
         rotationAngleDegrees: _selectedAngle,
         transformOnlyFrame: widget.data!.transformOnlyFrame,
-        rotationalSymmetries: widget.data!.rotationalSymmetries, // This will be ignored by the setter
-        crystalSystem: widget.data!.crystalSystem, // Preserve existing crystal system
+        rotationalSymmetries: widget
+            .data!.rotationalSymmetries, // This will be ignored by the setter
+        crystalSystem:
+            widget.data!.crystalSystem, // Preserve existing crystal system
       ),
     );
   }
@@ -121,13 +124,13 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
             nodeTypeName: 'lattice_symop',
           ),
           const SizedBox(height: 16),
-          
+
           // Crystal system display
           CrystalSystemDisplay(
             crystalSystem: widget.data!.crystalSystem,
           ),
           const SizedBox(height: 16),
-          
+
           // Translation input
           IVec3Input(
             label: 'Translation',
@@ -147,7 +150,7 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
             },
           ),
           const SizedBox(height: 16),
-          
+
           // Rotational symmetry dropdown
           Text('Rotational Symmetry Axis',
               style: Theme.of(context).textTheme.titleSmall),
@@ -182,14 +185,15 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
             },
           ),
           const SizedBox(height: 16),
-          
+
           // Rotation angle dropdown
           Text('Rotation Angle (degrees)',
               style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           DropdownButtonFormField<double>(
-            value: _getValidAnglesForSymmetry(_selectedSymmetry).contains(_selectedAngle) 
-                ? _selectedAngle 
+            value: _getValidAnglesForSymmetry(_selectedSymmetry)
+                    .contains(_selectedAngle)
+                ? _selectedAngle
                 : _getValidAnglesForSymmetry(_selectedSymmetry).first,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
@@ -211,11 +215,12 @@ class _LatticeSymopEditorState extends State<LatticeSymopEditor> {
             },
           ),
           const SizedBox(height: 16),
-          
+
           // Transform only frame checkbox
           CheckboxListTile(
             title: const Text('Transform Only Frame'),
-            subtitle: const Text('If checked, only the reference frame is transformed, the geometry remains in place'),
+            subtitle: const Text(
+                'If checked, only the reference frame is transformed, the geometry remains in place'),
             value: widget.data!.transformOnlyFrame,
             onChanged: (bool? value) {
               if (value != null) {

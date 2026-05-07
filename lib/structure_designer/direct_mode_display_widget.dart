@@ -27,8 +27,7 @@ class ModeToggleButton extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: isSelected ? AppColors.primaryAccent : Colors.transparent,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
         child: InkWell(
           borderRadius: BorderRadius.circular(4.0),
           onTap: enabled ? onPressed : null,
@@ -85,9 +84,8 @@ class ModeToggleButtons extends StatelessWidget {
                 icon: Icons.account_tree,
                 tooltip: 'Node Network Mode',
                 isSelected: !isDirectMode,
-                onPressed: isDirectMode
-                    ? () => model.switchToNodeNetworkMode()
-                    : null,
+                onPressed:
+                    isDirectMode ? () => model.switchToNodeNetworkMode() : null,
               ),
             ],
           );

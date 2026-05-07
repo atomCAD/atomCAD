@@ -31,7 +31,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
     super.initState();
     // _position will be initialized in build based on screen size
   }
-  
+
   @override
   Widget build(BuildContext context) {
     // Calculate the initial position to center the dialog
@@ -40,7 +40,7 @@ class _DraggableDialogState extends State<DraggableDialog> {
       (screenSize.width - widget.width) / 2,
       (screenSize.height - (widget.height ?? 300)) / 2,
     );
-    
+
     // Initialize position if not already set
     _position ??= initialPosition;
 
@@ -49,17 +49,17 @@ class _DraggableDialogState extends State<DraggableDialog> {
         // Invisible full-screen barrier for detecting clicks outside
         Positioned.fill(
           child: GestureDetector(
-            onTap: widget.dismissible ? () => Navigator.of(context).pop() : null,
+            onTap:
+                widget.dismissible ? () => Navigator.of(context).pop() : null,
             behavior: HitTestBehavior.opaque,
             child: Container(color: Colors.transparent),
           ),
         ),
-        
+
         // The draggable dialog
         AnimatedPositioned(
-          duration: _isDragging 
-              ? Duration.zero 
-              : const Duration(milliseconds: 100),
+          duration:
+              _isDragging ? Duration.zero : const Duration(milliseconds: 100),
           left: _position!.dx,
           top: _position!.dy,
           child: GestureDetector(

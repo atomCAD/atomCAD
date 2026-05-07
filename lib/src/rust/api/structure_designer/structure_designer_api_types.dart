@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -721,6 +721,40 @@ enum APIEditAtomTool {
   addAtom,
   addBond,
   ;
+}
+
+/// Result of an explicit Execute pass triggered from the UI on a single node.
+///
+/// Side-effect nodes (`export_xyz`, `print` with `execute_only`, future effect
+/// nodes) only fire under `context.execute == true`; the Execute action sets
+/// that flag for the duration of one evaluation pass on the targeted node.
+/// Phase 4 will extend this struct with a `logs: Vec<APIPrintLogEntry>` field
+/// carrying the prints emitted by *this* pass; the field is intentionally
+/// absent in Phase 3 so the print plumbing lands in one piece. See
+/// `doc/design_node_execution.md` (Phase 3 / Phase 4).
+class APIExecuteResult {
+  /// True when the Execute pass completed without surfacing a top-level
+  /// `NetworkResult::Error` from the targeted node.
+  final bool ok;
+
+  /// Populated with the error message when `ok == false`; None otherwise.
+  final String? error;
+
+  const APIExecuteResult({
+    required this.ok,
+    this.error,
+  });
+
+  @override
+  int get hashCode => ok.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIExecuteResult &&
+          runtimeType == other.runtimeType &&
+          ok == other.ok &&
+          error == other.error;
 }
 
 class APIExportXYZData {

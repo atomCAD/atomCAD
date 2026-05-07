@@ -73,7 +73,7 @@ class AppSpacing {
   static const buttonHeight = 28.0;
   static const smallButtonWidth = 66.0;
   static const labelWidth = 48.0;
-  
+
   // Input field constraints
   static const inputFieldMinWidth = 50.0;
   static const inputFieldMaxWidth = 100.0;
@@ -127,13 +127,15 @@ SelectModifier getSelectModifierFromKeyboard() {
 
 /// Safely updates a TextEditingController's text while preserving selection
 /// if possible, or positioning cursor at the end if the selection is invalid.
-void updateTextControllerWithSelection(TextEditingController controller, String newText) {
+void updateTextControllerWithSelection(
+    TextEditingController controller, String newText) {
   final selection = controller.selection;
   controller.text = newText;
-  
+
   // Ensure selection offset doesn't exceed new text length
   final maxOffset = controller.text.length;
-  if (selection.baseOffset <= maxOffset && selection.extentOffset <= maxOffset) {
+  if (selection.baseOffset <= maxOffset &&
+      selection.extentOffset <= maxOffset) {
     controller.selection = selection;
   } else {
     controller.selection = TextSelection.fromPosition(

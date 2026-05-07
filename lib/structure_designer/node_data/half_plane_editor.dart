@@ -5,7 +5,6 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/inputs/ivec2_input.dart';
 
-
 /// Editor widget for half_plane nodes
 class HalfPlaneEditor extends StatefulWidget {
   final BigInt nodeId;

@@ -19,8 +19,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 bool nameIsTaken(String name) {
   final networks = sd_api.getNodeNetworkNames() ?? const <String>[];
   if (networks.contains(name)) return true;
-  final allRecordDefs =
-      sd_api.getAllRecordTypeDefNames() ?? const <String>[];
+  final allRecordDefs = sd_api.getAllRecordTypeDefNames() ?? const <String>[];
   if (allRecordDefs.contains(name)) return true;
   return false;
 }

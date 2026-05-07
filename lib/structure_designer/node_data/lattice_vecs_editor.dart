@@ -46,11 +46,10 @@ class LatticeVecsEditorState extends State<LatticeVecsEditor> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const NodeEditorHeader(
-            title: 'Lattice Vectors Properties',
-            nodeTypeName: 'lattice_vecs',
-          ),
+              title: 'Lattice Vectors Properties',
+              nodeTypeName: 'lattice_vecs',
+            ),
             const SizedBox(height: 8),
-
 
             // Cell Lengths Section
             Text('Cell Lengths (Å)',

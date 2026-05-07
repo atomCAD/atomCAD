@@ -112,9 +112,11 @@ class _MotifEditorState extends State<MotifEditor> {
                 // Label
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(4.0),
                       topRight: Radius.circular(4.0),
@@ -123,8 +125,8 @@ class _MotifEditorState extends State<MotifEditor> {
                   child: Text(
                     'Motif Definition',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                 ),
                 // Code field
@@ -138,7 +140,12 @@ class _MotifEditorState extends State<MotifEditor> {
                         focusNode: _definitionFocusNode,
                         textStyle: const TextStyle(
                           fontFamily: 'Courier New',
-                          fontFamilyFallback: ['Consolas', 'Monaco', 'Menlo', 'monospace'],
+                          fontFamilyFallback: [
+                            'Consolas',
+                            'Monaco',
+                            'Menlo',
+                            'monospace'
+                          ],
                           fontSize: 14.0,
                         ),
                         expands: false,

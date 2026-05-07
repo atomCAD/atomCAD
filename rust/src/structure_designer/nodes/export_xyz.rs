@@ -3,7 +3,7 @@ use crate::crystolecule::io::xyz_saver::save_xyz;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
+use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
@@ -42,6 +42,11 @@ impl NodeData for ExportXYZData {
         _decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
     ) -> EvalOutput {
+        // No `if context.execute { … }` guard — the central skip rule in
+        // `evaluate_all_outputs` / `evaluate` guarantees this `eval` is only
+        // invoked when `context.execute == true`. See
+        // `doc/design_node_execution.md` (Phase 2 — Central skip rule for
+        // Unit-returning nodes).
         let atomic_structure = match network_evaluator.evaluate_required(
             network_stack,
             node_id,
@@ -91,20 +96,14 @@ impl NodeData for ExportXYZData {
             }
         };
 
-        // Save the atomic structure to XYZ file
-        match save_xyz(&atomic_structure, &resolved_path) {
-            Ok(()) => {
-                // Return the atomic structure (pass-through)
-                EvalOutput::single(NetworkResult::Molecule(MoleculeData {
-                    atoms: atomic_structure,
-                    geo_tree_root: None,
-                }))
-            }
-            Err(err) => EvalOutput::single(NetworkResult::Error(format!(
+        if let Err(err) = save_xyz(&atomic_structure, &resolved_path) {
+            return EvalOutput::single(NetworkResult::Error(format!(
                 "Failed to save XYZ file '{}': {}",
                 file_name, err
-            ))),
+            )));
         }
+
+        EvalOutput::single(NetworkResult::Unit)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -115,8 +114,15 @@ impl NodeData for ExportXYZData {
         &self,
         connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
-        if connected_input_pins.contains("file_name") || self.file_name.is_empty() {
+        if connected_input_pins.contains("file_name") {
+            // The wired input drives the path — no static subtitle.
             None
+        } else if self.file_name.is_empty() {
+            // Recover the eager UX feedback that previously came from the
+            // runtime check inside `eval` (which now defers to Execute under
+            // the central skip rule). See `doc/design_node_execution.md`
+            // ("Tradeoff: lost runtime input feedback on Unit nodes").
+            Some("(no file name)".to_string())
         } else {
             Some(self.file_name.clone())
         }
@@ -213,7 +219,7 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::String,
             },
         ],
-        output_pins: OutputPinDefinition::single(DataType::HasAtoms),
+        output_pins: OutputPinDefinition::single_fixed(DataType::Unit),
         public: true,
         node_data_creator: || Box::new(ExportXYZData::new()),
         node_data_saver: export_xyz_data_saver,

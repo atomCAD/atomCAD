@@ -96,9 +96,8 @@ class NodeNetworksActionBar extends StatelessWidget {
           // Delete active item button
           Expanded(
             child: Tooltip(
-              message: hasActiveDef
-                  ? 'Delete record type def'
-                  : 'Delete network',
+              message:
+                  hasActiveDef ? 'Delete record type def' : 'Delete network',
               child: IconButton(
                 key: const Key('delete_network_button'),
                 onPressed: hasActiveItem
@@ -131,8 +130,8 @@ class NodeNetworksActionBar extends StatelessWidget {
       if (confirmed == true) {
         final errorMessage = model.deleteRecordTypeDef(defName);
         if (errorMessage != null && context.mounted) {
-          await _showDeleteErrorDialog(context, errorMessage,
-              'Cannot Delete Record Type Def');
+          await _showDeleteErrorDialog(
+              context, errorMessage, 'Cannot Delete Record Type Def');
         }
       }
       return;
@@ -143,8 +142,8 @@ class NodeNetworksActionBar extends StatelessWidget {
     if (confirmed == true) {
       final errorMessage = model.deleteNodeNetwork(networkName);
       if (errorMessage != null && context.mounted) {
-        await _showDeleteErrorDialog(context, errorMessage,
-            'Cannot Delete Network');
+        await _showDeleteErrorDialog(
+            context, errorMessage, 'Cannot Delete Network');
       }
     }
   }
@@ -226,8 +225,8 @@ class NodeNetworksActionBar extends StatelessWidget {
   }
 
   // Show confirmation dialog for user-type deletion
-  Future<bool?> _showDeleteConfirmationDialog(BuildContext context, String name,
-      String titleLabel, String kindLabel) {
+  Future<bool?> _showDeleteConfirmationDialog(
+      BuildContext context, String name, String titleLabel, String kindLabel) {
     return showDraggableAlertDialog<bool>(
       context: context,
       key: const Key('delete_confirm_dialog'),

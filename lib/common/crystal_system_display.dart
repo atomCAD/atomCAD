@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// A reusable widget for displaying crystal system information
-/// 
+///
 /// This widget provides a consistent visual representation of crystal system
 /// information across different editors in the application.
 class CrystalSystemDisplay extends StatelessWidget {
