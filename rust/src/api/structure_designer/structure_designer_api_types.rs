@@ -859,6 +859,9 @@ pub struct APIFilterData {
 
 pub struct APICollectData {
     pub element_type: APIDataType,
+    /// Optional cap on the number of elements collected. `None` collects the
+    /// full stream; overridden by the wired `limit` input pin when connected.
+    pub limit: Option<i32>,
 }
 
 pub struct APIFoldData {

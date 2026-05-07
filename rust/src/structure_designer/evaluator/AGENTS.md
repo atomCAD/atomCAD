@@ -98,7 +98,7 @@ Iterator(Walker), Function(Closure), Unit, Error(String)
 
 `NetworkResult` is cloned on multiple hot paths — `EvalOutput::get` (`node_data.rs:50`, `.cloned()`), `EvalOutput::get_display`, `evaluate_required` (`network_evaluator.rs:751`), `parameter::eval` (`parameter.rs:63`). Every one of these clones any enclosed `Walker`. **`Walker::clone()` must therefore produce a walker whose `next()` advances independently of the original** — anyone adding a new walker variant must preserve this. The current design satisfies it naturally: per-walker `idx`/`emitted`/`current` state is owned, `FromArray::items` is `Arc`-shared so cloning is O(1) regardless of array length, and `FunctionEvaluator` derives `Clone` with no shared mutable state.
 
-The evaluator does **not** memoize pin results, so for an `Iter[T]` pin with fan-out N the producing node's `eval()` runs N times in one pass — each call constructs a fresh walker. Two consumers of the same iterator pin therefore drain *different* walkers; one cannot starve the other. The display path is one such consumer (it auto-collects up to `ITER_DISPLAY_CAP = 256` elements over a clone of the displayed pin's walker).
+The evaluator does **not** memoize pin results, so for an `Iter[T]` pin with fan-out N the producing node's `eval()` runs N times in one pass — each call constructs a fresh walker. Two consumers of the same iterator pin therefore drain *different* walkers; one cannot starve the other. (A node whose displayed pin output is `Iter[T]` produces no viewport output — materialization is the consumer's job. To preview a stream, wire it into `collect` and display that. See `doc/design_iter_display_via_collect.md`.)
 
 ## FunctionEvaluator
 

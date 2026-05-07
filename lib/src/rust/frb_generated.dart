@@ -11104,10 +11104,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICollectData dco_decode_api_collect_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APICollectData(
       elementType: dco_decode_api_data_type(arr[0]),
+      limit: dco_decode_opt_box_autoadd_i_32(arr[1]),
     );
   }
 
@@ -14222,7 +14223,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICollectData sse_decode_api_collect_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_elementType = sse_decode_api_data_type(deserializer);
-    return APICollectData(elementType: var_elementType);
+    var var_limit = sse_decode_opt_box_autoadd_i_32(deserializer);
+    return APICollectData(elementType: var_elementType, limit: var_limit);
   }
 
   @protected
@@ -17846,6 +17848,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APICollectData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_data_type(self.elementType, serializer);
+    sse_encode_opt_box_autoadd_i_32(self.limit, serializer);
   }
 
   @protected

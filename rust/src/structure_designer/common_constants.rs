@@ -21,11 +21,3 @@ pub const LINE_RADIUS: f64 = 0.18;
 pub const LINE_RADIUS_HIT_TEST_FACTOR: f64 = 1.3;
 
 pub const CONNECTED_PIN_SYMBOL: &str = "⎆";
-
-/// Maximum number of elements drained from a displayed `Iter[T]` pin during
-/// scene generation. The auto-collect for display is bounded so an unbounded
-/// or very large iterator can still be displayed without OOM. If a walker
-/// yields more than this many elements, the subtitle reads "showing first
-/// 256"; otherwise it reads "(N elements)". Tunable per
-/// `doc/design_iterators.md` "Display".
-pub const ITER_DISPLAY_CAP: usize = 256;

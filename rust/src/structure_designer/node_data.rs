@@ -41,6 +41,13 @@ pub struct EvalOutput {
     /// instead of extracting from the primary result. Used by motif_edit where
     /// the wire value is Motif (which doesn't carry a UnitCellStruct).
     pub unit_cell_override: Option<UnitCellStruct>,
+    /// Optional per-pin subtitle overrides for the node-graph UI. When
+    /// present for a pin index, the evaluator stamps this string into
+    /// `context.node_output_strings` instead of the default
+    /// `result.to_display_string()`. Used by `collect` to surface a count
+    /// like "(5 elements)" / "(stopped at limit 100)" in place of the raw
+    /// array dump.
+    pub pin_subtitles: HashMap<usize, String>,
 }
 
 impl EvalOutput {
@@ -50,6 +57,7 @@ impl EvalOutput {
             results: vec![result],
             display_results: HashMap::new(),
             unit_cell_override: None,
+            pin_subtitles: HashMap::new(),
         }
     }
 
@@ -59,6 +67,7 @@ impl EvalOutput {
             results,
             display_results: HashMap::new(),
             unit_cell_override: None,
+            pin_subtitles: HashMap::new(),
         }
     }
 

@@ -417,19 +417,25 @@ class APICircleData {
 class APICollectData {
   final APIDataType elementType;
 
+  /// Optional cap on the number of elements collected. `None` collects the
+  /// full stream; overridden by the wired `limit` input pin when connected.
+  final int? limit;
+
   const APICollectData({
     required this.elementType,
+    this.limit,
   });
 
   @override
-  int get hashCode => elementType.hashCode;
+  int get hashCode => elementType.hashCode ^ limit.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APICollectData &&
           runtimeType == other.runtimeType &&
-          elementType == other.elementType;
+          elementType == other.elementType &&
+          limit == other.limit;
 }
 
 class APICommentData {

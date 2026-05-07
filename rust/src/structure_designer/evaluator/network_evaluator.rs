@@ -9,7 +9,6 @@ use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::csg_cache::CsgConversionCache;
-use crate::structure_designer::common_constants::ITER_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
@@ -236,7 +235,7 @@ impl NetworkEvaluator {
             .is_node_selected(node_id);
 
         // Evaluate all outputs once (avoids redundant evaluation for multi-output nodes)
-        let mut eval_output = {
+        let eval_output = {
             //let _timer = Timer::new("evaluate inside generate_scene");
             self.evaluate_all_outputs(
                 &network_stack,
@@ -247,31 +246,10 @@ impl NetworkEvaluator {
             )
         };
 
-        // Drain any `Iter[T]` results in `eval_output` for display purposes,
-        // capping at ITER_DISPLAY_CAP elements per pin. The iterator value
-        // is replaced in-place with a `NetworkResult::Array(items)` so the
-        // existing display dispatch code (which already knows how to render
-        // arrays of geometry / atoms / etc.) handles it without further
-        // changes. Per-pin subtitle hints are stamped into
-        // `context.node_output_strings` so the `Iter[T]` decoration in the
-        // node-graph UI shows the live element count or "(showing first
-        // N)" cap message. See `doc/design_iterators.md` ("Display").
-        let iter_subtitles = if let Some(nt) = registry.get_node_type_for_node(node) {
-            self.drain_iterators_for_display(&mut eval_output, nt, registry, context)
-        } else {
-            HashMap::new()
-        };
-        if !iter_subtitles.is_empty() {
-            let pin_strings = context.node_output_strings.entry(node_id).or_default();
-            while pin_strings.len() < eval_output.results.len() {
-                pin_strings.push(String::new());
-            }
-            for (pin_idx, subtitle) in iter_subtitles {
-                if let Some(slot) = pin_strings.get_mut(pin_idx) {
-                    *slot = subtitle;
-                }
-            }
-        }
+        // A node whose displayed pin output is `Iter[T]` produces no
+        // viewport output — materialization is the consumer's job. To
+        // preview elements of a stream, wire it into a `collect` node and
+        // display that. See `doc/design_iter_display_via_collect.md`.
 
         // Get the unit cell: prefer explicit override (e.g. motif_edit), else extract from primary
         let unit_cell = eval_output
@@ -654,146 +632,12 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
-        } else if let DataType::Iterator(inner_type) = data_type {
-            // `generate_scene` pre-drains displayed iterator pins into
-            // `NetworkResult::Array(items)` (capped at ITER_DISPLAY_CAP)
-            // so the array-display dispatch can be reused unchanged.
-            if let NetworkResult::Array(elements) = result {
-                self.convert_array_to_node_output(
-                    elements,
-                    inner_type,
-                    from_selected_node,
-                    network_stack,
-                    node_id,
-                    registry,
-                    context,
-                    geometry_visualization_preferences,
-                )
-            } else {
-                (NodeOutput::None, None)
-            }
         } else {
+            // `Iter[T]` pins render no viewport output — materialization is
+            // the consumer's job (`collect`). See
+            // `doc/design_iter_display_via_collect.md`.
             (NodeOutput::None, None)
         }
-    }
-
-    /// Drains every `NetworkResult::Iterator(_)` value in `eval_output`
-    /// (both `results` and `display_results`) into a capped array of up to
-    /// `ITER_DISPLAY_CAP` elements, returning per-pin subtitle strings.
-    ///
-    /// Replacing iterators with arrays before the rest of `generate_scene`
-    /// runs means downstream dispatch (`convert_result_to_node_output`'s
-    /// `Iter[T]` arm, plus `to_display_string` for the *unchanged* recorded
-    /// pin strings on non-displayed nodes) sees the same kind of value
-    /// regardless of the pin's declared type. The walker is dropped after
-    /// the drain — the original iterator is never observed by anything
-    /// beyond this method.
-    fn drain_iterators_for_display(
-        &self,
-        eval_output: &mut EvalOutput,
-        node_type: &crate::structure_designer::node_type::NodeType,
-        registry: &NodeTypeRegistry,
-        context: &mut NetworkEvaluationContext,
-    ) -> HashMap<usize, String> {
-        let mut subtitles: HashMap<usize, String> = HashMap::new();
-
-        for (pin_idx, result) in eval_output.results.iter_mut().enumerate() {
-            if let NetworkResult::Iterator(walker) = result {
-                let pin_data_type = node_type.get_output_pin_type(pin_idx as i32);
-                let label = pin_data_type.to_string();
-                let mut walker_local = std::mem::replace(
-                    walker,
-                    crate::structure_designer::evaluator::iterator_walker::Walker::from_array(
-                        Vec::new(),
-                    ),
-                );
-                let (items, subtitle) =
-                    self.drain_walker_for_display(&mut walker_local, &label, registry, context);
-                subtitles.insert(pin_idx, subtitle);
-                *result = NetworkResult::Array(items);
-            }
-        }
-
-        // Also drain any iterator-typed display overrides. Display overrides
-        // are rare for iterator pins, but if a node ever sets one we must
-        // handle it consistently — otherwise the override would surface as
-        // `NetworkResult::Iterator(_)` to `convert_result_to_node_output`'s
-        // Iter arm, which expects a pre-drained Array.
-        let override_keys: Vec<usize> = eval_output
-            .display_results
-            .iter()
-            .filter_map(|(k, v)| {
-                if matches!(v, NetworkResult::Iterator(_)) {
-                    Some(*k)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        for pin_idx in override_keys {
-            if let Some(NetworkResult::Iterator(walker)) =
-                eval_output.display_results.get_mut(&pin_idx)
-            {
-                let pin_data_type = node_type.get_output_pin_type(pin_idx as i32);
-                let label = pin_data_type.to_string();
-                let mut walker_local = std::mem::replace(
-                    walker,
-                    crate::structure_designer::evaluator::iterator_walker::Walker::from_array(
-                        Vec::new(),
-                    ),
-                );
-                let (items, subtitle) =
-                    self.drain_walker_for_display(&mut walker_local, &label, registry, context);
-                // Display-override subtitles win over wire subtitles for the
-                // same pin (the override is what the user actually sees).
-                subtitles.insert(pin_idx, subtitle);
-                eval_output
-                    .display_results
-                    .insert(pin_idx, NetworkResult::Array(items));
-            }
-        }
-
-        subtitles
-    }
-
-    /// Drains a single walker up to `ITER_DISPLAY_CAP`, also producing the
-    /// matching subtitle: `"<Iter[T]> (showing first N)"` when the cap was
-    /// reached, `"<Iter[T]> (N elements)"` when the walker exhausted before
-    /// the cap, or `"<Iter[T]> error: ..."` if the walker yielded an error
-    /// mid-stream.
-    ///
-    /// Public so cross-crate tests can exercise the cap-boundary subtitle
-    /// wording without going through `generate_scene`'s GPU/scene plumbing.
-    pub fn drain_walker_for_display(
-        &self,
-        walker: &mut crate::structure_designer::evaluator::iterator_walker::Walker,
-        type_label: &str,
-        registry: &NodeTypeRegistry,
-        context: &mut NetworkEvaluationContext,
-    ) -> (Vec<NetworkResult>, String) {
-        let mut items: Vec<NetworkResult> = Vec::new();
-        let mut error_msg: Option<String> = None;
-        loop {
-            if items.len() >= ITER_DISPLAY_CAP {
-                break;
-            }
-            match walker.next(self, registry, context) {
-                None => break,
-                Some(NetworkResult::Error(e)) => {
-                    error_msg = Some(e);
-                    break;
-                }
-                Some(item) => items.push(item),
-            }
-        }
-        let subtitle = if let Some(msg) = error_msg {
-            format!("{} error: {}", type_label, msg)
-        } else if items.len() >= ITER_DISPLAY_CAP {
-            format!("{} (showing first {})", type_label, ITER_DISPLAY_CAP)
-        } else {
-            format!("{} ({} elements)", type_label, items.len())
-        };
-        (items, subtitle)
     }
 
     /// Merges an array of results into a single displayable output.
@@ -1250,11 +1094,21 @@ impl NetworkEvaluator {
         if let NetworkResult::Error(error_message) = primary {
             context.node_errors.insert(node_id, error_message.clone());
         }
-        // Record per-pin display strings
+        // Record per-pin display strings. A node may publish a custom
+        // subtitle via `EvalOutput::pin_subtitles` (e.g. `collect` reports
+        // "(N elements)" instead of the raw array dump); falls back to the
+        // result's display string when no override is set.
         let pin_strings: Vec<String> = eval_output
             .results
             .iter()
-            .map(|r| r.to_display_string())
+            .enumerate()
+            .map(|(idx, r)| {
+                eval_output
+                    .pin_subtitles
+                    .get(&idx)
+                    .cloned()
+                    .unwrap_or_else(|| r.to_display_string())
+            })
             .collect();
         context.node_output_strings.insert(node_id, pin_strings);
 
@@ -1278,6 +1132,12 @@ impl NetworkEvaluator {
             .nodes
             .get(&node_id)
             .unwrap();
+
+        // Subtitle override published by `NodeData::eval` via
+        // `EvalOutput::pin_subtitles` for the requested pin. The outer
+        // single-pin clobber at the end of this method honors it instead
+        // of the result's `to_display_string()`.
+        let mut pin_subtitle_override: Option<String> = None;
 
         let result = if output_pin_index == (-1) {
             let node_type = registry.get_node_type_for_node(node);
@@ -1344,13 +1204,30 @@ impl NetworkEvaluator {
                         .eval(self, network_stack, node_id, registry, decorate, context);
                 // Record all pin strings now, since eval() already computed them all.
                 // This prevents partial overwrites when get_all_node_output_strings()
-                // aggregates across multiple generate_scene() contexts.
+                // aggregates across multiple generate_scene() contexts. Pins may
+                // publish a custom subtitle via `EvalOutput::pin_subtitles`.
                 let pin_strings: Vec<String> = eval_output
                     .results
                     .iter()
-                    .map(|r| r.to_display_string())
+                    .enumerate()
+                    .map(|(idx, r)| {
+                        eval_output
+                            .pin_subtitles
+                            .get(&idx)
+                            .cloned()
+                            .unwrap_or_else(|| r.to_display_string())
+                    })
                     .collect();
                 context.node_output_strings.insert(node_id, pin_strings);
+                // Capture subtitle for the requested pin so the outer clobber
+                // below preserves it (otherwise it would be replaced by the
+                // result's raw display string — e.g. an array dump).
+                let requested_pin_idx = if output_pin_index < 0 {
+                    0
+                } else {
+                    output_pin_index as usize
+                };
+                pin_subtitle_override = eval_output.pin_subtitles.get(&requested_pin_idx).cloned();
                 eval_output.get(output_pin_index)
             } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
                 // custom node — pass through the requested output pin index to the return node
@@ -1391,8 +1268,10 @@ impl NetworkEvaluator {
             context.node_errors.insert(node_id, error_message.clone());
         }
 
-        // Record per-pin display string (single-pin evaluation overwrites)
-        let display_string = result.to_display_string();
+        // Record per-pin display string (single-pin evaluation overwrites).
+        // A subtitle override published via `EvalOutput::pin_subtitles` (e.g.
+        // `collect`'s "(N elements)") wins over the raw result display.
+        let display_string = pin_subtitle_override.unwrap_or_else(|| result.to_display_string());
         let pin_index = if output_pin_index < 0 {
             0
         } else {

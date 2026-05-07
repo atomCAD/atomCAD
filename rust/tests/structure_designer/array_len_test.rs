@@ -166,6 +166,7 @@ fn test_array_len_int_three_elements() {
         collect_id,
         Box::new(CollectData {
             element_type: DataType::Int,
+            limit: None,
         }),
     );
 

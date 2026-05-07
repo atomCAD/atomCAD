@@ -367,7 +367,7 @@ The reverse direction `Iter[T] → Array[T]` is **not** an implicit conversion: 
 
 **Display**
 
-A node whose displayed pin output is `Iter[T]` auto-collects up to **256 elements** for visualization and tags the subtitle with `Iter[T] (showing first 256)` if the walker yielded more, or `Iter[T] (N elements)` if it exhausted before the cap. To inspect a longer slice, wire `collect` and display the resulting array.
+A node whose displayed pin output is `Iter[T]` produces **no** viewport output — materialization is the consumer's job, and the iterator is, by design, potentially unbounded or expensive to drain. To inspect elements of a stream, wire it into a `collect` node (with an optional limit) and display the `collect`. The `collect` node reports the live element count or "stopped at limit N" in its node-graph subtitle.
 
 ## range
 
@@ -467,21 +467,25 @@ To append multiple elements, chain `array_append` nodes (or wire an `array_conca
 
 ## collect
 
-Materializes a lazy iterator (`Iter[T]`) into an array (`Array[T]`) by exhausting the stream. This is the explicit escape hatch when a downstream array consumer really does want the whole vector. Iterators are produced by the stream-fusing nodes `range`, `map`, `filter`, and `product`; an `Array[T]` source wired into `collect.iter` is also accepted thanks to the implicit `[T] → Iter[T]` wire conversion (in which case `collect` is a no-op pass-through).
+Materializes a lazy iterator (`Iter[T]`) into an array (`Array[T]`) by exhausting the stream. This is the explicit escape hatch when a downstream array consumer really does want the whole vector, and — because `Iter[T]` pins are not displayable in their own right — also the place where you ask atomCAD to *show* you elements of a stream. Iterators are produced by the stream-fusing nodes `range`, `map`, `filter`, and `product`; an `Array[T]` source wired into `collect.iter` is also accepted thanks to the implicit `[T] → Iter[T]` wire conversion (in which case `collect` is a no-op pass-through).
 
 **Properties**
 
 - `Element type` — the element type T. Drives both the iterator-input pin (`Iter[T]`) and the array-output pin (`Array[T]`).
+- `Limit elements` (checkbox + spinbox, optional) — when checked, caps the number of elements collected. Default 100 on first check. When the cap is reached, `collect` stops pulling from the walker and the resulting array contains exactly that many elements. When unchecked, `collect` exhausts the stream.
 
 **Input pins**
 
 - `iter: Iter[ElementType]` — the iterator to drain. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion (eagerly wrapped) and a single `ElementType` value via the single-element broadcast rule.
+- `limit: Int` (optional) — when wired, **overrides** the stored `Limit elements` setting at evaluation time. Use this to drive the cap from a parameter or computed value (e.g. a `slider` upstream). When the pin is disconnected or evaluates to `None`, the stored value (if any) takes effect. Negative values produce an evaluation error.
 
 **Behavior**
 
-If `iter` is unconnected the output is `None` (propagates as a missing input). Otherwise `collect` pulls elements from the walker until it ends, accumulating them into a new array in iteration order. An iterator that yields an `Error` value mid-stream causes `collect` to abort and propagate that error; subsequent elements are not pulled.
+If `iter` is unconnected the output is `None` (propagates as a missing input). Otherwise `collect` pulls elements from the walker until it ends *or* the effective limit is reached, accumulating them into a new array in iteration order. An iterator that yields an `Error` value mid-stream causes `collect` to abort and propagate that error; subsequent elements are not pulled.
 
-There is no built-in size cap. If you wire a 10⁹-element iterator into `collect` you will run out of memory — that is the contract: `collect` is the explicit, expensive step that turns a fused stream back into a fully materialized array.
+The node's pin subtitle reports the materialization outcome — `(N elements)` when the walker exhausted, or `(stopped at limit N)` when the cap was reached with more elements still pending.
+
+Without a limit there is no built-in size cap. If you wire a 10⁹-element iterator into `collect` with no limit you will run out of memory — that is the contract: `collect` is the explicit, expensive step that turns a fused stream back into a fully materialized array.
 
 ## map
 
@@ -582,7 +586,7 @@ Side-effect counterpart of `map`: walks a stream of values and runs the supplied
 - **Display passes (no Execute):** zero work. The central skip rule prevents `eval` from running on any all-Unit-output node when `execute = false`, so neither `xs` nor `f` is touched. This is what makes a `product → foreach` pipeline cheap during normal editing.
 - **Execute passes:** drains `xs` left-to-right; for each element, runs the body and discards the result. **Fail-fast on errors:** if the body returns an error for any element, `foreach` halts immediately and surfaces that error as its output. This matches `fold` and `collect`'s mid-stream error semantics — silently producing a partial result set is the worst of all worlds for batch operations.
 
-`map` keeps its data semantics; the `map(... export_xyz ...)` pattern still works under Execute (the flag propagates through the higher-order-function machinery), but `foreach` is the recommended primitive for batch export because of the display-pass short-circuit. `map`'s iterator output makes it eligible for the display path's auto-collect cap, which would silently drain up to 256 elements during normal editing — exactly what `foreach` is designed to avoid.
+`map` keeps its data semantics; the `map(... export_xyz ...)` pattern still works under Execute (the flag propagates through the higher-order-function machinery), but `foreach` is the recommended primitive for batch export because of the display-pass short-circuit. A `map`-only pipeline produces an `Iter[Unit]` whose elements are only realized when the iterator is *consumed* — and you'd typically consume it by displaying a `collect` for inspection. `foreach` skips that ceremony: it consumes the stream itself and is the natural sink for "do something for every element."
 
 ## print
 

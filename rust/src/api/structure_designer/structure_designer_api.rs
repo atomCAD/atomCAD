@@ -3514,6 +3514,7 @@ pub fn get_collect_data(node_id: u64) -> Option<APICollectData> {
 
                 Some(APICollectData {
                     element_type: data_type_to_api_data_type(&collect_data.element_type),
+                    limit: collect_data.limit,
                 })
             },
             None,
@@ -4476,7 +4477,10 @@ pub fn set_collect_data(node_id: u64, data: APICollectData) {
                 Err(_) => DataType::None,
             };
 
-            let collect_data = Box::new(CollectData { element_type });
+            let collect_data = Box::new(CollectData {
+                element_type,
+                limit: data.limit,
+            });
 
             cad_instance
                 .structure_designer

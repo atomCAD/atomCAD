@@ -86,12 +86,14 @@ fn test_collect_registered_in_registry() {
     let nt = node_type.unwrap();
     assert_eq!(nt.name, "collect");
     assert!(nt.public);
-    assert_eq!(nt.parameters.len(), 1);
+    assert_eq!(nt.parameters.len(), 2);
     assert_eq!(nt.parameters[0].name, "iter");
     assert_eq!(
         nt.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::Int))
     );
+    assert_eq!(nt.parameters[1].name, "limit");
+    assert_eq!(nt.parameters[1].data_type, DataType::Int);
     assert_eq!(nt.output_pins.len(), 1);
     assert_eq!(*nt.output_type(), DataType::Array(Box::new(DataType::Int)));
 }
@@ -106,6 +108,7 @@ fn test_collect_custom_type_int() {
     let base = registry.get_node_type("collect").unwrap();
     let data = CollectData {
         element_type: DataType::Int,
+        limit: None,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -125,6 +128,7 @@ fn test_collect_custom_type_float() {
     let base = registry.get_node_type("collect").unwrap();
     let data = CollectData {
         element_type: DataType::Float,
+        limit: None,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -144,6 +148,7 @@ fn test_collect_custom_type_structure() {
     let base = registry.get_node_type("collect").unwrap();
     let data = CollectData {
         element_type: DataType::Structure,
+        limit: None,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -285,6 +290,7 @@ fn test_collect_unconnected_iter_yields_none() {
 fn test_collect_text_properties_roundtrip() {
     let original = CollectData {
         element_type: DataType::Structure,
+        limit: None,
     };
     let props = original.get_text_properties();
     assert_eq!(props.len(), 1);
@@ -300,6 +306,7 @@ fn test_collect_text_properties_roundtrip() {
 fn test_collect_text_properties_values() {
     let data = CollectData {
         element_type: DataType::Float,
+        limit: None,
     };
     let props = data.get_text_properties();
     assert_eq!(
@@ -319,6 +326,7 @@ fn test_collect_text_properties_values() {
 fn test_collect_data_serde_roundtrip() {
     let original = CollectData {
         element_type: DataType::Float,
+        limit: None,
     };
     let json = serde_json::to_value(&original).unwrap();
     assert_eq!(json["element_type"], "Float");
@@ -334,6 +342,7 @@ fn test_collect_data_serde_roundtrip() {
 fn test_collect_clone_box() {
     let data = CollectData {
         element_type: DataType::Vec3,
+        limit: None,
     };
     let cloned = data.clone_box();
     let props = cloned.get_text_properties();
@@ -451,6 +460,7 @@ fn test_collect_cnnd_roundtrip() {
         collect_id,
         Box::new(CollectData {
             element_type: DataType::Vec3,
+            limit: None,
         }),
     );
     designer.validate_active_network();
@@ -488,4 +498,285 @@ fn test_collect_cnnd_roundtrip() {
         DataType::Vec3,
         "element_type should survive .cnnd roundtrip"
     );
+}
+
+// ============================================================================
+// Limit field — stored, wired pin override, validation, subtitles
+// (doc/design_iter_display_via_collect.md)
+// ============================================================================
+
+fn add_range(designer: &mut StructureDesigner, x: f64, count: i32) -> u64 {
+    let id = designer.add_node("range", DVec2::new(x, 0.0));
+    set_node_data(
+        designer,
+        "test",
+        id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count,
+        }),
+    );
+    id
+}
+
+fn add_int_node(designer: &mut StructureDesigner, x: f64, value: i32) -> u64 {
+    let id = designer.add_node("int", DVec2::new(x, 0.0));
+    set_node_data(designer, "test", id, Box::new(IntData { value }));
+    id
+}
+
+fn add_collect_with_limit(designer: &mut StructureDesigner, x: f64, limit: Option<i32>) -> u64 {
+    let id = designer.add_node("collect", DVec2::new(x, 0.0));
+    set_node_data(
+        designer,
+        "test",
+        id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+            limit,
+        }),
+    );
+    id
+}
+
+fn evaluate_with_subtitle(
+    designer: &StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+) -> (NetworkResult, Option<String>) {
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(network_name).unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let network_stack = vec![NetworkStackElement {
+        node_network: network,
+        node_id: 0,
+    }];
+    let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
+    let subtitle = context
+        .node_output_strings
+        .get(&node_id)
+        .and_then(|v| v.first())
+        .cloned();
+    (result, subtitle)
+}
+
+fn extract_int_array(result: &NetworkResult) -> Vec<i32> {
+    match result {
+        NetworkResult::Array(items) => items
+            .iter()
+            .map(|r| match r {
+                NetworkResult::Int(v) => *v,
+                other => panic!("Expected Int, got {:?}", other.to_display_string()),
+            })
+            .collect(),
+        other => panic!("Expected Array, got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_collect_default_limit_is_none() {
+    let data = CollectData::default();
+    assert_eq!(data.limit, None);
+}
+
+#[test]
+fn test_collect_unbounded_exhausts_finite_stream() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 5);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, None);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![0, 1, 2, 3, 4]);
+    assert_eq!(subtitle.as_deref(), Some("(5 elements)"));
+}
+
+#[test]
+fn test_collect_stored_limit_caps_long_stream() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 100);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, Some(3));
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![0, 1, 2]);
+    assert_eq!(subtitle.as_deref(), Some("(stopped at limit 3)"));
+}
+
+#[test]
+fn test_collect_stored_limit_above_stream_size_exhausts() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 3);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, Some(100));
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![0, 1, 2]);
+    // Stream exhausts before the cap → element-count subtitle, not cap-hit.
+    assert_eq!(subtitle.as_deref(), Some("(3 elements)"));
+}
+
+#[test]
+fn test_collect_stored_limit_exactly_stream_size_reports_count() {
+    // Walker exhausts at exactly the cap. The peek check distinguishes this
+    // from a true cap-hit so the subtitle reads "(N elements)" rather than
+    // "(stopped at limit N)".
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 5);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, Some(5));
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![0, 1, 2, 3, 4]);
+    assert_eq!(subtitle.as_deref(), Some("(5 elements)"));
+}
+
+#[test]
+fn test_collect_stored_limit_zero_yields_empty_array() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, Some(0));
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), Vec::<i32>::new());
+    // Limit 0 with a non-empty stream is cap-hit (the stream had more).
+    assert_eq!(subtitle.as_deref(), Some("(stopped at limit 0)"));
+}
+
+#[test]
+fn test_collect_stored_limit_negative_returns_error() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, Some(-1));
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, _) = evaluate_with_subtitle(&designer, "test", collect_id);
+    match result {
+        NetworkResult::Error(msg) => {
+            assert!(
+                msg.contains("limit must be non-negative"),
+                "expected non-negative error, got: {}",
+                msg
+            );
+        }
+        other => panic!("Expected Error, got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_collect_wired_limit_overrides_stored() {
+    // Stored limit says 100, wired limit pin says 2 → 2 wins.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let limit_id = add_int_node(&mut designer, 100.0, 2);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, Some(100));
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(limit_id, 0, collect_id, 1);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![0, 1]);
+    assert_eq!(subtitle.as_deref(), Some("(stopped at limit 2)"));
+}
+
+#[test]
+fn test_collect_wired_limit_with_stored_none() {
+    // No stored limit, but wired pin caps at 4.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let limit_id = add_int_node(&mut designer, 100.0, 4);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, None);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(limit_id, 0, collect_id, 1);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![0, 1, 2, 3]);
+    assert_eq!(subtitle.as_deref(), Some("(stopped at limit 4)"));
+}
+
+#[test]
+fn test_collect_wired_limit_negative_returns_error() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let limit_id = add_int_node(&mut designer, 100.0, -5);
+    let collect_id = add_collect_with_limit(&mut designer, 200.0, None);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(limit_id, 0, collect_id, 1);
+
+    let (result, _) = evaluate_with_subtitle(&designer, "test", collect_id);
+    match result {
+        NetworkResult::Error(msg) => {
+            assert!(
+                msg.contains("limit must be non-negative"),
+                "expected non-negative error, got: {}",
+                msg
+            );
+        }
+        other => panic!("Expected Error, got {:?}", other.to_display_string()),
+    }
+}
+
+// ============================================================================
+// Text properties roundtrip for limit
+// ============================================================================
+
+#[test]
+fn test_collect_text_properties_omits_none_limit() {
+    let data = CollectData {
+        element_type: DataType::Float,
+        limit: None,
+    };
+    let props = data.get_text_properties();
+    assert_eq!(props.len(), 1);
+    assert_eq!(props[0].0, "element_type");
+}
+
+#[test]
+fn test_collect_text_properties_emits_some_limit() {
+    let data = CollectData {
+        element_type: DataType::Float,
+        limit: Some(50),
+    };
+    let props = data.get_text_properties();
+    assert_eq!(props.len(), 2);
+    let map = props_to_hashmap(props);
+    assert_eq!(map.get("limit"), Some(&TextValue::Int(50)));
+}
+
+#[test]
+fn test_collect_text_properties_roundtrip_with_limit() {
+    let original = CollectData {
+        element_type: DataType::Int,
+        limit: Some(7),
+    };
+    let props = original.get_text_properties();
+    let mut restored = CollectData::default();
+    restored
+        .set_text_properties(&props_to_hashmap(props))
+        .unwrap();
+    assert_eq!(restored.element_type, DataType::Int);
+    assert_eq!(restored.limit, Some(7));
+}
+
+#[test]
+fn test_collect_serde_roundtrip_with_limit() {
+    let original = CollectData {
+        element_type: DataType::Float,
+        limit: Some(42),
+    };
+    let json = serde_json::to_value(&original).unwrap();
+    assert_eq!(json["limit"], 42);
+    let restored: CollectData = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.limit, Some(42));
 }
