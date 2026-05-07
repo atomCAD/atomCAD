@@ -123,6 +123,21 @@ class StructureDesignerModel extends ChangeNotifier {
   bool isDirty = false;
   String? filePath;
 
+  /// Accumulated `print` node entries. Polled from the Rust per-CAD-instance
+  /// buffer via `takePrintLog()` after each `refreshFromKernel`. Drives the
+  /// bottom Console panel. Newest entries are appended at the end.
+  /// See `doc/design_node_execution.md` (Phase 4 — Console panel).
+  final List<APIPrintLogEntry> printLog = [];
+
+  /// Number of print-log entries that have arrived since the Console panel
+  /// was last opened. Drives the toolbar toggle's "new entries" dot. The
+  /// Console panel resets this to 0 when it becomes visible.
+  int unreadPrintLogCount = 0;
+
+  /// Whether the Console panel is currently visible (docked at bottom). The
+  /// toolbar toggle / `Ctrl+`` ` keyboard shortcut flips this.
+  bool consolePanelVisible = false;
+
   StructureDesignerModel();
 
   void init() {
@@ -1266,6 +1281,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setPrintData(BigInt nodeId, APIPrintData data) {
+    structure_designer_api.setPrintData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setFloatData(BigInt nodeId, APIFloatData data) {
     structure_designer_api.setFloatData(nodeId: nodeId, data: data);
     refreshFromKernel();
@@ -1592,6 +1612,39 @@ class StructureDesignerModel extends ChangeNotifier {
     filePath = structure_designer_api.getDesignFilePath();
     directEditingMode = structure_designer_api.getDirectEditingMode();
 
+    // Drain any `print` node entries pushed during this refresh's eval pass
+    // into the Console panel buffer. Drain-on-read keeps the Rust-side
+    // `print_log` from growing indefinitely as long as the panel is
+    // occasionally polled — which it is, after every refresh. If the panel
+    // is closed, the entries still accumulate here for when the user opens
+    // it. See `doc/design_node_execution.md` (Phase 4 — FFI).
+    final newEntries = structure_designer_api.takePrintLog();
+    if (newEntries.isNotEmpty) {
+      printLog.addAll(newEntries);
+      if (!consolePanelVisible) {
+        unreadPrintLogCount += newEntries.length;
+      }
+    }
+
+    notifyListeners();
+  }
+
+  /// Clear the Console panel log (Rust-side buffer + Flutter-side mirror).
+  void clearPrintLog() {
+    structure_designer_api.clearPrintLog();
+    printLog.clear();
+    unreadPrintLogCount = 0;
+    notifyListeners();
+  }
+
+  /// Toggle the Console panel's docked-bottom visibility. Resetting the
+  /// "new entries" counter when the panel becomes visible keeps the toolbar
+  /// dot in sync.
+  void toggleConsolePanel() {
+    consolePanelVisible = !consolePanelVisible;
+    if (consolePanelVisible) {
+      unreadPrintLogCount = 0;
+    }
     notifyListeners();
   }
 

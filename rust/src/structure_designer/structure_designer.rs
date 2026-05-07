@@ -1,6 +1,6 @@
 use super::camera_settings::CameraSettings;
 use super::evaluator::network_evaluator::{
-    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement, PrintLogEntry,
 };
 use super::evaluator::network_result::NetworkResult;
 use super::navigation_history::NavigationHistory;
@@ -99,6 +99,12 @@ pub struct StructureDesigner {
     // If no match, CLI write access is allowed by default.
     // Setting a rule prunes all descendant rules to keep the map minimal.
     pub cli_access_rules: HashMap<String, bool>,
+    // Per-CAD-instance print log buffer. Accumulates entries pushed by the
+    // `print` node across both display passes (when `execute_only == false`)
+    // and explicit Execute passes. Drained by Flutter via `take_print_log` and
+    // displayed in the Console panel. See `doc/design_node_execution.md`
+    // (Phase 4 — Console panel).
+    pub print_log: Vec<PrintLogEntry>,
 }
 
 impl Default for StructureDesigner {
@@ -137,6 +143,7 @@ impl StructureDesigner {
             pending_comment_edit: None,
             direct_editing_mode: true,
             cli_access_rules: HashMap::new(),
+            print_log: Vec::new(),
         }
     }
 }
@@ -182,13 +189,25 @@ impl StructureDesigner {
             &mut context,
         );
         // Drain regardless of how `f` returned — prints accumulated up to a
-        // mid-pass error are still worth showing to the user. Phase 4 will
-        // append `entries` to `self.print_log`; for now the field doesn't
-        // exist yet so the buffer is taken and dropped. The wiring lands now
-        // (Phase 2) so Phase 4 only needs to flip an extend from a no-op to
-        // the real append.
-        let _entries = std::mem::take(&mut context.print_buffer);
+        // mid-pass error are still worth showing to the user.
+        let entries = std::mem::take(&mut context.print_buffer);
+        self.print_log.extend(entries);
         result
+    }
+
+    /// Drain and return the accumulated print log entries. Called from FFI
+    /// (`take_print_log`) at a sensible cadence by the Flutter Console panel.
+    /// Drain-on-read prevents the buffer from growing indefinitely so long as
+    /// the panel is occasionally opened. See `doc/design_node_execution.md`
+    /// (Phase 4 — FFI).
+    pub fn take_print_log(&mut self) -> Vec<PrintLogEntry> {
+        std::mem::take(&mut self.print_log)
+    }
+
+    /// Clear the accumulated print log without returning entries (Console
+    /// panel "Clear" button).
+    pub fn clear_print_log(&mut self) {
+        self.print_log.clear();
     }
 
     /// Returns the atomic structure from the interactive pin of the selected node, if any.
@@ -4484,6 +4503,13 @@ impl StructureDesigner {
         }
 
         let network_name_owned = network_name.to_string();
+        // Slice off entries appended by *this* pass only — any earlier
+        // display-pass prints already in `print_log` are left alone for the
+        // Console panel's normal `take_print_log` polling cadence to pick up.
+        // Without this slicing the panel would re-receive prior entries via
+        // `APIExecuteResult.logs` and double-display them. See
+        // `doc/design_node_execution.md` (Centralized drain).
+        let pass_start = self.print_log.len();
         // Run the pass with `execute = true`. The central skip rule in the
         // evaluator only invokes `eval` on a Unit-returning node when this
         // flag is set; that is what lets `export_xyz` / `foreach` /
@@ -4509,7 +4535,14 @@ impl StructureDesigner {
             _ => (true, None),
         };
 
-        Ok(APIExecuteResult { ok, error })
+        let logs: Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIPrintLogEntry,
+        > = self.print_log[pass_start..]
+            .iter()
+            .map(Into::into)
+            .collect();
+
+        Ok(APIExecuteResult { ok, error, logs })
     }
 
     /// Find a node ID by its display name in the active network.

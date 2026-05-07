@@ -264,3 +264,6 @@ mod execute_flag_test;
 
 #[path = "structure_designer/execute_node_test.rs"]
 mod execute_node_test;
+
+#[path = "structure_designer/print_node_test.rs"]
+mod print_node_test;

@@ -560,6 +560,50 @@ If any input is unconnected, the node produces an error (`xs input is missing` /
 
 `fold` is the universal aggregator: sum, product, min, max, "all true", "any true", and chained CSG (e.g. unioning a list of blueprints) are all special cases.
 
+## foreach
+
+Side-effect counterpart of `map`: walks a stream of values and runs the supplied function on every element for its side effect, discarding each return value. The output type is `Unit`, so `foreach` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — on a normal display pass the central skip rule short-circuits the node entirely without pulling a single element from `xs`, even when the upstream iterator would have been a million elements long. The motivating use case is **batch export**: a `product` node fans variants into a stream, and `foreach(variant → export_xyz(...))` writes one file per variant when the user invokes Execute.
+
+**Property**
+
+- `Input type` — the element type T of the input stream.
+
+**Input pins**
+
+- `xs: Iter[InputType]` — the stream to walk. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
+- `f: InputType -> Unit` — the per-element function. Because the universal `T → Unit` widening applies at the function's output position, the body sub-network can end in *any* node — `export_xyz` (the natural fit), `print` (returns `String`, widened to `Unit`), or even a pure data computation whose value is silently discarded.
+
+**Output (single pin)**
+
+- `Unit`. Not displayable; the only point of wiring `foreach` is its side effect under Execute.
+
+**Behavior**
+
+- **Display passes (no Execute):** zero work. The central skip rule prevents `eval` from running on any all-Unit-output node when `execute = false`, so neither `xs` nor `f` is touched. This is what makes a `product → foreach` pipeline cheap during normal editing.
+- **Execute passes:** drains `xs` left-to-right; for each element, runs the body and discards the result. **Fail-fast on errors:** if the body returns an error for any element, `foreach` halts immediately and surfaces that error as its output. This matches `fold` and `collect`'s mid-stream error semantics — silently producing a partial result set is the worst of all worlds for batch operations.
+
+`map` keeps its data semantics; the `map(... export_xyz ...)` pattern still works under Execute (the flag propagates through the higher-order-function machinery), but `foreach` is the recommended primitive for batch export because of the display-pass short-circuit. `map`'s iterator output makes it eligible for the display path's auto-collect cap, which would silently drain up to 256 elements during normal editing — exactly what `foreach` is designed to avoid.
+
+## print
+
+A **debug node** for surfacing intermediate values into the [Console panel](../ui.md#console-panel) without breaking the wire. Passes its `text` input through unchanged on the output, and as a side effect appends a timestamped entry to a per-CAD-instance log buffer that the Console panel renders. Output type is `String` (not `Unit`), so the central skip rule does **not** apply: by default `print` fires on every evaluation that reaches it, including normal display passes — which is exactly what you want when you're trying to figure out what's flowing through a wire.
+
+**Property**
+
+- `execute_only: Bool` (default `false`) — when `true`, the buffer push fires only under an Execute pass; display passes still pass `text` through but do not append. Useful when the print is part of a batch-export pipeline and you only want one entry per element per Execute, not one per upstream edit.
+
+**Input pin**
+
+- `text: String` — the value to log. Wire any sub-network ending in a `String` (an `expr` template literal is a common pattern) into this pin; combine with record `record_destructure` to print specific fields of a record stream.
+
+**Output (single pin)**
+
+- `String` — the same value as `text`, unchanged. Insert `print` mid-chain without affecting downstream behavior.
+
+The Console panel shows entries chronologically with a `[HH:MM:SS]` timestamp, the source `network / node-label`, and a ▶ marker on entries from Execute passes (so you can tell display-pass and Execute-pass prints apart). See the [Console panel](../ui.md#console-panel) section for toggling visibility, the autoscroll toggle, and the Clear button.
+
+> **Tip.** `print` inside a `foreach` body fires once per element (lazy iteration), and the entries arrive in the same order the body was invoked. Combine with `execute_only = true` to keep the Console quiet during edits and only see the per-element trace when you actually run the batch.
+
 ## Record types
 
 A **record type** bundles a fixed set of named, heterogeneously-typed fields into a single value that travels along one wire. Records are the CAD equivalent of a struct: rather than fan a small payload out into N parallel pins (or N parallel arrays), you declare the shape once and the network passes records through unchanged.

@@ -27,6 +27,8 @@ use super::structure_designer_api_types::APIMotifParameterInfo;
 use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
+use super::structure_designer_api_types::APIPrintData;
+use super::structure_designer_api_types::APIPrintLogEntry;
 use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APISequenceData;
@@ -149,6 +151,7 @@ use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
+use crate::structure_designer::nodes::print::PrintData;
 use crate::structure_designer::nodes::product::ProductData;
 use crate::structure_designer::nodes::range::RangeData;
 use crate::structure_designer::nodes::record_construct::RecordConstructData;
@@ -1994,6 +1997,24 @@ pub fn get_bool_data(node_id: u64) -> Option<APIBoolData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_print_data(node_id: u64) -> Option<APIPrintData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let print_data = node_data.as_any_ref().downcast_ref::<PrintData>()?;
+                Some(APIPrintData {
+                    execute_only: print_data.execute_only,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_float_data(node_id: u64) -> Option<APIFloatData> {
     unsafe {
         with_cad_instance_or(
@@ -3653,6 +3674,21 @@ pub fn set_bool_data(node_id: u64, data: APIBoolData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, bool_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_print_data(node_id: u64, data: APIPrintData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let print_data = Box::new(PrintData {
+                execute_only: data.execute_only,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, print_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -5435,6 +5471,40 @@ pub fn execute_node(network_name: String, node_id: u64) -> Result<APIExecuteResu
             },
             Err("CAD instance not available".to_string()),
         )
+    }
+}
+
+/// Drain and return the accumulated print-log entries.
+///
+/// The Flutter Console panel calls this at a sensible cadence (after each
+/// evaluation triggered through the model layer, plus on Console-panel open).
+/// Drain-on-read prevents the buffer from growing indefinitely as long as the
+/// panel is occasionally opened. See `doc/design_node_execution.md`
+/// (Phase 4 — FFI).
+#[flutter_rust_bridge::frb(sync)]
+pub fn take_print_log() -> Vec<APIPrintLogEntry> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .take_print_log()
+                    .iter()
+                    .map(Into::into)
+                    .collect()
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// Clear all entries in the print-log buffer (Console panel "Clear" button).
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_print_log() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.clear_print_log();
+        });
     }
 }
 

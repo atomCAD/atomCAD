@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -728,10 +728,9 @@ enum APIEditAtomTool {
 /// Side-effect nodes (`export_xyz`, `print` with `execute_only`, future effect
 /// nodes) only fire under `context.execute == true`; the Execute action sets
 /// that flag for the duration of one evaluation pass on the targeted node.
-/// Phase 4 will extend this struct with a `logs: Vec<APIPrintLogEntry>` field
-/// carrying the prints emitted by *this* pass; the field is intentionally
-/// absent in Phase 3 so the print plumbing lands in one piece. See
-/// `doc/design_node_execution.md` (Phase 3 / Phase 4).
+/// `logs` carries the print entries produced by *this* pass only — earlier
+/// display-pass entries already in `print_log` are not duplicated here. See
+/// `doc/design_node_execution.md` (Phase 3 / Phase 4 — Centralized drain).
 class APIExecuteResult {
   /// True when the Execute pass completed without surfacing a top-level
   /// `NetworkResult::Error` from the targeted node.
@@ -740,13 +739,19 @@ class APIExecuteResult {
   /// Populated with the error message when `ok == false`; None otherwise.
   final String? error;
 
+  /// Print entries emitted by `print` nodes evaluated during this pass.
+  /// Sliced from `StructureDesigner.print_log` so the Console panel does
+  /// not double-display entries already pulled via `take_print_log`.
+  final List<APIPrintLogEntry> logs;
+
   const APIExecuteResult({
     required this.ok,
     this.error,
+    required this.logs,
   });
 
   @override
-  int get hashCode => ok.hashCode ^ error.hashCode;
+  int get hashCode => ok.hashCode ^ error.hashCode ^ logs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -754,7 +759,8 @@ class APIExecuteResult {
       other is APIExecuteResult &&
           runtimeType == other.runtimeType &&
           ok == other.ok &&
-          error == other.error;
+          error == other.error &&
+          logs == other.logs;
 }
 
 class APIExportXYZData {
@@ -1869,6 +1875,73 @@ class APIParameterElement {
           defaultAtomicNumber == other.defaultAtomicNumber &&
           reservedAtomicNumber == other.reservedAtomicNumber &&
           color == other.color;
+}
+
+/// Property payload for the `print` node. The single field gates the buffer
+/// push to Execute passes only — see `doc/design_node_execution.md` (Phase 4).
+class APIPrintData {
+  final bool executeOnly;
+
+  const APIPrintData({
+    required this.executeOnly,
+  });
+
+  @override
+  int get hashCode => executeOnly.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIPrintData &&
+          runtimeType == other.runtimeType &&
+          executeOnly == other.executeOnly;
+}
+
+/// One entry in the Console-panel print log, produced by the `print` node
+/// (and any future node that surfaces text through `context.print_buffer`).
+/// `timestamp_ms` is epoch milliseconds (FFI-friendly integer); the original
+/// `SystemTime` lives Rust-side in `PrintLogEntry`.
+class APIPrintLogEntry {
+  final PlatformInt64 timestampMs;
+  final String networkName;
+  final BigInt nodeId;
+  final String nodeLabel;
+  final String text;
+
+  /// True when the entry was produced under `context.execute == true`
+  /// (an explicit Execute pass), false for normal display passes. The
+  /// Console panel uses this to flag execute-pass entries with a marker.
+  final bool fromExecute;
+
+  const APIPrintLogEntry({
+    required this.timestampMs,
+    required this.networkName,
+    required this.nodeId,
+    required this.nodeLabel,
+    required this.text,
+    required this.fromExecute,
+  });
+
+  @override
+  int get hashCode =>
+      timestampMs.hashCode ^
+      networkName.hashCode ^
+      nodeId.hashCode ^
+      nodeLabel.hashCode ^
+      text.hashCode ^
+      fromExecute.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIPrintLogEntry &&
+          runtimeType == other.runtimeType &&
+          timestampMs == other.timestampMs &&
+          networkName == other.networkName &&
+          nodeId == other.nodeId &&
+          nodeLabel == other.nodeLabel &&
+          text == other.text &&
+          fromExecute == other.fromExecute;
 }
 
 class APIRangeData {

@@ -440,6 +440,9 @@ APIStringData? getStringData({required BigInt nodeId}) => RustLib.instance.api
 APIBoolData? getBoolData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetBoolData(nodeId: nodeId);
 
+APIPrintData? getPrintData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetPrintData(nodeId: nodeId);
+
 APIFloatData? getFloatData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetFloatData(nodeId: nodeId);
 
@@ -660,6 +663,11 @@ void setProductData(
 void setBoolData({required BigInt nodeId, required APIBoolData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetBoolData(
+            nodeId: nodeId, data: data);
+
+void setPrintData({required BigInt nodeId, required APIPrintData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetPrintData(
             nodeId: nodeId, data: data);
 
 void setFloatData({required BigInt nodeId, required APIFloatData data}) =>
@@ -1121,6 +1129,20 @@ APIExecuteResult executeNode(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiExecuteNode(
             networkName: networkName, nodeId: nodeId);
+
+/// Drain and return the accumulated print-log entries.
+///
+/// The Flutter Console panel calls this at a sensible cadence (after each
+/// evaluation triggered through the model layer, plus on Console-panel open).
+/// Drain-on-read prevents the buffer from growing indefinitely as long as the
+/// panel is occasionally opened. See `doc/design_node_execution.md`
+/// (Phase 4 — FFI).
+List<APIPrintLogEntry> takePrintLog() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiTakePrintLog();
+
+/// Clear all entries in the print-log buffer (Console panel "Clear" button).
+void clearPrintLog() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiClearPrintLog();
 
 /// Apply auto-layout to the active node network.
 ///

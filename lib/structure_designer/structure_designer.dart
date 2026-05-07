@@ -19,6 +19,7 @@ import 'direct_mode_display_widget.dart';
 import 'camera_control_widget.dart';
 import 'preferences_window.dart';
 import 'main_content_area.dart';
+import 'console_panel.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -158,6 +159,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                   ? 'Switch to Horizontal Layout'
                                   : 'Switch to Vertical Layout'),
                             ),
+                          MenuItemButton(
+                            key: const Key('toggle_console_item'),
+                            onPressed: () => graphModel.toggleConsolePanel(),
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.backquote,
+                                control: true),
+                            child: Text(model.consolePanelVisible
+                                ? 'Hide Console'
+                                : 'Show Console'),
+                          ),
                         ],
                       );
                     },
@@ -271,6 +282,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
                 },
               ),
             ),
+            // Bottom-docked Console panel (collapses to zero height when
+            // hidden). See `doc/design_node_execution.md` (Phase 4).
+            const ConsolePanel(),
           ],
         ),
       ),
@@ -494,6 +508,11 @@ class _StructureDesignerState extends State<StructureDesigner> {
         if (desc != null) {
           _showUndoRedoSnackBar(context, 'Undo: $desc');
         }
+        return KeyEventResult.handled;
+      }
+      // Ctrl+`: Toggle Console panel.
+      if (event.logicalKey == LogicalKeyboardKey.backquote) {
+        graphModel.toggleConsolePanel();
         return KeyEventResult.handled;
       }
     }

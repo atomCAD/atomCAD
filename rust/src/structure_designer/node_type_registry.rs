@@ -59,6 +59,7 @@ use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
 use super::nodes::polygon::get_node_type as polygon_get_node_type;
+use super::nodes::print::get_node_type as print_get_node_type;
 use super::nodes::product::get_node_type as product_get_node_type;
 use super::nodes::range::get_node_type as range_get_node_type;
 use super::nodes::record_construct::get_node_type as record_construct_get_node_type;
@@ -197,6 +198,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(filter_get_node_type());
         ret.add_node_type(fold_get_node_type());
         ret.add_node_type(foreach_get_node_type());
+        ret.add_node_type(print_get_node_type());
         ret.add_node_type(sequence_get_node_type());
         ret.add_node_type(string_get_node_type());
         ret.add_node_type(bool_get_node_type());

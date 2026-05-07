@@ -148,6 +148,40 @@ The selection must be a "single-output subset" — at most one wire may exit the
 **Click-to-activate from viewport**
 When multiple nodes have their output visible in the 3D viewport, you can click on a rendered output to activate the node that produced it. The first click activates the node and scrolls the node network panel to reveal it; subsequent clicks on the same node’s output perform the normal action (e.g., atom selection). If outputs from multiple nodes overlap at the click position, a disambiguation popup appears letting you choose which node to activate. The active node’s geometry is rendered with a distinct color to help distinguish it from other visible outputs.
 
+### Execute action (side-effect nodes)
+
+Some nodes exist to *do something* rather than to produce a value: `export_xyz` writes an XYZ file to disk; `foreach` runs a body once per element of an upstream stream; future effect nodes will follow the same pattern. These nodes return the [`Unit` data type](./node_networks.md#data-types) (a value that carries no information) so the node graph can wire them around without misrepresenting them as data sources.
+
+Effect nodes only fire when the user **explicitly invokes them**. To run an effect node, **right-click the node and choose Execute** from the context menu. This is the *only* way an effect node fires — display passes (the implicit re-evaluations triggered by editing parameters, moving nodes, panning the camera, etc.) skip over Unit-returning nodes entirely, even when the node is visible. That eliminates a whole class of footguns where editing an unrelated parameter would silently overwrite an exported file.
+
+The Execute action is **one-shot**: invoking it runs a single evaluation pass with the side-effect flag set, then resets. There is no "armed" state — to re-fire, right-click and choose Execute again. The targeted node is evaluated independently of display state: whether the node is visible or not, and whether anything downstream is displayed, the action evaluates the node and its transitive inputs fresh.
+
+While an Execute pass is running, a small modal **"Executing…"** dialog appears so you know the app is working and not frozen. (The Rust evaluator runs synchronously on the UI thread, so the dialog does not animate while the pass is in flight; it disappears as soon as the pass completes.) On success, a status snackbar confirms completion; on error, a snackbar surfaces the message and the targeted node lights up red in the graph.
+
+The most common pattern is a `product → foreach( variant → export_xyz(...) )` pipeline: edit the product axes freely (no files written), then right-click the `foreach` node and choose Execute to write one file per variant. See the [`foreach`](./nodes/math_programming.md#foreach) and [`export_xyz`](./nodes/atomic.md#export_xyz) reference entries for full pipeline examples.
+
+## Console panel
+
+The **Console panel** is a docked, collapsible bottom strip that displays entries pushed by the [`print` node](./nodes/math_programming.md#print) — a debug-observation surface for the node graph. Hidden by default; toggle with **Ctrl+`** (backtick — same as VS Code / Chrome dev tools), via the *View > Show/Hide Console* menu entry, or by clicking the close `×` icon on the panel header.
+
+When visible, the panel shows a chronological list of entries, newest at the bottom. Each row reads:
+
+```
+[HH:MM:SS]  [▶]  network_name / node_label    text
+```
+
+The `▶` marker appears only on entries produced by Execute passes, so you can tell at a glance which prints came from an explicit run versus a normal display refresh. Entries accumulate across passes; closing and reopening the panel does not lose them, but closing the application does (the log is in-memory only).
+
+Header controls:
+
+- **Autoscroll toggle** — when on (default), the view scrolls to the latest entry as new ones arrive; when off, the scrollbar stays where you parked it so a long log won't yank away while you are reading older entries.
+- **Clear** (trash icon) — empties the buffer.
+- **Close** (×) — collapses the panel; equivalent to *View > Hide Console* or **Ctrl+`**.
+
+A small dot on the *View > Show Console* menu item (and on the toolbar toggle, when the panel is closed) signals that new entries arrived since the panel was last open. Opening the panel clears the dot.
+
+See the [`print` node reference](./nodes/math_programming.md#print) for how to feed the Console panel from a node network.
+
 ## Node Properties Panel
 
 The properties of the active node can be edited here.
@@ -219,6 +253,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *Edit > Validate active network*: Validates the active node network and reports any errors. Available in Node Network Mode only.
 - *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network using the Sugiyama layout algorithm for a clean, readable layout.
 - *View > Switch to Horizontal Layout* / *View > Switch to Vertical Layout*: Changes the orientation of the node network editor panel.
+- *View > Show/Hide Console* (**Ctrl + backtick**): Toggles the [Console panel](#console-panel) docked at the bottom of the window.
 
 ## Preferences Dialog
 

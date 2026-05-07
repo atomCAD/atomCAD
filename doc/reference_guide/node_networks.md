@@ -44,6 +44,7 @@ Supported basic data types include:
 - `Molecule` — a free-floating atomic structure with **no** `Structure` association. Produced by importing an XYZ file or by stripping the structure off a `Crystal` (`exit_structure`). Can be moved arbitrarily.
 - `Motif`
 - `Record(Name)` — a user-defined record type bundling a fixed set of named, heterogeneously-typed fields into a single value. Defined from the **User Types** panel and consumed by the `record_construct`, `record_destructure`, and `product` nodes — see [Record types](./nodes/math_programming.md#record-types) for details. Records are structurally subtyped (compatibility is decided by field shape, not by name) with width subtyping (extra fields ride through unchanged).
+- `Unit` — the type with exactly one value, used as the return type of *effect nodes* (`export_xyz`, `foreach`, …) — i.e. nodes that exist for their side effect rather than to produce a value. A wire of type `Unit` is never displayable (the eye icon is hidden) and any value can be implicitly *discarded* into `Unit` (the `T → Unit` widening), which is why a sub-network ending in `print` (whose output is `String`) can still be wired into `foreach`'s `Unit`-returning function pin. The reverse — `Unit → T` — is **not** allowed: a unit value carries no information. See the [Execute action](./ui.md#execute-action-side-effect-nodes) for how unit-returning nodes are gated to fire only on demand.
 
 ### The three phases
 

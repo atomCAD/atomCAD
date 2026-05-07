@@ -23,6 +23,7 @@ import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/print_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/collect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
@@ -525,6 +526,13 @@ class NodeDataWidget extends StatelessWidget {
         return BoolEditor(
           nodeId: selectedNode.id,
           data: boolData,
+          model: model,
+        );
+      case 'print':
+        final printData = getPrintData(nodeId: selectedNode.id);
+        return PrintEditor(
+          nodeId: selectedNode.id,
+          data: printData,
           model: model,
         );
       case 'float':

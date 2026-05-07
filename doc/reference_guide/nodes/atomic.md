@@ -12,13 +12,20 @@ It converts file paths to relative paths whenever possible (if the file is in th
 
 ## export_xyz
 
-Exports atomic structure on its `molecule` input into an XYZ file.
+Saves the atomic structure on its `molecule` input as an XYZ file. This is an **effect node**: its output type is `Unit`, and the file write only happens when the node is invoked through the right-click **Execute** action (or transitively from a `foreach` upstream of it). Display passes — including normal scene refreshes triggered by editing — never write a file. See [Execute action (side-effect nodes)](../ui.md#execute-action-side-effect-nodes).
 
 ![](../../atomCAD_images/export_xyz.png)
 
-The XYZ file will be exported when the node is evaluated. You can re-export by making the node invisible and visible again.
+**Input pins**
 
-This node will be most useful once we will support node network evaluation from the command line so that you will be able to create automated workflows ending in XYZ files. Just to export something manually you can use the *File > Export visible* menu item.
+- `molecule: HasAtoms` — the `Crystal` or `Molecule` to write.
+- `file_name: String` — the file path. May be wired in (typical when batch-exporting) or set as a stored property. Relative paths are resolved against the design's directory; absolute paths are stored relative when the file lives under the design tree, so projects remain portable when copied.
+
+**Output (single pin)**
+
+- `Unit`. The pin is not displayable in the 3D viewport; its only purpose is to be wired into a `foreach` body (or to be the target of an explicit Execute) so the side effect fires when intended.
+
+> **Note on the signature change.** `export_xyz` previously passed the molecule through unchanged on its output pin and wrote the file as a side effect of any evaluation that reached it (which made editing upstream parameters silently overwrite files). It now returns `Unit` and writes only on Execute. If you want both the export side effect *and* the molecule downstream, wire the molecule directly into the downstream consumer and treat `export_xyz` as a sibling sink.
 
 ## import_cif
 

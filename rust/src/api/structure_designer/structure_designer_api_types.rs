@@ -3,8 +3,10 @@ use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
+use crate::structure_designer::evaluator::network_evaluator::PrintLogEntry;
 use flutter_rust_bridge::frb;
 use std::collections::HashMap;
+use std::time::UNIX_EPOCH;
 
 #[derive(Clone)]
 pub enum APIEditAtomTool {
@@ -181,6 +183,12 @@ pub struct APIRecordTypeDef {
 
 pub struct APIBoolData {
     pub value: bool,
+}
+
+/// Property payload for the `print` node. The single field gates the buffer
+/// push to Execute passes only — see `doc/design_node_execution.md` (Phase 4).
+pub struct APIPrintData {
+    pub execute_only: bool,
 }
 
 pub struct APIFloatData {
@@ -925,10 +933,9 @@ pub struct BatchCliConfig {
 /// Side-effect nodes (`export_xyz`, `print` with `execute_only`, future effect
 /// nodes) only fire under `context.execute == true`; the Execute action sets
 /// that flag for the duration of one evaluation pass on the targeted node.
-/// Phase 4 will extend this struct with a `logs: Vec<APIPrintLogEntry>` field
-/// carrying the prints emitted by *this* pass; the field is intentionally
-/// absent in Phase 3 so the print plumbing lands in one piece. See
-/// `doc/design_node_execution.md` (Phase 3 / Phase 4).
+/// `logs` carries the print entries produced by *this* pass only — earlier
+/// display-pass entries already in `print_log` are not duplicated here. See
+/// `doc/design_node_execution.md` (Phase 3 / Phase 4 — Centralized drain).
 #[derive(Debug, Clone)]
 pub struct APIExecuteResult {
     /// True when the Execute pass completed without surfacing a top-level
@@ -936,6 +943,48 @@ pub struct APIExecuteResult {
     pub ok: bool,
     /// Populated with the error message when `ok == false`; None otherwise.
     pub error: Option<String>,
+    /// Print entries emitted by `print` nodes evaluated during this pass.
+    /// Sliced from `StructureDesigner.print_log` so the Console panel does
+    /// not double-display entries already pulled via `take_print_log`.
+    pub logs: Vec<APIPrintLogEntry>,
+}
+
+/// One entry in the Console-panel print log, produced by the `print` node
+/// (and any future node that surfaces text through `context.print_buffer`).
+/// `timestamp_ms` is epoch milliseconds (FFI-friendly integer); the original
+/// `SystemTime` lives Rust-side in `PrintLogEntry`.
+#[derive(Debug, Clone)]
+pub struct APIPrintLogEntry {
+    pub timestamp_ms: i64,
+    pub network_name: String,
+    pub node_id: u64,
+    pub node_label: String,
+    pub text: String,
+    /// True when the entry was produced under `context.execute == true`
+    /// (an explicit Execute pass), false for normal display passes. The
+    /// Console panel uses this to flag execute-pass entries with a marker.
+    pub from_execute: bool,
+}
+
+impl From<&PrintLogEntry> for APIPrintLogEntry {
+    fn from(entry: &PrintLogEntry) -> Self {
+        let timestamp_ms = entry
+            .timestamp
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            // Pre-epoch timestamps shouldn't occur (SystemTime::now() during
+            // an eval pass), but if the clock is genuinely before 1970 we
+            // surface a negative offset rather than panicking.
+            .unwrap_or_else(|err| -(err.duration().as_millis() as i64));
+        Self {
+            timestamp_ms,
+            network_name: entry.network_name.clone(),
+            node_id: entry.node_id,
+            node_label: entry.node_label.clone(),
+            text: entry.text.clone(),
+            from_execute: entry.from_execute,
+        }
+    }
 }
 
 /// Result of evaluating a single node via CLI

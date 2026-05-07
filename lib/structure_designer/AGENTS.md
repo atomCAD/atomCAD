@@ -132,6 +132,30 @@ Drag coalescing in `node_network/node_widget.dart`:
 
 Model methods: `StructureDesignerModel.beginMoveNodes()` / `endMoveNodes()`.
 
+## Execute action & Console panel
+
+Right-click a node → **Execute** triggers a one-shot evaluation pass on that node with the side-effect flag set, gating effect nodes (`export_xyz`, `foreach`, `print` with `execute_only`) to actually fire. The Flutter side runs the FFI synchronously — `frb(sync)` — because `CAD_INSTANCE` has no internal synchronization and the persistent per-frame `provide_texture` callback would race against a worker-thread Rust call (see `doc/design_node_execution.md` "Why not async (worker thread) FFI"). To give the user feedback while the call blocks, the model method follows this recipe:
+
+1. Show a non-dismissable `DraggableDialog` placard ("Executing…") with `barrierDismissible: false` and `dismissible: false`.
+2. `await SchedulerBinding.instance.endOfFrame` so the dialog frame actually paints before the sync FFI takes over the UI thread.
+3. Run `sd_api.executeNode(...)` inside `try { … } finally { Navigator.of(context).pop(); }` — the `finally` ensures the placard always dismisses, including on a thrown FFI error or a Rust panic surfaced through FRB.
+4. After dismissal, surface success/error via the existing snackbar/status-message mechanism.
+
+The placard intentionally uses a **static** icon (`Icons.hourglass_empty`), not a `CircularProgressIndicator` — the UI thread is blocked during the FFI call so any animated widget would freeze mid-frame and look broken.
+
+The **Console panel** (`console_panel.dart`) is a docked-bottom strip showing entries pushed by `print` nodes. State lives on `StructureDesignerModel`:
+- `printLog: List<APIPrintLogEntry>` accumulates entries.
+- `consolePanelVisible: bool` toggles visibility (zero height when off).
+- `unreadPrintLogCount: int` drives the new-entries dot.
+
+`refreshFromKernel()` polls `sd_api.takePrintLog()` after every refresh and appends to `printLog` (drain-on-read keeps the Rust-side buffer bounded as long as the user occasionally exercises the app). The panel is wired into `structure_designer.dart` as the last child of the main `Column` (so it docks below the main content area), with a *View > Show/Hide Console* menu entry and a global **Ctrl + backtick** keyboard shortcut in `_handleGlobalKeyEvent`.
+
+`APIExecuteResult.logs` carries only this Execute pass's prints (sliced Rust-side from `pass_start`); the model's polling drain handles general-case feeding, so the executeNode() call site does **not** also push `result.logs` into `printLog` — doing so would double-display the execute-pass entries.
+
+**PlatformInt64 gotcha.** `APIPrintLogEntry.timestampMs` is FRB's `PlatformInt64` — typedef'd to `int` on native and `BigInt` on web. Console panel code uses `int` directly which is correct for desktop (the project's primary target); needs a `.toInt()` adapter if web ever becomes a real target.
+
+Design doc: `doc/design_node_execution.md`.
+
 ## node_networks_list/ Subdirectory
 
 Unified user-types panel — lists both node networks and record type defs:
