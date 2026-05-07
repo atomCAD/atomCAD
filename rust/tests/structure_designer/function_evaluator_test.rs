@@ -113,7 +113,7 @@ fn test_map_with_expr_function_evaluates_without_panic() {
     let evaluator = NetworkEvaluator::new();
     let mut values: Vec<i32> = Vec::new();
     loop {
-        match walker.next(&evaluator, registry) {
+        match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
             None => break,
             Some(NetworkResult::Int(v)) => values.push(v),
             Some(NetworkResult::Error(e)) => panic!("map walker yielded Error: {}", e),

@@ -30,7 +30,7 @@ fn drain_iter(designer: &StructureDesigner, result: NetworkResult) -> Vec<Networ
             let evaluator = NetworkEvaluator::new();
             let mut out = Vec::new();
             loop {
-                match walker.next(&evaluator, registry) {
+                match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
                     None => break,
                     Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
                     Some(v) => out.push(v),

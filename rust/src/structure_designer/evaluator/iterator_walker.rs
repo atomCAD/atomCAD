@@ -16,7 +16,9 @@
 use std::sync::Arc;
 
 use crate::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
-use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use crate::structure_designer::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator,
+};
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 
@@ -148,15 +150,23 @@ impl Walker {
     /// - `Some(NetworkResult::Error(_))` — error mid-stream (fires at most
     ///   once for the lifetime of this walker; subsequent calls return `None`).
     /// - `Some(other)` — next element.
+    ///
+    /// `context` is the outer pass's evaluation context. Walker variants that
+    /// embed a `FunctionEvaluator` (`Map`, `Filter`) forward the same `&mut`
+    /// context to `FunctionEvaluator::evaluate`, which is what propagates
+    /// `context.execute` into per-element body evaluations and drains the
+    /// inner body's `print_buffer` back into the outer context. See
+    /// `doc/design_node_execution.md` (Phase 2 — Walker propagation).
     pub fn next(
         &mut self,
         evaluator: &NetworkEvaluator,
         registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
     ) -> Option<NetworkResult> {
         if self.fused {
             return None;
         }
-        let result = self.kind.next_inner(evaluator, registry);
+        let result = self.kind.next_inner(evaluator, registry, context);
         if let Some(NetworkResult::Error(_)) = &result {
             self.fused = true;
         }
@@ -194,6 +204,7 @@ impl WalkerKind {
         &mut self,
         evaluator: &NetworkEvaluator,
         registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
     ) -> Option<NetworkResult> {
         match self {
             WalkerKind::FromArray { items, idx } => {
@@ -220,21 +231,21 @@ impl WalkerKind {
                 *emitted += 1;
                 Some(NetworkResult::Int(value as i32))
             }
-            WalkerKind::Map { source, fe } => match source.next(evaluator, registry) {
+            WalkerKind::Map { source, fe } => match source.next(evaluator, registry, context) {
                 None => None,
                 Some(NetworkResult::Error(e)) => Some(NetworkResult::Error(e)),
                 Some(elem) => {
                     fe.set_argument_value(0, elem);
-                    Some(fe.evaluate(evaluator, registry))
+                    Some(fe.evaluate(evaluator, registry, context))
                 }
             },
             WalkerKind::Filter { source, fe } => loop {
-                match source.next(evaluator, registry) {
+                match source.next(evaluator, registry, context) {
                     None => return None,
                     Some(NetworkResult::Error(e)) => return Some(NetworkResult::Error(e)),
                     Some(elem) => {
                         fe.set_argument_value(0, elem.clone());
-                        let predicate = fe.evaluate(evaluator, registry);
+                        let predicate = fe.evaluate(evaluator, registry, context);
                         match predicate {
                             NetworkResult::Bool(true) => return Some(elem),
                             NetworkResult::Bool(false) => continue,
@@ -261,7 +272,7 @@ impl WalkerKind {
                 if !*primed {
                     current.clear();
                     for axis in axes.iter_mut() {
-                        match axis.next(evaluator, registry) {
+                        match axis.next(evaluator, registry, context) {
                             None => {
                                 *done = true;
                                 return None;
@@ -289,7 +300,7 @@ impl WalkerKind {
                         return None;
                     }
                     i -= 1;
-                    match axes[i].next(evaluator, registry) {
+                    match axes[i].next(evaluator, registry, context) {
                         Some(NetworkResult::Error(e)) => {
                             *done = true;
                             return Some(NetworkResult::Error(e));
@@ -300,7 +311,7 @@ impl WalkerKind {
                         }
                         None => {
                             axes[i].reset();
-                            match axes[i].next(evaluator, registry) {
+                            match axes[i].next(evaluator, registry, context) {
                                 None => {
                                     // An axis that produced at least one value
                                     // on first prime cannot now be empty after

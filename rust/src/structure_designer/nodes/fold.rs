@@ -107,7 +107,7 @@ impl NodeData for FoldData {
 
         let mut acc = init_val;
         loop {
-            match walker.next(network_evaluator, registry) {
+            match walker.next(network_evaluator, registry, context) {
                 None => break,
                 Some(NetworkResult::Error(e)) => {
                     return EvalOutput::single(NetworkResult::Error(e));
@@ -115,7 +115,7 @@ impl NodeData for FoldData {
                 Some(elem) => {
                     function_evaluator.set_argument_value(0, acc);
                     function_evaluator.set_argument_value(1, elem);
-                    let next = function_evaluator.evaluate(network_evaluator, registry);
+                    let next = function_evaluator.evaluate(network_evaluator, registry, context);
                     if let NetworkResult::Error(_) = next {
                         return EvalOutput::single(next);
                     }

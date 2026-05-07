@@ -109,7 +109,7 @@ fn extract_int_array(designer: &StructureDesigner, result: NetworkResult) -> Vec
             let evaluator = NetworkEvaluator::new();
             let mut out: Vec<i32> = Vec::new();
             loop {
-                match walker.next(&evaluator, registry) {
+                match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
                     None => break,
                     Some(NetworkResult::Int(v)) => out.push(v),
                     Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
@@ -435,7 +435,7 @@ fn test_filter_ivec3_z_positive() {
     let evaluator = NetworkEvaluator::new();
     let mut vecs: Vec<IVec3> = Vec::new();
     loop {
-        match walker.next(&evaluator, registry) {
+        match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
             None => break,
             Some(NetworkResult::IVec3(v)) => vecs.push(v),
             Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
@@ -584,7 +584,7 @@ fn test_filter_predicate_error_propagates() {
     let evaluator = NetworkEvaluator::new();
     let mut saw_error = false;
     loop {
-        match walker.next(&evaluator, registry) {
+        match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
             None => break,
             Some(NetworkResult::Error(_)) => {
                 saw_error = true;

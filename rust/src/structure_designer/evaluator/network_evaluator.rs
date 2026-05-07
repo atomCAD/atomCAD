@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
+use std::time::SystemTime;
 
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
@@ -68,6 +69,24 @@ pub struct NodeInvocationId {
     node_id_stack: Vec<u64>,
 }
 
+/// One entry in the per-pass print log. Produced by the `print` node (Phase 4)
+/// and by any future node that wants to surface text to the in-app Console
+/// panel. The field shape lands now (Phase 2) so the eval layer can carry the
+/// buffer through `FunctionEvaluator` / `Walker` propagation without later
+/// re-touching every signature. See `doc/design_node_execution.md` (Console
+/// panel section).
+#[derive(Debug, Clone)]
+pub struct PrintLogEntry {
+    pub timestamp: SystemTime,
+    pub network_name: String,
+    pub node_id: u64,
+    pub node_label: String,
+    pub text: String,
+    /// True when the entry was produced under `context.execute == true`
+    /// (an explicit Execute pass), false for normal display passes.
+    pub from_execute: bool,
+}
+
 pub struct NetworkEvaluationContext {
     pub node_errors: HashMap<u64, String>,
     pub node_output_strings: HashMap<u64, Vec<String>>,
@@ -75,6 +94,25 @@ pub struct NetworkEvaluationContext {
     pub top_level_parameters: HashMap<String, NetworkResult>,
     /// Whether to use spatial grid cutoff for vdW interactions during minimization.
     pub use_vdw_cutoff: bool,
+    /// When `true`, side-effect nodes (`export_xyz`, `print` with
+    /// `execute_only`, future effect nodes) actually perform their effect
+    /// during this evaluation pass. Set to `true` only when the user
+    /// triggers an explicit Execute action; `false` for all normal display
+    /// / scene-generation evaluations. The flag is consulted in exactly one
+    /// place in the evaluator — the central skip rule in
+    /// `evaluate_all_outputs` — plus the `print` node's per-node opt-in.
+    /// Propagated by `FunctionEvaluator::evaluate` and `Walker::next` into
+    /// inner-body evaluations so effects nested inside `map`/`filter`/`fold`/
+    /// `foreach` chains fire correctly under Execute. See
+    /// `doc/design_node_execution.md` (Phase 2).
+    pub execute: bool,
+    /// Per-pass print buffer. Each `print` node `eval` (Phase 4) appends to
+    /// this; the orchestrator drains it into `StructureDesigner.print_log`
+    /// at end-of-pass via the `with_eval_context` helper.
+    /// `FunctionEvaluator::evaluate` drains its inner context's buffer back
+    /// into the outer context's buffer at end-of-call so prints from inner
+    /// bodies aggregate into the single per-pass log.
+    pub print_buffer: Vec<PrintLogEntry>,
 }
 
 impl Default for NetworkEvaluationContext {
@@ -84,6 +122,16 @@ impl Default for NetworkEvaluationContext {
 }
 
 impl NetworkEvaluationContext {
+    /// Construct a fresh evaluation context. `execute` defaults to `false`
+    /// (normal display passes); set to `true` only for explicit Execute
+    /// actions.
+    ///
+    /// In production code paths inside `rust/src/structure_designer/`, the
+    /// only legitimate callers are `StructureDesigner::with_eval_context` and
+    /// `FunctionEvaluator::evaluate` (the inner-body context, which drains
+    /// its prints back into the outer context before being dropped). Every
+    /// other eval-driving site goes through `with_eval_context` so the
+    /// per-pass print drain happens in exactly one place. Tests are exempt.
     pub fn new() -> Self {
         Self {
             node_errors: HashMap::new(),
@@ -91,6 +139,8 @@ impl NetworkEvaluationContext {
             selected_node_eval_cache: None,
             top_level_parameters: HashMap::new(),
             use_vdw_cutoff: false,
+            execute: false,
+            print_buffer: Vec::new(),
         }
     }
 }
@@ -128,7 +178,13 @@ impl NetworkEvaluator {
     }
 
     // Creates the Scene that will be displayed for the given node by the Renderer, and is retained
-    // for interaction purposes
+    // for interaction purposes.
+    //
+    // The caller passes in a `NetworkEvaluationContext` so that per-pass state
+    // (`execute`, `print_buffer`, etc.) is set up at a higher level and drained
+    // consistently. In production code, `StructureDesigner::with_eval_context`
+    // is the only legitimate caller-side construction site — see
+    // `doc/design_node_execution.md` (Centralized drain).
     #[allow(clippy::too_many_arguments)]
     pub fn generate_scene(
         &mut self,
@@ -137,8 +193,7 @@ impl NetworkEvaluator {
         _display_type: NodeDisplayType, //TODO: use display_type
         registry: &NodeTypeRegistry,
         geometry_visualization_preferences: &GeometryVisualizationPreferences,
-        top_level_parameters: Option<HashMap<String, NetworkResult>>,
-        use_vdw_cutoff: bool,
+        context: &mut NetworkEvaluationContext,
     ) -> NodeSceneData {
         //let _timer = Timer::new("generate_scene");
 
@@ -152,11 +207,16 @@ impl NetworkEvaluator {
             return NodeSceneData::new(NodeOutput::None);
         }
 
-        let mut context = NetworkEvaluationContext::new();
-        context.use_vdw_cutoff = use_vdw_cutoff;
-        if let Some(params) = top_level_parameters {
-            context.top_level_parameters = params;
-        }
+        // Reset per-call scratch fields — `generate_scene` is invoked once per
+        // displayed node within a single shared `context`, but each
+        // `NodeSceneData` should reflect only its own evaluation's errors,
+        // output strings, and selected-node eval cache. Per-pass state that
+        // *should* aggregate across calls (`print_buffer`, `execute`,
+        // `use_vdw_cutoff`, `top_level_parameters`) is intentionally not
+        // touched.
+        context.node_errors.clear();
+        context.node_output_strings.clear();
+        context.selected_node_eval_cache = None;
 
         // We assign the root node network zero node id. It is not used in the evaluation.
         let network_stack = vec![NetworkStackElement {
@@ -183,7 +243,7 @@ impl NetworkEvaluator {
                 node_id,
                 registry,
                 from_selected_node,
-                &mut context,
+                context,
             )
         };
 
@@ -197,7 +257,7 @@ impl NetworkEvaluator {
         // node-graph UI shows the live element count or "(showing first
         // N)" cap message. See `doc/design_iterators.md` ("Display").
         let iter_subtitles = if let Some(nt) = registry.get_node_type_for_node(node) {
-            self.drain_iterators_for_display(&mut eval_output, nt, registry)
+            self.drain_iterators_for_display(&mut eval_output, nt, registry, context)
         } else {
             HashMap::new()
         };
@@ -256,7 +316,7 @@ impl NetworkEvaluator {
             &network_stack,
             node_id,
             registry,
-            &mut context,
+            context,
             geometry_visualization_preferences,
         );
 
@@ -306,7 +366,7 @@ impl NetworkEvaluator {
                 &network_stack,
                 node_id,
                 registry,
-                &mut context,
+                context,
                 geometry_visualization_preferences,
             );
             pin_outputs.push(DisplayedPinOutput {
@@ -328,7 +388,8 @@ impl NetworkEvaluator {
         // (motif_edit sets unit_cell_override; other nodes don't)
         let show_unit_cell_wireframe = eval_output.unit_cell_override.is_some();
 
-        // Build NodeSceneData
+        // Build NodeSceneData. We `.take()` the eval cache so the next
+        // `generate_scene` call sharing this context does not inherit it.
         NodeSceneData {
             output,
             geo_tree,
@@ -338,7 +399,7 @@ impl NetworkEvaluator {
             node_output_strings: context.node_output_strings.clone(),
             unit_cell,
             show_unit_cell_wireframe,
-            selected_node_eval_cache: context.selected_node_eval_cache,
+            selected_node_eval_cache: context.selected_node_eval_cache.take(),
         }
     }
 
@@ -632,6 +693,7 @@ impl NetworkEvaluator {
         eval_output: &mut EvalOutput,
         node_type: &crate::structure_designer::node_type::NodeType,
         registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
     ) -> HashMap<usize, String> {
         let mut subtitles: HashMap<usize, String> = HashMap::new();
 
@@ -646,7 +708,7 @@ impl NetworkEvaluator {
                     ),
                 );
                 let (items, subtitle) =
-                    self.drain_walker_for_display(&mut walker_local, &label, registry);
+                    self.drain_walker_for_display(&mut walker_local, &label, registry, context);
                 subtitles.insert(pin_idx, subtitle);
                 *result = NetworkResult::Array(items);
             }
@@ -681,7 +743,7 @@ impl NetworkEvaluator {
                     ),
                 );
                 let (items, subtitle) =
-                    self.drain_walker_for_display(&mut walker_local, &label, registry);
+                    self.drain_walker_for_display(&mut walker_local, &label, registry, context);
                 // Display-override subtitles win over wire subtitles for the
                 // same pin (the override is what the user actually sees).
                 subtitles.insert(pin_idx, subtitle);
@@ -707,6 +769,7 @@ impl NetworkEvaluator {
         walker: &mut crate::structure_designer::evaluator::iterator_walker::Walker,
         type_label: &str,
         registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
     ) -> (Vec<NetworkResult>, String) {
         let mut items: Vec<NetworkResult> = Vec::new();
         let mut error_msg: Option<String> = None;
@@ -714,7 +777,7 @@ impl NetworkEvaluator {
             if items.len() >= ITER_DISPLAY_CAP {
                 break;
             }
-            match walker.next(self, registry) {
+            match walker.next(self, registry, context) {
                 None => break,
                 Some(NetworkResult::Error(e)) => {
                     error_msg = Some(e);
@@ -1070,6 +1133,40 @@ impl NetworkEvaluator {
     ) -> EvalOutput {
         let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
+        // Central skip rule for `Unit`-returning nodes: when the pass is *not*
+        // an explicit Execute and every resolved output pin of this node is
+        // `DataType::Unit`, skip `NodeData::eval` entirely and synthesise an
+        // `EvalOutput` of all `NetworkResult::Unit` values directly. This is
+        // what gates side-effect nodes (`export_xyz`, `foreach`, future
+        // effect nodes) on display passes — `eval` only runs when the user
+        // actually invokes Execute. The check uses **resolved** output types
+        // (via `resolve_output_type`) so polymorphic pins resolving to Unit
+        // are also covered. See `doc/design_node_execution.md` (Phase 2 —
+        // Central skip rule for Unit-returning nodes).
+        if !context.execute {
+            if let Some(node_type) = registry.get_node_type_for_node(node) {
+                let pin_count = node_type.output_pin_count();
+                if pin_count > 0 {
+                    let current_network = network_stack.last().unwrap().node_network;
+                    let all_unit = (0..pin_count).all(|pin_idx| {
+                        registry
+                            .resolve_output_type(node, current_network, pin_idx as i32)
+                            .map(|t| t == DataType::Unit)
+                            .unwrap_or(false)
+                    });
+                    if all_unit {
+                        let results = vec![NetworkResult::Unit; pin_count];
+                        // Record per-pin display strings so the UI renders the
+                        // node consistently with non-skipped passes.
+                        let pin_strings: Vec<String> =
+                            results.iter().map(|r| r.to_display_string()).collect();
+                        context.node_output_strings.insert(node_id, pin_strings);
+                        return EvalOutput::multi(results);
+                    }
+                }
+            }
+        }
+
         let eval_output = if registry
             .built_in_node_types
             .contains_key(&node.node_type_name)
@@ -1205,6 +1302,39 @@ impl NetworkEvaluator {
             })
         } else {
             let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+            // Central skip rule for `Unit`-returning nodes (mirrors
+            // `evaluate_all_outputs`). When the pass is not an Execute and
+            // every resolved output pin of this node is `DataType::Unit`, we
+            // synthesise `NetworkResult::Unit` directly instead of running
+            // the node's `eval`. This is what makes side-effect nodes
+            // (`export_xyz`, `foreach`, …) cost-free on display passes
+            // regardless of whether they are reached via
+            // `evaluate_all_outputs` (top-level displayed node) or via
+            // `evaluate` (consumed as another node's input). See
+            // `doc/design_node_execution.md` (Phase 2 — Central skip rule).
+            if !context.execute {
+                if let Some(node_type) = registry.get_node_type_for_node(node) {
+                    let pin_count = node_type.output_pin_count();
+                    if pin_count > 0 {
+                        let current_network = network_stack.last().unwrap().node_network;
+                        let all_unit = (0..pin_count).all(|pin_idx| {
+                            registry
+                                .resolve_output_type(node, current_network, pin_idx as i32)
+                                .map(|t| t == DataType::Unit)
+                                .unwrap_or(false)
+                        });
+                        if all_unit {
+                            let pin_strings: Vec<String> = (0..pin_count)
+                                .map(|_| NetworkResult::Unit.to_display_string())
+                                .collect();
+                            context.node_output_strings.insert(node_id, pin_strings);
+                            return NetworkResult::Unit;
+                        }
+                    }
+                }
+            }
+
             if registry
                 .built_in_node_types
                 .contains_key(&node.node_type_name)

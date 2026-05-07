@@ -7,7 +7,9 @@
 
 use rust_lib_flutter_cad::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
 use rust_lib_flutter_cad::structure_designer::evaluator::iterator_walker::Walker;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator,
+};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{Closure, NetworkResult};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -27,15 +29,22 @@ fn empty_registry() -> NodeTypeRegistry {
 
 /// Drain a walker into a `Vec<NetworkResult>`, stopping at the first `None`.
 /// Caps at 4096 elements as a runaway-test safety net.
+///
+/// The walker no longer self-supplies its evaluation context — Phase 2 of the
+/// node-execution design threads the outer-pass context through `Walker::next`
+/// so closures inside `Map`/`Filter` walkers inherit `execute` and so prints
+/// drain back into the per-pass log. Tests that don't care about either flag
+/// just construct an empty context here.
 fn drain(
     walker: &mut Walker,
     evaluator: &NetworkEvaluator,
     registry: &NodeTypeRegistry,
 ) -> Vec<NetworkResult> {
+    let mut ctx = NetworkEvaluationContext::new();
     let mut out = Vec::new();
     let cap = 4096;
     while out.len() < cap {
-        match walker.next(evaluator, registry) {
+        match walker.next(evaluator, registry, &mut ctx) {
             None => return out,
             Some(v) => out.push(v),
         }
@@ -146,7 +155,10 @@ fn from_array_empty_yields_none() {
     let evaluator = make_evaluator();
     let registry = empty_registry();
     let mut w = Walker::from_array(vec![]);
-    assert!(w.next(&evaluator, &registry).is_none());
+    assert!(
+        w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new())
+            .is_none()
+    );
 }
 
 #[test]
@@ -165,7 +177,8 @@ fn from_array_drain_twice_without_reset_yields_none() {
     let mut w = Walker::from_array(ints(&[1, 2, 3]));
     let _ = drain(&mut w, &evaluator, &registry);
     assert!(
-        w.next(&evaluator, &registry).is_none(),
+        w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new())
+            .is_none(),
         "second drain should immediately yield None"
     );
 }
@@ -188,11 +201,17 @@ fn from_array_partial_drain_then_reset_replays_full_sequence() {
     let mut w = Walker::from_array(ints(&[1, 2, 3, 4, 5]));
     // Drain 2 of 5 explicitly.
     assert_eq!(
-        matches!(w.next(&evaluator, &registry), Some(NetworkResult::Int(1))),
+        matches!(
+            w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new()),
+            Some(NetworkResult::Int(1))
+        ),
         true
     );
     assert_eq!(
-        matches!(w.next(&evaluator, &registry), Some(NetworkResult::Int(2))),
+        matches!(
+            w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new()),
+            Some(NetworkResult::Int(2))
+        ),
         true
     );
     w.reset();
@@ -216,7 +235,7 @@ fn from_array_clone_advances_independently() {
     let evaluator = make_evaluator();
     let registry = empty_registry();
     let mut w = Walker::from_array(ints(&[10, 20, 30, 40]));
-    let _ = w.next(&evaluator, &registry); // original advanced past 10
+    let _ = w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new()); // original advanced past 10
     let mut clone = w.clone();
     // Drain the clone fully.
     let clone_drain = drain(&mut clone, &evaluator, &registry);
@@ -254,7 +273,10 @@ fn range_empty_when_count_is_zero() {
     let evaluator = make_evaluator();
     let registry = empty_registry();
     let mut w = Walker::range(0, 1, 0);
-    assert!(w.next(&evaluator, &registry).is_none());
+    assert!(
+        w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new())
+            .is_none()
+    );
 }
 
 #[test]
@@ -301,23 +323,43 @@ fn map_clone_advances_independently() {
     let mut w = Walker::map(Walker::range(0, 1, 5), fe);
     // Advance original by 2 (consumes 0 and 1 from underlying range; emits 0, 2).
     assert!(matches!(
-        w.next(&evaluator, &designer.node_type_registry),
+        w.next(
+            &evaluator,
+            &designer.node_type_registry,
+            &mut NetworkEvaluationContext::new()
+        ),
         Some(NetworkResult::Int(0))
     ));
     assert!(matches!(
-        w.next(&evaluator, &designer.node_type_registry),
+        w.next(
+            &evaluator,
+            &designer.node_type_registry,
+            &mut NetworkEvaluationContext::new()
+        ),
         Some(NetworkResult::Int(2))
     ));
     let mut clone = w.clone();
     // Advance clone by 2 — it should pick up where the original left off.
-    let clone_step1 = clone.next(&evaluator, &designer.node_type_registry);
-    let clone_step2 = clone.next(&evaluator, &designer.node_type_registry);
+    let clone_step1 = clone.next(
+        &evaluator,
+        &designer.node_type_registry,
+        &mut NetworkEvaluationContext::new(),
+    );
+    let clone_step2 = clone.next(
+        &evaluator,
+        &designer.node_type_registry,
+        &mut NetworkEvaluationContext::new(),
+    );
     assert!(matches!(clone_step1, Some(NetworkResult::Int(4))));
     assert!(matches!(clone_step2, Some(NetworkResult::Int(6))));
     // Original is unaffected by clone's advancement — it still yields its
     // own next-in-sequence (which is also 4 because clone is independent).
     assert!(matches!(
-        w.next(&evaluator, &designer.node_type_registry),
+        w.next(
+            &evaluator,
+            &designer.node_type_registry,
+            &mut NetworkEvaluationContext::new()
+        ),
         Some(NetworkResult::Int(4))
     ));
 }
@@ -350,7 +392,11 @@ fn filter_non_bool_predicate_yields_error() {
     let (designer, fe) = build_expr_fe("net_filter_nonbool", "x", "Int");
     let evaluator = make_evaluator();
     let mut w = Walker::filter(Walker::range(0, 1, 3), fe);
-    let first = w.next(&evaluator, &designer.node_type_registry);
+    let first = w.next(
+        &evaluator,
+        &designer.node_type_registry,
+        &mut NetworkEvaluationContext::new(),
+    );
     match first {
         Some(NetworkResult::Error(msg)) => {
             assert!(
@@ -366,7 +412,12 @@ fn filter_non_bool_predicate_yields_error() {
     }
     // Outer fuse: subsequent calls return None, not another error.
     assert!(
-        w.next(&evaluator, &designer.node_type_registry).is_none(),
+        w.next(
+            &evaluator,
+            &designer.node_type_registry,
+            &mut NetworkEvaluationContext::new()
+        )
+        .is_none(),
         "outer fuse should have tripped"
     );
     assert!(w.is_fused());
@@ -388,7 +439,11 @@ fn map_error_propagates_then_fuses() {
     let mut got_values = Vec::new();
     let mut got_error = false;
     for _ in 0..10 {
-        match w.next(&evaluator, &designer.node_type_registry) {
+        match w.next(
+            &evaluator,
+            &designer.node_type_registry,
+            &mut NetworkEvaluationContext::new(),
+        ) {
             None => break,
             Some(NetworkResult::Error(_)) => {
                 got_error = true;
@@ -403,7 +458,14 @@ fn map_error_propagates_then_fuses() {
         got_values.len()
     );
     // After error: subsequent calls return None (outer fuse).
-    assert!(w.next(&evaluator, &designer.node_type_registry).is_none());
+    assert!(
+        w.next(
+            &evaluator,
+            &designer.node_type_registry,
+            &mut NetworkEvaluationContext::new()
+        )
+        .is_none()
+    );
     assert!(w.is_fused());
 }
 
@@ -456,7 +518,10 @@ fn product_with_empty_axis_yields_none_immediately() {
         ],
         vec!["a".to_string(), "b".to_string(), "c".to_string()],
     );
-    assert!(w.next(&evaluator, &registry).is_none());
+    assert!(
+        w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new())
+            .is_none()
+    );
 }
 
 #[test]
@@ -517,7 +582,10 @@ fn product_partial_drain_reset_replays_full_sequence() {
     let mut w = make();
     // Drain 3 records mid-odometer.
     for _ in 0..3 {
-        assert!(w.next(&evaluator, &registry).is_some());
+        assert!(
+            w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new())
+                .is_some()
+        );
     }
     w.reset();
     let after_reset = drain(&mut w, &evaluator, &registry);
@@ -593,7 +661,7 @@ fn product_clone_advances_independently() {
     };
     let mut w = make();
     // Advance the original by 1 (yielding (10, 1)).
-    let _ = w.next(&evaluator, &registry);
+    let _ = w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new());
     let mut clone = w.clone();
     // Drain the clone fully — should yield 3 more records.
     let clone_drain = drain(&mut clone, &evaluator, &registry);
@@ -619,7 +687,12 @@ fn display_cap_below_boundary_reports_exhausted_count() {
     let evaluator = make_evaluator();
     let registry = empty_registry();
     let mut walker = Walker::range(0, 1, 255);
-    let (items, subtitle) = evaluator.drain_walker_for_display(&mut walker, "Iter[Int]", &registry);
+    let (items, subtitle) = evaluator.drain_walker_for_display(
+        &mut walker,
+        "Iter[Int]",
+        &registry,
+        &mut NetworkEvaluationContext::new(),
+    );
     assert_eq!(items.len(), 255);
     assert_eq!(subtitle, "Iter[Int] (255 elements)");
 }
@@ -629,7 +702,12 @@ fn display_cap_at_boundary_reports_first_n() {
     let evaluator = make_evaluator();
     let registry = empty_registry();
     let mut walker = Walker::range(0, 1, 256);
-    let (items, subtitle) = evaluator.drain_walker_for_display(&mut walker, "Iter[Int]", &registry);
+    let (items, subtitle) = evaluator.drain_walker_for_display(
+        &mut walker,
+        "Iter[Int]",
+        &registry,
+        &mut NetworkEvaluationContext::new(),
+    );
     assert_eq!(items.len(), 256);
     // At exactly the cap the walker has yielded ≥ ITER_DISPLAY_CAP elements,
     // so the subtitle reads "(showing first 256)" — see the design doc's
@@ -642,7 +720,12 @@ fn display_cap_above_boundary_reports_first_n() {
     let evaluator = make_evaluator();
     let registry = empty_registry();
     let mut walker = Walker::range(0, 1, 257);
-    let (items, subtitle) = evaluator.drain_walker_for_display(&mut walker, "Iter[Int]", &registry);
+    let (items, subtitle) = evaluator.drain_walker_for_display(
+        &mut walker,
+        "Iter[Int]",
+        &registry,
+        &mut NetworkEvaluationContext::new(),
+    );
     // The drain stops at the cap regardless of how many elements remain.
     assert_eq!(items.len(), 256);
     assert_eq!(subtitle, "Iter[Int] (showing first 256)");
@@ -653,8 +736,12 @@ fn display_cap_empty_walker_reports_zero_elements() {
     let evaluator = make_evaluator();
     let registry = empty_registry();
     let mut walker = Walker::from_array(Vec::new());
-    let (items, subtitle) =
-        evaluator.drain_walker_for_display(&mut walker, "Iter[Float]", &registry);
+    let (items, subtitle) = evaluator.drain_walker_for_display(
+        &mut walker,
+        "Iter[Float]",
+        &registry,
+        &mut NetworkEvaluationContext::new(),
+    );
     assert_eq!(items.len(), 0);
     assert_eq!(subtitle, "Iter[Float] (0 elements)");
 }

@@ -141,6 +141,55 @@ impl StructureDesigner {
 }
 
 impl StructureDesigner {
+    /// Run an evaluation with a fresh `NetworkEvaluationContext`, then drain
+    /// any prints the pass produced into `self.print_log` (Phase 4 — for
+    /// now the buffer is taken and dropped). The closure receives split
+    /// borrows of the evaluator, the registry, the preferences, and the
+    /// context, so eval-driving call sites do not need to construct a
+    /// context inline.
+    ///
+    /// **This is the only legitimate construction site for a
+    /// `NetworkEvaluationContext` inside `rust/src/structure_designer/`,
+    /// alongside `FunctionEvaluator::evaluate`'s inner-body context (which
+    /// drains its `print_buffer` back into its outer caller).** Reviewers
+    /// grepping for `NetworkEvaluationContext::new(` outside those two
+    /// sites — and outside test crates, which are exempt — have a one-shot
+    /// audit. Centralising the construct + drain pair eliminates the
+    /// foot-gun where a missed call site silently swallows prints. See
+    /// `doc/design_node_execution.md` (Centralized drain — no per-call-site
+    /// boilerplate).
+    pub fn with_eval_context<R>(
+        &mut self,
+        execute: bool,
+        f: impl FnOnce(
+            &mut NetworkEvaluator,
+            &NodeTypeRegistry,
+            &StructureDesignerPreferences,
+            &mut NetworkEvaluationContext,
+        ) -> R,
+    ) -> R {
+        let mut context = NetworkEvaluationContext::new();
+        context.execute = execute;
+        context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
+        if let Some(params) = self.cli_top_level_parameters.clone() {
+            context.top_level_parameters = params;
+        }
+        let result = f(
+            &mut self.network_evaluator,
+            &self.node_type_registry,
+            &self.preferences,
+            &mut context,
+        );
+        // Drain regardless of how `f` returned — prints accumulated up to a
+        // mid-pass error are still worth showing to the user. Phase 4 will
+        // append `entries` to `self.print_log`; for now the field doesn't
+        // exist yet so the buffer is taken and dropped. The wiring lands now
+        // (Phase 2) so Phase 4 only needs to flip an extend from a no-op to
+        // the real append.
+        let _entries = std::mem::take(&mut context.print_buffer);
+        result
+    }
+
     /// Returns the atomic structure from the interactive pin of the selected node, if any.
     /// The interactive pin is the lowest-indexed displayed output pin.
     pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
@@ -486,47 +535,60 @@ impl StructureDesigner {
 
     // Full refresh implementation - re-evaluates all displayed nodes
     fn refresh_full(&mut self, node_network_name: &str) {
-        let network = match self.node_type_registry.node_networks.get(node_network_name) {
-            Some(network) => network,
-            None => return,
-        };
+        let (active_node_id, displayed_node_ids) = {
+            let network = match self.node_type_registry.node_networks.get(node_network_name) {
+                Some(network) => network,
+                None => return,
+            };
 
-        // Create new scene with empty node_data HashMap and invisibility cache.
-        self.last_generated_structure_designer_scene = StructureDesignerScene::new();
-        self.last_generated_structure_designer_scene.active_node_id = network.active_node_id;
+            // Create new scene with empty node_data HashMap and invisibility cache.
+            self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+            self.last_generated_structure_designer_scene.active_node_id = network.active_node_id;
+
+            // Clear input caches on all displayed nodes (full refresh: upstream may have changed)
+            for node_entry in &network.displayed_nodes {
+                if let Some(data) = network.get_node_network_data(*node_entry.0) {
+                    data.clear_input_cache();
+                }
+            }
+
+            // Snapshot the (id, display_type) pairs so the closure below can
+            // iterate without re-borrowing `self` while `with_eval_context`
+            // owns the mutable borrow on it.
+            let displayed: Vec<(u64, super::node_network::NodeDisplayType)> = network
+                .displayed_nodes
+                .iter()
+                .map(|(id, state)| (*id, state.display_type))
+                .collect();
+            (network.active_node_id, displayed)
+        };
 
         // Track selected node's unit cell
         let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
+        let mut new_scenes: Vec<(
+            u64,
+            crate::structure_designer::structure_designer_scene::NodeSceneData,
+        )> = Vec::with_capacity(displayed_node_ids.len());
 
-        // Clear input caches on all displayed nodes (full refresh: upstream may have changed)
-        for node_entry in &network.displayed_nodes {
-            if let Some(data) = network.get_node_network_data(*node_entry.0) {
-                data.clear_input_cache();
+        self.with_eval_context(false, |evaluator, registry, prefs, context| {
+            for (node_id, display_type) in &displayed_node_ids {
+                let node_data = evaluator.generate_scene(
+                    node_network_name,
+                    *node_id,
+                    *display_type,
+                    registry,
+                    &prefs.geometry_visualization_preferences,
+                    context,
+                );
+
+                if Some(*node_id) == active_node_id {
+                    selected_node_unit_cell = node_data.unit_cell.clone();
+                }
+                new_scenes.push((*node_id, node_data));
             }
-        }
+        });
 
-        // Generate NodeSceneData for each displayed node and populate node_data HashMap
-        for node_entry in &network.displayed_nodes {
-            let node_id = *node_entry.0;
-            let display_type = node_entry.1.display_type;
-
-            // Generate NodeSceneData for this node
-            let node_data = self.network_evaluator.generate_scene(
-                node_network_name,
-                node_id,
-                display_type,
-                &self.node_type_registry,
-                &self.preferences.geometry_visualization_preferences,
-                self.cli_top_level_parameters.clone(),
-                self.preferences.simulation_preferences.use_vdw_cutoff,
-            );
-
-            // Capture the active node's unit cell
-            if Some(node_id) == network.active_node_id {
-                selected_node_unit_cell = node_data.unit_cell.clone();
-            }
-
-            // Insert into final scene's node_data HashMap
+        for (node_id, node_data) in new_scenes {
             self.last_generated_structure_designer_scene
                 .node_data
                 .insert(node_id, node_data);
@@ -643,37 +705,48 @@ impl StructureDesigner {
 
         // Step 5: Re-evaluate nodes that need it (skip if empty)
         if !nodes_needing_evaluation.is_empty() {
-            for &node_id in &nodes_needing_evaluation {
-                // Get the display type for this node (it must be displayed if it's in nodes_needing_evaluation)
-                let display_type = {
-                    let network = match self.node_type_registry.node_networks.get(node_network_name)
-                    {
-                        Some(network) => network,
-                        None => continue,
-                    };
-                    match network.displayed_nodes.get(&node_id) {
-                        Some(state) => state.display_type,
-                        None => continue, // Skip if not displayed (shouldn't happen)
-                    }
+            // Snapshot (id, display_type) pairs upfront so the closure body
+            // does not need to re-borrow `self.node_type_registry`.
+            let to_evaluate: Vec<(u64, super::node_network::NodeDisplayType)> = {
+                let network = match self.node_type_registry.node_networks.get(node_network_name) {
+                    Some(network) => network,
+                    None => return,
                 };
+                nodes_needing_evaluation
+                    .iter()
+                    .filter_map(|&node_id| {
+                        network
+                            .displayed_nodes
+                            .get(&node_id)
+                            .map(|state| (node_id, state.display_type))
+                    })
+                    .collect()
+            };
 
-                // Generate NodeSceneData for this node
-                let node_data = self.network_evaluator.generate_scene(
-                    node_network_name,
-                    node_id,
-                    display_type,
-                    &self.node_type_registry,
-                    &self.preferences.geometry_visualization_preferences,
-                    self.cli_top_level_parameters.clone(),
-                    self.preferences.simulation_preferences.use_vdw_cutoff,
-                );
+            let mut new_scenes: Vec<(
+                u64,
+                crate::structure_designer::structure_designer_scene::NodeSceneData,
+            )> = Vec::with_capacity(to_evaluate.len());
 
-                // Capture the active node's unit cell
-                if Some(node_id) == active_node_id {
-                    selected_node_unit_cell = node_data.unit_cell.clone();
+            self.with_eval_context(false, |evaluator, registry, prefs, context| {
+                for (node_id, display_type) in &to_evaluate {
+                    let node_data = evaluator.generate_scene(
+                        node_network_name,
+                        *node_id,
+                        *display_type,
+                        registry,
+                        &prefs.geometry_visualization_preferences,
+                        context,
+                    );
+
+                    if Some(*node_id) == active_node_id {
+                        selected_node_unit_cell = node_data.unit_cell.clone();
+                    }
+                    new_scenes.push((*node_id, node_data));
                 }
+            });
 
-                // Update or insert into scene's node_data HashMap
+            for (node_id, node_data) in new_scenes {
                 self.last_generated_structure_designer_scene
                     .node_data
                     .insert(node_id, node_data);
@@ -4324,33 +4397,26 @@ impl StructureDesigner {
             .map(|nt| nt.output_type().to_string())
             .unwrap_or_else(|| "Unknown".to_string());
 
-        // Set up evaluation context
-        let mut context = NetworkEvaluationContext::new();
-        context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
-        if let Some(params) = self.cli_top_level_parameters.clone() {
-            context.top_level_parameters = params;
-        }
-
-        // Create the network stack
-        let network = self
-            .node_type_registry
-            .node_networks
-            .get(&network_name)
-            .unwrap();
-        let network_stack = vec![NetworkStackElement {
-            node_network: network,
-            node_id: 0,
-        }];
-
-        // Evaluate the node (output pin 0 is the main output)
-        let result = self.network_evaluator.evaluate(
-            &network_stack,
-            node_id,
-            0, // output pin index
-            &self.node_type_registry,
-            false, // decorate - false since this is just for text output
-            &mut context,
-        );
+        // Evaluate the node (output pin 0 is the main output) through the
+        // central context helper so prints / future per-pass state drain
+        // consistently. CLI evaluations are normal (non-Execute) display
+        // passes — Phase 3's `execute_node` orchestrator is what passes
+        // `execute = true`.
+        let result = self.with_eval_context(false, |evaluator, registry, _prefs, context| {
+            let network = registry.node_networks.get(&network_name).unwrap();
+            let network_stack = vec![NetworkStackElement {
+                node_network: network,
+                node_id: 0,
+            }];
+            evaluator.evaluate(
+                &network_stack,
+                node_id,
+                0, // output pin index
+                registry,
+                false, // decorate - false since this is just for text output
+                context,
+            )
+        });
 
         // Build the response
         let display_string = result.to_display_string();

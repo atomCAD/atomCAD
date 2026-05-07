@@ -75,7 +75,7 @@ impl NodeData for CollectData {
 
         let mut out = Vec::new();
         loop {
-            match walker.next(network_evaluator, registry) {
+            match walker.next(network_evaluator, registry, context) {
                 None => break,
                 Some(NetworkResult::Error(e)) => {
                     return EvalOutput::single(NetworkResult::Error(e));

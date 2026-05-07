@@ -146,10 +146,29 @@ impl FunctionEvaluator {
             .set_node_network_data(node_id, Box::new(ValueData { value }));
     }
 
+    /// Evaluate the closure against the most recently set argument values.
+    ///
+    /// `outer_context` is the calling pass's evaluation context. A fresh
+    /// inner context is constructed for the body evaluation, but the
+    /// per-pass flags that need to flow through (`execute`, `use_vdw_cutoff`)
+    /// are inherited so effects nested inside `map`/`filter`/`fold`/
+    /// `foreach` bodies fire correctly under Execute. The inner context's
+    /// `print_buffer` is drained back into `outer_context.print_buffer` at
+    /// end-of-call so prints from inner-body nodes aggregate into the single
+    /// per-pass log instead of being silently dropped.
+    ///
+    /// `node_errors` / `node_output_strings` / `selected_node_eval_cache` /
+    /// `top_level_parameters` are intentionally **not** inherited — they are
+    /// per-pass scratch state scoped to the outer network and would be
+    /// confusing if mixed with the inner closure body's nodes.
+    ///
+    /// See `doc/design_node_execution.md` (Phase 2 — propagation through
+    /// FunctionEvaluator).
     pub fn evaluate(
         &self,
         evaluator: &NetworkEvaluator,
         registry: &NodeTypeRegistry,
+        outer_context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
         // We assign the root node network zero node id. It is not used in the evaluation.
         let network_stack = vec![NetworkStackElement {
@@ -157,14 +176,20 @@ impl FunctionEvaluator {
             node_id: 0,
         }];
 
-        // TODO: think about whether the context is ok this way?
-        evaluator.evaluate(
+        let mut inner = NetworkEvaluationContext::new();
+        inner.execute = outer_context.execute;
+        inner.use_vdw_cutoff = outer_context.use_vdw_cutoff;
+        // print_buffer is *not* inherited — each FE call starts with an empty
+        // buffer and is drained back into the outer buffer below.
+        let result = evaluator.evaluate(
             &network_stack,
             self.main_node_id,
             0,
             registry,
             false,
-            &mut NetworkEvaluationContext::new(),
-        )
+            &mut inner,
+        );
+        outer_context.print_buffer.append(&mut inner.print_buffer);
+        result
     }
 }
