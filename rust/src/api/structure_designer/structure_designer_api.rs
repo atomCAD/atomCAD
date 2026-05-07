@@ -14,6 +14,7 @@ use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIFilterData;
 use super::structure_designer_api_types::APIFoldData;
+use super::structure_designer_api_types::APIForeachData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIImportCIFData;
@@ -127,6 +128,7 @@ use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
 use crate::structure_designer::nodes::filter::FilterData;
 use crate::structure_designer::nodes::float::FloatData;
 use crate::structure_designer::nodes::fold::FoldData;
+use crate::structure_designer::nodes::foreach::ForeachData;
 use crate::structure_designer::nodes::free_move::FreeMoveData;
 use crate::structure_designer::nodes::free_rot::FreeRotData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
@@ -3503,6 +3505,25 @@ pub fn get_filter_data(node_id: u64) -> Option<APIFilterData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_foreach_data(node_id: u64) -> Option<APIForeachData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let foreach_data = node_data.as_any_ref().downcast_ref::<ForeachData>()?;
+
+                Some(APIForeachData {
+                    input_type: data_type_to_api_data_type(&foreach_data.input_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_collect_data(node_id: u64) -> Option<APICollectData> {
     unsafe {
         with_cad_instance_or(
@@ -4463,6 +4484,25 @@ pub fn set_filter_data(node_id: u64, data: APIFilterData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, filter_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_foreach_data(node_id: u64, data: APIForeachData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let input_type = match api_data_type_to_data_type(&data.input_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            let foreach_data = Box::new(ForeachData { input_type });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, foreach_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

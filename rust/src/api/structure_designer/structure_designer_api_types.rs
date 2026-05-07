@@ -857,6 +857,10 @@ pub struct APIFilterData {
     pub element_type: APIDataType,
 }
 
+pub struct APIForeachData {
+    pub input_type: APIDataType,
+}
+
 pub struct APICollectData {
     pub element_type: APIDataType,
     /// Optional cap on the number of elements collected. `None` collects the

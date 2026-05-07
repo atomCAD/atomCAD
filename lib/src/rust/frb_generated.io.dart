@@ -152,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFoldData dco_decode_api_fold_data(dynamic raw);
 
   @protected
+  APIForeachData dco_decode_api_foreach_data(dynamic raw);
+
+  @protected
   APIFreeMoveData dco_decode_api_free_move_data(dynamic raw);
 
   @protected
@@ -431,6 +434,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFoldData dco_decode_box_autoadd_api_fold_data(dynamic raw);
+
+  @protected
+  APIForeachData dco_decode_box_autoadd_api_foreach_data(dynamic raw);
 
   @protected
   APIFreeMoveData dco_decode_box_autoadd_api_free_move_data(dynamic raw);
@@ -842,6 +848,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFoldData? dco_decode_opt_box_autoadd_api_fold_data(dynamic raw);
 
   @protected
+  APIForeachData? dco_decode_opt_box_autoadd_api_foreach_data(dynamic raw);
+
+  @protected
   APIFreeMoveData? dco_decode_opt_box_autoadd_api_free_move_data(dynamic raw);
 
   @protected
@@ -1222,6 +1231,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFoldData sse_decode_api_fold_data(SseDeserializer deserializer);
 
   @protected
+  APIForeachData sse_decode_api_foreach_data(SseDeserializer deserializer);
+
+  @protected
   APIFreeMoveData sse_decode_api_free_move_data(SseDeserializer deserializer);
 
   @protected
@@ -1545,6 +1557,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFoldData sse_decode_box_autoadd_api_fold_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIForeachData sse_decode_box_autoadd_api_foreach_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2042,6 +2058,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIForeachData? sse_decode_opt_box_autoadd_api_foreach_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIFreeMoveData? sse_decode_opt_box_autoadd_api_free_move_data(
       SseDeserializer deserializer);
 
@@ -2478,6 +2498,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_fold_data(APIFoldData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_foreach_data(
+      APIForeachData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_free_move_data(
       APIFreeMoveData self, SseSerializer serializer);
 
@@ -2824,6 +2848,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_fold_data(
       APIFoldData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_foreach_data(
+      APIForeachData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_free_move_data(
@@ -3327,6 +3355,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_fold_data(
       APIFoldData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_foreach_data(
+      APIForeachData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_free_move_data(

@@ -1453,6 +1453,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setForeachData(BigInt nodeId, APIForeachData data) {
+    structure_designer_api.setForeachData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setCollectData(BigInt nodeId, APICollectData data) {
     structure_designer_api.setCollectData(nodeId: nodeId, data: data);
     refreshFromKernel();

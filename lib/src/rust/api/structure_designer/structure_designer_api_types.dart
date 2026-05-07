@@ -989,6 +989,24 @@ class APIFoldData {
           accumulatorType == other.accumulatorType;
 }
 
+class APIForeachData {
+  final APIDataType inputType;
+
+  const APIForeachData({
+    required this.inputType,
+  });
+
+  @override
+  int get hashCode => inputType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIForeachData &&
+          runtimeType == other.runtimeType &&
+          inputType == other.inputType;
+}
+
 class APIFreeMoveData {
   final APIVec3 translation;
 

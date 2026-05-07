@@ -604,6 +604,10 @@ APIMapData? getMapData({required BigInt nodeId}) => RustLib.instance.api
 APIFilterData? getFilterData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetFilterData(nodeId: nodeId);
 
+APIForeachData? getForeachData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetForeachData(
+        nodeId: nodeId);
+
 APICollectData? getCollectData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCollectData(
         nodeId: nodeId);
@@ -896,6 +900,11 @@ void setMapData({required BigInt nodeId, required APIMapData data}) =>
 void setFilterData({required BigInt nodeId, required APIFilterData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetFilterData(
+            nodeId: nodeId, data: data);
+
+void setForeachData({required BigInt nodeId, required APIForeachData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetForeachData(
             nodeId: nodeId, data: data);
 
 void setCollectData({required BigInt nodeId, required APICollectData data}) =>
