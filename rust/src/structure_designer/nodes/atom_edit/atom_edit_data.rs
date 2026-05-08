@@ -1543,47 +1543,44 @@ impl NodeData for AtomEditData {
         decorate: bool,
         context: &mut crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext,
     ) -> EvalOutput {
-        // Use cached input if available (populated during previous eval,
-        // cleared by clear_input_cache() when upstream may have changed).
-        let cached = if let Some(cached) = self
-            .cached_input
-            .lock()
-            .ok()
-            .and_then(|guard| guard.clone())
-        {
-            cached
-        } else {
-            let input_val =
-                network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
-            if let NetworkResult::Error(_) = input_val {
-                return EvalOutput::single(input_val);
-            }
-            let fresh = match input_val {
-                NetworkResult::Crystal(c) => CachedInput {
-                    atoms: c.atoms,
-                    wrapper: InputWrapperKind::Crystal {
-                        structure: c.structure,
-                        geo_tree_root: c.geo_tree_root,
-                        alignment: c.alignment,
-                        alignment_reason: c.alignment_reason,
-                    },
+        // Always evaluate the input from upstream — never short-circuit through
+        // `cached_input` here. The dependency-driven invalidation in
+        // `refresh_partial` only walks the active network, so an atom_edit
+        // nested inside a custom subnetwork never sees `clear_input_cache()`
+        // when an outer-network change reroutes its input. And subnetwork
+        // bodies live once in the registry, so a single `cached_input` would
+        // be shared across every call site of that subnetwork — there is no
+        // correct value to cache. The field is still populated below for the
+        // tool-access path (`get_cached_input()` in operations.rs).
+        let input_val =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
+        if let NetworkResult::Error(_) = input_val {
+            return EvalOutput::single(input_val);
+        }
+        let cached = match input_val {
+            NetworkResult::Crystal(c) => CachedInput {
+                atoms: c.atoms,
+                wrapper: InputWrapperKind::Crystal {
+                    structure: c.structure,
+                    geo_tree_root: c.geo_tree_root,
+                    alignment: c.alignment,
+                    alignment_reason: c.alignment_reason,
                 },
-                NetworkResult::Molecule(m) => CachedInput {
-                    atoms: m.atoms,
-                    wrapper: InputWrapperKind::Molecule {
-                        geo_tree_root: m.geo_tree_root,
-                    },
+            },
+            NetworkResult::Molecule(m) => CachedInput {
+                atoms: m.atoms,
+                wrapper: InputWrapperKind::Molecule {
+                    geo_tree_root: m.geo_tree_root,
                 },
-                _ => CachedInput {
-                    atoms: AtomicStructure::new(),
-                    wrapper: InputWrapperKind::Other,
-                },
-            };
-            if let Ok(mut guard) = self.cached_input.lock() {
-                *guard = Some(fresh.clone());
-            }
-            fresh
+            },
+            _ => CachedInput {
+                atoms: AtomicStructure::new(),
+                wrapper: InputWrapperKind::Other,
+            },
         };
+        if let Ok(mut guard) = self.cached_input.lock() {
+            *guard = Some(cached.clone());
+        }
         let input_structure = cached.atoms;
         let input_wrapper = cached.wrapper;
 
