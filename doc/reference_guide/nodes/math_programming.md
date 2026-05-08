@@ -109,7 +109,7 @@ The expr node supports scalar arithmetic, vector operations, conditional express
 
 **Arithmetic Operators:**
 
-- `+` - Addition
+- `+` - Addition (also concatenates two `String` values; see *String Template Literals* below)
 - `-` - Subtraction  
 - `*` - Multiplication
 - `/` - Division
@@ -290,7 +290,9 @@ Non-finite Floats (`NaN`, `+inf`, `-inf`) are rejected at evaluation time — th
 
 **Escapes.** `\` `\\ \$ \n \t \r` are recognized inside template text. Use `\$` to write a literal `${...}` without triggering interpolation; use `` \` `` to embed a backtick. Raw newlines inside the literal are also allowed (the body can span multiple lines).
 
-**Out of scope.** Nested template literals are rejected at lex time — a backtick inside `${…}` is an error. Use adjacent interpolations (`` `prefix-${x}-suffix` ``) instead. Plain `"…"` string literals, a `+` overload for string concatenation, and format specifiers (zero-padding, width, precision) are not provided; templates compose strings inline well enough that these have not been needed.
+**`+` for string concatenation.** Two `String` values can be glued with `+` — `` `hello ` + `world` `` produces `"hello world"`. The operator is **strict**: only `String + String` is accepted. Mixing in `Int`, `Float`, `Bool`, or any other type is rejected at validation time; for mixed-type composition use a template literal (`` `count: ${n}` ``), which auto-stringifies `Int`/`Float`/`Bool` per the *Stringification rules* table above. `+` is left-associative, so `` `a` + `b` + `c` `` is `"abc"`. Largely redundant with templates, but provided for users who prefer the operator form.
+
+**Out of scope.** Nested template literals are rejected at lex time — a backtick inside `${…}` is an error. Use adjacent interpolations (`` `prefix-${x}-suffix` ``) instead. Plain `"…"` string literals and format specifiers (zero-padding, width, precision) are not provided; templates compose strings inline well enough that these have not been needed.
 
 Examples:
 
