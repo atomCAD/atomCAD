@@ -27,6 +27,12 @@ pub struct CollectData {
     /// `doc/design_iter_display_via_collect.md`.
     #[serde(default)]
     pub limit: Option<i32>,
+    /// Number of elements to skip from the front of the stream before
+    /// collecting starts. `0` (the default) means "start at the first
+    /// element". Overridden by the wired `offset` input pin when connected.
+    /// Skipping past the end of the stream yields an empty array.
+    #[serde(default)]
+    pub offset: i32,
 }
 
 impl Default for CollectData {
@@ -34,6 +40,7 @@ impl Default for CollectData {
         Self {
             element_type: DataType::Int,
             limit: None,
+            offset: 0,
         }
     }
 }
@@ -85,6 +92,23 @@ impl NodeData for CollectData {
             }
         }
 
+        // Same override pattern as `limit`: wired Int pin replaces stored
+        // field; disconnected pin falls through. `0` is a valid no-op.
+        let offset_arg =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 2);
+        let effective_offset: i32 = match offset_arg {
+            NetworkResult::Int(n) => n,
+            NetworkResult::Error(_) => return EvalOutput::single(offset_arg),
+            _ => self.offset,
+        };
+
+        if effective_offset < 0 {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "collect: offset must be non-negative, got {}",
+                effective_offset
+            )));
+        }
+
         let mut walker = match v {
             NetworkResult::None => return EvalOutput::single(NetworkResult::None),
             NetworkResult::Iterator(w) => w,
@@ -105,6 +129,20 @@ impl NodeData for CollectData {
         let cap = effective_limit.map(|n| n as usize);
         let mut out: Vec<NetworkResult> = Vec::new();
         let mut cap_hit = false;
+
+        // Skip phase: discard the first `effective_offset` elements before
+        // collecting. If the walker exhausts during skip, the collect loop
+        // below sees an empty walker and produces an empty array — silent
+        // overrun, no cap-hit subtitle.
+        for _ in 0..(effective_offset as usize) {
+            match walker.next(network_evaluator, registry, context) {
+                None => break,
+                Some(NetworkResult::Error(e)) => {
+                    return EvalOutput::single(NetworkResult::Error(e));
+                }
+                Some(_) => {}
+            }
+        }
 
         loop {
             let at_cap = matches!(cap, Some(n) if out.len() >= n);
@@ -164,6 +202,9 @@ impl NodeData for CollectData {
         if let Some(n) = self.limit {
             props.push(("limit".to_string(), TextValue::Int(n)));
         }
+        if self.offset != 0 {
+            props.push(("offset".to_string(), TextValue::Int(self.offset)));
+        }
         props
     }
 
@@ -179,6 +220,11 @@ impl NodeData for CollectData {
                 v.as_int()
                     .ok_or_else(|| "limit must be an Int".to_string())?,
             );
+        }
+        if let Some(v) = props.get("offset") {
+            self.offset = v
+                .as_int()
+                .ok_or_else(|| "offset must be an Int".to_string())?;
         }
         Ok(())
     }
@@ -202,6 +248,7 @@ impl NodeData for CollectData {
         Some(Box::new(CollectData {
             element_type: elem,
             limit: None,
+            offset: 0,
         }))
     }
 }
@@ -210,7 +257,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
         name: "collect".to_string(),
         description:
-            "Materializes a lazy iterator into an array by exhausting the stream. The escape hatch when a downstream array consumer really does want the whole vector. The configured element type drives both the iterator-input pin and the array-output pin. Optional `limit` (stored on the node or wired as an Int input) caps the number of elements collected — useful for previewing long or unbounded streams. The wired pin overrides the stored value when connected."
+            "Materializes a lazy iterator into an array by exhausting the stream. The escape hatch when a downstream array consumer really does want the whole vector. The configured element type drives both the iterator-input pin and the array-output pin. Optional `limit` (stored on the node or wired as an Int input) caps the number of elements collected — useful for previewing long or unbounded streams. Optional `offset` (stored or wired) skips that many elements at the front of the stream before collecting starts — useful for peeking at the middle or tail of a long stream. Skipping past the end of the stream yields an empty array. Both wired pins override their stored counterparts when connected."
                 .to_string(),
         summary: Some("Materialize an iterator into an array".to_string()),
         category: NodeTypeCategory::MathAndProgramming,
@@ -223,6 +270,11 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "limit".to_string(),
+                data_type: DataType::Int,
+            },
+            Parameter {
+                id: None,
+                name: "offset".to_string(),
                 data_type: DataType::Int,
             },
         ],

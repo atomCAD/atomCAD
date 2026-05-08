@@ -75,6 +75,7 @@ fn add_collect_int(designer: &mut StructureDesigner, network_name: &str, x: f64)
         Box::new(CollectData {
             element_type: DataType::Int,
             limit: None,
+            offset: 0,
         }),
     );
     id

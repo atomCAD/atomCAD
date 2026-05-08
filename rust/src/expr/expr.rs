@@ -211,6 +211,13 @@ impl Expr {
                                 Ok(DataType::Vec3)
                             }
 
+                            // String concatenation via `+`. Strict: no implicit
+                            // conversion from numeric or bool — use a template
+                            // literal `${x}` for mixed-type composition.
+                            (DataType::String, DataType::String) if matches!(op, BinOp::Add) => {
+                                Ok(DataType::String)
+                            }
+
                             _ => Err(format!(
                                 "Arithmetic operation {:?} not supported for types {:?} and {:?}",
                                 op, left_type, right_type
@@ -803,6 +810,14 @@ impl Expr {
                 || matches!(right, NetworkResult::Mat3(_) | NetworkResult::IMat3(_)))
         {
             return Self::matrix_arith_op(left, right, op);
+        }
+
+        // String concatenation: `+` on two strings. Validation guarantees this
+        // is the only String-involving arithmetic that reaches evaluation.
+        if matches!(op, BinOp::Add) {
+            if let (NetworkResult::String(a), NetworkResult::String(b)) = (&left, &right) {
+                return NetworkResult::String(format!("{}{}", a, b));
+            }
         }
 
         match op {

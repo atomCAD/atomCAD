@@ -1,4 +1,5 @@
 use super::structure_designer_api_types::APIAlignment;
+use super::structure_designer_api_types::APIArrayAtData;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
 use super::structure_designer_api_types::APICandidateNode;
@@ -107,6 +108,7 @@ use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::layout;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
+use crate::structure_designer::nodes::array_at::ArrayAtData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
@@ -3536,6 +3538,27 @@ pub fn get_collect_data(node_id: u64) -> Option<APICollectData> {
                 Some(APICollectData {
                     element_type: data_type_to_api_data_type(&collect_data.element_type),
                     limit: collect_data.limit,
+                    offset: collect_data.offset,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_array_at_data(node_id: u64) -> Option<APIArrayAtData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let array_at_data = node_data.as_any_ref().downcast_ref::<ArrayAtData>()?;
+
+                Some(APIArrayAtData {
+                    element_type: data_type_to_api_data_type(&array_at_data.element_type),
+                    index: array_at_data.index,
                 })
             },
             None,
@@ -4520,11 +4543,34 @@ pub fn set_collect_data(node_id: u64, data: APICollectData) {
             let collect_data = Box::new(CollectData {
                 element_type,
                 limit: data.limit,
+                offset: data.offset,
             });
 
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, collect_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_array_at_data(node_id: u64, data: APIArrayAtData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let element_type = match api_data_type_to_data_type(&data.element_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            let array_at_data = Box::new(ArrayAtData {
+                element_type,
+                index: data.index,
+            });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, array_at_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

@@ -76,6 +76,7 @@ fn add_collect_int(designer: &mut StructureDesigner, network_name: &str, x: f64)
         Box::new(CollectData {
             element_type: DataType::Int,
             limit: None,
+            offset: 0,
         }),
     );
     id
@@ -89,6 +90,7 @@ fn add_collect_int(designer: &mut StructureDesigner, network_name: &str, x: f64)
 fn test_array_at_default() {
     let data = ArrayAtData::default();
     assert_eq!(data.element_type, DataType::Int);
+    assert_eq!(data.index, 0);
 }
 
 #[test]
@@ -116,6 +118,7 @@ fn test_array_at_custom_type_int() {
     let base = registry.get_node_type("array_at").unwrap();
     let data = ArrayAtData {
         element_type: DataType::Int,
+        index: 0,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -133,6 +136,7 @@ fn test_array_at_custom_type_ivec3() {
     let base = registry.get_node_type("array_at").unwrap();
     let data = ArrayAtData {
         element_type: DataType::IVec3,
+        index: 0,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -150,6 +154,7 @@ fn test_array_at_custom_type_structure() {
     let base = registry.get_node_type("array_at").unwrap();
     let data = ArrayAtData {
         element_type: DataType::Structure,
+        index: 0,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -334,6 +339,7 @@ fn test_array_at_ivec3_element_type() {
         at_id,
         Box::new(ArrayAtData {
             element_type: DataType::IVec3,
+            index: 0,
         }),
     );
     designer.validate_active_network();
@@ -494,7 +500,7 @@ fn test_array_at_empty_array_index_zero_errors() {
 }
 
 // ============================================================================
-// Evaluation: unconnected pins propagate as None
+// Evaluation: unconnected array pin propagates as None
 // ============================================================================
 
 #[test]
@@ -521,8 +527,14 @@ fn test_array_at_unconnected_array_pin_yields_none() {
     }
 }
 
+// ============================================================================
+// Evaluation: stored index (used when index pin is disconnected)
+// ============================================================================
+
 #[test]
-fn test_array_at_unconnected_index_pin_yields_none() {
+fn test_array_at_unconnected_index_pin_uses_stored_default() {
+    // With nothing wired to the `index` pin, eval falls back to the stored
+    // `index` field. Default is 0, which reads the first element.
     let mut designer = setup_designer_with_network("test");
 
     let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
@@ -546,8 +558,142 @@ fn test_array_at_unconnected_index_pin_yields_none() {
 
     let result = evaluate_node(&designer, "test", at_id);
     match result {
-        NetworkResult::None => {}
-        other => panic!("Expected None, got {:?}", other.to_display_string()),
+        NetworkResult::Int(v) => assert_eq!(v, 10),
+        other => panic!("Expected Int(10), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_array_at_stored_index_nonzero() {
+    let mut designer = setup_designer_with_network("test");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        range_id,
+        Box::new(RangeData {
+            start: 10,
+            step: 10,
+            count: 3,
+        }),
+    );
+
+    let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        at_id,
+        Box::new(ArrayAtData {
+            element_type: DataType::Int,
+            index: 2,
+        }),
+    );
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
+    designer.validate_active_network();
+
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
+
+    let result = evaluate_node(&designer, "test", at_id);
+    match result {
+        NetworkResult::Int(v) => assert_eq!(v, 30),
+        other => panic!("Expected Int(30), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_array_at_wired_index_overrides_stored() {
+    // Stored index is 2 but a wired pin supplies 0 — wired wins.
+    let mut designer = setup_designer_with_network("test");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        range_id,
+        Box::new(RangeData {
+            start: 10,
+            step: 10,
+            count: 3,
+        }),
+    );
+
+    let index_id = designer.add_node("int", DVec2::new(0.0, 100.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        index_id,
+        Box::new(IntData { value: 0 }),
+    );
+
+    let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        at_id,
+        Box::new(ArrayAtData {
+            element_type: DataType::Int,
+            index: 2,
+        }),
+    );
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
+    designer.validate_active_network();
+
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
+    designer.connect_nodes(index_id, 0, at_id, 1);
+
+    let result = evaluate_node(&designer, "test", at_id);
+    match result {
+        NetworkResult::Int(v) => assert_eq!(v, 10),
+        other => panic!("Expected Int(10), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_array_at_stored_index_negative_errors() {
+    let mut designer = setup_designer_with_network("test");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        range_id,
+        Box::new(RangeData {
+            start: 10,
+            step: 10,
+            count: 3,
+        }),
+    );
+
+    let at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        at_id,
+        Box::new(ArrayAtData {
+            element_type: DataType::Int,
+            index: -1,
+        }),
+    );
+    let collect_id = add_collect_int(&mut designer, "test", 100.0);
+    designer.validate_active_network();
+
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(collect_id, 0, at_id, 0);
+
+    let result = evaluate_node(&designer, "test", at_id);
+    match result {
+        NetworkResult::Error(msg) => {
+            assert!(msg.contains("-1"), "error should mention index: {}", msg);
+            assert!(
+                msg.contains("out of bounds"),
+                "error should say out of bounds: {}",
+                msg
+            );
+        }
+        other => panic!("Expected Error, got {:?}", other.to_display_string()),
     }
 }
 
@@ -559,21 +705,24 @@ fn test_array_at_unconnected_index_pin_yields_none() {
 fn test_array_at_text_properties_roundtrip() {
     let original = ArrayAtData {
         element_type: DataType::Structure,
+        index: 7,
     };
     let props = original.get_text_properties();
-    assert_eq!(props.len(), 1);
+    assert_eq!(props.len(), 2);
 
     let mut restored = ArrayAtData::default();
     let props_map = props_to_hashmap(props);
     restored.set_text_properties(&props_map).unwrap();
 
     assert_eq!(restored.element_type, original.element_type);
+    assert_eq!(restored.index, original.index);
 }
 
 #[test]
 fn test_array_at_text_properties_values() {
     let data = ArrayAtData {
         element_type: DataType::IVec3,
+        index: 0,
     };
     let props = data.get_text_properties();
     assert_eq!(
@@ -583,6 +732,19 @@ fn test_array_at_text_properties_values() {
             TextValue::DataType(DataType::IVec3)
         )
     );
+    // Default index is omitted from the property list to keep serialized
+    // text minimal — same convention as `collect.offset`.
+    assert_eq!(props.len(), 1);
+}
+
+#[test]
+fn test_array_at_text_properties_omits_default_index() {
+    let data = ArrayAtData {
+        element_type: DataType::Int,
+        index: 0,
+    };
+    let props = data.get_text_properties();
+    assert!(props.iter().all(|(name, _)| name != "index"));
 }
 
 // ============================================================================
@@ -593,11 +755,24 @@ fn test_array_at_text_properties_values() {
 fn test_array_at_data_serde_roundtrip() {
     let original = ArrayAtData {
         element_type: DataType::IVec3,
+        index: 5,
     };
     let json = serde_json::to_value(&original).unwrap();
     assert_eq!(json["element_type"], "IVec3");
+    assert_eq!(json["index"], 5);
     let restored: ArrayAtData = serde_json::from_value(json).unwrap();
     assert_eq!(restored.element_type, original.element_type);
+    assert_eq!(restored.index, original.index);
+}
+
+#[test]
+fn test_array_at_data_serde_legacy_missing_index() {
+    // Old `.cnnd` payloads pre-dating the `index` field omit it; the
+    // `#[serde(default)]` annotation should fill in `0`.
+    let json = serde_json::json!({ "element_type": "Int" });
+    let restored: ArrayAtData = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.element_type, DataType::Int);
+    assert_eq!(restored.index, 0);
 }
 
 // ============================================================================
@@ -608,6 +783,7 @@ fn test_array_at_data_serde_roundtrip() {
 fn test_array_at_clone_box() {
     let data = ArrayAtData {
         element_type: DataType::Float,
+        index: 0,
     };
     let cloned = data.clone_box();
     let props = cloned.get_text_properties();
@@ -722,6 +898,7 @@ fn test_array_at_cnnd_roundtrip() {
         at_id,
         Box::new(ArrayAtData {
             element_type: DataType::IVec3,
+            index: 0,
         }),
     );
     designer.validate_active_network();

@@ -866,11 +866,23 @@ pub struct APICollectData {
     /// Optional cap on the number of elements collected. `None` collects the
     /// full stream; overridden by the wired `limit` input pin when connected.
     pub limit: Option<i32>,
+    /// Number of elements to skip before collecting. `0` (the default) means
+    /// "start at the first element"; overridden by the wired `offset` input
+    /// pin when connected.
+    pub offset: i32,
 }
 
 pub struct APIFoldData {
     pub element_type: APIDataType,
     pub accumulator_type: APIDataType,
+}
+
+pub struct APIArrayAtData {
+    pub element_type: APIDataType,
+    /// Stored index used when the `index` input pin is not connected. `0`
+    /// (the default) reads the first element; overridden by the wired
+    /// `index` input pin when connected.
+    pub index: i32,
 }
 
 pub struct APISequenceData {

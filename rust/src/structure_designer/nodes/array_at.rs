@@ -19,12 +19,19 @@ use std::collections::HashMap;
 pub struct ArrayAtData {
     /// Element type of the input array (and of the output).
     pub element_type: DataType,
+    /// Stored index used when the `index` input pin is not connected.
+    /// `0` (the default) reads the first element. Overridden by the wired
+    /// `index` input pin when connected. Negative values produce an
+    /// out-of-bounds evaluation error, same as a wired negative index.
+    #[serde(default)]
+    pub index: i32,
 }
 
 impl Default for ArrayAtData {
     fn default() -> Self {
         Self {
             element_type: DataType::Int,
+            index: 0,
         }
     }
 }
@@ -62,28 +69,22 @@ impl NodeData for ArrayAtData {
             _ => {}
         }
 
+        // Same override pattern as `collect.limit`: a wired Int pin replaces
+        // the stored field; a disconnected pin (or one yielding `None`) falls
+        // through to `self.index`. Errors propagate.
         let index_val =
             network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
-        match &index_val {
-            NetworkResult::None => return EvalOutput::single(NetworkResult::None),
+        let index: i32 = match index_val {
+            NetworkResult::Int(n) => n,
             NetworkResult::Error(_) => return EvalOutput::single(index_val),
-            _ => {}
-        }
+            _ => self.index,
+        };
 
         let items = match array_val {
             NetworkResult::Array(items) => items,
             _ => {
                 return EvalOutput::single(NetworkResult::Error(
                     "array_at: array input is not an array".to_string(),
-                ));
-            }
-        };
-
-        let index = match index_val {
-            NetworkResult::Int(i) => i,
-            _ => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "array_at: index input is not an Int".to_string(),
                 ));
             }
         };
@@ -111,10 +112,14 @@ impl NodeData for ArrayAtData {
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
-        vec![(
+        let mut props = vec![(
             "element_type".to_string(),
             TextValue::DataType(self.element_type.clone()),
-        )]
+        )];
+        if self.index != 0 {
+            props.push(("index".to_string(), TextValue::Int(self.index)));
+        }
+        props
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
@@ -123,6 +128,11 @@ impl NodeData for ArrayAtData {
                 .as_data_type()
                 .ok_or_else(|| "element_type must be a DataType".to_string())?
                 .clone();
+        }
+        if let Some(v) = props.get("index") {
+            self.index = v
+                .as_int()
+                .ok_or_else(|| "index must be an Int".to_string())?;
         }
         Ok(())
     }
@@ -156,7 +166,10 @@ impl NodeData for ArrayAtData {
         if matches!(elem, DataType::Iterator(_)) {
             return None;
         }
-        Some(Box::new(ArrayAtData { element_type: elem }))
+        Some(Box::new(ArrayAtData {
+            element_type: elem,
+            index: 0,
+        }))
     }
 }
 
@@ -164,7 +177,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
         name: "array_at".to_string(),
         description:
-            "Reads one element from an array at a given integer index. Out-of-bounds indices produce an evaluation error."
+            "Reads one element from an array at a given integer index. The index can be stored on the node (default 0) or supplied by the wired `index` input pin — the wired pin overrides the stored value when connected. Out-of-bounds indices produce an evaluation error."
                 .to_string(),
         summary: Some("Element access on an array".to_string()),
         category: NodeTypeCategory::MathAndProgramming,

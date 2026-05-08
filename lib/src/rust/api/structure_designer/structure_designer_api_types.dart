@@ -115,6 +115,31 @@ class APIApplyDiffData {
           errorOnStale == other.errorOnStale;
 }
 
+class APIArrayAtData {
+  final APIDataType elementType;
+
+  /// Stored index used when the `index` input pin is not connected. `0`
+  /// (the default) reads the first element; overridden by the wired
+  /// `index` input pin when connected.
+  final int index;
+
+  const APIArrayAtData({
+    required this.elementType,
+    required this.index,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode ^ index.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrayAtData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType &&
+          index == other.index;
+}
+
 class APIAtomComposeDiffData {
   final double tolerance;
   final bool errorOnStale;
@@ -421,13 +446,19 @@ class APICollectData {
   /// full stream; overridden by the wired `limit` input pin when connected.
   final int? limit;
 
+  /// Number of elements to skip before collecting. `0` (the default) means
+  /// "start at the first element"; overridden by the wired `offset` input
+  /// pin when connected.
+  final int offset;
+
   const APICollectData({
     required this.elementType,
     this.limit,
+    required this.offset,
   });
 
   @override
-  int get hashCode => elementType.hashCode ^ limit.hashCode;
+  int get hashCode => elementType.hashCode ^ limit.hashCode ^ offset.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -435,7 +466,8 @@ class APICollectData {
       other is APICollectData &&
           runtimeType == other.runtimeType &&
           elementType == other.elementType &&
-          limit == other.limit;
+          limit == other.limit &&
+          offset == other.offset;
 }
 
 class APICommentData {

@@ -612,6 +612,10 @@ APICollectData? getCollectData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetCollectData(
         nodeId: nodeId);
 
+APIArrayAtData? getArrayAtData({required BigInt nodeId}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetArrayAtData(
+        nodeId: nodeId);
+
 APIFoldData? getFoldData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetFoldData(nodeId: nodeId);
 
@@ -910,6 +914,11 @@ void setForeachData({required BigInt nodeId, required APIForeachData data}) =>
 void setCollectData({required BigInt nodeId, required APICollectData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetCollectData(
+            nodeId: nodeId, data: data);
+
+void setArrayAtData({required BigInt nodeId, required APIArrayAtData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetArrayAtData(
             nodeId: nodeId, data: data);
 
 void setFoldData({required BigInt nodeId, required APIFoldData data}) =>

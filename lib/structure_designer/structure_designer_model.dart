@@ -1463,6 +1463,11 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setArrayAtData(BigInt nodeId, APIArrayAtData data) {
+    structure_designer_api.setArrayAtData(nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   void setFoldData(BigInt nodeId, APIFoldData data) {
     structure_designer_api.setFoldData(nodeId: nodeId, data: data);
     refreshFromKernel();

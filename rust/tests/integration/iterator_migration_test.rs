@@ -118,7 +118,7 @@ fn test_load_old_range_to_array_len_inserts_collect() {
 
     // The synthesised `collect` is wired to the range output (pin 0).
     let collect_node = network.nodes.get(&collect_id).unwrap();
-    assert_eq!(collect_node.arguments.len(), 2);
+    assert_eq!(collect_node.arguments.len(), 3);
     assert_eq!(
         collect_node.arguments[0]
             .argument_output_pins
@@ -270,7 +270,7 @@ fn test_load_old_map_to_array_at_inserts_collect() {
 
     // Synthesised collect wires range/map → collect → array_at.
     let collect_node = network.nodes.get(&collect_id).unwrap();
-    assert_eq!(collect_node.arguments.len(), 2);
+    assert_eq!(collect_node.arguments.len(), 3);
     assert_eq!(
         collect_node.arguments[0]
             .argument_output_pins
@@ -570,7 +570,7 @@ fn test_load_old_product_to_array_at_inserts_collect() {
 
     // Synthesised collect wires product → collect → array_at.
     let collect_node = network.nodes.get(&collect_id).unwrap();
-    assert_eq!(collect_node.arguments.len(), 2);
+    assert_eq!(collect_node.arguments.len(), 3);
     assert_eq!(
         collect_node.arguments[0]
             .argument_output_pins

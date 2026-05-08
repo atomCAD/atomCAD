@@ -33,3 +33,6 @@ mod record_literal_test;
 
 #[path = "expr/template_literal_test.rs"]
 mod template_literal_test;
+
+#[path = "expr/string_concat_test.rs"]
+mod string_concat_test;

@@ -86,7 +86,7 @@ fn test_collect_registered_in_registry() {
     let nt = node_type.unwrap();
     assert_eq!(nt.name, "collect");
     assert!(nt.public);
-    assert_eq!(nt.parameters.len(), 2);
+    assert_eq!(nt.parameters.len(), 3);
     assert_eq!(nt.parameters[0].name, "iter");
     assert_eq!(
         nt.parameters[0].data_type,
@@ -94,6 +94,8 @@ fn test_collect_registered_in_registry() {
     );
     assert_eq!(nt.parameters[1].name, "limit");
     assert_eq!(nt.parameters[1].data_type, DataType::Int);
+    assert_eq!(nt.parameters[2].name, "offset");
+    assert_eq!(nt.parameters[2].data_type, DataType::Int);
     assert_eq!(nt.output_pins.len(), 1);
     assert_eq!(*nt.output_type(), DataType::Array(Box::new(DataType::Int)));
 }
@@ -109,6 +111,7 @@ fn test_collect_custom_type_int() {
     let data = CollectData {
         element_type: DataType::Int,
         limit: None,
+        offset: 0,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -129,6 +132,7 @@ fn test_collect_custom_type_float() {
     let data = CollectData {
         element_type: DataType::Float,
         limit: None,
+        offset: 0,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -149,6 +153,7 @@ fn test_collect_custom_type_structure() {
     let data = CollectData {
         element_type: DataType::Structure,
         limit: None,
+        offset: 0,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
@@ -291,6 +296,7 @@ fn test_collect_text_properties_roundtrip() {
     let original = CollectData {
         element_type: DataType::Structure,
         limit: None,
+        offset: 0,
     };
     let props = original.get_text_properties();
     assert_eq!(props.len(), 1);
@@ -307,6 +313,7 @@ fn test_collect_text_properties_values() {
     let data = CollectData {
         element_type: DataType::Float,
         limit: None,
+        offset: 0,
     };
     let props = data.get_text_properties();
     assert_eq!(
@@ -327,6 +334,7 @@ fn test_collect_data_serde_roundtrip() {
     let original = CollectData {
         element_type: DataType::Float,
         limit: None,
+        offset: 0,
     };
     let json = serde_json::to_value(&original).unwrap();
     assert_eq!(json["element_type"], "Float");
@@ -343,6 +351,7 @@ fn test_collect_clone_box() {
     let data = CollectData {
         element_type: DataType::Vec3,
         limit: None,
+        offset: 0,
     };
     let cloned = data.clone_box();
     let props = cloned.get_text_properties();
@@ -461,6 +470,7 @@ fn test_collect_cnnd_roundtrip() {
         Box::new(CollectData {
             element_type: DataType::Vec3,
             limit: None,
+            offset: 0,
         }),
     );
     designer.validate_active_network();
@@ -535,6 +545,29 @@ fn add_collect_with_limit(designer: &mut StructureDesigner, x: f64, limit: Optio
         Box::new(CollectData {
             element_type: DataType::Int,
             limit,
+            offset: 0,
+        }),
+    );
+    id
+}
+
+/// Helper for offset-related tests. Stores both `limit` and `offset` on the
+/// collect node; either can be `None`/`0` for the unset case.
+fn add_collect_with_limit_offset(
+    designer: &mut StructureDesigner,
+    x: f64,
+    limit: Option<i32>,
+    offset: i32,
+) -> u64 {
+    let id = designer.add_node("collect", DVec2::new(x, 0.0));
+    set_node_data(
+        designer,
+        "test",
+        id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+            limit,
+            offset,
         }),
     );
     id
@@ -736,6 +769,7 @@ fn test_collect_text_properties_omits_none_limit() {
     let data = CollectData {
         element_type: DataType::Float,
         limit: None,
+        offset: 0,
     };
     let props = data.get_text_properties();
     assert_eq!(props.len(), 1);
@@ -747,6 +781,7 @@ fn test_collect_text_properties_emits_some_limit() {
     let data = CollectData {
         element_type: DataType::Float,
         limit: Some(50),
+        offset: 0,
     };
     let props = data.get_text_properties();
     assert_eq!(props.len(), 2);
@@ -759,6 +794,7 @@ fn test_collect_text_properties_roundtrip_with_limit() {
     let original = CollectData {
         element_type: DataType::Int,
         limit: Some(7),
+        offset: 0,
     };
     let props = original.get_text_properties();
     let mut restored = CollectData::default();
@@ -774,9 +810,263 @@ fn test_collect_serde_roundtrip_with_limit() {
     let original = CollectData {
         element_type: DataType::Float,
         limit: Some(42),
+        offset: 0,
     };
     let json = serde_json::to_value(&original).unwrap();
     assert_eq!(json["limit"], 42);
     let restored: CollectData = serde_json::from_value(json).unwrap();
     assert_eq!(restored.limit, Some(42));
+}
+
+// ============================================================================
+// Offset field — stored, wired pin override, validation, windowing
+// ============================================================================
+
+#[test]
+fn test_collect_default_offset_is_zero() {
+    let data = CollectData::default();
+    assert_eq!(data.offset, 0);
+}
+
+#[test]
+fn test_collect_zero_offset_is_identity() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 5);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, None, 0);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![0, 1, 2, 3, 4]);
+    assert_eq!(subtitle.as_deref(), Some("(5 elements)"));
+}
+
+#[test]
+fn test_collect_stored_offset_skips_prefix() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, None, 3);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![3, 4, 5, 6, 7, 8, 9]);
+    assert_eq!(subtitle.as_deref(), Some("(7 elements)"));
+}
+
+#[test]
+fn test_collect_offset_with_limit_windows_middle() {
+    // offset=3 + limit=4 over [0..10) → [3,4,5,6]; cap-hit since walker had
+    // more after the window.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, Some(4), 3);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![3, 4, 5, 6]);
+    assert_eq!(subtitle.as_deref(), Some("(stopped at limit 4)"));
+}
+
+#[test]
+fn test_collect_offset_overruns_yields_empty() {
+    // offset >= stream length → empty array, no cap-hit, no error.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 5);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, None, 100);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), Vec::<i32>::new());
+    assert_eq!(subtitle.as_deref(), Some("(0 elements)"));
+}
+
+#[test]
+fn test_collect_offset_at_exact_end_yields_empty() {
+    // offset == stream length — boundary case, walker exhausts during skip.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 5);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, None, 5);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), Vec::<i32>::new());
+    assert_eq!(subtitle.as_deref(), Some("(0 elements)"));
+}
+
+#[test]
+fn test_collect_offset_with_limit_overruns_yields_empty() {
+    // offset overruns even with a non-None limit → still empty, no cap-hit.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 5);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, Some(2), 100);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), Vec::<i32>::new());
+    assert_eq!(subtitle.as_deref(), Some("(0 elements)"));
+}
+
+#[test]
+fn test_collect_wired_offset_overrides_stored() {
+    // Stored offset says 7, wired pin says 2 → 2 wins.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let offset_id = add_int_node(&mut designer, 100.0, 2);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, Some(3), 7);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(offset_id, 0, collect_id, 2);
+
+    let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![2, 3, 4]);
+    assert_eq!(subtitle.as_deref(), Some("(stopped at limit 3)"));
+}
+
+#[test]
+fn test_collect_wired_offset_with_stored_zero() {
+    // Stored offset is 0; wired pin sets it to 4.
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let offset_id = add_int_node(&mut designer, 100.0, 4);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, None, 0);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(offset_id, 0, collect_id, 2);
+
+    let (result, _) = evaluate_with_subtitle(&designer, "test", collect_id);
+    assert_eq!(extract_int_array(&result), vec![4, 5, 6, 7, 8, 9]);
+}
+
+#[test]
+fn test_collect_stored_offset_negative_returns_error() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, None, -1);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+
+    let (result, _) = evaluate_with_subtitle(&designer, "test", collect_id);
+    match result {
+        NetworkResult::Error(msg) => {
+            assert!(
+                msg.contains("offset must be non-negative"),
+                "expected non-negative error, got: {}",
+                msg
+            );
+        }
+        other => panic!("Expected Error, got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_collect_wired_offset_negative_returns_error() {
+    let mut designer = setup_designer_with_network("test");
+    let range_id = add_range(&mut designer, 0.0, 10);
+    let offset_id = add_int_node(&mut designer, 100.0, -3);
+    let collect_id = add_collect_with_limit_offset(&mut designer, 200.0, None, 0);
+    designer.validate_active_network();
+    designer.connect_nodes(range_id, 0, collect_id, 0);
+    designer.connect_nodes(offset_id, 0, collect_id, 2);
+
+    let (result, _) = evaluate_with_subtitle(&designer, "test", collect_id);
+    match result {
+        NetworkResult::Error(msg) => {
+            assert!(
+                msg.contains("offset must be non-negative"),
+                "expected non-negative error, got: {}",
+                msg
+            );
+        }
+        other => panic!("Expected Error, got {:?}", other.to_display_string()),
+    }
+}
+
+// ============================================================================
+// Text properties roundtrip for offset
+// ============================================================================
+
+#[test]
+fn test_collect_text_properties_omits_zero_offset() {
+    let data = CollectData {
+        element_type: DataType::Float,
+        limit: None,
+        offset: 0,
+    };
+    let props = data.get_text_properties();
+    assert_eq!(props.len(), 1);
+    assert_eq!(props[0].0, "element_type");
+}
+
+#[test]
+fn test_collect_text_properties_emits_nonzero_offset() {
+    let data = CollectData {
+        element_type: DataType::Float,
+        limit: None,
+        offset: 25,
+    };
+    let props = data.get_text_properties();
+    assert_eq!(props.len(), 2);
+    let map = props_to_hashmap(props);
+    assert_eq!(map.get("offset"), Some(&TextValue::Int(25)));
+}
+
+#[test]
+fn test_collect_text_properties_emits_both_limit_and_offset() {
+    let data = CollectData {
+        element_type: DataType::Int,
+        limit: Some(50),
+        offset: 10,
+    };
+    let props = data.get_text_properties();
+    assert_eq!(props.len(), 3);
+    let map = props_to_hashmap(props);
+    assert_eq!(map.get("limit"), Some(&TextValue::Int(50)));
+    assert_eq!(map.get("offset"), Some(&TextValue::Int(10)));
+}
+
+#[test]
+fn test_collect_text_properties_roundtrip_with_offset() {
+    let original = CollectData {
+        element_type: DataType::Int,
+        limit: Some(7),
+        offset: 12,
+    };
+    let props = original.get_text_properties();
+    let mut restored = CollectData::default();
+    restored
+        .set_text_properties(&props_to_hashmap(props))
+        .unwrap();
+    assert_eq!(restored.element_type, DataType::Int);
+    assert_eq!(restored.limit, Some(7));
+    assert_eq!(restored.offset, 12);
+}
+
+#[test]
+fn test_collect_serde_roundtrip_with_offset() {
+    let original = CollectData {
+        element_type: DataType::Float,
+        limit: None,
+        offset: 33,
+    };
+    let json = serde_json::to_value(&original).unwrap();
+    assert_eq!(json["offset"], 33);
+    let restored: CollectData = serde_json::from_value(json).unwrap();
+    assert_eq!(restored.offset, 33);
+}
+
+#[test]
+fn test_collect_serde_old_file_without_offset_field_loads_with_zero() {
+    // Backward-compat: old .cnnd files written before `offset` existed have
+    // no `offset` JSON field. `#[serde(default)]` must fill it as 0.
+    let json = serde_json::json!({
+        "element_type": "Int",
+    });
+    let data: CollectData = serde_json::from_value(json).unwrap();
+    assert_eq!(data.offset, 0);
+    assert_eq!(data.limit, None);
 }

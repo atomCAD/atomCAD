@@ -11,12 +11,22 @@ import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart
 /// path of least resistance, large enough to be useful for most streams.
 const int DEFAULT_COLLECT_LIMIT = 100;
 
-/// Editor widget for `collect` nodes. Two stored properties:
+/// Pin index of the `limit` input pin on the `collect` node. Mirrors
+/// `rust/src/structure_designer/nodes/collect.rs::get_node_type`.
+const int COLLECT_LIMIT_PIN_INDEX = 1;
+
+/// Pin index of the `offset` input pin on the `collect` node.
+const int COLLECT_OFFSET_PIN_INDEX = 2;
+
+/// Editor widget for `collect` nodes. Three stored properties:
 ///   - `element_type` drives the input pin's `Iter[T]` and the output pin's
 ///     `Array[T]` declared types.
 ///   - `limit` (optional) caps the collected array size. When the `limit`
 ///     input pin is wired, the wired Int overrides the stored value at
 ///     evaluation time — see `doc/design_iter_display_via_collect.md`.
+///   - `offset` skips that many elements at the front of the stream before
+///     collecting starts. `0` is the natural identity. When the `offset`
+///     input pin is wired, the wired Int overrides the stored value.
 class CollectEditor extends StatefulWidget {
   final BigInt nodeId;
   final APICollectData? data;
@@ -41,7 +51,9 @@ class CollectEditorState extends State<CollectEditor> {
     }
 
     final limit = widget.data!.limit;
-    final limitPinConnected = _isLimitPinConnected();
+    final offset = widget.data!.offset;
+    final limitPinConnected = _isPinConnected(COLLECT_LIMIT_PIN_INDEX);
+    final offsetPinConnected = _isPinConnected(COLLECT_OFFSET_PIN_INDEX);
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -57,10 +69,7 @@ class CollectEditorState extends State<CollectEditor> {
             label: 'Element Type',
             value: widget.data!.elementType,
             onChanged: (newValue) {
-              widget.model.setCollectData(
-                widget.nodeId,
-                APICollectData(elementType: newValue, limit: limit),
-              );
+              _updateData(elementType: newValue);
             },
           ),
           const SizedBox(height: 12),
@@ -104,6 +113,27 @@ class CollectEditorState extends State<CollectEditor> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          if (offsetPinConnected)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Offset supplied by `offset` input. Disconnect to edit inline.',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ),
+          Opacity(
+            opacity: offsetPinConnected ? 0.5 : 1.0,
+            child: IgnorePointer(
+              ignoring: offsetPinConnected,
+              child: IntInput(
+                label: 'Offset',
+                value: offset,
+                minimumValue: 0,
+                onChanged: (newValue) => _setOffset(newValue),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -118,21 +148,36 @@ class CollectEditorState extends State<CollectEditor> {
   }
 
   void _setLimit(int? newLimit) {
+    _updateData(limit: () => newLimit);
+  }
+
+  void _setOffset(int newOffset) {
+    _updateData(offset: newOffset);
+  }
+
+  /// Single-channel update path. `limit` is wrapped in a thunk so callers can
+  /// pass `() => null` to clear it without colliding with "field not provided".
+  void _updateData({
+    APIDataType? elementType,
+    int? Function()? limit,
+    int? offset,
+  }) {
     widget.model.setCollectData(
       widget.nodeId,
       APICollectData(
-        elementType: widget.data!.elementType,
-        limit: newLimit,
+        elementType: elementType ?? widget.data!.elementType,
+        limit: limit != null ? limit() : widget.data!.limit,
+        offset: offset ?? widget.data!.offset,
       ),
     );
   }
 
-  bool _isLimitPinConnected() {
+  bool _isPinConnected(int pinIndex) {
     final view = widget.model.nodeNetworkView;
     if (view == null) return false;
+    final target = BigInt.from(pinIndex);
     for (final wire in view.wires) {
-      if (wire.destNodeId == widget.nodeId &&
-          wire.destParamIndex == BigInt.one) {
+      if (wire.destNodeId == widget.nodeId && wire.destParamIndex == target) {
         return true;
       }
     }
