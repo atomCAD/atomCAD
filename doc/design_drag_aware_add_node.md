@@ -11,7 +11,6 @@ This document designs a single mechanism that fixes both halves: candidate nodes
 
 Out of scope:
 
-- `expr`'s output type (driven by parsed expression text — no clean automatic adaptation).
 - Custom networks (their parameters' types come from the network's own `parameter` nodes; those *do* get adapted via this mechanism, which means custom networks that re-export a single user parameter benefit transitively).
 - `record_construct` / `record_destructure` / `product` schema selection — the property is a record-def *name* (not a `DataType`), so adapting requires a fuzzy lookup against `record_type_defs`. Possible follow-up; left out for v1.
 - Auto-connect pin selection when multiple pins of the new node are compatible (already user-driven via the existing pin-picker dialog).
@@ -246,6 +245,7 @@ The popup widget's filter call (`getCompatibleNodeTypes`) is unchanged in shape 
 | `array_concat` | `element_type` | source `Array[T]` → `element_type=T` | source `Array[T]` → `element_type=T` | |
 | `array_append` | `element_type` | source `Array[T]` *or* `T` → `element_type=T` (two compatible pins; auto-connect picker handles disambiguation) | source `Array[T]` → `element_type=T` | |
 | `parameter` | `data_type` | source `T` → `data_type=T` (the `default` input pin then accepts `T`) | source `T` → `data_type=T` (the output is `data_type`) | The `FromInput` case is the user-asked-for "drag from input pin → spawn parameter that feeds it." See §"Parameter node specifics". |
+| `expr` | `parameters`, `expression`, `output_type` | source `T` → single passthrough param `x: T`, body `"x"`, output `T` | source `T` → same (identity body makes output type == input type) | Rejects abstract / `Function(_)` / `Iter[T]` / `Unit`. The adapter calls `parse_and_validate(0)` before returning so the new node arrives with `expr: Some(_)` and `output_type: Some(T)` already populated — without this priming step, the new node would render "Expression not parsed" until the user opened the property panel and re-saved. See §"Expr node specifics" below. |
 
 ### Element-type extraction helper
 
@@ -325,6 +325,54 @@ impl NodeData for ParameterData {
 ```
 
 The instantiation-order discussion in §"Instantiation order" is specifically motivated by this node — the existing parameter special-case in `add_node` (lines 1264-1286) overwrites `param_id` / `param_name` / `sort_order`, none of which the adapter sets, so the two passes compose cleanly.
+
+### Expr node specifics
+
+`expr`'s output type is normally derived by parsing `self.expression` and validating against `self.parameters`, so adapting it is a matter of *choosing a body* whose output we can predict. The cheapest such body is the identity expression `"x"`: with a single parameter `x: T`, validation always returns `T`, so the resulting node has input type `T`, output type `T`, and acts as a typed pass-through that the user can immediately replace with the real expression they want.
+
+```rust
+impl NodeData for ExprData {
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // Variables in the expression language must be concrete data values;
+        // abstract supertypes, functions, iterators (lazy walkers can't be
+        // re-read like values), and `Unit` (no value to pass through) are
+        // rejected.
+        if source_type.is_abstract()
+            || matches!(
+                source_type,
+                DataType::Function(_) | DataType::Iterator(_) | DataType::Unit
+            )
+        {
+            return None;
+        }
+        let mut adapted = ExprData {
+            parameters: vec![ExprParameter {
+                id: Some(1),
+                name: "x".to_string(),
+                data_type: source_type.clone(),
+                data_type_str: None,
+            }],
+            expression: "x".to_string(),
+            expr: None,
+            error: None,
+            output_type: None,
+        };
+        // Prime `self.expr` and `self.output_type` so eval works
+        // immediately — the add-node path otherwise leaves a fresh expr
+        // node showing "Expression not parsed" until the user opens the
+        // panel and re-saves.
+        adapted.parse_and_validate(0);
+        Some(Box::new(adapted))
+    }
+}
+```
+
+Both drag directions use the same adapted data — the identity body means input type == output type, so `FromInput` (where we want the node's output to match the source) is satisfied for free. Filter strict-verification passes via identity (no broadcast), so the asymmetric Stage-2 predicate from §"Asymmetric verification" admits the adapter for all accepted source types.
 
 ## Backward compatibility
 
@@ -436,7 +484,7 @@ Phases 1 and 2 are merged: shipping the trait + filter refactor without any over
 ## Open questions / left for follow-up
 
 1. **`record_construct` / `record_destructure` / `product`** — these have a `schema` / `target` `String` property naming a record def, not a `DataType`. Adapter would need to find a record def whose schema matches the drag source's element type, which is more involved (multiple defs may match, none may match, the user might want a *new* def). Defer until the v1 mechanism is in place; the per-node adapter slot is ready for them when the lookup logic is decided.
-2. **`expr` adapter** — `expr`'s output type comes from parsing the user-authored expression; there's no clean way to adapt without writing a default expression. Possibility: adapt to `expr` with a single parameter typed `T` and a body that is just the parameter name (so the output is `T`). Useful but borderline; punt.
+2. ~~**`expr` adapter**~~ — *Resolved.* The identity-body shape (`{ parameters: [{ name: "x", data_type: T }], expression: "x" }`) is unambiguous and useful: pick `expr` from a drag and the new node arrives as a typed pass-through that the user immediately edits into a real expression. See §"Expr node specifics".
 3. **Custom-network adapters** — a custom network whose return-node passes through a single parameter's type *could* surface in the drag popup with that parameter's type set to the source. Doable via a default `adapt_for_drag_source` impl on `CustomNodeData` that walks the network's signature and adapts a single parameter. Significantly more complex than the per-node adapters; defer to a follow-up.
 4. **`is_abstract` rejection consistency** — every adapter currently rejects abstract source types (`HasAtoms`, `HasStructure`, `HasFreeLinOps`) and `Function(_)`. Worth lifting that check into the filter so adapters don't have to repeat it. Cosmetic; do it once two or three adapters duplicate the boilerplate.
 5. **Multiple adapters per node** — could a node have two valid adaptations for the same source (e.g. `array_append` accepting either `Array[T]` or `T` from a `FromOutput` drag of type `T`)? The current design returns at most one adapted `NodeData`; the auto-connect step's existing pin-picker handles which pin gets wired. This is fine because both pins use the same `element_type`, so one adaptation covers both. If a future node has two type properties whose *separate* settings would each yield a valid match, the design would need to surface multiple popup entries — not currently anticipated.

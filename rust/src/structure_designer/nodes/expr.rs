@@ -9,7 +9,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::{
     NetworkResult, error_in_input, input_missing_error,
 };
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -124,6 +124,54 @@ impl NodeData for ExprData {
             .collect();
 
         Some(custom_node_type)
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // Adapt the default expr template (one parameter `x` of the drag
+        // source's type, identity body `x`) so the resulting node passes the
+        // source value through unchanged. Both drag directions adapt
+        // identically: the identity body means input type == output type, so
+        // a `FromInput` drag (where the popup wants `node.output → source`)
+        // is satisfied automatically. See
+        // `doc/design_drag_aware_add_node.md` (per-node adapter table).
+        //
+        // Reject types that can't sensibly be variables in the expression
+        // language: abstract supertypes (no concrete representation),
+        // function-typed values (callable, not data), iterators (lazy
+        // walkers can't be re-read like values), and `Unit` (no value to
+        // pass through).
+        if source_type.is_abstract()
+            || matches!(
+                source_type,
+                DataType::Function(_) | DataType::Iterator(_) | DataType::Unit
+            )
+        {
+            return None;
+        }
+        let mut adapted = ExprData {
+            parameters: vec![ExprParameter {
+                id: Some(1),
+                name: "x".to_string(),
+                data_type: source_type.clone(),
+                data_type_str: None,
+            }],
+            expression: "x".to_string(),
+            expr: None,
+            error: None,
+            output_type: None,
+        };
+        // Parse the body up front so the new node arrives with `expr`
+        // populated and `output_type` derived — otherwise `eval` would
+        // return "Expression not parsed" until the user opens the
+        // property panel and re-saves. node_id `0` is a stand-in (the
+        // validation errors aren't propagated from here).
+        adapted.parse_and_validate(0);
+        Some(Box::new(adapted))
     }
 
     fn eval<'a>(

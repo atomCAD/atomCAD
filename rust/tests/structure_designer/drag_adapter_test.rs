@@ -10,6 +10,7 @@
 //! `Array[Foo]` drag from output surfaces all of them.
 
 use glam::f64::DVec2;
+use rust_lib_flutter_cad::structure_designer::data_type::RecordType;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::node_data::{DragDirection, NodeData};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -18,6 +19,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::array_at::ArrayAtData;
 use rust_lib_flutter_cad::structure_designer::nodes::array_concat::ArrayConcatData;
 use rust_lib_flutter_cad::structure_designer::nodes::array_len::ArrayLenData;
 use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
+use rust_lib_flutter_cad::structure_designer::nodes::expr::ExprData;
 use rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData;
 use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
@@ -1122,4 +1124,264 @@ fn add_node_with_drag_source_falls_back_when_only_broadcast_match() {
         "adapter must be rejected: scalar Blueprint into Iter[T] is broadcast-only"
     );
     assert_eq!(data.output_type, DataType::Float);
+}
+
+// ============================================================================
+// expr adapter
+// ============================================================================
+//
+// `expr` adapts by replacing its parameter list with a single passthrough
+// parameter `x: T`, body `"x"`, and pre-running `parse_and_validate` so the
+// new node has `expr: Some(_)` and `output_type: Some(T)` immediately.
+// Both drag directions adapt identically — see
+// `doc/design_drag_aware_add_node.md` §"Expr node specifics".
+
+fn adapt_expr(source: DataType, dir: DragDirection) -> Option<ExprData> {
+    let registry = NodeTypeRegistry::new();
+    // Use the default created by `expr_get_node_type().node_data_creator`
+    // to mirror what the popup actually feeds the adapter.
+    let data = (rust_lib_flutter_cad::structure_designer::nodes::expr::get_node_type()
+        .node_data_creator)();
+    let adapted = data.adapt_for_drag_source(&source, dir, &registry)?;
+    adapted.as_any_ref().downcast_ref::<ExprData>().cloned()
+}
+
+#[test]
+fn expr_adapter_from_output_int() {
+    let adapted = adapt_expr(DataType::Int, DragDirection::FromOutput).expect("should adapt");
+    assert_eq!(adapted.parameters.len(), 1);
+    assert_eq!(adapted.parameters[0].name, "x");
+    assert_eq!(adapted.parameters[0].data_type, DataType::Int);
+    assert_eq!(adapted.expression, "x");
+    assert!(
+        adapted.expr.is_some(),
+        "parse_and_validate must have populated `expr`"
+    );
+    assert_eq!(adapted.output_type, Some(DataType::Int));
+    assert!(
+        adapted.error.is_none(),
+        "identity body against a valid parameter type must validate cleanly; got {:?}",
+        adapted.error
+    );
+}
+
+#[test]
+fn expr_adapter_from_output_float() {
+    let adapted = adapt_expr(DataType::Float, DragDirection::FromOutput).expect("should adapt");
+    assert_eq!(adapted.parameters[0].data_type, DataType::Float);
+    assert_eq!(adapted.output_type, Some(DataType::Float));
+}
+
+#[test]
+fn expr_adapter_from_output_vec3() {
+    let adapted = adapt_expr(DataType::Vec3, DragDirection::FromOutput).expect("should adapt");
+    assert_eq!(adapted.parameters[0].data_type, DataType::Vec3);
+    assert_eq!(adapted.output_type, Some(DataType::Vec3));
+}
+
+#[test]
+fn expr_adapter_from_output_concrete_phase_type() {
+    // Concrete phase types (`Blueprint`, `Crystal`, `Molecule`) are valid
+    // expr parameter types — the body `x` just passes the value through.
+    // Useful as a typed pass-through the user immediately replaces with a
+    // real expression.
+    let adapted = adapt_expr(DataType::Crystal, DragDirection::FromOutput).expect("should adapt");
+    assert_eq!(adapted.parameters[0].data_type, DataType::Crystal);
+    assert_eq!(adapted.output_type, Some(DataType::Crystal));
+}
+
+#[test]
+fn expr_adapter_from_output_record() {
+    // Named record types are valid expr parameter types — expressions can
+    // member-access them (`x.from`, `x.to`). `ElementMapping` is a built-in
+    // record def, so it's always present in the registry.
+    let source = DataType::Record(RecordType::Named("ElementMapping".to_string()));
+    let adapted = adapt_expr(source.clone(), DragDirection::FromOutput).expect("should adapt");
+    assert_eq!(adapted.parameters[0].data_type, source);
+    assert_eq!(adapted.output_type, Some(source));
+}
+
+#[test]
+fn expr_adapter_from_output_array() {
+    // `Array[T]` is a valid expr parameter type — `len(x)` and `x[i]` work.
+    let source = DataType::Array(Box::new(DataType::Int));
+    let adapted = adapt_expr(source.clone(), DragDirection::FromOutput).expect("should adapt");
+    assert_eq!(adapted.parameters[0].data_type, source);
+    assert_eq!(adapted.output_type, Some(source));
+}
+
+#[test]
+fn expr_adapter_from_input_int() {
+    // FromInput direction: the user dragged from a target input pin of type
+    // Int and wants a node that produces Int. Identity body means
+    // output type == input type, so the adapter is symmetric.
+    let adapted = adapt_expr(DataType::Int, DragDirection::FromInput).expect("should adapt");
+    assert_eq!(adapted.parameters[0].data_type, DataType::Int);
+    assert_eq!(adapted.output_type, Some(DataType::Int));
+}
+
+#[test]
+fn expr_adapter_rejects_abstract() {
+    assert!(adapt_expr(DataType::HasAtoms, DragDirection::FromOutput).is_none());
+    assert!(adapt_expr(DataType::HasStructure, DragDirection::FromOutput).is_none());
+    assert!(adapt_expr(DataType::HasFreeLinOps, DragDirection::FromOutput).is_none());
+}
+
+#[test]
+fn expr_adapter_rejects_function() {
+    let fn_ty = DataType::Function(FunctionType {
+        parameter_types: vec![DataType::Int],
+        output_type: Box::new(DataType::Int),
+    });
+    assert!(adapt_expr(fn_ty, DragDirection::FromOutput).is_none());
+}
+
+#[test]
+fn expr_adapter_rejects_iterator() {
+    // Iter[T] is rejected: lazy walkers can't be re-read from the
+    // variables map across multiple uses, so they don't behave like data
+    // values in the expression language.
+    assert!(
+        adapt_expr(
+            DataType::Iterator(Box::new(DataType::Int)),
+            DragDirection::FromOutput
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn expr_adapter_rejects_unit() {
+    assert!(adapt_expr(DataType::Unit, DragDirection::FromOutput).is_none());
+}
+
+// --- Filter (popup) integration -------------------------------------------
+
+#[test]
+fn int_from_output_surfaces_expr_via_adapter() {
+    let registry = NodeTypeRegistry::new();
+    let categories = registry.get_compatible_node_types(&DataType::Int, true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    assert!(
+        names.contains(&"expr"),
+        "expr must surface for scalar Int from output; got {:?}",
+        names
+    );
+}
+
+#[test]
+fn float_from_output_surfaces_expr_via_adapter() {
+    let registry = NodeTypeRegistry::new();
+    let categories = registry.get_compatible_node_types(&DataType::Float, true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    assert!(
+        names.contains(&"expr"),
+        "expr must surface for scalar Float from output"
+    );
+}
+
+#[test]
+fn iter_int_from_output_does_not_surface_expr() {
+    // Sanity: the expr adapter rejects Iter[T], so the filter must not
+    // surface `expr` for an iterator drag source.
+    let registry = NodeTypeRegistry::new();
+    let categories =
+        registry.get_compatible_node_types(&DataType::Iterator(Box::new(DataType::Int)), true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    assert!(
+        !names.contains(&"expr"),
+        "expr must not surface for Iter[Int] from output (adapter rejects iterators); got {:?}",
+        names
+    );
+}
+
+#[test]
+fn crystal_from_input_surfaces_expr_via_adapter() {
+    // FromInput direction: dragging from a Crystal-typed consumer pin
+    // should surface `expr` (with x: Crystal, output Crystal).
+    let registry = NodeTypeRegistry::new();
+    let categories = registry.get_compatible_node_types(&DataType::Crystal, false);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    assert!(
+        names.contains(&"expr"),
+        "expr must surface for Crystal-typed input drag; got {:?}",
+        names
+    );
+}
+
+// --- Create-time tests ----------------------------------------------------
+
+fn get_expr_data(designer: &StructureDesigner, node_id: u64) -> ExprData {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    let node = net.nodes.get(&node_id).unwrap();
+    node.data
+        .as_any_ref()
+        .downcast_ref::<ExprData>()
+        .cloned()
+        .expect("ExprData")
+}
+
+#[test]
+fn add_node_with_drag_source_configures_expr_float() {
+    // The full create-time path: popup picks `expr` after dragging from a
+    // Float output, the adapter primes the data, and we verify the new
+    // node arrives with `expr` parsed and `output_type` derived — not the
+    // default-data Int template.
+    let mut designer = setup_designer();
+    let node_id = designer.add_node_with_drag_source(
+        "expr",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: DataType::Float,
+            direction: DragDirection::FromOutput,
+        }),
+    );
+    assert_ne!(node_id, 0);
+    let data = get_expr_data(&designer, node_id);
+    assert_eq!(data.parameters.len(), 1);
+    assert_eq!(data.parameters[0].name, "x");
+    assert_eq!(data.parameters[0].data_type, DataType::Float);
+    assert_eq!(data.expression, "x");
+    assert_eq!(data.output_type, Some(DataType::Float));
+    assert!(
+        data.expr.is_some(),
+        "expr must arrive parsed — without `parse_and_validate` in the adapter, eval would return \"Expression not parsed\""
+    );
+}
+
+#[test]
+fn add_node_with_drag_source_falls_back_for_expr_on_iter() {
+    // expr's adapter rejects `Iter[T]`, so create-time should keep the
+    // default Int template (not adopt some half-resolved iter shape).
+    let mut designer = setup_designer();
+    let node_id = designer.add_node_with_drag_source(
+        "expr",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: DataType::Iterator(Box::new(DataType::Int)),
+            direction: DragDirection::FromOutput,
+        }),
+    );
+    assert_ne!(node_id, 0);
+    let data = get_expr_data(&designer, node_id);
+    // Default ExprData from `node_data_creator`: x: Int, expr "x",
+    // output Int.
+    assert_eq!(data.parameters[0].data_type, DataType::Int);
+    assert_eq!(data.expression, "x");
 }
