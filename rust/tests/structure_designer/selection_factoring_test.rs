@@ -237,6 +237,104 @@ fn test_selection_no_external_output_valid() {
 
     assert!(analysis.is_valid);
     assert!(analysis.external_output.is_none());
+    // A single isolated node is the unique unconsumed sink → promoted to return.
+    assert_eq!(analysis.return_source, Some((node_a, 0)));
+}
+
+#[test]
+fn test_return_source_mirrors_external_output() {
+    let mut network = NodeNetwork::new(create_test_node_type("test"));
+    let registry = create_test_registry();
+
+    // A (selected) -> B (outside)
+    let node_a = network.add_node("cuboid", DVec2::new(0.0, 0.0), 0, Box::new(MockNodeData));
+    let node_b = network.add_node("union", DVec2::new(100.0, 0.0), 1, Box::new(MockNodeData));
+    network.connect_nodes(node_a, 0, node_b, 0, false);
+    network.select_node(node_a);
+
+    let analysis = analyze_selection_for_factoring(&network, &registry);
+
+    assert!(analysis.is_valid);
+    assert_eq!(analysis.return_source, Some((node_a, 0)));
+}
+
+#[test]
+fn test_unique_sink_promoted_to_return_no_external_output() {
+    let mut network = NodeNetwork::new(create_test_node_type("test"));
+    let registry = create_test_registry();
+
+    // A -> B, both selected, no wires leave the selection.
+    let node_a = network.add_node("cuboid", DVec2::new(0.0, 0.0), 0, Box::new(MockNodeData));
+    let node_b = network.add_node("union", DVec2::new(100.0, 0.0), 1, Box::new(MockNodeData));
+    network.connect_nodes(node_a, 0, node_b, 0, false);
+    network.select_nodes(vec![node_a, node_b]);
+
+    let analysis = analyze_selection_for_factoring(&network, &registry);
+
+    assert!(analysis.is_valid);
+    assert!(analysis.external_output.is_none());
+    // B is the only selected node whose output isn't consumed inside the selection.
+    assert_eq!(analysis.return_source, Some((node_b, 0)));
+
+    let subnetwork =
+        create_subnetwork_from_selection(&network, &analysis, "my_subnet", &[], &registry);
+    assert!(subnetwork.return_node_id.is_some());
+    // The new return node should be a `union` (the mapped B).
+    let return_node = subnetwork
+        .nodes
+        .get(&subnetwork.return_node_id.unwrap())
+        .unwrap();
+    assert_eq!(return_node.node_type_name, "union");
+}
+
+#[test]
+fn test_ambiguous_sinks_no_return_source() {
+    let mut network = NodeNetwork::new(create_test_node_type("test"));
+    let registry = create_test_registry();
+
+    // Two completely disconnected nodes, both selected.
+    let node_a = network.add_node("cuboid", DVec2::new(0.0, 0.0), 0, Box::new(MockNodeData));
+    let node_b = network.add_node(
+        "cuboid",
+        DVec2::new(100.0, 0.0),
+        0,
+        Box::new(MockNodeData),
+    );
+    network.select_nodes(vec![node_a, node_b]);
+
+    let analysis = analyze_selection_for_factoring(&network, &registry);
+
+    assert!(analysis.is_valid);
+    assert!(analysis.external_output.is_none());
+    // Two unconsumed sinks → ambiguous → no return source.
+    assert_eq!(analysis.return_source, None);
+
+    let subnetwork =
+        create_subnetwork_from_selection(&network, &analysis, "my_subnet", &[], &registry);
+    assert!(subnetwork.return_node_id.is_none());
+}
+
+#[test]
+fn test_diamond_shape_picks_join_node_as_return() {
+    let mut network = NodeNetwork::new(create_test_node_type("test"));
+    let registry = create_test_registry();
+
+    // A -> B, A -> C, B -> D, C -> D. All four selected, no external wires.
+    let node_a = network.add_node("cuboid", DVec2::new(0.0, 0.0), 0, Box::new(MockNodeData));
+    let node_b = network.add_node("union", DVec2::new(100.0, -50.0), 1, Box::new(MockNodeData));
+    let node_c = network.add_node("union", DVec2::new(100.0, 50.0), 1, Box::new(MockNodeData));
+    let node_d = network.add_node("union", DVec2::new(200.0, 0.0), 2, Box::new(MockNodeData));
+    network.connect_nodes(node_a, 0, node_b, 0, false);
+    network.connect_nodes(node_a, 0, node_c, 0, false);
+    network.connect_nodes(node_b, 0, node_d, 0, false);
+    network.connect_nodes(node_c, 0, node_d, 1, false);
+    network.select_nodes(vec![node_a, node_b, node_c, node_d]);
+
+    let analysis = analyze_selection_for_factoring(&network, &registry);
+
+    assert!(analysis.is_valid);
+    assert!(analysis.external_output.is_none());
+    assert_eq!(analysis.return_source, Some((node_d, 0)));
 }
 
 #[test]

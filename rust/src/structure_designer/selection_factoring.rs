@@ -57,6 +57,15 @@ pub struct SelectionAnalysis {
     pub external_inputs: Vec<ExternalInput>,
     /// Wire going OUT OF the selection to OUTSIDE (0 or 1 for valid selection)
     pub external_output: Option<ExternalOutput>,
+    /// The `(source_node_id, source_output_pin_index)` inside the selection
+    /// that becomes the return of the new subnetwork.
+    ///
+    /// - When `external_output` is `Some`, this mirrors its source pin.
+    /// - When `external_output` is `None` and exactly one selected node has
+    ///   no outputs consumed by any selected node ("unique unconsumed sink"),
+    ///   this is `(that_node, 0)`.
+    /// - Otherwise `None` — the new subnetwork has no return node set.
+    pub return_source: Option<(u64, i32)>,
     /// Whether the selection is valid for factoring
     pub is_valid: bool,
     /// If not valid, the reason why
@@ -71,6 +80,7 @@ fn invalid(reason: &str) -> SelectionAnalysis {
         selected_ids: HashSet::new(),
         external_inputs: Vec::new(),
         external_output: None,
+        return_source: None,
         is_valid: false,
         invalid_reason: Some(reason.to_string()),
         bounding_box: (DVec2::ZERO, DVec2::ZERO),
@@ -144,6 +154,39 @@ fn deduplicate_external_inputs(inputs: Vec<ExternalInput>) -> Vec<ExternalInput>
         .into_iter()
         .filter(|input| seen.insert((input.source_node_id, input.source_output_pin_index)))
         .collect()
+}
+
+/// Finds the unique unconsumed sink in the selection: a selected node whose
+/// outputs are not referenced by any other selected node's arguments. Returns
+/// `Some(node_id)` only if exactly one such node exists; otherwise `None`.
+///
+/// Any consumption (on any pin) by any other selected node disqualifies a node
+/// from being a sink — multi-output nodes whose pin 1 is used inside the
+/// subnetwork while pin 0 dangles are not sinks.
+fn find_unique_unconsumed_sink(
+    network: &NodeNetwork,
+    selected_ids: &HashSet<u64>,
+) -> Option<u64> {
+    let mut consumed: HashSet<u64> = HashSet::new();
+    for &sel_id in selected_ids {
+        if let Some(node) = network.nodes.get(&sel_id) {
+            for arg in &node.arguments {
+                for &source_id in arg.argument_output_pins.keys() {
+                    if selected_ids.contains(&source_id) {
+                        consumed.insert(source_id);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut sinks = selected_ids.iter().filter(|id| !consumed.contains(id));
+    let first = sinks.next().copied()?;
+    if sinks.next().is_some() {
+        None
+    } else {
+        Some(first)
+    }
 }
 
 /// Calculates the bounding box of the selected nodes
@@ -281,10 +324,22 @@ pub fn analyze_selection_for_factoring(
     // 8. Calculate bounding box
     let bounding_box = calculate_bounding_box(&network.selected_node_ids, &network.nodes);
 
+    // 9. Resolve the return source. An external output (if any) dictates it;
+    //    otherwise fall back to a unique unconsumed sink so a selection that
+    //    looks like a complete function body (e.g. for `map`) gets its tail
+    //    node promoted to the return.
+    let external_output = external_outputs.into_iter().next();
+    let return_source = if let Some(ref out) = external_output {
+        Some((out.source_node_id, out.source_output_pin_index))
+    } else {
+        find_unique_unconsumed_sink(network, &network.selected_node_ids).map(|id| (id, 0))
+    };
+
     SelectionAnalysis {
         selected_ids: network.selected_node_ids.clone(),
         external_inputs,
-        external_output: external_outputs.into_iter().next(),
+        external_output,
+        return_source,
         is_valid: true,
         invalid_reason: None,
         bounding_box,
@@ -325,14 +380,9 @@ pub fn create_subnetwork_from_selection(
     param_names: &[String],
     registry: &NodeTypeRegistry,
 ) -> NodeNetwork {
-    // 1. Determine output type
-    let output_type = if let Some(ref output) = analysis.external_output {
-        get_output_type(
-            source_network,
-            output.source_node_id,
-            output.source_output_pin_index,
-            registry,
-        )
+    // 1. Determine output type from the resolved return source.
+    let output_type = if let Some((src_id, src_pin)) = analysis.return_source {
+        get_output_type(source_network, src_id, src_pin, registry)
     } else {
         DataType::None
     };
@@ -469,9 +519,9 @@ pub fn create_subnetwork_from_selection(
         }
     }
 
-    // 8. Set return node if there's an external output
-    if let Some(ref output) = analysis.external_output {
-        if let Some(&new_return_id) = id_mapping.get(&output.source_node_id) {
+    // 8. Set return node from the resolved return source.
+    if let Some((src_id, _)) = analysis.return_source {
+        if let Some(&new_return_id) = id_mapping.get(&src_id) {
             new_network.return_node_id = Some(new_return_id);
         }
     }
