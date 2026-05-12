@@ -309,13 +309,16 @@ impl NodeTypeRegistry {
             .map(|network| (&network.node_type, NodeTypeCategory::Custom));
 
         // Two-step compatibility check per candidate node type:
-        // 1. Static fast path — covers every node with no type properties.
+        // 1. Static fast path (permissive `static_match`) — covers every
+        //    node with no type properties. Author-declared collection pins
+        //    keep their `S → Array[T]` / `S → Iter[T]` broadcast affordance.
         // 2. Adapter slow path — only allocates for type-parameterized nodes
         //    whose static defaults didn't match. The adapter's claim is
-        //    verified by re-running the static match against the resolved
-        //    node type after applying `calculate_custom_node_type` to the
-        //    adapted data, so over-promising adapters are silently dropped.
-        // See `doc/design_drag_aware_add_node.md`.
+        //    verified by `static_match_strict` against the resolved node
+        //    type, which rejects matches that only land via scalar
+        //    broadcast. Adapter-shapeshifted collection pins therefore do
+        //    not surface when the user dragged a scalar — see
+        //    `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
         let all_views: Vec<APINodeTypeView> = built_in_iter
             .chain(custom_iter)
             .filter(|(node_type, _)| {
@@ -331,7 +334,7 @@ impl NodeTypeRegistry {
                 let resolved = adapted
                     .calculate_custom_node_type(node_type)
                     .unwrap_or_else(|| (*node_type).clone());
-                static_match(&resolved, source_type, direction, self)
+                static_match_strict(&resolved, source_type, direction, self)
             })
             .map(|(node_type, category)| APINodeTypeView {
                 name: node_type.name.clone(),
@@ -1495,5 +1498,42 @@ pub fn static_match(
         DragDirection::FromInput => {
             DataType::can_be_converted_to(node_type.output_type(), source_type, registry)
         }
+    }
+}
+
+/// Like `static_match`, but uses `DataType::can_be_converted_to_strict_no_broadcast`
+/// — rejects matches that only land via the `S → Array[T]` or `S → Iter[T]`
+/// scalar broadcast rules.
+///
+/// Used at the Stage-2 adapter-verification site in
+/// `get_compatible_node_types` and the mirror site in
+/// `StructureDesigner::add_node_with_drag_source`. Stage-1 statically-typed
+/// candidates still use the permissive `static_match` — the node author
+/// declared the collection pin, so broadcasting into it is a legitimate
+/// type-system convenience. The strict variant kicks in only after an
+/// adapter has shapeshifted the node, where a broadcast-only match would
+/// amount to silently wrapping the user's one value in a singleton
+/// collection. See `doc/design_drag_aware_add_node.md`
+/// §"Asymmetric verification".
+pub fn static_match_strict(
+    node_type: &NodeType,
+    source_type: &DataType,
+    direction: crate::structure_designer::node_data::DragDirection,
+    registry: &NodeTypeRegistry,
+) -> bool {
+    use crate::structure_designer::node_data::DragDirection;
+    match direction {
+        DragDirection::FromOutput => node_type.parameters.iter().any(|param| {
+            DataType::can_be_converted_to_strict_no_broadcast(
+                source_type,
+                &param.data_type,
+                registry,
+            )
+        }),
+        DragDirection::FromInput => DataType::can_be_converted_to_strict_no_broadcast(
+            node_type.output_type(),
+            source_type,
+            registry,
+        ),
     }
 }

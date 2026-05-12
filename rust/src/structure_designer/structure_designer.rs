@@ -1377,9 +1377,13 @@ impl StructureDesigner {
             };
 
         // Drag-source adapter: only applied when the adapted node still
-        // statically matches the drag (mirrors the popup filter's
-        // verification). Protects callers that bypass the popup (CLI,
-        // direct API, stale popups after concurrent network mutations).
+        // statically matches the drag under the *strict* predicate (mirrors
+        // the popup filter's Stage-2 verification — rejects matches that
+        // would only land via scalar→collection broadcast). Protects
+        // callers that bypass the popup (CLI, direct API, stale popups
+        // after concurrent network mutations) and keeps create-time
+        // behavior in lockstep with the picker. See
+        // `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
         if let Some(drag) = drag_source.as_ref() {
             if let Some(node_type) = self.node_type_registry.get_node_type(node_type_name) {
                 if let Some(adapted) = node_data.adapt_for_drag_source(
@@ -1390,7 +1394,7 @@ impl StructureDesigner {
                     let resolved = adapted
                         .calculate_custom_node_type(node_type)
                         .unwrap_or_else(|| node_type.clone());
-                    if crate::structure_designer::node_type_registry::static_match(
+                    if crate::structure_designer::node_type_registry::static_match_strict(
                         &resolved,
                         &drag.source_type,
                         drag.direction,

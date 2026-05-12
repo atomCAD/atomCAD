@@ -925,3 +925,201 @@ fn add_node_with_drag_source_configures_parameter() {
     );
     assert_eq!(data.sort_order, 0);
 }
+
+// ============================================================================
+// Asymmetric verification: scalar→collection broadcast suppressed at Stage 2
+// ============================================================================
+//
+// Stage 1 (static_match, permissive) keeps the type-system-wide
+// `S → Array[T]` / `S → Iter[T]` broadcast rules — node authors who declared
+// a collection input pin (e.g. `union.shapes: Array[Blueprint]`) still see
+// scalar producers / their nodes still surface for scalar sources.
+//
+// Stage 2 (static_match_strict, adapter-verification) drops scalar broadcast
+// — adapter-shapeshifted nodes whose resolved pin only accepts the source
+// via broadcast are silently dropped from both the picker and the create
+// path. See `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
+
+#[test]
+fn scalar_blueprint_from_output_keeps_union_and_intersect() {
+    // Stage-1 candidates that declared `Array[Blueprint]` or `Blueprint`
+    // input pins keep showing up — their match goes through the permissive
+    // `static_match`, which still allows `Blueprint → Array[Blueprint]`
+    // broadcast.
+    let registry = NodeTypeRegistry::new();
+    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    assert!(
+        names.contains(&"union"),
+        "union (Array[Blueprint] input) must keep surfacing via Stage 1 broadcast"
+    );
+    assert!(
+        names.contains(&"intersect"),
+        "intersect (Blueprint input) must keep surfacing"
+    );
+    assert!(
+        names.contains(&"diff"),
+        "diff (Blueprint input) must keep surfacing"
+    );
+}
+
+#[test]
+fn scalar_blueprint_from_output_suppresses_broadcast_only_adapter_nodes() {
+    // The fix's core assertion: when the user drags a scalar `Blueprint`
+    // from an output, adapter-using nodes whose resolved input pins are
+    // collection-shaped (`Array[T]` / `Iter[T]`) and only match via the
+    // scalar broadcast rule are dropped at Stage-2 verification.
+    let registry = NodeTypeRegistry::new();
+    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    // `fold` deliberately not in this list — after adapting `element_type`
+    // and `accumulator_type` to `Blueprint`, fold's `init: Blueprint` pin
+    // matches the source via identity (not broadcast), so the strict rule
+    // correctly leaves it surfaced. The user can wire to `init` (genuine
+    // intent) or to `xs` via the broadcast-only path the auto-connect
+    // pin-picker will offer. Same reasoning for `sequence` (element-typed
+    // input pins) and `array_append` (the `element: T` pin) — both keep
+    // surfacing for principled, non-broadcast reasons.
+    for n in [
+        "map",
+        "foreach",
+        "filter",
+        "array_at",
+        "array_len",
+        "array_concat",
+        "collect",
+    ] {
+        assert!(
+            !names.contains(&n),
+            "{n} must not surface for scalar Blueprint from output (broadcast-only match); got {:?}",
+            names
+        );
+    }
+}
+
+#[test]
+fn scalar_blueprint_from_output_keeps_array_append_via_element_pin() {
+    // `array_append` has two input pins after adaptation:
+    //   - `array: Array[Blueprint]` — only via broadcast, rejected by strict
+    //   - `element: Blueprint`      — identity, accepted by strict
+    // At least one pin must accept under strict, so `array_append` keeps
+    // surfacing. The auto-connect pin-picker disambiguates which pin gets
+    // wired.
+    let registry = NodeTypeRegistry::new();
+    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    assert!(
+        names.contains(&"array_append"),
+        "array_append must surface for scalar Blueprint (matches via `element` pin under strict); got {:?}",
+        names
+    );
+}
+
+#[test]
+fn scalar_int_from_output_keeps_parameter_via_identity() {
+    // `parameter`'s adapter sets `data_type = source_type` directly (no
+    // peel), so the resolved input pin equals the source — identity match,
+    // strict passes.
+    let registry = NodeTypeRegistry::new();
+    let categories = registry.get_compatible_node_types(&DataType::Int, true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    assert!(
+        names.contains(&"parameter"),
+        "parameter must surface for scalar Int (identity after adaptation); got {:?}",
+        names
+    );
+}
+
+#[test]
+fn iter_int_from_output_still_surfaces_iterator_consumers() {
+    // Sanity: the strict rule must not regress the Iter-source path.
+    // map/filter/fold/collect all have adapters that peel the element
+    // type; after adaptation, the resolved input pin is `Iter[Int]` —
+    // identity with the source, no broadcast involved, strict passes.
+    let registry = NodeTypeRegistry::new();
+    let categories =
+        registry.get_compatible_node_types(&DataType::Iterator(Box::new(DataType::Int)), true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    for n in ["map", "filter", "fold", "collect"] {
+        assert!(
+            names.contains(&n),
+            "{n} must still surface for Iter[Int] from output; got {:?}",
+            names
+        );
+    }
+}
+
+#[test]
+fn array_blueprint_from_output_still_surfaces_array_and_iter_consumers() {
+    // Sanity: dragging an `Array[Blueprint]` from an output still surfaces
+    // `array_at`/`array_len`/`array_concat`/`collect` (identity on the
+    // adapted `Array[Blueprint]` pin) and `map`/`foreach`/`filter` (the
+    // `Array[S] → Iter[T]` eager-wrap rule survives the strict predicate).
+    let registry = NodeTypeRegistry::new();
+    let categories =
+        registry.get_compatible_node_types(&DataType::Array(Box::new(DataType::Blueprint)), true);
+    let names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+    for n in [
+        "array_at",
+        "array_len",
+        "array_concat",
+        "collect",
+        "map",
+        "filter",
+        "foreach",
+    ] {
+        assert!(
+            names.contains(&n),
+            "{n} must still surface for Array[Blueprint] from output; got {:?}",
+            names
+        );
+    }
+}
+
+#[test]
+fn add_node_with_drag_source_falls_back_when_only_broadcast_match() {
+    // Create-time mirror of the picker rule. When the adapter would match
+    // only via scalar→collection broadcast, the strict verification
+    // rejects it and we keep the default `MapData` instead of installing
+    // `MapData { input_type: Blueprint, output_type: Blueprint }`. This
+    // protects callers that bypass the popup (CLI, scripted, stale popup
+    // after concurrent edits).
+    let mut designer = setup_designer();
+    let node_id = designer.add_node_with_drag_source(
+        "map",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: DataType::Blueprint,
+            direction: DragDirection::FromOutput,
+        }),
+    );
+    assert_ne!(node_id, 0);
+    let data = get_map_data(&designer, node_id);
+    // map's `node_data_creator` builds `MapData { input_type: Float,
+    // output_type: Float }`. Strict verification must have rejected the
+    // adapter, leaving us with these defaults (not Blueprint).
+    assert_eq!(
+        data.input_type,
+        DataType::Float,
+        "adapter must be rejected: scalar Blueprint into Iter[T] is broadcast-only"
+    );
+    assert_eq!(data.output_type, DataType::Float);
+}

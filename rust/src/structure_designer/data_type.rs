@@ -441,6 +441,126 @@ impl DataType {
             _ => is_tag_only_widening(source_type, dest_type),
         }
     }
+
+    /// Like `can_be_converted_to`, but recursively rejects the two
+    /// scalar-to-collection broadcast rules (`S → Array[T]` and `S → Iter[T]`
+    /// where `S` is not itself an array/iterator). Used at the drag-aware
+    /// add-node popup's Stage-2 adapter-verification site (and the mirror
+    /// site in `StructureDesigner::add_node_with_drag_source`).
+    ///
+    /// Rationale: an adapter that only matches the drag source via scalar
+    /// broadcast is offering to "wrap your one value in a singleton
+    /// collection," which is almost never user intent. Stage-1 static
+    /// matches stay permissive (the node author declared the collection
+    /// pin); only adapter-shapeshifted matches get the strict treatment.
+    /// See `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
+    ///
+    /// Keeps: identity, discard-to-`Unit`, record subtyping (field path is
+    /// already strict via `can_be_structurally_converted_to`),
+    /// `Array[S] → Iter[T]` eager wrap, `Array[S] → Array[T]` element-wise,
+    /// function partial-application, `Int↔Float`/`IVec*↔Vec*`/`IMat3↔Mat3`,
+    /// `LatticeVecs→DrawingPlane`, and tag-only phase upcasts. All recursive
+    /// descents call this strict variant, not `can_be_converted_to`, so
+    /// broadcast cannot leak in through a nested element type.
+    pub fn can_be_converted_to_strict_no_broadcast(
+        source_type: &DataType,
+        dest_type: &DataType,
+        registry: &NodeTypeRegistry,
+    ) -> bool {
+        // Identity.
+        if source_type == dest_type {
+            return true;
+        }
+
+        // Universal `T → Unit` discard widening.
+        if matches!(dest_type, DataType::Unit) {
+            return true;
+        }
+
+        // Records: identical structural subtyping to the permissive arm.
+        // Field-level checks go through `can_be_structurally_converted_to`,
+        // which is already strictly tag-only (no broadcast, no value
+        // conversions) — safe to delegate.
+        if matches!(
+            (source_type, dest_type),
+            (DataType::Record(_), DataType::Record(_))
+        ) {
+            return DataType::can_be_converted_to(source_type, dest_type, registry);
+        }
+
+        // Iterator destination: only `Array[S] → Iter[T]` eager wrap and
+        // `Iter[T] → Iter[T]` identity (already handled above). The scalar
+        // broadcast rule `S → Iter[T]` is dropped.
+        if let DataType::Iterator(target_element_type) = dest_type {
+            if let DataType::Array(source_element_type) = source_type {
+                return DataType::can_be_converted_to_strict_no_broadcast(
+                    source_element_type,
+                    target_element_type,
+                    registry,
+                );
+            }
+            // Iter[S] → Iter[T] with S != T rejected (same as permissive).
+            // Scalar broadcast rejected.
+            return false;
+        }
+
+        // Iterator source against a non-iterator destination is rejected
+        // (same as permissive).
+        if matches!(source_type, DataType::Iterator(_)) {
+            return false;
+        }
+
+        // Array destination: only element-wise `Array[S] → Array[T]`.
+        // Scalar broadcast `S → Array[T]` is dropped.
+        if let DataType::Array(target_element_type) = dest_type {
+            if let DataType::Array(source_element_type) = source_type {
+                return DataType::can_be_converted_to_strict_no_broadcast(
+                    source_element_type,
+                    target_element_type,
+                    registry,
+                );
+            }
+            return false;
+        }
+
+        // Function partial-application: same shape as permissive but
+        // recurses strictly, so broadcast can't sneak in via parameter or
+        // return types.
+        if let (DataType::Function(source_func), DataType::Function(dest_func)) =
+            (source_type, dest_type)
+        {
+            if !DataType::can_be_converted_to_strict_no_broadcast(
+                &source_func.output_type,
+                &dest_func.output_type,
+                registry,
+            ) {
+                return false;
+            }
+            if source_func.parameter_types.len() < dest_func.parameter_types.len() {
+                return false;
+            }
+            for (i, dest_param) in dest_func.parameter_types.iter().enumerate() {
+                if !DataType::can_be_converted_to_strict_no_broadcast(
+                    &source_func.parameter_types[i],
+                    dest_param,
+                    registry,
+                ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Value-converting widenings stay (they're not broadcast).
+        match (source_type, dest_type) {
+            (DataType::Int, DataType::Float) | (DataType::Float, DataType::Int) => true,
+            (DataType::IVec2, DataType::Vec2) | (DataType::Vec2, DataType::IVec2) => true,
+            (DataType::IVec3, DataType::Vec3) | (DataType::Vec3, DataType::IVec3) => true,
+            (DataType::IMat3, DataType::Mat3) | (DataType::Mat3, DataType::IMat3) => true,
+            (DataType::LatticeVecs, DataType::DrawingPlane) => true,
+            _ => is_tag_only_widening(source_type, dest_type),
+        }
+    }
 }
 
 /// True when `t` is `Iter[..]` itself, or contains an `Iter[..]` reachable

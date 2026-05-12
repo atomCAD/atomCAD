@@ -92,7 +92,7 @@ for (name, node_type) in built_in_types.iter().chain(custom_types) {
     let resolved = adapted
         .calculate_custom_node_type(node_type)
         .unwrap_or_else(|| node_type.clone());
-    if !static_match(&resolved, source_type, direction, self) {
+    if !static_match_strict(&resolved, source_type, direction, self) {
         // Adapter overpromised. Skip rather than show a misleading entry.
         continue;
     }
@@ -100,7 +100,38 @@ for (name, node_type) in built_in_types.iter().chain(custom_types) {
 }
 ```
 
-`static_match(...)` is exactly the predicate used today — pulled into a small helper so both paths use the same logic. The `calculate_custom_node_type` call is the same function the evaluator already runs every pass; calling it once per type-parameterized candidate during a popup open is negligible.
+`static_match(...)` is the permissive predicate (uses `DataType::can_be_converted_to`); `static_match_strict(...)` is identical except it uses `DataType::can_be_converted_to_strict_no_broadcast` — see §"Asymmetric verification: dropping scalar broadcast at Stage 2" below. The `calculate_custom_node_type` call is the same function the evaluator already runs every pass; calling it once per type-parameterized candidate during a popup open is negligible.
+
+### Asymmetric verification: dropping scalar broadcast at Stage 2
+
+The two-stage filter intentionally uses **two different predicates**:
+
+- **Stage 1 (`static_match`, permissive)** — `DataType::can_be_converted_to`. Includes the type-system-wide `T → Array[T]` and `T → Iter[T]` scalar-to-collection broadcast rules. Reflects "the node author declared this pin type; broadcasting a scalar in is a documented convenience and might be useful".
+- **Stage 2 (`static_match_strict`)** — `DataType::can_be_converted_to_strict_no_broadcast`. Identical to the permissive predicate **except** scalar-to-collection broadcast is rejected (recursively, at every nesting level). Identity, discard-to-`Unit`, record subtyping, `Array[S] → Iter[T]` eager wrap, `Array[S] → Array[T]` element conversion, function partial-application, numeric/vector/matrix pair coercions, and tag-only phase upcasts all stay.
+
+**Why asymmetric.** A Stage-1 match means the candidate's *declared* default pin natively accepts the source — `union`'s `Array[Blueprint]` input, `intersect`'s `Blueprint` input. The user picked a node author's deliberate signature. A Stage-2 match means the adapter has *shapeshifted* the node's type properties to a configuration that happens to match the source. When the only thing making the shapeshifted match work is scalar broadcast (e.g. `Blueprint → Iter[Blueprint]` for an element-typed `map`), the adapter is in effect saying "trust me, wrapping your one value as a singleton iterator is what you wanted" — and that is almost never user intent. Stage 1 keeps broadcast because the *author* declared the collection-shaped pin; Stage 2 drops broadcast because the *adapter* is the one inventing the collection shape.
+
+**Worked example: drag `Blueprint` from a `cuboid` output.**
+
+| Candidate | Stage 1 (permissive) | Stage 2 (strict) | Outcome |
+|---|---|---|---|
+| `union` (declared `Array[Blueprint]` input) | ✓ broadcast `Blueprint → Array[Blueprint]` | — (already passed) | shown ✓ |
+| `intersect` (declared `Blueprint, Blueprint` inputs) | ✓ identity | — | shown ✓ |
+| `map` (adapter resolves to `Iter[Blueprint]` input) | ✗ | ✗ (broadcast-only) | suppressed |
+| `foreach` (adapter resolves to `Iter[Blueprint]` input) | ✗ | ✗ (broadcast-only) | suppressed |
+| `array_at` (adapter resolves to `Array[Blueprint]` input) | ✗ | ✗ (broadcast-only) | suppressed |
+| `array_concat` / `array_len` (collection-only inputs) | ✗ | ✗ (broadcast-only) | suppressed |
+| `collect` (rejects scalar source in its adapter) | ✗ | — (adapter returned `None`) | suppressed |
+| `array_append` (adapter resolves to `Array[Blueprint]` + `Blueprint` pins) | ✗ | ✓ identity on the `element` pin | shown ✓ |
+| `parameter` (adapter sets `data_type = Blueprint`) | ✗ | ✓ identity on the `default` pin / output | shown ✓ |
+
+**Worked example: drag `Iter[Int]` from output.** Stage-1 fails for the iterator-consuming nodes (their static defaults are `Iter[Float]`). Stage-2 adapter peels to `Int`, and the resolved `Iter[Int]` input matches the source via identity (no broadcast) — strict passes. `map`/`filter`/`fold`/`collect` all surface as before.
+
+**Worked example: drag `Array[Blueprint]` from output.** Stage-2 adapters peel to `Blueprint`. `array_at`/`array_concat`/`array_len` resolve to `Array[Blueprint]` inputs (identity, strict passes). `map`/`foreach` resolve to `Iter[Blueprint]` inputs (eager-wrap `Array[Blueprint] → Iter[Blueprint]`, strict passes). All surface.
+
+**Why strict at the leaves matters.** The predicate recurses on its own strict form (not on the permissive form) when descending into `Iter[T]`/`Array[S] → Array[T]`/`Function(..)` shapes. Otherwise a strict outer call could still admit a broadcast at, say, an inner array element. The two recursive cases that *don't* descend strictly — records — already use `can_be_structurally_converted_to` for field-level checks, which rejects broadcast unconditionally. So strictness is uniform.
+
+**Scope.** The strict predicate is used **only** at the two adapter-verification sites: the Stage-2 verification in `get_compatible_node_types`, and the mirror verification at create time in `StructureDesigner::add_node_with_drag_source`. The runtime wire-conversion path (`NetworkResult::convert_to`) and validation (`DataType::can_be_converted_to`) are untouched — implicit scalar broadcast still works on wires.
 
 ### Create-time API change
 
@@ -152,7 +183,7 @@ if let Some(drag) = drag_source {
         let resolved = adapted
             .calculate_custom_node_type(node_type)
             .unwrap_or_else(|| node_type.clone());
-        if static_match(&resolved, &drag.source_type, drag.direction, &self.node_type_registry) {
+        if static_match_strict(&resolved, &drag.source_type, drag.direction, &self.node_type_registry) {
             node_data = adapted;
         }
         // else: adapter overpromised — keep the default node_data.
@@ -175,7 +206,7 @@ if let Some(drag) = drag_source {
 
 Adapter runs *before* the parameter special-case so the special-case retains authority over `param_id` / `param_name` / `sort_order` — those are network-level bookkeeping, not user-configurable types.
 
-The static-match gate in step 2 lets per-node adapters be loose: e.g. `MapData::adapt_for_drag_source` reuses `drag_element_type_from_output` for both directions even though the `FromInput` case can't actually accept scalar broadcast (map's output is `Iter[T]`). The filter's verification step caught those at popup-open time; replicating it here means create-time is just as safe.
+The static-match-strict gate in step 2 lets per-node adapters be loose **and** silently drops adaptations that only land via scalar broadcast: e.g. `MapData::adapt_for_drag_source` reuses `drag_element_type_from_output` for both directions even though the `FromInput` case can't actually accept scalar broadcast (map's output is `Iter[T]`), and even though a scalar `Blueprint` drag from output produces an adapted `MapData { input_type: Blueprint }` whose `Iter[Blueprint]` input only matches the source via broadcast — both are suppressed here, mirroring the filter. See §"Asymmetric verification: dropping scalar broadcast at Stage 2" for the rationale.
 
 ### Flutter integration
 
