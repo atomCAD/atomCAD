@@ -65,6 +65,7 @@ import 'package:flutter_cad/structure_designer/node_data/mat3_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/mat3_diag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/custom_node_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// Keys for property editor widgets used in integration testing.
@@ -744,8 +745,21 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       default:
-        return Center(
-          child: Text('No editor available for ${selectedNode.nodeTypeName}'),
+        // Custom node type names are dynamic, so they cannot be `case`
+        // labels. `null` means it is genuinely not a custom node; a custom
+        // node returns a (possibly empty) parameter list.
+        final params = model.getCustomNodeParams(selectedNode.id);
+        if (params == null) {
+          return Center(
+            child:
+                Text('No editor available for ${selectedNode.nodeTypeName}'),
+          );
+        }
+        return CustomNodeEditor(
+          nodeId: selectedNode.id,
+          nodeTypeName: selectedNode.nodeTypeName,
+          params: params,
+          model: model,
         );
     }
   }

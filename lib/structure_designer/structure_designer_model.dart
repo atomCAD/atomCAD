@@ -1305,6 +1305,25 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Returns the editable (simple-typed) parameters of a custom node, or
+  /// `null` if `nodeId` is not a custom node. An empty list means a custom
+  /// node with no simple-typed parameters.
+  List<APICustomNodeParam>? getCustomNodeParams(BigInt nodeId) =>
+      structure_designer_api.getCustomNodeParams(nodeId: nodeId);
+
+  void setCustomNodeLiteral(
+      BigInt nodeId, String paramName, APILiteralValue value) {
+    structure_designer_api.setCustomNodeLiteral(
+        nodeId: nodeId, paramName: paramName, value: value);
+    refreshFromKernel();
+  }
+
+  void clearCustomNodeLiteral(BigInt nodeId, String paramName) {
+    structure_designer_api.clearCustomNodeLiteral(
+        nodeId: nodeId, paramName: paramName);
+    refreshFromKernel();
+  }
+
   void setIvec2Data(BigInt nodeId, APIIVec2Data data) {
     structure_designer_api.setIvec2Data(nodeId: nodeId, data: data);
     refreshFromKernel();
