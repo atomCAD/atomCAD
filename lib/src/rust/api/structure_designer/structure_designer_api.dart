@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_data_type_to_data_type`, `atom_symbol`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`, `param_element_color_u32`
+// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_data_type_to_data_type`, `api_literal_to_text_value`, `atom_symbol`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`, `data_type_to_simple_param_type`, `network_result_to_api_literal`, `param_element_color_u32`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `text_value_to_api_literal`, `vecs_to_rows_f64`, `vecs_to_rows_i32`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
@@ -895,6 +895,37 @@ void setParameterData(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetParameterData(
             nodeId: nodeId, data: data);
+
+/// Returns `None` if `node_id` is not a custom node (its `node_type_name` is
+/// not a key in `registry.node_networks`). Returns `Some(vec)` — possibly
+/// empty — for a custom node, listing only its simple-typed parameters in pin
+/// order.
+///
+/// Runs through `with_mut_cad_instance`: resolving each parameter's default
+/// (`resolve_parameter_default`) evaluates the subnetwork and needs `&mut`.
+List<APICustomNodeParam>? getCustomNodeParams({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetCustomNodeParams(
+            nodeId: nodeId);
+
+/// Inserts/updates `literal_values[param_name]` on a custom node. Goes through
+/// `set_node_network_data`, so it gets the existing `SetNodeData` undo command
+/// and `refresh_structure_designer_auto` for free.
+void setCustomNodeLiteral(
+        {required BigInt nodeId,
+        required String paramName,
+        required APILiteralValue value}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetCustomNodeLiteral(
+            nodeId: nodeId, paramName: paramName, value: value);
+
+/// Removes `literal_values[param_name]` from a custom node. Same
+/// `set_node_network_data` path as `set_custom_node_literal`.
+void clearCustomNodeLiteral(
+        {required BigInt nodeId, required String paramName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiClearCustomNodeLiteral(
+            nodeId: nodeId, paramName: paramName);
 
 void setMapData({required BigInt nodeId, required APIMapData data}) =>
     RustLib.instance.api

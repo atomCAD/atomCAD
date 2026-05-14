@@ -207,7 +207,11 @@
       "Bash(CARGO_BUILD_JOBS=2 cargo clippy --tests -- -A clippy::all)",
       "Bash(wait)",
       "Bash(rustfmt --check /c/machine_phase_systems/flutter_cad/rust/src/structure_designer/data_type.rs /c/machine_phase_systems/flutter_cad/rust/src/structure_designer/evaluator/network_result.rs /c/machine_phase_systems/flutter_cad/rust/src/structure_designer/text_format/node_type_introspection.rs /c/machine_phase_systems/flutter_cad/rust/src/expr/parser.rs /c/machine_phase_systems/flutter_cad/rust/src/api/structure_designer/structure_designer_api_types.rs /c/machine_phase_systems/flutter_cad/rust/src/api/structure_designer/structure_designer_api.rs /c/machine_phase_systems/flutter_cad/rust/tests/structure_designer/unit_type_test.rs /c/machine_phase_systems/flutter_cad/rust/tests/expr/array_literal_test.rs /c/machine_phase_systems/flutter_cad/rust/tests/structure_designer.rs)",
-      "Bash(Unit)"
+      "Bash(Unit)",
+      "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Read(//c/c/machine_phase_systems/flutter_cad/rust/tests/**)",
+      "Read(//c/c/machine_phase_systems/flutter_cad/rust/**)"
     ]
   }
 }

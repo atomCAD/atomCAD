@@ -519,6 +519,53 @@ class APICuboidData {
           extent == other.extent;
 }
 
+/// One editable parameter (input pin) of a custom node, surfaced for the
+/// auto-generated property panel.
+class APICustomNodeParam {
+  final String name;
+  final APISimpleParamType dataType;
+
+  /// The literal currently stored in `CustomNodeData.literal_values`, if any
+  /// AND it still matches `data_type`. `None` ⇒ render the placeholder.
+  final APILiteralValue? storedValue;
+
+  /// The value the parameter node's `default` input pin resolves to, used as
+  /// the field placeholder. `None` when the default pin is unconnected or
+  /// evaluation fails / yields a non-simple type.
+  final APILiteralValue? defaultValue;
+
+  /// True when the parent pin has a wire connected. When true the row renders
+  /// disabled.
+  final bool isWired;
+
+  const APICustomNodeParam({
+    required this.name,
+    required this.dataType,
+    this.storedValue,
+    this.defaultValue,
+    required this.isWired,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      dataType.hashCode ^
+      storedValue.hashCode ^
+      defaultValue.hashCode ^
+      isWired.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICustomNodeParam &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          dataType == other.dataType &&
+          storedValue == other.storedValue &&
+          defaultValue == other.defaultValue &&
+          isWired == other.isWired;
+}
+
 class APIDataType {
   final APIDataTypeBase dataTypeBase;
 
@@ -1424,6 +1471,46 @@ class APILatticeVecsData {
           crystalSystem == other.crystalSystem;
 }
 
+@freezed
+sealed class APILiteralValue with _$APILiteralValue {
+  const APILiteralValue._();
+
+  const factory APILiteralValue.bool(
+    bool field0,
+  ) = APILiteralValue_Bool;
+  const factory APILiteralValue.int(
+    int field0,
+  ) = APILiteralValue_Int;
+  const factory APILiteralValue.float(
+    double field0,
+  ) = APILiteralValue_Float;
+  const factory APILiteralValue.str(
+    String field0,
+  ) = APILiteralValue_Str;
+  const factory APILiteralValue.iVec2(
+    APIIVec2 field0,
+  ) = APILiteralValue_IVec2;
+  const factory APILiteralValue.iVec3(
+    APIIVec3 field0,
+  ) = APILiteralValue_IVec3;
+  const factory APILiteralValue.vec2(
+    APIVec2 field0,
+  ) = APILiteralValue_Vec2;
+  const factory APILiteralValue.vec3(
+    APIVec3 field0,
+  ) = APILiteralValue_Vec3;
+
+  /// Row-major 3x3, matching `TextValue::IMat3`.
+  const factory APILiteralValue.iMat3(
+    List<Int32List> field0,
+  ) = APILiteralValue_IMat3;
+
+  /// Row-major 3x3, matching `TextValue::Mat3`.
+  const factory APILiteralValue.mat3(
+    List<Float64List> field0,
+  ) = APILiteralValue_Mat3;
+}
+
 class APIMapData {
   final APIDataType inputType;
   final APIDataType outputType;
@@ -2200,6 +2287,22 @@ class APISequenceData {
           runtimeType == other.runtimeType &&
           elementType == other.elementType &&
           inputCount == other.inputCount;
+}
+
+/// Dedicated enum so the Flutter widget switches directly without parsing pin
+/// type strings or depending on `APIDataTypeBase`'s coverage.
+enum APISimpleParamType {
+  bool,
+  int,
+  float,
+  str,
+  iVec2,
+  iVec3,
+  vec2,
+  vec3,
+  iMat3,
+  mat3,
+  ;
 }
 
 class APISphereData {

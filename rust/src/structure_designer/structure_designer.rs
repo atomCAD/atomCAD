@@ -4549,6 +4549,53 @@ impl StructureDesigner {
         Ok(APIExecuteResult { ok, error, logs })
     }
 
+    /// Best-effort: evaluate the `default` input pin of the parameter node
+    /// named `param_name` inside `subnetwork_name`, in isolation.
+    ///
+    /// Evaluating with a single-element network stack ("in isolation") makes
+    /// `parameter.rs::eval` take its `eval_default` path — the value of the
+    /// parameter node's `default` input pin (argument 0). An unconnected
+    /// default pin or any evaluation error surfaces as a `NetworkResult` the
+    /// caller can reject (`NetworkResult::None` / `NetworkResult::Error`).
+    ///
+    /// Returns `None` only when the subnetwork or the named parameter node
+    /// cannot be found.
+    ///
+    /// Takes `&mut self`: evaluation goes through `with_eval_context`, which
+    /// mutably borrows the evaluator and drains the print buffer. This is
+    /// logically a read, but not side-effect-free.
+    pub fn resolve_parameter_default(
+        &mut self,
+        subnetwork_name: &str,
+        param_name: &str,
+    ) -> Option<NetworkResult> {
+        use crate::structure_designer::nodes::parameter::ParameterData;
+
+        // Find the parameter node id by name. The registry borrow ends here,
+        // before the `&mut self` `with_eval_context` call below.
+        let param_node_id = {
+            let subnetwork = self.node_type_registry.node_networks.get(subnetwork_name)?;
+            subnetwork.nodes.iter().find_map(|(id, node)| {
+                if node.node_type_name != "parameter" {
+                    return None;
+                }
+                let param_data = node.data.as_any_ref().downcast_ref::<ParameterData>()?;
+                (param_data.param_name == param_name).then_some(*id)
+            })?
+        };
+
+        let subnetwork_name = subnetwork_name.to_string();
+        let result = self.with_eval_context(false, |evaluator, registry, _prefs, context| {
+            let subnetwork = registry.node_networks.get(&subnetwork_name).unwrap();
+            let network_stack = vec![NetworkStackElement {
+                node_network: subnetwork,
+                node_id: 0,
+            }];
+            evaluator.evaluate(&network_stack, param_node_id, 0, registry, false, context)
+        });
+        Some(result)
+    }
+
     /// Find a node ID by its display name in the active network.
     ///
     /// Since all nodes have persistent names assigned at creation,

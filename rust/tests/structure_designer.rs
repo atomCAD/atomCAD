@@ -273,3 +273,6 @@ mod execute_node_test;
 
 #[path = "structure_designer/print_node_test.rs"]
 mod print_node_test;
+
+#[path = "structure_designer/custom_node_property_panel_test.rs"]
+mod custom_node_property_panel_test;

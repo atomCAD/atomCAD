@@ -14,6 +14,708 @@ part of 'structure_designer_api_types.dart';
 T _$identity<T>(T value) => value;
 
 /// @nodoc
+mixin _$APILiteralValue {
+  Object get field0;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue &&
+            const DeepCollectionEquality().equals(other.field0, field0));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, const DeepCollectionEquality().hash(field0));
+
+  @override
+  String toString() {
+    return 'APILiteralValue(field0: $field0)';
+  }
+}
+
+/// @nodoc
+class $APILiteralValueCopyWith<$Res> {
+  $APILiteralValueCopyWith(
+      APILiteralValue _, $Res Function(APILiteralValue) __);
+}
+
+/// @nodoc
+
+class APILiteralValue_Bool extends APILiteralValue {
+  const APILiteralValue_Bool(this.field0) : super._();
+
+  @override
+  final bool field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_BoolCopyWith<APILiteralValue_Bool> get copyWith =>
+      _$APILiteralValue_BoolCopyWithImpl<APILiteralValue_Bool>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_Bool &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.bool(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_BoolCopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_BoolCopyWith(APILiteralValue_Bool value,
+          $Res Function(APILiteralValue_Bool) _then) =
+      _$APILiteralValue_BoolCopyWithImpl;
+  @useResult
+  $Res call({bool field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_BoolCopyWithImpl<$Res>
+    implements $APILiteralValue_BoolCopyWith<$Res> {
+  _$APILiteralValue_BoolCopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_Bool _self;
+  final $Res Function(APILiteralValue_Bool) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_Bool(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as bool,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_Int extends APILiteralValue {
+  const APILiteralValue_Int(this.field0) : super._();
+
+  @override
+  final int field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_IntCopyWith<APILiteralValue_Int> get copyWith =>
+      _$APILiteralValue_IntCopyWithImpl<APILiteralValue_Int>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_Int &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.int(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_IntCopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_IntCopyWith(
+          APILiteralValue_Int value, $Res Function(APILiteralValue_Int) _then) =
+      _$APILiteralValue_IntCopyWithImpl;
+  @useResult
+  $Res call({int field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_IntCopyWithImpl<$Res>
+    implements $APILiteralValue_IntCopyWith<$Res> {
+  _$APILiteralValue_IntCopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_Int _self;
+  final $Res Function(APILiteralValue_Int) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_Int(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_Float extends APILiteralValue {
+  const APILiteralValue_Float(this.field0) : super._();
+
+  @override
+  final double field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_FloatCopyWith<APILiteralValue_Float> get copyWith =>
+      _$APILiteralValue_FloatCopyWithImpl<APILiteralValue_Float>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_Float &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.float(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_FloatCopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_FloatCopyWith(APILiteralValue_Float value,
+          $Res Function(APILiteralValue_Float) _then) =
+      _$APILiteralValue_FloatCopyWithImpl;
+  @useResult
+  $Res call({double field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_FloatCopyWithImpl<$Res>
+    implements $APILiteralValue_FloatCopyWith<$Res> {
+  _$APILiteralValue_FloatCopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_Float _self;
+  final $Res Function(APILiteralValue_Float) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_Float(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as double,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_Str extends APILiteralValue {
+  const APILiteralValue_Str(this.field0) : super._();
+
+  @override
+  final String field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_StrCopyWith<APILiteralValue_Str> get copyWith =>
+      _$APILiteralValue_StrCopyWithImpl<APILiteralValue_Str>(this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_Str &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.str(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_StrCopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_StrCopyWith(
+          APILiteralValue_Str value, $Res Function(APILiteralValue_Str) _then) =
+      _$APILiteralValue_StrCopyWithImpl;
+  @useResult
+  $Res call({String field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_StrCopyWithImpl<$Res>
+    implements $APILiteralValue_StrCopyWith<$Res> {
+  _$APILiteralValue_StrCopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_Str _self;
+  final $Res Function(APILiteralValue_Str) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_Str(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_IVec2 extends APILiteralValue {
+  const APILiteralValue_IVec2(this.field0) : super._();
+
+  @override
+  final APIIVec2 field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_IVec2CopyWith<APILiteralValue_IVec2> get copyWith =>
+      _$APILiteralValue_IVec2CopyWithImpl<APILiteralValue_IVec2>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_IVec2 &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.iVec2(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_IVec2CopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_IVec2CopyWith(APILiteralValue_IVec2 value,
+          $Res Function(APILiteralValue_IVec2) _then) =
+      _$APILiteralValue_IVec2CopyWithImpl;
+  @useResult
+  $Res call({APIIVec2 field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_IVec2CopyWithImpl<$Res>
+    implements $APILiteralValue_IVec2CopyWith<$Res> {
+  _$APILiteralValue_IVec2CopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_IVec2 _self;
+  final $Res Function(APILiteralValue_IVec2) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_IVec2(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as APIIVec2,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_IVec3 extends APILiteralValue {
+  const APILiteralValue_IVec3(this.field0) : super._();
+
+  @override
+  final APIIVec3 field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_IVec3CopyWith<APILiteralValue_IVec3> get copyWith =>
+      _$APILiteralValue_IVec3CopyWithImpl<APILiteralValue_IVec3>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_IVec3 &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.iVec3(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_IVec3CopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_IVec3CopyWith(APILiteralValue_IVec3 value,
+          $Res Function(APILiteralValue_IVec3) _then) =
+      _$APILiteralValue_IVec3CopyWithImpl;
+  @useResult
+  $Res call({APIIVec3 field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_IVec3CopyWithImpl<$Res>
+    implements $APILiteralValue_IVec3CopyWith<$Res> {
+  _$APILiteralValue_IVec3CopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_IVec3 _self;
+  final $Res Function(APILiteralValue_IVec3) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_IVec3(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as APIIVec3,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_Vec2 extends APILiteralValue {
+  const APILiteralValue_Vec2(this.field0) : super._();
+
+  @override
+  final APIVec2 field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_Vec2CopyWith<APILiteralValue_Vec2> get copyWith =>
+      _$APILiteralValue_Vec2CopyWithImpl<APILiteralValue_Vec2>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_Vec2 &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.vec2(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_Vec2CopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_Vec2CopyWith(APILiteralValue_Vec2 value,
+          $Res Function(APILiteralValue_Vec2) _then) =
+      _$APILiteralValue_Vec2CopyWithImpl;
+  @useResult
+  $Res call({APIVec2 field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_Vec2CopyWithImpl<$Res>
+    implements $APILiteralValue_Vec2CopyWith<$Res> {
+  _$APILiteralValue_Vec2CopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_Vec2 _self;
+  final $Res Function(APILiteralValue_Vec2) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_Vec2(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as APIVec2,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_Vec3 extends APILiteralValue {
+  const APILiteralValue_Vec3(this.field0) : super._();
+
+  @override
+  final APIVec3 field0;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_Vec3CopyWith<APILiteralValue_Vec3> get copyWith =>
+      _$APILiteralValue_Vec3CopyWithImpl<APILiteralValue_Vec3>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_Vec3 &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  @override
+  String toString() {
+    return 'APILiteralValue.vec3(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_Vec3CopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_Vec3CopyWith(APILiteralValue_Vec3 value,
+          $Res Function(APILiteralValue_Vec3) _then) =
+      _$APILiteralValue_Vec3CopyWithImpl;
+  @useResult
+  $Res call({APIVec3 field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_Vec3CopyWithImpl<$Res>
+    implements $APILiteralValue_Vec3CopyWith<$Res> {
+  _$APILiteralValue_Vec3CopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_Vec3 _self;
+  final $Res Function(APILiteralValue_Vec3) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_Vec3(
+      null == field0
+          ? _self.field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as APIVec3,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_IMat3 extends APILiteralValue {
+  const APILiteralValue_IMat3(final List<Int32List> field0)
+      : _field0 = field0,
+        super._();
+
+  final List<Int32List> _field0;
+  @override
+  List<Int32List> get field0 {
+    if (_field0 is EqualUnmodifiableListView) return _field0;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_field0);
+  }
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_IMat3CopyWith<APILiteralValue_IMat3> get copyWith =>
+      _$APILiteralValue_IMat3CopyWithImpl<APILiteralValue_IMat3>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_IMat3 &&
+            const DeepCollectionEquality().equals(other._field0, _field0));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, const DeepCollectionEquality().hash(_field0));
+
+  @override
+  String toString() {
+    return 'APILiteralValue.iMat3(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_IMat3CopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_IMat3CopyWith(APILiteralValue_IMat3 value,
+          $Res Function(APILiteralValue_IMat3) _then) =
+      _$APILiteralValue_IMat3CopyWithImpl;
+  @useResult
+  $Res call({List<Int32List> field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_IMat3CopyWithImpl<$Res>
+    implements $APILiteralValue_IMat3CopyWith<$Res> {
+  _$APILiteralValue_IMat3CopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_IMat3 _self;
+  final $Res Function(APILiteralValue_IMat3) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_IMat3(
+      null == field0
+          ? _self._field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as List<Int32List>,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APILiteralValue_Mat3 extends APILiteralValue {
+  const APILiteralValue_Mat3(final List<Float64List> field0)
+      : _field0 = field0,
+        super._();
+
+  final List<Float64List> _field0;
+  @override
+  List<Float64List> get field0 {
+    if (_field0 is EqualUnmodifiableListView) return _field0;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_field0);
+  }
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APILiteralValue_Mat3CopyWith<APILiteralValue_Mat3> get copyWith =>
+      _$APILiteralValue_Mat3CopyWithImpl<APILiteralValue_Mat3>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APILiteralValue_Mat3 &&
+            const DeepCollectionEquality().equals(other._field0, _field0));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, const DeepCollectionEquality().hash(_field0));
+
+  @override
+  String toString() {
+    return 'APILiteralValue.mat3(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APILiteralValue_Mat3CopyWith<$Res>
+    implements $APILiteralValueCopyWith<$Res> {
+  factory $APILiteralValue_Mat3CopyWith(APILiteralValue_Mat3 value,
+          $Res Function(APILiteralValue_Mat3) _then) =
+      _$APILiteralValue_Mat3CopyWithImpl;
+  @useResult
+  $Res call({List<Float64List> field0});
+}
+
+/// @nodoc
+class _$APILiteralValue_Mat3CopyWithImpl<$Res>
+    implements $APILiteralValue_Mat3CopyWith<$Res> {
+  _$APILiteralValue_Mat3CopyWithImpl(this._self, this._then);
+
+  final APILiteralValue_Mat3 _self;
+  final $Res Function(APILiteralValue_Mat3) _then;
+
+  /// Create a copy of APILiteralValue
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APILiteralValue_Mat3(
+      null == field0
+          ? _self._field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as List<Float64List>,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$APIMeasurement {
   @override
   bool operator ==(Object other) {

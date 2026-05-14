@@ -6,6 +6,7 @@ use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
+use super::structure_designer_api_types::APICustomNodeParam;
 use super::structure_designer_api_types::APIDataType;
 use super::structure_designer_api_types::APIDragSource;
 use super::structure_designer_api_types::APIExecuteResult;
@@ -21,6 +22,7 @@ use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIImportCIFData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIInferBondsData;
+use super::structure_designer_api_types::APILiteralValue;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMaterializeData;
 use super::structure_designer_api_types::APIMeasurement;
@@ -34,6 +36,7 @@ use super::structure_designer_api_types::APIPrintLogEntry;
 use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APISequenceData;
+use super::structure_designer_api_types::APISimpleParamType;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
@@ -53,6 +56,8 @@ use crate::api::api_common::with_cad_instance;
 use crate::api::api_common::with_cad_instance_or;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
+use crate::api::common_api_types::APIIVec2;
+use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APIResult;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
@@ -105,8 +110,11 @@ use crate::crystolecule::unit_cell_symmetries::{
 };
 use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::{DataType, RecordType};
-use crate::structure_designer::evaluator::network_result::Alignment;
+use crate::structure_designer::evaluator::network_result::{
+    Alignment, NetworkResult, dmat3_to_rows,
+};
 use crate::structure_designer::layout;
+use crate::structure_designer::node_data::CustomNodeData;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::array_at::ArrayAtData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
@@ -170,6 +178,8 @@ use crate::structure_designer::nodes::structure_rot::{StructureRotData, Structur
 use crate::structure_designer::nodes::supercell::SupercellData;
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
+use crate::structure_designer::text_format::TextValue;
+use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::collections::HashMap;
 
 fn alignment_to_api(alignment: Alignment) -> APIAlignment {
@@ -4461,6 +4471,278 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, parameter_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+// --- Custom node property panel ---
+
+/// Maps a `DataType` to its `APISimpleParamType`, or `None` for any pin type
+/// that the custom-node panel does not render inline.
+fn data_type_to_simple_param_type(data_type: &DataType) -> Option<APISimpleParamType> {
+    Some(match data_type {
+        DataType::Bool => APISimpleParamType::Bool,
+        DataType::Int => APISimpleParamType::Int,
+        DataType::Float => APISimpleParamType::Float,
+        DataType::String => APISimpleParamType::Str,
+        DataType::IVec2 => APISimpleParamType::IVec2,
+        DataType::IVec3 => APISimpleParamType::IVec3,
+        DataType::Vec2 => APISimpleParamType::Vec2,
+        DataType::Vec3 => APISimpleParamType::Vec3,
+        DataType::IMat3 => APISimpleParamType::IMat3,
+        DataType::Mat3 => APISimpleParamType::Mat3,
+        _ => return None,
+    })
+}
+
+fn rows_i32_to_vecs(m: &[[i32; 3]; 3]) -> Vec<Vec<i32>> {
+    m.iter().map(|r| r.to_vec()).collect()
+}
+
+fn rows_f64_to_vecs(m: &[[f64; 3]; 3]) -> Vec<Vec<f64>> {
+    m.iter().map(|r| r.to_vec()).collect()
+}
+
+/// Pads/truncates a (possibly malformed) `Vec<Vec<_>>` from FFI into a fixed
+/// row-major 3x3 array. Missing cells default to `0`.
+fn vecs_to_rows_i32(rows: Vec<Vec<i32>>) -> [[i32; 3]; 3] {
+    let mut out = [[0i32; 3]; 3];
+    for (r, row) in rows.into_iter().take(3).enumerate() {
+        for (c, val) in row.into_iter().take(3).enumerate() {
+            out[r][c] = val;
+        }
+    }
+    out
+}
+
+fn vecs_to_rows_f64(rows: Vec<Vec<f64>>) -> [[f64; 3]; 3] {
+    let mut out = [[0.0f64; 3]; 3];
+    for (r, row) in rows.into_iter().take(3).enumerate() {
+        for (c, val) in row.into_iter().take(3).enumerate() {
+            out[r][c] = val;
+        }
+    }
+    out
+}
+
+/// Converts a stored `TextValue` to an `APILiteralValue` for the parameter's
+/// current `data_type`. Returns `None` when the stored value cannot be coerced
+/// to that type — the parameter was retyped in the subnetwork and the stale
+/// literal should render as a placeholder instead.
+fn text_value_to_api_literal(value: &TextValue, data_type: &DataType) -> Option<APILiteralValue> {
+    Some(match data_type {
+        DataType::Bool => APILiteralValue::Bool(value.as_bool()?),
+        DataType::Int => APILiteralValue::Int(value.as_int()?),
+        DataType::Float => APILiteralValue::Float(value.as_float()?),
+        DataType::String => APILiteralValue::Str(value.as_string()?.to_string()),
+        DataType::IVec2 => {
+            let v = value.as_ivec2()?;
+            APILiteralValue::IVec2(APIIVec2 { x: v.x, y: v.y })
+        }
+        DataType::IVec3 => {
+            let v = value.as_ivec3()?;
+            APILiteralValue::IVec3(APIIVec3 {
+                x: v.x,
+                y: v.y,
+                z: v.z,
+            })
+        }
+        DataType::Vec2 => {
+            let v = value.as_vec2()?;
+            APILiteralValue::Vec2(APIVec2 { x: v.x, y: v.y })
+        }
+        DataType::Vec3 => {
+            let v = value.as_vec3()?;
+            APILiteralValue::Vec3(APIVec3 {
+                x: v.x,
+                y: v.y,
+                z: v.z,
+            })
+        }
+        DataType::IMat3 => APILiteralValue::IMat3(rows_i32_to_vecs(&value.as_imat3()?)),
+        DataType::Mat3 => APILiteralValue::Mat3(rows_f64_to_vecs(&value.as_mat3()?)),
+        _ => return None,
+    })
+}
+
+/// Converts a resolved `default`-pin `NetworkResult` to an `APILiteralValue`
+/// for the parameter's `data_type`. Returns `None` for non-simple results.
+fn network_result_to_api_literal(
+    result: &NetworkResult,
+    data_type: &DataType,
+) -> Option<APILiteralValue> {
+    Some(match (result, data_type) {
+        (NetworkResult::Bool(b), DataType::Bool) => APILiteralValue::Bool(*b),
+        (NetworkResult::Int(i), DataType::Int) => APILiteralValue::Int(*i),
+        (NetworkResult::Float(f), DataType::Float) => APILiteralValue::Float(*f),
+        (NetworkResult::Int(i), DataType::Float) => APILiteralValue::Float(*i as f64),
+        (NetworkResult::Float(f), DataType::Int) => APILiteralValue::Int(*f as i32),
+        (NetworkResult::String(s), DataType::String) => APILiteralValue::Str(s.clone()),
+        (NetworkResult::IVec2(v), DataType::IVec2) => {
+            APILiteralValue::IVec2(APIIVec2 { x: v.x, y: v.y })
+        }
+        (NetworkResult::IVec3(v), DataType::IVec3) => APILiteralValue::IVec3(APIIVec3 {
+            x: v.x,
+            y: v.y,
+            z: v.z,
+        }),
+        (NetworkResult::Vec2(v), DataType::Vec2) => {
+            APILiteralValue::Vec2(APIVec2 { x: v.x, y: v.y })
+        }
+        (NetworkResult::Vec3(v), DataType::Vec3) => APILiteralValue::Vec3(APIVec3 {
+            x: v.x,
+            y: v.y,
+            z: v.z,
+        }),
+        (NetworkResult::IMat3(m), DataType::IMat3) => APILiteralValue::IMat3(rows_i32_to_vecs(m)),
+        (NetworkResult::Mat3(m), DataType::Mat3) => {
+            APILiteralValue::Mat3(rows_f64_to_vecs(&dmat3_to_rows(m)))
+        }
+        _ => return None,
+    })
+}
+
+/// Converts an `APILiteralValue` from FFI into the `TextValue` stored in
+/// `CustomNodeData.literal_values`.
+fn api_literal_to_text_value(value: APILiteralValue) -> TextValue {
+    match value {
+        APILiteralValue::Bool(b) => TextValue::Bool(b),
+        APILiteralValue::Int(i) => TextValue::Int(i),
+        APILiteralValue::Float(f) => TextValue::Float(f),
+        APILiteralValue::Str(s) => TextValue::String(s),
+        APILiteralValue::IVec2(v) => TextValue::IVec2(IVec2::new(v.x, v.y)),
+        APILiteralValue::IVec3(v) => TextValue::IVec3(IVec3::new(v.x, v.y, v.z)),
+        APILiteralValue::Vec2(v) => TextValue::Vec2(DVec2::new(v.x, v.y)),
+        APILiteralValue::Vec3(v) => TextValue::Vec3(DVec3::new(v.x, v.y, v.z)),
+        APILiteralValue::IMat3(rows) => TextValue::IMat3(vecs_to_rows_i32(rows)),
+        APILiteralValue::Mat3(rows) => TextValue::Mat3(vecs_to_rows_f64(rows)),
+    }
+}
+
+/// Returns `None` if `node_id` is not a custom node (its `node_type_name` is
+/// not a key in `registry.node_networks`). Returns `Some(vec)` — possibly
+/// empty — for a custom node, listing only its simple-typed parameters in pin
+/// order.
+///
+/// Runs through `with_mut_cad_instance`: resolving each parameter's default
+/// (`resolve_parameter_default`) evaluates the subnetwork and needs `&mut`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APICustomNodeParam>> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let sd = &mut cad_instance.structure_designer;
+
+                // Gather all immutable info first; the borrows of `sd` end
+                // with this block, before the `&mut self` default-resolution
+                // pass below.
+                let (subnetwork_name, params_info) = {
+                    let network = sd.get_active_node_network()?;
+                    let node = network.nodes.get(&node_id)?;
+                    // A custom node's `node_type_name` is a key in `node_networks`.
+                    if !sd
+                        .node_type_registry
+                        .node_networks
+                        .contains_key(&node.node_type_name)
+                    {
+                        return None;
+                    }
+                    let subnetwork_name = node.node_type_name.clone();
+                    let node_type = sd.node_type_registry.get_node_type_for_node(node)?;
+                    let custom_data = node.data.as_any_ref().downcast_ref::<CustomNodeData>();
+
+                    let mut params_info = Vec::new();
+                    for (i, param) in node_type.parameters.iter().enumerate() {
+                        let Some(simple_type) = data_type_to_simple_param_type(&param.data_type)
+                        else {
+                            continue;
+                        };
+                        let is_wired = node
+                            .arguments
+                            .get(i)
+                            .map(|arg| !arg.is_empty())
+                            .unwrap_or(false);
+                        let stored_value = custom_data
+                            .and_then(|cd| cd.literal_values.get(&param.name))
+                            .and_then(|tv| text_value_to_api_literal(tv, &param.data_type));
+                        params_info.push((
+                            param.name.clone(),
+                            param.data_type.clone(),
+                            simple_type,
+                            is_wired,
+                            stored_value,
+                        ));
+                    }
+                    (subnetwork_name, params_info)
+                };
+
+                // Resolve each parameter's default pin (needs `&mut self`).
+                let mut result = Vec::with_capacity(params_info.len());
+                for (name, data_type, simple_type, is_wired, stored_value) in params_info {
+                    let default_value = sd
+                        .resolve_parameter_default(&subnetwork_name, &name)
+                        .and_then(|nr| network_result_to_api_literal(&nr, &data_type));
+                    result.push(APICustomNodeParam {
+                        name,
+                        data_type: simple_type,
+                        stored_value,
+                        default_value,
+                        is_wired,
+                    });
+                }
+                Some(result)
+            },
+            None,
+        )
+    }
+}
+
+/// Inserts/updates `literal_values[param_name]` on a custom node. Goes through
+/// `set_node_network_data`, so it gets the existing `SetNodeData` undo command
+/// and `refresh_structure_designer_auto` for free.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_custom_node_literal(node_id: u64, param_name: String, value: APILiteralValue) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let existing = cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|network| network.nodes.get(&node_id))
+                .and_then(|node| node.data.as_any_ref().downcast_ref::<CustomNodeData>())
+                .cloned();
+            let Some(mut data) = existing else {
+                return;
+            };
+            data.literal_values
+                .insert(param_name, api_literal_to_text_value(value));
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, Box::new(data));
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Removes `literal_values[param_name]` from a custom node. Same
+/// `set_node_network_data` path as `set_custom_node_literal`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_custom_node_literal(node_id: u64, param_name: String) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let existing = cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|network| network.nodes.get(&node_id))
+                .and_then(|node| node.data.as_any_ref().downcast_ref::<CustomNodeData>())
+                .cloned();
+            let Some(mut data) = existing else {
+                return;
+            };
+            data.literal_values.remove(&param_name);
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, Box::new(data));
             refresh_structure_designer_auto(cad_instance);
         });
     }

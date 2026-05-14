@@ -1100,3 +1100,58 @@ pub enum APIViewportPickResult {
     /// Ray missed everything — proceed with normal click handling.
     NoHit,
 }
+
+/// The editable subset of `TextValue` that the custom-node property panel can
+/// render. Mirrors the "simple" data types. FRB data-carrying enum — same
+/// shape as the existing `APIMeasurement` enum.
+///
+/// Named for the `CustomNodeData.literal_values` map it is read from / written
+/// to — deliberately *not* `APITextValue`, since the "text" in the core
+/// `TextValue` type refers to the node-network text format, which is unrelated
+/// to this panel. See `doc/design_custom_node_property_panel.md`.
+pub enum APILiteralValue {
+    Bool(bool),
+    Int(i32),
+    Float(f64),
+    Str(String),
+    IVec2(APIIVec2),
+    IVec3(APIIVec3),
+    Vec2(APIVec2),
+    Vec3(APIVec3),
+    /// Row-major 3x3, matching `TextValue::IMat3`.
+    IMat3(Vec<Vec<i32>>),
+    /// Row-major 3x3, matching `TextValue::Mat3`.
+    Mat3(Vec<Vec<f64>>),
+}
+
+/// Dedicated enum so the Flutter widget switches directly without parsing pin
+/// type strings or depending on `APIDataTypeBase`'s coverage.
+pub enum APISimpleParamType {
+    Bool,
+    Int,
+    Float,
+    Str,
+    IVec2,
+    IVec3,
+    Vec2,
+    Vec3,
+    IMat3,
+    Mat3,
+}
+
+/// One editable parameter (input pin) of a custom node, surfaced for the
+/// auto-generated property panel.
+pub struct APICustomNodeParam {
+    pub name: String,
+    pub data_type: APISimpleParamType,
+    /// The literal currently stored in `CustomNodeData.literal_values`, if any
+    /// AND it still matches `data_type`. `None` ⇒ render the placeholder.
+    pub stored_value: Option<APILiteralValue>,
+    /// The value the parameter node's `default` input pin resolves to, used as
+    /// the field placeholder. `None` when the default pin is unconnected or
+    /// evaluation fails / yields a non-simple type.
+    pub default_value: Option<APILiteralValue>,
+    /// True when the parent pin has a wire connected. When true the row renders
+    /// disabled.
+    pub is_wired: bool,
+}
