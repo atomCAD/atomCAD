@@ -5718,6 +5718,45 @@ pub fn factor_selection_into_subnetwork(
     }
 }
 
+/// Promote a node to a parameter.
+///
+/// Inserts a `parameter` node typed after the given node's output pin 0,
+/// wires that pin into the parameter's default input, and rewires every
+/// downstream consumer of the source's pin 0 — including a return-node
+/// reference — to read from the parameter instead.
+#[flutter_rust_bridge::frb(sync)]
+pub fn promote_node_to_parameter(
+    node_id: u64,
+) -> super::structure_designer_api_types::APIPromoteToParameterResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| match cad_instance
+                .structure_designer
+                .promote_node_to_parameter(node_id)
+            {
+                Ok(new_node_id) => {
+                    refresh_structure_designer_auto(cad_instance);
+                    super::structure_designer_api_types::APIPromoteToParameterResult {
+                        success: true,
+                        error: None,
+                        new_node_id: Some(new_node_id),
+                    }
+                }
+                Err(error) => super::structure_designer_api_types::APIPromoteToParameterResult {
+                    success: false,
+                    error: Some(error),
+                    new_node_id: None,
+                },
+            },
+            super::structure_designer_api_types::APIPromoteToParameterResult {
+                success: false,
+                error: Some("CAD instance not available".to_string()),
+                new_node_id: None,
+            },
+        )
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn copy_selection() -> bool {
     unsafe {

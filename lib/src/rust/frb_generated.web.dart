@@ -254,6 +254,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIPrintLogEntry dco_decode_api_print_log_entry(dynamic raw);
 
   @protected
+  APIPromoteToParameterResult dco_decode_api_promote_to_parameter_result(
+      dynamic raw);
+
+  @protected
   APIRangeData dco_decode_api_range_data(dynamic raw);
 
   @protected
@@ -1350,6 +1354,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIPrintLogEntry sse_decode_api_print_log_entry(SseDeserializer deserializer);
+
+  @protected
+  APIPromoteToParameterResult sse_decode_api_promote_to_parameter_result(
+      SseDeserializer deserializer);
 
   @protected
   APIRangeData sse_decode_api_range_data(SseDeserializer deserializer);
@@ -2646,6 +2654,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_print_log_entry(
       APIPrintLogEntry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_promote_to_parameter_result(
+      APIPromoteToParameterResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_range_data(APIRangeData self, SseSerializer serializer);

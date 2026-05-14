@@ -4749,6 +4749,95 @@ impl StructureDesigner {
         Ok(new_node_id)
     }
 
+    /// Promotes a node to a parameter.
+    ///
+    /// Creates a new `parameter` node typed after the given node's output
+    /// pin 0 (resolved), wires that pin into the parameter's default input,
+    /// and rewires every downstream consumer of pin 0 — including a return
+    /// node reference — to read from the parameter instead. The source node
+    /// becomes the parameter's default value provider.
+    ///
+    /// # Returns
+    /// * `Ok(parameter_node_id)` — id of the newly created parameter node.
+    /// * `Err(String)` — if the node doesn't exist, is already a parameter,
+    ///   or its pin 0 type is not eligible (abstract, `Function`, `Unit`,
+    ///   `Iter[T]`, unresolved).
+    pub fn promote_node_to_parameter(&mut self, node_id: u64) -> Result<u64, String> {
+        use super::promote_to_parameter;
+
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or("No active network")?;
+
+        let network_before = self
+            .snapshot_network(&network_name)
+            .ok_or_else(|| "Failed to snapshot network".to_string())?;
+
+        // Temporarily remove the network from the registry so we can pass
+        // both `&mut NodeNetwork` and `&NodeTypeRegistry` to the core function
+        // without a borrow conflict.
+        let mut network = self
+            .node_type_registry
+            .node_networks
+            .remove(&network_name)
+            .ok_or("Network not found")?;
+
+        let promote_result = promote_to_parameter::promote_node_to_parameter(
+            &mut network,
+            node_id,
+            &self.node_type_registry,
+        );
+
+        self.node_type_registry
+            .node_networks
+            .insert(network_name.clone(), network);
+
+        let new_id = promote_result?;
+
+        // Refresh custom node type cache on the new parameter node so its
+        // pin signature is populated.
+        let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
+            &self.node_type_registry.built_in_node_types,
+            &self.node_type_registry.record_type_defs,
+            &self.node_type_registry.built_in_record_type_defs,
+            &mut self.node_type_registry.node_networks,
+        );
+        if let Some(network) = node_networks.get_mut(&network_name) {
+            if let Some(node) = network.nodes.get_mut(&new_id) {
+                NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+                    built_in_types,
+                    record_type_defs,
+                    built_in_record_type_defs,
+                    node,
+                    true,
+                );
+            }
+        }
+
+        // Mark the new parameter as displayed so the user can see it.
+        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
+            network.set_node_display(new_id, true);
+            self.pending_changes.visibility_changed.insert(new_id);
+        }
+
+        self.validate_active_network();
+
+        if let Some(network_after) = self.snapshot_network(&network_name) {
+            use super::undo::commands::promote_to_parameter::PromoteToParameterCommand;
+            self.push_command(PromoteToParameterCommand {
+                network_name: network_name.clone(),
+                network_before,
+                network_after,
+            });
+        }
+
+        self.is_dirty = true;
+        self.mark_full_refresh();
+
+        Ok(new_id)
+    }
+
     /// Gets information about whether/how the current selection can be factored.
     ///
     /// This analyzes the selection without making any changes, returning information

@@ -163,10 +163,7 @@ fn deduplicate_external_inputs(inputs: Vec<ExternalInput>) -> Vec<ExternalInput>
 /// Any consumption (on any pin) by any other selected node disqualifies a node
 /// from being a sink — multi-output nodes whose pin 1 is used inside the
 /// subnetwork while pin 0 dangles are not sinks.
-fn find_unique_unconsumed_sink(
-    network: &NodeNetwork,
-    selected_ids: &HashSet<u64>,
-) -> Option<u64> {
+fn find_unique_unconsumed_sink(network: &NodeNetwork, selected_ids: &HashSet<u64>) -> Option<u64> {
     let mut consumed: HashSet<u64> = HashSet::new();
     for &sel_id in selected_ids {
         if let Some(node) = network.nodes.get(&sel_id) {

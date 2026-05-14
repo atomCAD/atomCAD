@@ -294,12 +294,7 @@ fn test_ambiguous_sinks_no_return_source() {
 
     // Two completely disconnected nodes, both selected.
     let node_a = network.add_node("cuboid", DVec2::new(0.0, 0.0), 0, Box::new(MockNodeData));
-    let node_b = network.add_node(
-        "cuboid",
-        DVec2::new(100.0, 0.0),
-        0,
-        Box::new(MockNodeData),
-    );
+    let node_b = network.add_node("cuboid", DVec2::new(100.0, 0.0), 0, Box::new(MockNodeData));
     network.select_nodes(vec![node_a, node_b]);
 
     let analysis = analyze_selection_for_factoring(&network, &registry);

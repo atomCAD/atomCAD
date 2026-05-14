@@ -70,6 +70,9 @@ mod preferences_test;
 #[path = "structure_designer/selection_factoring_test.rs"]
 mod selection_factoring_test;
 
+#[path = "structure_designer/promote_to_parameter_test.rs"]
+mod promote_to_parameter_test;
+
 #[path = "structure_designer/copy_paste_test.rs"]
 mod copy_paste_test;
 

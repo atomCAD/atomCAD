@@ -1140,6 +1140,10 @@ class NodeWidget extends StatelessWidget {
           value: 'cut',
           child: Text('Cut (Ctrl+X)'),
         ),
+        PopupMenuItem(
+          value: 'promote_to_parameter',
+          child: Text('Promote to Parameter'),
+        ),
         if (canFactor)
           PopupMenuItem(
             value: 'factor_into_subnetwork',
@@ -1176,6 +1180,19 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.cutSelection();
+      } else if (value == 'promote_to_parameter') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        final result = model.promoteNodeToParameter(node.id);
+        if (!context.mounted) return;
+        if (!result.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.error ?? 'Could not promote node'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
       } else if (value == 'factor_into_subnetwork') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

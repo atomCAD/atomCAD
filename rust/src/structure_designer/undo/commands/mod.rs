@@ -15,6 +15,7 @@ pub mod factor_selection;
 pub mod motif_edit_property;
 pub mod move_nodes;
 pub mod paste_nodes;
+pub mod promote_to_parameter;
 pub mod rename_helpers;
 pub mod rename_namespace;
 pub mod rename_network;

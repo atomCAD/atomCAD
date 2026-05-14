@@ -1197,6 +1197,17 @@ FactorSelectionResult factorSelectionIntoSubnetwork(
         .crateApiStructureDesignerStructureDesignerApiFactorSelectionIntoSubnetwork(
             request: request);
 
+/// Promote a node to a parameter.
+///
+/// Inserts a `parameter` node typed after the given node's output pin 0,
+/// wires that pin into the parameter's default input, and rewires every
+/// downstream consumer of the source's pin 0 — including a return-node
+/// reference — to read from the parameter instead.
+APIPromoteToParameterResult promoteNodeToParameter({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPromoteNodeToParameter(
+            nodeId: nodeId);
+
 bool copySelection() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiCopySelection();
 

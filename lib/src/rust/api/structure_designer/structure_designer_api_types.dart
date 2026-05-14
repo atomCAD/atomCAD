@@ -2000,6 +2000,33 @@ class APIPrintLogEntry {
           fromExecute == other.fromExecute;
 }
 
+/// Result of a Promote-to-Parameter attempt.
+class APIPromoteToParameterResult {
+  final bool success;
+  final String? error;
+
+  /// ID of the newly created parameter node (if successful)
+  final BigInt? newNodeId;
+
+  const APIPromoteToParameterResult({
+    required this.success,
+    this.error,
+    this.newNodeId,
+  });
+
+  @override
+  int get hashCode => success.hashCode ^ error.hashCode ^ newNodeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIPromoteToParameterResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          error == other.error &&
+          newNodeId == other.newNodeId;
+}
+
 class APIRangeData {
   final int start;
   final int step;

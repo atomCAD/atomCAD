@@ -1225,6 +1225,20 @@ class StructureDesignerModel extends ChangeNotifier {
     return newNodeId;
   }
 
+  /// Promote a node to a parameter.
+  ///
+  /// Inserts a `parameter` node typed after the node's output pin 0,
+  /// wires that pin into the parameter's default input, and rewires every
+  /// downstream consumer of the source's pin 0 to read from the parameter.
+  /// Returns the API result; UI is refreshed regardless of success so any
+  /// partial state is reflected.
+  APIPromoteToParameterResult promoteNodeToParameter(BigInt nodeId) {
+    final result =
+        structure_designer_api.promoteNodeToParameter(nodeId: nodeId);
+    refreshFromKernel();
+    return result;
+  }
+
   /// Run an explicit Execute pass on `nodeId` in the active network.
   ///
   /// Synchronous FFI call (the `with_*_cad_instance` helpers require

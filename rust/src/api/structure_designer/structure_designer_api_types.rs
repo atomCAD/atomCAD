@@ -1057,6 +1057,14 @@ pub struct FactorSelectionResult {
     pub new_node_id: Option<u64>,
 }
 
+/// Result of a Promote-to-Parameter attempt.
+pub struct APIPromoteToParameterResult {
+    pub success: bool,
+    pub error: Option<String>,
+    /// ID of the newly created parameter node (if successful)
+    pub new_node_id: Option<u64>,
+}
+
 /// Result of applying text format edits to the active network.
 pub struct APITextEditResult {
     pub success: bool,
