@@ -159,6 +159,7 @@ These indicators are **information, not warnings** — workflows that deliberate
 
 - Most placed node is the node network has associated data. This data consists of properties of the node which are editable in the node properties panel.
 - Often a node has both a property and input pin for the same concept. For example the cuboid node has a Min corner property and also has a min_corner input pin. In these cases you can both manually (property) and programmatically (input pin) control this aspect. The input pin always takes precedence.
+- Custom nodes follow the same model: their auto-generated property panel edits a per-parameter value, and a wired parameter pin overrides the value set inline. See [Subnetworks](#subnetworks).
 
 As an example see the input pins and the properties of the `cuboid` node:
 
@@ -191,6 +192,12 @@ Now that we created the `cube` subnetwork when adding a node in a different node
 The cube node will have the `Int` typed `size` input pin and a `Blueprint` typed output pin:
 
 ![](../atomCAD_images/cube_node.png)
+
+### Editing custom node parameters
+
+When you select a custom node instance, the **Node Properties** panel auto-generates an editor with one field per parameter pin whose type is a simple editable type (`Bool`, `Int`, `Float`, `String`, the `Vec`/`IVec` vector types, and the `Mat3`/`IMat3` matrices). You can set a value for each such parameter inline. Parameters of other types (`Blueprint`, `Crystal`, arrays, records, …) stay wire-only and do not appear in the panel.
+
+As with built-in nodes, a value wired into a parameter pin takes precedence over the value set inline (see [Node properties vs. input pins](#node-properties-vs-input-pins)). A parameter that is neither wired nor set inline falls back to the `default` input pin of its `parameter` node inside the subnetwork.
 
 ## Functional programming in atomCAD
 

@@ -192,6 +192,7 @@ This is different for each node, we will discuss this in depth at the specific n
 
 - When dragging the mouse on integer number editor fields the number can be
 incremented or decremented using the mouse wheel. Shift + mouse wheel works in 10 increments.
+- Selecting a **custom node** (a node defined by a subnetwork) shows an auto-generated panel with one editable field per simple-typed parameter pin — see [Editing custom node parameters](./node_networks.md#editing-custom-node-parameters).
 
 In case no node is selected the description of the active node network can be edited in the node properties panel:
 
