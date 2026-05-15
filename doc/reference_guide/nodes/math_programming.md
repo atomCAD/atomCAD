@@ -642,7 +642,9 @@ Bundles N input values into a single record value of the target schema.
 
 **Behavior**
 
-If any required field input is unconnected, the output is `None` (propagates as a missing-input). Otherwise the node assembles a record value carrying every field. Editing the schema (renaming a field, retyping one, adding or removing fields) immediately re-derives this node's pin layout; wires whose source type no longer matches the corresponding field's type are disconnected.
+When you select a `record_construct` node, the **Node Properties** panel shows the schema dropdown followed by one inline editor row per field whose type is a simple editable type (`Bool`, `Int`, `Float`, `String`, the `Vec`/`IVec` vector types, and the `Mat3`/`IMat3` matrices) — the same set as for [custom node parameters](../node_networks.md#editing-custom-node-parameters). Fields of other types (`Blueprint`, `Crystal`, arrays, nested records, …) stay wire-only and do not appear in the panel.
+
+For each field, a value wired into the corresponding input pin takes precedence over the value set inline; if neither is supplied, the output is `None` (propagates as a missing-input). Unlike custom node parameters, `record_construct` fields have no *default* layer to fall back to. Otherwise the node assembles a record value carrying every field. Editing the schema (renaming a field, retyping one, adding or removing fields) immediately re-derives this node's pin layout; wires whose source type no longer matches the corresponding field's type are disconnected, and inline values whose field was renamed or retyped become inert (they linger in the saved file but are ignored at eval).
 
 If the `Schema` property is empty (`— No schema chosen —`) or names a deleted def, the node's output type is dangling and downstream wires are disconnected by the network's repair pass.
 
