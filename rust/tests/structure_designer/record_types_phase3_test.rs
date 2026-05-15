@@ -1,4 +1,4 @@
-//! Phase 3 tests for record types (see `doc/design_record_types.md`).
+﻿//! Phase 3 tests for record types (see `doc/design_record_types.md`).
 //!
 //! Phase 3 introduces the `record_construct` and `record_destructure` nodes,
 //! both of which derive their pin layout from a `RecordTypeDef` in the
@@ -6,7 +6,7 @@
 //!
 //! - construct + destructure round-trip
 //! - nested defs (Box references Point)
-//! - missing-input → None propagation
+//! - missing-input â†’ None propagation
 //! - pass-through on destructure (extra runtime fields ignored)
 //! - dangling schema (empty / deleted)
 //! - field-rename-as-remove+add semantics
@@ -388,7 +388,7 @@ fn nested_def_construct_and_destructure() {
     designer.connect_nodes(x, 0, inner, 1);
     designer.connect_nodes(inner, 0, outer, 0);
     designer.connect_nodes(outer, 0, unbox, 0);
-    // unbox output pin "p" → unpoint input.
+    // unbox output pin "p" â†’ unpoint input.
     designer.connect_nodes(unbox, 0, unpoint, 0);
 
     // unpoint pins: [y, x] in authored order.
@@ -444,7 +444,7 @@ fn missing_input_propagates_through_destructure() {
         .add_record_type_def(point_def())
         .unwrap();
 
-    // No record_construct upstream — destructure's `record` input is unconnected.
+    // No record_construct upstream â€” destructure's `record` input is unconnected.
     let destructure = designer.add_node("record_destructure", DVec2::new(0.0, 0.0));
     set_node_data(
         &mut designer,
@@ -630,7 +630,7 @@ fn dangling_schema_after_delete_disconnects_downstream() {
             .unwrap()
             .arguments
             .iter()
-            .map(|a| a.argument_output_pins.len())
+            .map(|a| a.argument_output_pins().len())
             .sum()
     };
     assert_eq!(pre_arg_count, 2);
@@ -684,11 +684,11 @@ fn field_rename_disconnects_old_pin_wires() {
     );
     designer.validate_active_network();
 
-    // Authored order [y, x] → pin 0 = y, pin 1 = x.
+    // Authored order [y, x] â†’ pin 0 = y, pin 1 = x.
     designer.connect_nodes(y, 0, construct, 0);
     designer.connect_nodes(x, 0, construct, 1);
 
-    // Rename field x → xx (treated as remove x, add xx). The y pin survives.
+    // Rename field x â†’ xx (treated as remove x, add xx). The y pin survives.
     designer
         .update_record_type_def(
             "Point",
@@ -715,8 +715,8 @@ fn field_rename_disconnects_old_pin_wires() {
 
     // y wire (pin 0) survives; xx wire (pin 1) is empty.
     assert_eq!(construct_node.arguments.len(), 2);
-    assert_eq!(construct_node.arguments[0].argument_output_pins.len(), 1);
-    assert_eq!(construct_node.arguments[1].argument_output_pins.len(), 0);
+    assert_eq!(construct_node.arguments[0].argument_output_pins().len(), 1);
+    assert_eq!(construct_node.arguments[1].argument_output_pins().len(), 0);
 }
 
 // ============================================================================
@@ -755,7 +755,7 @@ fn retyping_field_disconnects_now_incompatible_wire() {
     // to Vec3 and the post-update validation marks the network invalid
     // because the Int source is no longer compatible. (Following the
     // existing codebase pattern, the wire entry itself is left in place
-    // with a validation error rather than being auto-disconnected — the
+    // with a validation error rather than being auto-disconnected â€” the
     // user is expected to fix the wire manually.)
     designer
         .update_record_type_def(
@@ -778,10 +778,10 @@ fn retyping_field_disconnects_now_incompatible_wire() {
     let nt = registry.get_node_type_for_node(construct_node).unwrap();
     assert_eq!(nt.parameters[0].data_type, DataType::Vec3);
     assert_eq!(nt.parameters[1].data_type, DataType::Int);
-    // x wire (pin 1) stays connected (Int → Int).
-    assert_eq!(construct_node.arguments[1].argument_output_pins.len(), 1);
+    // x wire (pin 1) stays connected (Int â†’ Int).
+    assert_eq!(construct_node.arguments[1].argument_output_pins().len(), 1);
 
-    // The retype made the Int → Vec3 wire incompatible; the network is
+    // The retype made the Int â†’ Vec3 wire incompatible; the network is
     // marked invalid so the user notices.
     assert!(!net.valid, "network should be invalid after retype");
 }

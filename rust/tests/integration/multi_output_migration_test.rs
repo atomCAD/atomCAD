@@ -1,4 +1,4 @@
-// Phase 0: Backward-compatibility fixture tests for multi-output pin migration.
+﻿// Phase 0: Backward-compatibility fixture tests for multi-output pin migration.
 //
 // These tests load frozen .cnnd files created with the old serialization format
 // (before any multi-output changes) and verify they load correctly.
@@ -72,7 +72,7 @@ fn test_load_old_builtin_only() {
         "Union node should have arguments"
     );
     assert_eq!(
-        union_node.arguments[0].argument_output_pins.len(),
+        union_node.arguments[0].argument_output_pins().len(),
         2,
         "Union shapes param should have 2 wired inputs"
     );
@@ -282,7 +282,7 @@ fn test_load_old_atom_edit_output_diff_false() {
         "atom_edit should have arguments"
     );
     assert_eq!(
-        atom_edit_node.arguments[0].argument_output_pins.len(),
+        atom_edit_node.arguments[0].argument_output_pins().len(),
         1,
         "atom_edit's molecule input should be wired"
     );

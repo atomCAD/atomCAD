@@ -519,17 +519,15 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
                 for (_id, node) in node_network.nodes.iter() {
                     for (index, argument) in node.arguments.iter().enumerate() {
-                        for (argument_node_id, output_pin_index) in
-                            argument.argument_output_pins.iter()
-                        {
+                        for (argument_node_id, output_pin_index) in argument.iter_source_pins() {
                             node_network_view.wires.push(WireView {
-                                source_node_id: *argument_node_id,
-                                source_output_pin_index: *output_pin_index,
+                                source_node_id: argument_node_id,
+                                source_output_pin_index: output_pin_index,
                                 dest_node_id: node.id,
                                 dest_param_index: index,
                                 selected: node_network.is_wire_selected(
-                                    *argument_node_id,
-                                    *output_pin_index,
+                                    argument_node_id,
+                                    output_pin_index,
                                     node.id,
                                     index,
                                 ),
@@ -1655,7 +1653,7 @@ pub fn get_selected_wires() -> Vec<WireView> {
                     .into_iter()
                     .map(|wire| WireView {
                         source_node_id: wire.source_node_id,
-                        source_output_pin_index: wire.source_output_pin_index,
+                        source_output_pin_index: wire.expect_node_output_pin(),
                         dest_node_id: wire.destination_node_id,
                         dest_param_index: wire.destination_argument_index,
                         selected: true,
@@ -1683,11 +1681,13 @@ pub fn select_wires(wires: Vec<super::structure_designer_api_types::WireIdentifi
         with_mut_cad_instance(|instance| {
             let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
                 .into_iter()
-                .map(|w| crate::structure_designer::node_network::Wire {
-                    source_node_id: w.source_node_id,
-                    source_output_pin_index: w.source_output_pin_index,
-                    destination_node_id: w.destination_node_id,
-                    destination_argument_index: w.destination_argument_index,
+                .map(|w| {
+                    crate::structure_designer::node_network::Wire::node_output(
+                        w.source_node_id,
+                        w.source_output_pin_index,
+                        w.destination_node_id,
+                        w.destination_argument_index,
+                    )
                 })
                 .collect();
             instance.structure_designer.select_wires(wire_structs);
@@ -1702,11 +1702,13 @@ pub fn add_wires_to_selection(wires: Vec<super::structure_designer_api_types::Wi
         with_mut_cad_instance(|instance| {
             let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
                 .into_iter()
-                .map(|w| crate::structure_designer::node_network::Wire {
-                    source_node_id: w.source_node_id,
-                    source_output_pin_index: w.source_output_pin_index,
-                    destination_node_id: w.destination_node_id,
-                    destination_argument_index: w.destination_argument_index,
+                .map(|w| {
+                    crate::structure_designer::node_network::Wire::node_output(
+                        w.source_node_id,
+                        w.source_output_pin_index,
+                        w.destination_node_id,
+                        w.destination_argument_index,
+                    )
                 })
                 .collect();
             instance
@@ -1723,11 +1725,13 @@ pub fn toggle_wires_selection(wires: Vec<super::structure_designer_api_types::Wi
         with_mut_cad_instance(|instance| {
             let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
                 .into_iter()
-                .map(|w| crate::structure_designer::node_network::Wire {
-                    source_node_id: w.source_node_id,
-                    source_output_pin_index: w.source_output_pin_index,
-                    destination_node_id: w.destination_node_id,
-                    destination_argument_index: w.destination_argument_index,
+                .map(|w| {
+                    crate::structure_designer::node_network::Wire::node_output(
+                        w.source_node_id,
+                        w.source_output_pin_index,
+                        w.destination_node_id,
+                        w.destination_argument_index,
+                    )
                 })
                 .collect();
             instance
@@ -1747,11 +1751,13 @@ pub fn select_nodes_and_wires(
         with_mut_cad_instance(|instance| {
             let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
                 .into_iter()
-                .map(|w| crate::structure_designer::node_network::Wire {
-                    source_node_id: w.source_node_id,
-                    source_output_pin_index: w.source_output_pin_index,
-                    destination_node_id: w.destination_node_id,
-                    destination_argument_index: w.destination_argument_index,
+                .map(|w| {
+                    crate::structure_designer::node_network::Wire::node_output(
+                        w.source_node_id,
+                        w.source_output_pin_index,
+                        w.destination_node_id,
+                        w.destination_argument_index,
+                    )
                 })
                 .collect();
             instance
@@ -1771,11 +1777,13 @@ pub fn add_nodes_and_wires_to_selection(
         with_mut_cad_instance(|instance| {
             let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
                 .into_iter()
-                .map(|w| crate::structure_designer::node_network::Wire {
-                    source_node_id: w.source_node_id,
-                    source_output_pin_index: w.source_output_pin_index,
-                    destination_node_id: w.destination_node_id,
-                    destination_argument_index: w.destination_argument_index,
+                .map(|w| {
+                    crate::structure_designer::node_network::Wire::node_output(
+                        w.source_node_id,
+                        w.source_output_pin_index,
+                        w.destination_node_id,
+                        w.destination_argument_index,
+                    )
                 })
                 .collect();
             instance
@@ -1795,11 +1803,13 @@ pub fn toggle_nodes_and_wires_selection(
         with_mut_cad_instance(|instance| {
             let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
                 .into_iter()
-                .map(|w| crate::structure_designer::node_network::Wire {
-                    source_node_id: w.source_node_id,
-                    source_output_pin_index: w.source_output_pin_index,
-                    destination_node_id: w.destination_node_id,
-                    destination_argument_index: w.destination_argument_index,
+                .map(|w| {
+                    crate::structure_designer::node_network::Wire::node_output(
+                        w.source_node_id,
+                        w.source_output_pin_index,
+                        w.destination_node_id,
+                        w.destination_argument_index,
+                    )
                 })
                 .collect();
             instance

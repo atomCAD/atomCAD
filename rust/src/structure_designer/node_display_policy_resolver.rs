@@ -111,7 +111,8 @@ impl NodeDisplayPolicyResolver {
 
                     // Forward connections: nodes this node connects to (via arguments)
                     for arg in &current_node.arguments {
-                        for (&connected_node_id, &_output_pin_index) in &arg.argument_output_pins {
+                        for wire in &arg.incoming_wires {
+                            let connected_node_id = wire.source_node_id;
                             if !visited.contains(&connected_node_id)
                                 && node_network.nodes.contains_key(&connected_node_id)
                             {

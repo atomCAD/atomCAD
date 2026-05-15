@@ -195,8 +195,8 @@ fn compute_input_barycenter(
     let input_positions: Vec<f64> = node
         .arguments
         .iter()
-        .flat_map(|arg| arg.argument_output_pins.keys())
-        .filter_map(|&source_id| prev_positions.get(&source_id).copied())
+        .flat_map(|arg| arg.incoming_wires.iter().map(|w| w.source_node_id))
+        .filter_map(|source_id| prev_positions.get(&source_id).copied())
         .collect();
 
     if input_positions.is_empty() {
@@ -231,7 +231,7 @@ fn compute_output_barycenter(
             let is_connected = other_node
                 .arguments
                 .iter()
-                .any(|arg| arg.argument_output_pins.contains_key(&node_id));
+                .any(|arg| arg.has_source(node_id));
 
             if is_connected {
                 next_positions.get(&other_id).copied()

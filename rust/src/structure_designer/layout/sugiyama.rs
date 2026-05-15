@@ -181,7 +181,8 @@ fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
             if let Some(node) = network.nodes.get(&current) {
                 // Input connections
                 for arg in &node.arguments {
-                    for &source_id in arg.argument_output_pins.keys() {
+                    for wire in &arg.incoming_wires {
+                        let source_id = wire.source_node_id;
                         if !component.contains(&source_id) {
                             queue.push_back(source_id);
                         }
@@ -192,9 +193,7 @@ fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
             // Output connections (nodes that use this node as input)
             for (&other_id, other_node) in &network.nodes {
                 for arg in &other_node.arguments {
-                    if arg.argument_output_pins.contains_key(&current)
-                        && !component.contains(&other_id)
-                    {
+                    if arg.has_source(current) && !component.contains(&other_id) {
                         queue.push_back(other_id);
                     }
                 }
@@ -354,7 +353,8 @@ fn insert_dummy_nodes(
         };
 
         for arg in &node.arguments {
-            for &source_id in arg.argument_output_pins.keys() {
+            for wire in &arg.incoming_wires {
+                let source_id = wire.source_node_id;
                 let Some(&source_layer) = depths.get(&source_id) else {
                     continue;
                 };

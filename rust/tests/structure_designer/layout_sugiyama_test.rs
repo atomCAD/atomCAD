@@ -1,4 +1,4 @@
-//! Tests for the Sugiyama layout algorithm.
+﻿//! Tests for the Sugiyama layout algorithm.
 //!
 //! These tests verify:
 //! - Layer assignment and dummy node insertion
@@ -121,8 +121,8 @@ fn test_dummy_nodes_for_long_edges() {
     // This requires a chain to push the target node to a higher layer
     //
     // Structure:
-    //   f1 ─────────────────────┐
-    //                           ▼
+    //   f1 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+    //                           â–¼
     //   f2 -> sphere1 -> sphere2
     //
     // f1 is at depth 0, f2 is at depth 0
@@ -154,7 +154,7 @@ fn test_dummy_nodes_for_long_edges() {
         "sphere2 should have at least 2 arguments"
     );
     assert!(
-        !sphere2_node.arguments[1].argument_output_pins.is_empty(),
+        !sphere2_node.arguments[1].argument_output_pins().is_empty(),
         "sphere2 arg[1] should be connected to f1"
     );
 

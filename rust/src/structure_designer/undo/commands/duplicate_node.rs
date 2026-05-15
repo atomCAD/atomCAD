@@ -27,7 +27,7 @@ impl UndoCommand for DuplicateNodeCommand {
             for other_id in node_ids {
                 if let Some(node) = network.nodes.get_mut(&other_id) {
                     for arg in node.arguments.iter_mut() {
-                        arg.argument_output_pins.remove(&self.new_node_id);
+                        arg.remove_source(self.new_node_id);
                     }
                 }
             }
@@ -90,7 +90,7 @@ impl UndoCommand for DuplicateNodeCommand {
                 node.custom_name = snap.custom_name.clone();
                 for (i, arg_snap) in snap.arguments.iter().enumerate() {
                     if let Some(arg) = node.arguments.get_mut(i) {
-                        arg.argument_output_pins = arg_snap.argument_output_pins.clone();
+                        arg.incoming_wires = arg_snap.incoming_wires.clone();
                     }
                 }
             }

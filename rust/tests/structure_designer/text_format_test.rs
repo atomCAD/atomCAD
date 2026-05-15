@@ -1,4 +1,4 @@
-use glam::{DVec2, DVec3, IVec2, IVec3};
+﻿use glam::{DVec2, DVec3, IVec2, IVec3};
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::text_format::{
     Lexer, Parser, PropertyValue, Statement, TextValue, Token, describe_node_type,
@@ -747,7 +747,7 @@ mod network_editor_tests {
 
         // Radius is parameter index 1
         assert!(
-            !sphere_node.arguments[1].argument_output_pins.is_empty(),
+            !sphere_node.arguments[1].argument_output_pins().is_empty(),
             "Sphere radius should be connected"
         );
     }
@@ -1075,7 +1075,7 @@ mod network_editor_tests {
 
         // shapes is parameter index 0
         assert_eq!(
-            union_node.arguments[0].argument_output_pins.len(),
+            union_node.arguments[0].argument_output_pins().len(),
             2,
             "Union should have two inputs connected"
         );
@@ -1114,12 +1114,12 @@ mod network_editor_tests {
         let f_param_index = 1;
         let f_arg = &map_node.arguments[f_param_index];
         assert!(
-            !f_arg.argument_output_pins.is_empty(),
+            !f_arg.argument_output_pins().is_empty(),
             "f parameter should be connected"
         );
 
         // Verify it's a function pin connection (output_pin_index = -1)
-        let (_, &pin_index) = f_arg.argument_output_pins.iter().next().unwrap();
+        let (_, &pin_index) = f_arg.argument_output_pins().iter().next().unwrap();
         assert_eq!(pin_index, -1, "Should be a function pin reference");
     }
 
@@ -1283,7 +1283,7 @@ mod network_editor_tests {
 
         // shapes is parameter index 0
         assert_eq!(
-            union_node.arguments[0].argument_output_pins.len(),
+            union_node.arguments[0].argument_output_pins().len(),
             2,
             "Union should have two inputs connected"
         );
@@ -2926,8 +2926,8 @@ mod multi_output_text_format_tests {
             .unwrap();
 
         let ad_node = network.nodes.get(&ad_id).unwrap();
-        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
-        assert_eq!(pin_index, Some(&1), "Should wire to pin 1 (diff)");
+        let pin_index = ad_node.arguments[1].get_source_pin(ae_id);
+        assert_eq!(pin_index, Some(1), "Should wire to pin 1 (diff)");
     }
 
     #[test]
@@ -2967,8 +2967,8 @@ mod multi_output_text_format_tests {
             .unwrap();
 
         let ad_node = network.nodes.get(&ad_id).unwrap();
-        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
-        assert_eq!(pin_index, Some(&0), "Should wire to pin 0 (default)");
+        let pin_index = ad_node.arguments[1].get_source_pin(ae_id);
+        assert_eq!(pin_index, Some(0), "Should wire to pin 0 (default)");
     }
 
     #[test]
@@ -3008,8 +3008,8 @@ mod multi_output_text_format_tests {
             .unwrap();
 
         let ad_node = network.nodes.get(&ad_id).unwrap();
-        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
-        assert_eq!(pin_index, Some(&0), "Explicit .result should wire to pin 0");
+        let pin_index = ad_node.arguments[1].get_source_pin(ae_id);
+        assert_eq!(pin_index, Some(0), "Explicit .result should wire to pin 0");
     }
 
     #[test]
@@ -3110,7 +3110,7 @@ mod multi_output_text_format_tests {
 
     #[test]
     fn test_roundtrip_multi_output_pin_reference() {
-        // Parse → serialize → parse produces identical network
+        // Parse â†’ serialize â†’ parse produces identical network
         let mut designer = setup_designer_with_network("test_net");
 
         let code = r#"
@@ -3165,10 +3165,8 @@ mod multi_output_text_format_tests {
             .unwrap();
 
         let ad_node = network2.nodes.get(&ad_id).unwrap();
-        let pin_index = ad_node.arguments[1].argument_output_pins.get(&ae_id);
-        assert_eq!(
-            pin_index,
-            Some(&1),
+        let pin_index = ad_node.arguments[1].get_source_pin(ae_id);
+        assert_eq!(pin_index, Some(1),
             "Roundtrip should preserve pin 1 (diff) wire"
         );
 
@@ -3238,10 +3236,8 @@ mod multi_output_text_format_tests {
             .find(|(_, n)| n.custom_name.as_deref() == Some("ad1"))
             .map(|(&id, _)| id)
             .unwrap();
-        let ad1_pin = network2.nodes.get(&ad1_id).unwrap().arguments[1]
-            .argument_output_pins
-            .get(&ae_id);
-        assert_eq!(ad1_pin, Some(&0), "ad1 should wire to pin 0");
+        let ad1_pin = network2.nodes.get(&ad1_id).unwrap().arguments[1].get_source_pin(ae_id);
+        assert_eq!(ad1_pin, Some(0), "ad1 should wire to pin 0");
 
         // Check ad2 wired to pin 1
         let ad2_id = network2
@@ -3250,9 +3246,7 @@ mod multi_output_text_format_tests {
             .find(|(_, n)| n.custom_name.as_deref() == Some("ad2"))
             .map(|(&id, _)| id)
             .unwrap();
-        let ad2_pin = network2.nodes.get(&ad2_id).unwrap().arguments[1]
-            .argument_output_pins
-            .get(&ae_id);
-        assert_eq!(ad2_pin, Some(&1), "ad2 should wire to pin 1 (diff)");
+        let ad2_pin = network2.nodes.get(&ad2_id).unwrap().arguments[1].get_source_pin(ae_id);
+        assert_eq!(ad2_pin, Some(1), "ad2 should wire to pin 1 (diff)");
     }
 }

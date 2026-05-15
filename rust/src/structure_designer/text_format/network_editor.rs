@@ -606,9 +606,7 @@ impl<'a> NetworkEditor<'a> {
 
         // Clear existing connections for this parameter if it's not multi
         if !is_multi {
-            dest_node.arguments[param_index]
-                .argument_output_pins
-                .clear();
+            dest_node.arguments[param_index].clear();
         }
 
         // Wire each source
@@ -631,9 +629,7 @@ impl<'a> NetworkEditor<'a> {
             // Add the connection
             // We need to re-borrow dest_node since we released it above
             if let Some(dest_node) = self.network.nodes.get_mut(&dest_node_id) {
-                dest_node.arguments[param_index]
-                    .argument_output_pins
-                    .insert(source_node_id, output_pin_index);
+                dest_node.arguments[param_index].set_source(source_node_id, output_pin_index);
             }
 
             let ref_type = if source_ref.is_function_ref { "@" } else { "" };
@@ -761,7 +757,7 @@ impl<'a> NetworkEditor<'a> {
         // Remove outgoing wires (where this node is a source)
         for node in self.network.nodes.values_mut() {
             for argument in node.arguments.iter_mut() {
-                argument.argument_output_pins.remove(&node_id);
+                argument.remove_source(node_id);
             }
         }
 

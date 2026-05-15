@@ -867,20 +867,26 @@ impl NetworkEvaluator {
         let expected_type = registry.get_node_param_data_type(node, parameter_index);
 
         if expected_type.is_array() {
-            let input_output_pins = &node.arguments[parameter_index].argument_output_pins;
+            let incoming_wires = &node.arguments[parameter_index].incoming_wires;
 
-            if input_output_pins.is_empty() {
+            if incoming_wires.is_empty() {
                 return NetworkResult::None; // Nothing is connected
             }
 
             let mut merged_items = Vec::new();
 
-            // Sort by node ID to ensure deterministic evaluation order
-            // (HashMap iteration order is non-deterministic)
-            let mut sorted_pins: Vec<_> = input_output_pins.iter().collect();
-            sorted_pins.sort_by_key(|&(&node_id, _)| node_id);
+            // Sort by source node ID to ensure deterministic evaluation
+            // order. (Pre-zones, the source of these wires came from a
+            // HashMap with non-deterministic iteration order; the Vec is
+            // deterministic but we still sort by node ID to keep merge
+            // order independent of construction order.)
+            let mut sorted_pins: Vec<(u64, i32)> = incoming_wires
+                .iter()
+                .filter_map(|w| w.as_legacy_pair())
+                .collect();
+            sorted_pins.sort_by_key(|&(node_id, _)| node_id);
 
-            for (&input_node_id, &input_node_output_pin_index) in sorted_pins {
+            for (input_node_id, input_node_output_pin_index) in sorted_pins {
                 let result = self.evaluate(
                     network_stack,
                     input_node_id,

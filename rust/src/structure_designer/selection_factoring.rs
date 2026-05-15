@@ -168,7 +168,8 @@ fn find_unique_unconsumed_sink(network: &NodeNetwork, selected_ids: &HashSet<u64
     for &sel_id in selected_ids {
         if let Some(node) = network.nodes.get(&sel_id) {
             for arg in &node.arguments {
-                for &source_id in arg.argument_output_pins.keys() {
+                for wire in &arg.incoming_wires {
+                    let source_id = wire.source_node_id;
                     if selected_ids.contains(&source_id) {
                         consumed.insert(source_id);
                     }
@@ -246,7 +247,10 @@ pub fn analyze_selection_for_factoring(
 
         // Check each argument for external inputs
         for (param_idx, arg) in node.arguments.iter().enumerate() {
-            for (&source_id, &pin_idx) in &arg.argument_output_pins {
+            for wire in &arg.incoming_wires {
+                let Some((source_id, pin_idx)) = wire.as_legacy_pair() else {
+                    continue;
+                };
                 if !network.selected_node_ids.contains(&source_id) {
                     // This is an external input
                     let data_type = get_output_type(network, source_id, pin_idx, registry);
@@ -278,7 +282,10 @@ pub fn analyze_selection_for_factoring(
         }
 
         for (param_idx, arg) in other_node.arguments.iter().enumerate() {
-            for (&source_id, &pin_idx) in &arg.argument_output_pins {
+            for wire in &arg.incoming_wires {
+                let Some((source_id, pin_idx)) = wire.as_legacy_pair() else {
+                    continue;
+                };
                 if network.selected_node_ids.contains(&source_id) {
                     // This is an external output
                     external_outputs.push(ExternalOutput {
@@ -495,24 +502,36 @@ pub fn create_subnetwork_from_selection(
     for &new_id in id_mapping.values() {
         let node = new_network.nodes.get_mut(&new_id).unwrap();
         for arg in &mut node.arguments {
-            let mut new_pins: HashMap<u64, i32> = HashMap::new();
+            let mut new_wires: Vec<crate::structure_designer::node_network::IncomingWire> =
+                Vec::new();
 
-            for (&source_id, &pin_idx) in &arg.argument_output_pins {
+            for wire in &arg.incoming_wires {
+                let Some((source_id, pin_idx)) = wire.as_legacy_pair() else {
+                    continue;
+                };
                 if let Some(&mapped_id) = id_mapping.get(&source_id) {
                     // Internal connection - use mapped ID
-                    new_pins.insert(mapped_id, pin_idx);
+                    new_wires.push(
+                        crate::structure_designer::node_network::IncomingWire::node_output(
+                            mapped_id, pin_idx,
+                        ),
+                    );
                 } else {
                     // External input - connect to parameter node
                     let key = (source_id, pin_idx);
                     if let Some(&param_index) = source_to_param_index.get(&key) {
                         if let Some(&param_id) = param_node_ids.get(&param_index) {
-                            new_pins.insert(param_id, 0); // Parameter output is pin 0
+                            new_wires.push(
+                                crate::structure_designer::node_network::IncomingWire::node_output(
+                                    param_id, 0,
+                                ),
+                            ); // Parameter output is pin 0
                         }
                     }
                 }
             }
 
-            arg.argument_output_pins = new_pins;
+            arg.incoming_wires = new_wires;
         }
     }
 
@@ -597,7 +616,7 @@ pub fn replace_selection_with_custom_node(
         for other_id in nodes_to_process {
             if let Some(node) = network.nodes.get_mut(&other_id) {
                 for arg in &mut node.arguments {
-                    arg.argument_output_pins.remove(&node_id);
+                    arg.remove_source(node_id);
                 }
             }
         }

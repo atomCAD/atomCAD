@@ -721,11 +721,11 @@ impl NodeTypeRegistry {
                     .iter()
                     .position(|p| p.name == *input_pin_name)?;
                 let argument = node.arguments.get(arg_index)?;
-                if argument.argument_output_pins.is_empty() {
+                if argument.is_empty() {
                     return None;
                 }
                 let mut common: Option<DataType> = None;
-                for (&src_node_id, &src_pin_index) in &argument.argument_output_pins {
+                for (src_node_id, src_pin_index) in argument.iter_source_pins() {
                     let src_node = network.nodes.get(&src_node_id)?;
                     let src_ty = self.resolve_output_type(src_node, network, src_pin_index)?;
                     // Peel a single Array wrapper if present; non-array sources broadcast
@@ -770,7 +770,7 @@ impl NodeTypeRegistry {
             None => return false,
         };
         match node.arguments.get(arg_index) {
-            Some(argument) => argument.argument_output_pins.is_empty(),
+            Some(argument) => argument.is_empty(),
             None => false,
         }
     }
@@ -788,10 +788,10 @@ impl NodeTypeRegistry {
             .position(|p| p.name == input_pin_name)?;
         let argument = node.arguments.get(arg_index)?;
         // SameAsInput is only meaningful for single-connection (non-array) input pins.
-        if argument.argument_output_pins.len() != 1 {
+        if argument.len() != 1 {
             return None;
         }
-        let (&src_node_id, &src_pin_index) = argument.argument_output_pins.iter().next()?;
+        let (src_node_id, src_pin_index) = argument.iter_source_pins().next()?;
         let src_node = network.nodes.get(&src_node_id)?;
         Some((src_node, src_pin_index))
     }
@@ -1068,22 +1068,26 @@ impl NodeTypeRegistry {
             // - Drop connections with unsupported output pin indices
             //   (-1=function pin, 0..N-1=result output pins based on the source node's type)
             for argument in node.arguments.iter_mut() {
-                argument
-                    .argument_output_pins
-                    .retain(|source_node_id, output_pin_index| {
-                        if !node_ids.contains(source_node_id) {
-                            return false;
-                        }
-                        if *output_pin_index == -1 {
-                            return true;
-                        }
-                        if let Some(&count) = pin_counts.get(source_node_id) {
-                            (*output_pin_index as usize) < count
-                        } else {
-                            // Unknown type — keep wire, let validator catch it
-                            true
-                        }
-                    });
+                argument.incoming_wires.retain(|wire| {
+                    let Some((source_node_id, output_pin_index)) = wire.as_legacy_pair() else {
+                        // Non-legacy wires (zone-input or cross-scope) are
+                        // not produced in Phase 1; defer their validation
+                        // to Phase 6.
+                        return true;
+                    };
+                    if !node_ids.contains(&source_node_id) {
+                        return false;
+                    }
+                    if output_pin_index == -1 {
+                        return true;
+                    }
+                    if let Some(&count) = pin_counts.get(&source_node_id) {
+                        (output_pin_index as usize) < count
+                    } else {
+                        // Unknown type — keep wire, let validator catch it
+                        true
+                    }
+                });
             }
         }
     }

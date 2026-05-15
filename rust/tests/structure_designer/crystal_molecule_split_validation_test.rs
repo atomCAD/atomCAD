@@ -1,8 +1,8 @@
-//! Tests for step 6.4 of the Crystal / Molecule split: wire validation,
+﻿//! Tests for step 6.4 of the Crystal / Molecule split: wire validation,
 //! polymorphic-output resolution, and output-type propagation into custom
 //! network types.
 //!
-//! See `doc/design_crystal_molecule_split.md` §6.4.
+//! See `doc/design_crystal_molecule_split.md` Â§6.4.
 
 use glam::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
@@ -150,8 +150,8 @@ fn mixed_phase_array_into_same_as_array_elements_flags_node_invalid() {
     let crystal = make_node(1, "crystal_src", 0);
     let molecule = make_node(2, "molecule_src", 0);
     let mut arr_poly = make_node(3, "arr_poly", 1);
-    arr_poly.arguments[0].argument_output_pins.insert(1, 0);
-    arr_poly.arguments[0].argument_output_pins.insert(2, 0);
+    arr_poly.arguments[0].set_source(1, 0);
+    arr_poly.arguments[0].set_source(2, 0);
     network.nodes.insert(1, crystal);
     network.nodes.insert(2, molecule);
     network.nodes.insert(3, arr_poly);
@@ -182,8 +182,8 @@ fn same_kind_array_into_same_as_array_elements_resolves_and_is_valid() {
     let c1 = make_node(1, "crystal_src", 0);
     let c2 = make_node(2, "crystal_src", 0);
     let mut arr_poly = make_node(3, "arr_poly", 1);
-    arr_poly.arguments[0].argument_output_pins.insert(1, 0);
-    arr_poly.arguments[0].argument_output_pins.insert(2, 0);
+    arr_poly.arguments[0].set_source(1, 0);
+    arr_poly.arguments[0].set_source(2, 0);
     network.nodes.insert(1, c1);
     network.nodes.insert(2, c2);
     network.nodes.insert(3, arr_poly);
@@ -203,7 +203,7 @@ fn same_kind_array_into_same_as_array_elements_resolves_and_is_valid() {
     let arr_poly_node = network.nodes.get(&3).unwrap();
     let resolved = registry.resolve_output_type(arr_poly_node, network, 0);
     assert_eq!(resolved, Some(DataType::Crystal));
-    // Re-resolve — pure function, must return the same value.
+    // Re-resolve â€” pure function, must return the same value.
     let resolved2 = registry.resolve_output_type(arr_poly_node, network, 0);
     assert_eq!(resolved, resolved2);
 }
@@ -216,7 +216,7 @@ fn resolve_output_type_is_idempotent_against_validation_cache() {
 
     let m = make_node(1, "molecule_src", 0);
     let mut poly = make_node(2, "poly", 1);
-    poly.arguments[0].argument_output_pins.insert(1, 0);
+    poly.arguments[0].set_source(1, 0);
     network.nodes.insert(1, m);
     network.nodes.insert(2, poly);
     registry.node_networks.insert("test".to_string(), network);

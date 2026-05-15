@@ -168,7 +168,11 @@ impl<'a> NetworkSerializer<'a> {
         if let Some(node) = self.network.nodes.get(&node_id) {
             for argument in &node.arguments {
                 // Sort dependency node IDs for deterministic output
-                let mut dep_ids: Vec<u64> = argument.argument_output_pins.keys().copied().collect();
+                let mut dep_ids: Vec<u64> = argument
+                    .incoming_wires
+                    .iter()
+                    .map(|w| w.source_node_id)
+                    .collect();
                 dep_ids.sort();
                 for source_node_id in dep_ids {
                     self.dfs_visit(source_node_id, result, visited, temp_mark)?;
@@ -221,31 +225,29 @@ impl<'a> NetworkSerializer<'a> {
         // First pass: gather connections
         if let Some(nt) = node_type {
             for (arg_index, argument) in node.arguments.iter().enumerate() {
-                if !argument.argument_output_pins.is_empty() && arg_index < nt.parameters.len() {
+                if !argument.is_empty() && arg_index < nt.parameters.len() {
                     let param_name = &nt.parameters[arg_index].name;
                     connected_params.insert(param_name.clone());
 
                     // Check if this is a multi-input parameter
-                    let is_multi = argument.argument_output_pins.len() > 1;
+                    let is_multi = argument.len() > 1;
 
                     if is_multi {
                         // Multi-input: format as array of references
                         // Sort by source node ID for deterministic output
-                        let mut entries: Vec<_> = argument.argument_output_pins.iter().collect();
-                        entries.sort_by_key(|(id, _)| **id);
+                        let mut entries: Vec<(u64, i32)> = argument.iter_source_pins().collect();
+                        entries.sort_by_key(|(id, _)| *id);
                         let refs: Vec<String> = entries
                             .iter()
                             .filter_map(|(source_id, pin_index)| {
-                                let source_name = self.get_node_name(**source_id)?;
-                                Some(self.format_reference(source_name, **pin_index, **source_id))
+                                let source_name = self.get_node_name(*source_id)?;
+                                Some(self.format_reference(source_name, *pin_index, *source_id))
                             })
                             .collect();
                         properties.push((param_name.clone(), format!("[{}]", refs.join(", "))));
                     } else {
                         // Single input: format as direct reference
-                        if let Some((&source_id, &pin_index)) =
-                            argument.argument_output_pins.iter().next()
-                        {
+                        if let Some((source_id, pin_index)) = argument.iter_source_pins().next() {
                             if let Some(source_name) = self.get_node_name(source_id) {
                                 properties.push((
                                     param_name.clone(),

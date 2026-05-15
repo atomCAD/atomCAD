@@ -1,4 +1,4 @@
-//! Tests for selection factoring functionality.
+﻿//! Tests for selection factoring functionality.
 
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
@@ -237,7 +237,7 @@ fn test_selection_no_external_output_valid() {
 
     assert!(analysis.is_valid);
     assert!(analysis.external_output.is_none());
-    // A single isolated node is the unique unconsumed sink → promoted to return.
+    // A single isolated node is the unique unconsumed sink â†’ promoted to return.
     assert_eq!(analysis.return_source, Some((node_a, 0)));
 }
 
@@ -301,7 +301,7 @@ fn test_ambiguous_sinks_no_return_source() {
 
     assert!(analysis.is_valid);
     assert!(analysis.external_output.is_none());
-    // Two unconsumed sinks → ambiguous → no return source.
+    // Two unconsumed sinks â†’ ambiguous â†’ no return source.
     assert_eq!(analysis.return_source, None);
 
     let subnetwork =
@@ -562,7 +562,7 @@ fn test_replace_selection_wires_up_inputs() {
     assert!(!new_node.arguments[0].is_empty());
     assert!(
         new_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .contains_key(&node_a)
     );
 }
@@ -590,7 +590,7 @@ fn test_replace_selection_wires_up_output() {
     assert!(!node_b_obj.arguments[0].is_empty());
     assert!(
         node_b_obj.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .contains_key(&new_node_id)
     );
 }
@@ -686,7 +686,7 @@ fn test_full_factoring_workflow() {
     let node_c_obj = main_network.nodes.get(&node_c).unwrap();
     assert!(
         node_c_obj.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .contains_key(&new_node_id)
     );
 }

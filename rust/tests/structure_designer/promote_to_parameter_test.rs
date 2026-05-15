@@ -1,4 +1,4 @@
-//! Tests for the Promote-to-Parameter operation.
+﻿//! Tests for the Promote-to-Parameter operation.
 
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
@@ -61,7 +61,7 @@ fn test_promote_float_node_creates_parameter_with_matching_type() {
         .unwrap();
     let param_node = network.nodes.get(&new_id).unwrap();
     let default_arg = &param_node.arguments[0];
-    assert_eq!(default_arg.argument_output_pins.get(&float_id), Some(&0));
+    assert_eq!(default_arg.argument_output_pins().get(&float_id), Some(&0));
 }
 
 #[test]
@@ -82,8 +82,8 @@ fn test_promote_rewires_downstream_consumer() {
     let radius_arg = &sphere.arguments[0];
 
     // Sphere now reads from the parameter, not from the float directly.
-    assert_eq!(radius_arg.argument_output_pins.get(&param_id), Some(&0));
-    assert!(radius_arg.argument_output_pins.get(&float_id).is_none());
+    assert_eq!(radius_arg.argument_output_pins().get(&param_id), Some(&0));
+    assert!(radius_arg.argument_output_pins().get(&float_id).is_none());
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn test_promote_rejects_unknown_node_id() {
 
 #[test]
 fn test_promote_rejects_export_xyz_unit_output() {
-    // export_xyz returns Unit — should be rejected as not parameterizable.
+    // export_xyz returns Unit â€” should be rejected as not parameterizable.
     let mut designer = setup_designer("net");
     let export_id = designer.add_node("export_xyz", DVec2::new(0.0, 0.0));
 
@@ -158,7 +158,7 @@ fn test_promote_rejects_export_xyz_unit_output() {
 
 #[test]
 fn test_promote_rejects_iterator_output() {
-    // range returns Iter[Int] — should be rejected.
+    // range returns Iter[Int] â€” should be rejected.
     let mut designer = setup_designer("net");
     let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
 
@@ -214,7 +214,7 @@ fn test_promote_undo_restores_original_network() {
     // Sphere's argument is rewired back to the float directly.
     let sphere = network.nodes.get(&sphere_id).unwrap();
     assert_eq!(
-        sphere.arguments[0].argument_output_pins.get(&float_id),
+        sphere.arguments[0].argument_output_pins().get(&float_id),
         Some(&0)
     );
 }
@@ -245,7 +245,7 @@ fn test_promote_redo_reapplies() {
 
     let sphere = network.nodes.get(&sphere_id).unwrap();
     assert_eq!(
-        sphere.arguments[0].argument_output_pins.get(&param_id),
+        sphere.arguments[0].argument_output_pins().get(&param_id),
         Some(&0)
     );
 }

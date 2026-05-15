@@ -126,10 +126,10 @@ pub fn promote_node_to_parameter(
             continue;
         }
         for arg in &mut consumer.arguments {
-            if let Some(&pin_idx) = arg.argument_output_pins.get(&node_id) {
+            if let Some(pin_idx) = arg.get_source_pin(node_id) {
                 if pin_idx == 0 {
-                    arg.argument_output_pins.remove(&node_id);
-                    arg.argument_output_pins.insert(new_id, 0);
+                    arg.remove_source(node_id);
+                    arg.set_source(new_id, 0);
                 }
             }
         }

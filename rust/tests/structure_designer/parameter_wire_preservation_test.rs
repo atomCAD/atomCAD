@@ -1,4 +1,4 @@
-use glam::f64::DVec2;
+﻿use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData; // Import trait for set_text_properties
 use rust_lib_flutter_cad::structure_designer::nodes::expr::ExprData;
@@ -31,7 +31,7 @@ fn get_wire_count(
     let node = network.nodes.get(&node_id).unwrap();
     node.arguments
         .get(param_index)
-        .map(|a| a.argument_output_pins.len())
+        .map(|a| a.argument_output_pins().len())
         .unwrap_or(0)
 }
 
@@ -51,7 +51,7 @@ fn has_wire_from(
     let node = network.nodes.get(&dest_node_id).unwrap();
     node.arguments
         .get(param_index)
-        .map(|a| a.argument_output_pins.contains_key(&source_node_id))
+        .map(|a| a.argument_output_pins().contains_key(&source_node_id))
         .unwrap_or(false)
 }
 

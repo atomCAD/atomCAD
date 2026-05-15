@@ -59,7 +59,7 @@ impl UndoCommand for AddNodeCommand {
             for other_id in node_ids {
                 if let Some(node) = network.nodes.get_mut(&other_id) {
                     for arg in node.arguments.iter_mut() {
-                        arg.argument_output_pins.remove(&self.node_id);
+                        arg.remove_source(self.node_id);
                     }
                 }
             }

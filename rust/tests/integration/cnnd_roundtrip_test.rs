@@ -99,15 +99,15 @@ fn roundtrip_cnnd_file(file_path: &str) {
             for (i, arg1) in node1.arguments.iter().enumerate() {
                 let arg2 = &node2.arguments[i];
                 assert_eq!(
-                    arg1.argument_output_pins.len(),
-                    arg2.argument_output_pins.len(),
+                    arg1.len(),
+                    arg2.len(),
                     "argument {} output_pins count mismatch for node {} in network '{}'",
                     i,
                     node_id,
                     name
                 );
-                for (pin_node_id, pin_index) in &arg1.argument_output_pins {
-                    let pin_index2 = arg2.argument_output_pins.get(pin_node_id).expect(&format!(
+                for (pin_node_id, pin_index) in arg1.iter_source_pins() {
+                    let pin_index2 = arg2.get_source_pin(pin_node_id).expect(&format!(
                         "argument {} pin {} missing for node {} in network '{}'",
                         i, pin_node_id, node_id, name
                     ));

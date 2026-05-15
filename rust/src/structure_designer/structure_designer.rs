@@ -492,7 +492,7 @@ impl StructureDesigner {
                 .arguments
                 .iter()
                 .map(|arg| ArgumentSnapshot {
-                    argument_output_pins: arg.argument_output_pins.clone(),
+                    incoming_wires: arg.incoming_wires.clone(),
                 })
                 .collect(),
         })
@@ -1701,7 +1701,7 @@ impl StructureDesigner {
                 for &node_id in &new_ids {
                     if let Some(node) = network.nodes.get(&node_id) {
                         for (param_idx, arg) in node.arguments.iter().enumerate() {
-                            for (&src_id, &src_pin) in &arg.argument_output_pins {
+                            for (src_id, src_pin) in arg.iter_source_pins() {
                                 if new_id_set.contains(&src_id) {
                                     pasted_wires.push(super::undo::snapshot::WireSnapshot {
                                         source_node_id: src_id,
@@ -1837,15 +1837,14 @@ impl StructureDesigner {
                     if let Some(arg) = dest_node.arguments.get(dest_param_index) {
                         if !arg.is_empty() {
                             // There's an existing wire that will be replaced
-                            arg.argument_output_pins
-                                .iter()
-                                .next()
-                                .map(|(&src_id, &src_pin)| super::undo::snapshot::WireSnapshot {
+                            arg.iter_source_pins().next().map(|(src_id, src_pin)| {
+                                super::undo::snapshot::WireSnapshot {
                                     source_node_id: src_id,
                                     source_output_pin_index: src_pin,
                                     dest_node_id,
                                     dest_param_index,
-                                })
+                                }
+                            })
                         } else {
                             None
                         }
@@ -3385,7 +3384,7 @@ impl StructureDesigner {
                     .iter()
                     .map(|w| WireSnapshot {
                         source_node_id: w.source_node_id,
-                        source_output_pin_index: w.source_output_pin_index,
+                        source_output_pin_index: w.expect_node_output_pin(),
                         dest_node_id: w.destination_node_id,
                         dest_param_index: w.destination_argument_index,
                     })
@@ -3410,7 +3409,7 @@ impl StructureDesigner {
                     .iter()
                     .map(|w| WireSnapshot {
                         source_node_id: w.source_node_id,
-                        source_output_pin_index: w.source_output_pin_index,
+                        source_output_pin_index: w.expect_node_output_pin(),
                         dest_node_id: w.destination_node_id,
                         dest_param_index: w.destination_argument_index,
                     })

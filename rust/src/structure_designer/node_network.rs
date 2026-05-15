@@ -58,17 +58,66 @@ impl ValidationError {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+/// Source pin kind for an incoming wire. Phase 1 only ever constructs
+/// `NodeOutput` (zone-input sources arrive with the zone work in later phases).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SourcePin {
+    /// Pin on a regular output of a node. `pin_index = -1` is the legacy
+    /// function pin; `0` is the primary output; `>= 1` are additional outputs.
+    NodeOutput { pin_index: i32 },
+    /// Inside-facing source pin on a zone-owning node. Used in later phases
+    /// when zones land — Phase 1 never constructs this variant.
+    ZoneInput { pin_index: usize },
+}
+
+/// One inbound wire on an argument pin. Carries enough information to identify
+/// the source side under both today's flat-network semantics and the
+/// zones-world's cross-scope sources. Phase 1 invariant: every wire has
+/// `source_pin = NodeOutput { .. }` and `source_scope_depth = 0`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IncomingWire {
+    pub source_node_id: u64,
+    pub source_pin: SourcePin,
+    /// `0` = source lives in the same network as the destination argument's
+    /// scope; `>= 1` = walk that many ancestor frames up the network stack.
+    /// Always `0` in Phase 1.
+    #[serde(default)]
+    pub source_scope_depth: u8,
+}
+
+impl IncomingWire {
+    /// Constructs an `IncomingWire` for a regular-output source in the same
+    /// scope as the destination — the only shape Phase 1 ever produces.
+    pub fn node_output(source_node_id: u64, pin_index: i32) -> Self {
+        Self {
+            source_node_id,
+            source_pin: SourcePin::NodeOutput { pin_index },
+            source_scope_depth: 0,
+        }
+    }
+
+    /// Returns the legacy `(source_node_id, output_pin_index)` pair iff this
+    /// wire is a regular-output, local-scope wire. Convenience for the many
+    /// callsites that don't yet care about zone-input or cross-scope wires.
+    pub fn as_legacy_pair(&self) -> Option<(u64, i32)> {
+        if self.source_scope_depth != 0 {
+            return None;
+        }
+        match self.source_pin {
+            SourcePin::NodeOutput { pin_index } => Some((self.source_node_id, pin_index)),
+            SourcePin::ZoneInput { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Argument {
-    // As parameters can have the 'multiple' flag set we need to represent multiple argument output pins here.
-    // In argument_output_pins the key is node id of the output pin,
-    // and the value is the output pin index.
-    // The output pin index can have the following values:
-    // -1: the 'function pin' of the node
-    // 0: the normal output pin of the node
-    // Later if we will support multiple regular output pins we will be able to use the positive
-    // output pin indices.
-    pub argument_output_pins: HashMap<u64, i32>,
+    /// Inbound wires on this argument pin. Phase 1 invariant: every entry has
+    /// `source_pin = NodeOutput { .. }` and `source_scope_depth = 0`, and at
+    /// most one entry per `source_node_id` (mirrors the old HashMap's keying).
+    /// Order is meaningful — callsites should preserve insertion order so
+    /// serialized output stays byte-stable across runs.
+    pub incoming_wires: Vec<IncomingWire>,
 }
 
 impl Default for Argument {
@@ -80,42 +129,208 @@ impl Default for Argument {
 impl Argument {
     pub fn new() -> Self {
         Self {
-            argument_output_pins: HashMap::new(),
+            incoming_wires: Vec::new(),
         }
     }
 
-    /// Returns Some(node_id) for one of the nodes in argument_output_pins if not empty,
-    /// otherwise returns None
+    /// Returns Some(node_id) for one of the incoming wires if not empty,
+    /// otherwise returns None.
     pub fn get_node_id(&self) -> Option<u64> {
-        self.argument_output_pins.keys().next().copied()
+        self.incoming_wires.first().map(|w| w.source_node_id)
     }
 
-    /// Returns Some((node_id, output_pin_index)) for one of the nodes in argument_output_pins if not empty,
-    /// otherwise returns None
+    /// Returns Some((node_id, output_pin_index)) for one of the incoming wires
+    /// if not empty, otherwise returns None. Phase 1: every wire is a
+    /// `NodeOutput` so the legacy pair is always available.
     pub fn get_node_id_and_pin(&self) -> Option<(u64, i32)> {
-        self.argument_output_pins
-            .iter()
-            .next()
-            .map(|(&node_id, &pin_index)| (node_id, pin_index))
+        self.incoming_wires.first().and_then(|w| w.as_legacy_pair())
     }
 
     pub fn is_empty(&self) -> bool {
-        self.argument_output_pins.is_empty()
+        self.incoming_wires.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.incoming_wires.len()
+    }
+
+    pub fn clear(&mut self) {
+        self.incoming_wires.clear();
+    }
+
+    /// True if any incoming wire's source is `node_id` (Phase 1: there is at
+    /// most one such wire — see [`Argument`] uniqueness invariant).
+    pub fn has_source(&self, node_id: u64) -> bool {
+        self.incoming_wires
+            .iter()
+            .any(|w| w.source_node_id == node_id)
+    }
+
+    /// Returns the regular-output pin index of the wire from `node_id`, if any.
+    pub fn get_source_pin(&self, node_id: u64) -> Option<i32> {
+        self.incoming_wires
+            .iter()
+            .find(|w| w.source_node_id == node_id)
+            .and_then(|w| w.as_legacy_pair().map(|(_, pin)| pin))
+    }
+
+    /// Set the wire from `source_node_id` to point at `pin_index`. If a wire
+    /// from this source already exists, its pin index is updated in place;
+    /// otherwise a new wire is appended. Phase 1 keeps the per-source
+    /// uniqueness invariant inherited from the old HashMap representation.
+    pub fn set_source(&mut self, source_node_id: u64, pin_index: i32) {
+        if let Some(existing) = self
+            .incoming_wires
+            .iter_mut()
+            .find(|w| w.source_node_id == source_node_id)
+        {
+            existing.source_pin = SourcePin::NodeOutput { pin_index };
+            existing.source_scope_depth = 0;
+        } else {
+            self.incoming_wires
+                .push(IncomingWire::node_output(source_node_id, pin_index));
+        }
+    }
+
+    /// Remove the wire (if any) whose source is `node_id`. Returns the pin
+    /// index that was attached to it, or `None` if no such wire existed.
+    pub fn remove_source(&mut self, node_id: u64) -> Option<i32> {
+        let pos = self
+            .incoming_wires
+            .iter()
+            .position(|w| w.source_node_id == node_id)?;
+        let removed = self.incoming_wires.remove(pos);
+        removed.as_legacy_pair().map(|(_, pin)| pin)
+    }
+
+    /// Iterate the wires as legacy `(source_node_id, output_pin_index)` pairs.
+    /// Phase 1: every wire is a `NodeOutput`, so all wires are yielded. Order
+    /// follows the underlying `Vec` (deterministic, unlike the old HashMap).
+    pub fn iter_source_pins(&self) -> impl Iterator<Item = (u64, i32)> + '_ {
+        self.incoming_wires.iter().filter_map(|w| w.as_legacy_pair())
+    }
+
+    /// Returns the wires as a `HashMap<source_node_id, output_pin_index>` —
+    /// the shape `Argument` used to store directly. Kept for tests and
+    /// adapter code that still want HashMap access semantics. Phase 1
+    /// invariant guarantees no duplicate source ids in the result.
+    pub fn argument_output_pins(&self) -> HashMap<u64, i32> {
+        self.iter_source_pins().collect()
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+// Backward-compatible serialization for `Argument`. New saves emit
+// `incoming_wires`; old saves and migration outputs (which still produce
+// `argument_output_pins`) deserialize into the same internal shape.
+impl Serialize for Argument {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Argument", 1)?;
+        state.serialize_field("incoming_wires", &self.incoming_wires)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Argument {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct ArgumentSerde {
+            #[serde(default)]
+            incoming_wires: Option<Vec<IncomingWire>>,
+            #[serde(default)]
+            argument_output_pins: Option<HashMap<u64, i32>>,
+        }
+
+        let raw = ArgumentSerde::deserialize(deserializer)?;
+        if let Some(wires) = raw.incoming_wires {
+            return Ok(Argument {
+                incoming_wires: wires,
+            });
+        }
+        if let Some(map) = raw.argument_output_pins {
+            // Sort by source_node_id for deterministic ordering — the old
+            // HashMap had no defined iteration order, so locking the upgrade
+            // path to sorted order keeps roundtrip output byte-stable.
+            let mut entries: Vec<(u64, i32)> = map.into_iter().collect();
+            entries.sort_by_key(|&(nid, _)| nid);
+            let wires = entries
+                .into_iter()
+                .map(|(nid, pin)| IncomingWire::node_output(nid, pin))
+                .collect();
+            return Ok(Argument {
+                incoming_wires: wires,
+            });
+        }
+        Ok(Argument::new())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Wire {
     pub source_node_id: u64,
-    pub source_output_pin_index: i32,
+    pub source_pin: SourcePin,
+    /// `0` in Phase 1 (added now so later phases can carry capture-wire depth
+    /// without touching every Wire literal again).
+    #[serde(default)]
+    pub source_scope_depth: u8,
     pub destination_node_id: u64,
     pub destination_argument_index: usize,
+}
+
+impl Wire {
+    /// Construct a Wire for a regular-output source in the same scope as the
+    /// destination — the only shape Phase 1 ever produces. Convenience for the
+    /// many callsites that used to take a bare `source_output_pin_index: i32`.
+    pub fn node_output(
+        source_node_id: u64,
+        source_output_pin_index: i32,
+        destination_node_id: u64,
+        destination_argument_index: usize,
+    ) -> Self {
+        Self {
+            source_node_id,
+            source_pin: SourcePin::NodeOutput {
+                pin_index: source_output_pin_index,
+            },
+            source_scope_depth: 0,
+            destination_node_id,
+            destination_argument_index,
+        }
+    }
+
+    /// Legacy pin index, for Phase 1 callsites that still think in terms of a
+    /// single `i32`. Returns `None` for `ZoneInput` sources or non-zero scope
+    /// depth (neither of which are produced in Phase 1).
+    pub fn source_pin_index(&self) -> Option<i32> {
+        if self.source_scope_depth != 0 {
+            return None;
+        }
+        match self.source_pin {
+            SourcePin::NodeOutput { pin_index } => Some(pin_index),
+            SourcePin::ZoneInput { .. } => None,
+        }
+    }
+
+    /// Same as [`source_pin_index`] but panics on the future shapes — callers
+    /// that statically know they're in Phase 1 use this to avoid threading
+    /// `Option` through every site.
+    pub fn expect_node_output_pin(&self) -> i32 {
+        self.source_pin_index()
+            .expect("Wire is not a regular-output, local-scope wire (Phase 1 invariant violated)")
+    }
 }
 
 impl PartialEq for Wire {
     fn eq(&self, other: &Self) -> bool {
         self.source_node_id == other.source_node_id
-            && self.source_output_pin_index == other.source_output_pin_index
+            && self.source_pin == other.source_pin
+            && self.source_scope_depth == other.source_scope_depth
             && self.destination_node_id == other.destination_node_id
             && self.destination_argument_index == other.destination_argument_index
     }
@@ -273,11 +488,11 @@ impl NodeNetwork {
 
         for (&node_id, node) in &self.nodes {
             for arg in &node.arguments {
-                for (&source_node_id, &_output_pin_index) in &arg.argument_output_pins {
+                for wire in &arg.incoming_wires {
                     // node_id depends on source_node_id
                     // So source_node_id has node_id as a downstream dependent
                     reverse_map
-                        .entry(source_node_id)
+                        .entry(wire.source_node_id)
                         .or_default()
                         .insert(node_id);
                 }
@@ -301,7 +516,7 @@ impl NodeNetwork {
         if let Some(node) = self.nodes.get(&node_id) {
             for argument in &node.arguments {
                 // Add all node IDs that provide input to this node
-                connected_ids.extend(argument.argument_output_pins.keys());
+                connected_ids.extend(argument.incoming_wires.iter().map(|w| w.source_node_id));
             }
         }
 
@@ -314,7 +529,7 @@ impl NodeNetwork {
 
             // Check if any of this node's arguments reference the given node
             for argument in &other_node.arguments {
-                if argument.argument_output_pins.contains_key(&node_id) {
+                if argument.has_source(node_id) {
                     connected_ids.insert(*other_id);
                     break; // No need to check other arguments of this node
                 }
@@ -417,16 +632,20 @@ impl NodeNetwork {
         for &new_id in &new_ids {
             if let Some(node) = self.nodes.get_mut(&new_id) {
                 for arg in &mut node.arguments {
-                    let remapped: HashMap<u64, i32> = arg
-                        .argument_output_pins
+                    let remapped: Vec<IncomingWire> = arg
+                        .incoming_wires
                         .iter()
-                        .filter_map(|(&source_id, &pin_index)| {
-                            old_to_new
-                                .get(&source_id)
-                                .map(|&mapped_id| (mapped_id, pin_index))
+                        .filter_map(|wire| {
+                            old_to_new.get(&wire.source_node_id).map(|&mapped_id| {
+                                IncomingWire {
+                                    source_node_id: mapped_id,
+                                    source_pin: wire.source_pin,
+                                    source_scope_depth: wire.source_scope_depth,
+                                }
+                            })
                         })
                         .collect();
-                    arg.argument_output_pins = remapped;
+                    arg.incoming_wires = remapped;
                 }
             }
         }
@@ -581,11 +800,9 @@ impl NodeNetwork {
             let argument = &mut dest_node.arguments[dest_param_index];
             // In case of single parameters we need to disconnect the existing parameter first
             if (!dest_param_is_multi) && (!argument.is_empty()) {
-                argument.argument_output_pins.clear();
+                argument.clear();
             }
-            argument
-                .argument_output_pins
-                .insert(source_node_id, source_output_pin_index);
+            argument.set_source(source_node_id, source_output_pin_index);
         }
     }
 
@@ -814,12 +1031,12 @@ impl NodeNetwork {
             self.selected_node_ids.clear();
             self.active_node_id = None;
             self.selected_wires.clear();
-            self.selected_wires.push(Wire {
+            self.selected_wires.push(Wire::node_output(
                 source_node_id,
                 source_output_pin_index,
                 destination_node_id,
                 destination_argument_index,
-            });
+            ));
             true
         } else {
             false
@@ -842,12 +1059,12 @@ impl NodeNetwork {
             return false;
         }
 
-        let wire = Wire {
+        let wire = Wire::node_output(
             source_node_id,
             source_output_pin_index,
             destination_node_id,
             destination_argument_index,
-        };
+        );
 
         // Check if wire already selected
         if let Some(idx) = self.selected_wires.iter().position(|w| *w == wire) {
@@ -874,12 +1091,12 @@ impl NodeNetwork {
             return false;
         }
 
-        let wire = Wire {
+        let wire = Wire::node_output(
             source_node_id,
             source_output_pin_index,
             destination_node_id,
             destination_argument_index,
-        };
+        );
 
         // Only add if not already selected
         if !self.selected_wires.contains(&wire) {
@@ -896,12 +1113,12 @@ impl NodeNetwork {
         destination_node_id: u64,
         destination_argument_index: usize,
     ) -> bool {
-        let wire = Wire {
+        let wire = Wire::node_output(
             source_node_id,
             source_output_pin_index,
             destination_node_id,
             destination_argument_index,
-        };
+        );
         self.selected_wires.contains(&wire)
     }
 
@@ -1096,14 +1313,15 @@ impl NodeNetwork {
             // Collect all wires connected to selected nodes
             for (&node_id, node) in &self.nodes {
                 for (param_index, arg) in node.arguments.iter().enumerate() {
-                    for (&source_node_id, &output_pin_index) in &arg.argument_output_pins {
+                    for wire in &arg.incoming_wires {
                         // Wire is affected if source or dest is being deleted
-                        if self.selected_node_ids.contains(&source_node_id)
+                        if self.selected_node_ids.contains(&wire.source_node_id)
                             || self.selected_node_ids.contains(&node_id)
                         {
                             info.deleted_wires.push(Wire {
-                                source_node_id,
-                                source_output_pin_index: output_pin_index,
+                                source_node_id: wire.source_node_id,
+                                source_pin: wire.source_pin,
+                                source_scope_depth: wire.source_scope_depth,
                                 destination_node_id: node_id,
                                 destination_argument_index: param_index,
                             });
@@ -1147,7 +1365,7 @@ impl NodeNetwork {
                 for other_node_id in nodes_to_process {
                     if let Some(node) = self.nodes.get_mut(&other_node_id) {
                         for argument in node.arguments.iter_mut() {
-                            argument.argument_output_pins.remove(&node_id);
+                            argument.remove_source(node_id);
                         }
                     }
                 }
@@ -1176,7 +1394,7 @@ impl NodeNetwork {
                     if let Some(argument) =
                         dest_node.arguments.get_mut(wire.destination_argument_index)
                     {
-                        argument.argument_output_pins.remove(&wire.source_node_id);
+                        argument.remove_source(wire.source_node_id);
                     }
                 }
             }

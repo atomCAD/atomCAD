@@ -1,4 +1,4 @@
-// Lattice-space refactoring .cnnd migration tests (v2 → v3).
+﻿// Lattice-space refactoring .cnnd migration tests (v2 â†’ v3).
 //
 // Per-fixture tests for each migration change-class. Each phase of
 // `doc/design_cnnd_migration_v2_to_v3.md` adds new fixtures here.
@@ -106,7 +106,7 @@ fn materialize_node_id(registry: &NodeTypeRegistry, network_name: &str) -> u64 {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1: version dispatch — v3 file is a no-op through the new load path.
+// Phase 1: version dispatch â€” v3 file is a no-op through the new load path.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -134,7 +134,7 @@ fn test_load_trivial_v3_no_op() {
 // Phase 2: string renames (DataType + node type).
 // ---------------------------------------------------------------------------
 
-/// Fixture 1 — `pure_rename.cnnd`:
+/// Fixture 1 â€” `pure_rename.cnnd`:
 /// a Main network using `unit_cell`, `atom_move`, and a `parameter` node whose
 /// `data.data_type` is `"UnitCell"`. No structural changes needed post-v3 beyond
 /// the string rewrites. Verifies both rename tables (DataType + node type) and
@@ -151,7 +151,7 @@ fn test_load_pure_rename() {
         .get("Main")
         .expect("Main network missing");
 
-    // Node-type rename: `unit_cell` → `lattice_vecs`, `atom_move` → `free_move`.
+    // Node-type rename: `unit_cell` â†’ `lattice_vecs`, `atom_move` â†’ `free_move`.
     let type_names: std::collections::HashSet<&str> = network
         .nodes
         .values()
@@ -159,12 +159,12 @@ fn test_load_pure_rename() {
         .collect();
     assert!(
         type_names.contains("lattice_vecs"),
-        "expected unit_cell → lattice_vecs; got {:?}",
+        "expected unit_cell â†’ lattice_vecs; got {:?}",
         type_names
     );
     assert!(
         type_names.contains("free_move"),
-        "expected atom_move → free_move; got {:?}",
+        "expected atom_move â†’ free_move; got {:?}",
         type_names
     );
     assert!(
@@ -173,7 +173,7 @@ fn test_load_pure_rename() {
         type_names
     );
 
-    // DataType rename inside ParameterData: `"UnitCell"` → `"LatticeVecs"`. The parameter
+    // DataType rename inside ParameterData: `"UnitCell"` â†’ `"LatticeVecs"`. The parameter
     // node's custom type is computed from its data_type so the pin type shows through.
     let param_node = network
         .nodes
@@ -187,7 +187,7 @@ fn test_load_pure_rename() {
     assert_eq!(
         *custom_type.output_type(),
         DataType::LatticeVecs,
-        "parameter node's output should be LatticeVecs after v2→v3 rename"
+        "parameter node's output should be LatticeVecs after v2â†’v3 rename"
     );
 }
 
@@ -233,7 +233,7 @@ fn test_roundtrip_pure_rename() {
     assert_eq!(net1.return_node_id, net2.return_node_id);
 }
 
-/// Fixture 7 — `custom_network.cnnd`:
+/// Fixture 7 â€” `custom_network.cnnd`:
 /// the rename walker must reach the parameter/output-pin type strings inside
 /// each custom network's embedded `node_type`, not just the top-level Main
 /// network. Also verifies the `[Atomic]` (bracketed) Display form rewrites to
@@ -252,14 +252,14 @@ fn test_load_custom_network_rename() {
         .get("my_custom")
         .expect("my_custom network missing");
 
-    // Custom-network output_type: `Geometry` → `Blueprint`.
+    // Custom-network output_type: `Geometry` â†’ `Blueprint`.
     assert_eq!(
         *my_custom.node_type.output_type(),
         DataType::Blueprint,
         "custom-network output_type should be Blueprint after rename"
     );
 
-    // Custom-network parameter types: `UnitCell` → `LatticeVecs`, `[Atomic]` → `[Molecule]`.
+    // Custom-network parameter types: `UnitCell` â†’ `LatticeVecs`, `[Atomic]` â†’ `[Molecule]`.
     let param_types: Vec<(String, DataType)> = my_custom
         .node_type
         .parameters
@@ -325,16 +325,16 @@ fn test_roundtrip_custom_network_rename() {
     assert_eq!(c1.node_type.parameters.len(), c2.node_type.parameters.len());
 }
 
-/// Fixture — `function_type_parameter.cnnd`:
+/// Fixture â€” `function_type_parameter.cnnd`:
 /// a custom network whose parameter pins include function-typed DataTypes.
-/// Regression coverage for a real user file that the initial v2→v3 migration
+/// Regression coverage for a real user file that the initial v2â†’v3 migration
 /// failed to load: the old `rename_data_type_display_string` only peeled
-/// `[…]` brackets and matched the core against three exact identifiers, so
+/// `[â€¦]` brackets and matched the core against three exact identifiers, so
 /// `"Atomic -> Atomic"` (function-type Display form) passed through
 /// untouched, leaving a post-migration `Atomic` identifier that v3 could no
 /// longer resolve. The rewrite scans every identifier token in the string so
-/// every `DataType::Display`-emitted shape — plain, array, and function,
-/// including multi-parameter `(A,B) -> C` — converts correctly.
+/// every `DataType::Display`-emitted shape â€” plain, array, and function,
+/// including multi-parameter `(A,B) -> C` â€” converts correctly.
 #[test]
 fn test_load_function_type_parameter_rename() {
     let mut registry = NodeTypeRegistry::new();
@@ -366,7 +366,7 @@ fn test_load_function_type_parameter_rename() {
             }),
         ),
         // `A -> A -> A` parses right-associatively as `A -> (A -> A)`, so
-        // every nested `Atomic` identifier — three in total — must be
+        // every nested `Atomic` identifier â€” three in total â€” must be
         // rewritten by the scan.
         (
             "curried".to_string(),
@@ -390,7 +390,7 @@ fn test_load_function_type_parameter_rename() {
     ];
     assert_eq!(param_types, expected);
 
-    // Output pin: `Atomic` → `Molecule`.
+    // Output pin: `Atomic` â†’ `Molecule`.
     assert_eq!(*net.node_type.output_type(), DataType::Molecule);
 }
 
@@ -414,7 +414,7 @@ fn test_roundtrip_function_type_parameter_rename() {
     .expect("Failed to save");
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
-    // No v2 identifier survives anywhere in the saved file — including inside
+    // No v2 identifier survives anywhere in the saved file â€” including inside
     // the function-type display strings.
     assert!(
         !saved.contains("Atomic"),
@@ -447,16 +447,16 @@ fn test_roundtrip_function_type_parameter_rename() {
 // Phase 3: deleted-node drop (`atom_trans`, `lattice_symop`).
 // ---------------------------------------------------------------------------
 
-/// Fixture 6 — `atom_trans_present.cnnd`:
+/// Fixture 6 â€” `atom_trans_present.cnnd`:
 /// two parallel chains covering both deleted v2 node types:
-/// 1. `parameter(Atomic) → atom_trans → atom_move` (tests atom_trans drop);
-/// 2. `cuboid → lattice_symop → lattice_move` (tests lattice_symop drop).
+/// 1. `parameter(Atomic) â†’ atom_trans â†’ atom_move` (tests atom_trans drop);
+/// 2. `cuboid â†’ lattice_symop â†’ lattice_move` (tests lattice_symop drop).
 ///
 /// In each chain the deleted node sits between an upstream source and a
 /// downstream consumer with a polymorphic output (so the disconnected input
 /// surfaces as an unresolved-output validation error). The downstream
-/// consumers are also both subject to node renames (`atom_move → free_move`,
-/// `lattice_move → structure_move`), exercising the rename pass's
+/// consumers are also both subject to node renames (`atom_move â†’ free_move`,
+/// `lattice_move â†’ structure_move`), exercising the rename pass's
 /// interaction with the deleted-node drop.
 ///
 /// Expected post-migration state:
@@ -512,9 +512,9 @@ fn test_load_atom_trans_and_lattice_symop_dropped() {
         .find(|n| n.node_type_name == "free_move")
         .expect("free_move node missing");
     assert!(
-        free_move.arguments[0].argument_output_pins.is_empty(),
+        free_move.arguments[0].argument_output_pins().is_empty(),
         "free_move's input wire to atom_trans should be disconnected; got {:?}",
-        free_move.arguments[0].argument_output_pins
+        free_move.arguments[0].argument_output_pins()
     );
 
     // Same for structure_move: its input (previously wired to lattice_symop=id 5)
@@ -525,9 +525,9 @@ fn test_load_atom_trans_and_lattice_symop_dropped() {
         .find(|n| n.node_type_name == "structure_move")
         .expect("structure_move node missing");
     assert!(
-        structure_move.arguments[0].argument_output_pins.is_empty(),
+        structure_move.arguments[0].argument_output_pins().is_empty(),
         "structure_move's input wire to lattice_symop should be disconnected; got {:?}",
-        structure_move.arguments[0].argument_output_pins
+        structure_move.arguments[0].argument_output_pins()
     );
 
     // lattice_symop's id (5) was in `displayed_node_ids`; the deleted-node drop
@@ -625,14 +625,14 @@ fn test_roundtrip_atom_trans_and_lattice_symop_dropped() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 4: primitive input adaptation (`LatticeVecs` wire → `structure` adapter).
+// Phase 4: primitive input adaptation (`LatticeVecs` wire â†’ `structure` adapter).
 // ---------------------------------------------------------------------------
 
-/// Fixture 3 — `primitive_with_lattice.cnnd`:
+/// Fixture 3 â€” `primitive_with_lattice.cnnd`:
 /// a Main network with two primitives covering both branches of the Phase 4
 /// decision tree:
-/// 1. `unit_cell → cuboid.unit_cell` (wired pin) — verifies adapter synthesis;
-/// 2. `sphere` with its `unit_cell` pin unwired — verifies no-op, new
+/// 1. `unit_cell â†’ cuboid.unit_cell` (wired pin) â€” verifies adapter synthesis;
+/// 2. `sphere` with its `unit_cell` pin unwired â€” verifies no-op, new
 ///    `structure` input falls back to the diamond default.
 ///
 /// Expected post-migration state:
@@ -680,23 +680,23 @@ fn test_load_primitive_with_lattice_adapter_synthesised() {
     );
     let adapter = structure_adapters[0];
 
-    // Adapter must be the id allocated from next_node_id (10 → allocated to adapter).
+    // Adapter must be the id allocated from next_node_id (10 â†’ allocated to adapter).
     assert_eq!(
         adapter.id, 10,
         "adapter should use the id pulled from next_node_id"
     );
-    // The adapter's 4 arguments: only arg 1 (lattice_vecs) is wired — to the
+    // The adapter's 4 arguments: only arg 1 (lattice_vecs) is wired â€” to the
     // renamed `lattice_vecs` node (id 1). The other three are unwired so the
     // primitive still gets diamond defaults for motif / motif_offset / base.
     assert_eq!(adapter.arguments.len(), 4);
-    assert!(adapter.arguments[0].argument_output_pins.is_empty());
+    assert!(adapter.arguments[0].argument_output_pins().is_empty());
     assert_eq!(
-        adapter.arguments[1].argument_output_pins.get(&1),
+        adapter.arguments[1].argument_output_pins().get(&1),
         Some(&0),
         "adapter's lattice_vecs input (arg 1) must be wired to the renamed unit_cell node (id 1, pin 0)"
     );
-    assert!(adapter.arguments[2].argument_output_pins.is_empty());
-    assert!(adapter.arguments[3].argument_output_pins.is_empty());
+    assert!(adapter.arguments[2].argument_output_pins().is_empty());
+    assert!(adapter.arguments[3].argument_output_pins().is_empty());
 
     // The cuboid's structure input (arg 2) now points at the adapter's output 0.
     let cuboid = network
@@ -705,17 +705,17 @@ fn test_load_primitive_with_lattice_adapter_synthesised() {
         .find(|n| n.node_type_name == "cuboid")
         .expect("cuboid missing");
     assert_eq!(
-        cuboid.arguments[2].argument_output_pins.get(&adapter.id),
+        cuboid.arguments[2].argument_output_pins().get(&adapter.id),
         Some(&0),
         "cuboid's structure input (arg 2) should be wired to adapter's output 0"
     );
     assert_eq!(
-        cuboid.arguments[2].argument_output_pins.len(),
+        cuboid.arguments[2].argument_output_pins().len(),
         1,
         "cuboid's structure pin must have the adapter as its only source"
     );
 
-    // The sphere — whose unit_cell pin was unwired in v2 — has no adapter.
+    // The sphere â€” whose unit_cell pin was unwired in v2 â€” has no adapter.
     // Its structure input (arg 2) stays empty; diamond defaults apply.
     let sphere = network
         .nodes
@@ -723,7 +723,7 @@ fn test_load_primitive_with_lattice_adapter_synthesised() {
         .find(|n| n.node_type_name == "sphere")
         .expect("sphere missing");
     assert!(
-        sphere.arguments[2].argument_output_pins.is_empty(),
+        sphere.arguments[2].argument_output_pins().is_empty(),
         "sphere had no v2 unit_cell wire; its structure pin must stay unwired (no adapter synthesized)"
     );
 
@@ -793,7 +793,7 @@ fn test_roundtrip_primitive_with_lattice() {
     let n2 = registry2.node_networks.get("Main").unwrap();
     assert_eq!(n1.nodes.len(), n2.nodes.len());
 
-    // Exactly one structure adapter survives the round trip — no second pass
+    // Exactly one structure adapter survives the round trip â€” no second pass
     // can sneak an extra one in on reload.
     let adapter_count = n2
         .nodes
@@ -812,8 +812,8 @@ fn test_roundtrip_primitive_with_lattice() {
 // `structure` source node holding the motif / motif_offset wires).
 // ---------------------------------------------------------------------------
 
-/// Fixture 2 — `atom_fill_split.cnnd` (case A coverage):
-/// a `unit_cell → cuboid → atom_fill` pipeline with motif and motif_offset
+/// Fixture 2 â€” `atom_fill_split.cnnd` (case A coverage):
+/// a `unit_cell â†’ cuboid â†’ atom_fill` pipeline with motif and motif_offset
 /// sources wired in, every Bool flag pin (passivate, rm_single, surf_recon,
 /// invert_phase) wired to its own `bool` source, and non-default
 /// `AtomFillData` field values. Verifies the full case-A algorithm: node-rename
@@ -876,8 +876,8 @@ fn test_load_atom_fill_split() {
     // The renamed node keeps its original id (9).
     assert_eq!(materialize.id, 9);
 
-    // Case A synthesises three new nodes — `get_structure` (G), `with_structure`
-    // (W), and a `structure` override (S) — alongside the primitive-adaptation
+    // Case A synthesises three new nodes â€” `get_structure` (G), `with_structure`
+    // (W), and a `structure` override (S) â€” alongside the primitive-adaptation
     // adapter on cuboid. So we expect:
     //   - exactly two `structure` nodes (the cuboid adapter + the override S),
     //   - exactly one `get_structure` node (G),
@@ -912,29 +912,29 @@ fn test_load_atom_fill_split() {
     let split_override = structure_nodes
         .iter()
         .find(|n| {
-            !n.arguments[2].argument_output_pins.is_empty()
-                || !n.arguments[3].argument_output_pins.is_empty()
+            !n.arguments[2].argument_output_pins().is_empty()
+                || !n.arguments[3].argument_output_pins().is_empty()
         })
         .expect("structure override for atom_fill split should have motif or motif_offset wired");
     assert_eq!(split_override.arguments.len(), 4);
     assert_eq!(
         split_override.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&get_structure.id),
         Some(&0),
         "case A split override's `structure` (arg 0) must be wired to G's pin 0"
     );
     assert!(
-        split_override.arguments[1].argument_output_pins.is_empty(),
+        split_override.arguments[1].argument_output_pins().is_empty(),
         "split override's `lattice_vecs` (arg 1) must be unwired"
     );
     assert_eq!(
-        split_override.arguments[2].argument_output_pins.get(&3),
+        split_override.arguments[2].argument_output_pins().get(&3),
         Some(&0),
         "split override's `motif` (arg 2) must be wired to motif source (id 3, pin 0)"
     );
     assert_eq!(
-        split_override.arguments[3].argument_output_pins.get(&4),
+        split_override.arguments[3].argument_output_pins().get(&4),
         Some(&0),
         "split override's `motif_offset` (arg 3) must be wired to vec3 source (id 4, pin 0)"
     );
@@ -942,22 +942,22 @@ fn test_load_atom_fill_split() {
     // G reads its single input from a clone of the original shape wire (cuboid id 2).
     assert_eq!(get_structure.arguments.len(), 1);
     assert_eq!(
-        get_structure.arguments[0].argument_output_pins.get(&2),
+        get_structure.arguments[0].argument_output_pins().get(&2),
         Some(&0),
         "G's input must be a clone of the original shape wire (cuboid id 2, pin 0)"
     );
 
-    // W: arg 0 (shape) ← clone of the original shape wire (cuboid id 2);
-    //    arg 1 (structure) ← S's pin 0.
+    // W: arg 0 (shape) â† clone of the original shape wire (cuboid id 2);
+    //    arg 1 (structure) â† S's pin 0.
     assert_eq!(with_structure.arguments.len(), 2);
     assert_eq!(
-        with_structure.arguments[0].argument_output_pins.get(&2),
+        with_structure.arguments[0].argument_output_pins().get(&2),
         Some(&0),
         "W's `shape` (arg 0) must be a clone of the original shape wire (cuboid id 2)"
     );
     assert_eq!(
         with_structure.arguments[1]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&split_override.id),
         Some(&0),
         "W's `structure` (arg 1) must be wired to the override S's pin 0"
@@ -968,38 +968,38 @@ fn test_load_atom_fill_split() {
     assert_eq!(materialize.arguments.len(), 5);
     assert_eq!(
         materialize.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&with_structure.id),
         Some(&0),
         "case A: materialize.shape must point at W's pin 0, not directly at the cuboid"
     );
     assert_eq!(
-        materialize.arguments[0].argument_output_pins.len(),
+        materialize.arguments[0].argument_output_pins().len(),
         1,
         "materialize.shape must have W as its only source in case A"
     );
     assert_eq!(
-        materialize.arguments[1].argument_output_pins.get(&5),
+        materialize.arguments[1].argument_output_pins().get(&5),
         Some(&0),
         "passivate wire must move from v2 arg 3 to v3 arg 1"
     );
     assert_eq!(
-        materialize.arguments[2].argument_output_pins.get(&6),
+        materialize.arguments[2].argument_output_pins().get(&6),
         Some(&0),
         "rm_single wire must move from v2 arg 4 to v3 arg 2"
     );
     assert_eq!(
-        materialize.arguments[3].argument_output_pins.get(&7),
+        materialize.arguments[3].argument_output_pins().get(&7),
         Some(&0),
         "surf_recon wire must move from v2 arg 5 to v3 arg 3"
     );
     assert_eq!(
-        materialize.arguments[4].argument_output_pins.get(&8),
+        materialize.arguments[4].argument_output_pins().get(&8),
         Some(&0),
         "invert_phase wire must move from v2 arg 6 to v3 arg 4"
     );
 
-    // NodeData translation: AtomFillData → MaterializeData. `motif_offset` is
+    // NodeData translation: AtomFillData â†’ MaterializeData. `motif_offset` is
     // dropped; everything else carries over verbatim from the v2 fixture.
     let mat_data = materialize
         .data
@@ -1012,8 +1012,8 @@ fn test_load_atom_fill_split() {
     assert!(!mat_data.surface_reconstruction);
     assert!(mat_data.invert_phase);
 
-    // next_node_id advances past every synthesised id — primitive adapter (1)
-    // + W/G/S triplet (3). With v2 next_node_id=10, post-migration must be ≥ 14.
+    // next_node_id advances past every synthesised id â€” primitive adapter (1)
+    // + W/G/S triplet (3). With v2 next_node_id=10, post-migration must be â‰¥ 14.
     assert!(
         network.next_node_id >= 14,
         "next_node_id should advance past both the cuboid adapter and the \
@@ -1103,8 +1103,8 @@ fn test_roundtrip_atom_fill_split() {
     );
 }
 
-/// Fixture 4 — `shared_unit_cell.cnnd` (case B coverage):
-/// one `unit_cell` (id 1) feeding two primitives — a `cuboid` (id 2) which
+/// Fixture 4 â€” `shared_unit_cell.cnnd` (case B coverage):
+/// one `unit_cell` (id 1) feeding two primitives â€” a `cuboid` (id 2) which
 /// then feeds `atom_fill.shape` (id 4), and a parallel `sphere` (id 3) used
 /// directly. The atom_fill has only its shape pin wired (motif and
 /// motif_offset both unwired), so it falls into case B: rename + re-index
@@ -1170,26 +1170,26 @@ fn test_load_shared_unit_cell_composes_passes() {
     // structure / motif / motif_offset (args 0, 2, 3) all unwired.
     for adapter in &structure_nodes {
         assert!(
-            adapter.arguments[0].argument_output_pins.is_empty(),
+            adapter.arguments[0].argument_output_pins().is_empty(),
             "primitive adapter's `structure` (arg 0) must be unwired"
         );
         assert_eq!(
-            adapter.arguments[1].argument_output_pins.get(&1),
+            adapter.arguments[1].argument_output_pins().get(&1),
             Some(&0),
             "primitive adapter's lattice_vecs (arg 1) must be wired to id 1, pin 0"
         );
         assert!(
-            adapter.arguments[2].argument_output_pins.is_empty(),
+            adapter.arguments[2].argument_output_pins().is_empty(),
             "primitive adapter's `motif` (arg 2) must be unwired"
         );
         assert!(
-            adapter.arguments[3].argument_output_pins.is_empty(),
+            adapter.arguments[3].argument_output_pins().is_empty(),
             "primitive adapter's `motif_offset` (arg 3) must be unwired"
         );
     }
 
     // The materialize node (renamed atom_fill, id 4) has its shape wire
-    // pointing at the cuboid (id 2) — case B preserves the original shape wire
+    // pointing at the cuboid (id 2) â€” case B preserves the original shape wire
     // verbatim. The four Bool flag args are unwired (no flag wires here).
     let materialize = network
         .nodes
@@ -1199,27 +1199,28 @@ fn test_load_shared_unit_cell_composes_passes() {
     assert_eq!(materialize.id, 4);
     assert_eq!(materialize.arguments.len(), 5);
     assert_eq!(
-        materialize.arguments[0].argument_output_pins.get(&2),
+        materialize.arguments[0].argument_output_pins().get(&2),
         Some(&0),
         "case B: materialize.shape (arg 0) must still point at cuboid (id 2, pin 0)"
     );
     for i in 1..5 {
         assert!(
-            materialize.arguments[i].argument_output_pins.is_empty(),
+            materialize.arguments[i].argument_output_pins().is_empty(),
             "materialize Bool arg {} should be unwired in this fixture",
             i
         );
     }
 
     // Each cuboid / sphere has its `structure` input (arg 2) rewired to its
-    // own adapter — never to id 1 directly.
+    // own adapter â€” never to id 1 directly.
     for primitive_name in ["cuboid", "sphere"] {
         let prim = network
             .nodes
             .values()
             .find(|n| n.node_type_name == primitive_name)
             .unwrap_or_else(|| panic!("{} node missing", primitive_name));
-        let wires = &prim.arguments[2].argument_output_pins;
+        let wires = prim.arguments[2].argument_output_pins();
+        let wires = &wires;
         assert_eq!(
             wires.len(),
             1,
@@ -1234,7 +1235,7 @@ fn test_load_shared_unit_cell_composes_passes() {
     }
 
     // Validate the migrated network: in case B the materialize should evaluate
-    // (its lattice context flows through the cuboid's adapter) — assert the
+    // (its lattice context flows through the cuboid's adapter) â€” assert the
     // network is valid end-to-end.
     let mut network = registry.node_networks.remove("Main").unwrap();
     validate_network(&mut network, &mut registry, None);
@@ -1301,16 +1302,16 @@ fn test_roundtrip_shared_unit_cell() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 6: hardening — frame_transform silent drop, idempotence, v3 no-op,
+// Phase 6: hardening â€” frame_transform silent drop, idempotence, v3 no-op,
 // corrupt-input error surface, real-sample smoke.
 // ---------------------------------------------------------------------------
 
-/// Fixture 5 — `frame_transform_present.cnnd`:
+/// Fixture 5 â€” `frame_transform_present.cnnd`:
 /// a v2 file whose `cuboid` and `sphere` node data blocks each carry a stray
 /// `frame_transform` field (as Appendix B of the refactoring design anticipates
 /// for older saves that encoded it inline). Verifies that serde's default
 /// leniency drops the field on deserialization and that it does not reappear
-/// in the v3 output on save — i.e. no explicit migration action is required
+/// in the v3 output on save â€” i.e. no explicit migration action is required
 /// for this removed field.
 #[test]
 fn test_load_frame_transform_dropped_silently() {
@@ -1326,7 +1327,7 @@ fn test_load_frame_transform_dropped_silently() {
         .get("Main")
         .expect("Main network missing");
 
-    // The two original primitives survived the load. Nothing synthesised — the
+    // The two original primitives survived the load. Nothing synthesised â€” the
     // fixture has no lattice wires or atom_fill nodes.
     assert_eq!(
         network.nodes.len(),
@@ -1376,7 +1377,7 @@ fn test_roundtrip_frame_transform_dropped() {
 
 /// Calling the pre-pass twice on the same in-memory value must produce a
 /// byte-identical result the second time. Catches helpers that silently mutate
-/// already-migrated shapes — the kind of bug that only surfaces if the
+/// already-migrated shapes â€” the kind of bug that only surfaces if the
 /// migration is accidentally re-invoked on its own output.
 #[test]
 fn test_double_migration_is_idempotent() {
@@ -1394,7 +1395,7 @@ fn test_double_migration_is_idempotent() {
     );
 }
 
-/// A v3 file must skip the pre-pass entirely — the version dispatch should not
+/// A v3 file must skip the pre-pass entirely â€” the version dispatch should not
 /// even call [`migrate_v2_to_v3`]. Uses the test-only call counter to observe
 /// dispatch behaviour directly. The counter is thread-local, so parallel tests
 /// don't contaminate this observation.
@@ -1413,7 +1414,7 @@ fn test_v3_file_skips_migration_pre_pass() {
     );
 }
 
-/// A v2 file must go through the pre-pass exactly once per load — the counterpart
+/// A v2 file must go through the pre-pass exactly once per load â€” the counterpart
 /// to the v3 no-op check. Together they prove the dispatch routes correctly.
 #[test]
 fn test_v2_file_invokes_migration_pre_pass() {
@@ -1431,7 +1432,7 @@ fn test_v2_file_invokes_migration_pre_pass() {
 }
 
 /// A structurally corrupt v2 file (truncated mid-JSON) must surface as a clear
-/// error from the load path — never a panic. The exact error type depends on
+/// error from the load path â€” never a panic. The exact error type depends on
 /// where the parse fails; the requirement is that the Display message carries
 /// useful locating information, which serde_json's errors always do
 /// (line/column).
@@ -1441,7 +1442,7 @@ fn test_corrupt_v2_produces_clear_error() {
     let result =
         load_node_networks_from_file(&mut registry, &format!("{}/corrupt_v2.cnnd", FIXTURE_DIR));
 
-    // Can't use `expect_err` here — `LoadResult` doesn't implement `Debug`. Match
+    // Can't use `expect_err` here â€” `LoadResult` doesn't implement `Debug`. Match
     // explicitly and panic with the message we do have.
     let err = match result {
         Ok(_) => panic!("truncated v2 fixture must not load successfully"),
@@ -1465,11 +1466,11 @@ fn test_corrupt_v2_produces_clear_error() {
 // ---------------------------------------------------------------------------
 // Real-sample smoke: `git show main:samples/...` seeded fixtures. These
 // exercise combinations of change classes the minimal fixtures don't hit.
-// No semantic comparison — just load / migrate / save / reload / idempotent
+// No semantic comparison â€” just load / migrate / save / reload / idempotent
 // per the design doc's Phase 6 instructions.
 // ---------------------------------------------------------------------------
 
-/// Real v2 sample — atom-heavy. Diamond uses `half_space`, `atom_fill`,
+/// Real v2 sample â€” atom-heavy. Diamond uses `half_space`, `atom_fill`,
 /// `lattice_move`, `lattice_rot`, `intersect`. Exercises every major migration
 /// change class in combination within one file.
 #[test]
@@ -1477,7 +1478,7 @@ fn test_real_diamond_roundtrip_smoke() {
     real_sample_roundtrip_smoke("real_diamond.cnnd");
 }
 
-/// Real v2 sample — geometry-heavy. Extrude-demo uses `extrude`, `polygon`,
+/// Real v2 sample â€” geometry-heavy. Extrude-demo uses `extrude`, `polygon`,
 /// `diff_2d`, `atom_fill`, `lattice_move`, plus custom networks (`M`, `P`, `S`).
 /// Exercises the rename walker descending into custom-network `node_type`
 /// definitions alongside the structural passes.
@@ -1487,7 +1488,7 @@ fn test_real_extrude_demo_roundtrip_smoke() {
 }
 
 /// Shared smoke shape used for every real sample: load, re-save, reload.
-/// No semantic comparison — just that the pipeline runs end-to-end without
+/// No semantic comparison â€” just that the pipeline runs end-to-end without
 /// panics or errors, that the saved file is tagged v3, and that every v2
 /// token we migrate has been erased.
 ///
@@ -1552,11 +1553,11 @@ fn real_sample_roundtrip_smoke(fixture_name: &str) {
     assert_eq!(
         migration_call_count(),
         0,
-        "{}: reloading the saved v3 form must not trigger the v2→v3 pre-pass",
+        "{}: reloading the saved v3 form must not trigger the v2â†’v3 pre-pass",
         fixture_name
     );
 
-    // Node count survives the full v2 load → v3 save → v3 reload cycle.
+    // Node count survives the full v2 load â†’ v3 save â†’ v3 reload cycle.
     let net_names: Vec<String> = registry.node_networks.keys().cloned().collect();
     for name in &net_names {
         let net1 = registry.node_networks.get(name).unwrap();
@@ -1583,7 +1584,7 @@ fn real_sample_roundtrip_smoke(fixture_name: &str) {
 // MOF5 regression.
 // ---------------------------------------------------------------------------
 
-/// Fixture — `atom_fill_unwired_shape.cnnd` (case C: motif wired, shape unwired):
+/// Fixture â€” `atom_fill_unwired_shape.cnnd` (case C: motif wired, shape unwired):
 /// no shape source, just a motif fed into `atom_fill.motif`. The migration
 /// must create a dangling `S` (no `G`/`W` because there is no shape chain to
 /// splice into) and leave `materialize.shape` empty so the validator surfaces
@@ -1634,25 +1635,25 @@ fn test_load_atom_fill_unwired_shape_case_c() {
         .expect("case C must synthesise a structure (S) node");
     assert_eq!(dangling_s.arguments.len(), 4);
     assert!(
-        dangling_s.arguments[0].argument_output_pins.is_empty(),
+        dangling_s.arguments[0].argument_output_pins().is_empty(),
         "dangling S's `structure` (arg 0) must be empty in case C (no chain to read base from)"
     );
     assert!(
-        dangling_s.arguments[1].argument_output_pins.is_empty(),
+        dangling_s.arguments[1].argument_output_pins().is_empty(),
         "dangling S's `lattice_vecs` (arg 1) must be empty"
     );
     assert_eq!(
-        dangling_s.arguments[2].argument_output_pins.get(&1),
+        dangling_s.arguments[2].argument_output_pins().get(&1),
         Some(&0),
         "dangling S's `motif` (arg 2) must hold the motif wire (id 1, pin 0)"
     );
     assert!(
-        dangling_s.arguments[3].argument_output_pins.is_empty(),
+        dangling_s.arguments[3].argument_output_pins().is_empty(),
         "dangling S's `motif_offset` (arg 3) must be empty (offset wasn't wired in v2)"
     );
 
     // Materialize.shape must remain empty (no chain). Validator should flag
-    // this as a user-visible missing input — exactly the signal the design
+    // this as a user-visible missing input â€” exactly the signal the design
     // intends ("a single drag-to-reconnect").
     let materialize = network
         .nodes
@@ -1660,13 +1661,13 @@ fn test_load_atom_fill_unwired_shape_case_c() {
         .find(|n| n.node_type_name == "materialize")
         .expect("materialize must exist");
     assert!(
-        materialize.arguments[0].argument_output_pins.is_empty(),
+        materialize.arguments[0].argument_output_pins().is_empty(),
         "case C: materialize.shape must stay unwired"
     );
 
     let materialize_id = materialize.id;
     // Static validation does not currently flag missing-required wires (it
-    // only checks type compatibility, parameter validity, etc. — see
+    // only checks type compatibility, parameter validity, etc. â€” see
     // `network_validator.rs`), so the v3 network passes static validation
     // just as the v2 file did. The user-visible signal comes at evaluation
     // time: materialize.eval() returns an Error for the missing shape input.
@@ -1688,7 +1689,7 @@ fn test_load_atom_fill_unwired_shape_case_c() {
     );
     match result {
         NetworkResult::Error(_) => {
-            // Expected — the missing shape wire surfaces as a runtime error
+            // Expected â€” the missing shape wire surfaces as a runtime error
             // when materialize is evaluated.
         }
         other => panic!(
@@ -1699,7 +1700,7 @@ fn test_load_atom_fill_unwired_shape_case_c() {
     }
 }
 
-/// Fixture — `motif_offset_only_chained.cnnd` (case A, only offset wired):
+/// Fixture â€” `motif_offset_only_chained.cnnd` (case A, only offset wired):
 /// shape + motif_offset wired, motif unwired. Specifically guards the
 /// `needs_S` broadening (motif OR motif_offset triggers S synthesis): if
 /// `needs_S` were gated only on the motif wire, the offset would be silently
@@ -1745,27 +1746,27 @@ fn test_load_motif_offset_only_chained_case_a() {
         .nodes
         .values()
         .find(|n| {
-            n.node_type_name == "structure" && !n.arguments[3].argument_output_pins.is_empty()
+            n.node_type_name == "structure" && !n.arguments[3].argument_output_pins().is_empty()
         })
         .expect("expected a structure override with motif_offset wired");
     assert!(
-        split_override.arguments[2].argument_output_pins.is_empty(),
+        split_override.arguments[2].argument_output_pins().is_empty(),
         "case A motif-offset-only: S.motif (arg 2) must be empty"
     );
     assert_eq!(
-        split_override.arguments[3].argument_output_pins.get(&3),
+        split_override.arguments[3].argument_output_pins().get(&3),
         Some(&0),
         "case A motif-offset-only: S.motif_offset (arg 3) must hold the user's vec3 wire (id 3, pin 0)"
     );
     assert_eq!(
         split_override.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&get_structure.id),
         Some(&0),
         "case A: S.structure (arg 0) must be wired to G's pin 0 (chained base)"
     );
     assert!(
-        split_override.arguments[1].argument_output_pins.is_empty(),
+        split_override.arguments[1].argument_output_pins().is_empty(),
         "case A: S.lattice_vecs (arg 1) stays unwired (rides through with the Blueprint)"
     );
 
@@ -1777,14 +1778,14 @@ fn test_load_motif_offset_only_chained_case_a() {
         .unwrap();
     assert_eq!(
         materialize.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&with_structure.id),
         Some(&0),
         "case A: materialize.shape (arg 0) must point at W"
     );
 }
 
-/// Fixture — `motif_offset_only_unchained.cnnd` (case C, only offset wired):
+/// Fixture â€” `motif_offset_only_unchained.cnnd` (case C, only offset wired):
 /// just a vec3 source feeding `atom_fill.motif_offset` with everything else
 /// unwired. Same `needs_S`-broadening guard as the chained variant but in the
 /// dangling-`S` branch: the offset wire must not be silently overwritten by
@@ -1824,19 +1825,19 @@ fn test_load_motif_offset_only_unchained_case_c() {
         .find(|n| n.node_type_name == "structure")
         .expect("case C must synthesise a dangling S");
     assert!(
-        dangling_s.arguments[0].argument_output_pins.is_empty(),
+        dangling_s.arguments[0].argument_output_pins().is_empty(),
         "dangling S.structure (arg 0) must be empty"
     );
     assert!(
-        dangling_s.arguments[1].argument_output_pins.is_empty(),
+        dangling_s.arguments[1].argument_output_pins().is_empty(),
         "dangling S.lattice_vecs (arg 1) must be empty"
     );
     assert!(
-        dangling_s.arguments[2].argument_output_pins.is_empty(),
+        dangling_s.arguments[2].argument_output_pins().is_empty(),
         "dangling S.motif (arg 2) must be empty (motif wasn't wired in v2)"
     );
     assert_eq!(
-        dangling_s.arguments[3].argument_output_pins.get(&1),
+        dangling_s.arguments[3].argument_output_pins().get(&1),
         Some(&0),
         "dangling S.motif_offset (arg 3) must hold the vec3 wire (id 1, pin 0); \
          re-index must not silently overwrite it"
@@ -1852,17 +1853,17 @@ fn test_load_motif_offset_only_unchained_case_c() {
     assert_eq!(materialize.arguments.len(), 5);
     for (i, a) in materialize.arguments.iter().enumerate() {
         assert!(
-            a.argument_output_pins.is_empty(),
+            a.argument_output_pins().is_empty(),
             "materialize arg {} should be empty in this fixture",
             i
         );
     }
 }
 
-/// Fixture — `motif_mof5.cnnd` (case A, regression: motif must survive):
+/// Fixture â€” `motif_mof5.cnnd` (case A, regression: motif must survive):
 /// the smaller stand-in for the full MOF5 file. A non-default motif (a single
 /// nitrogen site) is wired into `atom_fill.motif`. After migration, evaluating
-/// `materialize` must produce nitrogen atoms — not the diamond carbons that
+/// `materialize` must produce nitrogen atoms â€” not the diamond carbons that
 /// the buggy pre-fix migration produced. This is the regression test for the
 /// motif-fix design: failure means we are silently back to diamond.
 #[test]
@@ -1893,29 +1894,29 @@ fn test_load_motif_mof5_evaluation_preserves_motif() {
     assert!(
         elements.contains(&7),
         "materialize must produce nitrogen atoms (the motif's element); \
-         got elements {:?} — diamond would give {{6}}",
+         got elements {:?} â€” diamond would give {{6}}",
         elements
     );
     assert!(
         !elements.contains(&6),
-        "materialize must NOT produce carbon atoms — that would mean the \
+        "materialize must NOT produce carbon atoms â€” that would mean the \
          user's motif was lost and the diamond default leaked through; got {:?}",
         elements
     );
 }
 
-/// Fixture — `real_mof5.cnnd` (real-sample regression):
+/// Fixture â€” `real_mof5.cnnd` (real-sample regression):
 /// the actual MOF5 sample from `c:\atomcad_v0.3.0\samples\MOF5-motif.cnnd`.
 /// Load / migrate / save / reload; assert idempotence; assert that the
 /// `motif_MOF5` network's materialize node, when evaluated, produces atoms
-/// with elements including Zn / O / C — the MOF5 elements — rather than
+/// with elements including Zn / O / C â€” the MOF5 elements â€” rather than
 /// C-only (which would indicate diamond output).
 #[test]
 fn test_real_mof5_motif_survives_migration() {
     let registry = load_and_validate(&format!("{}/real_mof5.cnnd", FIXTURE_DIR));
 
     // The motif_MOF5 network is the one that owns the motif wired into its
-    // atom_fill — that's the case-A site under test.
+    // atom_fill â€” that's the case-A site under test.
     let network = registry.node_networks.get("motif_MOF5").unwrap_or_else(|| {
         panic!(
             "motif_MOF5 network missing; available: {:?}",
@@ -1948,7 +1949,7 @@ fn test_real_mof5_motif_survives_migration() {
         .collect();
     assert!(
         !non_carbon.is_empty(),
-        "MOF5 materialize must produce non-carbon (non-H) atoms — diamond \
+        "MOF5 materialize must produce non-carbon (non-H) atoms â€” diamond \
          output would give {{6}} (or {{1, 6}} with passivation). Got elements {:?}",
         elements
     );
@@ -1963,14 +1964,14 @@ fn test_real_mof5_motif_survives_migration() {
 }
 
 /// Roundtrip smoke for `real_mof5.cnnd`: load / migrate / save / reload, and
-/// verify the second load skips the v2 → v3 pre-pass entirely. Mirrors the
+/// verify the second load skips the v2 â†’ v3 pre-pass entirely. Mirrors the
 /// pattern used for `real_diamond.cnnd` and `real_extrude_demo.cnnd`.
 #[test]
 fn test_real_mof5_roundtrip_smoke() {
     real_sample_roundtrip_smoke("real_mof5.cnnd");
 }
 
-/// Once a v2 file has been migrated and saved as v3, repeated save→reload→save
+/// Once a v2 file has been migrated and saved as v3, repeated saveâ†’reloadâ†’save
 /// cycles must produce semantically identical files: same nodes, same wires,
 /// same `next_node_id`. The migration must run exactly once on the original
 /// load and never touch the output again.
@@ -1982,7 +1983,7 @@ fn test_real_mof5_roundtrip_smoke() {
 /// load-bearing check: if the migration silently re-allocated ids on the
 /// second save, this would drift.
 ///
-/// Uses `atom_fill_split.cnnd` because it's case A — exercises every
+/// Uses `atom_fill_split.cnnd` because it's case A â€” exercises every
 /// new-node-allocation path the migration takes.
 #[test]
 fn test_resave_roundtrip_semantically_identical_after_first_v3_save() {

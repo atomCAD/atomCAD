@@ -316,18 +316,22 @@ fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeT
     // Second pass: remove wires to non-existent output pins
     for node in network.nodes.values_mut() {
         for argument in node.arguments.iter_mut() {
-            argument
-                .argument_output_pins
-                .retain(|source_node_id, output_pin_index| {
-                    if *output_pin_index == -1 {
-                        return true; // Function pin is always valid
-                    }
-                    if let Some(&count) = pin_counts.get(source_node_id) {
-                        (*output_pin_index as usize) < count
-                    } else {
-                        true // Unknown source — let validate_wires catch it
-                    }
-                });
+            argument.incoming_wires.retain(|wire| {
+                let Some((source_node_id, output_pin_index)) = wire.as_legacy_pair() else {
+                    // ZoneInput or non-zero scope_depth wires aren't tied to
+                    // a regular-output pin count; leave them to later
+                    // zone-aware validation (Phase 6).
+                    return true;
+                };
+                if output_pin_index == -1 {
+                    return true; // Function pin is always valid
+                }
+                if let Some(&count) = pin_counts.get(&source_node_id) {
+                    (output_pin_index as usize) < count
+                } else {
+                    true // Unknown source — let validate_wires catch it
+                }
+            });
         }
     }
 }
@@ -399,12 +403,12 @@ fn validate_wires(
             let parameter = &dest_node_type.parameters[arg_index];
 
             // Validate non-multi input pins have at most one connection
-            if !parameter.data_type.is_array() && argument.argument_output_pins.len() > 1 {
+            if !parameter.data_type.is_array() && argument.len() > 1 {
                 network.validation_errors.push(ValidationError::new(
                     format!(
                         "Non-multi parameter '{}' has {} connections, but only 1 is allowed",
                         parameter.name,
-                        argument.argument_output_pins.len()
+                        argument.len()
                     ),
                     Some(*dest_node_id),
                 ));
@@ -412,7 +416,18 @@ fn validate_wires(
             }
 
             // Validate data types for each connected source node
-            for (source_node_id, output_pin_index) in &argument.argument_output_pins {
+            for incoming in &argument.incoming_wires {
+                let source_node_id = &incoming.source_node_id;
+                let output_pin_index = match incoming.source_pin {
+                    crate::structure_designer::node_network::SourcePin::NodeOutput {
+                        pin_index,
+                    } => pin_index,
+                    // Zone-input sources (later phases) aren't validated here.
+                    crate::structure_designer::node_network::SourcePin::ZoneInput { .. } => {
+                        continue;
+                    }
+                };
+                let output_pin_index = &output_pin_index;
                 // Get the source node
                 let source_node = match network.nodes.get(source_node_id) {
                     Some(node) => node,

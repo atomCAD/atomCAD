@@ -75,8 +75,7 @@ pub fn compute_node_depths(network: &NodeNetwork) -> HashMap<u64, usize> {
         let input_ids: Vec<u64> = node
             .arguments
             .iter()
-            .flat_map(|arg| arg.argument_output_pins.keys())
-            .copied()
+            .flat_map(|arg| arg.incoming_wires.iter().map(|w| w.source_node_id))
             .collect();
 
         // If no inputs, this is a source node at depth 0
@@ -123,8 +122,7 @@ pub fn get_input_node_ids(network: &NodeNetwork, node_id: u64) -> HashSet<u64> {
         .map(|node| {
             node.arguments
                 .iter()
-                .flat_map(|arg| arg.argument_output_pins.keys())
-                .copied()
+                .flat_map(|arg| arg.incoming_wires.iter().map(|w| w.source_node_id))
                 .collect()
         })
         .unwrap_or_default()
@@ -147,7 +145,7 @@ pub fn get_output_node_ids(network: &NodeNetwork, node_id: u64) -> HashSet<u64> 
         }
 
         for argument in &other_node.arguments {
-            if argument.argument_output_pins.contains_key(&node_id) {
+            if argument.has_source(node_id) {
                 outputs.insert(other_id);
                 break;
             }
@@ -174,10 +172,7 @@ pub fn find_source_nodes(network: &NodeNetwork) -> HashSet<u64> {
         .nodes
         .iter()
         .filter_map(|(&node_id, node)| {
-            let has_inputs = node
-                .arguments
-                .iter()
-                .any(|arg| !arg.argument_output_pins.is_empty());
+            let has_inputs = node.arguments.iter().any(|arg| !arg.is_empty());
             if has_inputs { None } else { Some(node_id) }
         })
         .collect()
@@ -199,8 +194,8 @@ pub fn find_sink_nodes(network: &NodeNetwork) -> HashSet<u64> {
 
     for node in network.nodes.values() {
         for argument in &node.arguments {
-            for &source_id in argument.argument_output_pins.keys() {
-                referenced_nodes.insert(source_id);
+            for wire in &argument.incoming_wires {
+                referenced_nodes.insert(wire.source_node_id);
             }
         }
     }

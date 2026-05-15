@@ -1,4 +1,4 @@
-use glam::f64::{DVec2, DVec3};
+﻿use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
@@ -150,7 +150,7 @@ fn atom_composediff_basic_two_diffs() {
     // Apply composed to base
     let composed_result = atomic_structure_diff::apply_diff(&base, &composed.composed, 0.1).result;
 
-    // Should have: C(0), C(2), N(6), Si(8) — original C(4) deleted
+    // Should have: C(0), C(2), N(6), Si(8) â€” original C(4) deleted
     assert_eq!(composed_result.get_num_of_atoms(), 4);
 }
 
@@ -364,7 +364,7 @@ result = apply_diff { base: base, diff: composed }
     // Verify two wires connected to the diffs pin
     let compose_node = compose_node.unwrap();
     assert_eq!(
-        compose_node.arguments[0].argument_output_pins.len(),
+        compose_node.arguments[0].argument_output_pins().len(),
         2,
         "diffs pin should have 2 wires connected"
     );

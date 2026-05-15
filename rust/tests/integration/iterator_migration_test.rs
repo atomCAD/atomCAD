@@ -1,4 +1,4 @@
-// v3 → v4 migration tests for the iterator refactoring (Phase 3+ of
+﻿// v3 â†’ v4 migration tests for the iterator refactoring (Phase 3+ of
 // `doc/design_iterators.md`).
 //
 // Phase 3 ships:
@@ -88,7 +88,7 @@ fn find_node_id_by_type(
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: `range → array_len` is rewritten as `range → collect → array_len`.
+// Phase 3: `range â†’ array_len` is rewritten as `range â†’ collect â†’ array_len`.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -121,7 +121,7 @@ fn test_load_old_range_to_array_len_inserts_collect() {
     assert_eq!(collect_node.arguments.len(), 3);
     assert_eq!(
         collect_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&range_id)
             .copied(),
         Some(0)
@@ -134,14 +134,14 @@ fn test_load_old_range_to_array_len_inserts_collect() {
     assert_eq!(array_len_node.arguments.len(), 1);
     assert_eq!(
         array_len_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&collect_id)
             .copied(),
         Some(0)
     );
     assert!(
         !array_len_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .contains_key(&range_id),
         "after migration array_len must no longer wire directly to range"
     );
@@ -167,12 +167,12 @@ fn test_load_old_range_to_array_len_inserts_collect() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: version dispatch — a v4 file is a no-op through `migrate_v3_to_v4`.
+// Phase 3: version dispatch â€” a v4 file is a no-op through `migrate_v3_to_v4`.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_v4_file_skips_migration() {
-    // Round-trip the migrated v3 fixture through save → load. The saved file
+    // Round-trip the migrated v3 fixture through save â†’ load. The saved file
     // should be v4, and reloading it must not invoke `migrate_v3_to_v4`.
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
@@ -192,12 +192,12 @@ fn test_v4_file_skips_migration() {
     assert_eq!(
         migration_call_count(),
         0,
-        "v4 file must skip the v3→v4 migration pass"
+        "v4 file must skip the v3â†’v4 migration pass"
     );
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: idempotence — running `migrate_v3_to_v4` directly on a value that
+// Phase 3: idempotence â€” running `migrate_v3_to_v4` directly on a value that
 // has already been migrated yields a no-op (no fresh `collect` insertions).
 // ---------------------------------------------------------------------------
 
@@ -214,14 +214,14 @@ fn test_migrate_v3_to_v4_is_idempotent() {
 
     assert_eq!(
         after_first, after_second,
-        "v3→v4 migration must be idempotent; second run must not add another collect"
+        "v3â†’v4 migration must be idempotent; second run must not add another collect"
     );
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3 of design_iterators: a freshly-built `range → collect → array_len`
+// Phase 3 of design_iterators: a freshly-built `range â†’ collect â†’ array_len`
 // chain validates and evaluates correctly even without going through
-// migration. Sanity-check that the new `range → Iter[Int]` plus implicit
+// migration. Sanity-check that the new `range â†’ Iter[Int]` plus implicit
 // conversions work end-to-end.
 // ---------------------------------------------------------------------------
 
@@ -239,8 +239,8 @@ fn test_range_output_type_is_iter_int() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 4: `map → array_at` is rewritten as `map → collect → array_at`.
-// `range → map.xs` stays direct because `map.xs` accepts `Iter[T]` natively.
+// Phase 4: `map â†’ array_at` is rewritten as `map â†’ collect â†’ array_at`.
+// `range â†’ map.xs` stays direct because `map.xs` accepts `Iter[T]` natively.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -268,12 +268,12 @@ fn test_load_old_map_to_array_at_inserts_collect() {
     let array_at_id = find_node_id_by_type(&registry, "Main", "array_at");
     let collect_id = find_node_id_by_type(&registry, "Main", "collect");
 
-    // Synthesised collect wires range/map → collect → array_at.
+    // Synthesised collect wires range/map â†’ collect â†’ array_at.
     let collect_node = network.nodes.get(&collect_id).unwrap();
     assert_eq!(collect_node.arguments.len(), 3);
     assert_eq!(
         collect_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&map_id)
             .copied(),
         Some(0),
@@ -284,7 +284,7 @@ fn test_load_old_map_to_array_at_inserts_collect() {
     let array_at_node = network.nodes.get(&array_at_id).unwrap();
     assert_eq!(
         array_at_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&collect_id)
             .copied(),
         Some(0),
@@ -292,28 +292,28 @@ fn test_load_old_map_to_array_at_inserts_collect() {
     );
     assert!(
         !array_at_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .contains_key(&map_id),
         "array_at must no longer wire directly to map"
     );
 
-    // range → map.xs stays direct: map.xs is now Iter[Int], so the wire is
+    // range â†’ map.xs stays direct: map.xs is now Iter[Int], so the wire is
     // identity-valid; no collect inserted on it.
     let map_node = network.nodes.get(&map_id).unwrap();
     let range_id = find_node_id_by_type(&registry, "Main", "range");
     assert_eq!(
         map_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&range_id)
             .copied(),
         Some(0),
-        "range → map.xs wire must be preserved unchanged (Iter[Int] → Iter[Int] identity)"
+        "range â†’ map.xs wire must be preserved unchanged (Iter[Int] â†’ Iter[Int] identity)"
     );
 }
 
 // ---------------------------------------------------------------------------
-// Phase 4: `filter → array_concat` is rewritten as
-// `filter → collect → array_concat`. `range → filter.xs` stays direct.
+// Phase 4: `filter â†’ array_concat` is rewritten as
+// `filter â†’ collect â†’ array_concat`. `range â†’ filter.xs` stays direct.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -343,7 +343,7 @@ fn test_load_old_filter_to_array_concat_inserts_collect() {
     let collect_node = network.nodes.get(&collect_id).unwrap();
     assert_eq!(
         collect_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&filter_id)
             .copied(),
         Some(0),
@@ -353,7 +353,7 @@ fn test_load_old_filter_to_array_concat_inserts_collect() {
     let array_concat_node = network.nodes.get(&array_concat_id).unwrap();
     assert_eq!(
         array_concat_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&collect_id)
             .copied(),
         Some(0),
@@ -364,7 +364,7 @@ fn test_load_old_filter_to_array_concat_inserts_collect() {
 // ---------------------------------------------------------------------------
 // Phase 4: fan-out from one `map` source pin to two non-iterator consumers
 // synthesises **one collect per consumer** (per-consumer adapters, not a
-// shared collect) — matches v2→v3's policy and the design doc's
+// shared collect) â€” matches v2â†’v3's policy and the design doc's
 // "Fan-out from one source pin to multiple non-iterator destinations" rule.
 // ---------------------------------------------------------------------------
 
@@ -412,7 +412,7 @@ fn test_load_old_double_fanout_inserts_one_collect_per_consumer() {
         let cnode = network.nodes.get(&cid).unwrap();
         assert_eq!(
             cnode.arguments[0]
-                .argument_output_pins
+                .argument_output_pins()
                 .get(&map_id)
                 .copied(),
             Some(0),
@@ -437,7 +437,7 @@ fn array_at_node_array_target<'a>(
     collect_ids: &'a [u64],
 ) -> &'a u64 {
     let node = network.nodes.get(&array_at_id).unwrap();
-    let pins = &node.arguments[0].argument_output_pins;
+    let pins = node.arguments[0].argument_output_pins();
     collect_ids
         .iter()
         .find(|cid| pins.contains_key(cid))
@@ -450,7 +450,7 @@ fn array_len_node_array_target<'a>(
     collect_ids: &'a [u64],
 ) -> &'a u64 {
     let node = network.nodes.get(&array_len_id).unwrap();
-    let pins = &node.arguments[0].argument_output_pins;
+    let pins = node.arguments[0].argument_output_pins();
     collect_ids
         .iter()
         .find(|cid| pins.contains_key(cid))
@@ -459,14 +459,14 @@ fn array_len_node_array_target<'a>(
 
 // ---------------------------------------------------------------------------
 // Phase 4: predicate (B) recognises `map.xs` and `filter.xs` as iterator
-// pins, so a v3 file with `map → map` (or `filter → filter`) is loaded
+// pins, so a v3 file with `map â†’ map` (or `filter â†’ filter`) is loaded
 // without inserting any collect.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_iter_to_iter_xs_pin_skips_collect_insertion() {
     // We don't ship a dedicated fixture for this; reuse `old_map_to_array_at`
-    // which has a `range → map.xs` wire in it. Because `map.xs` is in
+    // which has a `range â†’ map.xs` wire in it. Because `map.xs` is in
     // `ITERATOR_PINS_V4` after Phase 4, no collect should sit between range
     // and map.
     let registry = load_and_validate(&format!("{}/old_map_to_array_at.cnnd", FIXTURE_DIR));
@@ -476,7 +476,7 @@ fn test_iter_to_iter_xs_pin_skips_collect_insertion() {
     let map_id = find_node_id_by_type(&registry, "Main", "map");
     let range_id = find_node_id_by_type(&registry, "Main", "range");
     let map_node = network.nodes.get(&map_id).unwrap();
-    let xs_pins = &map_node.arguments[0].argument_output_pins;
+    let xs_pins = map_node.arguments[0].argument_output_pins();
     assert_eq!(xs_pins.len(), 1, "map.xs must have exactly one source");
     assert!(
         xs_pins.contains_key(&range_id),
@@ -502,7 +502,7 @@ fn test_migrate_v3_to_v4_idempotent_on_map_fanout() {
 
     assert_eq!(
         after_first, after_second,
-        "v3→v4 migration must be idempotent on a fan-out fixture"
+        "v3â†’v4 migration must be idempotent on a fan-out fixture"
     );
 }
 
@@ -537,8 +537,8 @@ fn test_filter_output_type_is_iter() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 6: `product → array_at` is rewritten as
-// `product → collect → array_at`. Wires from `range → product.<axis>` stay
+// Phase 6: `product â†’ array_at` is rewritten as
+// `product â†’ collect â†’ array_at`. Wires from `range â†’ product.<axis>` stay
 // direct because every `product` parameter pin is an iterator pin in v4.
 // ---------------------------------------------------------------------------
 
@@ -568,12 +568,12 @@ fn test_load_old_product_to_array_at_inserts_collect() {
     let array_at_id = find_node_id_by_type(&registry, "Main", "array_at");
     let collect_id = find_node_id_by_type(&registry, "Main", "collect");
 
-    // Synthesised collect wires product → collect → array_at.
+    // Synthesised collect wires product â†’ collect â†’ array_at.
     let collect_node = network.nodes.get(&collect_id).unwrap();
     assert_eq!(collect_node.arguments.len(), 3);
     assert_eq!(
         collect_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&product_id)
             .copied(),
         Some(0),
@@ -584,7 +584,7 @@ fn test_load_old_product_to_array_at_inserts_collect() {
     let array_at_node = network.nodes.get(&array_at_id).unwrap();
     assert_eq!(
         array_at_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&collect_id)
             .copied(),
         Some(0),
@@ -592,24 +592,24 @@ fn test_load_old_product_to_array_at_inserts_collect() {
     );
     assert!(
         !array_at_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .contains_key(&product_id),
         "array_at must no longer wire directly to product"
     );
 
-    // range → product.<axis> wires stay direct: every product parameter pin
+    // range â†’ product.<axis> wires stay direct: every product parameter pin
     // is `Iter[T_i]` in v4, so the wires are identity-valid.
     let product_node = network.nodes.get(&product_id).unwrap();
     assert_eq!(product_node.arguments.len(), 2);
     for (axis_index, arg) in product_node.arguments.iter().enumerate() {
         assert_eq!(
-            arg.argument_output_pins.len(),
+            arg.argument_output_pins().len(),
             1,
             "product axis {} should have exactly one upstream wire",
             axis_index
         );
         // Each axis is wired to a `range` node directly (no collect inserted).
-        let upstream_id = *arg.argument_output_pins.keys().next().unwrap();
+        let upstream_id = *arg.argument_output_pins().keys().next().unwrap();
         let upstream = network.nodes.get(&upstream_id).unwrap();
         assert_eq!(
             upstream.node_type_name, "range",
@@ -669,27 +669,27 @@ fn test_migrate_v3_to_v4_idempotent_on_product_fixture() {
 
     assert_eq!(
         after_first, after_second,
-        "v3→v4 migration must be idempotent on the product fixture"
+        "v3â†’v4 migration must be idempotent on the product fixture"
     );
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3: chained dispatch v2 → v3 → v4.
+// Phase 3: chained dispatch v2 â†’ v3 â†’ v4.
 // A v2 fixture (`pure_rename.cnnd` from the lattice-space migration tests)
 // should chain through both passes and reach v4 cleanly.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_chained_v2_v3_v4_dispatch() {
-    // Use an existing v2 fixture — it doesn't contain any `range`/`map`/etc.,
-    // so the v3→v4 pass is a no-op for it. The point is that both passes run
+    // Use an existing v2 fixture â€” it doesn't contain any `range`/`map`/etc.,
+    // so the v3â†’v4 pass is a no-op for it. The point is that both passes run
     // without erroring on a v2 file.
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
         "tests/fixtures/lattice_space_migration/pure_rename.cnnd",
     )
-    .expect("v2 file failed to chain through v2→v3 then v3→v4");
+    .expect("v2 file failed to chain through v2â†’v3 then v3â†’v4");
 
     // The Main network must exist and be loadable.
     assert!(
@@ -734,11 +734,11 @@ fn test_load_old_custom_iter_producer_to_array_at_inserts_collect() {
     let array_at_id = find_node_id_by_type(&registry, "Main", "array_at");
     let collect_id = find_node_id_by_type(&registry, "Main", "collect");
 
-    // collect ← MakeRange (predicate (A) hit via transitive resolution).
+    // collect â† MakeRange (predicate (A) hit via transitive resolution).
     let collect_node = main.nodes.get(&collect_id).unwrap();
     assert_eq!(
         collect_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&make_range_id)
             .copied(),
         Some(0),
@@ -749,7 +749,7 @@ fn test_load_old_custom_iter_producer_to_array_at_inserts_collect() {
     let array_at_node = main.nodes.get(&array_at_id).unwrap();
     assert_eq!(
         array_at_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&collect_id)
             .copied(),
         Some(0),
@@ -757,19 +757,19 @@ fn test_load_old_custom_iter_producer_to_array_at_inserts_collect() {
     );
     assert!(
         !array_at_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .contains_key(&make_range_id),
         "array_at must no longer wire directly to MakeRange"
     );
 
-    // The `MakeRange` network itself stays at one node — synthesised
+    // The `MakeRange` network itself stays at one node â€” synthesised
     // collects only sit at the *outer* boundary, not inside the producing
     // custom network.
     let mr = registry.node_networks.get("MakeRange").unwrap();
     assert_eq!(
         mr.nodes.len(),
         1,
-        "MakeRange should still contain only its `range` node — collects sit at the outer boundary"
+        "MakeRange should still contain only its `range` node â€” collects sit at the outer boundary"
     );
 }
 
@@ -789,14 +789,14 @@ fn test_migrate_v3_to_v4_idempotent_on_custom_iter_fixture() {
 
     assert_eq!(
         after_first, after_second,
-        "v3→v4 migration must be idempotent on the transitive-custom fixture"
+        "v3â†’v4 migration must be idempotent on the transitive-custom fixture"
     );
 }
 
 // ---------------------------------------------------------------------------
-// Phase 7: chained v2 → v3 → v4 dispatch on a v2 file containing an
-// iterator-producer chain. The v3→v4 pass must run after v2→v3 and insert
-// a collect on the `range → array_len` wire.
+// Phase 7: chained v2 â†’ v3 â†’ v4 dispatch on a v2 file containing an
+// iterator-producer chain. The v3â†’v4 pass must run after v2â†’v3 and insert
+// a collect on the `range â†’ array_len` wire.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -812,7 +812,7 @@ fn test_chained_v2_v3_v4_dispatch_with_iterator_chain() {
     assert_eq!(
         main.nodes.len(),
         3,
-        "expected 3 nodes (range + collect + array_len) after chained v2→v3→v4 migration; got {:?}",
+        "expected 3 nodes (range + collect + array_len) after chained v2â†’v3â†’v4 migration; got {:?}",
         main.nodes
             .values()
             .map(|n| n.node_type_name.as_str())
@@ -824,14 +824,14 @@ fn test_chained_v2_v3_v4_dispatch_with_iterator_chain() {
     let array_len_node = main.nodes.get(&array_len_id).unwrap();
     assert_eq!(
         array_len_node.arguments[0]
-            .argument_output_pins
+            .argument_output_pins()
             .get(&collect_id)
             .copied(),
         Some(0),
         "array_len.array must point at the synthesised collect after chained migration"
     );
 
-    // Evaluate the chain end-to-end: range(0,1,5) → collect → array_len → 5.
+    // Evaluate the chain end-to-end: range(0,1,5) â†’ collect â†’ array_len â†’ 5.
     let result = evaluate_node(&registry, "Main", array_len_id);
     match result {
         NetworkResult::Int(n) => assert_eq!(n, 5),
@@ -840,7 +840,7 @@ fn test_chained_v2_v3_v4_dispatch_with_iterator_chain() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 7: defensive parsing — a `MapData.output_type` that does not parse
+// Phase 7: defensive parsing â€” a `MapData.output_type` that does not parse
 // as a `DataType` falls back to `DataType::None` on the synthesised
 // `collect`, and the validator drops the now-mistyped wire on load.
 // ---------------------------------------------------------------------------
@@ -862,7 +862,7 @@ fn test_migrate_v3_to_v4_defensive_on_malformed_map_output_type() {
     // node's own malformed `output_type` field still fails strict
     // deserialization (the migration scope is the synthesised wire, not
     // the source node's stored data), so the file as a whole won't load
-    // — but the migration must still defensively produce a valid
+    // â€” but the migration must still defensively produce a valid
     // `collect.element_type` so the rest of the file is well-formed
     // wherever the malformed source isn't directly involved.
     let main_network = value
@@ -897,7 +897,7 @@ fn test_migrate_v3_to_v4_defensive_on_malformed_map_output_type() {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 7: defensive parsing — a node whose `arguments` shape is broken
+// Phase 7: defensive parsing â€” a node whose `arguments` shape is broken
 // (non-object inside the `argument_output_pins` map slot) is silently
 // skipped during migration. The wire fails post-load validation, but the
 // migration itself does not error.
@@ -906,7 +906,7 @@ fn test_migrate_v3_to_v4_defensive_on_malformed_map_output_type() {
 #[test]
 fn test_migrate_v3_to_v4_skips_malformed_arguments() {
     let mut registry = NodeTypeRegistry::new();
-    // The fixture has a `range → array_at.array` wire whose `arguments`
+    // The fixture has a `range â†’ array_at.array` wire whose `arguments`
     // shape is malformed. Migration must not panic; the file must load.
     load_node_networks_from_file(
         &mut registry,

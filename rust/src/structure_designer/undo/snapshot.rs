@@ -1,6 +1,6 @@
+use crate::structure_designer::node_network::IncomingWire;
 use glam::f64::DVec2;
 use serde_json::Value;
-use std::collections::HashMap;
 
 /// Full snapshot of a node, used by undo commands to restore deleted/pasted nodes.
 #[derive(Debug, Clone)]
@@ -17,8 +17,8 @@ pub struct NodeSnapshot {
 /// Snapshot of a node's argument (one input pin).
 #[derive(Debug, Clone)]
 pub struct ArgumentSnapshot {
-    /// Maps source_node_id → output_pin_index
-    pub argument_output_pins: HashMap<u64, i32>,
+    /// Inbound wires on this argument pin. Mirrors `Argument.incoming_wires`.
+    pub incoming_wires: Vec<IncomingWire>,
 }
 
 /// Snapshot of a wire connection.

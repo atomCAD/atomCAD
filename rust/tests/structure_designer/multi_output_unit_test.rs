@@ -1,4 +1,4 @@
-// Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6)
+﻿// Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6)
 // and EvalOutput display overrides.
 
 use glam::DVec2;
@@ -192,7 +192,7 @@ fn test_set_node_display_preserves_pins_on_redisplay() {
     network.set_node_display(node_id, false);
     assert!(!network.is_node_displayed(node_id));
 
-    // Re-display — should get fresh default state (pin 0 only)
+    // Re-display â€” should get fresh default state (pin 0 only)
     network.set_node_display(node_id, true);
     assert_eq!(
         network.get_displayed_pins(node_id),
@@ -212,7 +212,7 @@ fn test_set_node_display_type_preserves_pins() {
     // Add pin 1
     network.set_pin_displayed(node_id, 1, true);
 
-    // Change display type — should preserve pins
+    // Change display type â€” should preserve pins
     network.set_node_display_type(node_id, Some(NodeDisplayType::Ghost));
     assert_eq!(
         network.get_node_display_type(node_id),
@@ -254,7 +254,7 @@ fn test_set_pin_displayed_add_and_remove() {
         Some(&HashSet::from([1]))
     );
 
-    // Remove pin 1 — should auto-remove the node from displayed_nodes
+    // Remove pin 1 â€” should auto-remove the node from displayed_nodes
     network.set_pin_displayed(node_id, 1, false);
     assert!(!network.is_node_displayed(node_id));
     assert_eq!(network.get_displayed_pins(node_id), None);
@@ -428,11 +428,11 @@ fn test_set_pin_displayed_re_adds_removed_node() {
         Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {}),
     );
 
-    // Remove pin 0 — node is removed from displayed_nodes
+    // Remove pin 0 â€” node is removed from displayed_nodes
     network.set_pin_displayed(node_id, 0, false);
     assert!(!network.is_node_displayed(node_id));
 
-    // Re-add pin 0 — node should be re-added to displayed_nodes
+    // Re-add pin 0 â€” node should be re-added to displayed_nodes
     network.set_pin_displayed(node_id, 0, true);
     assert!(network.is_node_displayed(node_id));
     assert_eq!(
@@ -730,7 +730,7 @@ fn test_custom_network_return_node_change_single_to_multi() {
     assert_eq!(network.node_type.output_pin_count(), 2);
 }
 
-/// No return node → single output pin with DataType::None.
+/// No return node â†’ single output pin with DataType::None.
 #[test]
 fn test_custom_network_no_return_node() {
     let mut designer = setup_designer_with_network("inner");
@@ -751,7 +751,7 @@ fn test_custom_network_no_return_node() {
 // `atom_edit`'s `result` pin is `SameAsInput("molecule", default = Molecule)`.
 // With no input wired, the pin must resolve to `Molecule` so the node is
 // usable for "create a molecule from scratch" workflows. With a Crystal wired
-// in, the upstream concrete type still wins — the fallback is only a safety
+// in, the upstream concrete type still wins â€” the fallback is only a safety
 // net for the disconnected case.
 
 #[test]
@@ -864,7 +864,7 @@ fn test_custom_network_node_evaluate_pin1() {
         "Pin 0 should be Atomic"
     );
 
-    // Evaluate pin 1 (diff) — should also be Atomic
+    // Evaluate pin 1 (diff) â€” should also be Atomic
     let result_pin1 = evaluate_pin(&designer, "outer", inner_node_id, 1);
     assert!(
         matches!(
@@ -896,7 +896,7 @@ fn test_custom_network_wire_from_pin1() {
     // Wire from pin 1 (diff output) of inner to input 0 (base) of apply_diff
     designer.connect_nodes(inner_node_id, 1, apply_diff_id, 0);
 
-    // Validate the network — should be valid with the wire to pin 1
+    // Validate the network â€” should be valid with the wire to pin 1
     designer.validate_active_network();
     let network = designer
         .node_type_registry
@@ -911,11 +911,11 @@ fn test_custom_network_wire_from_pin1() {
     // The wire should still exist
     let apply_diff_node = network.nodes.get(&apply_diff_id).unwrap();
     assert!(
-        !apply_diff_node.arguments[0].argument_output_pins.is_empty(),
+        !apply_diff_node.arguments[0].argument_output_pins().is_empty(),
         "Wire from pin 1 should be preserved"
     );
     assert_eq!(
-        apply_diff_node.arguments[0].argument_output_pins[&inner_node_id], 1,
+        apply_diff_node.arguments[0].argument_output_pins()[&inner_node_id], 1,
         "Wire should reference pin index 1"
     );
 }
@@ -944,7 +944,7 @@ fn test_custom_network_shrink_output_pins_disconnects_wires() {
             .get("outer")
             .unwrap();
         let node = network.nodes.get(&apply_diff_id).unwrap();
-        assert_eq!(node.arguments[0].argument_output_pins.len(), 1);
+        assert_eq!(node.arguments[0].argument_output_pins().len(), 1);
     }
 
     // Now change inner's return node to sphere (single output)
@@ -961,7 +961,7 @@ fn test_custom_network_shrink_output_pins_disconnects_wires() {
         .unwrap();
     let node = network.nodes.get(&apply_diff_id).unwrap();
     assert!(
-        node.arguments[0].argument_output_pins.is_empty(),
+        node.arguments[0].argument_output_pins().is_empty(),
         "Wire to pin 1 should be disconnected after inner shrinks to single output"
     );
 }
@@ -1129,7 +1129,7 @@ fn test_eval_output_display_override_basic() {
 fn test_eval_output_display_override_fallback() {
     let output = EvalOutput::single(NetworkResult::Float(42.0));
 
-    // No display overrides set — get_display falls back to wire result
+    // No display overrides set â€” get_display falls back to wire result
     assert!(matches!(output.get_display(0), NetworkResult::Float(v) if v == 42.0));
 }
 
@@ -1342,8 +1342,8 @@ mod resolve_output_type_tests {
 
         let src = make_node(1, "src_float", 0);
         let mut poly = make_node(2, "poly", 2);
-        // Wire src (pin 0) → poly.arguments[0] ("in")
-        poly.arguments[0].argument_output_pins.insert(1, 0);
+        // Wire src (pin 0) â†’ poly.arguments[0] ("in")
+        poly.arguments[0].set_source(1, 0);
         network.nodes.insert(1, src);
         network.nodes.insert(2, poly);
 
@@ -1369,8 +1369,8 @@ mod resolve_output_type_tests {
 
         let src = make_node(1, "src_float_array", 0);
         let mut poly = make_node(2, "poly", 2);
-        // Wire src (pin 0, Array[Float]) → poly.arguments[1] ("arr")
-        poly.arguments[1].argument_output_pins.insert(1, 0);
+        // Wire src (pin 0, Array[Float]) â†’ poly.arguments[1] ("arr")
+        poly.arguments[1].set_source(1, 0);
         network.nodes.insert(1, src);
         network.nodes.insert(2, poly);
 
@@ -1387,7 +1387,7 @@ mod resolve_output_type_tests {
 
         let src = make_node(1, "src_float", 0);
         let mut poly = make_node(2, "poly", 2);
-        poly.arguments[1].argument_output_pins.insert(1, 0);
+        poly.arguments[1].set_source(1, 0);
         network.nodes.insert(1, src);
         network.nodes.insert(2, poly);
 
@@ -1435,7 +1435,7 @@ mod resolve_output_type_tests {
     // A pin declared as `SameAsInput { fallback_if_disconnected: Some(t) }`
     // resolves to `t` when the named input has zero connections. The resolver
     // also reports `via_fallback = true` so the API/UI can label the type as
-    // "default — no input connected".
+    // "default â€” no input connected".
 
     /// Toy registry with a `poly_with_default` node type whose `mirror` pin is
     /// `SameAsInput("in", default = Molecule)`. Used to exercise the fallback
@@ -1491,13 +1491,13 @@ mod resolve_output_type_tests {
     #[test]
     fn connected_input_takes_precedence_over_fallback() {
         // When the input *is* wired, the upstream concrete type wins and
-        // via_fallback is false — the fallback is only a safety net.
+        // via_fallback is false â€” the fallback is only a safety net.
         let registry = build_fallback_registry();
         let mut network = empty_network();
 
         let src = make_node(1, "src_float", 0);
         let mut poly = make_node(2, "poly_with_default", 1);
-        poly.arguments[0].argument_output_pins.insert(1, 0);
+        poly.arguments[0].set_source(1, 0);
         network.nodes.insert(1, src);
         network.nodes.insert(2, poly);
 

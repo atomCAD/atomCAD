@@ -1,4 +1,4 @@
-//! Type-system + wire-validation tests for `Iter[T]` (Phase 1 of
+﻿//! Type-system + wire-validation tests for `Iter[T]` (Phase 1 of
 //! `doc/design_iterators.md`).
 //!
 //! Coverage:
@@ -63,7 +63,7 @@ fn iter_to_iter_with_different_element_types_is_rejected() {
     let dst = DataType::Iterator(Box::new(DataType::Float));
     assert!(
         !DataType::can_be_converted_to(&src, &dst, &registry),
-        "Iter[Int] → Iter[Float] is reserved for a follow-up; not implicit in v1"
+        "Iter[Int] â†’ Iter[Float] is reserved for a follow-up; not implicit in v1"
     );
 }
 
@@ -74,7 +74,7 @@ fn iter_to_array_is_rejected() {
     let dst = DataType::Array(Box::new(DataType::Int));
     assert!(
         !DataType::can_be_converted_to(&src, &dst, &registry),
-        "Iter[T] → [T] requires an explicit `collect` node"
+        "Iter[T] â†’ [T] requires an explicit `collect` node"
     );
 }
 
@@ -88,7 +88,7 @@ fn iter_to_scalar_is_rejected() {
 
 #[test]
 fn iter_inside_array_disallowed_widening_to_array_only_iter() {
-    // `[Iter[Int]] → [Int]` would require unwrapping the iterator at every
+    // `[Iter[Int]] â†’ [Int]` would require unwrapping the iterator at every
     // element, which is not an implicit conversion.
     let registry = NodeTypeRegistry::new();
     let src = DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int))));
@@ -127,7 +127,7 @@ fn array_of_iter_parses() {
 
 #[test]
 fn bare_iter_without_brackets_is_rejected() {
-    // `Iter` alone is not a valid type — the bracket is mandatory.
+    // `Iter` alone is not a valid type â€” the bracket is mandatory.
     assert!(DataType::from_string("Iter").is_err());
 }
 
@@ -208,7 +208,7 @@ mod closure_capture_validation {
     /// Override an `expr` node's parameter list with a single parameter of
     /// the given `data_type`. We do this programmatically rather than through
     /// the text-format editor because the text-format `data_type:` literal
-    /// only accepts a single identifier — `Iter[Int]` cannot be expressed
+    /// only accepts a single identifier â€” `Iter[Int]` cannot be expressed
     /// there in v1 (this could be relaxed in a follow-up).
     fn set_expr_single_parameter(
         designer: &mut StructureDesigner,
@@ -256,9 +256,7 @@ mod closure_capture_validation {
         while dst_node.arguments.len() <= dst_arg_index {
             dst_node.arguments.push(Default::default());
         }
-        dst_node.arguments[dst_arg_index]
-            .argument_output_pins
-            .insert(src_node_id, src_pin_index);
+        dst_node.arguments[dst_arg_index].set_source(src_node_id, src_pin_index);
     }
 
     /// An `expr` whose parameter is `Iter[Int]`. Wire the `expr`'s function
@@ -266,8 +264,8 @@ mod closure_capture_validation {
     /// wire because the captured value-pin type contains `Iter[T]`.
     ///
     /// Phase 4 note: prior to flipping `map.xs` to `Iter[T]`, the test also
-    /// wired `range → map.xs` as scaffolding. Post-Phase 4, that wire would
-    /// be a different type mismatch (`Iter[Int] → Iter[Float]`) which fires
+    /// wired `range â†’ map.xs` as scaffolding. Post-Phase 4, that wire would
+    /// be a different type mismatch (`Iter[Int] â†’ Iter[Float]`) which fires
     /// before the closure-capture check; we drop it so the closure-capture
     /// error is the one that surfaces.
     #[test]
@@ -287,7 +285,7 @@ mod closure_capture_validation {
             DataType::Iterator(Box::new(DataType::Int)),
         );
 
-        // Connect expr's function pin (-1) → map.f (param 1). map.xs is left
+        // Connect expr's function pin (-1) â†’ map.f (param 1). map.xs is left
         // unconnected on purpose (see header comment).
         connect(&mut designer, "net_iter_capture", expr_id, -1, map_id, 1);
 
@@ -393,7 +391,7 @@ fn cli_top_level_parameter_with_iter_type_is_flagged() {
     // `cli_runner::parse_cli_parameters` checks `contains_iterator(&param_def.data_type)`
     // before parsing and returns an explanatory error mentioning `Iter[T]` and
     // `collect`. If `contains_iterator` ever returns false for a declared
-    // `Iter` type, the CLI rejection silently disappears — so lock the
+    // `Iter` type, the CLI rejection silently disappears â€” so lock the
     // predicate's behavior in here.
     assert!(contains_iterator(&DataType::Iterator(Box::new(
         DataType::Int

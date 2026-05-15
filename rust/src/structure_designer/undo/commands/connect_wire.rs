@@ -21,7 +21,7 @@ impl UndoCommand for ConnectWireCommand {
             // Remove the wire we added
             if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id) {
                 if let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
-                    arg.argument_output_pins.remove(&self.wire.source_node_id);
+                    arg.remove_source(self.wire.source_node_id);
                 }
             }
 
@@ -29,8 +29,7 @@ impl UndoCommand for ConnectWireCommand {
             if let Some(replaced) = &self.replaced_wire {
                 if let Some(dest_node) = network.nodes.get_mut(&replaced.dest_node_id) {
                     if let Some(arg) = dest_node.arguments.get_mut(replaced.dest_param_index) {
-                        arg.argument_output_pins
-                            .insert(replaced.source_node_id, replaced.source_output_pin_index);
+                        arg.set_source(replaced.source_node_id, replaced.source_output_pin_index);
                     }
                 }
             }
@@ -43,7 +42,7 @@ impl UndoCommand for ConnectWireCommand {
             if self.replaced_wire.is_some() {
                 if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id) {
                     if let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
-                        arg.argument_output_pins.clear();
+                        arg.clear();
                     }
                 }
             }
@@ -51,8 +50,7 @@ impl UndoCommand for ConnectWireCommand {
             // Re-establish the wire
             if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id) {
                 if let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
-                    arg.argument_output_pins
-                        .insert(self.wire.source_node_id, self.wire.source_output_pin_index);
+                    arg.set_source(self.wire.source_node_id, self.wire.source_output_pin_index);
                 }
             }
         }
