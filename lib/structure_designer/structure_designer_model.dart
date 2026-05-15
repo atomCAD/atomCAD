@@ -1324,6 +1324,26 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Returns the editable (simple-typed) fields of a `record_construct`
+  /// node's chosen schema, or `null` if the node is not `record_construct`
+  /// or its schema is empty / dangling. An empty list means a schema with no
+  /// simple-typed fields.
+  List<APILiteralField>? getRecordConstructFields(BigInt nodeId) =>
+      structure_designer_api.getRecordConstructFields(nodeId: nodeId);
+
+  void setRecordConstructLiteral(
+      BigInt nodeId, String fieldName, APILiteralValue value) {
+    structure_designer_api.setRecordConstructLiteral(
+        nodeId: nodeId, fieldName: fieldName, value: value);
+    refreshFromKernel();
+  }
+
+  void clearRecordConstructLiteral(BigInt nodeId, String fieldName) {
+    structure_designer_api.clearRecordConstructLiteral(
+        nodeId: nodeId, fieldName: fieldName);
+    refreshFromKernel();
+  }
+
   void setIvec2Data(BigInt nodeId, APIIVec2Data data) {
     structure_designer_api.setIvec2Data(nodeId: nodeId, data: data);
     refreshFromKernel();
