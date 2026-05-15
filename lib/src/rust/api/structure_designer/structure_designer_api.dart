@@ -640,7 +640,9 @@ void setStringData({required BigInt nodeId, required APIStringData data}) =>
 /// Writes the `schema` property of a `record_construct` node. After the
 /// write, the node-network refresh re-runs the registry-aware cache
 /// populator, which rebuilds the per-field input pin layout from the chosen
-/// def. An empty string clears the schema.
+/// def. An empty string clears the schema. Preserves any existing
+/// `literal_values` — entries whose keys no longer match a current field of
+/// the new def are inert (see `RecordConstructData::literal_values`).
 void setRecordConstructData(
         {required BigInt nodeId, required APIRecordSchemaData data}) =>
     RustLib.instance.api
@@ -903,7 +905,7 @@ void setParameterData(
 ///
 /// Runs through `with_mut_cad_instance`: resolving each parameter's default
 /// (`resolve_parameter_default`) evaluates the subnetwork and needs `&mut`.
-List<APICustomNodeParam>? getCustomNodeParams({required BigInt nodeId}) =>
+List<APILiteralField>? getCustomNodeParams({required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiGetCustomNodeParams(
             nodeId: nodeId);
@@ -926,6 +928,37 @@ void clearCustomNodeLiteral(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiClearCustomNodeLiteral(
             nodeId: nodeId, paramName: paramName);
+
+/// Returns `None` if `node_id` is not a `record_construct` node, or if its
+/// chosen `schema` is empty / not in the registry. Returns `Some(vec)` —
+/// possibly empty — listing only the def's simple-typed fields, in authored
+/// field order.
+///
+/// Pure read — `&self`, no subnetwork evaluation. Safe to call on every
+/// panel rebuild.
+List<APILiteralField>? getRecordConstructFields({required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetRecordConstructFields(
+            nodeId: nodeId);
+
+/// Inserts/updates `RecordConstructData.literal_values[field_name]`. Routes
+/// through `set_node_network_data`, picking up the existing `SetNodeData`
+/// undo command and `refresh_structure_designer_auto` for free.
+void setRecordConstructLiteral(
+        {required BigInt nodeId,
+        required String fieldName,
+        required APILiteralValue value}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetRecordConstructLiteral(
+            nodeId: nodeId, fieldName: fieldName, value: value);
+
+/// Removes `RecordConstructData.literal_values[field_name]`. Same
+/// `set_node_network_data` path as `set_record_construct_literal`.
+void clearRecordConstructLiteral(
+        {required BigInt nodeId, required String fieldName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiClearRecordConstructLiteral(
+            nodeId: nodeId, fieldName: fieldName);
 
 void setMapData({required BigInt nodeId, required APIMapData data}) =>
     RustLib.instance.api

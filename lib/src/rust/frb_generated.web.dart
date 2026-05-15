@@ -106,9 +106,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICuboidData dco_decode_api_cuboid_data(dynamic raw);
 
   @protected
-  APICustomNodeParam dco_decode_api_custom_node_param(dynamic raw);
-
-  @protected
   APIDataType dco_decode_api_data_type(dynamic raw);
 
   @protected
@@ -200,6 +197,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APILatticeVecsData dco_decode_api_lattice_vecs_data(dynamic raw);
+
+  @protected
+  APILiteralField dco_decode_api_literal_field(dynamic raw);
 
   @protected
   APILiteralValue dco_decode_api_literal_value(dynamic raw);
@@ -702,13 +702,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
 
   @protected
-  List<APICustomNodeParam> dco_decode_list_api_custom_node_param(dynamic raw);
-
-  @protected
   List<APIExprParameter> dco_decode_list_api_expr_parameter(dynamic raw);
 
   @protected
   List<APIFacet> dco_decode_list_api_facet(dynamic raw);
+
+  @protected
+  List<APILiteralField> dco_decode_list_api_literal_field(dynamic raw);
 
   @protected
   List<APIMotifParameterInfo> dco_decode_list_api_motif_parameter_info(
@@ -1068,8 +1068,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
-  List<APICustomNodeParam>? dco_decode_opt_list_api_custom_node_param(
-      dynamic raw);
+  List<APILiteralField>? dco_decode_opt_list_api_literal_field(dynamic raw);
 
   @protected
   List<APINetworkWithValidationErrors>?
@@ -1230,10 +1229,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer);
 
   @protected
-  APICustomNodeParam sse_decode_api_custom_node_param(
-      SseDeserializer deserializer);
-
-  @protected
   APIDataType sse_decode_api_data_type(SseDeserializer deserializer);
 
   @protected
@@ -1331,6 +1326,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APILatticeVecsData sse_decode_api_lattice_vecs_data(
       SseDeserializer deserializer);
+
+  @protected
+  APILiteralField sse_decode_api_literal_field(SseDeserializer deserializer);
 
   @protected
   APILiteralValue sse_decode_api_literal_value(SseDeserializer deserializer);
@@ -1925,15 +1923,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  List<APICustomNodeParam> sse_decode_list_api_custom_node_param(
-      SseDeserializer deserializer);
-
-  @protected
   List<APIExprParameter> sse_decode_list_api_expr_parameter(
       SseDeserializer deserializer);
 
   @protected
   List<APIFacet> sse_decode_list_api_facet(SseDeserializer deserializer);
+
+  @protected
+  List<APILiteralField> sse_decode_list_api_literal_field(
+      SseDeserializer deserializer);
 
   @protected
   List<APIMotifParameterInfo> sse_decode_list_api_motif_parameter_info(
@@ -2367,7 +2365,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
-  List<APICustomNodeParam>? sse_decode_opt_list_api_custom_node_param(
+  List<APILiteralField>? sse_decode_opt_list_api_literal_field(
       SseDeserializer deserializer);
 
   @protected
@@ -2547,10 +2545,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_cuboid_data(APICuboidData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_api_custom_node_param(
-      APICustomNodeParam self, SseSerializer serializer);
-
-  @protected
   void sse_encode_api_data_type(APIDataType self, SseSerializer serializer);
 
   @protected
@@ -2664,6 +2658,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_lattice_vecs_data(
       APILatticeVecsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_literal_field(
+      APILiteralField self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_literal_value(
@@ -3279,15 +3277,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APICandidateNode> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_api_custom_node_param(
-      List<APICustomNodeParam> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_list_api_expr_parameter(
       List<APIExprParameter> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_facet(List<APIFacet> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_literal_field(
+      List<APILiteralField> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_motif_parameter_info(
@@ -3727,8 +3725,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_list_api_custom_node_param(
-      List<APICustomNodeParam>? self, SseSerializer serializer);
+  void sse_encode_opt_list_api_literal_field(
+      List<APILiteralField>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_api_network_with_validation_errors(

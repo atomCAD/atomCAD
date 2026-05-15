@@ -276,3 +276,6 @@ mod print_node_test;
 
 #[path = "structure_designer/custom_node_property_panel_test.rs"]
 mod custom_node_property_panel_test;
+
+#[path = "structure_designer/record_construct_property_panel_test.rs"]
+mod record_construct_property_panel_test;

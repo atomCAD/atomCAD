@@ -519,53 +519,6 @@ class APICuboidData {
           extent == other.extent;
 }
 
-/// One editable parameter (input pin) of a custom node, surfaced for the
-/// auto-generated property panel.
-class APICustomNodeParam {
-  final String name;
-  final APISimpleParamType dataType;
-
-  /// The literal currently stored in `CustomNodeData.literal_values`, if any
-  /// AND it still matches `data_type`. `None` ⇒ render the placeholder.
-  final APILiteralValue? storedValue;
-
-  /// The value the parameter node's `default` input pin resolves to, used as
-  /// the field placeholder. `None` when the default pin is unconnected or
-  /// evaluation fails / yields a non-simple type.
-  final APILiteralValue? defaultValue;
-
-  /// True when the parent pin has a wire connected. When true the row renders
-  /// disabled.
-  final bool isWired;
-
-  const APICustomNodeParam({
-    required this.name,
-    required this.dataType,
-    this.storedValue,
-    this.defaultValue,
-    required this.isWired,
-  });
-
-  @override
-  int get hashCode =>
-      name.hashCode ^
-      dataType.hashCode ^
-      storedValue.hashCode ^
-      defaultValue.hashCode ^
-      isWired.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is APICustomNodeParam &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          dataType == other.dataType &&
-          storedValue == other.storedValue &&
-          defaultValue == other.defaultValue &&
-          isWired == other.isWired;
-}
-
 class APIDataType {
   final APIDataTypeBase dataTypeBase;
 
@@ -1469,6 +1422,62 @@ class APILatticeVecsData {
           cellAngleBeta == other.cellAngleBeta &&
           cellAngleGamma == other.cellAngleGamma &&
           crystalSystem == other.crystalSystem;
+}
+
+/// One editable input pin of a node that supports inline literal editing,
+/// surfaced for the auto-generated property panel. Used by both
+/// `CustomNodeEditor` (custom-node parameters) and `RecordConstructEditor`
+/// (record-construct fields).
+///
+/// `default_value` carries a uniform semantic across both call sites: it is
+/// `Some(..)` iff a resolvable default layer exists behind the pin. For
+/// custom nodes this is the value produced by the parameter node's `default`
+/// input pin; for `record_construct` it is always `None` (no default layer).
+class APILiteralField {
+  final String name;
+  final APISimpleParamType dataType;
+
+  /// The literal currently stored in the owning node's `literal_values`
+  /// map, if any AND it still matches `data_type`. `None` ⇒ render the
+  /// placeholder.
+  final APILiteralValue? storedValue;
+
+  /// The value of the default layer (if any), used as the field
+  /// placeholder. `None` when there is no default layer (record_construct)
+  /// or the default pin is unconnected / evaluation fails / yields a
+  /// non-simple type.
+  final APILiteralValue? defaultValue;
+
+  /// True when the parent pin has a wire connected. When true the row renders
+  /// disabled.
+  final bool isWired;
+
+  const APILiteralField({
+    required this.name,
+    required this.dataType,
+    this.storedValue,
+    this.defaultValue,
+    required this.isWired,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      dataType.hashCode ^
+      storedValue.hashCode ^
+      defaultValue.hashCode ^
+      isWired.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APILiteralField &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          dataType == other.dataType &&
+          storedValue == other.storedValue &&
+          defaultValue == other.defaultValue &&
+          isWired == other.isWired;
 }
 
 @freezed

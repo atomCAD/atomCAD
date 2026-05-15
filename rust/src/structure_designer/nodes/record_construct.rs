@@ -22,6 +22,13 @@ pub struct RecordConstructData {
     /// means "no schema chosen yet".
     #[serde(default)]
     pub schema: String,
+
+    /// Per-field stored literal values, consulted in `eval` when the
+    /// corresponding input pin is unwired. Keyed by field name. Entries whose
+    /// key isn't a current field of the chosen def are inert (orphan-tolerant):
+    /// `eval` ignores them and the property-panel getter does not surface them.
+    #[serde(default)]
+    pub literal_values: HashMap<String, TextValue>,
 }
 
 impl NodeData for RecordConstructData {
@@ -56,17 +63,52 @@ impl NodeData for RecordConstructData {
             return EvalOutput::single(NetworkResult::None);
         };
 
+        // Resolve `node` for the wire-state check below. Should always succeed
+        // — we are mid-eval on this node — but bail defensively.
+        let Some(node) = network_stack
+            .last()
+            .and_then(|frame| frame.node_network.nodes.get(&node_id))
+        else {
+            return EvalOutput::single(NetworkResult::None);
+        };
+
         // Walk the def's authored fields in order; the parameter pin layout
         // matches that order (set by the registry-aware cache populator).
         let mut fields: Vec<(String, NetworkResult)> = Vec::with_capacity(def.fields.len());
-        for (param_index, (field_name, _)) in def.fields.iter().enumerate() {
-            let value = network_evaluator.evaluate_arg(
-                network_stack,
-                node_id,
-                registry,
-                context,
-                param_index,
-            );
+        for (param_index, (field_name, field_type)) in def.fields.iter().enumerate() {
+            // Wired > literal > pass-None-through. A wired pin always wins;
+            // an unwired pin with a stored literal uses that literal (if it
+            // still coerces to the field type); otherwise we fall through to
+            // `evaluate_arg`, which on an unwired pin yields None and
+            // short-circuits the whole record below.
+            let wired = node
+                .arguments
+                .get(param_index)
+                .map(|arg| !arg.is_empty())
+                .unwrap_or(false);
+            let value = if wired {
+                network_evaluator.evaluate_arg(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    param_index,
+                )
+            } else if let Some(literal) = self
+                .literal_values
+                .get(field_name)
+                .and_then(|tv| tv.to_network_result(field_type))
+            {
+                literal
+            } else {
+                network_evaluator.evaluate_arg(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    param_index,
+                )
+            };
             match &value {
                 NetworkResult::None => return EvalOutput::single(NetworkResult::None),
                 NetworkResult::Error(_) => return EvalOutput::single(value),

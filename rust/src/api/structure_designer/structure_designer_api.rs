@@ -6,7 +6,7 @@ use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
-use super::structure_designer_api_types::APICustomNodeParam;
+use super::structure_designer_api_types::APILiteralField;
 use super::structure_designer_api_types::APIDataType;
 use super::structure_designer_api_types::APIDragSource;
 use super::structure_designer_api_types::APIExecuteResult;
@@ -3666,13 +3666,23 @@ pub fn set_string_data(node_id: u64, data: APIStringData) {
 /// Writes the `schema` property of a `record_construct` node. After the
 /// write, the node-network refresh re-runs the registry-aware cache
 /// populator, which rebuilds the per-field input pin layout from the chosen
-/// def. An empty string clears the schema.
+/// def. An empty string clears the schema. Preserves any existing
+/// `literal_values` — entries whose keys no longer match a current field of
+/// the new def are inert (see `RecordConstructData::literal_values`).
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_record_construct_data(node_id: u64, data: APIRecordSchemaData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            let existing = cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|network| network.nodes.get(&node_id))
+                .and_then(|node| node.data.as_any_ref().downcast_ref::<RecordConstructData>())
+                .cloned()
+                .unwrap_or_default();
             let record_data = Box::new(RecordConstructData {
                 schema: data.schema,
+                literal_values: existing.literal_values,
             });
             cad_instance
                 .structure_designer
@@ -4628,7 +4638,7 @@ fn api_literal_to_text_value(value: APILiteralValue) -> TextValue {
 /// Runs through `with_mut_cad_instance`: resolving each parameter's default
 /// (`resolve_parameter_default`) evaluates the subnetwork and needs `&mut`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APICustomNodeParam>> {
+pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APILiteralField>> {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -4683,7 +4693,7 @@ pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APICustomNodeParam>> {
                     let default_value = sd
                         .resolve_parameter_default(&subnetwork_name, &name)
                         .and_then(|nr| network_result_to_api_literal(&nr, &data_type));
-                    result.push(APICustomNodeParam {
+                    result.push(APILiteralField {
                         name,
                         data_type: simple_type,
                         stored_value,
@@ -4740,6 +4750,110 @@ pub fn clear_custom_node_literal(node_id: u64, param_name: String) {
                 return;
             };
             data.literal_values.remove(&param_name);
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, Box::new(data));
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Returns `None` if `node_id` is not a `record_construct` node, or if its
+/// chosen `schema` is empty / not in the registry. Returns `Some(vec)` —
+/// possibly empty — listing only the def's simple-typed fields, in authored
+/// field order.
+///
+/// Pure read — `&self`, no subnetwork evaluation. Safe to call on every
+/// panel rebuild.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_record_construct_fields(node_id: u64) -> Option<Vec<APILiteralField>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let sd = &cad_instance.structure_designer;
+                let network = sd.get_active_node_network()?;
+                let node = network.nodes.get(&node_id)?;
+                if node.node_type_name != "record_construct" {
+                    return None;
+                }
+                let data = node
+                    .data
+                    .as_any_ref()
+                    .downcast_ref::<RecordConstructData>()?;
+                let def = sd.node_type_registry.lookup_record_type_def(&data.schema)?;
+
+                let mut result = Vec::new();
+                for (i, (field_name, field_type)) in def.fields.iter().enumerate() {
+                    let Some(simple_type) = data_type_to_simple_param_type(field_type) else {
+                        continue;
+                    };
+                    let is_wired = node
+                        .arguments
+                        .get(i)
+                        .map(|arg| !arg.is_empty())
+                        .unwrap_or(false);
+                    let stored_value = data
+                        .literal_values
+                        .get(field_name)
+                        .and_then(|tv| text_value_to_api_literal(tv, field_type));
+                    result.push(APILiteralField {
+                        name: field_name.clone(),
+                        data_type: simple_type,
+                        stored_value,
+                        // No default layer for record_construct fields.
+                        default_value: None,
+                        is_wired,
+                    });
+                }
+                Some(result)
+            },
+            None,
+        )
+    }
+}
+
+/// Inserts/updates `RecordConstructData.literal_values[field_name]`. Routes
+/// through `set_node_network_data`, picking up the existing `SetNodeData`
+/// undo command and `refresh_structure_designer_auto` for free.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_record_construct_literal(node_id: u64, field_name: String, value: APILiteralValue) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let existing = cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|network| network.nodes.get(&node_id))
+                .and_then(|node| node.data.as_any_ref().downcast_ref::<RecordConstructData>())
+                .cloned();
+            let Some(mut data) = existing else {
+                return;
+            };
+            data.literal_values
+                .insert(field_name, api_literal_to_text_value(value));
+            cad_instance
+                .structure_designer
+                .set_node_network_data(node_id, Box::new(data));
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Removes `RecordConstructData.literal_values[field_name]`. Same
+/// `set_node_network_data` path as `set_record_construct_literal`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_record_construct_literal(node_id: u64, field_name: String) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let existing = cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|network| network.nodes.get(&node_id))
+                .and_then(|node| node.data.as_any_ref().downcast_ref::<RecordConstructData>())
+                .cloned();
+            let Some(mut data) = existing else {
+                return;
+            };
+            data.literal_values.remove(&field_name);
             cad_instance
                 .structure_designer
                 .set_node_network_data(node_id, Box::new(data));

@@ -152,6 +152,7 @@ fn record_construct_pins_match_authored_field_order() {
         id,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -184,6 +185,7 @@ fn record_destructure_pins_match_authored_field_order() {
         id,
         Box::new(RecordDestructureData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -234,6 +236,7 @@ fn construct_destructure_round_trip() {
         construct,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -244,6 +247,7 @@ fn construct_destructure_round_trip() {
         destructure,
         Box::new(RecordDestructureData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -293,6 +297,7 @@ fn construct_emits_record_in_canonical_order() {
         construct,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -339,6 +344,7 @@ fn nested_def_construct_and_destructure() {
         inner,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -349,6 +355,7 @@ fn nested_def_construct_and_destructure() {
         outer,
         Box::new(RecordConstructData {
             schema: "Box".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -359,6 +366,7 @@ fn nested_def_construct_and_destructure() {
         unbox,
         Box::new(RecordDestructureData {
             schema: "Box".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -369,6 +377,7 @@ fn nested_def_construct_and_destructure() {
         unpoint,
         Box::new(RecordDestructureData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -411,6 +420,7 @@ fn missing_input_makes_construct_output_none() {
         construct,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -442,6 +452,7 @@ fn missing_input_propagates_through_destructure() {
         destructure,
         Box::new(RecordDestructureData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -494,6 +505,7 @@ fn destructure_passes_through_extra_fields() {
         construct3,
         Box::new(RecordConstructData {
             schema: "Point3".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -505,6 +517,7 @@ fn destructure_passes_through_extra_fields() {
         destructure,
         Box::new(RecordDestructureData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 
@@ -552,6 +565,7 @@ fn empty_schema_construct_returns_none() {
         id,
         Box::new(RecordConstructData {
             schema: "".to_string(),
+            ..Default::default()
         }),
     );
     designer.validate_active_network();
@@ -569,6 +583,7 @@ fn empty_schema_destructure_returns_none() {
         id,
         Box::new(RecordDestructureData {
             schema: "".to_string(),
+            ..Default::default()
         }),
     );
     designer.validate_active_network();
@@ -596,6 +611,7 @@ fn dangling_schema_after_delete_disconnects_downstream() {
         construct,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
     designer.validate_active_network();
@@ -663,6 +679,7 @@ fn field_rename_disconnects_old_pin_wires() {
         construct,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
     designer.validate_active_network();
@@ -726,6 +743,7 @@ fn retyping_field_disconnects_now_incompatible_wire() {
         construct,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
     designer.validate_active_network();
@@ -787,6 +805,7 @@ fn rename_def_updates_record_node_pin_layout() {
         id,
         Box::new(RecordConstructData {
             schema: "Point".to_string(),
+            ..Default::default()
         }),
     );
 

@@ -29,7 +29,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 class CustomNodeEditor extends StatelessWidget {
   final BigInt nodeId;
   final String nodeTypeName;
-  final List<APICustomNodeParam> params;
+  final List<APILiteralField> params;
   final StructureDesignerModel model;
 
   const CustomNodeEditor({
@@ -67,7 +67,7 @@ class CustomNodeEditor extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(BuildContext context, APICustomNodeParam param) {
+  Widget _buildRow(BuildContext context, APILiteralField param) {
     final effective = param.storedValue ??
         param.defaultValue ??
         _typeZero(param.dataType);
@@ -138,13 +138,13 @@ class CustomNodeEditor extends StatelessWidget {
     );
   }
 
-  void _set(APICustomNodeParam param, APILiteralValue value) {
+  void _set(APILiteralField param, APILiteralValue value) {
     model.setCustomNodeLiteral(nodeId, param.name, value);
   }
 
   Widget _buildInput(
     BuildContext context,
-    APICustomNodeParam param,
+    APILiteralField param,
     APILiteralValue effective,
   ) {
     final inputKey = Key('custom_param_input_${param.name}');
@@ -213,7 +213,7 @@ class CustomNodeEditor extends StatelessWidget {
     }
   }
 
-  Widget _buildIMat3(APICustomNodeParam param, List<Int32List> m) {
+  Widget _buildIMat3(APILiteralField param, List<Int32List> m) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -248,7 +248,7 @@ class CustomNodeEditor extends StatelessWidget {
     );
   }
 
-  Widget _buildMat3(APICustomNodeParam param, List<Float64List> m) {
+  Widget _buildMat3(APILiteralField param, List<Float64List> m) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

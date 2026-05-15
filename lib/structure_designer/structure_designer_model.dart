@@ -1308,7 +1308,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Returns the editable (simple-typed) parameters of a custom node, or
   /// `null` if `nodeId` is not a custom node. An empty list means a custom
   /// node with no simple-typed parameters.
-  List<APICustomNodeParam>? getCustomNodeParams(BigInt nodeId) =>
+  List<APILiteralField>? getCustomNodeParams(BigInt nodeId) =>
       structure_designer_api.getCustomNodeParams(nodeId: nodeId);
 
   void setCustomNodeLiteral(
