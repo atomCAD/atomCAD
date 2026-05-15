@@ -437,6 +437,8 @@ Molecule inputs are rejected (use free_rot for free-space rotation)."
             },
         ],
         output_pins: OutputPinDefinition::single_same_as("input"),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || {
             Box::new(StructureRotData {

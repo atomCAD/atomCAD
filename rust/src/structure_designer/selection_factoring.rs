@@ -411,6 +411,8 @@ pub fn create_subnetwork_from_selection(
         category: NodeTypeCategory::Custom,
         parameters,
         output_pins: OutputPinDefinition::single(output_type),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,
@@ -444,6 +446,8 @@ pub fn create_subnetwork_from_selection(
             arguments: old_node.arguments.clone(), // Will rewire below
             data: old_node.data.clone_box(),
             custom_node_type: old_node.custom_node_type.clone(),
+            zone: old_node.zone.clone(),
+            zone_output_arguments: old_node.zone_output_arguments.clone(),
         };
         new_network.nodes.insert(new_id, new_node);
 
@@ -492,6 +496,8 @@ pub fn create_subnetwork_from_selection(
             arguments: vec![Argument::new()], // Default input
             data: Box::new(param_data),
             custom_node_type: None,
+            zone: None,
+            zone_output_arguments: Vec::new(),
         };
 
         new_network.nodes.insert(param_id, param_node);

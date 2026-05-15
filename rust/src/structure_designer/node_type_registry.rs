@@ -1051,6 +1051,11 @@ impl NodeTypeRegistry {
         for node in network.nodes.values_mut() {
             // Get the node type for this node
             if let Some(node_type) = self.get_node_type_for_node(node) {
+                // Phase 2 invariant: only zone-bearing types may carry a
+                // populated `zone` / `zone_output_arguments`. Cheap no-op in
+                // release; loud panic in debug.
+                node.debug_assert_zone_consistency(node_type);
+
                 let required_params = node_type.parameters.len();
                 let current_args = node.arguments.len();
 

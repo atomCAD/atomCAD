@@ -332,6 +332,8 @@ fn atom_composediff_node_eval_with_text_format() {
         },
         node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
         node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
     };
     let mut network = NodeNetwork::new(network_type);

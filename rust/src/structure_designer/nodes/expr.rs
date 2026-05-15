@@ -581,6 +581,8 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
       category: NodeTypeCategory::MathAndProgramming,
       parameters: vec![],
       output_pins: OutputPinDefinition::single(DataType::None), // will change based on the expression
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
       public: true,
       node_data_creator: || Box::new(ExprData {
         parameters: vec![

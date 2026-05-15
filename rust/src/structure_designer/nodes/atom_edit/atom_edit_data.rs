@@ -1997,6 +1997,8 @@ pub fn get_node_type() -> NodeType {
             ),
             OutputPinDefinition::fixed("diff", DataType::Molecule),
         ],
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new()),
         node_data_saver: |node_data, _design_dir| {
@@ -2053,6 +2055,8 @@ pub fn get_node_type_motif_edit() -> NodeType {
             OutputPinDefinition::fixed("result", DataType::Motif),
             OutputPinDefinition::fixed("diff", DataType::Molecule),
         ],
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(AtomEditData::new_motif_mode()),
         node_data_saver: |node_data, _design_dir| {

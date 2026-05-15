@@ -263,6 +263,8 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Motif,
         }],
         output_pins: OutputPinDefinition::single(DataType::Motif),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || {
             Box::new(MotifSubData {

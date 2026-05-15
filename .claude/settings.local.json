@@ -212,7 +212,8 @@
       "Bash(Select-Object Name)",
       "Read(//c/c/machine_phase_systems/flutter_cad/rust/tests/**)",
       "Read(//c/c/machine_phase_systems/flutter_cad/rust/**)",
-      "Bash(bc)"
+      "Bash(bc)",
+      "Bash(/c/Python311/python -c ' *)"
     ]
   }
 }

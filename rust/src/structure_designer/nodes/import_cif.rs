@@ -639,6 +639,8 @@ pub fn get_node_type() -> NodeType {
             OutputPinDefinition::fixed("atoms", DataType::Molecule),
             OutputPinDefinition::fixed("motif", DataType::Motif),
         ],
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(ImportCifData::new()),
         node_data_saver: import_cif_data_saver,

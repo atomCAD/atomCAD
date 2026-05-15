@@ -118,6 +118,8 @@ fn counter_unit_node_type() -> NodeType {
             data_type: DataType::Int,
         }],
         output_pins: OutputPinDefinition::single_fixed(DataType::Unit),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: false,
         node_data_creator: || Box::new(CounterUnitNodeData),
         node_data_saver: no_data_saver,
@@ -182,6 +184,8 @@ fn mixed_output_node_type() -> NodeType {
             OutputPinDefinition::fixed("value", DataType::Float),
             OutputPinDefinition::fixed("done", DataType::Unit),
         ],
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: false,
         node_data_creator: || Box::new(MixedOutputNodeData),
         node_data_saver: no_data_saver,
@@ -214,6 +218,8 @@ fn make_single_node_network(
         category: NodeTypeCategory::OtherBuiltin,
         parameters: vec![],
         output_pins: OutputPinDefinition::single(DataType::None),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || {
             Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})

@@ -230,6 +230,8 @@ The sort order property of a parameter determines the order of the parameters in
           },
       ],
       output_pins: OutputPinDefinition::single(DataType::Int), // will change based on ParameterData::data_type.
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
       public: true,
       node_data_creator: || Box::new(ParameterData {
         param_id: None,  // Will be assigned when the node is added to a network

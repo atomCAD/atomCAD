@@ -933,6 +933,8 @@ fn test_fold_text_format_roundtrip_matching_types() {
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_pins: OutputPinDefinition::single(DataType::Int),
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
@@ -1021,6 +1023,8 @@ fn test_fold_text_format_roundtrip_cross_type() {
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_pins: OutputPinDefinition::single(DataType::Int),
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})

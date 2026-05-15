@@ -480,6 +480,8 @@ Crystal inputs are rejected (exit_structure first, or use structure_rot to stay 
             },
         ],
         output_pins: OutputPinDefinition::single_same_as("input"),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || {
             Box::new(FreeRotData {

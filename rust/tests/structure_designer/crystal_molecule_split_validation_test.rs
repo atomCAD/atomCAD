@@ -26,6 +26,8 @@ fn toy_node_type(
         category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
         parameters,
         output_pins,
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,
@@ -42,6 +44,8 @@ fn make_node(id: u64, node_type_name: &str, arg_count: usize) -> Node {
         arguments: (0..arg_count).map(|_| Argument::new()).collect(),
         data: Box::new(NoData {}),
         custom_node_type: None,
+        zone: None,
+        zone_output_arguments: Vec::new(),
     }
 }
 
@@ -104,6 +108,8 @@ fn empty_network(name: &str) -> NodeNetwork {
         category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
         parameters: vec![],
         output_pins: OutputPinDefinition::single(DataType::None),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,

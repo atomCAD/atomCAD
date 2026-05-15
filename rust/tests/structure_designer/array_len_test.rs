@@ -406,6 +406,8 @@ fn test_array_len_text_format_roundtrip() {
             category: NodeTypeCategory::Custom,
             parameters: vec![],
             output_pins: OutputPinDefinition::single(DataType::Int),
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
             public: true,
             node_data_creator: || {
                 Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})

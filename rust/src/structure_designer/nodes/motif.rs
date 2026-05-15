@@ -193,6 +193,8 @@ Lines starting with `#` are comments.".to_string(),
       category: NodeTypeCategory::OtherBuiltin,
       parameters: vec![],
       output_pins: OutputPinDefinition::single(DataType::Motif),
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
       public: true,
       node_data_creator: || {
         let definition = DEFAULT_ZINCBLENDE_MOTIF_TEXT.trim().to_string();

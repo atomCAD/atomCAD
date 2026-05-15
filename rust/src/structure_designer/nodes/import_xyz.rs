@@ -228,6 +228,8 @@ It converts file paths to relative paths whenever possible (if the file is in th
         },
       ],
       output_pins: OutputPinDefinition::single(DataType::Molecule),
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
       public: true,
       node_data_creator: || Box::new(ImportXYZData::new()),
       node_data_saver: import_xyz_data_saver,

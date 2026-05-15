@@ -282,6 +282,8 @@ pub fn get_node_type() -> NodeType {
         },
       ],
       output_pins: OutputPinDefinition::single(DataType::LatticeVecs),
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
       public: true,
       node_data_creator: || Box::new(LatticeVecsData {
         cell_length_a: DIAMOND_UNIT_CELL_SIZE_ANGSTROM,

@@ -117,6 +117,8 @@ pub fn promote_node_to_parameter(
         arguments: vec![Argument::new()],
         data: Box::new(param_data),
         custom_node_type: None,
+        zone: None,
+        zone_output_arguments: Vec::new(),
     };
     param_node.set_custom_node_type(custom_type, false);
     network.nodes.insert(new_id, param_node);

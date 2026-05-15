@@ -118,6 +118,8 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::IVec3,
         }],
         output_pins: OutputPinDefinition::single(DataType::IMat3),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(IMat3DiagData::default()),
         node_data_saver: generic_node_data_saver::<IMat3DiagData>,

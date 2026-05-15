@@ -100,6 +100,8 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Crystal,
         }],
         output_pins: OutputPinDefinition::single_fixed(DataType::Blueprint),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(DematerializeData::default()),
         node_data_saver: generic_node_data_saver::<DematerializeData>,

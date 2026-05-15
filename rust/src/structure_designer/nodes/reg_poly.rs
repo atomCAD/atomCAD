@@ -210,6 +210,8 @@ Now that we have general polygon node this node is less used."
             },
         ],
         output_pins: OutputPinDefinition::single(DataType::Geometry2D),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || {
             Box::new(RegPolyData {

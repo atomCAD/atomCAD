@@ -78,6 +78,8 @@ pub fn get_node_type() -> NodeType {
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
         output_pins: OutputPinDefinition::single(DataType::String),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || {
             Box::new(StringData {

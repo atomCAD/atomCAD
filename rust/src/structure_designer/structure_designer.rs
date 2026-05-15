@@ -859,6 +859,8 @@ impl StructureDesigner {
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,
         node_data_loader: generic_node_data_loader::<CustomNodeData>,
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
       }
     ));

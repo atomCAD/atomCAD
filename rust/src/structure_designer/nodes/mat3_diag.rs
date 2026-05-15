@@ -121,6 +121,8 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Vec3,
         }],
         output_pins: OutputPinDefinition::single(DataType::Mat3),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(Mat3DiagData::default()),
         node_data_saver: generic_node_data_saver::<Mat3DiagData>,

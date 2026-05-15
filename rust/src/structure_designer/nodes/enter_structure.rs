@@ -115,6 +115,8 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: OutputPinDefinition::single_fixed(DataType::Crystal),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(EnterStructureData::default()),
         node_data_saver: generic_node_data_saver::<EnterStructureData>,

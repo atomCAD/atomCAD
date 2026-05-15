@@ -81,6 +81,8 @@ impl FunctionEvaluator {
         node_data_creator: || Box::new(NoData {}),
         node_data_saver: no_data_saver,
         node_data_loader: no_data_loader,
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: false,
       }),
       value_node_ids: Vec::new(),

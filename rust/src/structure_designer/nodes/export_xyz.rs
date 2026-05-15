@@ -220,6 +220,8 @@ pub fn get_node_type() -> NodeType {
             },
         ],
         output_pins: OutputPinDefinition::single_fixed(DataType::Unit),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(ExportXYZData::new()),
         node_data_saver: export_xyz_data_saver,

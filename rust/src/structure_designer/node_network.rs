@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use super::data_type::DataType;
 use super::node_layout;
@@ -271,6 +272,23 @@ impl<'de> Deserialize<'de> for Argument {
     }
 }
 
+/// Which argument list on the destination node a wire terminates at.
+///
+/// `External` is today's normal pin: the destination argument is in the
+/// destination node's containing network. `ZoneOutput` is an inside-facing
+/// zone-output pin on a zone-owning (HOF) node: the destination argument is
+/// in the HOF's owned body. Phase 2 lands the enum and the `Wire` view field
+/// but every wire built today is `External`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ArgumentKind {
+    /// Sourced from the destination's `arguments` (today's behavior).
+    #[default]
+    External,
+    /// Sourced from the destination's `zone_output_arguments` (HOF body
+    /// returns). Not produced in Phase 2.
+    ZoneOutput,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Wire {
     pub source_node_id: u64,
@@ -281,6 +299,10 @@ pub struct Wire {
     pub source_scope_depth: u8,
     pub destination_node_id: u64,
     pub destination_argument_index: usize,
+    /// Which argument list on the destination this wire terminates at.
+    /// Phase 2 lands the field; all wires built today use `External`.
+    #[serde(default)]
+    pub destination_argument_kind: ArgumentKind,
 }
 
 impl Wire {
@@ -301,6 +323,7 @@ impl Wire {
             source_scope_depth: 0,
             destination_node_id,
             destination_argument_index,
+            destination_argument_kind: ArgumentKind::External,
         }
     }
 
@@ -333,6 +356,7 @@ impl PartialEq for Wire {
             && self.source_scope_depth == other.source_scope_depth
             && self.destination_node_id == other.destination_node_id
             && self.destination_argument_index == other.destination_argument_index
+            && self.destination_argument_kind == other.destination_argument_kind
     }
 }
 
@@ -367,9 +391,61 @@ pub struct Node {
     pub arguments: Vec<Argument>,
     pub data: Box<dyn NodeData>,
     pub custom_node_type: Option<NodeType>,
+    /// The HOF body owned by this node. CoW-shared via `Arc` so `Node::clone`
+    /// is a refcount bump rather than a deep walk; mutation flows through
+    /// `zone_mut()` which wraps `Arc::make_mut`. Always `None` for non-HOF
+    /// node types. Phase 2 lands the field; no built-in type populates it yet.
+    pub zone: Option<Arc<NodeNetwork>>,
+    /// Wires terminating at this node's zone-output (inside-right) pins. Each
+    /// `Argument` here mirrors one zone-output pin on the node type. Empty for
+    /// every non-HOF node. Phase 2 lands the field; no built-in type populates
+    /// it yet.
+    pub zone_output_arguments: Vec<Argument>,
 }
 
 impl Node {
+    /// Mutable access to this node's owned zone body, lazily cloning under
+    /// `Arc::make_mut`. Returns `None` for nodes that don't own a zone (every
+    /// node today — Phase 2 lands the field without populating it). All body
+    /// edits must go through this accessor so callers don't reach into the
+    /// `Arc` directly and accidentally break sharing.
+    pub fn zone_mut(&mut self) -> Option<&mut NodeNetwork> {
+        self.zone.as_mut().map(|arc| Arc::make_mut(arc))
+    }
+
+    /// In debug builds, panic if this node's zone state is inconsistent with
+    /// its declared `NodeType`: non-HOF types (no zone pins) must have
+    /// `zone == None` and an empty `zone_output_arguments`. Phase 2 lands the
+    /// fields but no built-in type populates them, so the invariant should
+    /// hold trivially everywhere. Cheap in release (no-op).
+    #[inline]
+    pub fn debug_assert_zone_consistency(&self, node_type: &NodeType) {
+        if !node_type.has_zone() {
+            debug_assert!(
+                self.zone.is_none(),
+                "node {} ({}) has a populated zone but its type declares no zone pins",
+                self.id,
+                self.node_type_name
+            );
+            debug_assert!(
+                self.zone_output_arguments.is_empty(),
+                "node {} ({}) has zone_output_arguments but its type declares no zone-output pins",
+                self.id,
+                self.node_type_name
+            );
+        } else {
+            debug_assert_eq!(
+                self.zone_output_arguments.len(),
+                node_type.zone_output_pins.len(),
+                "node {} ({}) has {} zone_output_arguments but its type declares {} zone-output pins",
+                self.id,
+                self.node_type_name,
+                self.zone_output_arguments.len(),
+                node_type.zone_output_pins.len(),
+            );
+        }
+    }
+
     /// Sets the custom node type and intelligently preserves existing argument connections
     /// when parameter IDs (primary) or names (fallback) match between old and new node types
     pub fn set_custom_node_type(&mut self, custom_node_type: Option<NodeType>, refresh_args: bool) {
@@ -571,6 +647,8 @@ impl NodeNetwork {
             category: NodeTypeCategory::OtherBuiltin,
             parameters: vec![],
             output_pins: OutputPinDefinition::single(DataType::None),
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
             public: false,
             node_data_creator: || Box::new(NoData {}),
             node_data_saver: no_data_saver,
@@ -608,6 +686,8 @@ impl NodeNetwork {
 
             let cloned_data = source_node.data.clone_box();
             let cloned_arguments = source_node.arguments.clone();
+            let cloned_zone_output_arguments = source_node.zone_output_arguments.clone();
+            let cloned_zone = source_node.zone.clone();
             let custom_node_type = source_node.custom_node_type.clone();
             let node_type_name = source_node.node_type_name.clone();
             let new_position = source_node.position + position_offset;
@@ -621,6 +701,8 @@ impl NodeNetwork {
                 arguments: cloned_arguments,
                 data: cloned_data,
                 custom_node_type,
+                zone: cloned_zone,
+                zone_output_arguments: cloned_zone_output_arguments,
             };
 
             self.nodes.insert(new_id, new_node);
@@ -694,6 +776,8 @@ impl NodeNetwork {
             arguments,
             data: node_data,
             custom_node_type: None,
+            zone: None,
+            zone_output_arguments: Vec::new(),
         };
 
         self.next_node_id += 1;
@@ -726,6 +810,8 @@ impl NodeNetwork {
             arguments,
             data: node_data,
             custom_node_type: None,
+            zone: None,
+            zone_output_arguments: Vec::new(),
         };
 
         // Ensure next_node_id stays ahead of any manually assigned ID
@@ -1324,6 +1410,7 @@ impl NodeNetwork {
                                 source_scope_depth: wire.source_scope_depth,
                                 destination_node_id: node_id,
                                 destination_argument_index: param_index,
+                                destination_argument_kind: ArgumentKind::External,
                             });
                         }
                     }
@@ -1467,6 +1554,12 @@ impl NodeNetwork {
         // Clone the custom node type
         let custom_node_type = original_node.custom_node_type.clone();
 
+        // Carry the zone body and zone-output wires through duplication. The
+        // body shares storage via `Arc::clone`; mutating either copy CoW-
+        // forks lazily through `zone_mut()` / `Arc::make_mut`.
+        let cloned_zone = original_node.zone.clone();
+        let cloned_zone_output_arguments = original_node.zone_output_arguments.clone();
+
         // Generate a unique display name for the duplicated node
         let display_name = self.generate_unique_display_name(&node_type_name);
 
@@ -1479,6 +1572,8 @@ impl NodeNetwork {
             arguments: cloned_arguments,
             data: cloned_data,
             custom_node_type,
+            zone: cloned_zone,
+            zone_output_arguments: cloned_zone_output_arguments,
         };
 
         // Insert the duplicated node into the network

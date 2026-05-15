@@ -86,6 +86,8 @@ fn add_record_type_def_rejects_collision_with_node_network() {
             rust_lib_flutter_cad::structure_designer::node_type::generic_node_data_loader::<
                 rust_lib_flutter_cad::structure_designer::node_data::CustomNodeData,
             >,
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
     });
     registry.add_node_network(net);

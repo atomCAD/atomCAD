@@ -18,6 +18,7 @@ use serde_json;
 use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
+use std::sync::Arc;
 
 // The current version of the serialization format
 const SERIALIZATION_VERSION: u32 = 4;
@@ -81,6 +82,14 @@ pub struct SerializableNodeType {
     /// Old field: only read for migration from old .cnnd files. Never written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_type: Option<String>,
+    /// Inside-facing left-edge pins on a zone-owning (HOF) node type. Empty
+    /// for every node type today — reserved for the later zone phases.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zone_input_pins: Vec<SerializableOutputPin>,
+    /// Inside-facing right-edge pins on a zone-owning (HOF) node type. Empty
+    /// for every node type today — reserved for the later zone phases.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zone_output_pins: Vec<SerializableParameter>,
 }
 
 fn default_category() -> String {
@@ -136,6 +145,16 @@ pub struct SerializableNode {
     // Use a string type tag and direct JSON value for the polymorphic data
     pub data_type: String,
     pub data: serde_json::Value, // Store as native JSON value instead of a string for better readability
+    /// The owned zone body for HOF nodes. Always `None` for every node
+    /// produced by Phase 2 — the field is reserved for later phases that
+    /// rewrite `map` / `filter` / `fold` / `foreach` onto zones. `#[serde(default)]`
+    /// keeps old fixtures loadable without regeneration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zone: Option<SerializableNodeNetwork>,
+    /// Wires terminating at zone-output (inside-right) pins. Always empty for
+    /// non-HOF nodes. Phase 2 never populates this; reserved for later phases.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zone_output_arguments: Vec<Argument>,
 }
 
 /// Serializable version of NodeNetwork for JSON serialization
@@ -195,6 +214,24 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
         })
         .collect();
 
+    let serializable_zone_input_pins = node_type
+        .zone_input_pins
+        .iter()
+        .map(|pin| SerializableOutputPin {
+            name: pin.name.clone(),
+            data_type: pin.data_type.to_string(),
+        })
+        .collect();
+
+    let serializable_zone_output_pins = node_type
+        .zone_output_pins
+        .iter()
+        .map(|param| SerializableParameter {
+            name: param.name.clone(),
+            data_type: param.data_type.to_string(),
+        })
+        .collect();
+
     SerializableNodeType {
         name: node_type.name.clone(),
         description: node_type.description.clone(),
@@ -203,6 +240,8 @@ pub fn node_type_to_serializable(node_type: &NodeType) -> SerializableNodeType {
         parameters: serializable_parameters,
         output_pins: serializable_output_pins,
         output_type: None, // Old field: never written
+        zone_input_pins: serializable_zone_input_pins,
+        zone_output_pins: serializable_zone_output_pins,
     }
 }
 
@@ -265,6 +304,40 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
     // Parse category from string
     let category = category_from_string(&serializable.category);
 
+    // Parse zone pin definitions. Empty for every node type today; reserved
+    // for later phases when HOFs are rewritten on top of zones.
+    let zone_input_pins = serializable
+        .zone_input_pins
+        .iter()
+        .map(|p| {
+            let data_type = DataType::from_string(&p.data_type).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid zone-input pin type: {}", e),
+                )
+            })?;
+            Ok(OutputPinDefinition::fixed(&p.name, data_type))
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+
+    let zone_output_pins = serializable
+        .zone_output_pins
+        .iter()
+        .map(|p| {
+            let data_type = DataType::from_string(&p.data_type).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid zone-output pin type: {}", e),
+                )
+            })?;
+            Ok(Parameter {
+                id: None,
+                name: p.name.clone(),
+                data_type,
+            })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+
     // Create the NodeType with CustomNodeData to support literal parameters
     Ok(NodeType {
         name: serializable.name.clone(),
@@ -273,6 +346,8 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         category,
         parameters,
         output_pins,
+        zone_input_pins,
+        zone_output_pins,
         node_data_creator: || Box::new(CustomNodeData::default()),
         node_data_saver: generic_node_data_saver::<CustomNodeData>,
         node_data_loader: generic_node_data_loader::<CustomNodeData>,
@@ -307,6 +382,22 @@ pub fn node_to_serializable(
         ("no_data".to_string(), serde_json::json!({}))
     };
 
+    // Serialize the owned zone body (if any). Phase 2 never populates this on
+    // any node, but the path has to exist so later phases drop in transparently.
+    // `Arc::make_mut` is the cheap path here too: the saved-side body needs a
+    // mutable reference to walk node data savers, and serialization is the only
+    // caller, so the refcount at this point is 1.
+    let zone = if let Some(arc_body) = node.zone.as_mut() {
+        let body_ref = Arc::make_mut(arc_body);
+        Some(node_network_to_serializable(
+            body_ref,
+            built_in_node_types,
+            design_dir,
+        )?)
+    } else {
+        None
+    };
+
     // Create the serializable node
     Ok(SerializableNode {
         id,
@@ -316,6 +407,8 @@ pub fn node_to_serializable(
         arguments: node.arguments.clone(),
         data_type,
         data: json_data,
+        zone,
+        zone_output_arguments: node.zone_output_arguments.clone(),
     })
 }
 
@@ -340,6 +433,22 @@ pub fn serializable_to_node(
             Box::new(NoData {})
         };
 
+    // Reconstruct the owned zone body (if any) and zone-output arguments.
+    // Both are empty for every node serialized today; populated when zone-
+    // bearing HOFs land in later phases. `Arc` is per the zones design
+    // (cheap-clone semantics, CoW via `Arc::make_mut`); the runtime is
+    // single-threaded so the lack of `Send + Sync` on `NodeNetwork` is
+    // immaterial — keep the warning suppressed locally.
+    #[allow(clippy::arc_with_non_send_sync)]
+    let zone = serializable
+        .zone
+        .as_ref()
+        .map(|sn| -> io::Result<Arc<NodeNetwork>> {
+            let body = serializable_to_node_network(sn, built_in_node_types, design_dir)?;
+            Ok(Arc::new(body))
+        })
+        .transpose()?;
+
     // Create the Node instance
     Ok(Node {
         id: serializable.id,
@@ -349,6 +458,8 @@ pub fn serializable_to_node(
         arguments: serializable.arguments.clone(),
         data,
         custom_node_type: None,
+        zone,
+        zone_output_arguments: serializable.zone_output_arguments.clone(),
     })
 }
 

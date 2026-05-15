@@ -77,6 +77,8 @@ pub fn get_node_type() -> NodeType {
         category: NodeTypeCategory::MathAndProgramming,
         parameters: vec![],
         output_pins: OutputPinDefinition::single(DataType::Bool),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(BoolData { value: false }),
         node_data_saver: generic_node_data_saver::<BoolData>,

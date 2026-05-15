@@ -191,6 +191,8 @@ pub fn get_node_type() -> NodeType {
             data_type: DataType::Record(RecordType::Named(String::new())),
         }],
         output_pins: vec![OutputPinDefinition::fixed("result", DataType::None)],
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
         public: true,
         node_data_creator: || Box::new(RecordDestructureData::default()),
         node_data_saver: generic_node_data_saver::<RecordDestructureData>,

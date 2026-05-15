@@ -183,6 +183,16 @@ pub struct NodeType {
     pub category: NodeTypeCategory,
     pub parameters: Vec<Parameter>,
     pub output_pins: Vec<OutputPinDefinition>,
+    /// Inside-facing left-edge pins on a zone-owning (HOF) node. Each entry
+    /// declares an iteration value the body sees as a source. Empty for every
+    /// non-HOF node type. Reuses `OutputPinDefinition` because zone-input
+    /// pins, from the body's perspective, are sources that produce values.
+    pub zone_input_pins: Vec<OutputPinDefinition>,
+    /// Inside-facing right-edge pins on a zone-owning (HOF) node. Each entry
+    /// declares a value the body must produce. Empty for every non-HOF node
+    /// type. Reuses `Parameter` because zone-output pins, from the body's
+    /// perspective, are destinations that consume values.
+    pub zone_output_pins: Vec<Parameter>,
     pub public: bool, // whether this node type is available for users to add
     pub node_data_creator: fn() -> Box<dyn NodeData>,
     #[allow(clippy::type_complexity)]
@@ -234,6 +244,16 @@ impl NodeType {
     /// Whether this node type has multiple output pins.
     pub fn has_multi_output(&self) -> bool {
         self.output_pins.len() > 1
+    }
+
+    /// True if this node type declares any zone pins — i.e. it's a higher-order
+    /// function (HOF) node that owns an inline body. Phase 2 lands the fields
+    /// but no built-in type populates them yet, so this returns `false` for
+    /// every existing node type. The marker is used by validation invariants
+    /// to keep `Node.zone` / `Node.zone_output_arguments` consistent with the
+    /// node's declared type.
+    pub fn has_zone(&self) -> bool {
+        !self.zone_input_pins.is_empty() || !self.zone_output_pins.is_empty()
     }
 }
 

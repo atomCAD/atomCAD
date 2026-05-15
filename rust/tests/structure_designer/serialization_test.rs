@@ -33,6 +33,8 @@ fn create_serializable_node(
         arguments: vec![Argument::new()],
         data_type: node_type_name.to_string(),
         data,
+        zone: None,
+        zone_output_arguments: vec![],
     }
 }
 
@@ -50,6 +52,8 @@ fn create_serializable_network(nodes: Vec<SerializableNode>) -> SerializableNode
                 data_type: "Blueprint".to_string(),
             }],
             output_type: None,
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
         },
         nodes,
         return_node_id: None,
