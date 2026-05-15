@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
@@ -15,9 +16,9 @@ use crate::structure_designer::evaluator::network_result::error_in_input;
 use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud;
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
 use crate::structure_designer::node_data::EvalOutput;
-use crate::structure_designer::node_network::Node;
-use crate::structure_designer::node_network::NodeDisplayType;
-use crate::structure_designer::node_network::NodeNetwork;
+use crate::structure_designer::node_network::{
+    IncomingWire, Node, NodeDisplayType, NodeNetwork, SourcePin,
+};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::structure_designer_scene::{
@@ -68,6 +69,54 @@ pub struct NodeInvocationId {
     node_id_stack: Vec<u64>,
 }
 
+/// Identifies the **source side** of a pre-evaluated capture wire. Wires whose
+/// source is anywhere outside the destination body are captures — evaluated
+/// once at body entry, cached, and reused unchanged for every iteration. Multiple
+/// body-internal wires consuming the same upstream pin share one cache entry,
+/// so the key projects only the source-side fields of `IncomingWire`.
+///
+/// Phase 3 lands the type but no HOF populates the cache yet, so the lookup
+/// path is exercised only by tests.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CaptureKey {
+    pub source_node_id: u64,
+    pub source_scope_depth: u8,
+    pub source_pin: SourcePin,
+}
+
+impl CaptureKey {
+    /// Project an `IncomingWire` onto its source-side identity. Used both when
+    /// pre-evaluating captures (insert) and from `evaluate_arg`'s capture-cache
+    /// short-circuit (lookup).
+    pub fn from_incoming(incoming: &IncomingWire) -> Self {
+        Self {
+            source_node_id: incoming.source_node_id,
+            source_scope_depth: incoming.source_scope_depth,
+            source_pin: incoming.source_pin,
+        }
+    }
+}
+
+/// Build a fresh empty captures map, wrapped in `Arc`. Non-zone evaluation
+/// contexts use this for the `captured_source_values` field; it's one tiny
+/// allocation per context construction.
+///
+/// (`NetworkResult` is not `Sync` — it contains `Box<dyn NodeData>` through
+/// `Closure` and `Walker` — so a `static LazyLock<Arc<…>>` shared sentinel
+/// can't be expressed. The per-context allocation is cheap enough that the
+/// "share one empty allocation" optimization from the design doc isn't worth
+/// chasing.)
+///
+/// `Arc` (rather than `Rc`) matches the design doc and the surrounding
+/// convention in the evaluator (`Walker::FromArray` already carries
+/// `Arc<Vec<NetworkResult>>`). The evaluator is single-threaded in practice
+/// — `NetworkResult` cannot cross threads — so the `arc_with_non_send_sync`
+/// clippy lint is suppressed here.
+#[allow(clippy::arc_with_non_send_sync)]
+fn empty_captures() -> Arc<HashMap<CaptureKey, NetworkResult>> {
+    Arc::new(HashMap::new())
+}
+
 /// One entry in the per-pass print log. Produced by the `print` node (Phase 4)
 /// and by any future node that wants to surface text to the in-app Console
 /// panel. The field shape lands now (Phase 2) so the eval layer can carry the
@@ -112,6 +161,34 @@ pub struct NetworkEvaluationContext {
     /// into the outer context's buffer at end-of-call so prints from inner
     /// bodies aggregate into the single per-pass log.
     pub print_buffer: Vec<PrintLogEntry>,
+    /// HOF id ↦ stack of per-iteration frames (each frame is one
+    /// `Vec<NetworkResult>` indexed by zone-input pin). Reads always consult
+    /// the top frame (`last()`) — the innermost iterating HOF with that id.
+    /// The stack shape is load-bearing because `next_node_id` is per-network,
+    /// so an outer HOF in one network and an inner HOF in another network can
+    /// share a numeric id; without scope-stacking, a lazy walker for an inner
+    /// HOF would silently overwrite an outer's iteration value when its
+    /// `next()` runs. All push/pop/read access goes through the helper
+    /// methods on `NetworkEvaluationContext` so the discipline can't be
+    /// circumvented. See `doc/design_zones.md` (§"What's new" point 3).
+    ///
+    /// Phase 3 lands the field; no node populates it yet, so it stays empty
+    /// in every existing code path.
+    pub current_zone_input_values: HashMap<u64, Vec<Vec<NetworkResult>>>,
+    /// Pre-evaluated captures for the currently-active zone body. Populated
+    /// by the HOF's `eval` at body entry (once per HOF invocation) and
+    /// consulted from `evaluate_arg` ahead of the per-`SourcePin` dispatch so
+    /// captured upstream values are read from cache rather than re-evaluated
+    /// per iteration. `Arc`-shared so the lazy-walker per-`next()` swap is
+    /// three pointer-sized ops (`std::mem::replace` + `Arc::clone`) instead
+    /// of a HashMap clone. Non-zone evaluation contexts share one empty
+    /// allocation via `EMPTY_CAPTURES`. See `doc/design_zones.md`
+    /// (§"Capture pre-evaluation", §"Sub-context pattern for body
+    /// evaluation").
+    ///
+    /// Phase 3 lands the field; no HOF builds a captures map yet, so the
+    /// lookup path always misses in existing code.
+    pub captured_source_values: Arc<HashMap<CaptureKey, NetworkResult>>,
 }
 
 impl Default for NetworkEvaluationContext {
@@ -140,7 +217,205 @@ impl NetworkEvaluationContext {
             use_vdw_cutoff: false,
             execute: false,
             print_buffer: Vec::new(),
+            current_zone_input_values: HashMap::new(),
+            captured_source_values: empty_captures(),
         }
+    }
+
+    /// Push a fresh iteration frame onto the HOF's zone-input scope-stack.
+    /// Called by an HOF's `eval` (eager) or its `Walker::next` (lazy) at the
+    /// start of each iteration; **must** be balanced by `pop_zone_input_frame`
+    /// along every exit path including early-return on error. The debug
+    /// invariant records the new depth so a missing pop is caught at first
+    /// occurrence rather than as silent corruption a few iterations later.
+    ///
+    /// Phase 3 lands the helper; no HOF calls it yet.
+    pub fn push_zone_input_frame(&mut self, hof_id: u64, frame: Vec<NetworkResult>) {
+        self.current_zone_input_values
+            .entry(hof_id)
+            .or_default()
+            .push(frame);
+    }
+
+    /// Pop the top iteration frame from the HOF's zone-input scope-stack.
+    /// Debug-panics if the stack is empty (would indicate a missing push or
+    /// a double-pop).
+    pub fn pop_zone_input_frame(&mut self, hof_id: u64) {
+        match self.current_zone_input_values.get_mut(&hof_id) {
+            Some(stack) => {
+                let popped = stack.pop();
+                debug_assert!(
+                    popped.is_some(),
+                    "pop_zone_input_frame: stack for HOF id {} is empty",
+                    hof_id,
+                );
+                if stack.is_empty() {
+                    // Keep the map tight so the common case (no active HOF)
+                    // never leaves a stale empty Vec around.
+                    self.current_zone_input_values.remove(&hof_id);
+                }
+            }
+            None => {
+                debug_assert!(
+                    false,
+                    "pop_zone_input_frame: no entry for HOF id {}",
+                    hof_id,
+                );
+            }
+        }
+    }
+
+    /// Read the `pin_index`-th value of the top iteration frame for `hof_id`.
+    /// Debug-panics if no frame is active for this HOF — `evaluate_arg`
+    /// reaches this path only from a body-internal wire whose source is the
+    /// enclosing HOF's zone-input pin, which by construction means a frame
+    /// has been pushed.
+    pub fn current_zone_input(&self, hof_id: u64, pin_index: usize) -> &NetworkResult {
+        let stack = self
+            .current_zone_input_values
+            .get(&hof_id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "current_zone_input: no scope-stack entry for HOF id {}",
+                    hof_id
+                )
+            });
+        let frame = stack.last().unwrap_or_else(|| {
+            panic!(
+                "current_zone_input: scope-stack for HOF id {} is empty",
+                hof_id
+            )
+        });
+        frame.get(pin_index).unwrap_or_else(|| {
+            panic!(
+                "current_zone_input: pin_index {} out of range for HOF id {} frame of len {}",
+                pin_index,
+                hof_id,
+                frame.len()
+            )
+        })
+    }
+
+    /// Build an inner context for an eager HOF body's iterations
+    /// (`fold`, `foreach`). Mirrors `FunctionEvaluator::evaluate`'s
+    /// inherit-vs-fresh policy:
+    ///
+    /// **Inherited from the caller:**
+    /// - `execute`, `use_vdw_cutoff` — effects nested inside the body must
+    ///   see the same flags as the outer pass.
+    /// - `current_zone_input_values` — ancestor HOFs' scope-stacks come along
+    ///   intact; the inner body will push its own frame on top at iteration
+    ///   start and pop at iteration end.
+    ///
+    /// **Fresh:**
+    /// - `captured_source_values` — the inner body's captures are
+    ///   pre-evaluated into a separate map by its `eval` and sealed onto the
+    ///   inner context afterward; until that point the inner context shares
+    ///   the empty sentinel.
+    /// - `node_errors`, `node_output_strings`, `selected_node_eval_cache`,
+    ///   `top_level_parameters` — per-pass scratch state, scoped to the body.
+    /// - `print_buffer` — drained back into the outer context at end of call
+    ///   via [`drain_inner_context`] so prints emitted from inside the body
+    ///   aggregate into the single per-pass log.
+    ///
+    /// Phase 3 lands the helper; eager HOFs (`fold`, `foreach`) call it in
+    /// Phase 5. See `doc/design_zones.md` (§"Sub-context pattern for body
+    /// evaluation").
+    pub fn fresh_inner_for_eager_body(&self) -> Self {
+        Self {
+            node_errors: HashMap::new(),
+            node_output_strings: HashMap::new(),
+            selected_node_eval_cache: None,
+            top_level_parameters: HashMap::new(),
+            use_vdw_cutoff: self.use_vdw_cutoff,
+            execute: self.execute,
+            print_buffer: Vec::new(),
+            current_zone_input_values: self.current_zone_input_values.clone(),
+            captured_source_values: empty_captures(),
+        }
+    }
+
+    /// Drain an eager-body inner context back into this (the outer) context.
+    /// Matches the policy of [`fresh_inner_for_eager_body`]: prints are
+    /// aggregated; per-pass scratch state and the inner context's
+    /// `current_zone_input_values` are dropped (the outer context's
+    /// scope-stacks are unaffected by the inner body's push/pop cycle, which
+    /// happens entirely on `inner.current_zone_input_values`).
+    pub fn drain_inner_context(&mut self, mut inner: NetworkEvaluationContext) {
+        self.print_buffer.append(&mut inner.print_buffer);
+    }
+
+    /// Mutate the `pin_index`-th value of the top iteration frame for
+    /// `hof_id`. Convenient for `fold`'s acc-then-element per-step update
+    /// (the frame is per-call, not per-step, so the top frame's slots are
+    /// rewritten rather than a new frame pushed each iteration). Debug-panics
+    /// if no frame is active or `pin_index` is out of range.
+    pub fn write_zone_input_pin(&mut self, hof_id: u64, pin_index: usize, value: NetworkResult) {
+        let stack = self
+            .current_zone_input_values
+            .get_mut(&hof_id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "write_zone_input_pin: no scope-stack entry for HOF id {}",
+                    hof_id
+                )
+            });
+        let frame = stack.last_mut().unwrap_or_else(|| {
+            panic!(
+                "write_zone_input_pin: scope-stack for HOF id {} is empty",
+                hof_id
+            )
+        });
+        let frame_len = frame.len();
+        let slot = frame.get_mut(pin_index).unwrap_or_else(|| {
+            panic!(
+                "write_zone_input_pin: pin_index {} out of range for HOF id {} frame of len {}",
+                pin_index, hof_id, frame_len,
+            )
+        });
+        *slot = value;
+    }
+}
+
+/// RAII guard that swaps a fresh `Arc<HashMap<CaptureKey, NetworkResult>>`
+/// into a context's `captured_source_values` for the duration of a body step,
+/// restoring the caller's previous value on drop. Used by lazy walkers
+/// (`Walker::Map`/`Walker::Filter`) so each `next()` runs against the
+/// caller's context with the walker's captures visible — without paying a
+/// HashMap clone per element. Both sides share the same `Arc<HashMap<…>>`
+/// type, so swap is three pointer-sized ops:
+/// 1. `std::mem::replace` saves the caller's Arc and installs the walker's
+///    Arc.
+/// 2. On Drop, `std::mem::replace` puts the caller's Arc back and replaces
+///    the saved slot with the shared empty sentinel (so the guard's storage
+///    doesn't keep the caller's Arc alive past the restore).
+///
+/// Phase 3 lands the type; lazy walkers in later phases use it.
+pub struct CapturesGuard<'a> {
+    ctx: &'a mut NetworkEvaluationContext,
+    saved: Arc<HashMap<CaptureKey, NetworkResult>>,
+}
+
+impl<'a> CapturesGuard<'a> {
+    /// Install `new` into `ctx.captured_source_values` and return a guard
+    /// that will restore the previous value on drop. The caller passes an
+    /// already-`Arc<…>`-wrapped captures map (typically `Arc::clone(...)` of
+    /// the walker's stored `captures`) so the swap is a refcount bump.
+    pub fn swap_in(
+        ctx: &'a mut NetworkEvaluationContext,
+        new: Arc<HashMap<CaptureKey, NetworkResult>>,
+    ) -> Self {
+        let saved = std::mem::replace(&mut ctx.captured_source_values, new);
+        Self { ctx, saved }
+    }
+}
+
+impl Drop for CapturesGuard<'_> {
+    fn drop(&mut self) {
+        // Swap the saved Arc back into the context. `self.saved` then holds
+        // the installed (walker's) Arc, which drops naturally when the guard
+        // itself is dropped a moment later.
+        std::mem::swap(&mut self.ctx.captured_source_values, &mut self.saved);
     }
 }
 
@@ -866,60 +1141,40 @@ impl NetworkEvaluator {
         // Get the expected input type for this parameter
         let expected_type = registry.get_node_param_data_type(node, parameter_index);
 
-        if expected_type.is_array() {
-            let incoming_wires = &node.arguments[parameter_index].incoming_wires;
+        // Clone the wires list so we can iterate while passing
+        // `context: &mut` and `network_stack: &` into evaluate calls. The
+        // wires list is generally small (often 1) and `IncomingWire` is plain
+        // POD, so the clone is cheap.
+        let incoming_wires: Vec<IncomingWire> = node.arguments[parameter_index]
+            .incoming_wires
+            .clone();
 
+        if expected_type.is_array() {
             if incoming_wires.is_empty() {
                 return NetworkResult::None; // Nothing is connected
             }
 
             let mut merged_items = Vec::new();
 
-            // Sort by source node ID to ensure deterministic evaluation
-            // order. (Pre-zones, the source of these wires came from a
-            // HashMap with non-deterministic iteration order; the Vec is
-            // deterministic but we still sort by node ID to keep merge
-            // order independent of construction order.)
-            let mut sorted_pins: Vec<(u64, i32)> = incoming_wires
-                .iter()
-                .filter_map(|w| w.as_legacy_pair())
-                .collect();
-            sorted_pins.sort_by_key(|&(node_id, _)| node_id);
+            // Sort by source node id for deterministic merge order. Pre-zones
+            // the wires came from a HashMap with non-deterministic iteration
+            // order; the Vec is deterministic but we keep the sort so merge
+            // order doesn't depend on construction order.
+            let mut indices: Vec<usize> = (0..incoming_wires.len()).collect();
+            indices.sort_by_key(|&i| incoming_wires[i].source_node_id);
 
-            for (input_node_id, input_node_output_pin_index) in sorted_pins {
-                let result = self.evaluate(
-                    network_stack,
-                    input_node_id,
-                    input_node_output_pin_index,
-                    registry,
-                    false,
-                    context,
-                );
+            for idx in indices {
+                let incoming = &incoming_wires[idx];
+                let (result, source_type) =
+                    self.resolve_incoming_wire(network_stack, registry, context, incoming);
 
                 if let NetworkResult::Error(_) = result {
                     return error_in_input(&input_name);
                 }
 
-                let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
-                let current_network = network_stack.last().unwrap().node_network;
-                // Resolve the concrete output type. For polymorphic pins
-                // (`SameAsInput` / `SameAsArrayElements`) the declared type is
-                // `DataType::None`, which would defeat `convert_to`'s
-                // single→array auto-wrap. `resolve_output_type` walks the
-                // upstream wiring to find the real concrete type.
-                let input_node_output_type = registry
-                    .resolve_output_type(input_node, current_network, input_node_output_pin_index)
-                    .unwrap_or_else(|| {
-                        registry
-                            .get_node_type_for_node(input_node)
-                            .unwrap()
-                            .get_output_pin_type(input_node_output_pin_index)
-                    });
-
                 // convert_to handles conversion to array types, so we can convert directly.
                 // The result is guaranteed to be an array, containing one or more elements.
-                let converted_result =
-                    result.convert_to(&input_node_output_type, &expected_type.clone(), registry);
+                let converted_result = result.convert_to(&source_type, &expected_type, registry);
 
                 if let NetworkResult::Array(array_data) = converted_result {
                     merged_items.extend(array_data);
@@ -932,42 +1187,237 @@ impl NetworkEvaluator {
             NetworkResult::Array(merged_items)
         } else {
             // single argument evaluation
-            if let Some((input_node_id, input_node_output_pin_index)) =
-                node.arguments[parameter_index].get_node_id_and_pin()
-            {
-                let result = self.evaluate(
-                    network_stack,
-                    input_node_id,
-                    input_node_output_pin_index,
-                    registry,
-                    false,
-                    context,
-                );
-                if let NetworkResult::Error(_error) = result {
+            if let Some(incoming) = incoming_wires.first() {
+                let (result, source_type) =
+                    self.resolve_incoming_wire(network_stack, registry, context, incoming);
+                if let NetworkResult::Error(_) = result {
                     return error_in_input(&input_name);
                 }
-
-                let input_node = NetworkStackElement::get_top_node(network_stack, input_node_id);
-                let current_network = network_stack.last().unwrap().node_network;
-                // See the array-branch comment above: resolve the concrete
-                // upstream type so polymorphic output pins don't report
-                // `DataType::None` and break single→array auto-wrap.
-                let input_node_output_type = registry
-                    .resolve_output_type(input_node, current_network, input_node_output_pin_index)
-                    .unwrap_or_else(|| {
-                        registry
-                            .get_node_type_for_node(input_node)
-                            .unwrap()
-                            .get_output_pin_type(input_node_output_pin_index)
-                    });
-
-                // Convert the result to the expected type
-
-                result.convert_to(&input_node_output_type, &expected_type, registry)
+                result.convert_to(&source_type, &expected_type, registry)
             } else {
                 NetworkResult::None // Nothing is connected
             }
         }
+    }
+
+    /// Resolve one `IncomingWire` to its `(NetworkResult, source_data_type)`
+    /// pair. Single dispatch point for all four wire shapes (today's local
+    /// regular-output wire, capture wire crossing a zone boundary, iteration
+    /// value from an enclosing HOF's zone-input pin, deeper-than-immediate
+    /// captured zone-input). Order of checks:
+    ///
+    /// 1. **Capture cache** — if this wire was pre-evaluated at body entry,
+    ///    serve the cached value. This must come before the per-`SourcePin`
+    ///    dispatch so that captures of `ZoneInput` sources hit the cache
+    ///    rather than falling into the live-lookup path (which would read
+    ///    the wrong frame; nested-HOF captures see outer-iteration values
+    ///    snapshot at inner-body entry, not the current outer iteration).
+    /// 2. **`NodeOutput` source** — walk `source_scope_depth` levels up the
+    ///    network stack and evaluate via the normal `evaluate` path against
+    ///    the sliced stack. Depth `0` is today's path.
+    /// 3. **`ZoneInput` source** — read the top frame of the HOF's
+    ///    scope-stack in `current_zone_input_values`. The HOF lives at depth
+    ///    `source_scope_depth` (≥ 1) above the destination's body; its id is
+    ///    `incoming.source_node_id`.
+    ///
+    /// Phase 3 lands the helper. The two new arms (`NodeOutput` with
+    /// `source_scope_depth > 0`, and `ZoneInput`) are unreached in existing
+    /// code because no node populates zone data yet — every wire today has
+    /// `source_scope_depth = 0` and `source_pin = NodeOutput { .. }`. See
+    /// `doc/design_zones.md` (§"What's new" point 2).
+    fn resolve_incoming_wire<'a>(
+        &self,
+        network_stack: &[NetworkStackElement<'a>],
+        registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
+        incoming: &IncomingWire,
+    ) -> (NetworkResult, DataType) {
+        // 1. Capture cache. The cached value carries its own concrete type, so
+        // inferring it from the value is sufficient for downstream
+        // `convert_to`.
+        let key = CaptureKey::from_incoming(incoming);
+        if let Some(cached) = context.captured_source_values.get(&key) {
+            let value = cached.clone();
+            let dt = value.infer_data_type().unwrap_or(DataType::None);
+            return (value, dt);
+        }
+
+        match incoming.source_pin {
+            SourcePin::NodeOutput { pin_index } => {
+                let depth = incoming.source_scope_depth as usize;
+                let stack_len = network_stack.len();
+
+                // Walk `depth` frames up the stack. Depth `0` resolves
+                // against the destination's containing network (today's
+                // behavior). Phase 6 validation catches a depth that
+                // overflows the stack; this debug-asserts in case a wire
+                // sneaks through with a bad depth.
+                let source_frame_idx = stack_len.checked_sub(1 + depth).unwrap_or_else(|| {
+                    debug_assert!(
+                        false,
+                        "NodeOutput wire source_scope_depth {} exceeds stack length {}",
+                        depth, stack_len,
+                    );
+                    0
+                });
+                let source_slice = &network_stack[..=source_frame_idx];
+                let source_network = source_slice.last().unwrap().node_network;
+
+                let source_type = if let Some(source_node) =
+                    source_network.nodes.get(&incoming.source_node_id)
+                {
+                    // Resolve the concrete output type. For polymorphic pins
+                    // (`SameAsInput` / `SameAsArrayElements`) the declared
+                    // type is `DataType::None`, which would defeat
+                    // `convert_to`'s single→array auto-wrap.
+                    registry
+                        .resolve_output_type(source_node, source_network, pin_index)
+                        .unwrap_or_else(|| {
+                            registry
+                                .get_node_type_for_node(source_node)
+                                .map(|nt| nt.get_output_pin_type(pin_index))
+                                .unwrap_or(DataType::None)
+                        })
+                } else {
+                    DataType::None
+                };
+
+                let result = self.evaluate(
+                    source_slice,
+                    incoming.source_node_id,
+                    pin_index,
+                    registry,
+                    false,
+                    context,
+                );
+
+                (result, source_type)
+            }
+            SourcePin::ZoneInput { pin_index } => {
+                // Live lookup against the HOF's scope-stack. Reading at any
+                // depth lands on the most-recently-pushed frame for this
+                // HOF id, which is exactly the immediately-enclosing HOF's
+                // iteration values. Deeper-than-immediate references go
+                // through the capture cache and never reach this branch
+                // (handled at step 1 above) — see worked example in
+                // `doc/design_zones.md`.
+                let value = context
+                    .current_zone_input(incoming.source_node_id, pin_index)
+                    .clone();
+
+                // Source type is the declared type of the HOF's
+                // `pin_index`-th zone-input pin. The HOF's body frame sits
+                // at `stack_len - depth`; the HOF node itself lives in
+                // the network at `stack_len - depth - 1` with id matching
+                // the wire's `source_node_id`.
+                let depth = incoming.source_scope_depth as usize;
+                let stack_len = network_stack.len();
+                let source_type = if depth == 0 {
+                    debug_assert!(
+                        false,
+                        "ZoneInput wire requires source_scope_depth >= 1 (got 0)"
+                    );
+                    DataType::None
+                } else {
+                    let body_frame_idx = stack_len.checked_sub(depth).unwrap_or_else(|| {
+                        debug_assert!(
+                            false,
+                            "ZoneInput wire source_scope_depth {} exceeds stack length {}",
+                            depth, stack_len,
+                        );
+                        0
+                    });
+                    if body_frame_idx == 0 {
+                        // Nothing below the body frame to host the HOF node.
+                        debug_assert!(
+                            false,
+                            "ZoneInput wire: body frame is at stack root, no HOF ancestor",
+                        );
+                        DataType::None
+                    } else {
+                        let hof_network = network_stack[body_frame_idx - 1].node_network;
+                        let hof_id = network_stack[body_frame_idx].node_id;
+                        hof_network
+                            .nodes
+                            .get(&hof_id)
+                            .and_then(|hof_node| registry.get_node_type_for_node(hof_node))
+                            .and_then(|nt| {
+                                nt.zone_input_pins
+                                    .get(pin_index)
+                                    .and_then(|opd| opd.fixed_type().cloned())
+                            })
+                            .unwrap_or(DataType::None)
+                    }
+                };
+
+                (value, source_type)
+            }
+        }
+    }
+
+    /// Evaluate one of an HOF's zone-output destination pins. The body sits at
+    /// the top of `network_stack`; the HOF whose `zone_output_arguments` we
+    /// read lives one frame below. The wire's source is a body-internal node
+    /// (its `source_scope_depth` is `0` relative to the body's scope), so
+    /// resolution flows through the normal local-source path inside
+    /// `resolve_incoming_wire`.
+    ///
+    /// Phase 3 lands the helper for HOF eval to call in later phases — no
+    /// existing code path invokes it yet.
+    #[allow(dead_code)]
+    pub fn evaluate_zone_output<'a>(
+        &self,
+        network_stack: &[NetworkStackElement<'a>],
+        hof_node_id: u64,
+        zone_output_index: usize,
+        registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
+    ) -> NetworkResult {
+        debug_assert!(
+            network_stack.len() >= 2,
+            "evaluate_zone_output: network_stack must have at least the HOF's containing network and the body frame on top",
+        );
+        let hof_frame_idx = network_stack.len() - 2;
+        let hof_network = network_stack[hof_frame_idx].node_network;
+        let hof_node = match hof_network.nodes.get(&hof_node_id) {
+            Some(n) => n,
+            None => {
+                return NetworkResult::Error(format!(
+                    "evaluate_zone_output: HOF node {} not found in containing network",
+                    hof_node_id
+                ));
+            }
+        };
+        let incoming_wires: Vec<IncomingWire> =
+            match hof_node.zone_output_arguments.get(zone_output_index) {
+                Some(arg) => arg.incoming_wires.clone(),
+                None => {
+                    return NetworkResult::Error(format!(
+                        "evaluate_zone_output: zone_output_index {} out of range on HOF node {}",
+                        zone_output_index, hof_node_id
+                    ));
+                }
+            };
+        let incoming = match incoming_wires.first() {
+            Some(w) => w,
+            None => {
+                return NetworkResult::Error(format!(
+                    "evaluate_zone_output: zone-output pin {} on HOF node {} has no incoming wire",
+                    zone_output_index, hof_node_id
+                ));
+            }
+        };
+        // The body frame is the top of the stack. The wire's source is a
+        // body-internal node by construction.
+        let (result, _source_type) =
+            self.resolve_incoming_wire(network_stack, registry, context, incoming);
+        // Note: type conversion to the zone-output pin's declared type is
+        // left to the HOF's `eval` (later phases) — different HOFs have
+        // different semantics (e.g. `filter`'s `keep: Bool`, `foreach`'s
+        // `out: Unit` discard widening), so the conversion target isn't
+        // uniform here. This helper returns the raw body-side result and
+        // lets the caller decide.
+        result
     }
 
     /// Evaluate a node and return all output pin results.
