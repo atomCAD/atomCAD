@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 
 // Dash patterns for wires carrying unaligned Blueprint/Crystal values.
 // Long-dash for motif-unaligned (softer warning), short-dash for lattice-unaligned
@@ -39,32 +39,49 @@ class NodeNetworkPainter extends CustomPainter {
   NodeNetworkPainter(this.graphModel,
       {this.panOffset = Offset.zero, this.zoomLevel = ZoomLevel.normal});
 
-  (Offset, String)? _tryGetPinPositionAndDataType(
-      BigInt nodeId, PinType pinType, int pinIndex) {
+  /// Build a [ScopeResolver] for the current frame. Returns null when no
+  /// network is active. Constructed once per `paint` and once per
+  /// `findWireAtPosition` call so the painter can be a CustomPainter (no
+  /// per-frame mutable state held on the painter instance).
+  ScopeResolver? _makeResolver() {
     final view = graphModel.nodeNetworkView;
-    if (view == null) {
-      return null;
-    }
+    if (view == null) return null;
+    return ScopeResolver(
+      root: view,
+      panOffset: panOffset,
+      scale: getZoomScale(zoomLevel),
+      zoomLevel: zoomLevel,
+    );
+  }
 
-    final node = view.nodes[nodeId];
-    if (node == null) {
-      return null;
-    }
+  /// Build a [PinReference] for the source endpoint of [wire] in U1's
+  /// always-empty scope. Function pins are encoded by pin index `-1`; everything
+  /// else is a regular external output.
+  PinReference _wireSourcePin(WireView wire) {
+    return PinReference(
+      nodeId: wire.sourceNodeId,
+      pinKind: wire.sourceOutputPinIndex == -1
+          ? PinKind.functionPin
+          : PinKind.externalOutput,
+      pinIndex: wire.sourceOutputPinIndex,
+      dataType: '',
+    );
+  }
 
-    if (pinType == PinType.input) {
-      if (pinIndex < 0 || pinIndex >= node.inputPins.length) {
-        return null;
-      }
-    }
-
-    return _getPinPositionAndDataType(nodeId, pinType, pinIndex);
+  /// Build a [PinReference] for the destination endpoint of [wire].
+  PinReference _wireDestPin(WireView wire) {
+    return PinReference(
+      nodeId: wire.destNodeId,
+      pinKind: PinKind.externalInput,
+      pinIndex: wire.destParamIndex.toInt(),
+      dataType: '',
+    );
   }
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (graphModel.nodeNetworkView == null) {
-      return;
-    }
+    final resolver = _makeResolver();
+    if (resolver == null) return;
 
     // Draw grid first so it's behind everything else
     _drawGrid(canvas, size);
@@ -75,11 +92,9 @@ class NodeNetworkPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     // Draw regular wires first
-    for (var wire in graphModel.nodeNetworkView!.wires) {
-      final source = _tryGetPinPositionAndDataType(
-          wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
-      final dest = _tryGetPinPositionAndDataType(
-          wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
+    for (var wire in resolver.root.wires) {
+      final source = resolver.tryPinScreenPosition(_wireSourcePin(wire));
+      final dest = resolver.tryPinScreenPosition(_wireDestPin(wire));
 
       if (source == null || dest == null) {
         continue;
@@ -93,19 +108,16 @@ class NodeNetworkPainter extends CustomPainter {
 
     // Draw dragged wire on top
     if (graphModel.draggedWire != null) {
-      final wireStart = _tryGetPinPositionAndDataType(
-          graphModel.draggedWire!.startPin.nodeId,
-          graphModel.draggedWire!.startPin.pinType,
-          graphModel.draggedWire!.startPin.pinIndex);
+      final startPin = graphModel.draggedWire!.startPin;
+      final wireStart = resolver.tryPinScreenPosition(startPin);
       if (wireStart == null) {
         return;
       }
       final wireEndPos = graphModel.draggedWire!.wireEndPosition;
-      final startPin = graphModel.draggedWire!.startPin;
-      final alignment = startPin.pinType == PinType.output
+      final alignment = startPin.isOutput
           ? _getSourcePinAlignment(startPin.nodeId, startPin.pinIndex)
           : null;
-      if (startPin.pinType == PinType.output) {
+      if (startPin.isOutput) {
         // start is source
         _drawWire(wireStart.$1, wireEndPos, canvas, paint, wireStart.$2, false,
             alignment);
@@ -125,104 +137,6 @@ class NodeNetworkPainter extends CustomPainter {
     final node = graphModel.nodeNetworkView?.nodes[nodeId];
     if (node == null || pinIndex >= node.outputPins.length) return null;
     return node.outputPins[pinIndex].alignment;
-  }
-
-  (Offset, String) _getPinPositionAndDataType(
-      BigInt nodeId, PinType pinType, int pinIndex) {
-    if (zoomLevel == ZoomLevel.normal) {
-      return _getPinPositionNormal(nodeId, pinType, pinIndex);
-    } else {
-      return _getPinPositionZoomedOut(nodeId, pinType, pinIndex);
-    }
-  }
-
-  /// Calculate pin position for normal zoom level with detailed pins
-  (Offset, String) _getPinPositionNormal(
-      BigInt nodeId, PinType pinType, int pinIndex) {
-    final scale = getZoomScale(zoomLevel);
-
-    if (pinType == PinType.output) {
-      // output pin (source pin)
-      final sourceNode = graphModel.nodeNetworkView!.nodes[nodeId]!;
-      final double sourceVertOffset;
-      final String dataType;
-      if (pinIndex == -1) {
-        // Function pin in title bar
-        sourceVertOffset = NODE_VERT_WIRE_OFFSET_FUNCTION_PIN;
-        dataType = sourceNode.functionType;
-      } else {
-        // Result output pin(s) — use same vertical spacing as input pins
-        sourceVertOffset = NODE_VERT_WIRE_OFFSET +
-            (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-        // Get data type from the output pin definition; prefer the resolved
-        // concrete type over the declared (possibly abstract) one for coloring.
-        if (pinIndex < sourceNode.outputPins.length) {
-          dataType = sourceNode.outputPins[pinIndex].effectiveDataType;
-        } else {
-          dataType = sourceNode.outputType;
-        }
-      }
-      // Use central coordinate transformation
-      final logicalPos = apiVec2ToOffset(sourceNode.position) +
-          Offset(NODE_WIDTH, sourceVertOffset);
-      return (logicalToScreen(logicalPos, panOffset, scale), dataType);
-    } else {
-      // input pin (dest pin)
-      final destNode = graphModel.nodeNetworkView!.nodes[nodeId]!;
-      final destVertOffset = NODE_VERT_WIRE_OFFSET +
-          (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-      // Use central coordinate transformation
-      final logicalPos =
-          apiVec2ToOffset(destNode.position) + Offset(0.0, destVertOffset);
-      return (
-        logicalToScreen(logicalPos, panOffset, scale),
-        destNode.inputPins[pinIndex].dataType
-      );
-    }
-  }
-
-  /// Calculate pin position for zoomed-out mode with edge-based connections
-  (Offset, String) _getPinPositionZoomedOut(
-      BigInt nodeId, PinType pinType, int pinIndex) {
-    final node = graphModel.nodeNetworkView!.nodes[nodeId]!;
-    final scale = getZoomScale(zoomLevel);
-    final nodeSize = getNodeSize(node, zoomLevel);
-    // Use central coordinate transformation
-    final nodePos =
-        logicalToScreen(apiVec2ToOffset(node.position), panOffset, scale);
-
-    if (pinType == PinType.output) {
-      // Output wires connect to right edge
-      final rightEdgeX = nodePos.dx + nodeSize.width;
-      final numOutputs = node.outputPins.length;
-      if (numOutputs > 1 && pinIndex >= 0) {
-        // Multi-output: distribute output pins vertically
-        final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
-        final totalHeight = (numOutputs - 1) * spacing;
-        final startY = nodePos.dy + (nodeSize.height - totalHeight) / 2;
-        final outputY = startY + (pinIndex * spacing);
-        final dataType = pinIndex < node.outputPins.length
-            ? node.outputPins[pinIndex].effectiveDataType
-            : node.outputType;
-        return (Offset(rightEdgeX, outputY), dataType);
-      } else {
-        // Single output or function pin: centered vertically
-        final centerY = nodePos.dy + nodeSize.height / 2;
-        return (Offset(rightEdgeX, centerY), node.outputType);
-      }
-    } else {
-      // Input wires connect to left edge with small vertical offset per input
-      final leftEdgeX = nodePos.dx;
-      final numInputs = node.inputPins.length;
-
-      // Distribute input connections vertically with small spacing
-      final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
-      final totalHeight = (numInputs - 1) * spacing;
-      final startY = nodePos.dy + (nodeSize.height - totalHeight) / 2;
-      final inputY = startY + (pinIndex * spacing);
-
-      return (Offset(leftEdgeX, inputY), node.inputPins[pinIndex].dataType);
-    }
   }
 
   _drawWire(Offset sourcePos, Offset destPos, Canvas canvas, Paint paint,
@@ -347,15 +261,14 @@ class NodeNetworkPainter extends CustomPainter {
   }
 
   WireHitResult? findWireAtPosition(Offset position) {
-    if (graphModel.nodeNetworkView == null) return null;
+    final resolver = _makeResolver();
+    if (resolver == null) return null;
 
-    // We don't need to adjust the position here because _getPinPositionAndDataType
-    // already adds the panOffset to the returned positions
-    for (var wire in graphModel.nodeNetworkView!.wires) {
-      final source = _tryGetPinPositionAndDataType(
-          wire.sourceNodeId, PinType.output, wire.sourceOutputPinIndex);
-      final dest = _tryGetPinPositionAndDataType(
-          wire.destNodeId, PinType.input, wire.destParamIndex.toInt());
+    // `position` is already in screen coordinates and the resolver returns
+    // pin endpoints in screen coordinates, so no further transform is needed.
+    for (var wire in resolver.root.wires) {
+      final source = resolver.tryPinScreenPosition(_wireSourcePin(wire));
+      final dest = resolver.tryPinScreenPosition(_wireDestPin(wire));
 
       if (source == null || dest == null) {
         continue;

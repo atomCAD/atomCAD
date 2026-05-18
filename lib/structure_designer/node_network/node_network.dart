@@ -9,6 +9,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/comment_node_widget.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
+import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
@@ -417,7 +418,7 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Handles wire dropped in empty space - shows filtered Add Node popup
   void _handleWireDropInEmptySpace(
       PinReference startPin, Offset dropPosition) async {
-    final isOutput = startPin.pinType == PinType.output;
+    final isOutput = startPin.isOutput;
     final dataType = startPin.dataType;
 
     // Show the filtered Add Node popup
@@ -429,9 +430,14 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     if (selectedNodeType == null || !mounted) return;
 
-    // Convert screen position to logical coordinates for node creation
-    final scale = getZoomScale(_zoomLevel);
-    final logicalPosition = screenToLogical(dropPosition, _panOffset, scale);
+    // Resolve the drop's screen position to a scope-aware body-local position
+    // for the new node. In U1 the scope chain is always empty (no inline
+    // bodies are authored yet); future phases land the node inside whichever
+    // body the drop hit.
+    final resolver = _makeResolver();
+    if (resolver == null) return;
+    final scope = resolver.findContainingScope(dropPosition);
+    final logicalPosition = scope.bodyLocal;
 
     // Create the new node, passing the drag source so the popup-filter's
     // adapter (e.g. `map.input_type` set to match the dragged source) is
@@ -486,15 +492,40 @@ class NodeNetworkState extends State<NodeNetwork> {
       // Source is output, target pin is input
       widget.graphModel.connectPins(
         startPin,
-        PinReference(newNodeId, PinType.input, targetPinIndex, ''),
+        PinReference(
+          nodeId: newNodeId,
+          scopeChain: scope.scopeChain,
+          pinKind: PinKind.externalInput,
+          pinIndex: targetPinIndex,
+          dataType: '',
+        ),
       );
     } else {
       // Source is input, target pin is output (pin 0)
       widget.graphModel.connectPins(
-        PinReference(newNodeId, PinType.output, targetPinIndex, ''),
+        PinReference(
+          nodeId: newNodeId,
+          scopeChain: scope.scopeChain,
+          pinKind: PinKind.externalOutput,
+          pinIndex: targetPinIndex,
+          dataType: '',
+        ),
         startPin,
       );
     }
+  }
+
+  /// Construct a ScopeResolver tied to the current frame's view + transform.
+  /// Returns null when there is no active node network — callers should bail.
+  ScopeResolver? _makeResolver() {
+    final view = widget.graphModel.nodeNetworkView;
+    if (view == null) return null;
+    return ScopeResolver(
+      root: view,
+      panOffset: _panOffset,
+      scale: getZoomScale(_zoomLevel),
+      zoomLevel: _zoomLevel,
+    );
   }
 
   /// Calculate an appropriate pan offset based on node positions
@@ -538,60 +569,20 @@ class NodeNetworkState extends State<NodeNetwork> {
     });
   }
 
-  /// Checks if the given position is on top of any node
-  /// Converts screen position to logical space for hit testing
+  /// Checks if the given screen position lands on any node, anywhere in the
+  /// scope tree. In U1 the search is top-level only.
   bool _isClickOnNode(StructureDesignerModel model, Offset position) {
-    if (model.nodeNetworkView == null) return false;
-
-    // Convert screen position to logical coordinates
-    final scale = getZoomScale(_zoomLevel);
-    final logicalPosition = screenToLogical(position, _panOffset, scale);
-
-    for (final node in model.nodeNetworkView!.nodes.values) {
-      final nodePos = Offset(node.position.x, node.position.y);
-      Size logicalNodeSize;
-
-      // Comment nodes have custom sizes stored in their data
-      if (node.nodeTypeName == 'Comment') {
-        final width = node.commentWidth ?? 200.0;
-        final height = node.commentHeight ?? 100.0;
-        logicalNodeSize = Size(width, height);
-      } else {
-        final nodeSize = getNodeSize(node, _zoomLevel);
-        // Node size is already in screen space, convert to logical space
-        logicalNodeSize = Size(nodeSize.width / scale, nodeSize.height / scale);
-      }
-      final nodeRect = nodePos & logicalNodeSize;
-
-      if (nodeRect.contains(logicalPosition)) {
-        return true;
-      }
-    }
-    return false;
+    final resolver = _makeResolver();
+    if (resolver == null) return false;
+    return resolver.isPositionOnNode(position);
   }
 
-  /// Gets the node at the given position, if any
-  /// Converts screen position to logical space for hit testing
+  /// Gets the node at the given screen position, if any. In U1 the search is
+  /// top-level only.
   NodeView? getNodeAtPosition(StructureDesignerModel model, Offset position) {
-    if (model.nodeNetworkView == null) return null;
-
-    // Convert screen position to logical coordinates
-    final scale = getZoomScale(_zoomLevel);
-    final logicalPosition = screenToLogical(position, _panOffset, scale);
-
-    for (final node in model.nodeNetworkView!.nodes.values) {
-      final nodePos = Offset(node.position.x, node.position.y);
-      final nodeSize = getNodeSize(node, _zoomLevel);
-      // Node size is already in screen space, convert to logical space
-      final logicalNodeSize =
-          Size(nodeSize.width / scale, nodeSize.height / scale);
-      final nodeRect = nodePos & logicalNodeSize;
-
-      if (nodeRect.contains(logicalPosition)) {
-        return node;
-      }
-    }
-    return null;
+    final resolver = _makeResolver();
+    if (resolver == null) return null;
+    return resolver.findNodeAtScreenPosition(position)?.node;
   }
 
   // ===== RECTANGLE SELECTION HELPERS =====
@@ -615,22 +606,21 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Finish rectangle selection and apply to model
   void _handleSelectionRectEnd(StructureDesignerModel model) {
-    if (_selectionRect == null || model.nodeNetworkView == null) {
+    final resolver = _makeResolver();
+    if (_selectionRect == null || resolver == null) {
       _clearSelectionRect();
       return;
     }
 
-    final scale = getZoomScale(_zoomLevel);
     final rect = _selectionRect!;
 
-    // Find all nodes overlapping the rectangle
+    // Find all nodes overlapping the rectangle. In U1 the iteration is
+    // top-level only — body nodes appear in U4.
     List<BigInt> nodesInRect = [];
-    for (final entry in model.nodeNetworkView!.nodes.entries) {
-      final node = entry.value;
-      final nodeScreenPos = logicalToScreen(
+    for (final node in resolver.root.nodes.values) {
+      final nodeScreenPos = resolver.scopedToScreen(
+        const <BigInt>[],
         apiVec2ToOffset(node.position),
-        _panOffset,
-        scale,
       );
       final nodeSize = getNodeSize(node, _zoomLevel);
       final nodeRect = Rect.fromLTWH(
@@ -648,8 +638,8 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     // Find all wires overlapping the rectangle
     List<WireView> wiresInRect = [];
-    for (final wire in model.nodeNetworkView!.wires) {
-      if (_wireOverlapsRect(wire, rect, model, scale)) {
+    for (final wire in resolver.root.wires) {
+      if (_wireOverlapsRect(wire, rect, resolver)) {
         wiresInRect.add(wire);
       }
     }
@@ -680,18 +670,31 @@ class NodeNetworkState extends State<NodeNetwork> {
     });
   }
 
-  /// Check if a wire's Bezier curve overlaps the selection rectangle
-  bool _wireOverlapsRect(
-      WireView wire, Rect rect, StructureDesignerModel model, double scale) {
-    // Get source and destination pin positions
-    final sourceNode = model.nodeNetworkView!.nodes[wire.sourceNodeId];
-    final destNode = model.nodeNetworkView!.nodes[wire.destNodeId];
-    if (sourceNode == null || destNode == null) return false;
+  /// Check if a wire's Bezier curve overlaps the selection rectangle. Routes
+  /// pin endpoint resolution through [ScopeResolver] so source/dest endpoints
+  /// match the painter's positions exactly (the duplicate pin-position math
+  /// that used to live here is gone — see `doc/design_zones_ui.md` §R2).
+  bool _wireOverlapsRect(WireView wire, Rect rect, ScopeResolver resolver) {
+    final sourcePin = PinReference(
+      nodeId: wire.sourceNodeId,
+      pinKind: wire.sourceOutputPinIndex == -1
+          ? PinKind.functionPin
+          : PinKind.externalOutput,
+      pinIndex: wire.sourceOutputPinIndex,
+      dataType: '',
+    );
+    final destPin = PinReference(
+      nodeId: wire.destNodeId,
+      pinKind: PinKind.externalInput,
+      pinIndex: wire.destParamIndex.toInt(),
+      dataType: '',
+    );
 
-    final sourcePos =
-        _getPinScreenPosition(sourceNode, wire.sourceOutputPinIndex, true);
-    final destPos =
-        _getPinScreenPosition(destNode, wire.destParamIndex.toInt(), false);
+    final source = resolver.tryPinScreenPosition(sourcePin);
+    final dest = resolver.tryPinScreenPosition(destPin);
+    if (source == null || dest == null) return false;
+    final sourcePos = source.$1;
+    final destPos = dest.$1;
 
     // Quick bounding box check first
     final wireBounds = _getWireBoundingBox(sourcePos, destPos);
@@ -706,47 +709,6 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
 
     return false;
-  }
-
-  /// Get screen position of a pin on a node
-  Offset _getPinScreenPosition(NodeView node, int pinIndex, bool isOutput) {
-    final scale = getZoomScale(_zoomLevel);
-    final nodePos = apiVec2ToOffset(node.position);
-
-    if (_zoomLevel == ZoomLevel.normal) {
-      if (isOutput) {
-        final vertOffset = (pinIndex == -1)
-            ? NODE_VERT_WIRE_OFFSET_FUNCTION_PIN
-            : (node.inputPins.isEmpty
-                ? NODE_VERT_WIRE_OFFSET_EMPTY
-                : NODE_VERT_WIRE_OFFSET +
-                    node.inputPins.length *
-                        NODE_VERT_WIRE_OFFSET_PER_PARAM *
-                        0.5);
-        return logicalToScreen(
-            nodePos + Offset(NODE_WIDTH, vertOffset), _panOffset, scale);
-      } else {
-        final vertOffset = NODE_VERT_WIRE_OFFSET +
-            (pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-        return logicalToScreen(
-            nodePos + Offset(0.0, vertOffset), _panOffset, scale);
-      }
-    } else {
-      // Zoomed out mode
-      final nodeSize = getNodeSize(node, _zoomLevel);
-      final nodeScreenPos = logicalToScreen(nodePos, _panOffset, scale);
-
-      if (isOutput) {
-        return Offset(nodeScreenPos.dx + nodeSize.width,
-            nodeScreenPos.dy + nodeSize.height / 2);
-      } else {
-        final numInputs = node.inputPins.length;
-        final spacing = BASE_ZOOMED_OUT_PIN_SPACING * scale;
-        final totalHeight = (numInputs - 1) * spacing;
-        final startY = nodeScreenPos.dy + (nodeSize.height - totalHeight) / 2;
-        return Offset(nodeScreenPos.dx, startY + (pinIndex * spacing));
-      }
-    }
   }
 
   /// Get bounding box for a Bezier wire
@@ -818,9 +780,14 @@ class NodeNetworkState extends State<NodeNetwork> {
     // Only show context menu if clicked on empty space (not on a node)
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
-      final scale = getZoomScale(_zoomLevel);
-      final logicalPosition =
-          screenToLogical(details.localPosition, _panOffset, scale);
+      final resolver = _makeResolver();
+      // The scope the click landed in. In U1 this is always the top-level
+      // scope (no inline bodies); from U4 onward it's whichever body the
+      // user right-clicked inside.
+      final scopeHit = resolver?.findContainingScope(details.localPosition);
+      final logicalPosition = scopeHit?.bodyLocal ??
+          screenToLogical(
+              details.localPosition, _panOffset, getZoomScale(_zoomLevel));
 
       if (model.hasClipboardContent()) {
         // Show intermediary context menu with Add Node and Paste options
@@ -870,7 +837,8 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Builds the stack children for the node network
   List<Widget> _buildStackChildren(StructureDesignerModel model) {
-    if (model.nodeNetworkView == null) {
+    final view = model.nodeNetworkView;
+    if (view == null) {
       return [];
     }
 
@@ -880,7 +848,7 @@ class NodeNetworkState extends State<NodeNetwork> {
       NodeNetworkInteractionLayer(
           model: model, panOffset: _panOffset, zoomLevel: _zoomLevel),
       // Then all the nodes on top - use CommentNodeWidget for Comment nodes
-      ...model.nodeNetworkView!.nodes.entries.map((entry) {
+      ...view.nodes.entries.map((entry) {
         final node = entry.value;
         if (node.nodeTypeName == 'Comment') {
           return CommentNodeWidget(
@@ -894,6 +862,7 @@ class NodeNetworkState extends State<NodeNetwork> {
             node: node,
             panOffset: _panOffset,
             zoomLevel: _zoomLevel,
+            rootView: view,
           );
         }
       }),
@@ -1099,9 +1068,12 @@ class NodeNetworkState extends State<NodeNetwork> {
               if (HardwareKeyboard.instance.isControlPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyV) {
                 if (model.hasClipboardContent()) {
-                  final scale = getZoomScale(_zoomLevel);
-                  final logicalPos =
-                      screenToLogical(_lastMousePosition, _panOffset, scale);
+                  final resolver = _makeResolver();
+                  final scopeHit =
+                      resolver?.findContainingScope(_lastMousePosition);
+                  final logicalPos = scopeHit?.bodyLocal ??
+                      screenToLogical(_lastMousePosition, _panOffset,
+                          getZoomScale(_zoomLevel));
                   model.pasteAtPosition(logicalPos.dx, logicalPos.dy);
                 }
                 return KeyEventResult.handled;

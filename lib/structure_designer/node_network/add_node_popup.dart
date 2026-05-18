@@ -54,6 +54,20 @@ class AddNodePopup extends StatefulWidget {
   State<AddNodePopup> createState() => _AddNodePopupState();
 }
 
+/// HOF node types whose body authoring is not yet exposed by the UI. Gated
+/// out of the Add Node popup throughout phases U1-U3; re-enabled in U4 when
+/// body authoring lands. A freshly placed HOF has no body wires and would
+/// immediately fail the Rust-side zone validation rule "every zone-output
+/// pin has at least one incoming wire", so suppressing placement avoids that
+/// bricked-node state until the user has a UI path to fix it. See
+/// `doc/design_zones_ui.md` §"HOF gating through U3".
+const Set<String> _HOF_TYPES_HIDDEN_UNTIL_U4 = {
+  'map',
+  'filter',
+  'fold',
+  'foreach',
+};
+
 class _AddNodePopupState extends State<AddNodePopup> {
   final TextEditingController _filterController = TextEditingController();
   List<APINodeCategoryView> _allCategories = [];
@@ -73,10 +87,31 @@ class _AddNodePopupState extends State<AddNodePopup> {
       categories = getNodeTypeViews();
     }
     if (categories != null) {
-      _allCategories = categories;
+      _allCategories = _hideHofTypes(categories);
     }
     _filteredCategories = List.from(_allCategories);
     _filterController.addListener(_filterNodes);
+  }
+
+  /// Strip HOF nodes (`map`, `filter`, `fold`, `foreach`) out of the
+  /// category list. See [_HOF_TYPES_HIDDEN_UNTIL_U4] for rationale. Empty
+  /// categories produced by the strip are dropped so the popup doesn't show
+  /// blank headers.
+  List<APINodeCategoryView> _hideHofTypes(
+      List<APINodeCategoryView> categories) {
+    return categories
+        .map((category) {
+          final filtered = category.nodes
+              .where((node) => !_HOF_TYPES_HIDDEN_UNTIL_U4.contains(node.name))
+              .toList();
+          if (filtered.isEmpty) return null;
+          return APINodeCategoryView(
+            category: category.category,
+            nodes: filtered,
+          );
+        })
+        .whereType<APINodeCategoryView>()
+        .toList();
   }
 
   void _filterNodes() {

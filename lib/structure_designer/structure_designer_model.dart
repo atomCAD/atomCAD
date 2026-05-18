@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
@@ -22,22 +23,57 @@ import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
     as atom_edit_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
-enum PinType {
-  input,
-  output,
+/// Distinguishes the four (eventually five) kinds of pin slots a node can
+/// expose. Replaces the legacy `(PinType, pinIndex == -1)` discriminator pair
+/// that today distinguishes title-bar function pins from regular outputs, and
+/// makes room for zone pins introduced in phase U3 of zones UI work.
+///
+/// In phase U1 only [externalInput], [externalOutput], and [functionPin] are
+/// used. [functionPin] is a transitional value — it goes away when the parent
+/// Rust design's `DataType::Function` / `Closure` cleanup lands (see
+/// `doc/design_zones_ui.md` §"U7 Polish").
+enum PinKind {
+  /// Left-edge input pin. Consumes a wire.
+  externalInput,
+
+  /// Right-edge output pin. Produces a wire.
+  externalOutput,
+
+  /// Title-bar function pin (legacy `pinIndex == -1` output). Produces a wire.
+  functionPin,
+  // zoneInput, zoneOutput — added in phase U3.
 }
 
 class PinReference {
   BigInt nodeId;
-  PinType pinType;
+
+  /// Scope of the pin's owner node — empty for top-level. Always `const []`
+  /// in phase U1 (no inline-zone authoring yet) but plumbed through every
+  /// pin-handling code path so later phases can carry depth without touching
+  /// every call site again.
+  List<BigInt> scopeChain;
+  PinKind pinKind;
   int pinIndex;
   String dataType;
 
-  PinReference(this.nodeId, this.pinType, this.pinIndex, this.dataType);
+  PinReference({
+    required this.nodeId,
+    this.scopeChain = const [],
+    required this.pinKind,
+    required this.pinIndex,
+    required this.dataType,
+  });
+
+  /// True if this pin is a wire source (produces a value).
+  bool get isOutput =>
+      pinKind == PinKind.externalOutput || pinKind == PinKind.functionPin;
+
+  /// True if this pin is a wire destination (consumes a value).
+  bool get isInput => pinKind == PinKind.externalInput;
 
   @override
   String toString() {
-    return 'PinReference(nodeId: $nodeId, pinType: $pinType, pinIndex: $pinIndex dataType: $dataType)';
+    return 'PinReference(nodeId: $nodeId, scopeChain: $scopeChain, pinKind: $pinKind, pinIndex: $pinIndex, dataType: $dataType)';
   }
 
   @override
@@ -45,13 +81,15 @@ class PinReference {
     if (identical(this, other)) return true;
     if (other is! PinReference) return false;
     return nodeId == other.nodeId &&
-        pinType == other.pinType &&
+        listEquals(scopeChain, other.scopeChain) &&
+        pinKind == other.pinKind &&
         pinIndex == other.pinIndex &&
         dataType == other.dataType;
   }
 
   @override
-  int get hashCode => Object.hash(nodeId, pinType, pinIndex, dataType);
+  int get hashCode => Object.hash(
+      nodeId, Object.hashAll(scopeChain), pinKind, pinIndex, dataType);
 }
 
 class DraggedWire {
@@ -654,14 +692,14 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   bool canConnectPins(PinReference pin1, PinReference pin2) {
-    if (pin1.pinType == pin2.pinType) {
+    if (pin1.isOutput == pin2.isOutput) {
       return false;
     }
 
-    final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
-    final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
+    final outPin = pin1.isOutput ? pin1 : pin2;
+    final inPin = pin1.isInput ? pin1 : pin2;
 
-    if (outPin.pinType != PinType.output || inPin.pinType != PinType.input) {
+    if (!outPin.isOutput || !inPin.isInput) {
       return false;
     }
 
@@ -678,14 +716,14 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void connectPins(PinReference pin1, PinReference pin2) {
-    if (pin1.pinType == pin2.pinType) {
+    if (pin1.isOutput == pin2.isOutput) {
       return;
     }
 
-    final outPin = pin1.pinType == PinType.output ? pin1 : pin2;
-    final inPin = pin1.pinType == PinType.input ? pin1 : pin2;
+    final outPin = pin1.isOutput ? pin1 : pin2;
+    final inPin = pin1.isInput ? pin1 : pin2;
 
-    if (outPin.pinType != PinType.output || inPin.pinType != PinType.input) {
+    if (!outPin.isOutput || !inPin.isInput) {
       return;
     }
 

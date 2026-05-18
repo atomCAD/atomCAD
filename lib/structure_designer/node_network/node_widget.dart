@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
@@ -12,6 +13,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/factor_into_subnetwork_dialog.dart';
 
@@ -580,8 +582,8 @@ class PinWidget extends StatelessWidget {
       this.declaredDataType,
       this.resolvedViaFallback = false})
       : super(
-            key: ValueKey(pinReference.pinIndex +
-                ((pinReference.pinType == PinType.output) ? 1000 : 0)));
+            key: ValueKey(
+                pinReference.pinIndex + (pinReference.isOutput ? 1000 : 0)));
 
   RenderBox? _findNodeNetworkRenderBox(BuildContext context) {
     RenderBox? result;
@@ -597,7 +599,7 @@ class PinWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isInput = pinReference.pinType == PinType.input;
+    final bool isInput = pinReference.isInput;
     return SizedBox(
       width: PIN_HIT_AREA_WIDTH,
       height: PIN_HIT_AREA_HEIGHT,
@@ -683,9 +685,34 @@ class NodeWidget extends StatelessWidget {
   final Offset panOffset;
   final ZoomLevel zoomLevel;
 
-  NodeWidget(
-      {required this.node, required this.panOffset, required this.zoomLevel})
-      : super(key: NodeWidgetKeys.nodeWidget(node.id));
+  /// Scope of the network the node lives in. Empty = top-level (the only
+  /// possibility in phase U1; later phases use this for nodes inside an
+  /// HOF's inline body). The node's `position` is interpreted in this scope's
+  /// body-local coordinate frame.
+  final List<BigInt> scopeChain;
+
+  /// Root view used by [ScopeResolver] to walk the scope chain. In U1 always
+  /// equal to `Provider.of(StructureDesignerModel).nodeNetworkView`. Passed in
+  /// rather than re-fetched so the widget tree stays a pure function of its
+  /// inputs.
+  final NodeNetworkView rootView;
+
+  NodeWidget({
+    required this.node,
+    required this.panOffset,
+    required this.zoomLevel,
+    required this.rootView,
+    this.scopeChain = const [],
+  }) : super(key: NodeWidgetKeys.nodeWidget(node.id));
+
+  /// A resolver for this widget's current frame. Cheap to construct; the heavy
+  /// layout pass lands in phase U3.
+  ScopeResolver get _resolver => ScopeResolver(
+        root: rootView,
+        panOffset: panOffset,
+        scale: getZoomScale(zoomLevel),
+        zoomLevel: zoomLevel,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -712,10 +739,10 @@ class NodeWidget extends StatelessWidget {
       nodeWidget = _wrapWithErrorTooltip(nodeWidget);
     }
 
-    // Position the node using central coordinate transformation
-    final scale = getZoomScale(zoomLevel);
-    final screenPos = logicalToScreen(
-        Offset(node.position.x, node.position.y), panOffset, scale);
+    // Position the node via the scope resolver: node.position lives in
+    // [scopeChain]'s body-local frame; the resolver maps it to screen.
+    final screenPos =
+        _resolver.scopedToScreen(scopeChain, apiVec2ToOffset(node.position));
     return Positioned(
       left: screenPos.dx,
       top: screenPos.dy,
@@ -799,7 +826,12 @@ class NodeWidget extends StatelessWidget {
                 // Function pin
                 PinWidget(
                   pinReference: PinReference(
-                      node.id, PinType.output, -1, node.functionType),
+                    nodeId: node.id,
+                    scopeChain: scopeChain,
+                    pinKind: PinKind.functionPin,
+                    pinIndex: -1,
+                    dataType: node.functionType,
+                  ),
                   multi: false,
                 ),
               ],
@@ -821,8 +853,13 @@ class NodeWidget extends StatelessWidget {
                       .entries
                       .map((entry) => _buildInputPin(
                           entry.value.name,
-                          PinReference(node.id, PinType.input, entry.key,
-                              entry.value.dataType),
+                          PinReference(
+                            nodeId: node.id,
+                            scopeChain: scopeChain,
+                            pinKind: PinKind.externalInput,
+                            pinIndex: entry.key,
+                            dataType: entry.value.dataType,
+                          ),
                           entry.value.multi))
                       .toList(),
                 ),
@@ -908,7 +945,12 @@ class NodeWidget extends StatelessWidget {
         if (!isUnitPin) const SizedBox(width: 2),
         PinWidget(
           pinReference: PinReference(
-              node.id, PinType.output, pin.index, pin.effectiveDataType),
+            nodeId: node.id,
+            scopeChain: scopeChain,
+            pinKind: PinKind.externalOutput,
+            pinIndex: pin.index,
+            dataType: pin.effectiveDataType,
+          ),
           multi: false,
           outputString: pin.index < node.outputPinStrings.length
               ? node.outputPinStrings[pin.index]
