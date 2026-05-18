@@ -641,6 +641,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
   @protected
+  ZoneView dco_decode_box_autoadd_zone_view(dynamic raw);
+
+  @protected
   CliConfig dco_decode_cli_config(dynamic raw);
 
   @protected
@@ -1065,6 +1068,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
 
   @protected
+  ZoneView? dco_decode_opt_box_autoadd_zone_view(dynamic raw);
+
+  @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
@@ -1147,6 +1153,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WireView dco_decode_wire_view(dynamic raw);
+
+  @protected
+  ZoneView dco_decode_zone_view(dynamic raw);
 
   @protected
   int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
@@ -1853,6 +1862,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
+  ZoneView sse_decode_box_autoadd_zone_view(SseDeserializer deserializer);
+
+  @protected
   CliConfig sse_decode_cli_config(SseDeserializer deserializer);
 
   @protected
@@ -2362,6 +2374,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
+  ZoneView? sse_decode_opt_box_autoadd_zone_view(SseDeserializer deserializer);
+
+  @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
@@ -2455,6 +2470,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WireView sse_decode_wire_view(SseDeserializer deserializer);
+
+  @protected
+  ZoneView sse_decode_zone_view(SseDeserializer deserializer);
 
   @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
@@ -3205,6 +3223,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_zone_view(
+      ZoneView self, SseSerializer serializer);
+
+  @protected
   void sse_encode_cli_config(CliConfig self, SseSerializer serializer);
 
   @protected
@@ -3722,6 +3744,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_zone_view(
+      ZoneView? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
@@ -3820,6 +3846,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_wire_view(WireView self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_zone_view(ZoneView self, SseSerializer serializer);
 }
 
 // Section: wire_class

@@ -155,6 +155,22 @@ pub struct SerializableNode {
     /// non-HOF nodes. Phase 2 never populates this; reserved for later phases.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zone_output_arguments: Vec<Argument>,
+    /// Stored body width for HOF nodes (logical pixels). Defaulted on load so
+    /// pre-zone `.cnnd` fixtures continue to deserialize. Meaningful only when
+    /// `zone.is_some()`; see `doc/design_zones_ui.md` §"Body sizing".
+    #[serde(default = "default_body_width")]
+    pub body_width: f64,
+    /// Stored body height for HOF nodes (logical pixels). See [`body_width`].
+    #[serde(default = "default_body_height")]
+    pub body_height: f64,
+}
+
+fn default_body_width() -> f64 {
+    crate::structure_designer::node_network::DEFAULT_BODY_WIDTH
+}
+
+fn default_body_height() -> f64 {
+    crate::structure_designer::node_network::DEFAULT_BODY_HEIGHT
 }
 
 /// Serializable version of NodeNetwork for JSON serialization
@@ -409,6 +425,8 @@ pub fn node_to_serializable(
         data: json_data,
         zone,
         zone_output_arguments: node.zone_output_arguments.clone(),
+        body_width: node.body_width,
+        body_height: node.body_height,
     })
 }
 
@@ -460,6 +478,8 @@ pub fn serializable_to_node(
         custom_node_type: None,
         zone,
         zone_output_arguments: serializable.zone_output_arguments.clone(),
+        body_width: serializable.body_width,
+        body_height: serializable.body_height,
     })
 }
 

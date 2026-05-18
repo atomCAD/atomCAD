@@ -41,6 +41,7 @@ use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
 use super::structure_designer_api_types::OutputPinView;
+use super::structure_designer_api_types::ZoneView;
 use super::structure_designer_preferences::StructureDesignerPreferences;
 use crate::api::api_common::apply_camera_settings;
 use crate::api::api_common::from_api_ivec2;
@@ -305,6 +306,65 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
     }
 }
 
+/// Build a [`ZoneView`] for an HOF node's body.
+///
+/// Resolves the zone-input / zone-output pin definitions against the node's
+/// `NodeType`, surfaces the stored body dimensions, and reports the node count
+/// for Phase U3's `[N nodes]` placeholder. Returns `None` for non-HOF nodes
+/// (whose `Node.zone` is `None`).
+///
+/// Phase U3 deliberately does not populate body-internal `nodes` / `wires` —
+/// the body region renders read-only with a placeholder. U4 extends this
+/// helper to surface the body's nodes/wires recursively.
+fn build_zone_view(
+    node: &crate::structure_designer::node_network::Node,
+    node_type: &crate::structure_designer::node_type::NodeType,
+) -> Option<ZoneView> {
+    if !node_type.has_zone() {
+        return None;
+    }
+    let body = node.zone.as_ref()?;
+
+    // From the body's perspective zone-input pins are sources (carry values
+    // into the body), so we reuse the OutputPinView shape. The body-side
+    // resolution doesn't have an upstream wire to chase, so `resolved_data_type`
+    // stays None and the declared type is the rendered one.
+    let zone_input_pins: Vec<OutputPinView> = node_type
+        .zone_input_pins
+        .iter()
+        .enumerate()
+        .map(|(i, pin_def)| OutputPinView {
+            name: pin_def.name.clone(),
+            data_type: pin_def.data_type.to_string(),
+            resolved_data_type: None,
+            resolved_via_fallback: false,
+            index: i as i32,
+            alignment: None,
+            alignment_reason: None,
+        })
+        .collect();
+
+    // Zone-output pins are destinations from the body's perspective —
+    // reuse the InputPinView shape.
+    let zone_output_pins: Vec<InputPinView> = node_type
+        .zone_output_pins
+        .iter()
+        .map(|param| InputPinView {
+            name: param.name.clone(),
+            data_type: param.data_type.to_string(),
+            multi: param.data_type.is_array(),
+        })
+        .collect();
+
+    Some(ZoneView {
+        zone_input_pins,
+        zone_output_pins,
+        stored_width: node.body_width,
+        stored_height: node.body_height,
+        node_count: body.nodes.len() as u32,
+    })
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_node_network_view() -> Option<NodeNetworkView> {
     unsafe {
@@ -490,6 +550,8 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                         })
                         .unwrap_or_default();
 
+                    let zone = build_zone_view(node, node_type);
+
                     node_network_view.nodes.insert(
                         node.id,
                         NodeView {
@@ -513,6 +575,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                             comment_text,
                             comment_width,
                             comment_height,
+                            zone,
                         },
                     );
                 }
@@ -5888,6 +5951,40 @@ pub fn run_cli_batch(config: super::structure_designer_api_types::BatchCliConfig
                 error_message: "CAD instance not available".to_string(),
             },
         )
+    }
+}
+
+/// Set the stored body width/height of an HOF (zone-owning) node, identified
+/// by the body the resize applies to. `scope_path` is the chain of HOF node
+/// IDs leading to the body's owner — empty means the active top-level network,
+/// `[hof_id]` means the body owned by `hof_id` at the top level, deeper paths
+/// address bodies nested inside bodies. `hof_node_id` is the HOF whose stored
+/// body size is changing (located inside the scope's body).
+///
+/// Minimums clamp at 100×60 logical pixels so the body region is always large
+/// enough to render its inner pins. The body's *rendered* size is
+/// `max(stored, content_bbox + padding)` (zones UI design doc §"Body sizing"),
+/// so the user can shrink stored size down to the clamp regardless of content.
+///
+/// Phase U3 lands the API; the drag handles that drive it land alongside body
+/// content rendering. No undo command yet — that's tracked in U4 alongside
+/// node-move begin/end coalescing.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_zone_size(scope_path: Vec<u64>, hof_node_id: u64, width: f64, height: f64) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(network) = cad_instance
+                .structure_designer
+                .get_scope_network_mut(&scope_path)
+            {
+                if let Some(node) = network.nodes.get_mut(&hof_node_id) {
+                    if node.zone.is_some() {
+                        node.body_width = width.max(100.0);
+                        node.body_height = height.max(60.0);
+                    }
+                }
+            }
+        });
     }
 }
 

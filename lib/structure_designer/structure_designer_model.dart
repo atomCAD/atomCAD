@@ -23,15 +23,21 @@ import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
     as atom_edit_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
-/// Distinguishes the four (eventually five) kinds of pin slots a node can
-/// expose. Replaces the legacy `(PinType, pinIndex == -1)` discriminator pair
-/// that today distinguishes title-bar function pins from regular outputs, and
-/// makes room for zone pins introduced in phase U3 of zones UI work.
+/// Distinguishes the five kinds of pin slots a node can expose. Replaces the
+/// legacy `(PinType, pinIndex == -1)` discriminator pair that today
+/// distinguishes title-bar function pins from regular outputs, and accommodates
+/// the inner-edge zone pins on HOF nodes.
 ///
-/// In phase U1 only [externalInput], [externalOutput], and [functionPin] are
-/// used. [functionPin] is a transitional value — it goes away when the parent
-/// Rust design's `DataType::Function` / `Closure` cleanup lands (see
+/// [functionPin] is a transitional value — it goes away when the parent Rust
+/// design's `DataType::Function` / `Closure` cleanup lands (see
 /// `doc/design_zones_ui.md` §"U7 Polish").
+///
+/// Zone pins live on the inner edges of an HOF (zone-owning) node. From the
+/// body's perspective, [zoneInput] pins are sources (carry iteration values
+/// into the body) and [zoneOutput] pins are destinations (consume the body's
+/// per-iteration result). They face inward — wires that touch them live in
+/// the body's scope, not the HOF's containing network. See
+/// `doc/design_zones_ui.md` §"Pin sets".
 enum PinKind {
   /// Left-edge input pin. Consumes a wire.
   externalInput,
@@ -41,7 +47,14 @@ enum PinKind {
 
   /// Title-bar function pin (legacy `pinIndex == -1` output). Produces a wire.
   functionPin,
-  // zoneInput, zoneOutput — added in phase U3.
+
+  /// Inner-left pin on an HOF node, facing into its body. From the body's
+  /// perspective, it's a source: wires leave the pin and flow into body nodes.
+  zoneInput,
+
+  /// Inner-right pin on an HOF node, facing into its body. From the body's
+  /// perspective, it's a destination: wires from body nodes terminate here.
+  zoneOutput,
 }
 
 class PinReference {
@@ -64,12 +77,19 @@ class PinReference {
     required this.dataType,
   });
 
-  /// True if this pin is a wire source (produces a value).
+  /// True if this pin is a wire source (produces a value). Includes the
+  /// inside-facing [PinKind.zoneInput] pin on an HOF, which sources iteration
+  /// values into the body.
   bool get isOutput =>
-      pinKind == PinKind.externalOutput || pinKind == PinKind.functionPin;
+      pinKind == PinKind.externalOutput ||
+      pinKind == PinKind.functionPin ||
+      pinKind == PinKind.zoneInput;
 
-  /// True if this pin is a wire destination (consumes a value).
-  bool get isInput => pinKind == PinKind.externalInput;
+  /// True if this pin is a wire destination (consumes a value). Includes the
+  /// inside-facing [PinKind.zoneOutput] pin on an HOF, which receives the
+  /// body's per-iteration result.
+  bool get isInput =>
+      pinKind == PinKind.externalInput || pinKind == PinKind.zoneOutput;
 
   @override
   String toString() {

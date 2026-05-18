@@ -2947,6 +2947,13 @@ class NodeView {
   final double? commentWidth;
   final double? commentHeight;
 
+  /// Present iff this node is an HOF (the node type declares zone pins).
+  /// Carries the entire body as a nested view. `None` for non-HOF nodes.
+  /// Phase U3 surfaces zone-pin definitions and the body's `stored_width`/
+  /// `stored_height` plus a node count; body nodes/wires arrive in U4.
+  /// See `doc/design_zones_ui.md` §"Phase U3".
+  final ZoneView? zone;
+
   NodeView({
     required this.id,
     required this.nodeTypeName,
@@ -2968,6 +2975,7 @@ class NodeView {
     this.commentText,
     this.commentWidth,
     this.commentHeight,
+    this.zone,
   });
 
   @override
@@ -2991,7 +2999,8 @@ class NodeView {
       commentLabel.hashCode ^
       commentText.hashCode ^
       commentWidth.hashCode ^
-      commentHeight.hashCode;
+      commentHeight.hashCode ^
+      zone.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3017,7 +3026,8 @@ class NodeView {
           commentLabel == other.commentLabel &&
           commentText == other.commentText &&
           commentWidth == other.commentWidth &&
-          commentHeight == other.commentHeight;
+          commentHeight == other.commentHeight &&
+          zone == other.zone;
 }
 
 class OutputPinView {
@@ -3266,4 +3276,60 @@ class WireView {
           destNodeId == other.destNodeId &&
           destParamIndex == other.destParamIndex &&
           selected == other.selected;
+}
+
+/// Read-only view of an HOF node's body, surfaced for the Flutter editor.
+///
+/// Phase U3 populates only the fields needed to render the empty body region
+/// (inner-edge pins + a centered "[N nodes]" placeholder). The body's internal
+/// nodes/wires/selection arrive in U4. The recursion bottoms out naturally —
+/// non-HOF body nodes have `NodeView.zone == None`.
+class ZoneView {
+  /// Zone-input pins (inner-left) declared by the HOF type. From the body's
+  /// perspective these are sources; reuses `OutputPinView` for shape parity
+  /// with external output pins.
+  final List<OutputPinView> zoneInputPins;
+
+  /// Zone-output pins (inner-right) declared by the HOF type. From the body's
+  /// perspective these are destinations; reuses `InputPinView`.
+  final List<InputPinView> zoneOutputPins;
+
+  /// Stored body width in logical pixels. The renderer uses
+  /// `max(stored_width, content_bbox + padding)`; in U3 there is no content,
+  /// so the rendered size equals the stored size.
+  final double storedWidth;
+
+  /// Stored body height in logical pixels.
+  final double storedHeight;
+
+  /// Number of nodes inside the body. Used by U3's "[N nodes]" placeholder;
+  /// U4 replaces the placeholder with actual body-node rendering.
+  final int nodeCount;
+
+  const ZoneView({
+    required this.zoneInputPins,
+    required this.zoneOutputPins,
+    required this.storedWidth,
+    required this.storedHeight,
+    required this.nodeCount,
+  });
+
+  @override
+  int get hashCode =>
+      zoneInputPins.hashCode ^
+      zoneOutputPins.hashCode ^
+      storedWidth.hashCode ^
+      storedHeight.hashCode ^
+      nodeCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ZoneView &&
+          runtimeType == other.runtimeType &&
+          zoneInputPins == other.zoneInputPins &&
+          zoneOutputPins == other.zoneOutputPins &&
+          storedWidth == other.storedWidth &&
+          storedHeight == other.storedHeight &&
+          nodeCount == other.nodeCount;
 }

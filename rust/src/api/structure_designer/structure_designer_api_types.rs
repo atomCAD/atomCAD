@@ -128,6 +128,37 @@ pub struct NodeView {
     pub comment_text: Option<String>,
     pub comment_width: Option<f64>,
     pub comment_height: Option<f64>,
+    /// Present iff this node is an HOF (the node type declares zone pins).
+    /// Carries the entire body as a nested view. `None` for non-HOF nodes.
+    /// Phase U3 surfaces zone-pin definitions and the body's `stored_width`/
+    /// `stored_height` plus a node count; body nodes/wires arrive in U4.
+    /// See `doc/design_zones_ui.md` §"Phase U3".
+    pub zone: Option<ZoneView>,
+}
+
+/// Read-only view of an HOF node's body, surfaced for the Flutter editor.
+///
+/// Phase U3 populates only the fields needed to render the empty body region
+/// (inner-edge pins + a centered "[N nodes]" placeholder). The body's internal
+/// nodes/wires/selection arrive in U4. The recursion bottoms out naturally —
+/// non-HOF body nodes have `NodeView.zone == None`.
+pub struct ZoneView {
+    /// Zone-input pins (inner-left) declared by the HOF type. From the body's
+    /// perspective these are sources; reuses `OutputPinView` for shape parity
+    /// with external output pins.
+    pub zone_input_pins: Vec<OutputPinView>,
+    /// Zone-output pins (inner-right) declared by the HOF type. From the body's
+    /// perspective these are destinations; reuses `InputPinView`.
+    pub zone_output_pins: Vec<InputPinView>,
+    /// Stored body width in logical pixels. The renderer uses
+    /// `max(stored_width, content_bbox + padding)`; in U3 there is no content,
+    /// so the rendered size equals the stored size.
+    pub stored_width: f64,
+    /// Stored body height in logical pixels.
+    pub stored_height: f64,
+    /// Number of nodes inside the body. Used by U3's "[N nodes]" placeholder;
+    /// U4 replaces the placeholder with actual body-node rendering.
+    pub node_count: u32,
 }
 
 pub struct WireView {

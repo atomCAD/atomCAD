@@ -119,6 +119,8 @@ pub fn promote_node_to_parameter(
         custom_node_type: None,
         zone: None,
         zone_output_arguments: Vec::new(),
+        body_width: crate::structure_designer::node_network::DEFAULT_BODY_WIDTH,
+        body_height: crate::structure_designer::node_network::DEFAULT_BODY_HEIGHT,
     };
     param_node.set_custom_node_type(custom_type, false);
     network.nodes.insert(new_id, param_node);

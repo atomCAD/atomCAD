@@ -49,6 +49,30 @@ const double BASE_CUBIC_SPLINE_HORIZ_OFFSET = 50.0;
 const double BASE_ZOOMED_OUT_PIN_SPACING =
     10.0; // Vertical spacing between input wires in zoomed-out mode
 
+// HOF body layout constants (logical pixels, scaled by zoom).
+// The body region sits inside the HOF widget between the external input column
+// (on the left) and the external output column (on the right). Geometry:
+//
+//   ┌── HOF ───────────────────────────────────────────────────────┐
+//   │ title                                          function-pin →│
+//   │┌──────────────┬──────────────────────────────┬──────────────┐│
+//   ││ ext inputs   │  body (translucent)          │  ext outputs ││
+//   ││ ext●  "xs"   │ ●  element            result●│ "Iter" ●     ││
+//   ││              │                              │              ││
+//   │└──────────────┴──────────────────────────────┴──────────────┘│
+//   │ (subtitle)                                                   │
+//   └──────────────────────────────────────────────────────────────┘
+//
+// HOF_BODY_TOP_OFFSET is the body's top edge relative to the HOF widget's
+// top edge (covers title + padding). HOF_BODY_LEFT_OFFSET is the body's
+// left edge relative to the HOF's left edge (the external input column's
+// width). HOF_BODY_RIGHT_GUTTER is the width of the external output column
+// to the right of the body region.
+const double BASE_HOF_BODY_TOP_OFFSET = 36.0;
+const double BASE_HOF_BODY_LEFT_OFFSET = 70.0;
+const double BASE_HOF_BODY_RIGHT_GUTTER = 70.0;
+const double BASE_HOF_BODY_BOTTOM_PADDING = 8.0;
+
 // Legacy constants for backward compatibility (normal zoom)
 const double NODE_WIDTH = BASE_NODE_WIDTH;
 const double NODE_VERT_WIRE_OFFSET = BASE_NODE_VERT_WIRE_OFFSET;
@@ -150,33 +174,62 @@ Offset screenToLogical(Offset screen, Offset panOffset, double scale) {
 /// Returns Size(width, height) for the given node at the specified zoom level.
 /// For normal zoom, estimates height including title, pins, and subtitle.
 /// For zoomed-out modes, uses proportionally scaled height with minimum aspect ratio.
+///
+/// For HOF (zone-owning) nodes, the footprint grows to include the body region:
+/// width gains `body.storedWidth` (plus the external input/output gutters);
+/// height gains the body's height. See `doc/design_zones_ui.md` §"Phase U3"
+/// gotcha: "The HOF's overall screen footprint now grows to include the body."
 Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   final scale = getZoomScale(zoomLevel);
 
   // Calculate estimated height at normal scale (for all zoom levels)
   // Title bar: ~30px, main body: max(inputs, outputs), subtitle: ~20px, padding: ~8px
   final titleHeight = 30.0;
+  // For HOF nodes the inner-edge zone pins also stack along the body's edges,
+  // so the body-content row height must be at least the larger of the two
+  // zone pin counts. Non-HOF nodes have empty zone-pin lists ⇒ no effect.
+  final zone = node.zone;
+  final zoneInputPinsHeight = zone != null
+      ? zone.zoneInputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM
+      : 0.0;
+  final zoneOutputPinsHeight = zone != null
+      ? zone.zoneOutputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM
+      : 0.0;
   final inputPinsHeight =
       node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
   final outputPinsHeight =
       node.outputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
   final minOutputHeight = 25.0; // Minimum output area height
-  // Main body is a Row, so height = max(left inputs, right outputs)
-  final mainBodyHeight = [inputPinsHeight, outputPinsHeight, minOutputHeight]
-      .reduce((a, b) => a > b ? a : b);
+  // For HOF nodes the body region itself contributes to the row height. In
+  // U3 the body always renders at its stored size (no content_bbox computed
+  // yet — U4 brings that in via the layout pass).
+  final bodyContentHeight = zone != null ? zone.storedHeight : 0.0;
+  final mainBodyHeight = [
+    inputPinsHeight,
+    outputPinsHeight,
+    zoneInputPinsHeight,
+    zoneOutputPinsHeight,
+    bodyContentHeight,
+    minOutputHeight,
+  ].reduce((a, b) => a > b ? a : b);
   final subtitleHeight =
       (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
   final padding = 8.0;
 
   final normalHeight = titleHeight + mainBodyHeight + subtitleHeight + padding;
 
+  // Base width for the standard node; HOFs add the body region plus gutters.
+  final baseWidth = zone != null
+      ? BASE_HOF_BODY_LEFT_OFFSET + zone.storedWidth + BASE_HOF_BODY_RIGHT_GUTTER
+      : BASE_NODE_WIDTH;
+
   if (zoomLevel == ZoomLevel.normal) {
     // Normal zoom - use calculated height
-    return Size(BASE_NODE_WIDTH * scale, normalHeight * scale);
+    return Size(baseWidth * scale, normalHeight * scale);
   } else {
     // Zoomed out - use proportionally scaled height with minimum aspect ratio
     // Ensure minimum height for text readability (at least 0.375 aspect ratio = height/width)
-    final width = BASE_NODE_WIDTH * scale;
+    final width = baseWidth * scale;
     final scaledHeight = normalHeight * scale;
     final minHeight =
         width * 0.375; // Minimum aspect ratio for at least one line of text

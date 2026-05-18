@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_data_type_to_data_type`, `api_literal_to_text_value`, `atom_symbol`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`, `data_type_to_simple_param_type`, `network_result_to_api_literal`, `param_element_color_u32`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `text_value_to_api_literal`, `vecs_to_rows_f64`, `vecs_to_rows_i32`
+// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_data_type_to_data_type`, `api_literal_to_text_value`, `atom_symbol`, `build_zone_view`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`, `data_type_to_simple_param_type`, `network_result_to_api_literal`, `param_element_color_u32`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `text_value_to_api_literal`, `vecs_to_rows_f64`, `vecs_to_rows_i32`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
@@ -1203,6 +1203,33 @@ APIResult runCliSingle({required CliConfig config}) => RustLib.instance.api
 /// Run atomCAD in headless CLI batch mode
 APIResult runCliBatch({required BatchCliConfig config}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiRunCliBatch(config: config);
+
+/// Set the stored body width/height of an HOF (zone-owning) node, identified
+/// by the body the resize applies to. `scope_path` is the chain of HOF node
+/// IDs leading to the body's owner — empty means the active top-level network,
+/// `[hof_id]` means the body owned by `hof_id` at the top level, deeper paths
+/// address bodies nested inside bodies. `hof_node_id` is the HOF whose stored
+/// body size is changing (located inside the scope's body).
+///
+/// Minimums clamp at 100×60 logical pixels so the body region is always large
+/// enough to render its inner pins. The body's *rendered* size is
+/// `max(stored, content_bbox + padding)` (zones UI design doc §"Body sizing"),
+/// so the user can shrink stored size down to the clamp regardless of content.
+///
+/// Phase U3 lands the API; the drag handles that drive it land alongside body
+/// content rendering. No undo command yet — that's tracked in U4 alongside
+/// node-move begin/end coalescing.
+void setZoneSize(
+        {required Uint64List scopePath,
+        required BigInt hofNodeId,
+        required double width,
+        required double height}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetZoneSize(
+            scopePath: scopePath,
+            hofNodeId: hofNodeId,
+            width: width,
+            height: height);
 
 /// Resize a comment node.
 /// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node

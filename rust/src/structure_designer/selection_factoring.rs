@@ -448,6 +448,8 @@ pub fn create_subnetwork_from_selection(
             custom_node_type: old_node.custom_node_type.clone(),
             zone: old_node.zone.clone(),
             zone_output_arguments: old_node.zone_output_arguments.clone(),
+            body_width: old_node.body_width,
+            body_height: old_node.body_height,
         };
         new_network.nodes.insert(new_id, new_node);
 
@@ -498,6 +500,8 @@ pub fn create_subnetwork_from_selection(
             custom_node_type: None,
             zone: None,
             zone_output_arguments: Vec::new(),
+            body_width: crate::structure_designer::node_network::DEFAULT_BODY_WIDTH,
+            body_height: crate::structure_designer::node_network::DEFAULT_BODY_HEIGHT,
         };
 
         new_network.nodes.insert(param_id, param_node);

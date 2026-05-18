@@ -781,8 +781,15 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
-  /// Builds the normal detailed node with all pins and controls
+  /// Builds the normal detailed node with all pins and controls.
+  ///
+  /// For HOF nodes (`node.zone != null`) the inner row inserts a translucent
+  /// body region between the external input and output columns; the body
+  /// region carries the zone-input/zone-output pins on its inner edges and a
+  /// centered `[N nodes]` placeholder until U4 lands body-node rendering. See
+  /// `doc/design_zones_ui.md` §"Phase U3".
   Widget _buildNormalNodeContent(BuildContext context) {
+    final isHof = node.zone != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -838,42 +845,9 @@ class NodeWidget extends StatelessWidget {
             ),
           ),
         ),
-        // Main Body
-        Padding(
-          padding: const EdgeInsets.all(2),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left Side (Inputs)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: node.inputPins
-                      .asMap()
-                      .entries
-                      .map((entry) => _buildInputPin(
-                          entry.value.name,
-                          PinReference(
-                            nodeId: node.id,
-                            scopeChain: scopeChain,
-                            pinKind: PinKind.externalInput,
-                            pinIndex: entry.key,
-                            dataType: entry.value.dataType,
-                          ),
-                          entry.value.multi))
-                      .toList(),
-                ),
-              ),
-              // Right Side (Outputs)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: node.outputPins
-                    .map((pin) => _buildOutputPin(context, pin))
-                    .toList(),
-              ),
-            ],
-          ),
-        ),
+        // Main Body — different layout for HOFs (body region between
+        // input/output columns) vs. regular nodes (just input/output columns).
+        if (isHof) _buildHofMainBody(context) else _buildRegularMainBody(context),
         // Subtitle (if present)
         if (node.subtitle != null && node.subtitle!.isNotEmpty)
           Container(
@@ -895,6 +869,112 @@ class NodeWidget extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+
+  /// Original (non-HOF) main body: input column on the left, output column
+  /// on the right. Preserved verbatim from the pre-zones layout.
+  Widget _buildRegularMainBody(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left Side (Inputs)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: node.inputPins
+                  .asMap()
+                  .entries
+                  .map((entry) => _buildInputPin(
+                      entry.value.name,
+                      PinReference(
+                        nodeId: node.id,
+                        scopeChain: scopeChain,
+                        pinKind: PinKind.externalInput,
+                        pinIndex: entry.key,
+                        dataType: entry.value.dataType,
+                      ),
+                      entry.value.multi))
+                  .toList(),
+            ),
+          ),
+          // Right Side (Outputs)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: node.outputPins
+                .map((pin) => _buildOutputPin(context, pin))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// HOF main body: external input column on the left, translucent body
+  /// region in the middle (carrying inner-edge zone pins + `[N nodes]`
+  /// placeholder), external output column on the right.
+  ///
+  /// The body region's inner-edge pins use [PinKind.zoneInput] /
+  /// [PinKind.zoneOutput]. Phase U3 keeps them visual only — body content
+  /// is not authored yet, so dragging a wire from a zone pin lands in
+  /// empty space (same handler as any orphan wire drop).
+  Widget _buildHofMainBody(BuildContext context) {
+    final zone = node.zone!;
+    return SizedBox(
+      width: BASE_HOF_BODY_LEFT_OFFSET +
+          zone.storedWidth +
+          BASE_HOF_BODY_RIGHT_GUTTER,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // External input column. Width matched to BASE_HOF_BODY_LEFT_OFFSET
+          // so its right edge meets the body region's left edge.
+          SizedBox(
+            width: BASE_HOF_BODY_LEFT_OFFSET,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 2, top: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: node.inputPins
+                    .asMap()
+                    .entries
+                    .map((entry) => _buildInputPin(
+                        entry.value.name,
+                        PinReference(
+                          nodeId: node.id,
+                          scopeChain: scopeChain,
+                          pinKind: PinKind.externalInput,
+                          pinIndex: entry.key,
+                          dataType: entry.value.dataType,
+                        ),
+                        entry.value.multi))
+                    .toList(),
+              ),
+            ),
+          ),
+          // Translucent body region.
+          _ZoneBodyRegion(
+            nodeId: node.id,
+            scopeChain: scopeChain,
+            zone: zone,
+          ),
+          // External output column.
+          SizedBox(
+            width: BASE_HOF_BODY_RIGHT_GUTTER,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 2, top: 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: node.outputPins
+                    .map((pin) => _buildOutputPin(context, pin))
+                    .toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1332,6 +1412,115 @@ Future<void> runExecuteWithPlacard(
       const SnackBar(
         content: Text('Execute complete'),
         duration: Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+/// Translucent body region rendered inside an HOF node. Carries the inner-edge
+/// zone pins (zone-input on the left, zone-output on the right) and a centered
+/// `[N nodes]` placeholder.
+///
+/// Phase U3 surface only: body content (nodes + wires) is not rendered. The
+/// region is non-interactive — clicks pass through to the HOF chrome (the
+/// design's "container hit-testing" gotcha). The zone pins themselves are
+/// rendered with [PinViewWidget] (visual only) rather than [PinWidget] (draggable)
+/// because there's nothing inside the body to wire to yet — U4 swaps these to
+/// fully interactive `PinWidget`s once body editing arrives.
+class _ZoneBodyRegion extends StatelessWidget {
+  final BigInt nodeId;
+  final List<BigInt> scopeChain;
+  final ZoneView zone;
+
+  const _ZoneBodyRegion({
+    required this.nodeId,
+    required this.scopeChain,
+    required this.zone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = zone.storedWidth;
+    final height = zone.storedHeight;
+
+    // Pin vertical positions relative to the body region's top-left match the
+    // `pinScreenPosition` formula in ScopeResolver: the offset from the node's
+    // top is `NODE_VERT_WIRE_OFFSET + (i + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM`,
+    // and the body region's top within the node is BASE_HOF_BODY_TOP_OFFSET.
+    double pinY(int i) =>
+        NODE_VERT_WIRE_OFFSET +
+        (i + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM -
+        BASE_HOF_BODY_TOP_OFFSET -
+        PIN_HIT_AREA_HEIGHT / 2;
+
+    return Container(
+      width: width,
+      height: height,
+      margin: const EdgeInsets.only(top: BASE_HOF_BODY_TOP_OFFSET - 30),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.25),
+          width: 1.0,
+        ),
+        borderRadius: BorderRadius.circular(6.0),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Centered "[N nodes]" placeholder. U4 replaces this with body
+          // node rendering.
+          Center(
+            child: Text(
+              zone.nodeCount == 1
+                  ? '${zone.nodeCount} node inside'
+                  : '${zone.nodeCount} nodes inside',
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+          // Zone-input pins on the body's inner-left edge, facing into the
+          // body. Positioned so their hit-test centers match the
+          // `pinScreenPosition` formula in ScopeResolver.
+          for (int i = 0; i < zone.zoneInputPins.length; i++)
+            Positioned(
+              left: -PIN_HIT_AREA_WIDTH / 2,
+              top: pinY(i),
+              child: SizedBox(
+                width: PIN_HIT_AREA_WIDTH,
+                height: PIN_HIT_AREA_HEIGHT,
+                child: Center(
+                  child: PinViewWidget(
+                    dataType: zone.zoneInputPins[i].effectiveDataType,
+                    multi: false,
+                    isInput: false,
+                    pinName: zone.zoneInputPins[i].name,
+                  ),
+                ),
+              ),
+            ),
+          // Zone-output pins on the body's inner-right edge.
+          for (int i = 0; i < zone.zoneOutputPins.length; i++)
+            Positioned(
+              right: -PIN_HIT_AREA_WIDTH / 2,
+              top: pinY(i),
+              child: SizedBox(
+                width: PIN_HIT_AREA_WIDTH,
+                height: PIN_HIT_AREA_HEIGHT,
+                child: Center(
+                  child: PinViewWidget(
+                    dataType: zone.zoneOutputPins[i].dataType,
+                    multi: zone.zoneOutputPins[i].multi,
+                    isInput: true,
+                    pinName: zone.zoneOutputPins[i].name,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

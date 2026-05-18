@@ -401,7 +401,21 @@ pub struct Node {
     /// every non-HOF node. Phase 2 lands the field; no built-in type populates
     /// it yet.
     pub zone_output_arguments: Vec<Argument>,
+    /// Stored body width in logical pixels for HOF nodes. The body's rendered
+    /// width is `max(body_width, content_bbox + padding)` (zones UI design
+    /// doc §"Body sizing"). Meaningful only when `zone.is_some()`; the value
+    /// on non-HOF nodes is the default (`DEFAULT_BODY_WIDTH`) and unused.
+    pub body_width: f64,
+    /// Stored body height in logical pixels for HOF nodes. See [`body_width`].
+    pub body_height: f64,
 }
+
+/// Default stored body width for newly created HOF nodes (logical pixels).
+/// See `doc/design_zones_ui.md` §"Body sizing".
+pub const DEFAULT_BODY_WIDTH: f64 = 320.0;
+
+/// Default stored body height for newly created HOF nodes (logical pixels).
+pub const DEFAULT_BODY_HEIGHT: f64 = 180.0;
 
 impl Node {
     /// Mutable access to this node's owned zone body, lazily cloning under
@@ -740,6 +754,8 @@ impl NodeNetwork {
                 custom_node_type,
                 zone: cloned_zone,
                 zone_output_arguments: cloned_zone_output_arguments,
+                body_width: source_node.body_width,
+                body_height: source_node.body_height,
             };
 
             self.nodes.insert(new_id, new_node);
@@ -815,6 +831,8 @@ impl NodeNetwork {
             custom_node_type: None,
             zone: None,
             zone_output_arguments: Vec::new(),
+            body_width: DEFAULT_BODY_WIDTH,
+            body_height: DEFAULT_BODY_HEIGHT,
         };
 
         self.next_node_id += 1;
@@ -849,6 +867,8 @@ impl NodeNetwork {
             custom_node_type: None,
             zone: None,
             zone_output_arguments: Vec::new(),
+            body_width: DEFAULT_BODY_WIDTH,
+            body_height: DEFAULT_BODY_HEIGHT,
         };
 
         // Ensure next_node_id stays ahead of any manually assigned ID
@@ -1611,6 +1631,8 @@ impl NodeNetwork {
             custom_node_type,
             zone: cloned_zone,
             zone_output_arguments: cloned_zone_output_arguments,
+            body_width: original_node.body_width,
+            body_height: original_node.body_height,
         };
 
         // Insert the duplicated node into the network
