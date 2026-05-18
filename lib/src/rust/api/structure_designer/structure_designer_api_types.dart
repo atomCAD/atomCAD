@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -113,6 +113,20 @@ class APIApplyDiffData {
           runtimeType == other.runtimeType &&
           tolerance == other.tolerance &&
           errorOnStale == other.errorOnStale;
+}
+
+/// Discriminator for which argument list on the destination node a wire
+/// terminates at. Mirrors `node_network::ArgumentKind`. See
+/// `doc/design_zones_ui.md` §"Data model — Rust API extensions".
+enum APIArgumentKind {
+  /// Sourced from destination's `arguments` (today's regular wires +
+  /// captures + iteration-value references).
+  external_,
+
+  /// Sourced from destination's `zone_output_arguments` (body-return wires
+  /// from a body node's output into its containing HOF's zone-output pin).
+  zoneOutput,
+  ;
 }
 
 class APIArrayAtData {
@@ -3250,12 +3264,20 @@ class WireView {
   final BigInt destParamIndex;
   final bool selected;
 
+  /// Which argument list on the destination node this wire terminates at.
+  /// Phase U4 surfaces the discriminator for body-return wires (a body
+  /// node's output → its containing HOF's zone-output pin). Defaults to
+  /// `External` for every wire on the regular `arguments` list. See
+  /// `doc/design_zones_ui.md` §"Wire-creation API generalisation".
+  final APIArgumentKind destinationArgumentKind;
+
   const WireView({
     required this.sourceNodeId,
     required this.sourceOutputPinIndex,
     required this.destNodeId,
     required this.destParamIndex,
     required this.selected,
+    required this.destinationArgumentKind,
   });
 
   @override
@@ -3264,7 +3286,8 @@ class WireView {
       sourceOutputPinIndex.hashCode ^
       destNodeId.hashCode ^
       destParamIndex.hashCode ^
-      selected.hashCode;
+      selected.hashCode ^
+      destinationArgumentKind.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3275,15 +3298,15 @@ class WireView {
           sourceOutputPinIndex == other.sourceOutputPinIndex &&
           destNodeId == other.destNodeId &&
           destParamIndex == other.destParamIndex &&
-          selected == other.selected;
+          selected == other.selected &&
+          destinationArgumentKind == other.destinationArgumentKind;
 }
 
 /// Read-only view of an HOF node's body, surfaced for the Flutter editor.
 ///
-/// Phase U3 populates only the fields needed to render the empty body region
-/// (inner-edge pins + a centered "[N nodes]" placeholder). The body's internal
-/// nodes/wires/selection arrive in U4. The recursion bottoms out naturally —
-/// non-HOF body nodes have `NodeView.zone == None`.
+/// Phase U4 populates body-internal `nodes` and `wires`; non-HOF body nodes
+/// have `NodeView.zone == None`, terminating the recursion. Cross-scope wires
+/// (captures, iteration-value references, body returns) land in U5.
 class ZoneView {
   /// Zone-input pins (inner-left) declared by the HOF type. From the body's
   /// perspective these are sources; reuses `OutputPinView` for shape parity
@@ -3294,33 +3317,38 @@ class ZoneView {
   /// perspective these are destinations; reuses `InputPinView`.
   final List<InputPinView> zoneOutputPins;
 
+  /// All nodes inside the body, keyed by id. Positions are body-local.
+  /// Populated in U4; a non-HOF body node has `NodeView.zone == None`.
+  final Map<BigInt, NodeView> nodes;
+
+  /// All wires inside the body. U4 surfaces intra-body wires only; cross-
+  /// scope wires (captures, iteration values, body returns) come in U5.
+  final List<WireView> wires;
+
   /// Stored body width in logical pixels. The renderer uses
-  /// `max(stored_width, content_bbox + padding)`; in U3 there is no content,
-  /// so the rendered size equals the stored size.
+  /// `max(stored_width, content_bbox + padding)`.
   final double storedWidth;
 
   /// Stored body height in logical pixels.
   final double storedHeight;
 
-  /// Number of nodes inside the body. Used by U3's "[N nodes]" placeholder;
-  /// U4 replaces the placeholder with actual body-node rendering.
-  final int nodeCount;
-
   const ZoneView({
     required this.zoneInputPins,
     required this.zoneOutputPins,
+    required this.nodes,
+    required this.wires,
     required this.storedWidth,
     required this.storedHeight,
-    required this.nodeCount,
   });
 
   @override
   int get hashCode =>
       zoneInputPins.hashCode ^
       zoneOutputPins.hashCode ^
+      nodes.hashCode ^
+      wires.hashCode ^
       storedWidth.hashCode ^
-      storedHeight.hashCode ^
-      nodeCount.hashCode;
+      storedHeight.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3329,7 +3357,8 @@ class ZoneView {
           runtimeType == other.runtimeType &&
           zoneInputPins == other.zoneInputPins &&
           zoneOutputPins == other.zoneOutputPins &&
+          nodes == other.nodes &&
+          wires == other.wires &&
           storedWidth == other.storedWidth &&
-          storedHeight == other.storedHeight &&
-          nodeCount == other.nodeCount;
+          storedHeight == other.storedHeight;
 }

@@ -53,6 +53,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIApplyDiffData dco_decode_api_apply_diff_data(dynamic raw);
 
   @protected
+  APIArgumentKind dco_decode_api_argument_kind(dynamic raw);
+
+  @protected
   APIArrayAtData dco_decode_api_array_at_data(dynamic raw);
 
   @protected
@@ -1178,6 +1181,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIApplyDiffData sse_decode_api_apply_diff_data(SseDeserializer deserializer);
+
+  @protected
+  APIArgumentKind sse_decode_api_argument_kind(SseDeserializer deserializer);
 
   @protected
   APIArrayAtData sse_decode_api_array_at_data(SseDeserializer deserializer);
@@ -2496,6 +2502,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_apply_diff_data(
       APIApplyDiffData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_argument_kind(
+      APIArgumentKind self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_array_at_data(

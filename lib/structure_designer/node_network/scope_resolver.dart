@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_widget.dart'
+    show PIN_HIT_AREA_WIDTH;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Per-frame caches keyed by full scope chain terminating at an HOF node id
@@ -77,26 +79,93 @@ class ScopeResolver {
   /// positions. Must be called before any pin-position or hit-test query.
   /// O(N) in the total number of nodes in the network.
   ///
-  /// Phase U3 walks top-level nodes only — bodies don't render content yet,
-  /// so nested HOFs contribute nothing to the cache. The bottom-up
-  /// machinery is in place but trivial; U4 extends it with `content_bbox`.
+  /// Two phases:
+  /// 1. **Bottom-up sizes.** For each HOF reached, recurse into its body
+  ///    first so inner body sizes are known on return. Compute `content_bbox`
+  ///    as the union of every body node's rect in body-local coordinates.
+  ///    Then `bodySizes[chain] = max(stored, content_bbox + padding)`.
+  /// 2. **Top-down origins.** Walk down the tree using known body sizes to
+  ///    place each body's screen-space origin. The top-level frame's origin
+  ///    is computed via `logicalToScreen`; nested bodies' origins are the
+  ///    parent body's origin plus the HOF's position-in-parent times scale.
+  ///
+  /// See `doc/design_zones_ui.md` §"Layout pass — bottom-up sizes, top-down
+  /// origins".
   void runLayoutPass() {
     layout.bodySizes.clear();
     layout.bodyOrigins.clear();
+    // Phase 1: bottom-up sizes.
+    for (final node in root.nodes.values) {
+      final zone = node.zone;
+      if (zone == null) continue;
+      _computeBodySize(zone, [node.id]);
+    }
+    // Phase 2: top-down origins, starting from the top-level scope.
     for (final node in root.nodes.values) {
       final zone = node.zone;
       if (zone == null) continue;
       final chain = [node.id];
-      // In U3 the body always renders at its stored size; the
-      // `max(stored, content_bbox + padding)` rule is wired up in U4 once
-      // body nodes start appearing inside.
-      layout.bodySizes[chain] = Size(zone.storedWidth, zone.storedHeight);
-      // Body inner-top-left in screen coordinates.
       final hofPos = apiVec2ToOffset(node.position);
       final bodyTopLeftLogical = hofPos +
           const Offset(BASE_HOF_BODY_LEFT_OFFSET, BASE_HOF_BODY_TOP_OFFSET);
-      layout.bodyOrigins[chain] =
-          logicalToScreen(bodyTopLeftLogical, panOffset, scale);
+      final origin = logicalToScreen(bodyTopLeftLogical, panOffset, scale);
+      layout.bodyOrigins[chain] = origin;
+      _placeChildBodies(zone, chain, origin);
+    }
+  }
+
+  /// Recursive bottom-up size computation. After this returns, `layout
+  /// .bodySizes[chain]` holds the body's rendered size = `max(stored,
+  /// content_bbox + padding)`. Recurses into nested HOF bodies first so
+  /// their sizes contribute to the outer body's `content_bbox`.
+  void _computeBodySize(ZoneView zone, List<BigInt> chain) {
+    // Recurse first so inner sizes feed the outer content_bbox via
+    // getNodeSize (which reads the HOF body's stored size in U4 — bodies
+    // grow but the HOF widget footprint follows by way of getNodeSize using
+    // the cached body size on the next pass; for simplicity we use the
+    // node's own getNodeSize which derives from stored_width/height).
+    for (final innerNode in zone.nodes.values) {
+      final innerZone = innerNode.zone;
+      if (innerZone == null) continue;
+      _computeBodySize(innerZone, [...chain, innerNode.id]);
+    }
+
+    double maxRight = 0;
+    double maxBottom = 0;
+    for (final node in zone.nodes.values) {
+      final pos = apiVec2ToOffset(node.position);
+      final size = getNodeSize(node, zoomLevel);
+      // size is in *screen* coordinates; convert to body-local by /scale.
+      final logicalSize = Size(size.width / scale, size.height / scale);
+      final right = pos.dx + logicalSize.width;
+      final bottom = pos.dy + logicalSize.height;
+      if (right > maxRight) maxRight = right;
+      if (bottom > maxBottom) maxBottom = bottom;
+    }
+    const padding = BASE_HOF_BODY_BOTTOM_PADDING;
+    final contentWidth = maxRight + padding;
+    final contentHeight = maxBottom + padding;
+    final width = contentWidth > zone.storedWidth ? contentWidth : zone.storedWidth;
+    final height =
+        contentHeight > zone.storedHeight ? contentHeight : zone.storedHeight;
+    layout.bodySizes[chain] = Size(width, height);
+  }
+
+  /// Recursive top-down origin placement for child bodies. The parent body's
+  /// origin is [parentOrigin] (screen coords); each child body's origin is
+  /// `parentOrigin + (hof.position + body-inner-offset) * scale`.
+  void _placeChildBodies(
+      ZoneView parent, List<BigInt> parentChain, Offset parentOrigin) {
+    for (final innerNode in parent.nodes.values) {
+      final innerZone = innerNode.zone;
+      if (innerZone == null) continue;
+      final innerChain = [...parentChain, innerNode.id];
+      final hofPos = apiVec2ToOffset(innerNode.position);
+      final bodyTopLeftLocal = hofPos +
+          const Offset(BASE_HOF_BODY_LEFT_OFFSET, BASE_HOF_BODY_TOP_OFFSET);
+      final origin = parentOrigin + bodyTopLeftLocal * scale;
+      layout.bodyOrigins[innerChain] = origin;
+      _placeChildBodies(innerZone, innerChain, origin);
     }
   }
 
@@ -130,41 +199,115 @@ class ScopeResolver {
   /// Walk the screen point down through containing bodies; return the deepest
   /// scope chain that contains it and the body-local coordinate.
   ///
-  /// Phase U3 deliberately keeps body interiors non-interactive (clicks fall
-  /// through to the HOF chrome) — body authoring lands in U4. So this still
-  /// returns the top-level scope. The shape is in place for U4 to drop body
-  /// containment in without touching call sites.
+  /// A click inside an HOF's body interior (not on a body node, not on the
+  /// HOF's chrome) returns that body's scope. Used by right-click → Add Node
+  /// and by the active-body click handler. See `doc/design_zones_ui.md`
+  /// §"Coordinate system — Screen → logical".
   ({List<BigInt> scopeChain, Offset bodyLocal}) findContainingScope(
       Offset screenPos) {
+    // Walk top-level nodes for any HOF whose body contains the point, then
+    // recurse. Deepest containment wins.
+    final result = _findContainingScopeIn(
+      root.nodes.values,
+      const <BigInt>[],
+      screenPos,
+    );
+    if (result != null) return result;
     return (
       scopeChain: const <BigInt>[],
       bodyLocal: screenToLogical(screenPos, panOffset, scale),
     );
   }
 
+  ({List<BigInt> scopeChain, Offset bodyLocal})? _findContainingScopeIn(
+    Iterable<NodeView> nodes,
+    List<BigInt> scopeChain,
+    Offset screenPos,
+  ) {
+    for (final node in nodes) {
+      final zone = node.zone;
+      if (zone == null) continue;
+      final bodyChain = [...scopeChain, node.id];
+      final bodyOrigin = layout.lookupOrigin(bodyChain);
+      final bodySize = layout.lookupSize(bodyChain);
+      if (bodyOrigin == null || bodySize == null) continue;
+      final bodyRect = bodyOrigin & (bodySize * scale);
+      if (!bodyRect.contains(screenPos)) continue;
+      // Try deeper first — nested bodies trump the outer one.
+      final inner = _findContainingScopeIn(
+        zone.nodes.values,
+        bodyChain,
+        screenPos,
+      );
+      if (inner != null) return inner;
+      final bodyLocal = (screenPos - bodyOrigin) / scale;
+      return (scopeChain: bodyChain, bodyLocal: bodyLocal);
+    }
+    return null;
+  }
+
   /// Find the node containing [screenPos] anywhere in the tree. Returns the
   /// node and the scope chain its containing network occupies.
   ///
-  /// Phase U3 walks top-level nodes only. Clicks inside an HOF's body region
-  /// resolve to the HOF itself (the body is read-only in U3 — see
-  /// `doc/design_zones_ui.md` §"Phase U3" gotcha).
+  /// U4: walks into bodies. The deepest containing node wins — a click on a
+  /// body node returns that node, not its containing HOF.
   ({List<BigInt> scopeChain, NodeView node})? findNodeAtScreenPosition(
       Offset screenPos) {
-    final logicalPosition = screenToLogical(screenPos, panOffset, scale);
-    for (final node in root.nodes.values) {
-      Size logicalNodeSize;
+    return _findNodeAt(root.nodes.values, const <BigInt>[], screenPos);
+  }
+
+  ({List<BigInt> scopeChain, NodeView node})? _findNodeAt(
+    Iterable<NodeView> nodes,
+    List<BigInt> scopeChain,
+    Offset screenPos,
+  ) {
+    // First recurse into any HOF bodies — body content layers on top of its
+    // HOF, so deeper hits win.
+    for (final node in nodes) {
+      final zone = node.zone;
+      if (zone == null) continue;
+      final bodyChain = [...scopeChain, node.id];
+      final hit = _findNodeAt(zone.nodes.values, bodyChain, screenPos);
+      if (hit != null) return hit;
+    }
+    // Then check nodes at this scope.
+    for (final node in nodes) {
+      final nodeScreenPos =
+          scopedToScreen(scopeChain, apiVec2ToOffset(node.position));
+      Size screenSize;
       if (node.nodeTypeName == 'Comment') {
-        logicalNodeSize =
-            Size(node.commentWidth ?? 200.0, node.commentHeight ?? 100.0);
+        screenSize = Size(
+          (node.commentWidth ?? 200.0) * scale,
+          (node.commentHeight ?? 100.0) * scale,
+        );
       } else {
-        final nodeSize = getNodeSize(node, zoomLevel);
-        logicalNodeSize =
-            Size(nodeSize.width / scale, nodeSize.height / scale);
+        screenSize = getNodeSize(node, zoomLevel);
       }
-      final nodeRect = apiVec2ToOffset(node.position) & logicalNodeSize;
-      if (nodeRect.contains(logicalPosition)) {
-        return (scopeChain: const <BigInt>[], node: node);
+      final nodeRect = nodeScreenPos & screenSize;
+      if (!nodeRect.contains(screenPos)) continue;
+      // Special-case HOF nodes: clicks landing inside the body region are
+      // *not* on the HOF itself — they're on (the body's empty interior of)
+      // the body, which is logically empty space at that scope. Returning
+      // the HOF here would short-circuit right-click → Add Node and the
+      // body-empty-space click-to-activate handler. Body nodes are handled
+      // by the recursion above, so by the time we reach this branch we know
+      // no body node was hit.
+      if (node.zone != null) {
+        final bodyChain = [...scopeChain, node.id];
+        final bodyOrigin = layout.lookupOrigin(bodyChain);
+        final bodySize = layout.lookupSize(bodyChain);
+        if (bodyOrigin != null && bodySize != null) {
+          final bodyRect = bodyOrigin & (bodySize * scale);
+          if (bodyRect.contains(screenPos)) {
+            // Click is in body empty space — fall through to the next node
+            // (the HOF is reported as "not hit"). Caller's right-click
+            // handler will then see this as empty space and open Add Node
+            // popup parameterized by the body's scope.
+            continue;
+          }
+        }
       }
+      return (scopeChain: scopeChain, node: node);
     }
     return null;
   }
@@ -219,11 +362,20 @@ class ScopeResolver {
   }
 
   NodeView? _resolveNode(List<BigInt> scopeChain, BigInt nodeId) {
-    // In U3 body content isn't surfaced through the API (`ZoneView.nodes` is
-    // omitted), so a pin with a non-empty scope chain doesn't address any
-    // node visible to the editor. Phase U4 will walk `Node.zone.nodes`.
-    if (scopeChain.isNotEmpty) return null;
-    return root.nodes[nodeId];
+    if (scopeChain.isEmpty) {
+      return root.nodes[nodeId];
+    }
+    // Walk down the scope chain into nested HOF bodies. Returns null if any
+    // step fails (the chain references a missing or non-HOF node) — wires
+    // that point at deleted nodes degrade gracefully.
+    Map<BigInt, NodeView> currentNodes = root.nodes;
+    for (final hofId in scopeChain) {
+      final hof = currentNodes[hofId];
+      final zone = hof?.zone;
+      if (zone == null) return null;
+      currentNodes = zone.nodes;
+    }
+    return currentNodes[nodeId];
   }
 
   (Offset, String) _pinScreenPosition(NodeView node, PinReference pin) {
@@ -281,27 +433,38 @@ class ScopeResolver {
         return (scopedToScreen(pin.scopeChain, logicalPos), dataType);
       case PinKind.zoneInput:
         // Inner-left pin on the body region, facing into the body. The pin
-        // index is its slot in `zone.zoneInputPins`.
+        // widget is positioned at `left: 0` inside the body Container, so its
+        // CENTER (where the wire endpoint sits) is at body's left edge +
+        // PIN_HIT_AREA_WIDTH/2. This is the same inset on the other axis as
+        // a regular input pin on a node, just on the inside-facing edge.
         final z = zone!;
         final vertOffset = NODE_VERT_WIRE_OFFSET +
             (pin.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
-        final logicalPos =
-            nodePos + Offset(BASE_HOF_BODY_LEFT_OFFSET, vertOffset);
+        final logicalPos = nodePos +
+            Offset(BASE_HOF_BODY_LEFT_OFFSET + PIN_HIT_AREA_WIDTH / 2,
+                vertOffset);
         final dataType = pin.pinIndex < z.zoneInputPins.length
             ? z.zoneInputPins[pin.pinIndex].effectiveDataType
             : pin.dataType;
         return (scopedToScreen(pin.scopeChain, logicalPos), dataType);
       case PinKind.zoneOutput:
-        // Inner-right pin on the body region. Reads stored body width from
-        // the layout cache so wire rendering stays consistent with the
-        // body rect drawn by the painter.
+        // Inner-right pin on the body region, positioned at `right: 0`
+        // inside the body Container, so its CENTER is at body's right edge
+        // − PIN_HIT_AREA_WIDTH/2. Reads body size from the layout cache
+        // (rebuilt every frame via `runLayoutPass` — incorporates
+        // content_bbox and live-drag positions) so wire rendering stays
+        // consistent with the body rect drawn by the painter.
         final z = zone!;
-        final bodySize =
-            layout.lookupSize([node.id]) ?? Size(z.storedWidth, z.storedHeight);
+        final bodySize = layout.lookupSize([...pin.scopeChain, node.id]) ??
+            Size(z.storedWidth, z.storedHeight);
         final vertOffset = NODE_VERT_WIRE_OFFSET +
             (pin.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
         final logicalPos = nodePos +
-            Offset(BASE_HOF_BODY_LEFT_OFFSET + bodySize.width, vertOffset);
+            Offset(
+                BASE_HOF_BODY_LEFT_OFFSET +
+                    bodySize.width -
+                    PIN_HIT_AREA_WIDTH / 2,
+                vertOffset);
         final dataType = pin.pinIndex < z.zoneOutputPins.length
             ? z.zoneOutputPins[pin.pinIndex].dataType
             : pin.dataType;

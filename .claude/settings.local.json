@@ -213,7 +213,18 @@
       "Read(//c/c/machine_phase_systems/flutter_cad/rust/tests/**)",
       "Read(//c/c/machine_phase_systems/flutter_cad/rust/**)",
       "Bash(bc)",
-      "Bash(/c/Python311/python -c ' *)"
+      "Bash(/c/Python311/python -c ' *)",
+      "Bash(timeout 20 flutter run -d windows)",
+      "Bash(timeout 60 flutter run -d windows)",
+      "Bash(timeout 30 flutter run -d windows)",
+      "Bash(rm -rf build/windows)",
+      "Bash(flutter clean *)",
+      "Bash(flutter pub *)",
+      "Bash(timeout 15 flutter run -d windows)",
+      "Bash(tasklist)",
+      "Bash(pkill -f atomCAD)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell($data = [System.IO.File]::ReadAllBytes\\('build/windows/x64/runner/Debug/rust_lib_flutter_cad.dll'\\); $new = [BitConverter]::GetBytes\\([int32]1499921584\\); $old = [BitConverter]::GetBytes\\([int32]446442096\\); $count_new = 0; $count_old = 0; for \\($i = 0; $i -lt $data.Length - 3; $i++\\) { if \\($data[$i] -eq $new[0] -and $data[$i+1] -eq $new[1] -and $data[$i+2] -eq $new[2] -and $data[$i+3] -eq $new[3]\\) { $count_new++ } elseif \\($data[$i] -eq $old[0] -and $data[$i+1] -eq $old[1] -and $data[$i+2] -eq $old[2] -and $data[$i+3] -eq $old[3]\\) { $count_old++ } }; Write-Output \\('New hash count: ' + $count_new\\); Write-Output \\('Old hash count: ' + $count_old\\))"
     ]
   }
 }

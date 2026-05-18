@@ -130,11 +130,11 @@ class NodeDataWidget extends StatelessWidget {
           final nodeNetworkView = model.nodeNetworkView;
           if (nodeNetworkView == null) return const SizedBox.shrink();
 
-          // Find the selected node
-          final selectedNode = nodeNetworkView.nodes.entries
-              .where((entry) => entry.value.selected)
-              .map((entry) => entry.value)
-              .firstOrNull;
+          // Find the selected node — first in the active body's scope, then
+          // anywhere in the scope tree. Body-scope selection drives the
+          // property panel when the user clicked into a body. See
+          // `doc/design_zones_ui.md` §"The active body".
+          final selectedNode = _findSelectedNode(model, nodeNetworkView);
 
           if (selectedNode == null) {
             final description = getActiveNetworkDescription() ?? '';
@@ -161,6 +161,49 @@ class NodeDataWidget extends StatelessWidget {
         },
       ),
     );
+  }
+
+  /// Find the selected node anywhere in the scope tree, preferring the
+  /// active body's selection. Returns null if nothing is selected.
+  NodeView? _findSelectedNode(
+    StructureDesignerModel model,
+    NodeNetworkView rootView,
+  ) {
+    // Active body first: if the user just clicked into a body, that body's
+    // selected node drives the property panel.
+    if (model.activeScopeChain.isNotEmpty) {
+      Map<BigInt, NodeView> current = rootView.nodes;
+      bool valid = true;
+      for (final hofId in model.activeScopeChain) {
+        final hof = current[hofId];
+        final zone = hof?.zone;
+        if (zone == null) {
+          valid = false;
+          break;
+        }
+        current = zone.nodes;
+      }
+      if (valid) {
+        for (final entry in current.entries) {
+          if (entry.value.selected) return entry.value;
+        }
+      }
+    }
+    // Fall back: walk the whole tree.
+    return _findSelectedRecursive(rootView.nodes);
+  }
+
+  NodeView? _findSelectedRecursive(Map<BigInt, NodeView> nodes) {
+    for (final entry in nodes.entries) {
+      if (entry.value.selected) return entry.value;
+    }
+    for (final entry in nodes.entries) {
+      final zone = entry.value.zone;
+      if (zone == null) continue;
+      final inner = _findSelectedRecursive(zone.nodes);
+      if (inner != null) return inner;
+    }
+    return null;
   }
 
   // Helper method to build the appropriate editor based on node type

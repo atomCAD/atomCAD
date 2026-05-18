@@ -54,12 +54,13 @@ class NodeNetworkPainter extends CustomPainter {
     );
   }
 
-  /// Build a [PinReference] for the source endpoint of [wire] in U1's
-  /// always-empty scope. Function pins are encoded by pin index `-1`; everything
+  /// Build a [PinReference] for the source endpoint of [wire], owner scope
+  /// [scopeChain]. Function pins are encoded by pin index `-1`; everything
   /// else is a regular external output.
-  PinReference _wireSourcePin(WireView wire) {
+  PinReference _wireSourcePin(WireView wire, List<BigInt> scopeChain) {
     return PinReference(
       nodeId: wire.sourceNodeId,
+      scopeChain: scopeChain,
       pinKind: wire.sourceOutputPinIndex == -1
           ? PinKind.functionPin
           : PinKind.externalOutput,
@@ -69,9 +70,29 @@ class NodeNetworkPainter extends CustomPainter {
   }
 
   /// Build a [PinReference] for the destination endpoint of [wire].
-  PinReference _wireDestPin(WireView wire) {
+  ///
+  /// For body-return wires (`destination_argument_kind == ZoneOutput`), the
+  /// dest is the HOF's zone-output pin: the HOF itself lives in the *parent*
+  /// of [scopeChain] (since [scopeChain] is the body's scope, terminating at
+  /// the HOF). For all other wires the dest is a regular `externalInput` in
+  /// the same scope as the source.
+  PinReference _wireDestPin(WireView wire, List<BigInt> scopeChain) {
+    if (wire.destinationArgumentKind == APIArgumentKind.zoneOutput) {
+      // The HOF's containing scope is scopeChain with its terminal element
+      // (the HOF's own id) chopped off.
+      final hofScope =
+          scopeChain.isEmpty ? const <BigInt>[] : scopeChain.sublist(0, scopeChain.length - 1);
+      return PinReference(
+        nodeId: wire.destNodeId,
+        scopeChain: hofScope,
+        pinKind: PinKind.zoneOutput,
+        pinIndex: wire.destParamIndex.toInt(),
+        dataType: '',
+      );
+    }
     return PinReference(
       nodeId: wire.destNodeId,
+      scopeChain: scopeChain,
       pinKind: PinKind.externalInput,
       pinIndex: wire.destParamIndex.toInt(),
       dataType: '',
@@ -91,20 +112,11 @@ class NodeNetworkPainter extends CustomPainter {
       ..strokeWidth = WIRE_WIDTH_NORMAL
       ..style = PaintingStyle.stroke;
 
-    // Draw regular wires first
-    for (var wire in resolver.root.wires) {
-      final source = resolver.tryPinScreenPosition(_wireSourcePin(wire));
-      final dest = resolver.tryPinScreenPosition(_wireDestPin(wire));
-
-      if (source == null || dest == null) {
-        continue;
-      }
-
-      final alignment =
-          _getSourcePinAlignment(wire.sourceNodeId, wire.sourceOutputPinIndex);
-      _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected,
-          alignment);
-    }
+    // Draw wires for the top-level network, and recursively for every body
+    // — the design specifies the outermost layer paints all wires so that
+    // pin endpoint resolution can reach into any scope. See
+    // `doc/design_zones_ui.md` §"Wire rendering across scopes".
+    _drawWiresForNetwork(resolver, resolver.root, const <BigInt>[], canvas, paint);
 
     // Draw dragged wire on top
     if (graphModel.draggedWire != null) {
@@ -126,6 +138,65 @@ class NodeNetworkPainter extends CustomPainter {
         _drawWire(wireEndPos, wireStart.$1, canvas, paint, wireStart.$2, false,
             alignment);
       }
+    }
+  }
+
+  /// Recursively paint every wire reachable from the top-level network.
+  /// Wires at body depth are painted using `pinScreenPosition` against the
+  /// body's `scopeChain` so cross-frame positions resolve through the
+  /// layout cache. See `doc/design_zones_ui.md` §"Wire rendering across scopes".
+  void _drawWiresForNetwork(
+    ScopeResolver resolver,
+    NodeNetworkView network,
+    List<BigInt> scopeChain,
+    Canvas canvas,
+    Paint paint,
+  ) {
+    _drawWiresAtScope(resolver, network.wires, scopeChain, canvas, paint);
+    for (final node in network.nodes.values) {
+      final zone = node.zone;
+      if (zone == null) continue;
+      final innerChain = [...scopeChain, node.id];
+      _drawWiresInZone(resolver, zone, innerChain, canvas, paint);
+    }
+  }
+
+  void _drawWiresInZone(
+    ScopeResolver resolver,
+    ZoneView zone,
+    List<BigInt> scopeChain,
+    Canvas canvas,
+    Paint paint,
+  ) {
+    _drawWiresAtScope(resolver, zone.wires, scopeChain, canvas, paint);
+    for (final node in zone.nodes.values) {
+      final inner = node.zone;
+      if (inner == null) continue;
+      final innerChain = [...scopeChain, node.id];
+      _drawWiresInZone(resolver, inner, innerChain, canvas, paint);
+    }
+  }
+
+  void _drawWiresAtScope(
+    ScopeResolver resolver,
+    List<WireView> wires,
+    List<BigInt> scopeChain,
+    Canvas canvas,
+    Paint paint,
+  ) {
+    for (var wire in wires) {
+      final source =
+          resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
+      final dest =
+          resolver.tryPinScreenPosition(_wireDestPin(wire, scopeChain));
+      if (source == null || dest == null) continue;
+      // Alignment is only resolved for top-level nodes (no per-pin alignment
+      // surfaced for body-scope evaluation in U4); body wires render solid.
+      final alignment = scopeChain.isEmpty
+          ? _getSourcePinAlignment(wire.sourceNodeId, wire.sourceOutputPinIndex)
+          : null;
+      _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected,
+          alignment);
     }
   }
 
@@ -266,9 +337,14 @@ class NodeNetworkPainter extends CustomPainter {
 
     // `position` is already in screen coordinates and the resolver returns
     // pin endpoints in screen coordinates, so no further transform is needed.
+    // Top-level wires only — U4 doesn't surface body-wire selection via the
+    // interaction-layer click. (Body wire selection from a click on the wire
+    // is a U5 polish item.)
     for (var wire in resolver.root.wires) {
-      final source = resolver.tryPinScreenPosition(_wireSourcePin(wire));
-      final dest = resolver.tryPinScreenPosition(_wireDestPin(wire));
+      final source =
+          resolver.tryPinScreenPosition(_wireSourcePin(wire, const <BigInt>[]));
+      final dest =
+          resolver.tryPinScreenPosition(_wireDestPin(wire, const <BigInt>[]));
 
       if (source == null || dest == null) {
         continue;

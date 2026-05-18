@@ -222,6 +222,30 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Sets the active body for keyboard shortcuts (Delete, Ctrl+C/V/D, …).
+  /// Replaces only if changed to avoid spurious notifies. See
+  /// `doc/design_zones_ui.md` §"The active body".
+  void setActiveScopeChain(List<BigInt> scopeChain) {
+    if (listEquals(activeScopeChain, scopeChain)) return;
+    activeScopeChain = List<BigInt>.from(scopeChain);
+    notifyListeners();
+  }
+
+  /// Update the stored body size of the HOF identified by ([scopeChain],
+  /// [hofNodeId]). The renderer uses `max(stored, content_bbox + padding)`
+  /// so the body can never shrink below its content; the Rust API also
+  /// clamps to a minimum. See `doc/design_zones_ui.md` §"Body sizing".
+  void setZoneSize(
+      List<BigInt> scopeChain, BigInt hofNodeId, double width, double height) {
+    structure_designer_api.setZoneSize(
+      scopePath: _scopeChainToBytes(scopeChain),
+      hofNodeId: hofNodeId,
+      width: width,
+      height: height,
+    );
+    refreshFromKernel();
+  }
+
   void setCameraTransform(APITransform transform) {
     common_api.setCameraTransform(transform: transform);
     refreshFromKernel();
@@ -286,6 +310,15 @@ class StructureDesignerModel extends ChangeNotifier {
     structure_designer_api.clearSelection(
       scopePath: _scopeChainToBytes(scopeChain),
     );
+    refreshFromKernel();
+  }
+
+  /// Clear the selection (and active node) at every scope reachable from the
+  /// top-level network. Used when the user clicks on empty top-level space —
+  /// every body's active node should be cleared too so it no longer renders
+  /// active. Walks the tree once Rust-side via `clear_selection_all_scopes`.
+  void clearSelectionAllScopes() {
+    structure_designer_api.clearSelectionAllScopes();
     refreshFromKernel();
   }
 
@@ -361,13 +394,14 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  /// Drag all selected nodes by delta (UI-only, does not commit to kernel)
-  void dragSelectedNodes(Offset delta) {
+  /// Drag all selected nodes by delta (UI-only, does not commit to kernel).
+  /// Mutates positions in the body scope identified by [scopeChain].
+  void dragSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
-    final selectedIds = getSelectedNodeIds();
-    for (final nodeId in selectedIds) {
-      final node = nodeNetworkView!.nodes[nodeId];
-      if (node != null) {
+    final containerNodes = _nodesAtScope(scopeChain);
+    if (containerNodes == null) return;
+    for (final node in containerNodes.values) {
+      if (node.selected) {
         node.position = APIVec2(
             x: node.position.x + delta.dx, y: node.position.y + delta.dy);
       }
@@ -375,21 +409,35 @@ class StructureDesignerModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Commit positions of all selected nodes to the kernel
+  /// Commit positions of all selected nodes in [scopeChain] to the kernel.
   void updateSelectedNodesPosition({List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
-    final selectedIds = getSelectedNodeIds();
+    final containerNodes = _nodesAtScope(scopeChain);
+    if (containerNodes == null) return;
     final scopePath = _scopeChainToBytes(scopeChain);
-    for (final nodeId in selectedIds) {
-      final node = nodeNetworkView!.nodes[nodeId];
-      if (node != null) {
+    for (final node in containerNodes.values) {
+      if (node.selected) {
         structure_designer_api.moveNode(
             scopePath: scopePath,
-            nodeId: nodeId,
+            nodeId: node.id,
             position: APIVec2(x: node.position.x, y: node.position.y));
       }
     }
     refreshFromKernel();
+  }
+
+  /// Returns the node map at [scopeChain] (top-level if empty), or null if
+  /// the chain can't be walked.
+  Map<BigInt, NodeView>? _nodesAtScope(List<BigInt> scopeChain) {
+    if (nodeNetworkView == null) return null;
+    Map<BigInt, NodeView> currentNodes = nodeNetworkView!.nodes;
+    for (final hofId in scopeChain) {
+      final hof = currentNodes[hofId];
+      final zone = hof?.zone;
+      if (zone == null) return null;
+      currentNodes = zone.nodes;
+    }
+    return currentNodes;
   }
 
   // ===== MULTI-WIRE SELECTION METHODS =====
@@ -522,13 +570,37 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  /// Check if a node is the active node (for properties panel / gadget)
+  /// Returns the active node's id anywhere in the scope tree, preferring
+  /// nodes inside the [activeScopeChain] body so the property panel follows
+  /// the user's most recent body click. Falls back to the top-level network.
   BigInt? getActiveNodeId() {
     if (nodeNetworkView == null) return null;
-    for (final entry in nodeNetworkView!.nodes.entries) {
-      if (entry.value.active) {
-        return entry.key;
+    // Prefer the active scope: if the user just clicked into a body, that
+    // body's active node drives the property panel.
+    if (activeScopeChain.isNotEmpty) {
+      final activeBodyNodes = _nodesAtScope(activeScopeChain);
+      if (activeBodyNodes != null) {
+        for (final entry in activeBodyNodes.entries) {
+          if (entry.value.active) return entry.key;
+        }
       }
+    }
+    // Fall back to whichever node is active anywhere in the tree. Walks
+    // body content recursively so clicking back into top-level (which sets
+    // activeScopeChain = []) still finds a deeper body's active node if
+    // none is active at the top level.
+    return _findActiveNodeIdRecursive(nodeNetworkView!.nodes);
+  }
+
+  BigInt? _findActiveNodeIdRecursive(Map<BigInt, NodeView> nodes) {
+    for (final entry in nodes.entries) {
+      if (entry.value.active) return entry.key;
+    }
+    for (final entry in nodes.entries) {
+      final zone = entry.value.zone;
+      if (zone == null) continue;
+      final inner = _findActiveNodeIdRecursive(zone.nodes);
+      if (inner != null) return inner;
     }
     return null;
   }
@@ -725,8 +797,10 @@ class StructureDesignerModel extends ChangeNotifier {
 
   // Called on each small update when dragging a node
   // Works only on the UI: do not update the position in the kernel
-  void dragNodePosition(BigInt nodeId, Offset delta) {
-    final node = nodeNetworkView!.nodes[nodeId]!;
+  void dragNodePosition(BigInt nodeId, Offset delta,
+      {List<BigInt> scopeChain = const []}) {
+    final node = _findNodeInScope(nodeId, scopeChain);
+    if (node == null) return;
     node.position =
         APIVec2(x: node.position.x + delta.dx, y: node.position.y + delta.dy);
     notifyListeners();
@@ -734,15 +808,14 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Updates a node's position in the kernel and notifies listeners.
   void updateNodePosition(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
-    //print('updateNodePosition nodeId: ${nodeId} newPosition: ${newPosition}');
-    if (nodeNetworkView != null) {
-      final node = nodeNetworkView!.nodes[nodeId]!;
-      structure_designer_api.moveNode(
-          scopePath: _scopeChainToBytes(scopeChain),
-          nodeId: nodeId,
-          position: APIVec2(x: node.position.x, y: node.position.y));
-      refreshFromKernel();
-    }
+    if (nodeNetworkView == null) return;
+    final node = _findNodeInScope(nodeId, scopeChain);
+    if (node == null) return;
+    structure_designer_api.moveNode(
+        scopePath: _scopeChainToBytes(scopeChain),
+        nodeId: nodeId,
+        position: APIVec2(x: node.position.x, y: node.position.y));
+    refreshFromKernel();
   }
 
   void dragWire(PinReference startPin, Offset wireEndPosition) {
@@ -780,9 +853,28 @@ class StructureDesignerModel extends ChangeNotifier {
       return false;
     }
 
-    // Phase U2: both pin scope chains are always `const []` (the editor only
-    // authors at the top level until U4 / U5 introduces body / cross-scope
-    // wire authoring). The non-empty branches in the API reject as a placeholder.
+    if (inPin.pinKind == PinKind.zoneOutput) {
+      // Body-return wire candidate. Source must live in the HOF's body
+      // (`inPin.scopeChain ++ [inPin.nodeId]`) so the source's scope chain
+      // matches that prefix. Cross-scope captures into zone-output land
+      // in U5. We accept the connection on scope match — strict type
+      // checking for body-return wires is U5 polish.
+      final bodyScope = [...inPin.scopeChain, inPin.nodeId];
+      if (outPin.scopeChain.length != bodyScope.length) return false;
+      for (int i = 0; i < bodyScope.length; i++) {
+        if (outPin.scopeChain[i] != bodyScope[i]) return false;
+      }
+      return true;
+    }
+
+    // Both pins must share a scope chain — cross-scope wires (captures /
+    // iteration-value usage) are U5. The Rust `can_connect_nodes_scoped`
+    // also requires same-scope.
+    if (outPin.scopeChain.length != inPin.scopeChain.length) return false;
+    for (int i = 0; i < inPin.scopeChain.length; i++) {
+      if (outPin.scopeChain[i] != inPin.scopeChain[i]) return false;
+    }
+
     return structure_designer_api.canConnectNodes(
       scopePath: _scopeChainToBytes(inPin.scopeChain),
       sourceNodeId: outPin.nodeId,
@@ -808,13 +900,27 @@ class StructureDesignerModel extends ChangeNotifier {
       return;
     }
 
-    structure_designer_api.connectNodes(
-      scopePath: _scopeChainToBytes(inPin.scopeChain),
-      sourceNodeId: outPin.nodeId,
-      sourceOutputPinIndex: outPin.pinIndex,
-      destNodeId: inPin.nodeId,
-      destParamIndex: BigInt.from(inPin.pinIndex),
-    );
+    if (inPin.pinKind == PinKind.zoneOutput) {
+      // Body-return wire: source lives inside the HOF's body (its scope is
+      // `inPin.scopeChain ++ [inPin.nodeId]`). The wire is stored on the
+      // HOF's `zone_output_arguments`. See `doc/design_zones_ui.md`
+      // §"Wire-creation API generalisation" → Body return row.
+      final bodyScope = [...inPin.scopeChain, inPin.nodeId];
+      structure_designer_api.connectZoneOutputWire(
+        bodyScopePath: _scopeChainToBytes(bodyScope),
+        sourceNodeId: outPin.nodeId,
+        sourceOutputPinIndex: outPin.pinIndex,
+        zoneOutputIndex: BigInt.from(inPin.pinIndex),
+      );
+    } else {
+      structure_designer_api.connectNodes(
+        scopePath: _scopeChainToBytes(inPin.scopeChain),
+        sourceNodeId: outPin.nodeId,
+        sourceOutputPinIndex: outPin.pinIndex,
+        destNodeId: inPin.nodeId,
+        destParamIndex: BigInt.from(inPin.pinIndex),
+      );
+    }
 
     draggedWire = null;
 
@@ -842,15 +948,29 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setSelectedNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
-    if (nodeNetworkView != null) {
-      if (!nodeNetworkView!.nodes[nodeId]!.selected) {
-        structure_designer_api.selectNode(
-          scopePath: _scopeChainToBytes(scopeChain),
-          nodeId: nodeId,
-        );
-      }
-      refreshFromKernel();
+    if (nodeNetworkView == null) return;
+    final node = _findNodeInScope(nodeId, scopeChain);
+    if (node != null && !node.selected) {
+      structure_designer_api.selectNode(
+        scopePath: _scopeChainToBytes(scopeChain),
+        nodeId: nodeId,
+      );
     }
+    refreshFromKernel();
+  }
+
+  /// Look up a node either at the top level or inside a nested body scope.
+  /// Returns null if the path can't be walked or the node isn't found.
+  NodeView? _findNodeInScope(BigInt nodeId, List<BigInt> scopeChain) {
+    if (nodeNetworkView == null) return null;
+    Map<BigInt, NodeView> currentNodes = nodeNetworkView!.nodes;
+    for (final hofId in scopeChain) {
+      final hof = currentNodes[hofId];
+      final zone = hof?.zone;
+      if (zone == null) return null;
+      currentNodes = zone.nodes;
+    }
+    return currentNodes[nodeId];
   }
 
   /// Scrolls the node network panel to center the given node.

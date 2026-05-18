@@ -913,18 +913,21 @@ class NodeWidget extends StatelessWidget {
   }
 
   /// HOF main body: external input column on the left, translucent body
-  /// region in the middle (carrying inner-edge zone pins + `[N nodes]`
-  /// placeholder), external output column on the right.
+  /// region in the middle (carrying inner-edge zone pins + body nodes),
+  /// external output column on the right.
   ///
-  /// The body region's inner-edge pins use [PinKind.zoneInput] /
-  /// [PinKind.zoneOutput]. Phase U3 keeps them visual only — body content
-  /// is not authored yet, so dragging a wire from a zone pin lands in
-  /// empty space (same handler as any orphan wire drop).
+  /// The body region grows with its content: width/height are read from the
+  /// scope resolver's layout cache, which uses `max(stored, content_bbox +
+  /// padding)`. Live drag of a body node grows the body live (the cache
+  /// reads the model's live positions every frame).
   Widget _buildHofMainBody(BuildContext context) {
     final zone = node.zone!;
+    final bodyChain = [...scopeChain, node.id];
+    final cachedSize = _resolver.layout.lookupSize(bodyChain);
+    final effectiveSize = cachedSize ?? Size(zone.storedWidth, zone.storedHeight);
     return SizedBox(
       width: BASE_HOF_BODY_LEFT_OFFSET +
-          zone.storedWidth +
+          effectiveSize.width +
           BASE_HOF_BODY_RIGHT_GUTTER,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -959,6 +962,12 @@ class NodeWidget extends StatelessWidget {
             nodeId: node.id,
             scopeChain: scopeChain,
             zone: zone,
+            effectiveSize: effectiveSize,
+            onResize: (newSize) {
+              final model =
+                  Provider.of<StructureDesignerModel>(context, listen: false);
+              model.setZoneSize(scopeChain, node.id, newSize.width, newSize.height);
+            },
           ),
           // External output column.
           SizedBox(
@@ -1143,44 +1152,40 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
-  /// Handles node tap for selection with modifier key support
+  /// Handles node tap for selection with modifier key support.
+  /// Clicking a node makes its body the active scope for subsequent keyboard
+  /// shortcuts (per `doc/design_zones_ui.md` §"The active body").
   void _handleNodeTap(BuildContext context) {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    model.setActiveScopeChain(scopeChain);
 
     if (HardwareKeyboard.instance.isControlPressed) {
-      // Ctrl+click: toggle selection
-      model.toggleNodeSelection(node.id);
+      model.toggleNodeSelection(node.id, scopeChain: scopeChain);
     } else if (HardwareKeyboard.instance.isShiftPressed) {
-      // Shift+click: add to selection
-      model.addNodeToSelection(node.id);
+      model.addNodeToSelection(node.id, scopeChain: scopeChain);
     } else if (node.selected && !node.active) {
-      // Simple click on selected (but not active) node: make it active
-      model.addNodeToSelection(node.id);
+      model.addNodeToSelection(node.id, scopeChain: scopeChain);
     } else {
-      // Normal click: select only this node
-      model.setSelectedNode(node.id);
+      model.setSelectedNode(node.id, scopeChain: scopeChain);
     }
   }
 
   /// Handles the start of a node drag - captures positions for undo coalescing
   void _handleNodeDragStart(BuildContext context) {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
-    model.beginMoveNodes();
+    model.beginMoveNodes(scopeChain: scopeChain);
   }
 
   /// Handles node drag for positioning - moves all selected nodes if this node is selected
   void _handleNodeDrag(BuildContext context, DragUpdateDetails details) {
-    // Convert screen-space delta to logical-space delta
     final scale = getZoomScale(zoomLevel);
     final logicalDelta = details.delta / scale;
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
 
     if (node.selected) {
-      // This node is part of selection - drag all selected nodes
-      model.dragSelectedNodes(logicalDelta);
+      model.dragSelectedNodes(logicalDelta, scopeChain: scopeChain);
     } else {
-      // Dragging an unselected node - just drag this one
-      model.dragNodePosition(node.id, logicalDelta);
+      model.dragNodePosition(node.id, logicalDelta, scopeChain: scopeChain);
     }
   }
 
@@ -1189,14 +1194,11 @@ class NodeWidget extends StatelessWidget {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
 
     if (node.selected) {
-      // Commit positions of all selected nodes
-      model.updateSelectedNodesPosition();
+      model.updateSelectedNodesPosition(scopeChain: scopeChain);
     } else {
-      // Only commit position of this single node
-      model.updateNodePosition(node.id);
+      model.updateNodePosition(node.id, scopeChain: scopeChain);
     }
-    // End the move group for undo coalescing
-    model.endMoveNodes();
+    model.endMoveNodes(scopeChain: scopeChain);
   }
 
   /// Handles context menu for node
@@ -1418,30 +1420,46 @@ Future<void> runExecuteWithPlacard(
 }
 
 /// Translucent body region rendered inside an HOF node. Carries the inner-edge
-/// zone pins (zone-input on the left, zone-output on the right) and a centered
-/// `[N nodes]` placeholder.
+/// zone pins (zone-input on the left, zone-output on the right). Body nodes
+/// themselves are rendered by the parent `NodeNetwork`'s Stack at their
+/// scope-resolved screen positions — not nested inside this widget.
 ///
-/// Phase U3 surface only: body content (nodes + wires) is not rendered. The
-/// region is non-interactive — clicks pass through to the HOF chrome (the
-/// design's "container hit-testing" gotcha). The zone pins themselves are
-/// rendered with [PinViewWidget] (visual only) rather than [PinWidget] (draggable)
-/// because there's nothing inside the body to wire to yet — U4 swaps these to
-/// fully interactive `PinWidget`s once body editing arrives.
+/// Zone pins are fully interactive [PinWidget]s in U4 so users can wire body
+/// nodes to/from them. From the body's perspective, zone-input pins are
+/// sources (drag *from* them) and zone-output pins are destinations (drag
+/// *to* them). The right-click on body interior opens the Add Node popup
+/// parameterized by the body's scope (handled in [NodeNetwork]).
 class _ZoneBodyRegion extends StatelessWidget {
   final BigInt nodeId;
   final List<BigInt> scopeChain;
   final ZoneView zone;
 
+  /// Rendered body size (== `max(stored, content_bbox + padding)`), computed
+  /// by the scope resolver's layout pass. Drives both the body rectangle
+  /// and the inner-right edge pin positions.
+  final Size effectiveSize;
+
+  /// Called when the user finishes a resize drag; receives the new logical
+  /// size to persist via `set_zone_size`. The drag bottom-right corner
+  /// updates this in real time and commits at drag end.
+  final ValueChanged<Size> onResize;
+
   const _ZoneBodyRegion({
     required this.nodeId,
     required this.scopeChain,
     required this.zone,
+    required this.effectiveSize,
+    required this.onResize,
   });
+
+  /// Scope chain of the body's interior — the HOF's containing-network chain
+  /// extended with the HOF's own node id.
+  List<BigInt> get _bodyScopeChain => [...scopeChain, nodeId];
 
   @override
   Widget build(BuildContext context) {
-    final width = zone.storedWidth;
-    final height = zone.storedHeight;
+    final width = effectiveSize.width;
+    final height = effectiveSize.height;
 
     // Pin vertical positions relative to the body region's top-left match the
     // `pinScreenPosition` formula in ScopeResolver: the offset from the node's
@@ -1458,9 +1476,13 @@ class _ZoneBodyRegion extends StatelessWidget {
       height: height,
       margin: const EdgeInsets.only(top: BASE_HOF_BODY_TOP_OFFSET - 30),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        // Distinct from the dark node background so the body region reads as
+        // its own "canvas-like" surface. Slightly lighter than the node body
+        // and with a more visible border. See `doc/design_zones_ui.md`
+        // §"Visual model".
+        color: const Color(0xFF1A1A1A),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.25),
+          color: Colors.white.withValues(alpha: 0.35),
           width: 1.0,
         ),
         borderRadius: BorderRadius.circular(6.0),
@@ -1468,59 +1490,140 @@ class _ZoneBodyRegion extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Centered "[N nodes]" placeholder. U4 replaces this with body
-          // node rendering.
-          Center(
-            child: Text(
-              zone.nodeCount == 1
-                  ? '${zone.nodeCount} node inside'
-                  : '${zone.nodeCount} nodes inside',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-              ),
+          // Click-to-activate-body layer. A `Listener` (not a GestureDetector)
+          // so it doesn't enter the gesture arena and compete with inner pins'
+          // Draggable. We mark the body scope active on pointer-down and clear
+          // body-scope selection only on pointer-up that didn't move — this
+          // avoids the translucent-GestureDetector hit-test that was killing
+          // wire drags from zone pins.
+          Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) {
+                final model = Provider.of<StructureDesignerModel>(context,
+                    listen: false);
+                model.setActiveScopeChain(_bodyScopeChain);
+              },
             ),
           ),
           // Zone-input pins on the body's inner-left edge, facing into the
-          // body. Positioned so their hit-test centers match the
-          // `pinScreenPosition` formula in ScopeResolver.
+          // body. From the body's perspective these are sources, so we use
+          // `PinKind.zoneInput`. Body nodes connect to them by dragging a
+          // wire from the pin to an input. Positioned *inside* the body
+          // Container (left: 0) so the Stack's hit-testing reliably reaches
+          // them — pins at negative offset are visible with `Clip.none` but
+          // hit-testing through Container/SizedBox parent boundaries was
+          // unreliable, sending pointer events to the canvas instead.
           for (int i = 0; i < zone.zoneInputPins.length; i++)
             Positioned(
-              left: -PIN_HIT_AREA_WIDTH / 2,
+              left: 0,
               top: pinY(i),
-              child: SizedBox(
-                width: PIN_HIT_AREA_WIDTH,
-                height: PIN_HIT_AREA_HEIGHT,
-                child: Center(
-                  child: PinViewWidget(
-                    dataType: zone.zoneInputPins[i].effectiveDataType,
-                    multi: false,
-                    isInput: false,
-                    pinName: zone.zoneInputPins[i].name,
-                  ),
+              child: PinWidget(
+                pinReference: PinReference(
+                  nodeId: nodeId,
+                  scopeChain: scopeChain,
+                  pinKind: PinKind.zoneInput,
+                  pinIndex: i,
+                  dataType: zone.zoneInputPins[i].effectiveDataType,
                 ),
+                multi: false,
+                pinName: zone.zoneInputPins[i].name,
               ),
             ),
-          // Zone-output pins on the body's inner-right edge.
+          // Zone-output pins on the body's inner-right edge. These accept
+          // incoming body-return wires (drag from a body node's output here).
           for (int i = 0; i < zone.zoneOutputPins.length; i++)
             Positioned(
-              right: -PIN_HIT_AREA_WIDTH / 2,
+              right: 0,
               top: pinY(i),
-              child: SizedBox(
-                width: PIN_HIT_AREA_WIDTH,
-                height: PIN_HIT_AREA_HEIGHT,
-                child: Center(
-                  child: PinViewWidget(
-                    dataType: zone.zoneOutputPins[i].dataType,
-                    multi: zone.zoneOutputPins[i].multi,
-                    isInput: true,
-                    pinName: zone.zoneOutputPins[i].name,
-                  ),
+              child: PinWidget(
+                pinReference: PinReference(
+                  nodeId: nodeId,
+                  scopeChain: scopeChain,
+                  pinKind: PinKind.zoneOutput,
+                  pinIndex: i,
+                  dataType: zone.zoneOutputPins[i].dataType,
                 ),
+                multi: zone.zoneOutputPins[i].multi,
+                pinName: zone.zoneOutputPins[i].name,
               ),
             ),
+          // Bottom-right resize handle. Drags update stored width/height.
+          // The drag accumulator is held in a stateful sibling widget below so
+          // we can mutate the drag delta without rebuilding the parent.
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: _BodyResizeHandle(
+              initialSize: effectiveSize,
+              onResize: onResize,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// Stateful resize handle in the body's bottom-right corner. Maintains the
+/// in-flight drag delta locally so the model only gets one update per drag
+/// commit (begin/end coalescing — see `doc/design_zones_ui.md` §"Resize
+/// handles"). Per-frame intermediate updates also push to the model so the
+/// body grows live during the drag.
+class _BodyResizeHandle extends StatefulWidget {
+  final Size initialSize;
+  final ValueChanged<Size> onResize;
+
+  const _BodyResizeHandle({
+    required this.initialSize,
+    required this.onResize,
+  });
+
+  @override
+  State<_BodyResizeHandle> createState() => _BodyResizeHandleState();
+}
+
+class _BodyResizeHandleState extends State<_BodyResizeHandle> {
+  Size? _dragSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeDownRight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (_) {
+          _dragSize = widget.initialSize;
+        },
+        onPanUpdate: (details) {
+          final base = _dragSize ?? widget.initialSize;
+          // The handle sits at the body's bottom-right corner; deltas grow
+          // the body. Floor at 100x60 so the body never collapses below
+          // its inner pins. The Rust API clamps to the same minimum.
+          final next = Size(
+            (base.width + details.delta.dx).clamp(100.0, 4000.0),
+            (base.height + details.delta.dy).clamp(60.0, 4000.0),
+          );
+          _dragSize = next;
+          widget.onResize(next);
+        },
+        onPanEnd: (_) {
+          _dragSize = null;
+        },
+        child: Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.4),
+              width: 1,
+            ),
+            borderRadius: const BorderRadius.only(
+              bottomRight: Radius.circular(4),
+            ),
+          ),
+        ),
       ),
     );
   }

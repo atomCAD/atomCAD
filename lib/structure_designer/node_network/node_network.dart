@@ -363,8 +363,13 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
         );
       }
     } else {
-      // Clicked on empty space - clear selection
-      model.clearSelection();
+      // Clicked on empty top-level space. Reset the active scope back to the
+      // top level and clear selection at every scope so neither the top-level
+      // nor any body's selection visually lingers. Without the body-scope
+      // clears, an active body node (e.g. an expr inside a map's body) keeps
+      // its `.active` flag even though the user's intent is to deselect.
+      model.setActiveScopeChain(const <BigInt>[]);
+      model.clearSelectionAllScopes();
     }
   }
 
@@ -418,6 +423,12 @@ class NodeNetworkState extends State<NodeNetwork> {
   Rect? _selectionRect; // Current rectangle being drawn (screen coords)
   Offset? _selectionRectStart; // Start point of rectangle drag (screen coords)
 
+  /// Scope the rectangle drag started in. Empty = top-level. Captured at
+  /// pointer-down so the rectangle is confined to one body for its entire
+  /// drag — even if the cursor wanders into another scope. Per
+  /// `doc/design_zones_ui.md` §"Phase U4 → Gotchas".
+  List<BigInt> _selectionRectScope = const [];
+
   /// Last known mouse position in screen coordinates (for Ctrl+V paste)
   Offset _lastMousePosition = Offset.zero;
 
@@ -470,13 +481,16 @@ class NodeNetworkState extends State<NodeNetwork> {
     });
   }
 
-  /// Handles wire dropped in empty space - shows filtered Add Node popup
+  /// Handles wire dropped in empty space - shows filtered Add Node popup.
+  /// The new node lands in the body whose interior the drop hit. Auto-connect
+  /// only fires when the drop scope matches the source pin's scope — cross-
+  /// scope wire authoring (captures, body-return into popup-created nodes) is
+  /// deferred to U5. See `doc/design_zones_ui.md` §"Phase U5".
   void _handleWireDropInEmptySpace(
       PinReference startPin, Offset dropPosition) async {
     final isOutput = startPin.isOutput;
     final dataType = startPin.dataType;
 
-    // Show the filtered Add Node popup
     final selectedNodeType = await showAddNodePopup(
       context,
       filterByCompatibleType: dataType,
@@ -485,18 +499,11 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     if (selectedNodeType == null || !mounted) return;
 
-    // Resolve the drop's screen position to a scope-aware body-local position
-    // for the new node. In U1 the scope chain is always empty (no inline
-    // bodies are authored yet); future phases land the node inside whichever
-    // body the drop hit.
     final resolver = _makeResolver();
     if (resolver == null) return;
     final scope = resolver.findContainingScope(dropPosition);
     final logicalPosition = scope.bodyLocal;
 
-    // Create the new node, passing the drag source so the popup-filter's
-    // adapter (e.g. `map.input_type` set to match the dragged source) is
-    // applied at create time too. See `doc/design_drag_aware_add_node.md`.
     final newNodeId = widget.graphModel.createNode(
       selectedNodeType,
       logicalPosition,
@@ -504,12 +511,24 @@ class NodeNetworkState extends State<NodeNetwork> {
         sourcePinType: dataType,
         draggingFromOutput: isOutput,
       ),
+      scopeChain: scope.scopeChain,
     );
     if (newNodeId == BigInt.zero) return;
 
-    // Get compatible pins on the target node
+    // Auto-connect only when source and target live in the same scope. Cross-
+    // scope drops just create the node — wire authoring across scopes is U5.
+    final sourceScope = startPin.scopeChain;
+    final sameScope = sourceScope.length == scope.scopeChain.length &&
+        () {
+          for (int i = 0; i < sourceScope.length; i++) {
+            if (sourceScope[i] != scope.scopeChain[i]) return false;
+          }
+          return true;
+        }();
+    if (!sameScope) return;
+
     final compatiblePins = sd_api.getCompatiblePinsForAutoConnect(
-      scopePath: Uint64List(0),
+      scopePath: _scopeChainToBytes(scope.scopeChain),
       sourceNodeId: startPin.nodeId,
       sourcePinIndex: startPin.pinIndex,
       sourceIsOutput: isOutput,
@@ -520,10 +539,8 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     int targetPinIndex;
     if (compatiblePins.length == 1) {
-      // Only one compatible pin - connect directly
       targetPinIndex = compatiblePins.first.$1;
     } else {
-      // Multiple compatible pins - let user choose
       if (!mounted) return;
       final pinOptions = compatiblePins
           .map((p) => CompatiblePinOption(
@@ -543,9 +560,7 @@ class NodeNetworkState extends State<NodeNetwork> {
       targetPinIndex = selectedPinIndex;
     }
 
-    // Make the connection
     if (isOutput) {
-      // Source is output, target pin is input
       widget.graphModel.connectPins(
         startPin,
         PinReference(
@@ -557,7 +572,6 @@ class NodeNetworkState extends State<NodeNetwork> {
         ),
       );
     } else {
-      // Source is input, target pin is output (pin 0)
       widget.graphModel.connectPins(
         PinReference(
           nodeId: newNodeId,
@@ -569,6 +583,15 @@ class NodeNetworkState extends State<NodeNetwork> {
         startPin,
       );
     }
+  }
+
+  /// Convert a Dart scope chain to the Rust API's `Uint64List` representation.
+  Uint64List _scopeChainToBytes(List<BigInt> scopeChain) {
+    final result = Uint64List(scopeChain.length);
+    for (int i = 0; i < scopeChain.length; i++) {
+      result[i] = scopeChain[i].toUnsigned(64);
+    }
+    return result;
   }
 
   /// Construct a ScopeResolver tied to the current frame's view + transform.
@@ -643,11 +666,16 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   // ===== RECTANGLE SELECTION HELPERS =====
 
-  /// Start rectangle selection at the given screen position
+  /// Start rectangle selection at the given screen position. Records the
+  /// containing scope so the final overlap test only picks nodes in that
+  /// body (or top-level if the drag started outside any body).
   void _handleSelectionRectStart(Offset position) {
+    final resolver = _makeResolver();
+    final scope = resolver?.findContainingScope(position).scopeChain ?? const <BigInt>[];
     setState(() {
       _selectionRectStart = position;
       _selectionRect = Rect.fromPoints(position, position);
+      _selectionRectScope = scope;
     });
   }
 
@@ -660,7 +688,9 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
   }
 
-  /// Finish rectangle selection and apply to model
+  /// Finish rectangle selection and apply to model. Confined to the scope
+  /// the drag started in: a rectangle drawn inside a body picks body nodes
+  /// only; a rectangle drawn at top-level picks top-level nodes only.
   void _handleSelectionRectEnd(StructureDesignerModel model) {
     final resolver = _makeResolver();
     if (_selectionRect == null || resolver == null) {
@@ -669,53 +699,86 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
 
     final rect = _selectionRect!;
+    final scope = _selectionRectScope;
 
-    // Find all nodes overlapping the rectangle. In U1 the iteration is
-    // top-level only — body nodes appear in U4.
-    List<BigInt> nodesInRect = [];
-    for (final node in resolver.root.nodes.values) {
-      final nodeScreenPos = resolver.scopedToScreen(
-        const <BigInt>[],
-        apiVec2ToOffset(node.position),
-      );
-      final nodeSize = getNodeSize(node, _zoomLevel);
-      final nodeRect = Rect.fromLTWH(
-        nodeScreenPos.dx,
-        nodeScreenPos.dy,
-        nodeSize.width,
-        nodeSize.height,
-      );
-
-      // Overlap check (any intersection counts)
-      if (rect.overlaps(nodeRect)) {
-        nodesInRect.add(node.id);
+    // Walk the scope's nodes (top-level or body), testing screen-space
+    // overlap. The resolver's layout cache gives the correct screen origin
+    // for body-scope positions.
+    final container = _nodesForScope(resolver, scope);
+    final List<BigInt> nodesInRect = [];
+    if (container != null) {
+      for (final node in container.values) {
+        final nodeScreenPos = resolver.scopedToScreen(
+          scope,
+          apiVec2ToOffset(node.position),
+        );
+        final nodeSize = getNodeSize(node, _zoomLevel);
+        final nodeRect = Rect.fromLTWH(
+          nodeScreenPos.dx,
+          nodeScreenPos.dy,
+          nodeSize.width,
+          nodeSize.height,
+        );
+        if (rect.overlaps(nodeRect)) {
+          nodesInRect.add(node.id);
+        }
       }
     }
 
-    // Find all wires overlapping the rectangle
+    // Wire selection via rectangle drag: top-level only for U4. Body-wire
+    // rectangle selection routes through scope-aware select APIs that don't
+    // yet exist for the wire-selection path; deferred to U5 polish.
     List<WireView> wiresInRect = [];
-    for (final wire in resolver.root.wires) {
-      if (_wireOverlapsRect(wire, rect, resolver)) {
-        wiresInRect.add(wire);
+    if (scope.isEmpty) {
+      for (final wire in resolver.root.wires) {
+        if (_wireOverlapsRect(wire, rect, resolver)) {
+          wiresInRect.add(wire);
+        }
       }
     }
 
-    // Apply selection based on modifier keys
+    // Apply selection based on modifier keys. For body-scope, route through
+    // scope-aware select APIs; the wire-selection batch APIs are top-level
+    // only in U4.
     final isCtrl = HardwareKeyboard.instance.isControlPressed;
     final isShift = HardwareKeyboard.instance.isShiftPressed;
 
-    if (isCtrl) {
-      // Toggle: add unselected, remove selected
-      model.toggleNodesAndWiresSelection(nodesInRect, wiresInRect);
-    } else if (isShift) {
-      // Add to existing selection
-      model.addNodesAndWiresToSelection(nodesInRect, wiresInRect);
+    if (scope.isEmpty) {
+      if (isCtrl) {
+        model.toggleNodesAndWiresSelection(nodesInRect, wiresInRect);
+      } else if (isShift) {
+        model.addNodesAndWiresToSelection(nodesInRect, wiresInRect);
+      } else {
+        model.selectNodesAndWires(nodesInRect, wiresInRect);
+      }
     } else {
-      // Replace selection
-      model.selectNodesAndWires(nodesInRect, wiresInRect);
+      // Body scope. Move active scope to this body so subsequent keyboard
+      // shortcuts target it.
+      model.setActiveScopeChain(scope);
+      if (isCtrl) {
+        model.toggleNodesSelection(nodesInRect, scopeChain: scope);
+      } else if (isShift) {
+        model.addNodesToSelection(nodesInRect, scopeChain: scope);
+      } else {
+        model.selectNodes(nodesInRect, scopeChain: scope);
+      }
     }
 
     _clearSelectionRect();
+  }
+
+  /// Walk [resolver]'s root to the body identified by [scopeChain] and
+  /// return its `nodes` map. Returns null if the path can't be resolved.
+  Map<BigInt, NodeView>? _nodesForScope(
+      ScopeResolver resolver, List<BigInt> scopeChain) {
+    Map<BigInt, NodeView> current = resolver.root.nodes;
+    for (final hofId in scopeChain) {
+      final hof = current[hofId];
+      final zone = hof?.zone;
+      if (zone == null) return null;
+      current = zone.nodes;
+    }
+    return current;
   }
 
   /// Clear the selection rectangle state
@@ -723,6 +786,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     setState(() {
       _selectionRect = null;
       _selectionRectStart = null;
+      _selectionRectScope = const [];
     });
   }
 
@@ -837,16 +901,20 @@ class NodeNetworkState extends State<NodeNetwork> {
     // The nodes have their own context menu handling
     if (!_isClickOnNode(model, details.localPosition)) {
       final resolver = _makeResolver();
-      // The scope the click landed in. In U1 this is always the top-level
-      // scope (no inline bodies); from U4 onward it's whichever body the
-      // user right-clicked inside.
+      // The scope the click landed in. Right-clicking inside an HOF body
+      // resolves to that body's scope so the new node is created inside the
+      // body. See `doc/design_zones_ui.md` §"Add Node popup".
       final scopeHit = resolver?.findContainingScope(details.localPosition);
+      final scopeChain = scopeHit?.scopeChain ?? const <BigInt>[];
       final logicalPosition = scopeHit?.bodyLocal ??
           screenToLogical(
               details.localPosition, _panOffset, getZoomScale(_zoomLevel));
 
+      // Make the clicked scope active so subsequent keyboard shortcuts target
+      // the right body.
+      model.setActiveScopeChain(scopeChain);
+
       if (model.hasClipboardContent()) {
-        // Show intermediary context menu with Add Node and Paste options
         final RenderBox overlay =
             Overlay.of(context).context.findRenderObject() as RenderBox;
         final RelativeRect position = RelativeRect.fromRect(
@@ -873,16 +941,18 @@ class NodeNetworkState extends State<NodeNetwork> {
         if (value == 'add_node') {
           String? selectedNode = await showAddNodePopup(context);
           if (selectedNode != null) {
-            model.createNode(selectedNode, logicalPosition);
+            model.createNode(selectedNode, logicalPosition,
+                scopeChain: scopeChain);
           }
         } else if (value == 'paste') {
-          model.pasteAtPosition(logicalPosition.dx, logicalPosition.dy);
+          model.pasteAtPosition(logicalPosition.dx, logicalPosition.dy,
+              scopeChain: scopeChain);
         }
       } else {
-        // No clipboard content - show Add Node dialog directly (existing behavior)
         String? selectedNode = await showAddNodePopup(context);
         if (selectedNode != null) {
-          model.createNode(selectedNode, logicalPosition);
+          model.createNode(selectedNode, logicalPosition,
+              scopeChain: scopeChain);
         }
       }
     }
@@ -891,40 +961,93 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   // Left-click panning has been replaced by middle mouse button panning
 
-  /// Builds the stack children for the node network
+  /// Builds the stack children for the node network. HOF body nodes are
+  /// flattened into the same Stack — each is positioned via the scope
+  /// resolver against its scope chain. This keeps the widget tree shallow
+  /// and lets every node share the same pan/zoom transform via the resolver,
+  /// rather than nesting body widgets inside their HOF.
   List<Widget> _buildStackChildren(StructureDesignerModel model) {
     final view = model.nodeNetworkView;
     if (view == null) {
       return [];
     }
 
-    // The Stack will handle all the nodes and wires with appropriate transformations
-    return [
-      // Wire layer at the bottom
-      NodeNetworkInteractionLayer(
-          model: model, panOffset: _panOffset, zoomLevel: _zoomLevel),
-      // Then all the nodes on top - use CommentNodeWidget for Comment nodes
-      ...view.nodes.entries.map((entry) {
-        final node = entry.value;
-        if (node.nodeTypeName == 'Comment') {
-          return CommentNodeWidget(
-            key: ValueKey(node.id),
-            node: node,
-            panOffset: _panOffset,
-            zoomLevel: _zoomLevel,
-          );
-        } else {
-          return NodeWidget(
-            node: node,
-            panOffset: _panOffset,
-            zoomLevel: _zoomLevel,
-            rootView: view,
-          );
-        }
-      }),
-      // Selection rectangle on top of everything
-      _buildSelectionRectangle(),
-    ];
+    final List<Widget> children = [];
+    // Wire layer at the bottom: paints every wire reachable from the
+    // top-level network (including intra-body wires) so cross-scope wires
+    // and body wires all share one pass. See `doc/design_zones_ui.md`
+    // §"Wire rendering across scopes".
+    children.add(NodeNetworkInteractionLayer(
+        model: model, panOffset: _panOffset, zoomLevel: _zoomLevel));
+
+    _appendNodesRecursive(children, view, const <BigInt>[], view);
+
+    children.add(_buildSelectionRectangle());
+    return children;
+  }
+
+  /// Append every NodeWidget reachable from the top-level network — first the
+  /// outer scope's nodes (HOFs included), then each HOF's body nodes
+  /// recursively. Body nodes appear *above* their HOF in the Stack so they
+  /// can receive pointer events first.
+  void _appendNodesRecursive(
+    List<Widget> children,
+    NodeNetworkView view,
+    List<BigInt> scopeChain,
+    NodeNetworkView rootView,
+  ) {
+    for (final entry in view.nodes.entries) {
+      final node = entry.value;
+      if (node.nodeTypeName == 'Comment' && scopeChain.isEmpty) {
+        children.add(CommentNodeWidget(
+          key: ValueKey(node.id),
+          node: node,
+          panOffset: _panOffset,
+          zoomLevel: _zoomLevel,
+        ));
+      } else {
+        children.add(NodeWidget(
+          node: node,
+          panOffset: _panOffset,
+          zoomLevel: _zoomLevel,
+          rootView: rootView,
+          scopeChain: scopeChain,
+        ));
+      }
+    }
+    // Then walk into each HOF's body — body nodes are drawn after their
+    // owner HOF so they layer on top.
+    for (final entry in view.nodes.entries) {
+      final node = entry.value;
+      final zone = node.zone;
+      if (zone == null) continue;
+      _appendZoneNodesRecursive(children, zone, [...scopeChain, node.id], rootView);
+    }
+  }
+
+  void _appendZoneNodesRecursive(
+    List<Widget> children,
+    ZoneView zone,
+    List<BigInt> scopeChain,
+    NodeNetworkView rootView,
+  ) {
+    for (final entry in zone.nodes.entries) {
+      final node = entry.value;
+      children.add(NodeWidget(
+        node: node,
+        panOffset: _panOffset,
+        zoomLevel: _zoomLevel,
+        rootView: rootView,
+        scopeChain: scopeChain,
+      ));
+    }
+    for (final entry in zone.nodes.entries) {
+      final node = entry.value;
+      final inner = node.zone;
+      if (inner == null) continue;
+      _appendZoneNodesRecursive(
+          children, inner, [...scopeChain, node.id], rootView);
+    }
   }
 
   /// Handle pointer down event - check for middle mouse button, Shift + right mouse, or left-click for rectangle selection
