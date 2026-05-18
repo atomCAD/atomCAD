@@ -505,15 +505,16 @@ fn foreach_over_map_with_export_xyz_body_writes_n_files() {
 
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
+    // Phase 4 of `doc/design_zones.md` flipped `map` to inline-body zones, so
+    // the previous `r → map(identity) → foreach` chain no longer compiles
+    // via text format. The identity `map` was scaffolding only — wiring
+    // `r → foreach` directly preserves the test's intent (foreach over an
+    // iterator under Execute writes one file per element). MapZone coverage
+    // lives in `zones_test`.
     let outer_code = r#"
         r = range { start: 0, step: 1, count: 2 }
-        identity = expr {
-            expression: "x",
-            parameters: [{ name: "x", data_type: Int }]
-        }
-        m = map { input_type: Int, output_type: Int, xs: r, f: @identity }
         b = body { }
-        fe = foreach { input_type: Int, xs: m, f: @b }
+        fe = foreach { input_type: Int, xs: r, f: @b }
     "#;
     let edit_result = edit_designer_network(&mut designer, "main", outer_code, true);
     assert!(edit_result.success, "outer edit: {:?}", edit_result.errors);

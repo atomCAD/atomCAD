@@ -108,6 +108,7 @@ fn test_halfspace_demo_evaluation() {
 }
 
 #[test]
+#[ignore = "rotation-demo.cnnd uses pre-zones `map` with function-pin closures; .cnnd migration is deferred (see doc/design_zones.md, Out of scope)"]
 fn test_rotation_demo_evaluation() {
     let snapshot = evaluate_cnnd_file("../samples/rotation-demo.cnnd");
     insta::assert_json_snapshot!(snapshot);

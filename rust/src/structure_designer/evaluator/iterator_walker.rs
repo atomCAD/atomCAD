@@ -13,13 +13,15 @@
 //! state on every variant; only `FromArray::items` is `Arc`-shared so cloning
 //! a 10⁶-element wrapped array is O(1).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::{
-    NetworkEvaluationContext, NetworkEvaluator,
+    CaptureKey, NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::node_network::{IncomingWire, NodeNetwork, SourcePin};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 
 /// Lazy stream of `NetworkResult` values. The outer `fused` flag uniformly
@@ -48,9 +50,32 @@ enum WalkerKind {
         count: i32,
         emitted: i32,
     },
-    /// Apply `fe` to each pulled element. The FE is constructed once per
-    /// `map.eval()` invocation; per-element work is `set_argument_value(0, _)`
-    /// + `evaluate`.
+    /// `map` driven by an inline zone body. The body and captures are shared
+    /// via `Arc` so walker clones (Invariant 2) pay only refcount bumps. Per
+    /// `next()` the walker stands up a synthetic network stack of just this
+    /// body, pushes a fresh frame onto
+    /// `current_zone_input_values[hof_node_id]`, swaps captures into the
+    /// caller's context, evaluates the wire delivering the body's `result`
+    /// zone-output pin (resolved against the synthetic body-only stack),
+    /// then pops the frame and restores the caller's captures.
+    ///
+    /// We carry `zone_output_wires` rather than reach back through the outer
+    /// network stack (which `Walker::next` doesn't have access to) — the
+    /// design relies on captures being pre-evaluated at body entry so the
+    /// body-only synthetic stack is sufficient at runtime. See
+    /// `doc/design_zones.md` (Phase 4, §"Sub-context pattern").
+    MapZone {
+        source: Box<Walker>,
+        body: Arc<NodeNetwork>,
+        captures: Arc<HashMap<CaptureKey, NetworkResult>>,
+        zone_output_wires: Arc<Vec<IncomingWire>>,
+        hof_node_id: u64,
+    },
+    /// Legacy FE-driven `map`. No production node constructs this variant
+    /// after Phase 4 — `map` flips to `MapZone` — but the path is kept alive
+    /// as dead weight so unit tests targeting the FE walker plumbing keep
+    /// working until Phase 5 retires `FunctionEvaluator` and `Closure`
+    /// outright. See `doc/design_zones.md` (Phase 4 "Gotchas" — FE remains).
     Map {
         source: Box<Walker>,
         fe: FunctionEvaluator,
@@ -105,6 +130,30 @@ impl Walker {
         }
     }
 
+    /// Construct a `map` walker driven by an inline zone body. See
+    /// `WalkerKind::MapZone` for the per-`next()` discipline.
+    pub fn map_zone(
+        source: Walker,
+        body: Arc<NodeNetwork>,
+        captures: Arc<HashMap<CaptureKey, NetworkResult>>,
+        zone_output_wires: Arc<Vec<IncomingWire>>,
+        hof_node_id: u64,
+    ) -> Self {
+        Self {
+            kind: WalkerKind::MapZone {
+                source: Box::new(source),
+                body,
+                captures,
+                zone_output_wires,
+                hof_node_id,
+            },
+            fused: false,
+        }
+    }
+
+    /// Legacy FE-driven `map` constructor. No production code builds this
+    /// after Phase 4; kept alive so unit tests targeting the FE walker
+    /// plumbing continue to compile until Phase 5 retires FE entirely.
     pub fn map(source: Walker, fe: FunctionEvaluator) -> Self {
         Self {
             kind: WalkerKind::Map {
@@ -152,11 +201,13 @@ impl Walker {
     /// - `Some(other)` — next element.
     ///
     /// `context` is the outer pass's evaluation context. Walker variants that
-    /// embed a `FunctionEvaluator` (`Map`, `Filter`) forward the same `&mut`
+    /// embed a `FunctionEvaluator` (`Filter`) forward the same `&mut`
     /// context to `FunctionEvaluator::evaluate`, which is what propagates
     /// `context.execute` into per-element body evaluations and drains the
-    /// inner body's `print_buffer` back into the outer context. See
-    /// `doc/design_node_execution.md` (Phase 2 — Walker propagation).
+    /// inner body's `print_buffer` back into the outer context. `MapZone` runs
+    /// directly against the caller's context under a `CapturesGuard` swap
+    /// plus push/pop discipline on `current_zone_input_values[hof_node_id]` —
+    /// see `doc/design_zones.md` (§"Sub-context pattern for body evaluation").
     pub fn next(
         &mut self,
         evaluator: &NetworkEvaluator,
@@ -231,6 +282,35 @@ impl WalkerKind {
                 *emitted += 1;
                 Some(NetworkResult::Int(value as i32))
             }
+            WalkerKind::MapZone {
+                source,
+                body,
+                captures,
+                zone_output_wires,
+                hof_node_id,
+            } => match source.next(evaluator, registry, context) {
+                None => None,
+                Some(NetworkResult::Error(e)) => Some(NetworkResult::Error(e)),
+                Some(elem) => {
+                    // Per-element step under push/pop + captures swap.
+                    let hof_id = *hof_node_id;
+                    let body_arc = Arc::clone(body);
+                    let wires = Arc::clone(zone_output_wires);
+
+                    // Swap captures in for the duration of the step.
+                    let saved_captures =
+                        std::mem::replace(&mut context.captured_source_values, Arc::clone(captures));
+
+                    context.push_zone_input_frame(hof_id, vec![elem]);
+
+                    let result = eval_step(evaluator, registry, context, &body_arc, &wires, hof_id);
+
+                    context.pop_zone_input_frame(hof_id);
+                    context.captured_source_values = saved_captures;
+
+                    Some(result)
+                }
+            },
             WalkerKind::Map { source, fe } => match source.next(evaluator, registry, context) {
                 None => None,
                 Some(NetworkResult::Error(e)) => Some(NetworkResult::Error(e)),
@@ -343,6 +423,7 @@ impl WalkerKind {
         match self {
             WalkerKind::FromArray { idx, .. } => *idx = 0,
             WalkerKind::Range { emitted, .. } => *emitted = 0,
+            WalkerKind::MapZone { source, .. } => source.reset(),
             WalkerKind::Map { source, .. } => source.reset(),
             WalkerKind::Filter { source, .. } => source.reset(),
             WalkerKind::Product {
@@ -359,6 +440,74 @@ impl WalkerKind {
                 *primed = false;
                 *done = false;
             }
+        }
+    }
+}
+
+/// One zone-body step: stand up a body-only network stack, then resolve the
+/// first zone-output wire against it.
+///
+/// The walker doesn't carry the outer network stack — only the body. That's
+/// sufficient because:
+/// * Body-local wires (`source_scope_depth == 0`) resolve inside this body.
+/// * Outer-scope wires (`source_scope_depth > 0`) were pre-evaluated at body
+///   entry by `MapData::eval` and live in `context.captured_source_values`;
+///   the `resolve_incoming_wire` capture-cache check fires before any stack
+///   walk, so they never reach the outer frames the walker doesn't have.
+/// * `ZoneInput` wires referencing the immediately enclosing HOF read from
+///   `current_zone_input_values` via the live-lookup path.
+///
+/// We can't call `evaluator.evaluate_zone_output` directly because it
+/// expects the HOF node's containing network at `stack[len-2]` (so it can
+/// look up the HOF's `zone_output_arguments`); the walker stores those
+/// wires itself instead, and we resolve them here via the public `evaluate`
+/// path.
+fn eval_step(
+    evaluator: &NetworkEvaluator,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    body: &Arc<NodeNetwork>,
+    zone_output_wires: &[IncomingWire],
+    hof_node_id: u64,
+) -> NetworkResult {
+    let incoming = match zone_output_wires.first() {
+        Some(w) => w,
+        None => {
+            return NetworkResult::Error(
+                "map: body has no incoming wire on `result` zone-output pin".to_string(),
+            );
+        }
+    };
+
+    let body_stack = vec![NetworkStackElement {
+        node_network: body.as_ref(),
+        node_id: hof_node_id,
+    }];
+
+    // Capture-cache short-circuit: zone-output wires are always body-local
+    // (`source_scope_depth == 0`), so this should never fire for them, but
+    // we mirror `resolve_incoming_wire`'s order-of-checks for safety.
+    let key = CaptureKey::from_incoming(incoming);
+    if let Some(cached) = context.captured_source_values.get(&key) {
+        return cached.clone();
+    }
+
+    match incoming.source_pin {
+        SourcePin::NodeOutput { pin_index } => evaluator.evaluate(
+            &body_stack,
+            incoming.source_node_id,
+            pin_index,
+            registry,
+            false,
+            context,
+        ),
+        SourcePin::ZoneInput { pin_index } => {
+            // A body-return wire that sources from the HOF's own zone-input
+            // pin: legal (passes through the iteration value unchanged). Read
+            // from the live frame.
+            context
+                .current_zone_input(incoming.source_node_id, pin_index)
+                .clone()
         }
     }
 }

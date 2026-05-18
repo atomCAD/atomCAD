@@ -446,6 +446,43 @@ impl Node {
         }
     }
 
+    /// Ensure this node's zone state matches the given `NodeType`'s zone
+    /// declaration. Called from `populate_custom_node_type_cache_with_types`
+    /// after the custom node type has been installed, and from
+    /// `repair_node_network` when a zone-bearing node type's pin layout
+    /// changes.
+    ///
+    /// For HOF (zone-bearing) types this:
+    /// 1. Lazily initializes `self.zone` to an empty body network if it's
+    ///    currently `None`.
+    /// 2. Resizes `self.zone_output_arguments` to match the number of
+    ///    zone-output pins, preserving existing wires where the index lines
+    ///    up.
+    ///
+    /// For non-HOF types this is a no-op (the `debug_assert_zone_consistency`
+    /// invariant guarantees `zone == None` / `zone_output_arguments.is_empty()`
+    /// for those, set at construction time).
+    #[allow(clippy::arc_with_non_send_sync)]
+    pub fn ensure_zone_init(&mut self, node_type: &NodeType) {
+        if !node_type.has_zone() {
+            return;
+        }
+        if self.zone.is_none() {
+            // `Arc<NodeNetwork>` is not `Send + Sync` because `NodeNetwork`
+            // transitively holds `Box<dyn NodeData>`. We use `Arc` rather
+            // than `Rc` for forward-compat with multi-threaded evaluation,
+            // matching the convention in `Walker::FromArray`.
+            self.zone = Some(Arc::new(NodeNetwork::new_empty()));
+        }
+        let want = node_type.zone_output_pins.len();
+        if self.zone_output_arguments.len() < want {
+            self.zone_output_arguments
+                .resize_with(want, Argument::new);
+        } else if self.zone_output_arguments.len() > want {
+            self.zone_output_arguments.truncate(want);
+        }
+    }
+
     /// Sets the custom node type and intelligently preserves existing argument connections
     /// when parameter IDs (primary) or names (fallback) match between old and new node types
     pub fn set_custom_node_type(&mut self, custom_node_type: Option<NodeType>, refresh_args: bool) {

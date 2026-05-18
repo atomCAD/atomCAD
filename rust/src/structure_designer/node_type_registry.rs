@@ -607,6 +607,11 @@ impl NodeTypeRegistry {
 
         let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
         let has_custom_node_type = custom_node_type.is_some();
+        // Initialize zone state from the resolved type (custom if any, else
+        // base) before installing the custom type — `ensure_zone_init` needs
+        // a stable reference to the type for its `has_zone()` check.
+        let resolved_type = custom_node_type.as_ref().unwrap_or(base_node_type);
+        node.ensure_zone_init(resolved_type);
         node.set_custom_node_type(custom_node_type, refresh_args);
         has_custom_node_type
     }
@@ -1032,6 +1037,29 @@ impl NodeTypeRegistry {
                     node,
                     true,
                 );
+            } else if let Some(base_node_type) =
+                self.built_in_node_types.get(&node.node_type_name)
+            {
+                // For zone-bearing built-in node types, re-derive zone state
+                // from the base/custom type so that newly populated map nodes
+                // (and any future HOF) end up with a body initialized and
+                // `zone_output_arguments` sized correctly. Non-HOF types
+                // short-circuit in `ensure_zone_init`.
+                if base_node_type.has_zone()
+                    || node
+                        .custom_node_type
+                        .as_ref()
+                        .map(|t| t.has_zone())
+                        .unwrap_or(false)
+                {
+                    Self::populate_custom_node_type_cache_with_types(
+                        &self.built_in_node_types,
+                        &self.record_type_defs,
+                        &self.built_in_record_type_defs,
+                        node,
+                        true,
+                    );
+                }
             }
         }
 

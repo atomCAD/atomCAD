@@ -1087,19 +1087,23 @@ mod network_editor_tests {
 
     #[test]
     fn test_edit_function_ref_connection() {
+        // `filter` retains the function-pin (`f`) parameter in Phase 4 of the
+        // zones refactor (only `map` flipped to inline bodies); use it here
+        // so the test still exercises the `@expr` → function-pin wiring path.
         let registry = create_test_registry();
         let mut network = create_test_network();
 
-        // Create a pattern with map and function reference
-        // map node parameters: xs (index 0) and f (index 1)
-        // input_type and output_type are node data properties, not input parameters
         let result = edit_network(
             &mut network,
             &registry,
             r#"
             range1 = range { start: 0, step: 1, count: 5 }
-            expr1 = expr { expression: "x * 2", parameters: [{ name: "x", data_type: Int }] }
-            map1 = map { input_type: Int, output_type: Int, xs: range1, f: @expr1 }
+            pred = expr {
+                expression: "x % 2 == 0",
+                parameters: [{ name: "x", data_type: Int }],
+                output_type: Bool
+            }
+            filter1 = filter { element_type: Int, xs: range1, f: @pred }
         "#,
             true,
         );
@@ -1107,22 +1111,20 @@ mod network_editor_tests {
         assert!(result.success, "Edit should succeed: {:?}", result.errors);
         assert_eq!(result.nodes_created.len(), 3);
 
-        // Find the map node and check function reference
-        let map_node = network
+        let filter_node = network
             .nodes
             .values()
-            .find(|n| n.node_type_name == "map")
-            .expect("Should find map node");
+            .find(|n| n.node_type_name == "filter")
+            .expect("Should find filter node");
 
-        // f parameter is at index 1 (xs=0, f=1)
+        // filter parameters: xs (0), f (1).
         let f_param_index = 1;
-        let f_arg = &map_node.arguments[f_param_index];
+        let f_arg = &filter_node.arguments[f_param_index];
         assert!(
             !f_arg.argument_output_pins().is_empty(),
             "f parameter should be connected"
         );
 
-        // Verify it's a function pin connection (output_pin_index = -1)
         let (_, &pin_index) = f_arg.argument_output_pins().iter().next().unwrap();
         assert_eq!(pin_index, -1, "Should be a function pin reference");
     }

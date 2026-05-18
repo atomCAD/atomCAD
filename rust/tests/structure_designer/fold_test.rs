@@ -738,11 +738,15 @@ fn test_fold_combine_with_prebound_factor() {
 // ============================================================================
 
 #[test]
-fn test_fold_fusion_range_map_fold() {
-    // range(0, 1, 1000) → map(double) → fold(sum) → 2 * (0+1+…+999) = 999000.
-    // The intermediate `Iter[Int]` from map is never materialised; fold drains
-    // it one element at a time. Correctness here is the load-bearing assertion
-    // — the lazy walker tree is exercised end-to-end on a non-trivial N.
+fn test_fold_fusion_range_fold() {
+    // range(0, 1, 1000) → fold(acc + 2*elem) → 2 * (0+1+…+999) = 999000.
+    // Doubling inside the combine expression keeps the same numeric answer
+    // as the pre-zones `range → map(double) → fold(sum)` shape this test
+    // replaced. The lazy walker tree is still exercised end-to-end — fold
+    // drains the range walker one element at a time. Phase 4 of
+    // `doc/design_zones.md` retired the `map.f` function-pin path; the
+    // equivalent `range → map(zone) → drain` coverage now lives in
+    // `zones_test::map_zone_trivial_element_plus_one`.
     let mut designer = setup_designer_with_network("main");
 
     let result = edit_designer_network(
@@ -750,22 +754,15 @@ fn test_fold_fusion_range_map_fold() {
         "main",
         r#"
             r = range { start: 0, step: 1, count: 1000 }
-            doubler = expr {
-                expression: "x * 2",
-                parameters: [
-                    { name: "x", data_type: Int }
-                ]
-            }
-            m = map { input_type: Int, output_type: Int, xs: r, f: @doubler }
             i = int { value: 0 }
             combine = expr {
-                expression: "acc + elem",
+                expression: "acc + 2 * elem",
                 parameters: [
                     { name: "acc", data_type: Int },
                     { name: "elem", data_type: Int }
                 ]
             }
-            fld = fold { element_type: Int, accumulator_type: Int, xs: m, init: i, f: @combine }
+            fld = fold { element_type: Int, accumulator_type: Int, xs: r, init: i, f: @combine }
         "#,
         true,
     );

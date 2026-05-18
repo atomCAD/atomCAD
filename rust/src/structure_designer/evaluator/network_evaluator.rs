@@ -1310,6 +1310,13 @@ impl NetworkEvaluator {
                 // at `stack_len - depth`; the HOF node itself lives in
                 // the network at `stack_len - depth - 1` with id matching
                 // the wire's `source_node_id`.
+                //
+                // The lazy `Walker::MapZone` per-element step stands up a
+                // body-only synthetic stack (`stack_len = 1`), so the HOF
+                // ancestor isn't actually present in the slice we received.
+                // In that case we fall back to inferring the source type
+                // from the live iteration value — its concrete type is what
+                // `convert_to` cares about for the downstream conversion.
                 let depth = incoming.source_scope_depth as usize;
                 let stack_len = network_stack.len();
                 let source_type = if depth == 0 {
@@ -1318,22 +1325,11 @@ impl NetworkEvaluator {
                         "ZoneInput wire requires source_scope_depth >= 1 (got 0)"
                     );
                     DataType::None
-                } else {
-                    let body_frame_idx = stack_len.checked_sub(depth).unwrap_or_else(|| {
-                        debug_assert!(
-                            false,
-                            "ZoneInput wire source_scope_depth {} exceeds stack length {}",
-                            depth, stack_len,
-                        );
-                        0
-                    });
+                } else if let Some(body_frame_idx) = stack_len.checked_sub(depth) {
                     if body_frame_idx == 0 {
-                        // Nothing below the body frame to host the HOF node.
-                        debug_assert!(
-                            false,
-                            "ZoneInput wire: body frame is at stack root, no HOF ancestor",
-                        );
-                        DataType::None
+                        // Body-only synthetic stack (lazy walker): infer from
+                        // the live iteration value.
+                        value.infer_data_type().unwrap_or(DataType::None)
                     } else {
                         let hof_network = network_stack[body_frame_idx - 1].node_network;
                         let hof_id = network_stack[body_frame_idx].node_id;
@@ -1346,8 +1342,15 @@ impl NetworkEvaluator {
                                     .get(pin_index)
                                     .and_then(|opd| opd.fixed_type().cloned())
                             })
-                            .unwrap_or(DataType::None)
+                            .unwrap_or_else(|| value.infer_data_type().unwrap_or(DataType::None))
                     }
+                } else {
+                    debug_assert!(
+                        false,
+                        "ZoneInput wire source_scope_depth {} exceeds stack length {}",
+                        depth, stack_len,
+                    );
+                    DataType::None
                 };
 
                 (value, source_type)

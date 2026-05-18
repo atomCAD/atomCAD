@@ -260,20 +260,18 @@ mod closure_capture_validation {
     }
 
     /// An `expr` whose parameter is `Iter[Int]`. Wire the `expr`'s function
-    /// pin (-1) into `map.f`. The validator should reject the function-pin
+    /// pin (-1) into `filter.f`. The validator should reject the function-pin
     /// wire because the captured value-pin type contains `Iter[T]`.
     ///
-    /// Phase 4 note: prior to flipping `map.xs` to `Iter[T]`, the test also
-    /// wired `range â†’ map.xs` as scaffolding. Post-Phase 4, that wire would
-    /// be a different type mismatch (`Iter[Int] â†’ Iter[Float]`) which fires
-    /// before the closure-capture check; we drop it so the closure-capture
-    /// error is the one that surfaces.
+    /// Phase 4 of the zones refactor removed `map.f` (map now uses an inline
+    /// zone body). `filter` retains the function-pin path until Phase 5, so
+    /// this test exercises the closure-capture validator via `filter.f`.
     #[test]
     fn function_pin_rejects_iter_t_capture_via_value_pin() {
         let mut designer = setup_designer_with_network("net_iter_capture");
 
         let expr_id = designer.add_node("expr", DVec2::new(100.0, 0.0));
-        let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+        let filter_id = designer.add_node("filter", DVec2::new(200.0, 0.0));
 
         // Set the expr's parameter type to Iter[Int]. (The expression body
         // doesn't matter for the validator's structural check.)
@@ -285,9 +283,10 @@ mod closure_capture_validation {
             DataType::Iterator(Box::new(DataType::Int)),
         );
 
-        // Connect expr's function pin (-1) â†’ map.f (param 1). map.xs is left
-        // unconnected on purpose (see header comment).
-        connect(&mut designer, "net_iter_capture", expr_id, -1, map_id, 1);
+        // Connect expr's function pin (-1) â†’ filter.f (param 1). filter.xs
+        // is left unconnected on purpose so the closure-capture check is the
+        // only error that surfaces.
+        connect(&mut designer, "net_iter_capture", expr_id, -1, filter_id, 1);
 
         designer.validate_active_network();
 

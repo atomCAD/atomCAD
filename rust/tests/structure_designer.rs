@@ -279,3 +279,6 @@ mod custom_node_property_panel_test;
 
 #[path = "structure_designer/record_construct_property_panel_test.rs"]
 mod record_construct_property_panel_test;
+
+#[path = "structure_designer/zones_test.rs"]
+mod zones_test;
