@@ -1880,3 +1880,466 @@ fn nested_fold_with_inner_map_id_collision() {
         other => panic!("expected Int(6), got {}", other.to_display_string()),
     }
 }
+
+// ============================================================================
+// Phase 6 — zone validation rules
+// ============================================================================
+
+/// Helper — run validation on the active network and return whether it's
+/// valid, along with the collected validation errors.
+fn validate_and_get_errors(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+) -> (bool, Vec<String>) {
+    designer.validate_active_network();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    let errors: Vec<String> = network
+        .validation_errors
+        .iter()
+        .map(|e| e.error_text.clone())
+        .collect();
+    (network.valid, errors)
+}
+
+/// Helper — recursively collect every validation error text from the given
+/// network and all nested zone bodies. Used when a body-internal wire fails
+/// validation but the body's errors live on `body.validation_errors` (not
+/// on the top-level network).
+fn collect_all_errors(network: &rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork) -> Vec<String> {
+    let mut out: Vec<String> = network
+        .validation_errors
+        .iter()
+        .map(|e| e.error_text.clone())
+        .collect();
+    for node in network.nodes.values() {
+        if let Some(body) = node.zone.as_ref() {
+            out.extend(collect_all_errors(body));
+        }
+    }
+    out
+}
+
+/// Rule 1: a `map` whose `result` zone-output pin has no incoming wire is
+/// invalid after validation, and the validation error mentions the missing
+/// zone-output wire.
+#[test]
+fn validation_rule1_zone_output_pin_missing_wire() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    // No body wiring — the map's `result` zone-output pin has no incoming
+    // wire. Validation should report rule 1 violation.
+    let (valid, errors) = validate_and_get_errors(&mut designer, "main");
+    assert!(!valid, "Network should be invalid (missing zone-output wire)");
+    assert!(
+        errors.iter().any(|e| e.to_lowercase().contains("zone-output")
+            && e.to_lowercase().contains("no incoming wire")),
+        "Expected an error about a missing zone-output wire on `result`; got: {:?}",
+        errors
+    );
+}
+
+/// Rule 2: a body wire with `source_scope_depth > 0` referencing a node id
+/// that doesn't exist in the ancestor network is invalid.
+#[test]
+fn validation_rule2_capture_wire_missing_source() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    // Body: expr "x + k" with x from zone-input, k from a capture pointing
+    // at a non-existent ancestor node id.
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + k",
+        vec![
+            ("x".to_string(), DataType::Int),
+            ("k".to_string(), DataType::Int),
+        ],
+    );
+    wire_zone_input_to_body_node(&mut designer, "main", map_id, expr_id, 0);
+    // Capture wire pointing at a node id that doesn't exist anywhere.
+    wire_capture_to_body_node(&mut designer, "main", map_id, expr_id, 1, 99_999);
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    designer.validate_active_network();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let all_errors = collect_all_errors(network);
+    assert!(!network.valid, "Network with bad capture wire should be invalid");
+    assert!(
+        all_errors.iter().any(|e| {
+            let lower = e.to_lowercase();
+            lower.contains("capture wire")
+                && (lower.contains("non-existent") || lower.contains("references"))
+        }),
+        "Expected a capture-wire error about a non-existent source node; got: {:?}",
+        all_errors
+    );
+}
+
+/// Rule 3: a ZoneInput wire whose `pin_index` exceeds the source HOF's
+/// declared zone-input pin count is invalid.
+#[test]
+fn validation_rule3_zone_input_pin_index_out_of_range() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + 1",
+        vec![("x".to_string(), DataType::Int)],
+    );
+    // Wire expr.x to map's ZoneInput with an out-of-range pin index.
+    // map declares 1 zone-input pin ("element"), so pin_index 5 is invalid.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        let map_node = network.nodes.get_mut(&map_id).unwrap();
+        let body = map_node.zone_mut().unwrap();
+        let body_node = body.nodes.get_mut(&expr_id).unwrap();
+        body_node.arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: map_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 5 },
+                source_scope_depth: 1,
+            });
+    }
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    designer.validate_active_network();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let all_errors = collect_all_errors(network);
+    assert!(!network.valid, "Network with bad ZoneInput pin_index should be invalid");
+    assert!(
+        all_errors.iter().any(|e| {
+            let lower = e.to_lowercase();
+            lower.contains("zoneinput")
+                && (lower.contains("out of range") || lower.contains("pin_index"))
+        }),
+        "Expected a ZoneInput out-of-range error; got: {:?}",
+        all_errors
+    );
+}
+
+/// Rule 3 variant: ZoneInput wire with depth=0 (sibling reference, not
+/// allowed — must reference an enclosing HOF, not a sibling).
+#[test]
+fn validation_rule3_zone_input_depth_zero_rejected() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + 1",
+        vec![("x".to_string(), DataType::Int)],
+    );
+    // Wire expr.x to a ZoneInput with depth 0 — illegal (must be >= 1).
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        let map_node = network.nodes.get_mut(&map_id).unwrap();
+        let body = map_node.zone_mut().unwrap();
+        let body_node = body.nodes.get_mut(&expr_id).unwrap();
+        body_node.arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: map_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    designer.validate_active_network();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let all_errors = collect_all_errors(network);
+    assert!(!network.valid, "ZoneInput at depth=0 must be rejected");
+    assert!(
+        all_errors.iter().any(|e| {
+            let lower = e.to_lowercase();
+            lower.contains("zoneinput") && lower.contains("source_scope_depth")
+        }),
+        "Expected a ZoneInput depth error; got: {:?}",
+        all_errors
+    );
+}
+
+/// A well-formed `map` body should validate cleanly under the new rules.
+#[test]
+fn validation_well_formed_map_passes() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + 1",
+        vec![("x".to_string(), DataType::Int)],
+    );
+    wire_zone_input_to_body_node(&mut designer, "main", map_id, expr_id, 0);
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    let (valid, errors) = validate_and_get_errors(&mut designer, "main");
+    assert!(valid, "Well-formed map body should validate; got errors: {:?}", errors);
+}
+
+// ============================================================================
+// Phase 6 — repair: zone-input pin type changes disconnect body wires
+// ============================================================================
+
+/// When a `map` node's `input_type` changes from `Int` to `Crystal`, body
+/// wires that read `ZoneInput { 0 }` into a destination pin declared as
+/// `Int` become incompatible — `repair_node_network` should disconnect them.
+#[test]
+fn repair_disconnects_body_wire_when_zone_input_type_changes() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + 1",
+        vec![("x".to_string(), DataType::Int)],
+    );
+    wire_zone_input_to_body_node(&mut designer, "main", map_id, expr_id, 0);
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    // Sanity: the body wire we just added is present.
+    {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .nodes
+            .get(&map_id)
+            .unwrap()
+            .zone
+            .as_ref()
+            .unwrap();
+        let body_node = body.nodes.get(&expr_id).unwrap();
+        assert_eq!(
+            body_node.arguments[0].incoming_wires.len(),
+            1,
+            "body wire should be present before retyping"
+        );
+    }
+
+    // Now flip the map's input_type to Crystal — incompatible with Int.
+    // Use the same set_node_data path the other tests use; it re-populates
+    // the custom-node-type cache so the new zone_input_pins type lands.
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Crystal,
+            output_type: DataType::Int,
+        }),
+    );
+
+    // Trigger repair by calling `repair_node_network` directly via the
+    // split-borrow pattern (the same pattern structure_designer uses
+    // internally to avoid a double mutable borrow of the registry).
+    {
+        let mut network = designer
+            .node_type_registry
+            .node_networks
+            .remove("main")
+            .unwrap();
+        designer.node_type_registry.repair_node_network(&mut network);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert("main".to_string(), network);
+    }
+
+    // After repair: the ZoneInput wire (Crystal source → Int destination)
+    // should be gone.
+    let body = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap()
+        .nodes
+        .get(&map_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .unwrap();
+    let body_node = body.nodes.get(&expr_id).unwrap();
+    assert!(
+        body_node.arguments[0].incoming_wires.is_empty(),
+        "body wire should have been disconnected by repair (Crystal→Int incompatible); \
+         remaining wires: {:?}",
+        body_node.arguments[0].incoming_wires
+    );
+}

@@ -89,6 +89,7 @@ use crate::structure_designer::data_type::{DataType, RecordType, walk_data_type_
 use crate::structure_designer::node_network::Argument;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
+use crate::structure_designer::node_network::SourcePin;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -1015,6 +1016,14 @@ impl NodeTypeRegistry {
     /// to match their node type parameters. Adds empty arguments if a node has fewer
     /// arguments than its node type requires.
     ///
+    /// Also recurses into HOF nodes' owned zone bodies, applying the same repairs and
+    /// dropping body wires whose `ZoneInput` source pin index has fallen out of range
+    /// or whose source pin's declared type is no longer compatible with the
+    /// destination's declared type (the typical trigger is a `map`/`filter`/`fold`'s
+    /// `input_type` or `output_type` changing — body wires that referenced the now-
+    /// retyped pin get disconnected, matching the existing record-type-def repair
+    /// pattern).
+    ///
     /// # Parameters
     /// * `network` - A mutable reference to the node network to repair
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
@@ -1104,8 +1113,10 @@ impl NodeTypeRegistry {
                 argument.incoming_wires.retain(|wire| {
                     let Some((source_node_id, output_pin_index)) = wire.as_legacy_pair() else {
                         // Non-legacy wires (zone-input or cross-scope) are
-                        // not produced in Phase 1; defer their validation
-                        // to Phase 6.
+                        // not validated here — they live inside bodies and
+                        // their resolution depends on the ancestor chain,
+                        // which is handled by the zone-body repair pass
+                        // below (Phase 6).
                         return true;
                     };
                     if !node_ids.contains(&source_node_id) {
@@ -1123,6 +1134,124 @@ impl NodeTypeRegistry {
                 });
             }
         }
+
+        // Zone-body repair pass. For every HOF node in this network, walk
+        // its owned body and drop body-internal wires whose `ZoneInput`
+        // source pin has fallen out of range or whose declared source type
+        // is no longer convertible to the body destination's declared type.
+        // Recurse so nested zones inside the body are repaired too.
+        //
+        // The HOF's `zone_input_pins` were just refreshed at the top of
+        // this function (via `populate_custom_node_type_cache_with_types`),
+        // so the pin layout we read here is the up-to-date one. The
+        // body's `zone_output_arguments` count was likewise resized by
+        // `Node::ensure_zone_init`, so wires terminating at no-longer-
+        // existing zone-output pins have already been truncated.
+        let hof_ids: Vec<u64> = network
+            .nodes
+            .iter()
+            .filter_map(|(&id, n)| if n.zone.is_some() { Some(id) } else { None })
+            .collect();
+
+        for hof_id in hof_ids {
+            // Snapshot the HOF's zone-input pin types — body wires that
+            // read `ZoneInput { pin_index = i }` must be compatible with
+            // `zone_input_pins[i]`'s declared type.
+            let zone_input_pin_types: Vec<Option<DataType>> = network
+                .nodes
+                .get(&hof_id)
+                .and_then(|n| self.get_node_type_for_node(n))
+                .map(|nt| {
+                    nt.zone_input_pins
+                        .iter()
+                        .map(|p| p.fixed_type().cloned())
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            // Mutably borrow the body via `zone_mut` (CoW via Arc::make_mut).
+            if let Some(node) = network.nodes.get_mut(&hof_id) {
+                if let Some(body) = node.zone_mut() {
+                    self.repair_zone_body(body, hof_id, &zone_input_pin_types);
+                }
+            }
+        }
+    }
+
+    /// Repair body wires inside `body` (owned by HOF `hof_id`). Drops
+    /// `ZoneInput { pin_index }` wires referencing the HOF whose pin index
+    /// is out of range or whose declared source type isn't convertible to
+    /// the body destination's declared type. Then recurses via
+    /// `repair_node_network` so nested zones are repaired in turn.
+    fn repair_zone_body(
+        &self,
+        body: &mut NodeNetwork,
+        hof_id: u64,
+        zone_input_pin_types: &[Option<DataType>],
+    ) {
+        // First-level repair: drop now-invalid body wires sourced from this
+        // HOF's zone-input pins. We need the destination's declared type to
+        // run the compatibility check, so collect (node_id, arg_index,
+        // dest_data_type) tuples up front.
+        let body_nodes: Vec<u64> = body.nodes.keys().copied().collect();
+
+        for body_node_id in body_nodes {
+            // Snapshot the per-argument dest type so we don't borrow body
+            // mutably and immutably at the same time.
+            let dest_types: Vec<DataType> = {
+                let body_node = body.nodes.get(&body_node_id).unwrap();
+                let nt = self.get_node_type_for_node(body_node);
+                let num_args = body_node.arguments.len();
+                (0..num_args)
+                    .map(|i| {
+                        nt.map(|t| {
+                            t.parameters
+                                .get(i)
+                                .map(|p| p.data_type.clone())
+                                .unwrap_or(DataType::None)
+                        })
+                        .unwrap_or(DataType::None)
+                    })
+                    .collect()
+            };
+
+            let body_node_mut = body.nodes.get_mut(&body_node_id).unwrap();
+            for (arg_index, dest_type) in dest_types.iter().enumerate() {
+                if let Some(arg) = body_node_mut.arguments.get_mut(arg_index) {
+                    arg.incoming_wires.retain(|wire| {
+                        // Only repair ZoneInput wires that point at THIS
+                        // hof_id at depth 1 — that's the only case we have
+                        // local knowledge to repair. Deeper ZoneInput
+                        // references and capture wires live across scopes
+                        // and would need an ancestor chain we don't have
+                        // here; validation surfaces them as errors.
+                        if wire.source_node_id != hof_id || wire.source_scope_depth != 1 {
+                            return true;
+                        }
+                        let SourcePin::ZoneInput { pin_index } = wire.source_pin else {
+                            return true;
+                        };
+                        // Out-of-range pin index — drop.
+                        let Some(maybe_src_type) = zone_input_pin_types.get(pin_index) else {
+                            return false;
+                        };
+                        // Source type unknown (HOF type unresolved or
+                        // declares an abstract zone-input) — keep, let
+                        // validator surface any deeper issue.
+                        let Some(src_type) = maybe_src_type.as_ref() else {
+                            return true;
+                        };
+                        DataType::can_be_converted_to(src_type, dest_type, self)
+                    });
+                }
+            }
+        }
+
+        // Now recurse — bodies can themselves contain HOFs whose own
+        // zone state may have shifted. `repair_node_network` handles arg
+        // counts, dangling wire cleanup, and another level of zone-body
+        // repair.
+        self.repair_node_network(body);
     }
 
     /// Computes the transitive closure of node network dependencies.

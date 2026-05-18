@@ -1,10 +1,13 @@
 use crate::structure_designer::data_type::{DataType, contains_iterator};
-use crate::structure_designer::node_network::{Argument, NodeNetwork, ValidationError};
+use crate::structure_designer::node_network::{
+    Argument, IncomingWire, NodeNetwork, SourcePin, ValidationError,
+};
 use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOutputType};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Per-validation-run cache of resolved concrete output types, keyed by
 /// `(node_id, output_pin_index)`. A `None` entry means "we tried to resolve
@@ -630,6 +633,16 @@ pub fn validate_network(
         network.valid = false;
     }
 
+    // VALIDATION PHASE: Zone-specific rules (rule 1: zone-output pins have
+    // wires; rule 2: capture wires resolve; rule 3: zone-input references
+    // resolve). Recurses into every HOF node's owned body and walks nested
+    // zones with the ancestor chain extended. See `doc/design_zones.md`
+    // (§"Validation").
+    let zones_valid = validate_zones_recursive(network, &[], &[], node_type_registry);
+    if !zones_valid {
+        network.valid = false;
+    }
+
     // Update the network's output type based on return node, using resolved
     // concrete types for any polymorphic pins on the return node. This runs
     // even when wires are invalid so the enclosing network can still see this
@@ -640,6 +653,325 @@ pub fn validate_network(
     NetworkValidationResult {
         valid: network.valid,
         interface_changed: interface_changed || output_type_changed,
+    }
+}
+
+/// Recursively validate zone-related rules in `network` and every nested
+/// zone body. Reports errors directly on the network whose node the violation
+/// belongs to (body errors land on the body's `validation_errors`; the owning
+/// HOF in the parent network also gets a generic "zone body invalid" marker).
+///
+/// `ancestors[i]` is the network at depth `i` from the root (so `ancestors[0]`
+/// is the root, `ancestors[len-1]` is the immediate parent of `network`).
+/// `ancestor_hof_ids[i]` is the HOF node id (in `ancestors[i]`) whose owned
+/// zone body is `ancestors[i+1]` — except for the deepest entry, which is the
+/// HOF whose body is `network` itself. The two vectors always have the same
+/// length; at the top-level call from `validate_network` both are empty.
+///
+/// Returns `true` iff `network` and every nested body passed validation.
+fn validate_zones_recursive(
+    network: &mut NodeNetwork,
+    ancestors: &[&NodeNetwork],
+    ancestor_hof_ids: &[u64],
+    registry: &NodeTypeRegistry,
+) -> bool {
+    let mut ok = true;
+
+    let node_ids: Vec<u64> = network.nodes.keys().copied().collect();
+
+    // Pass A — for every node in `network`, check rule 1 (every zone-output
+    // pin has an incoming wire) and check rules 2 & 3 on wires in the
+    // node's `arguments` list. Wires in `zone_output_arguments` are scoped
+    // to the body — they are checked in Pass B with the extended chain.
+    for &node_id in &node_ids {
+        let Some(node) = network.nodes.get(&node_id) else {
+            continue;
+        };
+        let Some(node_type) = registry.get_node_type_for_node(node) else {
+            continue;
+        };
+
+        // Rule 1: every zone-output pin must have at least one incoming wire.
+        if node_type.has_zone() {
+            for (i, pin) in node_type.zone_output_pins.iter().enumerate() {
+                let has_wire = node
+                    .zone_output_arguments
+                    .get(i)
+                    .map(|arg| !arg.incoming_wires.is_empty())
+                    .unwrap_or(false);
+                if !has_wire {
+                    ok = false;
+                    network.validation_errors.push(ValidationError::new(
+                        format!(
+                            "Zone-output pin '{}' has no incoming wire",
+                            pin.name
+                        ),
+                        Some(node_id),
+                    ));
+                }
+            }
+        }
+
+        // Wires in `arguments` are in this network's frame — depth = 0
+        // resolves locally, depth > 0 walks `ancestors`.
+        let arg_wires: Vec<IncomingWire> = node
+            .arguments
+            .iter()
+            .flat_map(|a| a.incoming_wires.iter().cloned())
+            .collect();
+        for incoming in &arg_wires {
+            if let Some(err) =
+                check_zone_wire(incoming, node_id, ancestors, ancestor_hof_ids, registry)
+            {
+                ok = false;
+                network.validation_errors.push(err);
+            }
+        }
+    }
+
+    // Pass B — for each HOF in `network`: validate the zone-output wires
+    // (which live in the body's frame), then recurse into the owned body.
+    let hof_ids: Vec<u64> = node_ids
+        .iter()
+        .filter(|id| {
+            network
+                .nodes
+                .get(id)
+                .and_then(|n| n.zone.as_ref())
+                .is_some()
+        })
+        .copied()
+        .collect();
+
+    for hof_id in hof_ids {
+        // Snapshot the zone-output wires before mutating — they're in the
+        // body's frame (depth = 0 resolves to a body-internal source), so
+        // we'll check them with the extended chain below.
+        let zone_output_wires_snapshot: Vec<IncomingWire> = network
+            .nodes
+            .get(&hof_id)
+            .map(|n| {
+                n.zone_output_arguments
+                    .iter()
+                    .flat_map(|a| a.incoming_wires.iter().cloned())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Take the body Arc out so we can hold both `&network` (as the
+        // immediate-parent reference in the extended chain) and `&mut body`
+        // at once.
+        let body_arc_opt = network
+            .nodes
+            .get_mut(&hof_id)
+            .and_then(|n| n.zone.take());
+        let Some(mut body_arc) = body_arc_opt else {
+            continue;
+        };
+
+        // Reset the body's validation state — bodies are only ever
+        // validated through this recursion, so we own the error list.
+        {
+            let body = Arc::make_mut(&mut body_arc);
+            body.valid = true;
+            body.validation_errors.clear();
+        }
+
+        // Collect deferred errors so we don't have to hold `&*network`
+        // (via the extended ancestors chain) while pushing onto
+        // `network.validation_errors`.
+        let (recursion_ok, deferred_errors) = {
+            let mut new_ancestors: Vec<&NodeNetwork> = ancestors.to_vec();
+            new_ancestors.push(&*network);
+            let mut new_hof_ids: Vec<u64> = ancestor_hof_ids.to_vec();
+            new_hof_ids.push(hof_id);
+
+            let mut errs: Vec<ValidationError> = Vec::new();
+            for wire in &zone_output_wires_snapshot {
+                if let Some(err) = check_zone_wire(
+                    wire,
+                    hof_id,
+                    &new_ancestors,
+                    &new_hof_ids,
+                    registry,
+                ) {
+                    errs.push(err);
+                }
+            }
+
+            let body = Arc::make_mut(&mut body_arc);
+            let r_ok = validate_zones_recursive(body, &new_ancestors, &new_hof_ids, registry);
+            (r_ok, errs)
+        };
+
+        let body_inner_ok = recursion_ok && deferred_errors.is_empty();
+
+        for err in deferred_errors {
+            network.validation_errors.push(err);
+        }
+
+        if !body_inner_ok {
+            {
+                let body = Arc::make_mut(&mut body_arc);
+                body.valid = false;
+            }
+            ok = false;
+            network.validation_errors.push(ValidationError::new(
+                "Zone body is invalid".to_string(),
+                Some(hof_id),
+            ));
+        }
+
+        if let Some(node) = network.nodes.get_mut(&hof_id) {
+            node.zone = Some(body_arc);
+        }
+    }
+
+    ok
+}
+
+/// Validates a single wire under the zone rules. Returns `Some(err)` if the
+/// wire violates rule 2 or rule 3; `None` if the wire is fine (or is a
+/// depth-0 local wire — those are handled by `validate_wires`).
+fn check_zone_wire(
+    incoming: &IncomingWire,
+    dest_node_id: u64,
+    ancestors: &[&NodeNetwork],
+    ancestor_hof_ids: &[u64],
+    registry: &NodeTypeRegistry,
+) -> Option<ValidationError> {
+    match incoming.source_pin {
+        SourcePin::NodeOutput { pin_index } => {
+            let depth = incoming.source_scope_depth as usize;
+            if depth == 0 {
+                // Local wire — handled by `validate_wires`.
+                return None;
+            }
+            // Rule 2: depth > 0 means the source is in an ancestor network.
+            // The chain `ancestors` is indexed root-first; depth-N up means
+            // we want `ancestors[len - N]`. (`ancestors.last()` is depth=1.)
+            if depth > ancestors.len() {
+                return Some(ValidationError::new(
+                    format!(
+                        "Capture wire's source_scope_depth ({}) exceeds the \
+                         enclosing-zone chain length ({})",
+                        depth,
+                        ancestors.len()
+                    ),
+                    Some(dest_node_id),
+                ));
+            }
+            let source_network = ancestors[ancestors.len() - depth];
+            let Some(source_node) = source_network.nodes.get(&incoming.source_node_id)
+            else {
+                return Some(ValidationError::new(
+                    format!(
+                        "Capture wire references non-existent source node {} \
+                         in ancestor network (depth {})",
+                        incoming.source_node_id, depth
+                    ),
+                    Some(dest_node_id),
+                ));
+            };
+            // Confirm the named source pin exists. pin_index = -1 is the
+            // legacy function pin and is always considered present (matches
+            // the existing wire-validation path).
+            if pin_index != -1 {
+                let Some(source_node_type) = registry.get_node_type_for_node(source_node)
+                else {
+                    return Some(ValidationError::new(
+                        format!(
+                            "Capture wire's source node {} (depth {}) has \
+                             unknown node type '{}'",
+                            incoming.source_node_id, depth, source_node.node_type_name
+                        ),
+                        Some(dest_node_id),
+                    ));
+                };
+                let pin_count = source_node_type.output_pin_count();
+                if (pin_index as usize) >= pin_count {
+                    return Some(ValidationError::new(
+                        format!(
+                            "Capture wire references output pin index {} on \
+                             source node {} (depth {}) but that node has only \
+                             {} output pin(s)",
+                            pin_index, incoming.source_node_id, depth, pin_count
+                        ),
+                        Some(dest_node_id),
+                    ));
+                }
+            }
+            None
+        }
+        SourcePin::ZoneInput { pin_index } => {
+            let depth = incoming.source_scope_depth as usize;
+            // Rule 3: ZoneInput must reference an enclosing HOF (depth >= 1).
+            if depth < 1 {
+                return Some(ValidationError::new(
+                    "ZoneInput wire must have source_scope_depth >= 1 \
+                     (sibling zone-input references are not allowed)"
+                        .to_string(),
+                    Some(dest_node_id),
+                ));
+            }
+            if depth > ancestor_hof_ids.len() {
+                return Some(ValidationError::new(
+                    format!(
+                        "ZoneInput wire's source_scope_depth ({}) exceeds the \
+                         enclosing-zone chain length ({})",
+                        depth,
+                        ancestor_hof_ids.len()
+                    ),
+                    Some(dest_node_id),
+                ));
+            }
+            let expected_hof_id = ancestor_hof_ids[ancestor_hof_ids.len() - depth];
+            if incoming.source_node_id != expected_hof_id {
+                return Some(ValidationError::new(
+                    format!(
+                        "ZoneInput wire's source_node_id ({}) does not match \
+                         the enclosing HOF id ({}) at depth {}",
+                        incoming.source_node_id, expected_hof_id, depth
+                    ),
+                    Some(dest_node_id),
+                ));
+            }
+            // Verify pin_index is within the source HOF's zone_input_pins.
+            let hof_network = ancestors[ancestors.len() - depth];
+            let Some(hof_node) = hof_network.nodes.get(&expected_hof_id) else {
+                return Some(ValidationError::new(
+                    format!(
+                        "ZoneInput wire references HOF id {} at depth {} but \
+                         that node no longer exists in the ancestor network",
+                        expected_hof_id, depth
+                    ),
+                    Some(dest_node_id),
+                ));
+            };
+            let Some(hof_type) = registry.get_node_type_for_node(hof_node) else {
+                return Some(ValidationError::new(
+                    format!(
+                        "ZoneInput wire references HOF id {} at depth {} with \
+                         unknown node type '{}'",
+                        expected_hof_id, depth, hof_node.node_type_name
+                    ),
+                    Some(dest_node_id),
+                ));
+            };
+            if pin_index >= hof_type.zone_input_pins.len() {
+                return Some(ValidationError::new(
+                    format!(
+                        "ZoneInput pin_index {} out of range for HOF '{}' \
+                         (it declares {} zone-input pin(s))",
+                        pin_index,
+                        hof_type.name,
+                        hof_type.zone_input_pins.len()
+                    ),
+                    Some(dest_node_id),
+                ));
+            }
+            None
+        }
     }
 }
 
