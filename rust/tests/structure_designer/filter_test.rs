@@ -1,16 +1,19 @@
+//! Static/structural tests for the `filter` node.
+//!
+//! Phase 5 of `doc/design_zones.md` retired the function-pin `f` parameter:
+//! `filter` is now driven by an inline zone body with one zone-input pin
+//! (`element`) and one zone-output pin (`keep: Bool`). End-to-end evaluation
+//! coverage moved to `zones_test.rs`; this file keeps the static-shape tests
+//! (registration, calculate_custom_node_type, text properties, serde, clone,
+//! .cnnd roundtrip).
+
 use glam::f64::DVec2;
-use glam::i32::IVec3;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
-    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
-};
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::text_format::TextValue;
-use rust_lib_flutter_cad::structure_designer::text_format::edit_network;
 use std::collections::HashMap;
 
 // ============================================================================
@@ -22,18 +25,6 @@ fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
     designer.add_node_network(network_name);
     designer.set_active_node_network_name(Some(network_name.to_string()));
     designer
-}
-
-fn evaluate_node(designer: &StructureDesigner, network_name: &str, node_id: u64) -> NetworkResult {
-    let registry = &designer.node_type_registry;
-    let network = registry.node_networks.get(network_name).unwrap();
-    let evaluator = NetworkEvaluator::new();
-    let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        node_network: network,
-        node_id: 0,
-    }];
-    evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context)
 }
 
 fn set_node_data(
@@ -59,92 +50,6 @@ fn props_to_hashmap(props: Vec<(String, TextValue)>) -> HashMap<String, TextValu
     props.into_iter().collect()
 }
 
-fn edit_designer_network(
-    designer: &mut StructureDesigner,
-    network_name: &str,
-    code: &str,
-    replace: bool,
-) -> rust_lib_flutter_cad::structure_designer::text_format::EditResult {
-    let mut network = designer
-        .node_type_registry
-        .node_networks
-        .remove(network_name)
-        .unwrap();
-    let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
-    designer
-        .node_type_registry
-        .node_networks
-        .insert(network_name.to_string(), network);
-    designer.validate_active_network();
-    result
-}
-
-fn find_node_id(designer: &StructureDesigner, network_name: &str, node_type_name: &str) -> u64 {
-    let network = designer
-        .node_type_registry
-        .node_networks
-        .get(network_name)
-        .unwrap();
-    let (id, _) = network
-        .nodes
-        .iter()
-        .find(|(_, n)| n.node_type_name == node_type_name)
-        .unwrap_or_else(|| panic!("expected a `{}` node in `{}`", node_type_name, network_name));
-    *id
-}
-
-fn extract_int_array(designer: &StructureDesigner, result: NetworkResult) -> Vec<i32> {
-    match result {
-        NetworkResult::Array(items) => items
-            .into_iter()
-            .map(|r| match r {
-                NetworkResult::Int(v) => v,
-                other => panic!("expected Int element, got {}", other.to_display_string()),
-            })
-            .collect(),
-        // Phase 4: `filter` now produces `Iter[T]`. Drain the walker for
-        // the test assertion. Same pattern as `collect.eval`.
-        NetworkResult::Iterator(mut walker) => {
-            let registry = &designer.node_type_registry;
-            let evaluator = NetworkEvaluator::new();
-            let mut out: Vec<i32> = Vec::new();
-            loop {
-                match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
-                    None => break,
-                    Some(NetworkResult::Int(v)) => out.push(v),
-                    Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
-                    Some(other) => {
-                        panic!("expected Int element, got {}", other.to_display_string())
-                    }
-                }
-            }
-            out
-        }
-        other => panic!(
-            "expected Array or Iterator, got {}",
-            other.to_display_string()
-        ),
-    }
-}
-
-fn expect_error(result: NetworkResult, expected_message: &str) {
-    match result {
-        NetworkResult::Error(msg) => {
-            assert!(
-                msg.contains(expected_message),
-                "expected error containing {:?}, got {:?}",
-                expected_message,
-                msg
-            );
-        }
-        other => panic!(
-            "expected Error containing {:?}, got {}",
-            expected_message,
-            other.to_display_string()
-        ),
-    }
-}
-
 // ============================================================================
 // Default values & registration
 // ============================================================================
@@ -163,15 +68,22 @@ fn test_filter_registered_in_registry() {
     let nt = node_type.unwrap();
     assert_eq!(nt.name, "filter");
     assert!(nt.public);
-    assert_eq!(nt.parameters.len(), 2);
+    // Phase 5: `f` is gone — only external input is `xs`. The predicate body
+    // lives inside the zone.
+    assert_eq!(nt.parameters.len(), 1);
     assert_eq!(nt.parameters[0].name, "xs");
-    assert_eq!(nt.parameters[1].name, "f");
     assert_eq!(nt.output_pins.len(), 1);
-    // Phase 4: filter declares Iter[T] inputs and outputs.
     assert_eq!(
         *nt.output_type(),
         DataType::Iterator(Box::new(DataType::Float))
     );
+
+    // Zone-input pin: element (T). Zone-output: keep (Bool).
+    assert_eq!(nt.zone_input_pins.len(), 1);
+    assert_eq!(nt.zone_input_pins[0].name, "element");
+    assert_eq!(nt.zone_output_pins.len(), 1);
+    assert_eq!(nt.zone_output_pins[0].name, "keep");
+    assert_eq!(nt.zone_output_pins[0].data_type, DataType::Bool);
 }
 
 // ============================================================================
@@ -180,8 +92,6 @@ fn test_filter_registered_in_registry() {
 
 #[test]
 fn test_filter_custom_type_int() {
-    use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
-
     let registry = NodeTypeRegistry::new();
     let base = registry.get_node_type("filter").unwrap();
     let data = FilterData {
@@ -189,28 +99,24 @@ fn test_filter_custom_type_int() {
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
-    // Phase 4: filter pins are Iter[T].
+    assert_eq!(custom.parameters.len(), 1);
     assert_eq!(
         custom.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::Int))
     );
     assert_eq!(
-        custom.parameters[1].data_type,
-        DataType::Function(FunctionType {
-            parameter_types: vec![DataType::Int],
-            output_type: Box::new(DataType::Bool),
-        })
-    );
-    assert_eq!(
         *custom.output_type(),
         DataType::Iterator(Box::new(DataType::Int))
     );
+
+    assert_eq!(custom.zone_input_pins.len(), 1);
+    assert_eq!(custom.zone_input_pins[0].fixed_type(), Some(&DataType::Int));
+    assert_eq!(custom.zone_output_pins.len(), 1);
+    assert_eq!(custom.zone_output_pins[0].data_type, DataType::Bool);
 }
 
 #[test]
 fn test_filter_custom_type_ivec3() {
-    use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
-
     let registry = NodeTypeRegistry::new();
     let base = registry.get_node_type("filter").unwrap();
     let data = FilterData {
@@ -218,421 +124,19 @@ fn test_filter_custom_type_ivec3() {
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
-    // Phase 4: filter pins are Iter[T].
     assert_eq!(
         custom.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::IVec3))
     );
     assert_eq!(
-        custom.parameters[1].data_type,
-        DataType::Function(FunctionType {
-            parameter_types: vec![DataType::IVec3],
-            output_type: Box::new(DataType::Bool),
-        })
-    );
-    assert_eq!(
         *custom.output_type(),
         DataType::Iterator(Box::new(DataType::IVec3))
     );
-}
-
-// ============================================================================
-// Evaluation: basic predicate filtering (Int)
-// ============================================================================
-
-#[test]
-fn test_filter_int_greater_than() {
-    let mut designer = setup_designer_with_network("main");
-
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 1, step: 1, count: 5 }
-            pred = expr {
-                expression: "x > 2",
-                parameters: [{ name: "x", data_type: Int }]
-            }
-            f1 = filter { element_type: Int, xs: r, f: @pred }
-        "#,
-        true,
+    assert_eq!(
+        custom.zone_input_pins[0].fixed_type(),
+        Some(&DataType::IVec3)
     );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
-    assert_eq!(values, vec![3, 4, 5]);
-}
-
-#[test]
-fn test_filter_int_even_predicate() {
-    let mut designer = setup_designer_with_network("main");
-
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 1, step: 1, count: 4 }
-            pred = expr {
-                expression: "x % 2 == 0",
-                parameters: [{ name: "x", data_type: Int }]
-            }
-            f1 = filter { element_type: Int, xs: r, f: @pred }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
-    assert_eq!(values, vec![2, 4]);
-}
-
-#[test]
-fn test_filter_always_true_keeps_all() {
-    let mut designer = setup_designer_with_network("main");
-
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 1, step: 1, count: 3 }
-            pred = expr {
-                expression: "true",
-                parameters: [{ name: "x", data_type: Int }]
-            }
-            f1 = filter { element_type: Int, xs: r, f: @pred }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
-    assert_eq!(values, vec![1, 2, 3]);
-}
-
-#[test]
-fn test_filter_always_false_yields_empty() {
-    let mut designer = setup_designer_with_network("main");
-
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 1, step: 1, count: 3 }
-            pred = expr {
-                expression: "false",
-                parameters: [{ name: "x", data_type: Int }]
-            }
-            f1 = filter { element_type: Int, xs: r, f: @pred }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
-    assert!(values.is_empty(), "expected empty array, got {:?}", values);
-}
-
-#[test]
-fn test_filter_empty_array_input() {
-    let mut designer = setup_designer_with_network("main");
-
-    // range with count: 0 produces an empty Array[Int].
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 0, step: 1, count: 0 }
-            pred = expr {
-                expression: "x > 0",
-                parameters: [{ name: "x", data_type: Int }]
-            }
-            f1 = filter { element_type: Int, xs: r, f: @pred }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
-    assert!(values.is_empty(), "expected empty array, got {:?}", values);
-}
-
-// ============================================================================
-// Evaluation: IVec3 element type (.z > 0 predicate)
-// ============================================================================
-
-#[test]
-fn test_filter_ivec3_z_positive() {
-    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-    use rust_lib_flutter_cad::structure_designer::nodes::ivec3::IVec3Data;
-    use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
-
-    let mut designer = setup_designer_with_network("main");
-
-    // Build [(0,0,1), (1,0,-1), (2,2,2), (0,0,0)] via four ivec3 nodes + sequence.
-    let mut id_for = |x: i32, y: i32, z: i32, pos_y: f64| {
-        let id = designer.add_node("ivec3", DVec2::new(0.0, pos_y));
-        set_node_data(
-            &mut designer,
-            "main",
-            id,
-            Box::new(IVec3Data {
-                value: IVec3::new(x, y, z),
-            }),
-        );
-        id
-    };
-    let v0 = id_for(0, 0, 1, 0.0);
-    let v1 = id_for(1, 0, -1, 60.0);
-    let v2 = id_for(2, 2, 2, 120.0);
-    let v3 = id_for(0, 0, 0, 180.0);
-
-    let seq_id = designer.add_node("sequence", DVec2::new(120.0, 0.0));
-    set_node_data(
-        &mut designer,
-        "main",
-        seq_id,
-        Box::new(SequenceData {
-            element_type: DataType::IVec3,
-            input_count: 4,
-        }),
-    );
-    designer.validate_active_network();
-    designer.connect_nodes(v0, 0, seq_id, 0);
-    designer.connect_nodes(v1, 0, seq_id, 1);
-    designer.connect_nodes(v2, 0, seq_id, 2);
-    designer.connect_nodes(v3, 0, seq_id, 3);
-
-    // Now use text format to add the predicate and filter, wired to the existing sequence.
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            pred = expr {
-                expression: "x.z > 0",
-                parameters: [{ name: "x", data_type: IVec3 }]
-            }
-            f1 = filter { element_type: IVec3, xs: sequence1, f: @pred }
-        "#,
-        false,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    // Look up `f1` by name — sequence node was renamed to `sequence1` by serializer/editor;
-    // simpler to find via node_type_name.
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let result = evaluate_node(&designer, "main", filter_id);
-    // Phase 4: filter produces Iter[T]. Drain the walker.
-    let mut walker = match result {
-        NetworkResult::Iterator(w) => w,
-        other => panic!("expected Iterator, got {}", other.to_display_string()),
-    };
-    let registry = &designer.node_type_registry;
-    let evaluator = NetworkEvaluator::new();
-    let mut vecs: Vec<IVec3> = Vec::new();
-    loop {
-        match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
-            None => break,
-            Some(NetworkResult::IVec3(v)) => vecs.push(v),
-            Some(NetworkResult::Error(e)) => panic!("walker yielded Error: {}", e),
-            Some(other) => panic!("expected IVec3, got {}", other.to_display_string()),
-        }
-    }
-    assert_eq!(vecs, vec![IVec3::new(0, 0, 1), IVec3::new(2, 2, 2)]);
-}
-
-// ============================================================================
-// Evaluation: missing-input errors
-// ============================================================================
-
-#[test]
-fn test_filter_xs_unconnected_yields_error() {
-    let mut designer = setup_designer_with_network("main");
-
-    // Wire f, leave xs unconnected.
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            pred = expr {
-                expression: "x > 0",
-                parameters: [{ name: "x", data_type: Int }]
-            }
-            f1 = filter { element_type: Int, f: @pred }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    expect_error(
-        evaluate_node(&designer, "main", filter_id),
-        "xs input is missing",
-    );
-}
-
-#[test]
-fn test_filter_f_unconnected_yields_error() {
-    let mut designer = setup_designer_with_network("main");
-
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 1, step: 1, count: 3 }
-            f1 = filter { element_type: Int, xs: r }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    expect_error(
-        evaluate_node(&designer, "main", filter_id),
-        "f input is missing",
-    );
-}
-
-#[test]
-fn test_filter_both_unconnected_reports_xs_first() {
-    let mut designer = setup_designer_with_network("main");
-
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            f1 = filter { element_type: Int }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    expect_error(
-        evaluate_node(&designer, "main", filter_id),
-        "xs input is missing",
-    );
-}
-
-#[test]
-fn test_filter_empty_xs_with_unconnected_f_still_errors() {
-    let mut designer = setup_designer_with_network("main");
-
-    // xs is wired (empty array), but f is not — required-input check must fire
-    // even when xs would have been empty.
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 0, step: 1, count: 0 }
-            f1 = filter { element_type: Int, xs: r }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    expect_error(
-        evaluate_node(&designer, "main", filter_id),
-        "f input is missing",
-    );
-}
-
-// ============================================================================
-// Evaluation: predicate error mid-iteration propagates
-// ============================================================================
-
-#[test]
-fn test_filter_predicate_error_propagates() {
-    // Predicate references a captured array via array_at with an out-of-bounds
-    // index for some elements: when `x == 2`, `arr[5]` is out of bounds and
-    // expr evaluation produces an error which filter must propagate.
-    let mut designer = setup_designer_with_network("main");
-
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 1, step: 1, count: 4 }
-            pred = expr {
-                expression: "x > 0 && [10, 20][x] > 0",
-                parameters: [{ name: "x", data_type: Int }]
-            }
-            f1 = filter { element_type: Int, xs: r, f: @pred }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    // Phase 4: filter is lazy; errors surface during walker drain rather
-    // than at `eval()` time. Drain and look for an `Error` element.
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let result = evaluate_node(&designer, "main", filter_id);
-    let mut walker = match result {
-        NetworkResult::Iterator(w) => w,
-        NetworkResult::Error(_) => return, // eager error is acceptable too
-        other => panic!(
-            "expected Iterator or Error, got {}",
-            other.to_display_string()
-        ),
-    };
-    let registry = &designer.node_type_registry;
-    let evaluator = NetworkEvaluator::new();
-    let mut saw_error = false;
-    loop {
-        match walker.next(&evaluator, registry, &mut NetworkEvaluationContext::new()) {
-            None => break,
-            Some(NetworkResult::Error(_)) => {
-                saw_error = true;
-                break;
-            }
-            Some(_) => {}
-        }
-    }
-    assert!(
-        saw_error,
-        "expected the predicate error to surface during walker drain"
-    );
-}
-
-// ============================================================================
-// Evaluation: partial application of trailing params (pre-bound threshold)
-// ============================================================================
-
-#[test]
-fn test_filter_predicate_with_prebound_threshold() {
-    let mut designer = setup_designer_with_network("main");
-
-    // The predicate's first parameter is the iteration variable; the second
-    // (`threshold`) is wired to a constant inside the parent network. The
-    // closure captures `threshold` once at wire-time.
-    let result = edit_designer_network(
-        &mut designer,
-        "main",
-        r#"
-            r = range { start: 1, step: 1, count: 5 }
-            t = int { value: 3 }
-            pred = expr {
-                expression: "x > threshold",
-                parameters: [
-                    { name: "x", data_type: Int },
-                    { name: "threshold", data_type: Int }
-                ],
-                threshold: t
-            }
-            f1 = filter { element_type: Int, xs: r, f: @pred }
-        "#,
-        true,
-    );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let filter_id = find_node_id(&designer, "main", "filter");
-    let values = extract_int_array(&designer, evaluate_node(&designer, "main", filter_id));
-    assert_eq!(values, vec![4, 5]);
+    assert_eq!(custom.zone_output_pins[0].data_type, DataType::Bool);
 }
 
 // ============================================================================
@@ -699,91 +203,6 @@ fn test_filter_clone_box() {
     assert_eq!(
         map.get("element_type"),
         Some(&TextValue::DataType(DataType::Int))
-    );
-}
-
-// ============================================================================
-// Text format roundtrip (serialize_network → edit_network)
-// ============================================================================
-
-#[test]
-fn test_filter_text_format_roundtrip() {
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-    use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
-    use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
-
-    let registry = NodeTypeRegistry::new();
-
-    let create_network = || {
-        let node_type = NodeType {
-            name: "test".to_string(),
-            description: "Test network".to_string(),
-            summary: None,
-            category: NodeTypeCategory::Custom,
-            parameters: vec![],
-            output_pins: OutputPinDefinition::single(DataType::Array(Box::new(DataType::IVec3))),
-            zone_input_pins: vec![],
-            zone_output_pins: vec![],
-            public: true,
-            node_data_creator: || {
-                Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
-            },
-            node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
-            node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
-        };
-        NodeNetwork::new(node_type)
-    };
-
-    let mut network = create_network();
-    let result = edit_network(
-        &mut network,
-        &registry,
-        r#"
-            f1 = filter { element_type: IVec3 }
-            output f1
-        "#,
-        true,
-    );
-    assert!(
-        result.success,
-        "Initial edit should succeed: {:?}",
-        result.errors
-    );
-
-    let f_node = network
-        .nodes
-        .values()
-        .find(|n| n.node_type_name == "filter")
-        .unwrap();
-    let props: HashMap<String, TextValue> = f_node.data.get_text_properties().into_iter().collect();
-    assert_eq!(
-        props.get("element_type"),
-        Some(&TextValue::DataType(DataType::IVec3))
-    );
-
-    let serialized = serialize_network(&network, &registry, None);
-    assert!(
-        serialized.contains("filter"),
-        "serialized text should contain 'filter'"
-    );
-    assert!(
-        serialized.contains("element_type: IVec3"),
-        "serialized text should contain element_type: {}",
-        serialized
-    );
-
-    let mut network2 = create_network();
-    let result2 = edit_network(&mut network2, &registry, &serialized, true);
-    assert!(
-        result2.success,
-        "Roundtrip edit should succeed: {:?}",
-        result2.errors
-    );
-    assert_eq!(
-        network.nodes.len(),
-        network2.nodes.len(),
-        "networks should have same number of nodes"
     );
 }
 

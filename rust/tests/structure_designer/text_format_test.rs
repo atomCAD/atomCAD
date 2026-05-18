@@ -1085,49 +1085,13 @@ mod network_editor_tests {
         );
     }
 
-    #[test]
-    fn test_edit_function_ref_connection() {
-        // `filter` retains the function-pin (`f`) parameter in Phase 4 of the
-        // zones refactor (only `map` flipped to inline bodies); use it here
-        // so the test still exercises the `@expr` → function-pin wiring path.
-        let registry = create_test_registry();
-        let mut network = create_test_network();
-
-        let result = edit_network(
-            &mut network,
-            &registry,
-            r#"
-            range1 = range { start: 0, step: 1, count: 5 }
-            pred = expr {
-                expression: "x % 2 == 0",
-                parameters: [{ name: "x", data_type: Int }],
-                output_type: Bool
-            }
-            filter1 = filter { element_type: Int, xs: range1, f: @pred }
-        "#,
-            true,
-        );
-
-        assert!(result.success, "Edit should succeed: {:?}", result.errors);
-        assert_eq!(result.nodes_created.len(), 3);
-
-        let filter_node = network
-            .nodes
-            .values()
-            .find(|n| n.node_type_name == "filter")
-            .expect("Should find filter node");
-
-        // filter parameters: xs (0), f (1).
-        let f_param_index = 1;
-        let f_arg = &filter_node.arguments[f_param_index];
-        assert!(
-            !f_arg.argument_output_pins().is_empty(),
-            "f parameter should be connected"
-        );
-
-        let (_, &pin_index) = f_arg.argument_output_pins().iter().next().unwrap();
-        assert_eq!(pin_index, -1, "Should be a function pin reference");
-    }
+    // Phase 5 of `doc/design_zones.md` retired the function-pin parameter
+    // from every user-facing HOF. The `@expr` text-format syntax that
+    // referenced a function pin via pin index -1 no longer has a
+    // user-visible consumer (it remains in the parser for any future
+    // function-pin types). The previous `filter.f = @pred` test was deleted
+    // here; if a user-facing function-pin parameter is reintroduced in the
+    // future, restore an analogous test.
 
     #[test]
     fn test_edit_preserves_unmentioned_nodes_in_incremental() {

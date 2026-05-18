@@ -28,7 +28,6 @@ use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;
 use rust_lib_flutter_cad::structure_designer::nodes::foreach::ForeachData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_xyz::ImportXYZData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-use rust_lib_flutter_cad::structure_designer::text_format::edit_network;
 use tempfile::TempDir;
 
 // ============================================================================
@@ -101,40 +100,6 @@ fn evaluate_with_execute(
     evaluator.evaluate(&stack, node_id, 0, registry, false, &mut context)
 }
 
-fn edit_designer_network(
-    designer: &mut StructureDesigner,
-    network_name: &str,
-    code: &str,
-    replace: bool,
-) -> rust_lib_flutter_cad::structure_designer::text_format::EditResult {
-    let mut network = designer
-        .node_type_registry
-        .node_networks
-        .remove(network_name)
-        .unwrap();
-    let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
-    designer
-        .node_type_registry
-        .node_networks
-        .insert(network_name.to_string(), network);
-    designer.validate_active_network();
-    result
-}
-
-fn find_node_id(designer: &StructureDesigner, network_name: &str, node_type_name: &str) -> u64 {
-    let network = designer
-        .node_type_registry
-        .node_networks
-        .get(network_name)
-        .unwrap();
-    let (id, _) = network
-        .nodes
-        .iter()
-        .find(|(_, n)| n.node_type_name == node_type_name)
-        .unwrap_or_else(|| panic!("expected a `{}` node in `{}`", node_type_name, network_name));
-    *id
-}
-
 // ============================================================================
 // foreach registration & default values
 // ============================================================================
@@ -153,16 +118,23 @@ fn foreach_is_registered_in_registry() {
         .expect("foreach should be registered");
     assert_eq!(nt.name, "foreach");
     assert!(nt.public);
-    assert_eq!(nt.parameters.len(), 2);
+    // Phase 5: `f` is gone — only external input is `xs`. The body lives
+    // inside the zone.
+    assert_eq!(nt.parameters.len(), 1);
     assert_eq!(nt.parameters[0].name, "xs");
-    assert_eq!(nt.parameters[1].name, "f");
     assert_eq!(nt.output_pins.len(), 1);
     assert_eq!(*nt.output_type(), DataType::Unit);
+
+    // Zone-input pin: element (T). Zone-output: out (Unit).
+    assert_eq!(nt.zone_input_pins.len(), 1);
+    assert_eq!(nt.zone_input_pins[0].name, "element");
+    assert_eq!(nt.zone_output_pins.len(), 1);
+    assert_eq!(nt.zone_output_pins[0].name, "out");
+    assert_eq!(nt.zone_output_pins[0].data_type, DataType::Unit);
 }
 
 #[test]
-fn foreach_calculate_custom_node_type_uses_unit_output_and_unit_function_return() {
-    use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
+fn foreach_calculate_custom_node_type_uses_unit_output_and_zone_pins() {
     use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 
     let registry = NodeTypeRegistry::new();
@@ -171,18 +143,17 @@ fn foreach_calculate_custom_node_type_uses_unit_output_and_unit_function_return(
         input_type: DataType::Int,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
+    assert_eq!(custom.parameters.len(), 1);
     assert_eq!(
         custom.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::Int))
     );
-    assert_eq!(
-        custom.parameters[1].data_type,
-        DataType::Function(FunctionType {
-            parameter_types: vec![DataType::Int],
-            output_type: Box::new(DataType::Unit),
-        })
-    );
     assert_eq!(*custom.output_type(), DataType::Unit);
+
+    assert_eq!(custom.zone_input_pins.len(), 1);
+    assert_eq!(custom.zone_input_pins[0].fixed_type(), Some(&DataType::Int));
+    assert_eq!(custom.zone_output_pins.len(), 1);
+    assert_eq!(custom.zone_output_pins[0].data_type, DataType::Unit);
 }
 
 // ============================================================================
@@ -273,6 +244,129 @@ fn execute_node_returns_err_for_missing_node() {
 }
 
 // ============================================================================
+// foreach zone-body helpers — direct API construction
+// ============================================================================
+//
+// Phase 5 retired the function-pin `f` parameter; the body now lives inside
+// the foreach node's owned zone. These helpers wire up an inline body via the
+// API since the text format doesn't yet have zone syntax.
+
+fn add_expr_to_foreach_body(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    foreach_id: u64,
+    expression: &str,
+    parameters: Vec<(String, DataType)>,
+) -> u64 {
+    use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
+
+    let registry = &mut designer.node_type_registry;
+    let network = registry.node_networks.get_mut(network_name).unwrap();
+    let foreach_node = network.nodes.get_mut(&foreach_id).unwrap();
+    let body = foreach_node.zone_mut().expect("foreach node missing zone");
+
+    let expr_params: Vec<ExprParameter> = parameters
+        .into_iter()
+        .map(|(name, dt)| ExprParameter {
+            id: None,
+            name,
+            data_type: dt,
+            data_type_str: None,
+        })
+        .collect();
+    let num_params = expr_params.len();
+    let mut expr_data = ExprData {
+        parameters: expr_params,
+        expression: expression.to_string(),
+        expr: None,
+        error: None,
+        output_type: None,
+    };
+    let _ = expr_data.parse_and_validate(0);
+    let expr_id = body.add_node(
+        "expr",
+        DVec2::new(50.0, 0.0),
+        num_params,
+        Box::new(expr_data),
+    );
+
+    NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+        &registry.built_in_node_types,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+        registry
+            .node_networks
+            .get_mut(network_name)
+            .unwrap()
+            .nodes
+            .get_mut(&foreach_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&expr_id)
+            .unwrap(),
+        true,
+    );
+
+    expr_id
+}
+
+fn wire_foreach_zone_input_to_body_node(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    foreach_id: u64,
+    body_node_id: u64,
+    body_param_index: usize,
+) {
+    use rust_lib_flutter_cad::structure_designer::node_network::{IncomingWire, SourcePin};
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    let foreach_node = network.nodes.get_mut(&foreach_id).unwrap();
+    let body = foreach_node.zone_mut().unwrap();
+    let body_node = body.nodes.get_mut(&body_node_id).unwrap();
+    body_node.arguments[body_param_index]
+        .incoming_wires
+        .push(IncomingWire {
+            source_node_id: foreach_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 0 },
+            source_scope_depth: 1,
+        });
+}
+
+fn wire_foreach_body_node_to_zone_output(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    foreach_id: u64,
+    body_node_id: u64,
+) {
+    use rust_lib_flutter_cad::structure_designer::node_network::{
+        Argument, IncomingWire, SourcePin,
+    };
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    let foreach_node = network.nodes.get_mut(&foreach_id).unwrap();
+    if foreach_node.zone_output_arguments.is_empty() {
+        foreach_node.zone_output_arguments.push(Argument::new());
+    }
+    foreach_node.zone_output_arguments[0]
+        .incoming_wires
+        .push(IncomingWire {
+            source_node_id: body_node_id,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 0,
+        });
+}
+
+// ============================================================================
 // foreach perf property — display pass costs zero, even with large iterators
 // ============================================================================
 
@@ -284,25 +378,57 @@ fn foreach_skipped_on_display_pass_does_not_pull_iterator() {
     // rule, neither input pin is touched — this test should complete
     // essentially instantly. We assert via `Unit` output and no observable
     // side effects.
+    use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
+
     let mut designer = setup_designer_with_network("main");
-    let result = edit_designer_network(
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&range_id).unwrap();
+        node.data = Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 1_000_000,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    let foreach_id = designer.add_node("foreach", DVec2::new(200.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&foreach_id).unwrap();
+        node.data = Box::new(ForeachData {
+            input_type: DataType::Int,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    designer.connect_nodes(range_id, 0, foreach_id, 0);
+
+    // Body: expr "elem * 2"; wire element → expr.elem and expr → out.
+    let expr_id = add_expr_to_foreach_body(
         &mut designer,
         "main",
-        r#"
-            r = range { start: 0, step: 1, count: 1000000 }
-            body = expr {
-                expression: "elem * 2",
-                parameters: [
-                    { name: "elem", data_type: Int }
-                ]
-            }
-            fe = foreach { input_type: Int, xs: r, f: @body }
-        "#,
-        true,
+        foreach_id,
+        "elem * 2",
+        vec![("elem".to_string(), DataType::Int)],
     );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
-
-    let foreach_id = find_node_id(&designer, "main", "foreach");
+    wire_foreach_zone_input_to_body_node(&mut designer, "main", foreach_id, expr_id, 0);
+    wire_foreach_body_node_to_zone_output(&mut designer, "main", foreach_id, expr_id);
 
     let started = std::time::Instant::now();
     let display = evaluate_with_execute(&designer, "main", foreach_id, false);
@@ -324,31 +450,60 @@ fn foreach_skipped_on_display_pass_does_not_pull_iterator() {
 
 #[test]
 fn foreach_drains_all_elements_under_execute() {
-    // Use `fold` to count how many times the body fired during the foreach
-    // execute pass. The trick: a separate `fold` node tallies the same
-    // range, so we know N from its result; the foreach body (an `expr`
-    // computing elem*2) is invoked but its return value is discarded —
-    // we assert via the absence of an error and the foreach output being
-    // Unit.
+    // A `range(0..5)` upstream of `foreach`; the body does some arithmetic
+    // on the element. Under Execute, the walker is drained and the body
+    // fires N times; the result is Unit.
+    use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
+
     let mut designer = setup_designer_with_network("main");
-    let result = edit_designer_network(
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&range_id).unwrap();
+        node.data = Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 5,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    let foreach_id = designer.add_node("foreach", DVec2::new(200.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&foreach_id).unwrap();
+        node.data = Box::new(ForeachData {
+            input_type: DataType::Int,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    designer.connect_nodes(range_id, 0, foreach_id, 0);
+
+    let expr_id = add_expr_to_foreach_body(
         &mut designer,
         "main",
-        r#"
-            r = range { start: 0, step: 1, count: 5 }
-            body = expr {
-                expression: "elem + 1",
-                parameters: [
-                    { name: "elem", data_type: Int }
-                ]
-            }
-            fe = foreach { input_type: Int, xs: r, f: @body }
-        "#,
-        true,
+        foreach_id,
+        "elem + 1",
+        vec![("elem".to_string(), DataType::Int)],
     );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
+    wire_foreach_zone_input_to_body_node(&mut designer, "main", foreach_id, expr_id, 0);
+    wire_foreach_body_node_to_zone_output(&mut designer, "main", foreach_id, expr_id);
 
-    let foreach_id = find_node_id(&designer, "main", "foreach");
     let exec_result = evaluate_with_execute(&designer, "main", foreach_id, true);
     assert!(
         matches!(exec_result, NetworkResult::Unit),
@@ -375,65 +530,187 @@ fn xyz_files_in(dir: &std::path::Path) -> Vec<String> {
 
 #[test]
 fn foreach_with_export_xyz_body_writes_n_files_under_execute() {
+    // Phase 5 — zone-based version of the headline batch-export integration:
+    // build a `foreach` whose inline zone body holds an `import_xyz` + a
+    // path-templating `expr` + an `export_xyz`. The foreach drains the range
+    // under Execute, fires the body per element, and one file lands per
+    // upstream element.
+    use rust_lib_flutter_cad::structure_designer::node_network::{
+        Argument, IncomingWire, SourcePin,
+    };
+    use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
+    use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
+
     let tmp = TempDir::new().expect("tempdir");
     let tmp_dir: PathBuf = tmp.path().to_path_buf();
-
-    // Build a body sub-network whose signature is `[Int] → Unit`:
-    //  - `idx_param` is the function's input element (Int).
-    //  - `import_xyz1` (added imperatively, pre-populated with a single carbon)
-    //    is the static Molecule used for every element.
-    //  - `path` is an `expr` that templates the per-element file name.
-    //  - `ex` (export_xyz) is the return node — its Unit output is the
-    //    function's output, completing the `[Int] → Unit` signature foreach
-    //    expects.
-    let mut designer = setup_designer_with_network("body");
-    add_inline_import_xyz(&mut designer, "body"); // → custom_name "import_xyz1"
-
     let template = format!(
         "{}/out_${{idx}}.xyz",
         tmp_dir.to_str().unwrap().replace('\\', "/")
     );
-    let body_code = format!(
-        r#"
-            idx_param = parameter {{ param_name: "idx", data_type: Int, sort_order: 0 }}
-            path = expr {{
-                expression: "`{}`",
-                parameters: [
-                    {{ name: "idx", data_type: Int }}
-                ],
-                idx: idx_param
-            }}
-            ex = export_xyz {{ molecule: import_xyz1, file_name: path }}
-        "#,
-        template
-    );
-    let edit_result = edit_designer_network(&mut designer, "body", &body_code, false);
-    assert!(
-        edit_result.success,
-        "body edit should succeed: {:?}",
-        edit_result.errors
-    );
-    let export_id = find_node_id(&designer, "body", "export_xyz");
-    designer.set_return_node_id(Some(export_id));
 
-    // Outer network: range → foreach(body_instance). The body custom-network
-    // is instantiated as a node `b`; the foreach references its function-output
-    // pin via `@b`, which captures `b` (with its single `idx` Int input
-    // unwired) as the closure. The walker sets argument 0 per element.
-    designer.add_node_network("main");
-    designer.set_active_node_network_name(Some("main".to_string()));
-    let outer_code = r#"
-        r = range { start: 0, step: 1, count: 3 }
-        b = body { }
-        fe = foreach { input_type: Int, xs: r, f: @b }
-    "#;
-    let edit_result = edit_designer_network(&mut designer, "main", outer_code, true);
-    assert!(
-        edit_result.success,
-        "outer edit should succeed: {:?}",
-        edit_result.errors
-    );
-    let foreach_id = find_node_id(&designer, "main", "foreach");
+    let mut designer = setup_designer_with_network("main");
+
+    // Outer: range(0..3) → foreach.
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&range_id).unwrap();
+        node.data = Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    let foreach_id = designer.add_node("foreach", DVec2::new(200.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&foreach_id).unwrap();
+        node.data = Box::new(ForeachData {
+            input_type: DataType::Int,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    designer.connect_nodes(range_id, 0, foreach_id, 0);
+
+    // Build the zone body: import_xyz → export_xyz; path comes from an expr
+    // that templates the per-element file name from the `element` zone-input.
+    let mut import_atom = AtomicStructure::new();
+    import_atom.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    let (import_id, expr_id, export_id) = {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let foreach_node = network.nodes.get_mut(&foreach_id).unwrap();
+        let body = foreach_node.zone_mut().expect("foreach missing zone");
+
+        // import_xyz pre-populated with one carbon (no file read).
+        let mut import_data = ImportXYZData::default();
+        import_data.atomic_structure = Some(import_atom);
+        let import_id = body.add_node(
+            "import_xyz",
+            DVec2::new(-100.0, 0.0),
+            1,
+            Box::new(import_data),
+        );
+
+        // expr: outputs the templated path string.
+        let mut expr_data = ExprData {
+            parameters: vec![ExprParameter {
+                id: None,
+                name: "idx".to_string(),
+                data_type: DataType::Int,
+                data_type_str: None,
+            }],
+            expression: format!("`{}`", template),
+            expr: None,
+            error: None,
+            output_type: None,
+        };
+        let _ = expr_data.parse_and_validate(0);
+        let expr_id = body.add_node("expr", DVec2::new(0.0, 100.0), 1, Box::new(expr_data));
+
+        // export_xyz takes 2 inputs (molecule, file_name).
+        let export_data = ExportXYZData::default();
+        let export_id = body.add_node(
+            "export_xyz",
+            DVec2::new(100.0, 0.0),
+            2,
+            Box::new(export_data),
+        );
+
+        (import_id, expr_id, export_id)
+    };
+
+    // Populate caches for the new body nodes.
+    for nid in [import_id, expr_id, export_id] {
+        let registry = &mut designer.node_type_registry;
+        let body_node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&foreach_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&nid)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            body_node,
+            true,
+        );
+    }
+
+    // Wire the body: element → expr.idx; import → export.molecule; expr → export.file_name;
+    // export → foreach.out.
+    {
+        let registry = &mut designer.node_type_registry;
+        let foreach_node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&foreach_id)
+            .unwrap();
+        let body = foreach_node.zone_mut().unwrap();
+
+        // expr.idx (param 0) ← foreach zone-input `element` (pin 0)
+        body.nodes.get_mut(&expr_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: foreach_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+        // export.molecule (param 0) ← import (pin 0)
+        body.nodes.get_mut(&export_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: import_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+        // export.file_name (param 1) ← expr (pin 0)
+        body.nodes.get_mut(&export_id).unwrap().arguments[1]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: expr_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+
+        // export → zone-output `out` (pin 0).
+        if foreach_node.zone_output_arguments.is_empty() {
+            foreach_node.zone_output_arguments.push(Argument::new());
+        }
+        foreach_node.zone_output_arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: export_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
 
     // Display pass: no files should land.
     let display = evaluate_with_execute(&designer, "main", foreach_id, false);
@@ -463,105 +740,66 @@ fn foreach_with_export_xyz_body_writes_n_files_under_execute() {
     );
 }
 
-#[test]
-fn foreach_over_map_with_export_xyz_body_writes_n_files() {
-    // Walker propagation integration test: chain a `map` upstream of
-    // `foreach`, both bodies invoking `export_xyz`. The Walker::Map's
-    // FunctionEvaluator must forward the outer `&mut context` (with
-    // `execute=true`) so the inner `export_xyz` actually fires. Phase 2
-    // covered Walker::Map propagation in isolation via `CounterUnitNode`;
-    // this is the integration with the real effect node.
-    //
-    // We use `map` (not `filter`) so the upstream produces a stream of
-    // values that foreach drains. The map body discards its input and
-    // returns the same idx, exercising the FE call inside Walker::Map.
-    let tmp = TempDir::new().expect("tempdir");
-    let tmp_dir: PathBuf = tmp.path().to_path_buf();
-
-    let mut designer = setup_designer_with_network("body");
-    add_inline_import_xyz(&mut designer, "body");
-    let template = format!(
-        "{}/mapped_${{idx}}.xyz",
-        tmp_dir.to_str().unwrap().replace('\\', "/")
-    );
-    let body_code = format!(
-        r#"
-            idx_param = parameter {{ param_name: "idx", data_type: Int, sort_order: 0 }}
-            path = expr {{
-                expression: "`{}`",
-                parameters: [
-                    {{ name: "idx", data_type: Int }}
-                ],
-                idx: idx_param
-            }}
-            ex = export_xyz {{ molecule: import_xyz1, file_name: path }}
-        "#,
-        template
-    );
-    let edit_result = edit_designer_network(&mut designer, "body", &body_code, false);
-    assert!(edit_result.success, "body edit: {:?}", edit_result.errors);
-    let export_id = find_node_id(&designer, "body", "export_xyz");
-    designer.set_return_node_id(Some(export_id));
-
-    designer.add_node_network("main");
-    designer.set_active_node_network_name(Some("main".to_string()));
-    // Phase 4 of `doc/design_zones.md` flipped `map` to inline-body zones, so
-    // the previous `r → map(identity) → foreach` chain no longer compiles
-    // via text format. The identity `map` was scaffolding only — wiring
-    // `r → foreach` directly preserves the test's intent (foreach over an
-    // iterator under Execute writes one file per element). MapZone coverage
-    // lives in `zones_test`.
-    let outer_code = r#"
-        r = range { start: 0, step: 1, count: 2 }
-        b = body { }
-        fe = foreach { input_type: Int, xs: r, f: @b }
-    "#;
-    let edit_result = edit_designer_network(&mut designer, "main", outer_code, true);
-    assert!(edit_result.success, "outer edit: {:?}", edit_result.errors);
-    let foreach_id = find_node_id(&designer, "main", "foreach");
-
-    let exec = evaluate_with_execute(&designer, "main", foreach_id, true);
-    assert!(
-        matches!(exec, NetworkResult::Unit),
-        "foreach over map should yield Unit on Execute (got {})",
-        exec.to_display_string()
-    );
-    let names = xyz_files_in(&tmp_dir);
-    assert_eq!(
-        names,
-        vec!["mapped_0.xyz".to_string(), "mapped_1.xyz".to_string()],
-        "foreach over map under Execute should write one file per upstream element"
-    );
-}
-
 // ============================================================================
 // foreach error semantics — fail-fast on first body error
 // ============================================================================
 
 #[test]
 fn foreach_body_error_halts_loop_and_surfaces_as_foreach_output() {
-    // The body evaluates `1 / elem`, which surfaces an error when `elem == 0`.
+    // The body evaluates `10 / elem`, which surfaces an error when `elem == 0`.
     // The range starts at 0, so the very first body call errors and foreach
     // should fail fast.
+    use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
+
     let mut designer = setup_designer_with_network("main");
-    let result = edit_designer_network(
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&range_id).unwrap();
+        node.data = Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    let foreach_id = designer.add_node("foreach", DVec2::new(200.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&foreach_id).unwrap();
+        node.data = Box::new(ForeachData {
+            input_type: DataType::Int,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    designer.connect_nodes(range_id, 0, foreach_id, 0);
+
+    let expr_id = add_expr_to_foreach_body(
         &mut designer,
         "main",
-        r#"
-            r = range { start: 0, step: 1, count: 3 }
-            body = expr {
-                expression: "10 / elem",
-                parameters: [
-                    { name: "elem", data_type: Int }
-                ]
-            }
-            fe = foreach { input_type: Int, xs: r, f: @body }
-        "#,
-        true,
+        foreach_id,
+        "10 / elem",
+        vec![("elem".to_string(), DataType::Int)],
     );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
+    wire_foreach_zone_input_to_body_node(&mut designer, "main", foreach_id, expr_id, 0);
+    wire_foreach_body_node_to_zone_output(&mut designer, "main", foreach_id, expr_id);
 
-    let foreach_id = find_node_id(&designer, "main", "foreach");
     let outcome = evaluate_with_execute(&designer, "main", foreach_id, true);
     match outcome {
         NetworkResult::Error(_) => {} // expected
@@ -574,28 +812,60 @@ fn foreach_body_error_halts_loop_and_surfaces_as_foreach_output() {
 
 #[test]
 fn foreach_body_returning_non_error_value_is_discarded_as_unit() {
-    // Body returns Int values (10, 11, 12) — these are valid, non-Unit
-    // results. The universal `T → Unit` widening at the body's function
-    // output position means foreach silently discards them and emits Unit.
+    // Body returns Int values — these are valid, non-Unit results. The
+    // universal `T → Unit` widening at the body's `out` zone-output pin
+    // means foreach silently discards them and emits Unit.
+    use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
+
     let mut designer = setup_designer_with_network("main");
-    let result = edit_designer_network(
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&range_id).unwrap();
+        node.data = Box::new(RangeData {
+            start: 10,
+            step: 1,
+            count: 3,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    let foreach_id = designer.add_node("foreach", DVec2::new(200.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("main").unwrap();
+        let node = network.nodes.get_mut(&foreach_id).unwrap();
+        node.data = Box::new(ForeachData {
+            input_type: DataType::Int,
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    designer.connect_nodes(range_id, 0, foreach_id, 0);
+
+    let expr_id = add_expr_to_foreach_body(
         &mut designer,
         "main",
-        r#"
-            r = range { start: 10, step: 1, count: 3 }
-            body = expr {
-                expression: "elem + 0",
-                parameters: [
-                    { name: "elem", data_type: Int }
-                ]
-            }
-            fe = foreach { input_type: Int, xs: r, f: @body }
-        "#,
-        true,
+        foreach_id,
+        "elem + 0",
+        vec![("elem".to_string(), DataType::Int)],
     );
-    assert!(result.success, "edit should succeed: {:?}", result.errors);
+    wire_foreach_zone_input_to_body_node(&mut designer, "main", foreach_id, expr_id, 0);
+    wire_foreach_body_node_to_zone_output(&mut designer, "main", foreach_id, expr_id);
 
-    let foreach_id = find_node_id(&designer, "main", "foreach");
     let outcome = evaluate_with_execute(&designer, "main", foreach_id, true);
     assert!(
         matches!(outcome, NetworkResult::Unit),

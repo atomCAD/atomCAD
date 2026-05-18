@@ -80,11 +80,34 @@ enum WalkerKind {
         source: Box<Walker>,
         fe: FunctionEvaluator,
     },
-    /// Yield each pulled element for which `fe` returns `Bool(true)`.
-    /// A non-`Bool` result yields `Error`.
+    /// Legacy FE-driven `filter`. No production node constructs this variant
+    /// after Phase 5 — `filter` flips to `FilterZone` — but the path is kept
+    /// alive as dead weight so unit tests targeting the FE walker plumbing
+    /// keep working until `FunctionEvaluator` and `Closure` are retired
+    /// outright (deferred). See `doc/design_zones.md` (Phase 5 "Gotchas" —
+    /// FE remains).
     Filter {
         source: Box<Walker>,
         fe: FunctionEvaluator,
+    },
+    /// `filter` driven by an inline zone body. Per `next()` the walker stands
+    /// up a synthetic body-only network stack, pushes a fresh frame onto
+    /// `current_zone_input_values[hof_node_id]`, swaps captures into the
+    /// caller's context, evaluates the wire delivering the body's `keep`
+    /// zone-output pin (resolved against the synthetic body-only stack), and
+    /// pops everything. If the body yields `Bool(true)` the element is
+    /// emitted; `Bool(false)` skips and continues the loop; non-Bool /
+    /// Error halts the walker with an Error.
+    ///
+    /// Mirrors `MapZone`'s shape — see `WalkerKind::MapZone` for the
+    /// design-doc deviation that motivates carrying `zone_output_wires`
+    /// rather than reaching back through the outer network stack.
+    FilterZone {
+        source: Box<Walker>,
+        body: Arc<NodeNetwork>,
+        captures: Arc<HashMap<CaptureKey, NetworkResult>>,
+        zone_output_wires: Arc<Vec<IncomingWire>>,
+        hof_node_id: u64,
     },
     /// Cartesian product over `axes` (rightmost varies fastest). Each emitted
     /// element is a record whose field order is given by `field_names` and
@@ -169,6 +192,27 @@ impl Walker {
             kind: WalkerKind::Filter {
                 source: Box::new(source),
                 fe,
+            },
+            fused: false,
+        }
+    }
+
+    /// Construct a `filter` walker driven by an inline zone body. See
+    /// `WalkerKind::FilterZone` for the per-`next()` discipline.
+    pub fn filter_zone(
+        source: Walker,
+        body: Arc<NodeNetwork>,
+        captures: Arc<HashMap<CaptureKey, NetworkResult>>,
+        zone_output_wires: Arc<Vec<IncomingWire>>,
+        hof_node_id: u64,
+    ) -> Self {
+        Self {
+            kind: WalkerKind::FilterZone {
+                source: Box::new(source),
+                body,
+                captures,
+                zone_output_wires,
+                hof_node_id,
             },
             fused: false,
         }
@@ -339,6 +383,49 @@ impl WalkerKind {
                     }
                 }
             },
+            WalkerKind::FilterZone {
+                source,
+                body,
+                captures,
+                zone_output_wires,
+                hof_node_id,
+            } => loop {
+                match source.next(evaluator, registry, context) {
+                    None => return None,
+                    Some(NetworkResult::Error(e)) => return Some(NetworkResult::Error(e)),
+                    Some(elem) => {
+                        // Per-element step under push/pop + captures swap.
+                        // Mirrors `MapZone`'s discipline.
+                        let hof_id = *hof_node_id;
+                        let body_arc = Arc::clone(body);
+                        let wires = Arc::clone(zone_output_wires);
+
+                        let saved_captures = std::mem::replace(
+                            &mut context.captured_source_values,
+                            Arc::clone(captures),
+                        );
+                        context.push_zone_input_frame(hof_id, vec![elem.clone()]);
+
+                        let predicate =
+                            eval_step(evaluator, registry, context, &body_arc, &wires, hof_id);
+
+                        context.pop_zone_input_frame(hof_id);
+                        context.captured_source_values = saved_captures;
+
+                        match predicate {
+                            NetworkResult::Bool(true) => return Some(elem),
+                            NetworkResult::Bool(false) => continue,
+                            NetworkResult::Error(e) => return Some(NetworkResult::Error(e)),
+                            other => {
+                                return Some(NetworkResult::Error(format!(
+                                    "filter: body returned non-Bool (got {})",
+                                    other.to_display_string()
+                                )));
+                            }
+                        }
+                    }
+                }
+            },
             WalkerKind::Product {
                 axes,
                 field_names,
@@ -426,6 +513,7 @@ impl WalkerKind {
             WalkerKind::MapZone { source, .. } => source.reset(),
             WalkerKind::Map { source, .. } => source.reset(),
             WalkerKind::Filter { source, .. } => source.reset(),
+            WalkerKind::FilterZone { source, .. } => source.reset(),
             WalkerKind::Product {
                 axes,
                 current,
@@ -474,7 +562,7 @@ fn eval_step(
         Some(w) => w,
         None => {
             return NetworkResult::Error(
-                "map: body has no incoming wire on `result` zone-output pin".to_string(),
+                "HOF body has no incoming wire on zone-output pin".to_string(),
             );
         }
     };
