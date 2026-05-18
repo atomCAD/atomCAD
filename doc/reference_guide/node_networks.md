@@ -10,7 +10,7 @@ A **node network** is a collection of nodes. A node may be either a built-in nod
 
 A **node** may have zero or more *named input pins* (also called the node’s *parameters*) on the left side, and one or more *named output pins* on the right side. Most nodes have exactly one output pin (the "result"); a few nodes are **multi-output** — they expose more than one named output pin, each independently connectable and displayable. The clearest example is `atom_edit`, which exposes both a `result` pin (the applied edit) and a `diff` pin (the raw diff structure).
 
-Each node also has one *function pin* in the upper-right corner (the function pin is described in the functional programming section).
+Most nodes also have one *function pin* in the upper-right corner — a legacy artifact that lets a node be used as a first-class function value (used historically by the higher-order-function nodes). It is suppressed on the higher-order-function nodes themselves (`map`, `filter`, `fold`, `foreach`) — those nodes now carry their per-element computation as an *inline body region* instead of consuming a function value through a pin. See the [Higher-order functions](#higher-order-functions-and-inline-bodies) section.
 
 Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. (We will discuss implicit conversion soon.)
 
@@ -44,7 +44,7 @@ Supported basic data types include:
 - `Molecule` — a free-floating atomic structure with **no** `Structure` association. Produced by importing an XYZ file or by stripping the structure off a `Crystal` (`exit_structure`). Can be moved arbitrarily.
 - `Motif`
 - `Record(Name)` — a user-defined record type bundling a fixed set of named, heterogeneously-typed fields into a single value. Defined from the **User Types** panel and consumed by the `record_construct`, `record_destructure`, and `product` nodes — see [Record types](./nodes/math_programming.md#record-types) for details. Records are structurally subtyped (compatibility is decided by field shape, not by name) with width subtyping (extra fields ride through unchanged).
-- `Unit` — the type with exactly one value, used as the return type of *effect nodes* (`export_xyz`, `foreach`, …) — i.e. nodes that exist for their side effect rather than to produce a value. A wire of type `Unit` is never displayable (the eye icon is hidden) and any value can be implicitly *discarded* into `Unit` (the `T → Unit` widening), which is why a sub-network ending in `print` (whose output is `String`) can still be wired into `foreach`'s `Unit`-returning function pin. The reverse — `Unit → T` — is **not** allowed: a unit value carries no information. See the [Execute action](./ui.md#execute-action-side-effect-nodes) for how unit-returning nodes are gated to fire only on demand.
+- `Unit` — the type with exactly one value, used as the return type of *effect nodes* (`export_xyz`, `foreach`, …) — i.e. nodes that exist for their side effect rather than to produce a value. A wire of type `Unit` is never displayable (the eye icon is hidden) and any value can be implicitly *discarded* into `Unit` (the `T → Unit` widening), which is why a body-internal chain ending in `print` (whose output is `String`) can still feed `foreach`'s `Unit`-typed `out` zone-output pin. The reverse — `Unit → T` — is **not** allowed: a unit value carries no information. See the [Execute action](./ui.md#execute-action-side-effect-nodes) for how unit-returning nodes are gated to fire only on demand.
 
 ### The three phases
 
@@ -199,14 +199,51 @@ When you select a custom node instance, the **Node Properties** panel auto-gener
 
 As with built-in nodes, a value wired into a parameter pin takes precedence over the value set inline (see [Node properties vs. input pins](#node-properties-vs-input-pins)). A parameter that is neither wired nor set inline falls back to the `default` input pin of its `parameter` node inside the subnetwork.
 
-## Functional programming in atomCAD
+## Higher-order functions and inline bodies
 
-One of the key nodes to make an atomCAD node network more dynamic is the `expr` node. And `expr` node can represent arbitrary mathematical operations and even supports branching with the `if then else` construct. (See the description of the `expr` node in the nodes reference below.)
+One of the key nodes to make an atomCAD node network more dynamic is the `expr` node. The `expr` node can represent arbitrary mathematical operations and even supports branching with the `if then else` construct. (See the description of the `expr` node in the nodes reference.)
 
-To create complex programming logic in atomCAD the expr node is not enough: you need to use nodes which represent higher order functions. Currently only the `map` higher order function node is supported, but we plan to add more (e.g. filter, reduce).
+To go beyond a single expression and write **per-element computations** that run across a stream of values, atomCAD provides four **higher-order function** nodes — `map`, `filter`, `fold`, and `foreach`. Each one takes an input stream (`xs: Iter[T]`) and applies the same per-element computation to every element.
 
-To use a higher order function in any language effectively a language feature to be able to dynamically create a *function value* depending on parameters is needed: in some languages these are *closures*, in other languages it is *partial function application*. In an atomCAD node network is it achieved in a very simple way: as we mentioned at the implicit conversion rules: you can supply a function into a function typed input pin that has extra parameters. These extra parameters are bound at the time the function's real time value is created, and this dynamic function value is supplied to the higher order function. (See the description of the `map` node below where we discuss this with a concrete example.)
+The way you supply that per-element computation is the inline-body model:
 
-Another important node for functional programming is the `range` node which creates an array of integers that can be supplied to nodes like the `map` node.
+- Each higher-order-function node carries an **inline body region** inside the node — a small editable canvas of its own. You add nodes and wires *inside* the HOF the same way you do at the top level.
+- The body region has **zone-input pins** on its inner-left edge (sources that supply per-iteration values to the body — `element`, `acc`) and a **zone-output pin** on its inner-right edge (the body's per-iteration return value — `result`, `new_acc`, `out`).
+- Wires from outside the body into a body-internal pin are **captures** — they carry an outer-scope value into the per-iteration evaluation. Captures are how you parameterize a body without pre-binding function arguments: drag a wire from any outer-scope output straight into a body node's input.
 
-To see functional programming in atomCAD in action please check out the *Pattern* demo [in the demos document](../../samples/demo_description.md).
+Concretely, a `map` body that doubles each element looks like one `expr` node inside the body, with a parameter `x: Int` wired from the body's `element` source pin and `2 * x` wired into the body's `result` destination pin.
+
+```
+┌── map ──────────────────────────────────┐
+│ xs●──┐                          ┌── ●   │  ← Iter[Int] in, Iter[Int] out
+│      │                          │       │
+│      ▼                          ▲       │
+│   ┌─────────────────────────────┐       │
+│   │ element●─→ [ 2 * x ] ●→ result      │   ← body
+│   └─────────────────────────────┘       │
+└─────────────────────────────────────────┘
+```
+
+To parameterize the body — say, a `gap` value that the body uses — drop a node in the outer scope (e.g. an `int` or `float` literal) and drag a capture wire from it into a body-internal pin.
+
+The four HOF nodes differ in which zone-input pins they expose, what type the zone-output expects, and how they consume the per-iteration output. See the [HOF nodes reference section](./nodes/math_programming.md#higher-order-function-nodes-map-filter-fold-foreach) for details and the full list of pins.
+
+The `range` node produces a stream of integers (`Iter[Int]`) — the typical input to `map` / `filter` / `fold` / `foreach`. Other stream sources include `product` (cartesian product of N input streams as a record-typed stream) and any `Array[T]` value (which auto-converts to `Iter[T]` at wire time).
+
+### Nested HOFs
+
+HOFs can be nested: a `map` placed inside another `map`'s body renders its own inline body region; a wire from the outermost scope into the innermost body is a capture that crosses two body boundaries. Each crossing is marked with a small dot on the wire. There is no fixed nesting limit — depth 2 or 3 is typical.
+
+### The active body
+
+Keyboard shortcuts (Delete, Ctrl+C / X / V / D) operate on whichever body you most recently clicked into — the **active body**. Clicking on the top-level canvas (outside any HOF) makes the top level active again. Each body has its own selection set; selection in one body doesn't affect another.
+
+### Body sizing
+
+Body regions grow automatically to fit their content and can be dragged larger from the bottom-right corner handle. The stored size is the minimum size; live content additions and node drags grow the body in real time. Bodies don't shrink below their content.
+
+### Legacy function pin
+
+Pre-zones HOF nodes had a separate `f` input pin that received a function value, with extra function parameters pre-bound through a partial-application mechanism. The inline-body / capture model replaces that path entirely: there is no longer an `f` pin on `map`, `filter`, `fold`, or `foreach`. The legacy function pin survives in the title bar of *non-HOF* nodes — it lets a node be used as a first-class function value in code paths that still expect one — but it is suppressed on the HOFs themselves.
+
+To see higher-order functions in atomCAD in action please check out the *Pattern* demo [in the demos document](../../samples/demo_description.md).

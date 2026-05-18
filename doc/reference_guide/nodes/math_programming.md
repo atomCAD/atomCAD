@@ -364,7 +364,7 @@ The reverse direction `Iter[T] → Array[T]` is **not** an implicit conversion: 
 **Restrictions**
 
 - Lazy element conversion across iterator boundaries (`Iter[S] → Iter[T]` with `S ≠ T`) is not implicit; insert a `map` with the conversion, or `collect` and rebuild explicitly.
-- `Iter[T]` cannot appear as a record field type, and cannot be captured into a closure as a function pin's value-pin payload (the captured walker would be aliased and corrupt across invocations). Both restrictions point users at `collect`.
+- `Iter[T]` cannot appear as a record field type, and cannot be carried across a higher-order-function body's boundary as a capture (the same walker would be reused across per-iteration invocations and get corrupted). Both restrictions point users at `collect`.
 - Iterator-typed top-level parameters (CLI/API-bound) are not accepted; pass an `Array[T]` instead.
 
 **Display**
@@ -489,106 +489,149 @@ The node's pin subtitle reports the materialization outcome — `(N elements)` w
 
 Without a limit there is no built-in size cap. If you wire a 10⁹-element iterator into `collect` with no limit you will run out of memory — that is the contract: `collect` is the explicit, expensive step that turns a fused stream back into a fully materialized array.
 
+## Higher-order function nodes (`map`, `filter`, `fold`, `foreach`)
+
+`map`, `filter`, `fold`, and `foreach` are the four **higher-order function** (HOF) nodes — each one walks a stream of values and runs a per-element body on every element. Unlike a regular node, an HOF has an **inline body region** inside the node itself: a small editable canvas with its own nodes and wires that defines the per-element computation. There is no separate `f` input pin to wire a function value into; you author the body directly inside the HOF.
+
+A `map` node placed in a network looks like this — the rectangle in the middle is the body region:
+
+```
+┌── map ──────────────────────────────────────────────┐
+│ xs ●─────────┐                       ┌── ● Iter[U]  │   ← external pins (outside the body)
+│              │                       │              │
+│              ▼                       ▲              │
+│        ┌─────────────────────────────┐              │
+│        │                             │              │
+│ element●─── [ + 1 ] ────────────●result              │   ← inner pins (inside the body)
+│        │                             │              │
+│        └─────────────────────────────┘              │
+│              (translucent body region)              │
+└─────────────────────────────────────────────────────┘
+```
+
+Every HOF body has two kinds of inside-facing pins:
+
+- **Zone-input pins** (inner-left, facing into the body): sources that supply per-iteration values to body nodes. `map` / `filter` / `foreach` have one — `element` — the current iteration value. `fold` has two — `acc` (the running accumulator) and `element`.
+- **Zone-output pin** (inner-right, facing into the body): the destination that receives the body's per-iteration return value. `map`'s is `result` (the transformed element), `filter`'s is `result` (the `Bool` predicate decision), `fold`'s is `new_acc` (the next accumulator), `foreach`'s is `out` (whose value is discarded).
+
+You build the body by clicking into the body region (which makes it the *active scope*) and adding nodes there the same way you add nodes to a top-level network — right-click in the body, or drag a wire from a pin and drop on body empty space. Every node you add lives in **that body's scope**, with its own selection, undo, and copy/paste set. Wires between body nodes work like ordinary wires. The body region grows automatically as you add content and can also be dragged larger from its bottom-right corner.
+
+**Captures.** A wire that starts from a pin **outside** the body and ends on a pin **inside** the body is a **capture** — it crosses the body's boundary and carries an outer-scope value into the per-iteration evaluation. Captures are how the inline-body model replaces the "extra parameters bound at function-pin wiring" mechanism: rather than pre-binding parameters of a function value, you just drag a wire from any outer node's output pin straight into a body node's input pin. The wire is drawn as a normal bezier visibly crossing the body's translucent edge; a small dot marks the boundary crossing. A capture from a deeper scope into a doubly-nested body crosses two boundaries and gets one marker per crossing.
+
+Nested HOFs work the same way recursively: a `map` placed inside another `map`'s body renders its own inline body region; a capture from the outer-outer scope into the inner body crosses two boundaries.
+
+**Authoring tips.**
+
+- Bodies start out empty and immediately fail validation (every zone-output pin needs at least one incoming wire). The fix is to wire something into the zone-output pin; until you do, the HOF and the offending body node show a red error border. This is intentional — a freshly placed HOF with no body would have no per-element computation to run.
+- Keyboard shortcuts (Delete, Ctrl+C/X/V/D) operate on the **active body** — the body whose interior you most recently clicked into. Clicking on the top-level canvas (outside any HOF) makes the top level active again.
+- The function pin in the title bar is suppressed on HOF nodes. A body replaces the closure abstraction.
+- `expr` is a convenient body-internal node: a single-parameter `expr` named `x` wired from `element` is the typical shape for a `map` body that computes `x + 1`, `x * 2`, etc.
+
 ## map
 
-Takes a stream of values (`xs: Iter[T]`), applies the supplied `f: T -> U` function to each element, and produces a transformed stream (`Iter[U]`). The transformation is **lazy**: `f` is invoked one element at a time, only when a downstream consumer pulls from `map`'s output. Wire an `Array[T]` into `xs` and the implicit `Array[T] → Iter[T]` conversion handles the wrapping automatically; wire `map`'s output into an `Array[U]` consumer and you'll need an explicit `collect` to materialize the result.
+Takes a stream of values (`xs: Iter[T]`), runs the body on every element, and produces a transformed stream (`Iter[U]`) — the body's `result` zone-output value for each input element. The transformation is **lazy**: the body runs one element at a time, only when a downstream consumer pulls from `map`'s output. Wire an `Array[T]` into `xs` and the implicit `Array[T] → Iter[T]` conversion handles the wrapping automatically; wire `map`'s output into an `Array[U]` consumer and you'll need an explicit `collect` to materialize the result.
 
 **Properties**
 
-- `Input type` — the element type T of the input stream.
-- `Output type` — the element type U of the output stream.
+- `Input type` — the element type T of the input stream (drives the type of the body's `element` zone-input pin).
+- `Output type` — the element type U of the output stream (drives the type of the body's `result` zone-output pin).
 
-**Input pins**
+**External pins**
 
-- `xs: Iter[InputType]` — the stream to transform. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
-- `f: InputType -> OutputType` — the per-element function.
+- Input `xs: Iter[InputType]` — the stream to transform. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
+- Output `Iter[OutputType]` — the transformed stream.
 
-**Output (single pin)**
+**Body (inline)**
 
-- `Iter[OutputType]`.
+- Zone-input `element: InputType` — the current iteration value (inner-left source).
+- Zone-output `result: OutputType` — the body's per-iteration return value (inner-right destination). Must have at least one incoming wire.
 
 ![](../../atomCAD_images/map_node_props_viewport.png)
 
 To see the map node in action please check out the *Pattern* demo [in the demos document](../../../samples/demo_description.md).
 
-The above image shows the node network used in the Pattern demo. You can see that the input type chosen for the map node is `Int` and the output type is `Blueprint`. The data type of the `f` input pin is therefore `Int -> Blueprint`. You can see this if you hover over the `f` input pin with the mouse:
-
-![](../../atomCAD_images/map_input_pin_type.png)
-
-You can see that the `pattern` custom node in this case has an additional input pin in addition to the required one `Int` input pin: the `gap` pin. As discussed in the functional programming chapter, additional inputs are bound when the function value is supplied to the `map` node (this can be seen as a partial function application): this is the case with the `gap` input pin in this case and so this way the gap of the pattern can be parameterized.
+In the Pattern demo, `map`'s input type is `Int` and output type is `Blueprint` — so the body's `element` pin is `Int` and the `result` pin is `Blueprint`. Inside the body, an `Int → Blueprint` chain (a `cuboid` whose position is driven by `element`, for instance) wires into `result`. To parameterize the body — e.g. a `gap` value that the body uses to space the cuboids — drop a `float` (or any other) node in the **outer** scope and drag a capture wire from it into the relevant body-internal node's input. The capture wire is the inline-body equivalent of the old "extra function parameter" mechanism.
 
 ## filter
 
-Returns a stream containing the elements of `xs` for which the predicate `f` returned `true`, preserving order. The filter is **lazy**: `f` is invoked one element at a time, only when a downstream consumer pulls from `filter`'s output, and rejected elements are simply skipped over without buffering.
+Returns a stream containing the elements of `xs` for which the body's `result` zone-output was `true`, preserving order. The filter is **lazy**: the body runs one element at a time, only when a downstream consumer pulls from `filter`'s output, and rejected elements are skipped without buffering.
 
 **Properties**
 
 - `Element type` — the element type T of the input and output streams.
 
-**Input pins**
+**External pins**
 
-- `xs: Iter[ElementType]` — the stream to filter. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion.
-- `f: ElementType -> Bool` — the predicate.
+- Input `xs: Iter[ElementType]` — the stream to filter. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion.
+- Output `Iter[ElementType]` — the kept-elements stream.
 
-**Output (single pin)**
+**Body (inline)**
 
-- `Iter[ElementType]`.
+- Zone-input `element: ElementType` — the current iteration value.
+- Zone-output `result: Bool` — the predicate decision. Must have at least one incoming wire.
 
 **Behavior**
 
-If either input is unconnected, the node produces an error (`xs input is missing` / `f input is missing`); both inputs must be wired even when `xs` would have been empty. Otherwise downstream pulls from the output stream advance the upstream `xs` walker until `f(elem)` returns `true`, then yield `elem`; consumers see only the kept elements, in their original order. An empty `xs` produces an empty stream; `f` is never called. If `f` returns anything other than `Bool` (including `None` because a deeper input inside `f` is unwired), the stream yields `Error("filter: f returned non-Bool")` and then ends — same fuse semantics as the rest of the iterator pipeline.
+If `xs` is unconnected the node produces an error. With `xs` wired, downstream pulls from the output stream advance the upstream `xs` walker until the body returns `true` for an element, then yield that element; consumers see only the kept elements, in their original order. An empty `xs` produces an empty stream; the body is never run. If the body returns anything other than `Bool`, the stream yields `Error("filter: f returned non-Bool")` and then ends — same fuse semantics as the rest of the iterator pipeline. The same applies if any required input inside the body is unwired and propagates as `None` — the predicate result is non-`Bool`.
 
-The `f` function is supplied via the function pin (typically a small subnetwork or an `expr` node). Any extra parameters of `f` beyond the first are pre-bound at the time the function pin is wired — this is partial application, the same convention `map` uses (see the `map` section).
+A typical filter body is one `expr` node with an `Int` parameter named `x` wired from `element`, computing `x % 2 == 0` (keep evens) into `result`.
 
 ## fold
 
-Reduces `xs` to a single value by repeatedly applying `f(acc, elem)`, starting from `init`, left-to-right:
+Reduces `xs` to a single value by repeatedly running the body with `(acc, element)`, starting from `init`, left-to-right. With body B:
 
-- `fold(<empty stream>, init, f)         == init`
-- `fold(<a, b, c>, init, f)              == f(f(f(init, a), b), c)`
+- `fold(<empty stream>, init)  ==  init`
+- `fold(<a, b, c>, init)       ==  B(B(B(init, a), b), c)`
 
 `fold` is the primary **iterator consumer**: it drains the input stream one element at a time, so a `range → map → filter → fold` pipeline keeps memory at O(1) regardless of stream length. The output is a single accumulator value, not an iterator.
 
 **Properties**
 
-- `Element type` — the element type T of the input stream.
-- `Accumulator type` — the accumulator and output type Acc. Acc may differ from T; the closure's parameter pins use the same `Int ↔ Float` (and similar) conversions that any other pin connection does, so e.g. folding an `Iter[Float]` into an `Int` accumulator works exactly because Float→Int truncation is already a supported pin conversion.
+- `Element type` — the element type T of the input stream (drives the type of the body's `element` zone-input pin).
+- `Accumulator type` — the accumulator and output type Acc (drives the types of both `acc` zone-input and `new_acc` zone-output). Acc may differ from T; body-internal pin connections use the same `Int ↔ Float` (and similar) conversions that any other pin connection does, so e.g. folding an `Iter[Float]` into an `Int` accumulator works because Float→Int truncation is already a supported pin conversion.
 
-**Input pins**
+**External pins**
 
-- `xs: Iter[ElementType]` — the stream to reduce. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion, so the legacy `[1, 2, 3] → fold` shape keeps working with no edit.
-- `init: AccumulatorType` — the initial accumulator value.
-- `f: (AccumulatorType, ElementType) -> AccumulatorType` — the combining function. Argument 0 is the accumulator, argument 1 is the current element.
+- Input `xs: Iter[ElementType]` — the stream to reduce. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion, so the legacy `[1, 2, 3] → fold` shape keeps working with no edit.
+- Input `init: AccumulatorType` — the initial accumulator value.
+- Output `AccumulatorType` — the final accumulator after the stream exhausts.
+
+**Body (inline)**
+
+- Zone-input `acc: AccumulatorType` — the running accumulator at this step.
+- Zone-input `element: ElementType` — the current iteration value.
+- Zone-output `new_acc: AccumulatorType` — the next accumulator value. Must have at least one incoming wire.
 
 **Behavior**
 
-If any input is unconnected, the node produces an error (`xs input is missing` / `init input is missing` / `f input is missing`); all three inputs must be wired even when `xs` would have been empty. With everything wired, an empty `xs` returns `init` unchanged (`f` is never called). Otherwise the node walks `xs` left-to-right, replacing the accumulator with `f(acc, elem)` at each step, and returns the final accumulator value. If `f` errors on any iteration, the error propagates immediately and remaining elements are not pulled from the stream.
+If `xs` or `init` is unconnected, the node produces an error. With everything wired, an empty `xs` returns `init` unchanged (the body is never run). Otherwise the node walks `xs` left-to-right, replacing the accumulator with `body(acc, element)` at each step, and returns the final accumulator value. If the body errors on any iteration, the error propagates immediately and remaining elements are not pulled from the stream.
 
-`fold` is the universal aggregator: sum, product, min, max, "all true", "any true", and chained CSG (e.g. unioning a list of blueprints) are all special cases.
+A summation body is one `expr` with parameters `a: Int` and `x: Int` (wired from `acc` and `element` respectively) computing `a + x` into `new_acc`. `fold` is the universal aggregator: sum, product, min, max, "all true", "any true", and chained CSG (e.g. unioning a list of blueprints) are all special cases.
 
 ## foreach
 
-Side-effect counterpart of `map`: walks a stream of values and runs the supplied function on every element for its side effect, discarding each return value. The output type is `Unit`, so `foreach` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — on a normal display pass the central skip rule short-circuits the node entirely without pulling a single element from `xs`, even when the upstream iterator would have been a million elements long. The motivating use case is **batch export**: a `product` node fans variants into a stream, and `foreach(variant → export_xyz(...))` writes one file per variant when the user invokes Execute.
+Side-effect counterpart of `map`: walks a stream of values and runs the body on every element for its side effect, discarding each return value. The output type is `Unit`, so `foreach` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — on a normal display pass the central skip rule short-circuits the node entirely without pulling a single element from `xs`, even when the upstream iterator would have been a million elements long. The motivating use case is **batch export**: a `product` node fans variants into a stream, and a `foreach` whose body wires `element` into an `export_xyz` node writes one file per variant when the user invokes Execute.
 
 **Property**
 
-- `Input type` — the element type T of the input stream.
+- `Input type` — the element type T of the input stream (drives the type of the body's `element` zone-input pin).
 
-**Input pins**
+**External pins**
 
-- `xs: Iter[InputType]` — the stream to walk. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
-- `f: InputType -> Unit` — the per-element function. Because the universal `T → Unit` widening applies at the function's output position, the body sub-network can end in *any* node — `export_xyz` (the natural fit), `print` (returns `String`, widened to `Unit`), or even a pure data computation whose value is silently discarded.
+- Input `xs: Iter[InputType]` — the stream to walk. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
+- Output `Unit` — not displayable; the only point of wiring `foreach` is its side effect under Execute.
 
-**Output (single pin)**
+**Body (inline)**
 
-- `Unit`. Not displayable; the only point of wiring `foreach` is its side effect under Execute.
+- Zone-input `element: InputType` — the current iteration value.
+- Zone-output `out: Unit` — the body's per-iteration return value (discarded). Because the universal `T → Unit` widening applies at the body's return position, the body can end in *any* node — `export_xyz` (the natural fit), `print` (returns `String`, widened to `Unit`), or even a pure data computation whose value is silently discarded. Must have at least one incoming wire.
 
 **Behavior**
 
-- **Display passes (no Execute):** zero work. The central skip rule prevents `eval` from running on any all-Unit-output node when `execute = false`, so neither `xs` nor `f` is touched. This is what makes a `product → foreach` pipeline cheap during normal editing.
+- **Display passes (no Execute):** zero work. The central skip rule prevents `eval` from running on any all-Unit-output node when `execute = false`, so neither `xs` nor the body is touched. This is what makes a `product → foreach` pipeline cheap during normal editing.
 - **Execute passes:** drains `xs` left-to-right; for each element, runs the body and discards the result. **Fail-fast on errors:** if the body returns an error for any element, `foreach` halts immediately and surfaces that error as its output. This matches `fold` and `collect`'s mid-stream error semantics — silently producing a partial result set is the worst of all worlds for batch operations.
 
-`map` keeps its data semantics; the `map(... export_xyz ...)` pattern still works under Execute (the flag propagates through the higher-order-function machinery), but `foreach` is the recommended primitive for batch export because of the display-pass short-circuit. A `map`-only pipeline produces an `Iter[Unit]` whose elements are only realized when the iterator is *consumed* — and you'd typically consume it by displaying a `collect` for inspection. `foreach` skips that ceremony: it consumes the stream itself and is the natural sink for "do something for every element."
+`map` keeps its data semantics; the `map`-with-`export_xyz`-in-the-body pattern still works under Execute (the flag propagates through the higher-order-function machinery), but `foreach` is the recommended primitive for batch export because of the display-pass short-circuit. A `map`-only pipeline produces an `Iter[Unit]` whose elements are only realized when the iterator is *consumed* — and you'd typically consume it by displaying a `collect` for inspection. `foreach` skips that ceremony: it consumes the stream itself and is the natural sink for "do something for every element."
 
 ## print
 

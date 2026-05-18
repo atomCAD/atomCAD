@@ -840,17 +840,24 @@ class NodeWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 4),
-                // Function pin
-                PinWidget(
-                  pinReference: PinReference(
-                    nodeId: node.id,
-                    scopeChain: scopeChain,
-                    pinKind: PinKind.functionPin,
-                    pinIndex: -1,
-                    dataType: node.functionType,
+                // Function pin — suppressed on HOFs. The legacy function pin
+                // is never wired meaningfully on zone-owning nodes (their
+                // body replaces the closure abstraction), and showing it
+                // confuses users into wiring closures into HOFs. Full
+                // function-pin removal lives in the parent Rust design's
+                // cleanup phase per `doc/design_zones_ui.md` §U7. Until then
+                // we render it only on non-HOF nodes.
+                if (!isHof)
+                  PinWidget(
+                    pinReference: PinReference(
+                      nodeId: node.id,
+                      scopeChain: scopeChain,
+                      pinKind: PinKind.functionPin,
+                      pinIndex: -1,
+                      dataType: node.functionType,
+                    ),
+                    multi: false,
                   ),
-                  multi: false,
-                ),
               ],
             ),
           ),
@@ -1616,15 +1623,35 @@ class _BodyResizeHandle extends StatefulWidget {
 
 class _BodyResizeHandleState extends State<_BodyResizeHandle> {
   Size? _dragSize;
+  bool _hovered = false;
+  bool _dragging = false;
 
   @override
   Widget build(BuildContext context) {
+    // Brighten the handle while the user hovers or actively drags it — gives
+    // the same feedback as the pointer cursor change but stays visible after
+    // the cursor leaves the handle bounds during a drag. See
+    // `doc/design_zones_ui.md` §"Phase U7" → resize handle polish.
+    final bool highlight = _hovered || _dragging;
+    final Color fillColor = highlight
+        ? Colors.white.withValues(alpha: 0.35)
+        : Colors.white.withValues(alpha: 0.15);
+    final Color borderColor = highlight
+        ? Colors.white.withValues(alpha: 0.85)
+        : Colors.white.withValues(alpha: 0.4);
+    final double borderWidth = highlight ? 1.5 : 1.0;
+
     return MouseRegion(
       cursor: SystemMouseCursors.resizeDownRight,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (_) {
-          _dragSize = widget.initialSize;
+          setState(() {
+            _dragging = true;
+            _dragSize = widget.initialSize;
+          });
         },
         onPanUpdate: (details) {
           final base = _dragSize ?? widget.initialSize;
@@ -1639,17 +1666,17 @@ class _BodyResizeHandleState extends State<_BodyResizeHandle> {
           widget.onResize(next);
         },
         onPanEnd: (_) {
-          _dragSize = null;
+          setState(() {
+            _dragging = false;
+            _dragSize = null;
+          });
         },
         child: Container(
           width: 14,
           height: 14,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.4),
-              width: 1,
-            ),
+            color: fillColor,
+            border: Border.all(color: borderColor, width: borderWidth),
             borderRadius: const BorderRadius.only(
               bottomRight: Radius.circular(4),
             ),

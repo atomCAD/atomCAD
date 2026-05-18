@@ -2363,3 +2363,247 @@ fn repair_disconnects_body_wire_when_zone_input_type_changes() {
         body_node.arguments[0].incoming_wires
     );
 }
+
+// ============================================================================
+// Phase U7 — validation-error attribution for body-internal nodes
+//
+// The Flutter API layer's `build_node_view` populates `NodeView.error` by
+// filtering `node_network.validation_errors` for entries whose `node_id`
+// matches the node being viewed. Because `build_node_view` is invoked
+// recursively from `build_zone_view` against each HOF body, body-internal
+// nodes pick up their attributed errors directly — but only if the
+// validator actually stamps the right `node_id` on body-scope errors.
+//
+// These tests pin that contract: when a body wire violates rule 2 or rule 3,
+// the resulting `ValidationError` lives on the body's `validation_errors`
+// list with `node_id == Some(body_internal_node_id)` (not the HOF id, not
+// `None`). That is what makes the body node light up red in the editor.
+// See `doc/design_zones_ui.md` §"Phase U7" → validation rendering.
+// ============================================================================
+
+/// Find the validation error attributed to `node_id` inside `body`, if any.
+fn find_body_error_for_node(
+    body: &rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork,
+    node_id: u64,
+) -> Option<String> {
+    body.validation_errors
+        .iter()
+        .find(|e| e.node_id == Some(node_id))
+        .map(|e| e.error_text.clone())
+}
+
+/// A capture wire with a missing source surfaces as a validation error
+/// attributed to the body-internal destination node — that's the attribution
+/// `build_node_view` uses to light up the body node's red border.
+#[test]
+fn validation_error_attributed_to_body_internal_node_on_bad_capture() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + k",
+        vec![
+            ("x".to_string(), DataType::Int),
+            ("k".to_string(), DataType::Int),
+        ],
+    );
+    wire_zone_input_to_body_node(&mut designer, "main", map_id, expr_id, 0);
+    // Capture wire pointing at a node id that doesn't exist anywhere.
+    wire_capture_to_body_node(&mut designer, "main", map_id, expr_id, 1, 99_999);
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    designer.validate_active_network();
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let body = main.nodes.get(&map_id).unwrap().zone.as_ref().unwrap();
+    let body_err = find_body_error_for_node(body, expr_id);
+    assert!(
+        body_err.is_some(),
+        "Expected a validation error attributed to body node {} (the capture's destination); \
+         body errors were: {:?}",
+        expr_id,
+        body
+            .validation_errors
+            .iter()
+            .map(|e| (e.node_id, e.error_text.clone()))
+            .collect::<Vec<_>>()
+    );
+    let text = body_err.unwrap().to_lowercase();
+    assert!(
+        text.contains("capture") && (text.contains("non-existent") || text.contains("references")),
+        "Expected the body-internal error to be the missing-capture-source error; got: {:?}",
+        text,
+    );
+}
+
+/// An out-of-range ZoneInput pin reference attributes the validation error
+/// to the body-internal destination node so the editor can highlight it.
+#[test]
+fn validation_error_attributed_to_body_internal_node_on_bad_zone_input() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + 1",
+        vec![("x".to_string(), DataType::Int)],
+    );
+    // map declares 1 zone-input pin ("element"), so pin_index 5 is out of range.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        let map_node = network.nodes.get_mut(&map_id).unwrap();
+        let body = map_node.zone_mut().unwrap();
+        let body_node = body.nodes.get_mut(&expr_id).unwrap();
+        body_node.arguments[0].incoming_wires.push(IncomingWire {
+            source_node_id: map_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 5 },
+            source_scope_depth: 1,
+        });
+    }
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    designer.validate_active_network();
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let body = main.nodes.get(&map_id).unwrap().zone.as_ref().unwrap();
+    let body_err = find_body_error_for_node(body, expr_id);
+    assert!(
+        body_err.is_some(),
+        "Expected a validation error attributed to body node {} (the ZoneInput destination); \
+         body errors were: {:?}",
+        expr_id,
+        body
+            .validation_errors
+            .iter()
+            .map(|e| (e.node_id, e.error_text.clone()))
+            .collect::<Vec<_>>()
+    );
+    let text = body_err.unwrap().to_lowercase();
+    assert!(
+        text.contains("zoneinput"),
+        "Expected a ZoneInput-related error on the body-internal node; got: {:?}",
+        text,
+    );
+}
+
+/// Rule 1 (zone-output pin missing wire) attributes the error to the HOF
+/// itself in its containing network — that's what makes the HOF light up
+/// red. Body-internal nodes (none in this case) shouldn't pick up the error.
+#[test]
+fn validation_rule1_error_attributed_to_hof_in_parent_network() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    designer.validate_active_network();
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let hof_err = main
+        .validation_errors
+        .iter()
+        .find(|e| e.node_id == Some(map_id))
+        .map(|e| e.error_text.clone());
+    assert!(
+        hof_err.is_some(),
+        "Expected a validation error attributed to the HOF node {} in the parent network; \
+         errors were: {:?}",
+        map_id,
+        main
+            .validation_errors
+            .iter()
+            .map(|e| (e.node_id, e.error_text.clone()))
+            .collect::<Vec<_>>(),
+    );
+    let text = hof_err.unwrap().to_lowercase();
+    assert!(
+        text.contains("zone-output") && text.contains("no incoming wire"),
+        "Expected the rule-1 missing-wire error on the HOF; got: {:?}",
+        text,
+    );
+}

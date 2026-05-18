@@ -951,12 +951,28 @@ class NodeNetworkState extends State<NodeNetwork> {
     );
   }
 
-  /// Build the selection rectangle overlay widget
+  /// Build the selection rectangle overlay widget. When the drag started
+  /// inside an HOF body, the rendered rectangle is clipped to that body's
+  /// screen rect so the selection visually stays inside the body — matching
+  /// the overlap-test scope confinement done at drag end. See
+  /// `doc/design_zones_ui.md` §"Phase U7" → selection-rect clipping.
   Widget _buildSelectionRectangle() {
     if (_selectionRect == null) return const SizedBox.shrink();
 
+    Rect rendered = _selectionRect!;
+    if (_selectionRectScope.isNotEmpty) {
+      final resolver = _makeResolver();
+      final origin = resolver?.layout.lookupOrigin(_selectionRectScope);
+      final size = resolver?.layout.lookupSize(_selectionRectScope);
+      if (origin != null && size != null) {
+        final bodyRect = origin & (size * getZoomScale(_zoomLevel));
+        rendered = rendered.intersect(bodyRect);
+      }
+    }
+    if (rendered.isEmpty) return const SizedBox.shrink();
+
     return Positioned.fromRect(
-      rect: _selectionRect!,
+      rect: rendered,
       child: IgnorePointer(
         child: Container(
           decoration: BoxDecoration(

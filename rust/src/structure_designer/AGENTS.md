@@ -137,6 +137,32 @@ User-declared `RecordTypeDef`s live alongside custom networks in `NodeTypeRegist
 
 **Built-in record defs** (`NodeTypeRegistry::built_in_record_type_defs`) are application-supplied schemas like `ElementMapping = {from: Int, to: Int}` (consumed by `atom_replace.rules`). They share the user-type namespace with user defs and networks — `name_is_taken` consults this map, and `add_record_type_def` / `rename_record_type_def` reject collisions with built-in names. **Always look up named record defs through the unified accessor `NodeTypeRegistry::lookup_record_type_def(name)`** — it tries `record_type_defs` first, then falls back to `built_in_record_type_defs`. Direct indexing into `record_type_defs` silently misses built-ins. The same pattern applies to the `populate_custom_node_type_cache_with_types` helpers, which take both maps as parameters. Design doc: `doc/design_atom_replace_rules_input.md` (Phase A).
 
+## Zones (inline HOF bodies)
+
+The higher-order-function nodes (`map`, `filter`, `fold`, `foreach`) own an **inline body** — a `NodeNetwork` held on the HOF's `Node.zone: Option<Arc<NodeNetwork>>`. Body nodes' positions live in the body's own coordinate frame; `next_node_id` is per-body, so the same numeric id can appear in nested bodies.
+
+**Pin sets.** A zone-owning `NodeType` declares both `zone_input_pins` (inside-facing source pins on the body's inner-left edge — `element`, `acc`) and `zone_output_pins` (inside-facing destination pins on the body's inner-right edge — `result`, `new_acc`, `out`). The four external pin sets (regular input/output) coexist on the same HOF node. Test `NodeType::has_zone()` to detect HOF types.
+
+**Wire shapes.** A wire stored on a body node's `arguments` can have `source_scope_depth ≥ 0`:
+- `depth = 0` — regular intra-body wire (source in the same network).
+- `depth ≥ 1` with `source_pin = NodeOutput {..}` — **capture** from an ancestor scope's node output.
+- `depth ≥ 1` with `source_pin = ZoneInput { pin_index }` — **iteration-value reference** from an enclosing HOF's zone-input pin (`element`, `acc`).
+
+Body-return wires live on the HOF's separate `zone_output_arguments` list (one `Argument` per declared zone-output pin) — they read a body-internal source and feed the HOF's per-iteration return. The discriminator is `ArgumentKind::ZoneOutput`; everything else is `External`.
+
+**Evaluation.** `Walker::MapZone` / `FilterZone` carry the body and its `zone_output_wires` snapshot; per-step evaluation pushes a scope frame, evaluates the body-return wire(s), then pops. `fold` and `foreach` are eager — they drain the upstream walker in `eval()` and call `evaluate_zone_output` per step against a freshly built inner context. Captures resolve via `evaluate_arg` walking up the scope-stack `ancestors` chain by `source_scope_depth`. See `evaluator/AGENTS.md` (Walker section).
+
+**Validation** (`network_validator.rs::validate_zones_recursive`) enforces three rules across the recursive zone tree:
+1. Every zone-output pin has at least one incoming wire (error attributed to the HOF in its parent network).
+2. Capture wires reference an existing node in the ancestor at the named depth (error attributed to the body-internal destination).
+3. `ZoneInput { pin_index }` references point to a real zone-input pin index of an actual ancestor HOF (error attributed to the body-internal destination).
+
+Body errors land on `body.validation_errors` with `node_id == Some(body_internal_id)`; the API's `build_node_view` filters by `node_id` and surfaces them on the body node's `NodeView.error`. The HOF in the parent network also gets a generic "Zone body is invalid" marker so it lights up red even when only a deep body node is at fault.
+
+**Repair.** When an HOF's zone-input pin type changes (e.g. `map.input_type` flipped `Int → Crystal`), `repair_node_network::repair_zone_body` walks the body and disconnects any wire whose source/destination types are no longer compatible — same shape as the existing `arguments` repair, just scoped to one body. Uses the borrow-split pattern (snapshot `zone_output_wires`, then `.zone.take()` to repair, then re-insert).
+
+Design docs: `doc/design_zones.md` (Rust side, phases 1–6) and `doc/design_zones_ui.md` (Flutter side, phases U1–U7).
+
 ## Execute action & effect nodes
 
 A small set of nodes (`export_xyz`, `foreach`, future effects) exist for their **side effects** rather than to produce a value. These nodes return `DataType::Unit` so the graph passes them through cleanly without misrepresenting them as data sources, and they fire only when the user explicitly invokes the right-click → Execute action.

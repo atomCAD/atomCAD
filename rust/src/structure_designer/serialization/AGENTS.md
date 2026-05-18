@@ -56,6 +56,19 @@ A v2 file chains both passes; a v3 file runs only v3→v4; a v4 file runs neithe
 - **`displayed_node_ids`** is always written (backward compat with old readers). On save, split from `displayed_nodes`.
 - **atom_edit `output_diff` migration:** On load, `output_diff: true` → `displayed_pins: {1}`. No longer written on save.
 
+## Zone (HOF body) Serialization
+
+The four HOF node types (`map`, `filter`, `fold`, `foreach`) carry an inline body. Two sets of fields capture it:
+
+- **`SerializableNodeType.zone_input_pins` / `zone_output_pins`** — empty on non-HOF node types; for HOFs, the inside-facing source/destination pin definitions. Frozen at SERIALIZATION_VERSION = 4.
+- **`SerializableNode.zone: Option<SerializableNodeNetwork>`** — `Some(body)` for HOF nodes that have an inline body, `None` for non-HOF nodes. Uses `#[serde(default)]` so pre-zones `.cnnd` fixtures continue to deserialize (HOFs there have `zone: None` and validation_errors will flag the missing zone-output wire on load).
+- **`SerializableNode.zone_output_arguments: Vec<Argument>`** — wires terminating at the HOF's zone-output (inside-right) pins, one `Argument` per declared zone-output pin. Always empty for non-HOF nodes. `#[serde(default)]`.
+- **`SerializableNode.body_width` / `body_height: f64`** — stored body dimensions in logical pixels. Default 320×180 via `default_body_width`/`default_body_height`. Meaningful only when `zone.is_some()`; the renderer uses `max(stored, content_bbox + padding)` so this is the *minimum* size, never the rendered one.
+
+Wire scope semantics (`IncomingWire.source_scope_depth`, `source_pin: SourcePin::NodeOutput | ZoneInput`) are part of the wire serialization shape — see `node_network.rs`. The `Argument` type used by `zone_output_arguments` is the same one used by `arguments`, so wires inside a body that terminate on its containing HOF's zone-output pins serialize identically to ordinary wires (just with a different storage list).
+
+No version bump for zones: the new fields are all `#[serde(default)]`, and pre-zones networks load with `zone: None`, `zone_output_arguments: vec![]`, default body sizes. Validation flags the resulting all-HOFs-missing-bodies state on load — the user fixes individual HOFs interactively (or `.cnnd` migration deferred per `design_zones.md`).
+
 ## atom_edit Data (`atom_edit_data_serialization.rs`)
 
 Serializes `AtomEditData` for the `atom_edit` node (non-destructive diff-based editor):
