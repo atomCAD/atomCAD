@@ -2025,6 +2025,382 @@ impl StructureDesigner {
         });
     }
 
+    /// Scope-aware variant of [`can_connect_nodes`]. With an empty `scope_path`
+    /// queries the active top-level network (today's behavior); a non-empty
+    /// path queries the named HOF body. Phase U4 of `doc/design_zones_ui.md` —
+    /// only intra-body wires are validated here (cross-scope wires land in
+    /// U5 and have their own predicate).
+    pub fn can_connect_nodes_scoped(
+        &self,
+        scope_path: &[u64],
+        source_node_id: u64,
+        source_output_pin_index: i32,
+        dest_node_id: u64,
+        dest_param_index: usize,
+    ) -> bool {
+        if scope_path.is_empty() {
+            return self.can_connect_nodes(
+                source_node_id,
+                source_output_pin_index,
+                dest_node_id,
+                dest_param_index,
+            );
+        }
+        let network = match self.get_scope_network(scope_path) {
+            Some(n) => n,
+            None => return false,
+        };
+        network.can_connect_nodes(
+            source_node_id,
+            source_output_pin_index,
+            dest_node_id,
+            dest_param_index,
+            &self.node_type_registry,
+        )
+    }
+
+    /// Scope-aware variant of [`connect_nodes`]. Phase U4 — intra-body wires
+    /// only. With a non-empty `scope_path` the wire is added to the named HOF
+    /// body without the top-level display-policy / undo orchestration; body-
+    /// scope undo lands when body authoring is fully reachable.
+    pub fn connect_nodes_scoped(
+        &mut self,
+        scope_path: &[u64],
+        source_node_id: u64,
+        source_output_pin_index: i32,
+        dest_node_id: u64,
+        dest_param_index: usize,
+    ) {
+        if scope_path.is_empty() {
+            self.connect_nodes(
+                source_node_id,
+                source_output_pin_index,
+                dest_node_id,
+                dest_param_index,
+            );
+            return;
+        }
+        let dest_param_is_multi = {
+            let network = match self.get_scope_network(scope_path) {
+                Some(n) => n,
+                None => return,
+            };
+            let dest_node = match network.nodes.get(&dest_node_id) {
+                Some(n) => n,
+                None => return,
+            };
+            match self.node_type_registry.get_node_type_for_node(dest_node) {
+                Some(node_type) => {
+                    if dest_param_index >= node_type.parameters.len() {
+                        return;
+                    }
+                    node_type.parameters[dest_param_index].data_type.is_array()
+                }
+                None => return,
+            }
+        };
+        if let Some(network) = self.get_scope_network_mut(scope_path) {
+            network.connect_nodes(
+                source_node_id,
+                source_output_pin_index,
+                dest_node_id,
+                dest_param_index,
+                dest_param_is_multi,
+            );
+        }
+        self.set_dirty(true);
+    }
+
+    /// Scope-aware variant of `connect_nodes` for cross-scope wires (captures
+    /// and iteration-value references). Phase U5 of `doc/design_zones_ui.md`.
+    ///
+    /// `dest_scope_path` is the network where the wire is stored — the body
+    /// containing the destination node's `arguments` (External argument kind).
+    /// `source_scope_depth` measures how many ancestor frames up from
+    /// `dest_scope_path` the source pin lives:
+    ///   - `0` — same scope (regular wire)
+    ///   - `≥ 1` — capture (`NodeOutput` source) or iteration-value reference
+    ///     (`ZoneInput` source) from an ancestor scope
+    ///
+    /// Body-return wires (`destination_argument_kind = ZoneOutput`) go through
+    /// the separate [`connect_zone_output_wire`] path — their storage scope
+    /// differs from the destination's evaluation scope.
+    pub fn connect_wire_scoped(
+        &mut self,
+        dest_scope_path: &[u64],
+        source_node_id: u64,
+        source_pin: crate::structure_designer::node_network::SourcePin,
+        source_scope_depth: u8,
+        dest_node_id: u64,
+        dest_param_index: usize,
+    ) {
+        // Same-scope NodeOutput wires can route through the existing
+        // `connect_nodes_scoped` for parity with U4-era callers (display-policy
+        // / dirty-flag bookkeeping). Cross-scope / ZoneInput wires use the
+        // generalized `connect_wire` on NodeNetwork.
+        if source_scope_depth == 0 {
+            if let crate::structure_designer::node_network::SourcePin::NodeOutput { pin_index } =
+                source_pin
+            {
+                self.connect_nodes_scoped(
+                    dest_scope_path,
+                    source_node_id,
+                    pin_index,
+                    dest_node_id,
+                    dest_param_index,
+                );
+                return;
+            }
+        }
+        // Resolve dest pin's multi-ness against the dest node's type.
+        let dest_param_is_multi = {
+            let network = match self.get_scope_network(dest_scope_path) {
+                Some(n) => n,
+                None => return,
+            };
+            let dest_node = match network.nodes.get(&dest_node_id) {
+                Some(n) => n,
+                None => return,
+            };
+            match self.node_type_registry.get_node_type_for_node(dest_node) {
+                Some(node_type) => {
+                    if dest_param_index >= node_type.parameters.len() {
+                        return;
+                    }
+                    node_type.parameters[dest_param_index].data_type.is_array()
+                }
+                None => return,
+            }
+        };
+        if let Some(network) = self.get_scope_network_mut(dest_scope_path) {
+            network.connect_wire(
+                source_node_id,
+                source_pin,
+                source_scope_depth,
+                dest_node_id,
+                dest_param_index,
+                dest_param_is_multi,
+            );
+        }
+        self.set_dirty(true);
+    }
+
+    /// Scope-aware predicate for cross-scope wires (Phase U5). Returns `true`
+    /// if a wire with the given shape could legally be created (basic type
+    /// compatibility + structural sanity). Pairs with [`connect_wire_scoped`].
+    ///
+    /// The rule from `doc/design_zones_ui.md` §"Computing source_scope_depth
+    /// at wire creation": `source.scopeChain` must be a prefix of the
+    /// destination's evaluation scope; the Flutter caller has already enforced
+    /// this when computing `source_scope_depth`, so here we only walk the
+    /// scope chain to find the source's network and validate the type.
+    pub fn can_connect_wire_scoped(
+        &self,
+        dest_scope_path: &[u64],
+        source_node_id: u64,
+        source_pin: crate::structure_designer::node_network::SourcePin,
+        source_scope_depth: u8,
+        dest_node_id: u64,
+        dest_param_index: usize,
+    ) -> bool {
+        // Source's scope is `dest_scope_path` with the last `source_scope_depth`
+        // elements stripped. Reject if the requested depth exceeds the path.
+        if (source_scope_depth as usize) > dest_scope_path.len() {
+            return false;
+        }
+        let source_scope_path =
+            &dest_scope_path[..dest_scope_path.len() - source_scope_depth as usize];
+
+        let dest_network = match self.get_scope_network(dest_scope_path) {
+            Some(n) => n,
+            None => return false,
+        };
+        let dest_node = match dest_network.nodes.get(&dest_node_id) {
+            Some(n) => n,
+            None => return false,
+        };
+        if dest_param_index >= dest_node.arguments.len() {
+            return false;
+        }
+        let dest_param_type = self
+            .node_type_registry
+            .get_node_param_data_type(dest_node, dest_param_index);
+
+        // Resolve the source pin's data type in its containing network.
+        let source_network = match self.get_scope_network(source_scope_path) {
+            Some(n) => n,
+            None => return false,
+        };
+        let source_node = match source_network.nodes.get(&source_node_id) {
+            Some(n) => n,
+            None => return false,
+        };
+        let source_type = match source_pin {
+            crate::structure_designer::node_network::SourcePin::NodeOutput { pin_index } => {
+                match self.node_type_registry.resolve_output_type(
+                    source_node,
+                    source_network,
+                    pin_index,
+                ) {
+                    Some(t) => t,
+                    None => return false,
+                }
+            }
+            crate::structure_designer::node_network::SourcePin::ZoneInput { pin_index } => {
+                // The source node must be a zone-owning (HOF) node, and the
+                // pin_index must be a valid zone-input pin. Note: a ZoneInput
+                // source can only be authored when the wire is being created
+                // inside that HOF's body — the source's network is the HOF's
+                // *containing* network, and the destination scope is that
+                // HOF's body. The Flutter caller is responsible for ensuring
+                // this; here we just look up the pin's declared type.
+                let source_type = match self.node_type_registry.get_node_type_for_node(source_node)
+                {
+                    Some(t) => t,
+                    None => return false,
+                };
+                if !source_type.has_zone() {
+                    return false;
+                }
+                let pin = match source_type.zone_input_pins.get(pin_index) {
+                    Some(p) => p,
+                    None => return false,
+                };
+                // Zone-input pins reuse `OutputPinDefinition`; for `Fixed`
+                // declarations we use the type directly. Polymorphic
+                // (`SameAsInput`) zone-inputs aren't in use yet — fall back
+                // to None and reject.
+                match &pin.data_type {
+                    crate::structure_designer::node_type::PinOutputType::Fixed(t) => t.clone(),
+                    _ => return false,
+                }
+            }
+        };
+
+        crate::structure_designer::data_type::DataType::can_be_converted_to(
+            &source_type,
+            &dest_param_type,
+            &self.node_type_registry,
+        )
+    }
+
+    /// Connect a body-return wire: source is a body node, destination is an
+    /// HOF's zone-output pin (stored in the HOF's `zone_output_arguments`).
+    /// `body_scope_path` identifies the body the source lives in; the HOF
+    /// owning the zone-output is at the *last* element of the path — the
+    /// wire is added to that HOF's `zone_output_arguments[zone_output_index]`.
+    /// Phase U4 — see `doc/design_zones_ui.md` §"Wire-creation API
+    /// generalisation" (Body return row).
+    pub fn connect_zone_output_wire(
+        &mut self,
+        body_scope_path: &[u64],
+        source_node_id: u64,
+        source_output_pin_index: i32,
+        zone_output_index: usize,
+    ) {
+        if body_scope_path.is_empty() {
+            // Body-return wires only exist inside an HOF body, never at the
+            // top level.
+            return;
+        }
+        let hof_id = *body_scope_path.last().unwrap();
+        let parent_path = &body_scope_path[..body_scope_path.len() - 1];
+        let dest_param_is_multi = {
+            // The destination is a zone-output pin on the HOF, whose
+            // declaration lives on the HOF's NodeType. The HOF lives in
+            // `parent_path`'s network.
+            let parent_network = match self.get_scope_network(parent_path) {
+                Some(n) => n,
+                None => return,
+            };
+            let hof_node = match parent_network.nodes.get(&hof_id) {
+                Some(n) => n,
+                None => return,
+            };
+            let hof_type = match self.node_type_registry.get_node_type_for_node(hof_node) {
+                Some(t) => t,
+                None => return,
+            };
+            if zone_output_index >= hof_type.zone_output_pins.len() {
+                return;
+            }
+            hof_type.zone_output_pins[zone_output_index]
+                .data_type
+                .is_array()
+        };
+        // Now mutate: walk to parent network and reach the HOF's
+        // `zone_output_arguments`.
+        let parent_network = match self.get_scope_network_mut(parent_path) {
+            Some(n) => n,
+            None => return,
+        };
+        let hof_node = match parent_network.nodes.get_mut(&hof_id) {
+            Some(n) => n,
+            None => return,
+        };
+        // Ensure the `zone_output_arguments` vec has a slot for this index.
+        while hof_node.zone_output_arguments.len() <= zone_output_index {
+            hof_node
+                .zone_output_arguments
+                .push(crate::structure_designer::node_network::Argument::new());
+        }
+        let argument = &mut hof_node.zone_output_arguments[zone_output_index];
+        if !dest_param_is_multi && !argument.is_empty() {
+            argument.clear();
+        }
+        argument.set_source(source_node_id, source_output_pin_index);
+        self.set_dirty(true);
+    }
+
+    /// Scope-aware variant of [`duplicate_node`]. Phase U4 — body-scope dup
+    /// runs without top-level undo / display-policy orchestration.
+    pub fn duplicate_node_scoped(&mut self, scope_path: &[u64], node_id: u64) -> u64 {
+        if scope_path.is_empty() {
+            return self.duplicate_node(node_id);
+        }
+        let new_id = match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.duplicate_node(node_id).unwrap_or(0),
+            None => return 0,
+        };
+        if new_id != 0 {
+            self.set_dirty(true);
+        }
+        new_id
+    }
+
+    /// Scope-aware variant of [`toggle_node_selection`]. Phase U4.
+    pub fn toggle_node_selection_scoped(&mut self, scope_path: &[u64], node_id: u64) -> bool {
+        if scope_path.is_empty() {
+            return self.toggle_node_selection(node_id);
+        }
+        match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.toggle_node_selection(node_id),
+            None => false,
+        }
+    }
+
+    /// Scope-aware variant of [`add_node_to_selection`]. Phase U4.
+    pub fn add_node_to_selection_scoped(&mut self, scope_path: &[u64], node_id: u64) -> bool {
+        if scope_path.is_empty() {
+            return self.add_node_to_selection(node_id);
+        }
+        match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.add_node_to_selection(node_id),
+            None => false,
+        }
+    }
+
+    /// Scope-aware variant of [`select_nodes`]. Phase U4.
+    pub fn select_nodes_scoped(&mut self, scope_path: &[u64], node_ids: Vec<u64>) -> bool {
+        if scope_path.is_empty() {
+            return self.select_nodes(node_ids);
+        }
+        match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.select_nodes(node_ids),
+            None => false,
+        }
+    }
+
     /// Auto-connects a source pin to the first compatible pin on a target node.
     ///
     /// - When `source_is_output` is true: connects source output to target's first compatible input
@@ -2364,28 +2740,29 @@ impl StructureDesigner {
     }
 
     pub fn get_node_network_data(&self, node_id: u64) -> Option<&dyn NodeData> {
-        // Early return if active_node_network_name is None
-        let network_name = match &self.active_node_network_name {
-            Some(name) => name,
-            None => return None,
-        };
-        self.node_type_registry
-            .node_networks
-            .get(network_name)
-            .and_then(|network| network.get_node_network_data(node_id))
+        // Search the whole scope tree under the active top-level network so
+        // body-scope per-node-type data getters (called by the property panel
+        // when a body node is selected) find their target. The lookup is
+        // ambiguous in principle — top-level and body networks each have
+        // their own id counter — but it always finds *some* node with the
+        // matching id, and the property panel's active-id flow takes care
+        // not to ask about colliding ids. Phase U4 of `doc/design_zones_ui.md`.
+        let network_name = self.active_node_network_name.as_ref()?;
+        let network = self.node_type_registry.node_networks.get(network_name)?;
+        find_node_data_recursive(network, node_id)
     }
 
     pub fn get_node_network_data_mut(&mut self, node_id: u64) -> Option<&mut dyn NodeData> {
-        // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {
-            Some(name) => name,
+            Some(name) => name.clone(),
             None => return None,
         };
         self.pending_changes.mark_node_data_changed(node_id);
-        self.node_type_registry
+        let network = self
+            .node_type_registry
             .node_networks
-            .get_mut(network_name)
-            .and_then(|network| network.get_node_network_data_mut(node_id))
+            .get_mut(&network_name)?;
+        find_node_data_mut_recursive(network, node_id)
     }
 
     pub fn get_network_evaluator(&self) -> &NetworkEvaluator {
@@ -2994,6 +3371,33 @@ impl StructureDesigner {
 
     pub fn clear_selection(&mut self) {
         self.clear_selection_scoped(&[]);
+    }
+
+    /// Clear selection (and active_node_id) at every scope reachable from the
+    /// active top-level network. Used when the user clicks on empty top-level
+    /// space — the design's per-body selection means an active body node
+    /// keeps its `.active` flag even after the user deselects at the top
+    /// level, which surfaces as a stale "this node is active" highlight in
+    /// the property panel. This helper resets it everywhere.
+    pub fn clear_selection_all_scopes(&mut self) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+        let previously_active_node_id = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .and_then(|n| n.active_node_id);
+        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
+            clear_selection_recursive(network);
+        }
+        self.mark_selection_changed(previously_active_node_id, None);
+        if let Some(prev_id) = previously_active_node_id {
+            let mut dirty_nodes = HashSet::new();
+            dirty_nodes.insert(prev_id);
+            self.apply_node_display_policy(Some(&dirty_nodes));
+        }
     }
 
     /// Scope-aware variant of [`clear_selection`]. With an empty `scope_path`
@@ -5197,4 +5601,54 @@ pub struct FactorSelectionInfo {
     pub suggested_name: String,
     /// Suggested names for the parameters (one per external input)
     pub suggested_param_names: Vec<String>,
+}
+
+/// Clear selection and active state in [network] and every HOF body reachable
+/// from it. Used by `clear_selection_all_scopes` so an empty-space click at
+/// the top level deselects body nodes too.
+fn clear_selection_recursive(network: &mut NodeNetwork) {
+    network.clear_selection();
+    for node in network.nodes.values_mut() {
+        if let Some(zone) = node.zone_mut() {
+            clear_selection_recursive(zone);
+        }
+    }
+}
+
+/// Walk [network] and every HOF body reachable from it, returning the first
+/// node with id == [node_id]. Used by `get_node_network_data` so per-node-type
+/// data getters work for body nodes in U4. The walk is depth-first; the
+/// first match wins.
+fn find_node_data_recursive(network: &NodeNetwork, node_id: u64) -> Option<&dyn NodeData> {
+    if let Some(data) = network.get_node_network_data(node_id) {
+        return Some(data);
+    }
+    for node in network.nodes.values() {
+        if let Some(zone) = node.zone.as_ref() {
+            if let Some(data) = find_node_data_recursive(zone, node_id) {
+                return Some(data);
+            }
+        }
+    }
+    None
+}
+
+/// Mutable variant of [`find_node_data_recursive`]. Each step calls
+/// `Node::zone_mut` so the `Arc<NodeNetwork>` is uniquely owned (CoW) before
+/// recursion continues.
+fn find_node_data_mut_recursive(
+    network: &mut NodeNetwork,
+    node_id: u64,
+) -> Option<&mut dyn NodeData> {
+    if network.nodes.contains_key(&node_id) {
+        return network.get_node_network_data_mut(node_id);
+    }
+    for node in network.nodes.values_mut() {
+        if let Some(zone) = node.zone_mut() {
+            if let Some(data) = find_node_data_mut_recursive(zone, node_id) {
+                return Some(data);
+            }
+        }
+    }
+    None
 }

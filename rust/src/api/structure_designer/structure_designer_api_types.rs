@@ -138,10 +138,9 @@ pub struct NodeView {
 
 /// Read-only view of an HOF node's body, surfaced for the Flutter editor.
 ///
-/// Phase U3 populates only the fields needed to render the empty body region
-/// (inner-edge pins + a centered "[N nodes]" placeholder). The body's internal
-/// nodes/wires/selection arrive in U4. The recursion bottoms out naturally —
-/// non-HOF body nodes have `NodeView.zone == None`.
+/// Phase U4 populates body-internal `nodes` and `wires`; non-HOF body nodes
+/// have `NodeView.zone == None`, terminating the recursion. Cross-scope wires
+/// (captures, iteration-value references, body returns) land in U5.
 pub struct ZoneView {
     /// Zone-input pins (inner-left) declared by the HOF type. From the body's
     /// perspective these are sources; reuses `OutputPinView` for shape parity
@@ -150,23 +149,72 @@ pub struct ZoneView {
     /// Zone-output pins (inner-right) declared by the HOF type. From the body's
     /// perspective these are destinations; reuses `InputPinView`.
     pub zone_output_pins: Vec<InputPinView>,
+    /// All nodes inside the body, keyed by id. Positions are body-local.
+    /// Populated in U4; a non-HOF body node has `NodeView.zone == None`.
+    pub nodes: HashMap<u64, NodeView>,
+    /// All wires inside the body. U4 surfaces intra-body wires only; cross-
+    /// scope wires (captures, iteration values, body returns) come in U5.
+    pub wires: Vec<WireView>,
     /// Stored body width in logical pixels. The renderer uses
-    /// `max(stored_width, content_bbox + padding)`; in U3 there is no content,
-    /// so the rendered size equals the stored size.
+    /// `max(stored_width, content_bbox + padding)`.
     pub stored_width: f64,
     /// Stored body height in logical pixels.
     pub stored_height: f64,
-    /// Number of nodes inside the body. Used by U3's "[N nodes]" placeholder;
-    /// U4 replaces the placeholder with actual body-node rendering.
-    pub node_count: u32,
 }
 
 pub struct WireView {
     pub source_node_id: u64,
+    /// Legacy source pin index. Kept for back-compat with code paths that
+    /// only handle `NodeOutput` sources: `-1` = function pin, `≥ 0` = regular
+    /// output pin index. For `ZoneInput` sources (zones UI phase U5) this is
+    /// also set to the pin index for convenience, but consumers that need to
+    /// distinguish the source-pin kind should read `source_pin` directly.
     pub source_output_pin_index: i32,
     pub dest_node_id: u64,
     pub dest_param_index: usize,
     pub selected: bool,
+    /// Which argument list on the destination node this wire terminates at.
+    /// Phase U4 surfaces the discriminator for body-return wires (a body
+    /// node's output → its containing HOF's zone-output pin). Defaults to
+    /// `External` for every wire on the regular `arguments` list. See
+    /// `doc/design_zones_ui.md` §"Wire-creation API generalisation".
+    pub destination_argument_kind: APIArgumentKind,
+    /// Source pin kind: `NodeOutput` (today's normal wire source) or
+    /// `ZoneInput` (inside-facing source pin on an HOF, used by iteration-
+    /// value references). Phase U5 of `doc/design_zones_ui.md`.
+    pub source_pin: APISourcePin,
+    /// How many ancestor scope frames up from the wire's storage scope the
+    /// source lives. `0` = source in the same network as the destination
+    /// argument; `≥ 1` = capture or iteration-value reference from an outer
+    /// scope. Phase U5.
+    pub source_scope_depth: u32,
+}
+
+/// Discriminator for which argument list on the destination node a wire
+/// terminates at. Mirrors `node_network::ArgumentKind`. See
+/// `doc/design_zones_ui.md` §"Data model — Rust API extensions".
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APIArgumentKind {
+    /// Sourced from destination's `arguments` (today's regular wires +
+    /// captures + iteration-value references).
+    External,
+    /// Sourced from destination's `zone_output_arguments` (body-return wires
+    /// from a body node's output into its containing HOF's zone-output pin).
+    ZoneOutput,
+}
+
+/// Discriminator for which side of an HOF node a wire's source pin sits on.
+/// Mirrors `node_network::SourcePin`. See `doc/design_zones_ui.md`
+/// §"Data model — Rust API extensions" → "WireView carries source kind".
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APISourcePin {
+    /// Outside-facing source pin (regular output, or function pin at
+    /// `pin_index = -1`). The legacy default for every wire.
+    NodeOutput { pin_index: i32 },
+    /// Inside-facing source pin on a zone-owning (HOF) node. Used by
+    /// iteration-value references: a wire from the HOF's zone-input pin into
+    /// a body-internal node's input.
+    ZoneInput { pin_index: u32 },
 }
 
 /// Wire identifier for batch selection operations

@@ -1,4 +1,4 @@
-﻿// Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6)
+// Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6)
 // and EvalOutput display overrides.
 
 use glam::DVec2;
@@ -915,11 +915,14 @@ fn test_custom_network_wire_from_pin1() {
     // The wire should still exist
     let apply_diff_node = network.nodes.get(&apply_diff_id).unwrap();
     assert!(
-        !apply_diff_node.arguments[0].argument_output_pins().is_empty(),
+        !apply_diff_node.arguments[0]
+            .argument_output_pins()
+            .is_empty(),
         "Wire from pin 1 should be preserved"
     );
     assert_eq!(
-        apply_diff_node.arguments[0].argument_output_pins()[&inner_node_id], 1,
+        apply_diff_node.arguments[0].argument_output_pins()[&inner_node_id],
+        1,
         "Wire should reference pin index 1"
     );
 }
@@ -1263,7 +1266,8 @@ mod resolve_output_type_tests {
             zone: None,
             zone_output_arguments: Vec::new(),
             body_width: rust_lib_flutter_cad::structure_designer::node_network::DEFAULT_BODY_WIDTH,
-            body_height: rust_lib_flutter_cad::structure_designer::node_network::DEFAULT_BODY_HEIGHT,
+            body_height:
+                rust_lib_flutter_cad::structure_designer::node_network::DEFAULT_BODY_HEIGHT,
         }
     }
 

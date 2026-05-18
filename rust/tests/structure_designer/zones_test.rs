@@ -12,9 +12,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
-use rust_lib_flutter_cad::structure_designer::node_network::{
-    Argument, IncomingWire, SourcePin,
-};
+use rust_lib_flutter_cad::structure_designer::node_network::{Argument, IncomingWire, SourcePin};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
 use rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData;
@@ -101,10 +99,7 @@ fn extract_ints(values: Vec<NetworkResult>) -> Vec<i32> {
         .map(|r| match r {
             NetworkResult::Int(v) => v,
             NetworkResult::Error(msg) => panic!("expected Int element, got Error: {}", msg),
-            other => panic!(
-                "expected Int element, got {}",
-                other.to_display_string()
-            ),
+            other => panic!("expected Int element, got {}", other.to_display_string()),
         })
         .collect()
 }
@@ -617,7 +612,11 @@ fn map_zone_empty_body_yields_error_at_eval() {
 fn map_registers_zone_pins() {
     let registry = NodeTypeRegistry::new();
     let nt = registry.get_node_type("map").unwrap();
-    assert_eq!(nt.parameters.len(), 1, "map should have only `xs` externally");
+    assert_eq!(
+        nt.parameters.len(),
+        1,
+        "map should have only `xs` externally"
+    );
     assert_eq!(nt.parameters[0].name, "xs");
     assert_eq!(nt.zone_input_pins.len(), 1);
     assert_eq!(nt.zone_input_pins[0].name, "element");
@@ -648,10 +647,7 @@ fn map_calculate_custom_node_type_int_to_float() {
 
     assert_eq!(custom.zone_input_pins.len(), 1);
     assert_eq!(custom.zone_input_pins[0].name, "element");
-    assert_eq!(
-        custom.zone_input_pins[0].fixed_type(),
-        Some(&DataType::Int)
-    );
+    assert_eq!(custom.zone_input_pins[0].fixed_type(), Some(&DataType::Int));
 
     assert_eq!(custom.zone_output_pins.len(), 1);
     assert_eq!(custom.zone_output_pins[0].name, "result");
@@ -746,7 +742,12 @@ fn filter_zone_always_false_yields_empty() {
 
     let result = evaluate_node(&designer, "main", filter_id);
     let elements = drain_iter_with_designer(&designer, result);
-    assert_eq!(elements.len(), 0, "expected empty stream, got {} elements", elements.len());
+    assert_eq!(
+        elements.len(),
+        0,
+        "expected empty stream, got {} elements",
+        elements.len()
+    );
 }
 
 /// Filter that captures an outer-scope threshold value.
@@ -809,7 +810,11 @@ fn filter_zone_capture_outer_threshold() {
 fn filter_registers_zone_pins() {
     let registry = NodeTypeRegistry::new();
     let nt = registry.get_node_type("filter").unwrap();
-    assert_eq!(nt.parameters.len(), 1, "filter should have only `xs` externally");
+    assert_eq!(
+        nt.parameters.len(),
+        1,
+        "filter should have only `xs` externally"
+    );
     assert_eq!(nt.parameters[0].name, "xs");
     assert_eq!(nt.zone_input_pins.len(), 1);
     assert_eq!(nt.zone_input_pins[0].name, "element");
@@ -840,7 +845,12 @@ fn fold_zone_sum_range() {
     );
 
     let init_id = designer.add_node("int", DVec2::new(0.0, 100.0));
-    set_node_data(&mut designer, "main", init_id, Box::new(IntData { value: 0 }));
+    set_node_data(
+        &mut designer,
+        "main",
+        init_id,
+        Box::new(IntData { value: 0 }),
+    );
 
     let fold_id = designer.add_node("fold", DVec2::new(200.0, 0.0));
     set_node_data(
@@ -899,7 +909,12 @@ fn fold_zone_sum_with_captured_offset() {
     );
 
     let init_id = designer.add_node("int", DVec2::new(0.0, 100.0));
-    set_node_data(&mut designer, "main", init_id, Box::new(IntData { value: 0 }));
+    set_node_data(
+        &mut designer,
+        "main",
+        init_id,
+        Box::new(IntData { value: 0 }),
+    );
 
     let fold_id = designer.add_node("fold", DVec2::new(200.0, 0.0));
     set_node_data(
@@ -1430,15 +1445,7 @@ fn nested_fold_inner_captures_outer_constant() {
     );
 
     // Wire outer_expr.outer_acc ← outer fold's zone-input pin 0.
-    wire_zone_input_pin_to_body_node(
-        &mut designer,
-        "main",
-        outer_fold_id,
-        0,
-        outer_expr_id,
-        0,
-        1,
-    );
+    wire_zone_input_pin_to_body_node(&mut designer, "main", outer_fold_id, 0, outer_expr_id, 0, 1);
     // Wire outer_expr.inner_result ← inner_fold (pin 0) — local in the outer
     // body.
     {
@@ -1688,7 +1695,13 @@ fn nested_fold_with_inner_map_id_collision() {
 
     // Populate caches for every node in the outer body so zones are
     // initialized and custom-type caches are set up.
-    for nid in [inner_range_id, inner_map_id, collect_id, array_len_id, outer_expr_id] {
+    for nid in [
+        inner_range_id,
+        inner_map_id,
+        collect_id,
+        array_len_id,
+        outer_expr_id,
+    ] {
         let registry = &mut designer.node_type_registry;
         let body_node = registry
             .node_networks
@@ -1856,15 +1869,7 @@ fn nested_fold_with_inner_map_id_collision() {
 
     // Wire outer fold's body: outer_expr.outer_acc ← zone-input pin 0;
     // outer_expr → zone-output.
-    wire_zone_input_pin_to_body_node(
-        &mut designer,
-        "main",
-        outer_fold_id,
-        0,
-        outer_expr_id,
-        0,
-        1,
-    );
+    wire_zone_input_pin_to_body_node(&mut designer, "main", outer_fold_id, 0, outer_expr_id, 0, 1);
     wire_body_node_to_zone_output(&mut designer, "main", outer_fold_id, outer_expr_id);
 
     // Expected:
@@ -1909,7 +1914,9 @@ fn validate_and_get_errors(
 /// network and all nested zone bodies. Used when a body-internal wire fails
 /// validation but the body's errors live on `body.validation_errors` (not
 /// on the top-level network).
-fn collect_all_errors(network: &rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork) -> Vec<String> {
+fn collect_all_errors(
+    network: &rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork,
+) -> Vec<String> {
     let mut out: Vec<String> = network
         .validation_errors
         .iter()
@@ -1957,10 +1964,15 @@ fn validation_rule1_zone_output_pin_missing_wire() {
     // No body wiring — the map's `result` zone-output pin has no incoming
     // wire. Validation should report rule 1 violation.
     let (valid, errors) = validate_and_get_errors(&mut designer, "main");
-    assert!(!valid, "Network should be invalid (missing zone-output wire)");
     assert!(
-        errors.iter().any(|e| e.to_lowercase().contains("zone-output")
-            && e.to_lowercase().contains("no incoming wire")),
+        !valid,
+        "Network should be invalid (missing zone-output wire)"
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_lowercase().contains("zone-output")
+                && e.to_lowercase().contains("no incoming wire")),
         "Expected an error about a missing zone-output wire on `result`; got: {:?}",
         errors
     );
@@ -2020,7 +2032,10 @@ fn validation_rule2_capture_wire_missing_source() {
         .get("main")
         .unwrap();
     let all_errors = collect_all_errors(network);
-    assert!(!network.valid, "Network with bad capture wire should be invalid");
+    assert!(
+        !network.valid,
+        "Network with bad capture wire should be invalid"
+    );
     assert!(
         all_errors.iter().any(|e| {
             let lower = e.to_lowercase();
@@ -2080,13 +2095,11 @@ fn validation_rule3_zone_input_pin_index_out_of_range() {
         let map_node = network.nodes.get_mut(&map_id).unwrap();
         let body = map_node.zone_mut().unwrap();
         let body_node = body.nodes.get_mut(&expr_id).unwrap();
-        body_node.arguments[0]
-            .incoming_wires
-            .push(IncomingWire {
-                source_node_id: map_id,
-                source_pin: SourcePin::ZoneInput { pin_index: 5 },
-                source_scope_depth: 1,
-            });
+        body_node.arguments[0].incoming_wires.push(IncomingWire {
+            source_node_id: map_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 5 },
+            source_scope_depth: 1,
+        });
     }
     wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
 
@@ -2097,7 +2110,10 @@ fn validation_rule3_zone_input_pin_index_out_of_range() {
         .get("main")
         .unwrap();
     let all_errors = collect_all_errors(network);
-    assert!(!network.valid, "Network with bad ZoneInput pin_index should be invalid");
+    assert!(
+        !network.valid,
+        "Network with bad ZoneInput pin_index should be invalid"
+    );
     assert!(
         all_errors.iter().any(|e| {
             let lower = e.to_lowercase();
@@ -2156,13 +2172,11 @@ fn validation_rule3_zone_input_depth_zero_rejected() {
         let map_node = network.nodes.get_mut(&map_id).unwrap();
         let body = map_node.zone_mut().unwrap();
         let body_node = body.nodes.get_mut(&expr_id).unwrap();
-        body_node.arguments[0]
-            .incoming_wires
-            .push(IncomingWire {
-                source_node_id: map_id,
-                source_pin: SourcePin::ZoneInput { pin_index: 0 },
-                source_scope_depth: 0,
-            });
+        body_node.arguments[0].incoming_wires.push(IncomingWire {
+            source_node_id: map_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 0 },
+            source_scope_depth: 0,
+        });
     }
     wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
 
@@ -2224,7 +2238,11 @@ fn validation_well_formed_map_passes() {
     wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
 
     let (valid, errors) = validate_and_get_errors(&mut designer, "main");
-    assert!(valid, "Well-formed map body should validate; got errors: {:?}", errors);
+    assert!(
+        valid,
+        "Well-formed map body should validate; got errors: {:?}",
+        errors
+    );
 }
 
 // ============================================================================
@@ -2315,7 +2333,9 @@ fn repair_disconnects_body_wire_when_zone_input_type_changes() {
             .node_networks
             .remove("main")
             .unwrap();
-        designer.node_type_registry.repair_node_network(&mut network);
+        designer
+            .node_type_registry
+            .repair_node_network(&mut network);
         designer
             .node_type_registry
             .node_networks

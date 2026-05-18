@@ -295,6 +295,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISimpleParamType dco_decode_api_simple_param_type(dynamic raw);
 
   @protected
+  APISourcePin dco_decode_api_source_pin(dynamic raw);
+
+  @protected
   APISphereData dco_decode_api_sphere_data(dynamic raw);
 
   @protected
@@ -548,6 +551,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISequenceData dco_decode_box_autoadd_api_sequence_data(dynamic raw);
+
+  @protected
+  APISourcePin dco_decode_box_autoadd_api_source_pin(dynamic raw);
 
   @protected
   APISphereData dco_decode_box_autoadd_api_sphere_data(dynamic raw);
@@ -1446,6 +1452,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APISourcePin sse_decode_api_source_pin(SseDeserializer deserializer);
+
+  @protected
   APISphereData sse_decode_api_sphere_data(SseDeserializer deserializer);
 
   @protected
@@ -1757,6 +1766,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISequenceData sse_decode_box_autoadd_api_sequence_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APISourcePin sse_decode_box_autoadd_api_source_pin(
       SseDeserializer deserializer);
 
   @protected
@@ -2804,6 +2817,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APISimpleParamType self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_source_pin(APISourcePin self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_sphere_data(APISphereData self, SseSerializer serializer);
 
   @protected
@@ -3121,6 +3137,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_sequence_data(
       APISequenceData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_source_pin(
+      APISourcePin self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_sphere_data(

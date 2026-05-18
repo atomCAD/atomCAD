@@ -1,4 +1,4 @@
-﻿// Lattice-space refactoring .cnnd migration tests (v2 â†’ v3).
+// Lattice-space refactoring .cnnd migration tests (v2 â†’ v3).
 //
 // Per-fixture tests for each migration change-class. Each phase of
 // `doc/design_cnnd_migration_v2_to_v3.md` adds new fixtures here.
@@ -525,7 +525,9 @@ fn test_load_atom_trans_and_lattice_symop_dropped() {
         .find(|n| n.node_type_name == "structure_move")
         .expect("structure_move node missing");
     assert!(
-        structure_move.arguments[0].argument_output_pins().is_empty(),
+        structure_move.arguments[0]
+            .argument_output_pins()
+            .is_empty(),
         "structure_move's input wire to lattice_symop should be disconnected; got {:?}",
         structure_move.arguments[0].argument_output_pins()
     );
@@ -925,7 +927,9 @@ fn test_load_atom_fill_split() {
         "case A split override's `structure` (arg 0) must be wired to G's pin 0"
     );
     assert!(
-        split_override.arguments[1].argument_output_pins().is_empty(),
+        split_override.arguments[1]
+            .argument_output_pins()
+            .is_empty(),
         "split override's `lattice_vecs` (arg 1) must be unwired"
     );
     assert_eq!(
@@ -1750,7 +1754,9 @@ fn test_load_motif_offset_only_chained_case_a() {
         })
         .expect("expected a structure override with motif_offset wired");
     assert!(
-        split_override.arguments[2].argument_output_pins().is_empty(),
+        split_override.arguments[2]
+            .argument_output_pins()
+            .is_empty(),
         "case A motif-offset-only: S.motif (arg 2) must be empty"
     );
     assert_eq!(
@@ -1766,7 +1772,9 @@ fn test_load_motif_offset_only_chained_case_a() {
         "case A: S.structure (arg 0) must be wired to G's pin 0 (chained base)"
     );
     assert!(
-        split_override.arguments[1].argument_output_pins().is_empty(),
+        split_override.arguments[1]
+            .argument_output_pins()
+            .is_empty(),
         "case A: S.lattice_vecs (arg 1) stays unwired (rides through with the Blueprint)"
     );
 

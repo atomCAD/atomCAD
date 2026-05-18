@@ -1,4 +1,4 @@
-﻿use glam::{DVec2, DVec3, IVec2, IVec3};
+use glam::{DVec2, DVec3, IVec2, IVec3};
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::text_format::{
     Lexer, Parser, PropertyValue, Statement, TextValue, Token, describe_node_type,
@@ -3140,7 +3140,9 @@ mod multi_output_text_format_tests {
 
         let ad_node = network2.nodes.get(&ad_id).unwrap();
         let pin_index = ad_node.arguments[1].get_source_pin(ae_id);
-        assert_eq!(pin_index, Some(1),
+        assert_eq!(
+            pin_index,
+            Some(1),
             "Roundtrip should preserve pin 1 (diff) wire"
         );
 

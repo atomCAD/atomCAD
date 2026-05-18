@@ -1046,8 +1046,7 @@ impl NodeTypeRegistry {
                     node,
                     true,
                 );
-            } else if let Some(base_node_type) =
-                self.built_in_node_types.get(&node.node_type_name)
+            } else if let Some(base_node_type) = self.built_in_node_types.get(&node.node_type_name)
             {
                 // For zone-bearing built-in node types, re-derive zone state
                 // from the base/custom type so that newly populated map nodes

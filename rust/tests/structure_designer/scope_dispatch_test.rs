@@ -78,12 +78,7 @@ fn add_node_scoped_routes_to_body_for_nonempty_path() {
 
     // add_node with scope_path = [map_id] should land *inside* the body, not
     // in the top-level network.
-    let inner_id = designer.add_node_scoped(
-        &[map_id],
-        "int",
-        DVec2::new(50.0, 50.0),
-        None,
-    );
+    let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(50.0, 50.0), None);
     assert_ne!(inner_id, 0, "body-scope add_node should succeed");
 
     // Top-level network unchanged.
@@ -104,10 +99,7 @@ fn add_node_scoped_routes_to_body_for_nonempty_path() {
         body.nodes.contains_key(&inner_id),
         "body should hold the newly added node"
     );
-    assert_eq!(
-        body.nodes.get(&inner_id).unwrap().node_type_name,
-        "int"
-    );
+    assert_eq!(body.nodes.get(&inner_id).unwrap().node_type_name, "int");
 }
 
 #[test]
@@ -127,8 +119,7 @@ fn move_node_scoped_targets_the_body() {
         .position;
 
     // Add a node into the body.
-    let inner_id =
-        designer.add_node_scoped(&[map_id], "int", DVec2::new(10.0, 10.0), None);
+    let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(10.0, 10.0), None);
 
     // Move that inner node via the scoped variant.
     designer.move_node_scoped(&[map_id], inner_id, DVec2::new(42.0, 84.0));
@@ -161,8 +152,7 @@ fn select_node_scoped_targets_the_body_selection() {
     designer.select_node(top_a);
 
     // Body holds its own node; select it via scope_path = [map_id].
-    let inner_id =
-        designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
     let ok = designer.select_node_scoped(&[map_id], inner_id);
     assert!(ok, "select inside body must succeed");
 
@@ -195,8 +185,7 @@ fn delete_selected_scoped_only_touches_the_body() {
     designer.select_node(top_keep);
 
     // Body has its own selected node we *do* want to delete.
-    let inner_id =
-        designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
     designer.select_node_scoped(&[map_id], inner_id);
 
     designer.delete_selected_scoped(&[map_id]);
@@ -267,7 +256,10 @@ fn empty_scope_path_preserves_top_level_behavior() {
     // (add_node already pushes two — so we expect the cursor to advance).
     let cursor_before_delete = designer.undo_stack.undo_description().is_some();
     designer.delete_selected_scoped(&[]);
-    assert!(cursor_before_delete, "add_node should leave the stack non-empty");
+    assert!(
+        cursor_before_delete,
+        "add_node should leave the stack non-empty"
+    );
     assert!(
         designer.undo_stack.can_undo(),
         "delete_selected_scoped(&[]) should still leave an undoable history"

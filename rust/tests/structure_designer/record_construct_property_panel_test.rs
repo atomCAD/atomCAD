@@ -91,10 +91,7 @@ fn point_def() -> RecordTypeDef {
 /// panicking if the result is not a record or the field is missing.
 fn record_field(result: &NetworkResult, name: &str) -> NetworkResult {
     let NetworkResult::Record(fields) = result else {
-        panic!(
-            "expected Record, got {:?}",
-            result.to_display_string()
-        );
+        panic!("expected Record, got {:?}", result.to_display_string());
     };
     fields
         .iter()

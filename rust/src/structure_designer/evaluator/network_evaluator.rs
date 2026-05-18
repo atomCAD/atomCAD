@@ -1145,9 +1145,8 @@ impl NetworkEvaluator {
         // `context: &mut` and `network_stack: &` into evaluate calls. The
         // wires list is generally small (often 1) and `IncomingWire` is plain
         // POD, so the clone is cheap.
-        let incoming_wires: Vec<IncomingWire> = node.arguments[parameter_index]
-            .incoming_wires
-            .clone();
+        let incoming_wires: Vec<IncomingWire> =
+            node.arguments[parameter_index].incoming_wires.clone();
 
         if expected_type.is_array() {
             if incoming_wires.is_empty() {
@@ -1263,24 +1262,23 @@ impl NetworkEvaluator {
                 let source_slice = &network_stack[..=source_frame_idx];
                 let source_network = source_slice.last().unwrap().node_network;
 
-                let source_type = if let Some(source_node) =
-                    source_network.nodes.get(&incoming.source_node_id)
-                {
-                    // Resolve the concrete output type. For polymorphic pins
-                    // (`SameAsInput` / `SameAsArrayElements`) the declared
-                    // type is `DataType::None`, which would defeat
-                    // `convert_to`'s single→array auto-wrap.
-                    registry
-                        .resolve_output_type(source_node, source_network, pin_index)
-                        .unwrap_or_else(|| {
-                            registry
-                                .get_node_type_for_node(source_node)
-                                .map(|nt| nt.get_output_pin_type(pin_index))
-                                .unwrap_or(DataType::None)
-                        })
-                } else {
-                    DataType::None
-                };
+                let source_type =
+                    if let Some(source_node) = source_network.nodes.get(&incoming.source_node_id) {
+                        // Resolve the concrete output type. For polymorphic pins
+                        // (`SameAsInput` / `SameAsArrayElements`) the declared
+                        // type is `DataType::None`, which would defeat
+                        // `convert_to`'s single→array auto-wrap.
+                        registry
+                            .resolve_output_type(source_node, source_network, pin_index)
+                            .unwrap_or_else(|| {
+                                registry
+                                    .get_node_type_for_node(source_node)
+                                    .map(|nt| nt.get_output_pin_type(pin_index))
+                                    .unwrap_or(DataType::None)
+                            })
+                    } else {
+                        DataType::None
+                    };
 
                 let result = self.evaluate(
                     source_slice,

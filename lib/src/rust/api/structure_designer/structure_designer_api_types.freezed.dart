@@ -1302,6 +1302,208 @@ class _$APIMeasurement_AtomInfoCopyWithImpl<$Res>
 }
 
 /// @nodoc
+mixin _$APISourcePin {
+  int get pinIndex;
+
+  /// Create a copy of APISourcePin
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APISourcePinCopyWith<APISourcePin> get copyWith =>
+      _$APISourcePinCopyWithImpl<APISourcePin>(
+          this as APISourcePin, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APISourcePin &&
+            (identical(other.pinIndex, pinIndex) ||
+                other.pinIndex == pinIndex));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, pinIndex);
+
+  @override
+  String toString() {
+    return 'APISourcePin(pinIndex: $pinIndex)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APISourcePinCopyWith<$Res> {
+  factory $APISourcePinCopyWith(
+          APISourcePin value, $Res Function(APISourcePin) _then) =
+      _$APISourcePinCopyWithImpl;
+  @useResult
+  $Res call({int pinIndex});
+}
+
+/// @nodoc
+class _$APISourcePinCopyWithImpl<$Res> implements $APISourcePinCopyWith<$Res> {
+  _$APISourcePinCopyWithImpl(this._self, this._then);
+
+  final APISourcePin _self;
+  final $Res Function(APISourcePin) _then;
+
+  /// Create a copy of APISourcePin
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? pinIndex = null,
+  }) {
+    return _then(_self.copyWith(
+      pinIndex: null == pinIndex
+          ? _self.pinIndex
+          : pinIndex // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APISourcePin_NodeOutput extends APISourcePin {
+  const APISourcePin_NodeOutput({required this.pinIndex}) : super._();
+
+  @override
+  final int pinIndex;
+
+  /// Create a copy of APISourcePin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APISourcePin_NodeOutputCopyWith<APISourcePin_NodeOutput> get copyWith =>
+      _$APISourcePin_NodeOutputCopyWithImpl<APISourcePin_NodeOutput>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APISourcePin_NodeOutput &&
+            (identical(other.pinIndex, pinIndex) ||
+                other.pinIndex == pinIndex));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, pinIndex);
+
+  @override
+  String toString() {
+    return 'APISourcePin.nodeOutput(pinIndex: $pinIndex)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APISourcePin_NodeOutputCopyWith<$Res>
+    implements $APISourcePinCopyWith<$Res> {
+  factory $APISourcePin_NodeOutputCopyWith(APISourcePin_NodeOutput value,
+          $Res Function(APISourcePin_NodeOutput) _then) =
+      _$APISourcePin_NodeOutputCopyWithImpl;
+  @override
+  @useResult
+  $Res call({int pinIndex});
+}
+
+/// @nodoc
+class _$APISourcePin_NodeOutputCopyWithImpl<$Res>
+    implements $APISourcePin_NodeOutputCopyWith<$Res> {
+  _$APISourcePin_NodeOutputCopyWithImpl(this._self, this._then);
+
+  final APISourcePin_NodeOutput _self;
+  final $Res Function(APISourcePin_NodeOutput) _then;
+
+  /// Create a copy of APISourcePin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? pinIndex = null,
+  }) {
+    return _then(APISourcePin_NodeOutput(
+      pinIndex: null == pinIndex
+          ? _self.pinIndex
+          : pinIndex // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APISourcePin_ZoneInput extends APISourcePin {
+  const APISourcePin_ZoneInput({required this.pinIndex}) : super._();
+
+  @override
+  final int pinIndex;
+
+  /// Create a copy of APISourcePin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APISourcePin_ZoneInputCopyWith<APISourcePin_ZoneInput> get copyWith =>
+      _$APISourcePin_ZoneInputCopyWithImpl<APISourcePin_ZoneInput>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APISourcePin_ZoneInput &&
+            (identical(other.pinIndex, pinIndex) ||
+                other.pinIndex == pinIndex));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, pinIndex);
+
+  @override
+  String toString() {
+    return 'APISourcePin.zoneInput(pinIndex: $pinIndex)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APISourcePin_ZoneInputCopyWith<$Res>
+    implements $APISourcePinCopyWith<$Res> {
+  factory $APISourcePin_ZoneInputCopyWith(APISourcePin_ZoneInput value,
+          $Res Function(APISourcePin_ZoneInput) _then) =
+      _$APISourcePin_ZoneInputCopyWithImpl;
+  @override
+  @useResult
+  $Res call({int pinIndex});
+}
+
+/// @nodoc
+class _$APISourcePin_ZoneInputCopyWithImpl<$Res>
+    implements $APISourcePin_ZoneInputCopyWith<$Res> {
+  _$APISourcePin_ZoneInputCopyWithImpl(this._self, this._then);
+
+  final APISourcePin_ZoneInput _self;
+  final $Res Function(APISourcePin_ZoneInput) _then;
+
+  /// Create a copy of APISourcePin
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? pinIndex = null,
+  }) {
+    return _then(APISourcePin_ZoneInput(
+      pinIndex: null == pinIndex
+          ? _self.pinIndex
+          : pinIndex // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$APIViewportPickResult {
   @override
   bool operator ==(Object other) {

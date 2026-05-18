@@ -193,6 +193,33 @@ impl Argument {
         }
     }
 
+    /// General variant of [`set_source`] that installs an arbitrary wire
+    /// shape — used by zones UI phase U5 to author captures (depth ≥ 1) and
+    /// iteration-value references (`ZoneInput` source). Replaces any existing
+    /// wire from the same source node id, matching `set_source`'s per-source
+    /// uniqueness invariant.
+    pub fn set_source_full(
+        &mut self,
+        source_node_id: u64,
+        source_pin: SourcePin,
+        source_scope_depth: u8,
+    ) {
+        if let Some(existing) = self
+            .incoming_wires
+            .iter_mut()
+            .find(|w| w.source_node_id == source_node_id)
+        {
+            existing.source_pin = source_pin;
+            existing.source_scope_depth = source_scope_depth;
+        } else {
+            self.incoming_wires.push(IncomingWire {
+                source_node_id,
+                source_pin,
+                source_scope_depth,
+            });
+        }
+    }
+
     /// Remove the wire (if any) whose source is `node_id`. Returns the pin
     /// index that was attached to it, or `None` if no such wire existed.
     pub fn remove_source(&mut self, node_id: u64) -> Option<i32> {
@@ -208,7 +235,9 @@ impl Argument {
     /// Phase 1: every wire is a `NodeOutput`, so all wires are yielded. Order
     /// follows the underlying `Vec` (deterministic, unlike the old HashMap).
     pub fn iter_source_pins(&self) -> impl Iterator<Item = (u64, i32)> + '_ {
-        self.incoming_wires.iter().filter_map(|w| w.as_legacy_pair())
+        self.incoming_wires
+            .iter()
+            .filter_map(|w| w.as_legacy_pair())
     }
 
     /// Returns the wires as a `HashMap<source_node_id, output_pin_index>` —
@@ -490,8 +519,7 @@ impl Node {
         }
         let want = node_type.zone_output_pins.len();
         if self.zone_output_arguments.len() < want {
-            self.zone_output_arguments
-                .resize_with(want, Argument::new);
+            self.zone_output_arguments.resize_with(want, Argument::new);
         } else if self.zone_output_arguments.len() > want {
             self.zone_output_arguments.truncate(want);
         }
@@ -771,13 +799,13 @@ impl NodeNetwork {
                         .incoming_wires
                         .iter()
                         .filter_map(|wire| {
-                            old_to_new.get(&wire.source_node_id).map(|&mapped_id| {
-                                IncomingWire {
+                            old_to_new
+                                .get(&wire.source_node_id)
+                                .map(|&mapped_id| IncomingWire {
                                     source_node_id: mapped_id,
                                     source_pin: wire.source_pin,
                                     source_scope_depth: wire.source_scope_depth,
-                                }
-                            })
+                                })
                         })
                         .collect();
                     arg.incoming_wires = remapped;
@@ -946,6 +974,33 @@ impl NodeNetwork {
                 argument.clear();
             }
             argument.set_source(source_node_id, source_output_pin_index);
+        }
+    }
+
+    /// General-shape variant of [`connect_nodes`] for zones UI phase U5.
+    /// Stores an arbitrary [`SourcePin`] + `source_scope_depth` on the wire
+    /// landing in `dest_node`'s `arguments[dest_param_index]`. The destination
+    /// always lives in this network (External argument kind) — body-return
+    /// wires (ZoneOutput) are handled separately via
+    /// `StructureDesigner::connect_zone_output_wire`.
+    pub fn connect_wire(
+        &mut self,
+        source_node_id: u64,
+        source_pin: SourcePin,
+        source_scope_depth: u8,
+        dest_node_id: u64,
+        dest_param_index: usize,
+        dest_param_is_multi: bool,
+    ) {
+        if let Some(dest_node) = self.nodes.get_mut(&dest_node_id) {
+            if dest_param_index >= dest_node.arguments.len() {
+                return;
+            }
+            let argument = &mut dest_node.arguments[dest_param_index];
+            if (!dest_param_is_multi) && (!argument.is_empty()) {
+                argument.clear();
+            }
+            argument.set_source_full(source_node_id, source_pin, source_scope_depth);
         }
     }
 

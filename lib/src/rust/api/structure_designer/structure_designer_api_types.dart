@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -2328,6 +2328,24 @@ enum APISimpleParamType {
   ;
 }
 
+@freezed
+sealed class APISourcePin with _$APISourcePin {
+  const APISourcePin._();
+
+  /// Outside-facing source pin (regular output, or function pin at
+  /// `pin_index = -1`). The legacy default for every wire.
+  const factory APISourcePin.nodeOutput({
+    required int pinIndex,
+  }) = APISourcePin_NodeOutput;
+
+  /// Inside-facing source pin on a zone-owning (HOF) node. Used by
+  /// iteration-value references: a wire from the HOF's zone-input pin into
+  /// a body-internal node's input.
+  const factory APISourcePin.zoneInput({
+    required int pinIndex,
+  }) = APISourcePin_ZoneInput;
+}
+
 class APISphereData {
   final APIIVec3 center;
   final int radius;
@@ -3259,6 +3277,12 @@ class WireIdentifier {
 
 class WireView {
   final BigInt sourceNodeId;
+
+  /// Legacy source pin index. Kept for back-compat with code paths that
+  /// only handle `NodeOutput` sources: `-1` = function pin, `≥ 0` = regular
+  /// output pin index. For `ZoneInput` sources (zones UI phase U5) this is
+  /// also set to the pin index for convenience, but consumers that need to
+  /// distinguish the source-pin kind should read `source_pin` directly.
   final int sourceOutputPinIndex;
   final BigInt destNodeId;
   final BigInt destParamIndex;
@@ -3271,6 +3295,17 @@ class WireView {
   /// `doc/design_zones_ui.md` §"Wire-creation API generalisation".
   final APIArgumentKind destinationArgumentKind;
 
+  /// Source pin kind: `NodeOutput` (today's normal wire source) or
+  /// `ZoneInput` (inside-facing source pin on an HOF, used by iteration-
+  /// value references). Phase U5 of `doc/design_zones_ui.md`.
+  final APISourcePin sourcePin;
+
+  /// How many ancestor scope frames up from the wire's storage scope the
+  /// source lives. `0` = source in the same network as the destination
+  /// argument; `≥ 1` = capture or iteration-value reference from an outer
+  /// scope. Phase U5.
+  final int sourceScopeDepth;
+
   const WireView({
     required this.sourceNodeId,
     required this.sourceOutputPinIndex,
@@ -3278,6 +3313,8 @@ class WireView {
     required this.destParamIndex,
     required this.selected,
     required this.destinationArgumentKind,
+    required this.sourcePin,
+    required this.sourceScopeDepth,
   });
 
   @override
@@ -3287,7 +3324,9 @@ class WireView {
       destNodeId.hashCode ^
       destParamIndex.hashCode ^
       selected.hashCode ^
-      destinationArgumentKind.hashCode;
+      destinationArgumentKind.hashCode ^
+      sourcePin.hashCode ^
+      sourceScopeDepth.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3299,7 +3338,9 @@ class WireView {
           destNodeId == other.destNodeId &&
           destParamIndex == other.destParamIndex &&
           selected == other.selected &&
-          destinationArgumentKind == other.destinationArgumentKind;
+          destinationArgumentKind == other.destinationArgumentKind &&
+          sourcePin == other.sourcePin &&
+          sourceScopeDepth == other.sourceScopeDepth;
 }
 
 /// Read-only view of an HOF node's body, surfaced for the Flutter editor.

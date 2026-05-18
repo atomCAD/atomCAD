@@ -342,8 +342,10 @@ impl WalkerKind {
                     let wires = Arc::clone(zone_output_wires);
 
                     // Swap captures in for the duration of the step.
-                    let saved_captures =
-                        std::mem::replace(&mut context.captured_source_values, Arc::clone(captures));
+                    let saved_captures = std::mem::replace(
+                        &mut context.captured_source_values,
+                        Arc::clone(captures),
+                    );
 
                     context.push_zone_input_frame(hof_id, vec![elem]);
 

@@ -1,4 +1,5 @@
 use super::structure_designer_api_types::APIAlignment;
+use super::structure_designer_api_types::APIArgumentKind;
 use super::structure_designer_api_types::APIArrayAtData;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
@@ -6,7 +7,6 @@ use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
-use super::structure_designer_api_types::APILiteralField;
 use super::structure_designer_api_types::APIDataType;
 use super::structure_designer_api_types::APIDragSource;
 use super::structure_designer_api_types::APIExecuteResult;
@@ -22,6 +22,7 @@ use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIImportCIFData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIInferBondsData;
+use super::structure_designer_api_types::APILiteralField;
 use super::structure_designer_api_types::APILiteralValue;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMaterializeData;
@@ -37,6 +38,7 @@ use super::structure_designer_api_types::APIRectData;
 use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APISequenceData;
 use super::structure_designer_api_types::APISimpleParamType;
+use super::structure_designer_api_types::APISourcePin;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
@@ -309,16 +311,16 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
 /// Build a [`ZoneView`] for an HOF node's body.
 ///
 /// Resolves the zone-input / zone-output pin definitions against the node's
-/// `NodeType`, surfaces the stored body dimensions, and reports the node count
-/// for Phase U3's `[N nodes]` placeholder. Returns `None` for non-HOF nodes
-/// (whose `Node.zone` is `None`).
+/// `NodeType`, surfaces the stored body dimensions, and recursively builds
+/// `NodeView` / `WireView` for the body's contents (Phase U4). Returns `None`
+/// for non-HOF nodes (whose `Node.zone` is `None`).
 ///
-/// Phase U3 deliberately does not populate body-internal `nodes` / `wires` —
-/// the body region renders read-only with a placeholder. U4 extends this
-/// helper to surface the body's nodes/wires recursively.
+/// Cross-scope wires (captures, iteration-value references, body-return wires)
+/// are deferred to U5 — U4 surfaces only wires confined to the body's scope.
 fn build_zone_view(
     node: &crate::structure_designer::node_network::Node,
     node_type: &crate::structure_designer::node_type::NodeType,
+    cad_instance: &crate::api::api_common::CADInstance,
 ) -> Option<ZoneView> {
     if !node_type.has_zone() {
         return None;
@@ -356,13 +358,260 @@ fn build_zone_view(
         })
         .collect();
 
+    let mut nodes = HashMap::new();
+    for (body_node_id, body_node) in body.nodes.iter() {
+        if let Some(view) = build_node_view(body_node, body, cad_instance) {
+            nodes.insert(*body_node_id, view);
+        }
+    }
+
+    let mut wires = build_wires_for_network(body);
+    // Body-return wires live on the HOF's `zone_output_arguments`, not on a
+    // body-internal node's arguments. Surface them with the HOF as the
+    // destination so the Flutter wire renderer draws them from the body
+    // node's output pin to the HOF's zone-output (inner-right) pin.
+    for (zone_output_index, argument) in node.zone_output_arguments.iter().enumerate() {
+        for (source_node_id, source_output_pin_index) in argument.iter_source_pins() {
+            wires.push(WireView {
+                source_node_id,
+                source_output_pin_index,
+                dest_node_id: node.id,
+                dest_param_index: zone_output_index,
+                // Zone-output wires don't surface a per-wire `selected` flag
+                // yet — they're rendered as part of the body but selection
+                // for zone-output wires is a U5 polish item.
+                selected: false,
+                destination_argument_kind: APIArgumentKind::ZoneOutput,
+                source_pin: APISourcePin::NodeOutput {
+                    pin_index: source_output_pin_index,
+                },
+                source_scope_depth: 0,
+            });
+        }
+    }
+
     Some(ZoneView {
         zone_input_pins,
         zone_output_pins,
+        nodes,
+        wires,
         stored_width: node.body_width,
         stored_height: node.body_height,
-        node_count: body.nodes.len() as u32,
     })
+}
+
+/// Build a [`NodeView`] for a single node living in [`node_network`].
+///
+/// Pulled out of `get_node_network_view` so [`build_zone_view`] can call it
+/// recursively for nodes inside an HOF's body (Phase U4). Returns `None` if
+/// the registry can't resolve the node's type (kept as `Option` to mirror the
+/// existing top-level path's behavior).
+fn build_node_view(
+    node: &crate::structure_designer::node_network::Node,
+    node_network: &crate::structure_designer::node_network::NodeNetwork,
+    cad_instance: &crate::api::api_common::CADInstance,
+) -> Option<NodeView> {
+    let node_type = cad_instance
+        .structure_designer
+        .node_type_registry
+        .get_node_type_for_node(node)?;
+
+    let num_of_params = node_type.parameters.len();
+    let mut input_pins: Vec<InputPinView> = Vec::with_capacity(num_of_params);
+    for i in 0..num_of_params {
+        let param = &node_type.parameters[i];
+        let data_type = &cad_instance
+            .structure_designer
+            .node_type_registry
+            .get_node_param_data_type(node, i);
+        input_pins.push(InputPinView {
+            name: param.name.clone(),
+            data_type: data_type.to_string(),
+            multi: data_type.is_array(),
+        });
+    }
+
+    let mut error_messages = Vec::new();
+    for validation_error in &node_network.validation_errors {
+        if validation_error.node_id == Some(node.id) {
+            error_messages.push(validation_error.error_text.clone());
+        }
+    }
+    if node_network.validation_errors.is_empty() {
+        if let Some(eval_error) = cad_instance
+            .structure_designer
+            .last_generated_structure_designer_scene
+            .get_all_node_errors()
+            .get(&node.id)
+        {
+            error_messages.push(eval_error.clone());
+        }
+    }
+    let error = if error_messages.is_empty() {
+        None
+    } else {
+        Some(error_messages.join("\n"))
+    };
+
+    let output_pin_strings = cad_instance
+        .structure_designer
+        .last_generated_structure_designer_scene
+        .get_all_node_output_strings()
+        .get(&node.id)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut connected_input_pins = std::collections::HashSet::new();
+    for (param_index, argument) in node.arguments.iter().enumerate() {
+        if !argument.is_empty() && param_index < node_type.parameters.len() {
+            connected_input_pins.insert(node_type.parameters[param_index].name.clone());
+        }
+    }
+    let subtitle = node.data.get_subtitle(&connected_input_pins);
+
+    let (comment_label, comment_text, comment_width, comment_height) =
+        if let Some(comment_data) = node.data.as_any_ref().downcast_ref::<CommentData>() {
+            (
+                Some(comment_data.label.clone()),
+                Some(comment_data.text.clone()),
+                Some(comment_data.width),
+                Some(comment_data.height),
+            )
+        } else {
+            (None, None, None, None)
+        };
+
+    let output_type = node_type.output_type().clone();
+    let function_type = node_type.get_function_type();
+
+    let scene_node_data = cad_instance
+        .structure_designer
+        .last_generated_structure_designer_scene
+        .node_data
+        .get(&node.id);
+
+    let output_pins: Vec<OutputPinView> = node_type
+        .output_pins
+        .iter()
+        .enumerate()
+        .map(|(i, pin_def)| {
+            let needs_resolution = match &pin_def.data_type {
+                crate::structure_designer::node_type::PinOutputType::Fixed(t) => t.is_abstract(),
+                _ => true,
+            };
+            let (resolved_data_type, resolved_via_fallback) = if needs_resolution {
+                match cad_instance
+                    .structure_designer
+                    .node_type_registry
+                    .resolve_output_type_detailed(node, node_network, i as i32)
+                {
+                    Some(r) => (Some(r.data_type.to_string()), r.via_fallback),
+                    None => (None, false),
+                }
+            } else {
+                (None, false)
+            };
+            let pin_output = scene_node_data
+                .and_then(|d| d.pin_outputs.iter().find(|p| p.pin_index == i as i32));
+            let alignment = pin_output.and_then(|p| p.alignment).map(alignment_to_api);
+            let alignment_reason = pin_output.and_then(|p| p.alignment_reason.clone());
+            OutputPinView {
+                name: pin_def.name.clone(),
+                data_type: pin_def.data_type.to_string(),
+                resolved_data_type,
+                resolved_via_fallback,
+                index: i as i32,
+                alignment,
+                alignment_reason,
+            }
+        })
+        .collect();
+
+    let displayed_pins: Vec<i32> = node_network
+        .get_displayed_pins(node.id)
+        .map(|pins| {
+            let mut sorted: Vec<i32> = pins.iter().copied().collect();
+            sorted.sort();
+            sorted
+        })
+        .unwrap_or_default();
+
+    let zone = build_zone_view(node, node_type, cad_instance);
+
+    Some(NodeView {
+        id: node.id,
+        node_type_name: node.node_type_name.clone(),
+        custom_name: node.custom_name.clone(),
+        position: to_api_vec2(&node.position),
+        input_pins,
+        output_type: output_type.to_string(),
+        output_pins,
+        displayed_pins,
+        function_type: function_type.to_string(),
+        selected: node_network.is_node_selected(node.id),
+        active: node_network.is_node_active(node.id),
+        displayed: node_network.is_node_displayed(node.id),
+        return_node: node_network.return_node_id == Some(node.id),
+        error,
+        output_pin_strings,
+        subtitle,
+        comment_label,
+        comment_text,
+        comment_width,
+        comment_height,
+        zone,
+    })
+}
+
+/// Collect every wire stored on [node_network] as [`WireView`]s — used by
+/// both the top-level `get_node_network_view` and the recursive
+/// `build_zone_view`. Surfaces every `IncomingWire` regardless of
+/// `source_scope_depth` or [`SourcePin`] kind, so phase U5's captures and
+/// iteration-value references are visible to the Flutter painter.
+fn build_wires_for_network(
+    node_network: &crate::structure_designer::node_network::NodeNetwork,
+) -> Vec<WireView> {
+    use crate::structure_designer::node_network::SourcePin;
+    let mut wires = Vec::new();
+    for (_id, node) in node_network.nodes.iter() {
+        for (index, argument) in node.arguments.iter().enumerate() {
+            for incoming in argument.incoming_wires.iter() {
+                let (source_output_pin_index, source_pin) = match incoming.source_pin {
+                    SourcePin::NodeOutput { pin_index } => {
+                        (pin_index, APISourcePin::NodeOutput { pin_index })
+                    }
+                    SourcePin::ZoneInput { pin_index } => (
+                        pin_index as i32,
+                        APISourcePin::ZoneInput {
+                            pin_index: pin_index as u32,
+                        },
+                    ),
+                };
+                // `is_wire_selected` only knows about same-scope NodeOutput
+                // wires — cross-scope and ZoneInput wires aren't selectable
+                // until later UI polish, so we report `false` for them.
+                let selected = matches!(incoming.source_pin, SourcePin::NodeOutput { .. })
+                    && incoming.source_scope_depth == 0
+                    && node_network.is_wire_selected(
+                        incoming.source_node_id,
+                        source_output_pin_index,
+                        node.id,
+                        index,
+                    );
+                wires.push(WireView {
+                    source_node_id: incoming.source_node_id,
+                    source_output_pin_index,
+                    dest_node_id: node.id,
+                    dest_param_index: index,
+                    selected,
+                    destination_argument_kind: APIArgumentKind::External,
+                    source_pin,
+                    source_scope_depth: incoming.source_scope_depth as u32,
+                });
+            }
+        }
+    }
+    wires
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -386,220 +635,19 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
                     None => return None,
                 };
 
-                let mut node_network_view = NodeNetworkView {
+                let mut nodes = HashMap::new();
+                for (node_id, node) in node_network.nodes.iter() {
+                    if let Some(view) = build_node_view(node, node_network, cad_instance) {
+                        nodes.insert(*node_id, view);
+                    }
+                }
+                let wires = build_wires_for_network(node_network);
+
+                Some(NodeNetworkView {
                     name: node_network.node_type.name.clone(),
-                    nodes: HashMap::new(),
-                    wires: Vec::new(),
-                };
-
-                for (_id, node) in node_network.nodes.iter() {
-                    let mut input_pins: Vec<InputPinView> = Vec::new();
-                    let node_type = match cad_instance
-                        .structure_designer
-                        .node_type_registry
-                        .get_node_type_for_node(node)
-                    {
-                        Some(nt) => nt,
-                        None => return None,
-                    };
-                    let num_of_params = node_type.parameters.len();
-                    for i in 0..num_of_params {
-                        let param = &node_type.parameters[i];
-                        let data_type = &cad_instance
-                            .structure_designer
-                            .node_type_registry
-                            .get_node_param_data_type(node, i);
-                        input_pins.push(InputPinView {
-                            name: param.name.clone(),
-                            data_type: data_type.to_string(),
-                            multi: data_type.is_array(),
-                        });
-                    }
-
-                    // Collect validation errors for this node
-                    let mut error_messages = Vec::new();
-
-                    // Add validation errors from the node network
-                    for validation_error in &node_network.validation_errors {
-                        if validation_error.node_id == Some(node.id) {
-                            error_messages.push(validation_error.error_text.clone());
-                        }
-                    }
-
-                    // Only add evaluation errors if there are no validation errors in the entire network
-                    if node_network.validation_errors.is_empty() {
-                        if let Some(eval_error) = cad_instance
-                            .structure_designer
-                            .last_generated_structure_designer_scene
-                            .get_all_node_errors()
-                            .get(&node.id)
-                        {
-                            error_messages.push(eval_error.clone());
-                        }
-                    }
-
-                    // Combine all errors with newline separator
-                    let error = if error_messages.is_empty() {
-                        None
-                    } else {
-                        Some(error_messages.join("\n"))
-                    };
-
-                    let output_pin_strings = cad_instance
-                        .structure_designer
-                        .last_generated_structure_designer_scene
-                        .get_all_node_output_strings()
-                        .get(&node.id)
-                        .cloned()
-                        .unwrap_or_default();
-
-                    // Collect connected input pin names for subtitle generation
-                    let mut connected_input_pins = std::collections::HashSet::new();
-                    for (param_index, argument) in node.arguments.iter().enumerate() {
-                        if !argument.is_empty() {
-                            if param_index < node_type.parameters.len() {
-                                connected_input_pins
-                                    .insert(node_type.parameters[param_index].name.clone());
-                            }
-                        }
-                    }
-
-                    // Generate subtitle using the node's get_subtitle method
-                    let subtitle = node.data.get_subtitle(&connected_input_pins);
-
-                    // Extract comment-specific data if this is a Comment node
-                    let (comment_label, comment_text, comment_width, comment_height) =
-                        if let Some(comment_data) =
-                            node.data.as_any_ref().downcast_ref::<CommentData>()
-                        {
-                            (
-                                Some(comment_data.label.clone()),
-                                Some(comment_data.text.clone()),
-                                Some(comment_data.width),
-                                Some(comment_data.height),
-                            )
-                        } else {
-                            (None, None, None, None)
-                        };
-
-                    let output_type = node_type.output_type().clone();
-                    let function_type = node_type.get_function_type();
-
-                    // Look up this node's scene data once so we can read the
-                    // per-pin alignment recorded at evaluation time.
-                    let scene_node_data = cad_instance
-                        .structure_designer
-                        .last_generated_structure_designer_scene
-                        .node_data
-                        .get(&node.id);
-
-                    // Build output pin views from the node type's output_pins.
-                    // For polymorphic pins (SameAsInput / SameAsArrayElements) or
-                    // pins declared with an abstract Fixed type, also resolve the
-                    // concrete type against the upstream wires so the UI can show
-                    // the actual flowing type instead of e.g. "SameAsInput(input)".
-                    let output_pins: Vec<OutputPinView> = node_type
-                        .output_pins
-                        .iter()
-                        .enumerate()
-                        .map(|(i, pin_def)| {
-                            let needs_resolution = match &pin_def.data_type {
-                                crate::structure_designer::node_type::PinOutputType::Fixed(t) => {
-                                    t.is_abstract()
-                                }
-                                _ => true,
-                            };
-                            let (resolved_data_type, resolved_via_fallback) = if needs_resolution {
-                                match cad_instance
-                                    .structure_designer
-                                    .node_type_registry
-                                    .resolve_output_type_detailed(node, node_network, i as i32)
-                                {
-                                    Some(r) => (Some(r.data_type.to_string()), r.via_fallback),
-                                    None => (None, false),
-                                }
-                            } else {
-                                (None, false)
-                            };
-                            let pin_output = scene_node_data.and_then(|d| {
-                                d.pin_outputs.iter().find(|p| p.pin_index == i as i32)
-                            });
-                            let alignment =
-                                pin_output.and_then(|p| p.alignment).map(alignment_to_api);
-                            let alignment_reason =
-                                pin_output.and_then(|p| p.alignment_reason.clone());
-                            OutputPinView {
-                                name: pin_def.name.clone(),
-                                data_type: pin_def.data_type.to_string(),
-                                resolved_data_type,
-                                resolved_via_fallback,
-                                index: i as i32,
-                                alignment,
-                                alignment_reason,
-                            }
-                        })
-                        .collect();
-
-                    // Build displayed_pins from the node's display state
-                    let displayed_pins: Vec<i32> = node_network
-                        .get_displayed_pins(node.id)
-                        .map(|pins| {
-                            let mut sorted: Vec<i32> = pins.iter().copied().collect();
-                            sorted.sort();
-                            sorted
-                        })
-                        .unwrap_or_default();
-
-                    let zone = build_zone_view(node, node_type);
-
-                    node_network_view.nodes.insert(
-                        node.id,
-                        NodeView {
-                            id: node.id,
-                            node_type_name: node.node_type_name.clone(),
-                            custom_name: node.custom_name.clone(),
-                            position: to_api_vec2(&node.position),
-                            input_pins,
-                            output_type: output_type.to_string(),
-                            output_pins,
-                            displayed_pins,
-                            function_type: function_type.to_string(),
-                            selected: node_network.is_node_selected(node.id),
-                            active: node_network.is_node_active(node.id),
-                            displayed: node_network.is_node_displayed(node.id),
-                            return_node: node_network.return_node_id == Some(node.id),
-                            error,
-                            output_pin_strings,
-                            subtitle,
-                            comment_label,
-                            comment_text,
-                            comment_width,
-                            comment_height,
-                            zone,
-                        },
-                    );
-                }
-
-                for (_id, node) in node_network.nodes.iter() {
-                    for (index, argument) in node.arguments.iter().enumerate() {
-                        for (argument_node_id, output_pin_index) in argument.iter_source_pins() {
-                            node_network_view.wires.push(WireView {
-                                source_node_id: argument_node_id,
-                                source_output_pin_index: output_pin_index,
-                                dest_node_id: node.id,
-                                dest_param_index: index,
-                                selected: node_network.is_wire_selected(
-                                    argument_node_id,
-                                    output_pin_index,
-                                    node.id,
-                                    index,
-                                ),
-                            });
-                        }
-                    }
-                }
-
-                Some(node_network_view)
+                    nodes,
+                    wires,
+                })
             },
             None,
         )
@@ -670,26 +718,20 @@ pub fn add_node(
     }
 }
 
-/// Duplicate a node within `scope_path`'s network. Phase U2 of
-/// `doc/design_zones_ui.md` — for empty path this routes to today's
-/// `duplicate_node`; non-empty paths are not yet routed (no body authoring
-/// path lands until U4) and currently return 0.
+/// Duplicate a node within `scope_path`'s network. Phase U4 — body-scope
+/// dispatch routes through `duplicate_node_scoped`.
 #[flutter_rust_bridge::frb(sync)]
 pub fn duplicate_node(scope_path: Vec<u64>, node_id: u64) -> u64 {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                if !scope_path.is_empty() {
-                    // Body-scope duplicate is wired in U4 alongside the
-                    // rest of body authoring. For U2 the parameter is
-                    // plumbed for API-shape completeness only.
-                    return 0;
-                }
-                let ret = cad_instance.structure_designer.duplicate_node(node_id);
+                let ret = cad_instance
+                    .structure_designer
+                    .duplicate_node_scoped(&scope_path, node_id);
                 refresh_structure_designer_auto(cad_instance);
                 ret
             },
-            0, // Default value if CAD_INSTANCE is None
+            0,
         )
     }
 }
@@ -705,12 +747,8 @@ pub fn can_connect_nodes(
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                if !scope_path.is_empty() {
-                    // Body-scope can_connect lands in U4/U5 alongside cross-
-                    // scope wire authoring. For U2 the param is plumbed only.
-                    return false;
-                }
-                cad_instance.structure_designer.can_connect_nodes(
+                cad_instance.structure_designer.can_connect_nodes_scoped(
+                    &scope_path,
                     source_node_id,
                     source_output_pin_index,
                     dest_node_id,
@@ -732,16 +770,112 @@ pub fn connect_nodes(
 ) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if !scope_path.is_empty() {
-                // Body-scope wires (capture, iteration-value, body-return)
-                // come online in U4 / U5 — see `doc/design_zones_ui.md`.
-                return;
-            }
-            cad_instance.structure_designer.connect_nodes(
+            cad_instance.structure_designer.connect_nodes_scoped(
+                &scope_path,
                 source_node_id,
                 source_output_pin_index,
                 dest_node_id,
                 dest_param_index,
+            );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// General-shape wire-creation entry point for cross-scope wires. Used by
+/// zones UI phase U5 to author captures (depth ≥ 1) and iteration-value
+/// references (`ZoneInput` source). For local-scope `NodeOutput` wires the
+/// existing [`connect_nodes`] is equivalent and slightly cheaper; for body-
+/// return wires use [`connect_zone_output_wire`].
+///
+/// `dest_scope_path` is the network where the wire is stored — the body
+/// containing the destination node. `source_scope_depth` measures how many
+/// ancestor frames up from that storage scope the source lives.
+#[flutter_rust_bridge::frb(sync)]
+pub fn connect_wire(
+    dest_scope_path: Vec<u64>,
+    source_node_id: u64,
+    source_pin: APISourcePin,
+    source_scope_depth: u32,
+    dest_node_id: u64,
+    dest_param_index: usize,
+) {
+    use crate::structure_designer::node_network::SourcePin;
+    let source_pin = match source_pin {
+        APISourcePin::NodeOutput { pin_index } => SourcePin::NodeOutput { pin_index },
+        APISourcePin::ZoneInput { pin_index } => SourcePin::ZoneInput {
+            pin_index: pin_index as usize,
+        },
+    };
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.connect_wire_scoped(
+                &dest_scope_path,
+                source_node_id,
+                source_pin,
+                source_scope_depth as u8,
+                dest_node_id,
+                dest_param_index,
+            );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Predicate pair for [`connect_wire`]. Returns `true` when a cross-scope
+/// wire with this shape is type-compatible and structurally valid.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_connect_wire(
+    dest_scope_path: Vec<u64>,
+    source_node_id: u64,
+    source_pin: APISourcePin,
+    source_scope_depth: u32,
+    dest_node_id: u64,
+    dest_param_index: usize,
+) -> bool {
+    use crate::structure_designer::node_network::SourcePin;
+    let source_pin = match source_pin {
+        APISourcePin::NodeOutput { pin_index } => SourcePin::NodeOutput { pin_index },
+        APISourcePin::ZoneInput { pin_index } => SourcePin::ZoneInput {
+            pin_index: pin_index as usize,
+        },
+    };
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance.structure_designer.can_connect_wire_scoped(
+                    &dest_scope_path,
+                    source_node_id,
+                    source_pin,
+                    source_scope_depth as u8,
+                    dest_node_id,
+                    dest_param_index,
+                )
+            },
+            false,
+        )
+    }
+}
+
+/// Connect a body-return wire: source is a body node, destination is the
+/// containing HOF's zone-output pin. `body_scope_path` identifies the body
+/// (the last element is the HOF id whose `zone_output_arguments` receives
+/// the wire). Phase U4 — see `doc/design_zones_ui.md` §"Wire-creation API
+/// generalisation".
+#[flutter_rust_bridge::frb(sync)]
+pub fn connect_zone_output_wire(
+    body_scope_path: Vec<u64>,
+    source_node_id: u64,
+    source_output_pin_index: i32,
+    zone_output_index: usize,
+) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.connect_zone_output_wire(
+                &body_scope_path,
+                source_node_id,
+                source_output_pin_index,
+                zone_output_index,
             );
             refresh_structure_designer_auto(cad_instance);
         });
@@ -1529,18 +1663,27 @@ pub fn clear_selection(scope_path: Vec<u64>) {
     }
 }
 
+/// Clear selection in every scope reachable from the active top-level
+/// network. Used when the user clicks empty top-level space so an active body
+/// node doesn't keep its `.active` flag. Phase U4.
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_selection_all_scopes() {
+    unsafe {
+        with_mut_cad_instance(|instance| {
+            instance.structure_designer.clear_selection_all_scopes();
+            refresh_structure_designer_auto(instance);
+        });
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn toggle_node_selection(scope_path: Vec<u64>, node_id: u64) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                if !scope_path.is_empty() {
-                    // Body-scope toggle selection lands in U4. Until then the
-                    // body's selection cannot be reached from a click — the
-                    // call should be a no-op rather than mishandling.
-                    return false;
-                }
-                let result = instance.structure_designer.toggle_node_selection(node_id);
+                let result = instance
+                    .structure_designer
+                    .toggle_node_selection_scoped(&scope_path, node_id);
                 refresh_structure_designer_auto(instance);
                 result
             },
@@ -1554,10 +1697,9 @@ pub fn add_node_to_selection(scope_path: Vec<u64>, node_id: u64) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                if !scope_path.is_empty() {
-                    return false;
-                }
-                let result = instance.structure_designer.add_node_to_selection(node_id);
+                let result = instance
+                    .structure_designer
+                    .add_node_to_selection_scoped(&scope_path, node_id);
                 refresh_structure_designer_auto(instance);
                 result
             },
@@ -1571,10 +1713,9 @@ pub fn select_nodes(scope_path: Vec<u64>, node_ids: Vec<u64>) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                if !scope_path.is_empty() {
-                    return false;
-                }
-                let result = instance.structure_designer.select_nodes(node_ids);
+                let result = instance
+                    .structure_designer
+                    .select_nodes_scoped(&scope_path, node_ids);
                 refresh_structure_designer_auto(instance);
                 result
             },
@@ -1587,10 +1728,14 @@ pub fn select_nodes(scope_path: Vec<u64>, node_ids: Vec<u64>) -> bool {
 pub fn toggle_nodes_selection(scope_path: Vec<u64>, node_ids: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            if !scope_path.is_empty() {
-                return;
+            if scope_path.is_empty() {
+                instance.structure_designer.toggle_nodes_selection(node_ids);
+            } else if let Some(network) = instance
+                .structure_designer
+                .get_scope_network_mut(&scope_path)
+            {
+                network.toggle_nodes_selection(node_ids);
             }
-            instance.structure_designer.toggle_nodes_selection(node_ids);
             refresh_structure_designer_auto(instance);
         });
     }
@@ -1610,10 +1755,9 @@ pub fn get_selected_node_ids() -> Vec<u64> {
 pub fn move_selected_nodes(scope_path: Vec<u64>, delta_x: f64, delta_y: f64) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            instance.structure_designer.move_selected_nodes_scoped(
-                &scope_path,
-                glam::f64::DVec2::new(delta_x, delta_y),
-            );
+            instance
+                .structure_designer
+                .move_selected_nodes_scoped(&scope_path, glam::f64::DVec2::new(delta_x, delta_y));
         });
     }
 }
@@ -1794,12 +1938,18 @@ pub fn get_selected_wires() -> Vec<WireView> {
                     .structure_designer
                     .get_selected_wires()
                     .into_iter()
-                    .map(|wire| WireView {
-                        source_node_id: wire.source_node_id,
-                        source_output_pin_index: wire.expect_node_output_pin(),
-                        dest_node_id: wire.destination_node_id,
-                        dest_param_index: wire.destination_argument_index,
-                        selected: true,
+                    .map(|wire| {
+                        let pin_index = wire.expect_node_output_pin();
+                        WireView {
+                            source_node_id: wire.source_node_id,
+                            source_output_pin_index: pin_index,
+                            dest_node_id: wire.destination_node_id,
+                            dest_param_index: wire.destination_argument_index,
+                            selected: true,
+                            destination_argument_kind: APIArgumentKind::External,
+                            source_pin: APISourcePin::NodeOutput { pin_index },
+                            source_scope_depth: 0,
+                        }
                     })
                     .collect()
             },

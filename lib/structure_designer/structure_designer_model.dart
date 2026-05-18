@@ -337,8 +337,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Add node to selection without clearing existing selection (for Shift+click)
-  bool addNodeToSelection(BigInt nodeId,
-      {List<BigInt> scopeChain = const []}) {
+  bool addNodeToSelection(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.addNodeToSelection(
       scopePath: _scopeChainToBytes(scopeChain),
       nodeId: nodeId,
@@ -348,8 +347,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Select multiple nodes (for rectangle selection)
-  bool selectNodes(List<BigInt> nodeIds,
-      {List<BigInt> scopeChain = const []}) {
+  bool selectNodes(List<BigInt> nodeIds, {List<BigInt> scopeChain = const []}) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
@@ -384,8 +382,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Move all selected nodes by delta (commits position to kernel)
-  void moveSelectedNodes(Offset delta,
-      {List<BigInt> scopeChain = const []}) {
+  void moveSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
     structure_designer_api.moveSelectedNodes(
       scopePath: _scopeChainToBytes(scopeChain),
       deltaX: delta.dx,
@@ -837,6 +834,18 @@ class StructureDesignerModel extends ChangeNotifier {
     onWireDroppedInEmptySpace?.call(startPin, dropPosition);
   }
 
+  /// True iff [prefix] is a (non-strict) prefix of [chain] — i.e. the first
+  /// `prefix.length` ids of `chain` match `prefix` element-wise. Used to test
+  /// the scope-chain prefix relationship from `doc/design_zones_ui.md`
+  /// §"Computing source_scope_depth at wire creation".
+  static bool _isScopePrefix(List<BigInt> prefix, List<BigInt> chain) {
+    if (prefix.length > chain.length) return false;
+    for (int i = 0; i < prefix.length; i++) {
+      if (prefix[i] != chain[i]) return false;
+    }
+    return true;
+  }
+
   bool canConnectPins(PinReference pin1, PinReference pin2) {
     if (pin1.isOutput == pin2.isOutput) {
       return false;
@@ -853,32 +862,59 @@ class StructureDesignerModel extends ChangeNotifier {
       return false;
     }
 
+    // Compute the destination's *evaluation scope* per the design doc formula:
+    // for ZoneOutput destinations the body scope is one level deeper than the
+    // HOF's own scope. For all other destinations the evaluation scope equals
+    // the destination's scope chain.
+    final effectiveDestScope = inPin.pinKind == PinKind.zoneOutput
+        ? [...inPin.scopeChain, inPin.nodeId]
+        : inPin.scopeChain;
+
+    // The source's containing scope must be a prefix of the destination's
+    // evaluation scope. Otherwise the source can't be evaluated at the
+    // destination's call site.
+    if (!_isScopePrefix(outPin.scopeChain, effectiveDestScope)) return false;
+    final sourceScopeDepth =
+        effectiveDestScope.length - outPin.scopeChain.length;
+
     if (inPin.pinKind == PinKind.zoneOutput) {
-      // Body-return wire candidate. Source must live in the HOF's body
-      // (`inPin.scopeChain ++ [inPin.nodeId]`) so the source's scope chain
-      // matches that prefix. Cross-scope captures into zone-output land
-      // in U5. We accept the connection on scope match — strict type
-      // checking for body-return wires is U5 polish.
-      final bodyScope = [...inPin.scopeChain, inPin.nodeId];
-      if (outPin.scopeChain.length != bodyScope.length) return false;
-      for (int i = 0; i < bodyScope.length; i++) {
-        if (outPin.scopeChain[i] != bodyScope[i]) return false;
+      // Body-return wire: source must live in the body (depth 0 relative to
+      // the body's scope, i.e. depth `bodyScope.length - source.scope.length`
+      // in path-prefix terms above). Capture-into-zone-output is rejected —
+      // the body-return wire's source is always body-local.
+      if (sourceScopeDepth != 0) return false;
+      if (outPin.pinKind != PinKind.externalOutput &&
+          outPin.pinKind != PinKind.functionPin) {
+        return false;
       }
+      // Accept on structural match — strict type checking for body-return
+      // wires is U5 polish work.
       return true;
     }
 
-    // Both pins must share a scope chain — cross-scope wires (captures /
-    // iteration-value usage) are U5. The Rust `can_connect_nodes_scoped`
-    // also requires same-scope.
-    if (outPin.scopeChain.length != inPin.scopeChain.length) return false;
-    for (int i = 0; i < inPin.scopeChain.length; i++) {
-      if (outPin.scopeChain[i] != inPin.scopeChain[i]) return false;
+    // Same-scope NodeOutput → use the existing predicate. Local wires
+    // through `can_connect_wire_scoped` also work, but `canConnectNodes`
+    // preserves the U4-era code path exactly.
+    if (sourceScopeDepth == 0 && outPin.pinKind != PinKind.zoneInput) {
+      return structure_designer_api.canConnectNodes(
+        scopePath: _scopeChainToBytes(inPin.scopeChain),
+        sourceNodeId: outPin.nodeId,
+        sourceOutputPinIndex: outPin.pinIndex,
+        destNodeId: inPin.nodeId,
+        destParamIndex: BigInt.from(inPin.pinIndex),
+      );
     }
 
-    return structure_designer_api.canConnectNodes(
-      scopePath: _scopeChainToBytes(inPin.scopeChain),
+    // Cross-scope wire: capture or iteration-value reference. ZoneInput sources
+    // can only land here (they have `sourceScopeDepth >= 1` when wired into
+    // their own HOF's body).
+    final sourcePin = _pinReferenceToApiSourcePin(outPin);
+    if (sourcePin == null) return false;
+    return structure_designer_api.canConnectWire(
+      destScopePath: _scopeChainToBytes(inPin.scopeChain),
       sourceNodeId: outPin.nodeId,
-      sourceOutputPinIndex: outPin.pinIndex,
+      sourcePin: sourcePin,
+      sourceScopeDepth: sourceScopeDepth,
       destNodeId: inPin.nodeId,
       destParamIndex: BigInt.from(inPin.pinIndex),
     );
@@ -900,23 +936,45 @@ class StructureDesignerModel extends ChangeNotifier {
       return;
     }
 
+    final effectiveDestScope = inPin.pinKind == PinKind.zoneOutput
+        ? [...inPin.scopeChain, inPin.nodeId]
+        : inPin.scopeChain;
+
+    if (!_isScopePrefix(outPin.scopeChain, effectiveDestScope)) return;
+    final sourceScopeDepth =
+        effectiveDestScope.length - outPin.scopeChain.length;
+
     if (inPin.pinKind == PinKind.zoneOutput) {
-      // Body-return wire: source lives inside the HOF's body (its scope is
-      // `inPin.scopeChain ++ [inPin.nodeId]`). The wire is stored on the
-      // HOF's `zone_output_arguments`. See `doc/design_zones_ui.md`
-      // §"Wire-creation API generalisation" → Body return row.
-      final bodyScope = [...inPin.scopeChain, inPin.nodeId];
+      // Body-return wire: source lives inside the HOF's body. The wire is
+      // stored on the HOF's `zone_output_arguments`. See
+      // `doc/design_zones_ui.md` §"Wire-creation API generalisation"
+      // → Body return row.
+      if (sourceScopeDepth != 0) return;
       structure_designer_api.connectZoneOutputWire(
-        bodyScopePath: _scopeChainToBytes(bodyScope),
+        bodyScopePath: _scopeChainToBytes(effectiveDestScope),
         sourceNodeId: outPin.nodeId,
         sourceOutputPinIndex: outPin.pinIndex,
         zoneOutputIndex: BigInt.from(inPin.pinIndex),
       );
-    } else {
+    } else if (sourceScopeDepth == 0 && outPin.pinKind != PinKind.zoneInput) {
+      // Same-scope regular wire — preserve the U4 code path.
       structure_designer_api.connectNodes(
         scopePath: _scopeChainToBytes(inPin.scopeChain),
         sourceNodeId: outPin.nodeId,
         sourceOutputPinIndex: outPin.pinIndex,
+        destNodeId: inPin.nodeId,
+        destParamIndex: BigInt.from(inPin.pinIndex),
+      );
+    } else {
+      // Cross-scope wire: capture (NodeOutput, depth ≥ 1) or iteration-value
+      // reference (ZoneInput source, depth ≥ 1). U5 of `design_zones_ui.md`.
+      final sourcePin = _pinReferenceToApiSourcePin(outPin);
+      if (sourcePin == null) return;
+      structure_designer_api.connectWire(
+        destScopePath: _scopeChainToBytes(inPin.scopeChain),
+        sourceNodeId: outPin.nodeId,
+        sourcePin: sourcePin,
+        sourceScopeDepth: sourceScopeDepth,
         destNodeId: inPin.nodeId,
         destParamIndex: BigInt.from(inPin.pinIndex),
       );
@@ -925,6 +983,23 @@ class StructureDesignerModel extends ChangeNotifier {
     draggedWire = null;
 
     refreshFromKernel();
+  }
+
+  /// Translate a Flutter [PinReference] into the FRB `APISourcePin` enum.
+  /// Returns null for input pins (not source-shaped) — only [PinKind.externalOutput],
+  /// [PinKind.functionPin], and [PinKind.zoneInput] are accepted.
+  APISourcePin? _pinReferenceToApiSourcePin(PinReference pin) {
+    switch (pin.pinKind) {
+      case PinKind.externalOutput:
+      case PinKind.functionPin:
+        return APISourcePin.nodeOutput(pinIndex: pin.pinIndex);
+      case PinKind.zoneInput:
+        if (pin.pinIndex < 0) return null;
+        return APISourcePin.zoneInput(pinIndex: pin.pinIndex);
+      case PinKind.externalInput:
+      case PinKind.zoneOutput:
+        return null;
+    }
   }
 
   /// Auto-connects a source pin to the first compatible pin on a target node.
@@ -1127,8 +1202,7 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void toggleNodeDisplay(BigInt nodeId,
-      {List<BigInt> scopeChain = const []}) {
+  void toggleNodeDisplay(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     final node = nodeNetworkView!.nodes[nodeId];
     if (node == null) return;
@@ -1477,8 +1551,7 @@ class StructureDesignerModel extends ChangeNotifier {
     return nodeId;
   }
 
-  BigInt duplicateNode(BigInt nodeId,
-      {List<BigInt> scopeChain = const []}) {
+  BigInt duplicateNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return BigInt.zero;
     final scopePath = _scopeChainToBytes(scopeChain);
     final newNodeId = structure_designer_api.duplicateNode(

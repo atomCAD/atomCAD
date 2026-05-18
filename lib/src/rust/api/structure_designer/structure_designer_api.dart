@@ -78,6 +78,49 @@ void connectNodes(
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
+/// General-shape wire-creation entry point for cross-scope wires. Used by
+/// zones UI phase U5 to author captures (depth ≥ 1) and iteration-value
+/// references (`ZoneInput` source). For local-scope `NodeOutput` wires the
+/// existing [`connect_nodes`] is equivalent and slightly cheaper; for body-
+/// return wires use [`connect_zone_output_wire`].
+///
+/// `dest_scope_path` is the network where the wire is stored — the body
+/// containing the destination node. `source_scope_depth` measures how many
+/// ancestor frames up from that storage scope the source lives.
+void connectWire(
+        {required Uint64List destScopePath,
+        required BigInt sourceNodeId,
+        required APISourcePin sourcePin,
+        required int sourceScopeDepth,
+        required BigInt destNodeId,
+        required BigInt destParamIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiConnectWire(
+            destScopePath: destScopePath,
+            sourceNodeId: sourceNodeId,
+            sourcePin: sourcePin,
+            sourceScopeDepth: sourceScopeDepth,
+            destNodeId: destNodeId,
+            destParamIndex: destParamIndex);
+
+/// Predicate pair for [`connect_wire`]. Returns `true` when a cross-scope
+/// wire with this shape is type-compatible and structurally valid.
+bool canConnectWire(
+        {required Uint64List destScopePath,
+        required BigInt sourceNodeId,
+        required APISourcePin sourcePin,
+        required int sourceScopeDepth,
+        required BigInt destNodeId,
+        required BigInt destParamIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiCanConnectWire(
+            destScopePath: destScopePath,
+            sourceNodeId: sourceNodeId,
+            sourcePin: sourcePin,
+            sourceScopeDepth: sourceScopeDepth,
+            destNodeId: destNodeId,
+            destParamIndex: destParamIndex);
+
 /// Connect a body-return wire: source is a body node, destination is the
 /// containing HOF's zone-output pin. `body_scope_path` identifies the body
 /// (the last element is the HOF id whose `zone_output_arguments` receives

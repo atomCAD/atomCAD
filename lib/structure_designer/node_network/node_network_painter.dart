@@ -54,17 +54,44 @@ class NodeNetworkPainter extends CustomPainter {
     );
   }
 
-  /// Build a [PinReference] for the source endpoint of [wire], owner scope
-  /// [scopeChain]. Function pins are encoded by pin index `-1`; everything
-  /// else is a regular external output.
+  /// Build a [PinReference] for the source endpoint of [wire]. [scopeChain]
+  /// is the wire's storage scope (where it sits in the model); the source's
+  /// own scope is that scope with the last `source_scope_depth` elements
+  /// dropped — captures (`source_scope_depth ≥ 1`) and iteration-value
+  /// references (`ZoneInput` source) live in an ancestor frame.
   PinReference _wireSourcePin(WireView wire, List<BigInt> scopeChain) {
+    // Defensive clamp: a wire whose `source_scope_depth` exceeds the storage
+    // scope depth is structurally invalid (it would reference a non-existent
+    // ancestor frame); rather than throw a RangeError from `sublist`, route
+    // the pin to the top-level scope and let `tryPinScreenPosition` skip it
+    // when the source node id can't be found there.
+    final depth = wire.sourceScopeDepth.clamp(0, scopeChain.length);
+    final sourceScope = depth == 0
+        ? scopeChain
+        : scopeChain.sublist(0, scopeChain.length - depth);
+    final PinKind pinKind;
+    final int pinIndex;
+    final sourcePin = wire.sourcePin;
+    if (sourcePin is APISourcePin_ZoneInput) {
+      // Inside-facing zone-input pin on the HOF identified by `wire.sourceNodeId`.
+      // The HOF lives in `sourceScope` (its containing network); the pin faces
+      // into the body where the wire is stored.
+      pinKind = PinKind.zoneInput;
+      pinIndex = sourcePin.pinIndex;
+    } else {
+      // NodeOutput source (regular output or function pin). The legacy
+      // `pin_index == -1` convention selects the function pin; everything else
+      // is a regular external output.
+      pinKind = wire.sourceOutputPinIndex == -1
+          ? PinKind.functionPin
+          : PinKind.externalOutput;
+      pinIndex = wire.sourceOutputPinIndex;
+    }
     return PinReference(
       nodeId: wire.sourceNodeId,
-      scopeChain: scopeChain,
-      pinKind: wire.sourceOutputPinIndex == -1
-          ? PinKind.functionPin
-          : PinKind.externalOutput,
-      pinIndex: wire.sourceOutputPinIndex,
+      scopeChain: sourceScope,
+      pinKind: pinKind,
+      pinIndex: pinIndex,
       dataType: '',
     );
   }
@@ -80,8 +107,9 @@ class NodeNetworkPainter extends CustomPainter {
     if (wire.destinationArgumentKind == APIArgumentKind.zoneOutput) {
       // The HOF's containing scope is scopeChain with its terminal element
       // (the HOF's own id) chopped off.
-      final hofScope =
-          scopeChain.isEmpty ? const <BigInt>[] : scopeChain.sublist(0, scopeChain.length - 1);
+      final hofScope = scopeChain.isEmpty
+          ? const <BigInt>[]
+          : scopeChain.sublist(0, scopeChain.length - 1);
       return PinReference(
         nodeId: wire.destNodeId,
         scopeChain: hofScope,
@@ -116,7 +144,8 @@ class NodeNetworkPainter extends CustomPainter {
     // — the design specifies the outermost layer paints all wires so that
     // pin endpoint resolution can reach into any scope. See
     // `doc/design_zones_ui.md` §"Wire rendering across scopes".
-    _drawWiresForNetwork(resolver, resolver.root, const <BigInt>[], canvas, paint);
+    _drawWiresForNetwork(
+        resolver, resolver.root, const <BigInt>[], canvas, paint);
 
     // Draw dragged wire on top
     if (graphModel.draggedWire != null) {

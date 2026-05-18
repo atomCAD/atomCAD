@@ -702,10 +702,7 @@ fn validate_zones_recursive(
                 if !has_wire {
                     ok = false;
                     network.validation_errors.push(ValidationError::new(
-                        format!(
-                            "Zone-output pin '{}' has no incoming wire",
-                            pin.name
-                        ),
+                        format!("Zone-output pin '{}' has no incoming wire", pin.name),
                         Some(node_id),
                     ));
                 }
@@ -761,10 +758,7 @@ fn validate_zones_recursive(
         // Take the body Arc out so we can hold both `&network` (as the
         // immediate-parent reference in the extended chain) and `&mut body`
         // at once.
-        let body_arc_opt = network
-            .nodes
-            .get_mut(&hof_id)
-            .and_then(|n| n.zone.take());
+        let body_arc_opt = network.nodes.get_mut(&hof_id).and_then(|n| n.zone.take());
         let Some(mut body_arc) = body_arc_opt else {
             continue;
         };
@@ -788,13 +782,9 @@ fn validate_zones_recursive(
 
             let mut errs: Vec<ValidationError> = Vec::new();
             for wire in &zone_output_wires_snapshot {
-                if let Some(err) = check_zone_wire(
-                    wire,
-                    hof_id,
-                    &new_ancestors,
-                    &new_hof_ids,
-                    registry,
-                ) {
+                if let Some(err) =
+                    check_zone_wire(wire, hof_id, &new_ancestors, &new_hof_ids, registry)
+                {
                     errs.push(err);
                 }
             }
@@ -862,8 +852,7 @@ fn check_zone_wire(
                 ));
             }
             let source_network = ancestors[ancestors.len() - depth];
-            let Some(source_node) = source_network.nodes.get(&incoming.source_node_id)
-            else {
+            let Some(source_node) = source_network.nodes.get(&incoming.source_node_id) else {
                 return Some(ValidationError::new(
                     format!(
                         "Capture wire references non-existent source node {} \
@@ -877,8 +866,7 @@ fn check_zone_wire(
             // legacy function pin and is always considered present (matches
             // the existing wire-validation path).
             if pin_index != -1 {
-                let Some(source_node_type) = registry.get_node_type_for_node(source_node)
-                else {
+                let Some(source_node_type) = registry.get_node_type_for_node(source_node) else {
                     return Some(ValidationError::new(
                         format!(
                             "Capture wire's source node {} (depth {}) has \

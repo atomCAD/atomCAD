@@ -220,7 +220,9 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
 
   // Base width for the standard node; HOFs add the body region plus gutters.
   final baseWidth = zone != null
-      ? BASE_HOF_BODY_LEFT_OFFSET + zone.storedWidth + BASE_HOF_BODY_RIGHT_GUTTER
+      ? BASE_HOF_BODY_LEFT_OFFSET +
+          zone.storedWidth +
+          BASE_HOF_BODY_RIGHT_GUTTER
       : BASE_NODE_WIDTH;
 
   if (zoomLevel == ZoomLevel.normal) {
@@ -483,9 +485,11 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handles wire dropped in empty space - shows filtered Add Node popup.
   /// The new node lands in the body whose interior the drop hit. Auto-connect
-  /// only fires when the drop scope matches the source pin's scope — cross-
-  /// scope wire authoring (captures, body-return into popup-created nodes) is
-  /// deferred to U5. See `doc/design_zones_ui.md` §"Phase U5".
+  /// runs in both same-scope and cross-scope cases (U5): a same-scope drop
+  /// uses the Rust `getCompatiblePinsForAutoConnect` shortcut for top-level
+  /// pairs; a cross-scope drop falls back to per-pin `canConnectPins` checks
+  /// (which now route through `can_connect_wire_scoped` for captures) so the
+  /// dropped node receives a capture wire to the outer source.
   void _handleWireDropInEmptySpace(
       PinReference startPin, Offset dropPosition) async {
     final isOutput = startPin.isOutput;
@@ -515,8 +519,10 @@ class NodeNetworkState extends State<NodeNetwork> {
     );
     if (newNodeId == BigInt.zero) return;
 
-    // Auto-connect only when source and target live in the same scope. Cross-
-    // scope drops just create the node — wire authoring across scopes is U5.
+    // Top-level same-scope drops still use the existing Rust shortcut so the
+    // path is unchanged for non-zone authoring (the shortcut returns
+    // `Vec::new()` for non-empty `scope_path`, so it can't be used for body
+    // scopes — those fall through to the Flutter-side per-pin check below).
     final sourceScope = startPin.scopeChain;
     final sameScope = sourceScope.length == scope.scopeChain.length &&
         () {
@@ -525,15 +531,27 @@ class NodeNetworkState extends State<NodeNetwork> {
           }
           return true;
         }();
-    if (!sameScope) return;
 
-    final compatiblePins = sd_api.getCompatiblePinsForAutoConnect(
-      scopePath: _scopeChainToBytes(scope.scopeChain),
-      sourceNodeId: startPin.nodeId,
-      sourcePinIndex: startPin.pinIndex,
-      sourceIsOutput: isOutput,
-      targetNodeId: newNodeId,
-    );
+    List<(int, String, String)> compatiblePins;
+    if (sameScope && scope.scopeChain.isEmpty) {
+      compatiblePins = sd_api.getCompatiblePinsForAutoConnect(
+        scopePath: _scopeChainToBytes(scope.scopeChain),
+        sourceNodeId: startPin.nodeId,
+        sourcePinIndex: startPin.pinIndex,
+        sourceIsOutput: isOutput,
+        targetNodeId: newNodeId,
+      );
+    } else {
+      // Body-scope or cross-scope drop. Look up the new node in the refreshed
+      // view and probe each of its pins with `canConnectPins` (which handles
+      // capture / iteration-value / body-return semantics).
+      compatiblePins = _findCompatiblePinsCrossScope(
+        startPin,
+        newNodeId,
+        scope.scopeChain,
+        isOutput,
+      );
+    }
 
     if (compatiblePins.isEmpty) return;
 
@@ -583,6 +601,71 @@ class NodeNetworkState extends State<NodeNetwork> {
         startPin,
       );
     }
+  }
+
+  /// Walk the freshly-created [newNodeId] in [targetScope] and return its
+  /// pins that pass `canConnectPins` against [sourcePin]. Used when the Rust
+  /// `getCompatiblePinsForAutoConnect` shortcut doesn't apply (body-scope
+  /// drop, or cross-scope drop with an outer source).
+  ///
+  /// The return shape mirrors `getCompatiblePinsForAutoConnect`:
+  /// `(pinIndex, pinName, dataType)`.
+  List<(int, String, String)> _findCompatiblePinsCrossScope(
+    PinReference sourcePin,
+    BigInt newNodeId,
+    List<BigInt> targetScope,
+    bool sourceIsOutput,
+  ) {
+    final newNode = _lookupNodeInScope(newNodeId, targetScope);
+    if (newNode == null) return const [];
+    final result = <(int, String, String)>[];
+    if (sourceIsOutput) {
+      // Source is an output (or zone-input); find compatible inputs on the
+      // new node.
+      for (int i = 0; i < newNode.inputPins.length; i++) {
+        final pin = newNode.inputPins[i];
+        final candidate = PinReference(
+          nodeId: newNodeId,
+          scopeChain: targetScope,
+          pinKind: PinKind.externalInput,
+          pinIndex: i,
+          dataType: pin.dataType,
+        );
+        if (widget.graphModel.canConnectPins(sourcePin, candidate)) {
+          result.add((i, pin.name, pin.dataType));
+        }
+      }
+    } else {
+      // Source is an input; test each output pin on the new node.
+      for (int i = 0; i < newNode.outputPins.length; i++) {
+        final pin = newNode.outputPins[i];
+        final candidate = PinReference(
+          nodeId: newNodeId,
+          scopeChain: targetScope,
+          pinKind: PinKind.externalOutput,
+          pinIndex: pin.index,
+          dataType: pin.effectiveDataType,
+        );
+        if (widget.graphModel.canConnectPins(candidate, sourcePin)) {
+          result.add((pin.index, pin.name, pin.effectiveDataType));
+        }
+      }
+    }
+    return result;
+  }
+
+  /// Walk the model view to find a node by id at the given scope.
+  NodeView? _lookupNodeInScope(BigInt nodeId, List<BigInt> scope) {
+    final view = widget.graphModel.nodeNetworkView;
+    if (view == null) return null;
+    Map<BigInt, NodeView> current = view.nodes;
+    for (final hofId in scope) {
+      final hof = current[hofId];
+      final zone = hof?.zone;
+      if (zone == null) return null;
+      current = zone.nodes;
+    }
+    return current[nodeId];
   }
 
   /// Convert a Dart scope chain to the Rust API's `Uint64List` representation.
@@ -671,7 +754,8 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// body (or top-level if the drag started outside any body).
   void _handleSelectionRectStart(Offset position) {
     final resolver = _makeResolver();
-    final scope = resolver?.findContainingScope(position).scopeChain ?? const <BigInt>[];
+    final scope =
+        resolver?.findContainingScope(position).scopeChain ?? const <BigInt>[];
     setState(() {
       _selectionRectStart = position;
       _selectionRect = Rect.fromPoints(position, position);
@@ -1021,7 +1105,8 @@ class NodeNetworkState extends State<NodeNetwork> {
       final node = entry.value;
       final zone = node.zone;
       if (zone == null) continue;
-      _appendZoneNodesRecursive(children, zone, [...scopeChain, node.id], rootView);
+      _appendZoneNodesRecursive(
+          children, zone, [...scopeChain, node.id], rootView);
     }
   }
 
