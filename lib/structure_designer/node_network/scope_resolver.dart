@@ -10,9 +10,11 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 /// (`chain ++ [hof_id]`). Populated by [ScopeResolver.runLayoutPass]; every
 /// pin-position query reads from these maps in O(1).
 ///
-/// In phase U3 bodies have no rendered content, so [bodySizes] is just the
-/// stored size; U4 extends the bottom-up walk with `content_bbox` and the
-/// max-with-stored rule from `doc/design_zones_ui.md` §"Body sizing".
+/// U6 extends the cache with [collapsedBodies] so a body whose rendered
+/// height falls below [BODY_COLLAPSE_HEIGHT_THRESHOLD] (a tiny nested body
+/// at far zoom, typically) can be skipped from the widget tree and the
+/// painter — its HOF still renders, but its content is hidden. See
+/// `doc/design_zones_ui.md` §"Zoom levels".
 class LayoutCache {
   /// HOF body size in logical pixels, keyed by full scope chain terminating
   /// at the HOF id.
@@ -21,6 +23,13 @@ class LayoutCache {
   /// Body inner-top-left in screen coordinates, same keying. Folds in
   /// `panOffset` and `scale`.
   final Map<List<BigInt>, Offset> bodyOrigins = {};
+
+  /// Scope chains whose body renders too small to be readable — its body
+  /// content should be hidden and the HOF widget should render a simplified
+  /// placeholder. A scope is collapsed if its body's screen-space height is
+  /// under [BODY_COLLAPSE_HEIGHT_THRESHOLD] OR any ancestor is collapsed
+  /// (a collapsed outer body subsumes its inner bodies).
+  final List<List<BigInt>> collapsedBodies = [];
 
   Size? lookupSize(List<BigInt> bodyChain) {
     for (final entry in bodySizes.entries) {
@@ -36,6 +45,13 @@ class LayoutCache {
     return null;
   }
 
+  bool isCollapsed(List<BigInt> bodyChain) {
+    for (final entry in collapsedBodies) {
+      if (_listEq(entry, bodyChain)) return true;
+    }
+    return false;
+  }
+
   static bool _listEq(List<BigInt> a, List<BigInt> b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) {
@@ -44,6 +60,13 @@ class LayoutCache {
     return true;
   }
 }
+
+/// A body whose rendered screen-space height falls below this threshold is
+/// collapsed: its content is hidden and the HOF renders a placeholder. The
+/// threshold is set so an HOF can still receive captures (its outer chrome
+/// and pins remain interactive) at any zoom while bodies that would be
+/// unreadably small disappear. See `doc/design_zones_ui.md` §"Zoom levels".
+const double BODY_COLLAPSE_HEIGHT_THRESHOLD = 60.0;
 
 /// Resolves scope-aware coordinate and pin-position queries for the node
 /// network editor. Created fresh per frame from the current [root] view,
@@ -94,6 +117,7 @@ class ScopeResolver {
   void runLayoutPass() {
     layout.bodySizes.clear();
     layout.bodyOrigins.clear();
+    layout.collapsedBodies.clear();
     // Phase 1: bottom-up sizes.
     for (final node in root.nodes.values) {
       final zone = node.zone;
@@ -112,18 +136,103 @@ class ScopeResolver {
       layout.bodyOrigins[chain] = origin;
       _placeChildBodies(zone, chain, origin);
     }
+    // Phase 3: collapse decisions, top-down. A body is collapsed if its
+    // screen-space rendered height is below the readability threshold OR
+    // any ancestor body is collapsed. Computed after sizes are known so the
+    // cascade is correct.
+    for (final entry in layout.bodySizes.entries) {
+      final chain = entry.key;
+      final size = entry.value;
+      if (size.height * scale < BODY_COLLAPSE_HEIGHT_THRESHOLD) {
+        layout.collapsedBodies.add(List<BigInt>.from(chain));
+      }
+    }
+  }
+
+  /// Effective body size for [node]'s zone, in logical pixels. Reads from the
+  /// layout cache (populated bottom-up by [runLayoutPass]) so an inner body
+  /// that grew past its stored size cascades into the outer body's content
+  /// bbox. Returns [Size.zero] for non-HOF nodes; falls back to stored size
+  /// when the cache hasn't been populated for the chain (e.g. the cache
+  /// hasn't been run, or the chain points at a node that was just deleted).
+  Size effectiveBodySize(NodeView node, List<BigInt> nodeScopeChain) {
+    final zone = node.zone;
+    if (zone == null) return Size.zero;
+    final chain = [...nodeScopeChain, node.id];
+    return layout.lookupSize(chain) ?? Size(zone.storedWidth, zone.storedHeight);
+  }
+
+  /// HOF widget footprint at [nodeScopeChain] in logical pixels (pre-scale).
+  /// For non-HOF nodes, returns `getNodeSize() / scale`. For HOF nodes, uses
+  /// the cached effective body size so the outer container resizes when an
+  /// inner body grows — required for the nested-zone cascade. See
+  /// `doc/design_zones_ui.md` §"Body sizing — Layout pass".
+  Size effectiveNodeSizeLogical(NodeView node, List<BigInt> nodeScopeChain) {
+    final zone = node.zone;
+    if (zone == null) {
+      final s = getNodeSize(node, zoomLevel);
+      return Size(s.width / scale, s.height / scale);
+    }
+    final body = effectiveBodySize(node, nodeScopeChain);
+    final width =
+        BASE_HOF_BODY_LEFT_OFFSET + body.width + BASE_HOF_BODY_RIGHT_GUTTER;
+    const titleHeight = 30.0;
+    final inputPinsHeight =
+        node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+    final outputPinsHeight =
+        node.outputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+    final zoneInputPinsHeight =
+        zone.zoneInputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+    final zoneOutputPinsHeight =
+        zone.zoneOutputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
+    const minOutputHeight = 25.0;
+    final mainBodyHeight = [
+      inputPinsHeight.toDouble(),
+      outputPinsHeight.toDouble(),
+      zoneInputPinsHeight.toDouble(),
+      zoneOutputPinsHeight.toDouble(),
+      body.height,
+      minOutputHeight,
+    ].reduce((a, b) => a > b ? a : b);
+    final subtitleHeight =
+        (node.subtitle != null && node.subtitle!.isNotEmpty) ? 20.0 : 0.0;
+    const padding = 8.0;
+    return Size(width, titleHeight + mainBodyHeight + subtitleHeight + padding);
+  }
+
+  /// Screen-space variant of [effectiveNodeSizeLogical]. Used by hit testing
+  /// and the [NodeWidget] container so the rendered footprint matches the
+  /// scope resolver's idea of where the node ends.
+  Size effectiveNodeSizeScreen(NodeView node, List<BigInt> nodeScopeChain) {
+    final logical = effectiveNodeSizeLogical(node, nodeScopeChain);
+    return Size(logical.width * scale, logical.height * scale);
+  }
+
+  /// True when the body identified by [bodyScopeChain] (`[...parent, hofId]`)
+  /// or any ancestor body is collapsed — its content should be hidden and
+  /// the body region rendered as a placeholder. Always `false` for the
+  /// top-level scope (empty chain).
+  bool isBodyCollapsed(List<BigInt> bodyScopeChain) {
+    if (bodyScopeChain.isEmpty) return false;
+    for (int i = 1; i <= bodyScopeChain.length; i++) {
+      if (layout.isCollapsed(bodyScopeChain.sublist(0, i))) return true;
+    }
+    return false;
   }
 
   /// Recursive bottom-up size computation. After this returns, `layout
   /// .bodySizes[chain]` holds the body's rendered size = `max(stored,
   /// content_bbox + padding)`. Recurses into nested HOF bodies first so
   /// their sizes contribute to the outer body's `content_bbox`.
+  ///
+  /// For inner HOF child nodes the footprint is taken from
+  /// [effectiveNodeSizeLogical] rather than [getNodeSize] — the cached
+  /// effective body size is already populated by the recursive call above,
+  /// so an inner body that grew past its stored size cascades into this
+  /// body's `content_bbox`. See `doc/design_zones_ui.md` §U6.
   void _computeBodySize(ZoneView zone, List<BigInt> chain) {
-    // Recurse first so inner sizes feed the outer content_bbox via
-    // getNodeSize (which reads the HOF body's stored size in U4 — bodies
-    // grow but the HOF widget footprint follows by way of getNodeSize using
-    // the cached body size on the next pass; for simplicity we use the
-    // node's own getNodeSize which derives from stored_width/height).
+    // Recurse first so inner body sizes are in the cache before we read them
+    // back as part of this body's content_bbox.
     for (final innerNode in zone.nodes.values) {
       final innerZone = innerNode.zone;
       if (innerZone == null) continue;
@@ -134,9 +243,7 @@ class ScopeResolver {
     double maxBottom = 0;
     for (final node in zone.nodes.values) {
       final pos = apiVec2ToOffset(node.position);
-      final size = getNodeSize(node, zoomLevel);
-      // size is in *screen* coordinates; convert to body-local by /scale.
-      final logicalSize = Size(size.width / scale, size.height / scale);
+      final logicalSize = effectiveNodeSizeLogical(node, chain);
       final right = pos.dx + logicalSize.width;
       final bottom = pos.dy + logicalSize.height;
       if (right > maxRight) maxRight = right;
@@ -281,7 +388,9 @@ class ScopeResolver {
           (node.commentHeight ?? 100.0) * scale,
         );
       } else {
-        screenSize = getNodeSize(node, zoomLevel);
+        // Use the cache-aware effective size so an HOF whose body grew past
+        // its stored size still hit-tests against the full visible rect.
+        screenSize = effectiveNodeSizeScreen(node, scopeChain);
       }
       final nodeRect = nodeScreenPos & screenSize;
       if (!nodeRect.contains(screenPos)) continue;
@@ -393,9 +502,12 @@ class ScopeResolver {
       case PinKind.functionPin:
         // Function pin sits at the HOF's outer right edge for symmetry with
         // regular nodes; the HOF's overall width grows to include the body.
+        // Use the cached effective body width so the pin tracks the rendered
+        // right edge (which grows when the body cascades past its stored
+        // size).
         final nodeWidth = zone != null
             ? BASE_HOF_BODY_LEFT_OFFSET +
-                zone.storedWidth +
+                effectiveBodySize(node, pin.scopeChain).width +
                 BASE_HOF_BODY_RIGHT_GUTTER
             : NODE_WIDTH;
         final logicalPos =
@@ -407,9 +519,11 @@ class ScopeResolver {
       case PinKind.externalOutput:
         // External output pins live on the HOF's outer right edge — past the
         // body region. For non-HOFs the right edge is `NODE_WIDTH` as before.
+        // Use cached effective body width (same cascade reasoning as the
+        // functionPin arm above).
         final nodeWidth = zone != null
             ? BASE_HOF_BODY_LEFT_OFFSET +
-                zone.storedWidth +
+                effectiveBodySize(node, pin.scopeChain).width +
                 BASE_HOF_BODY_RIGHT_GUTTER
             : NODE_WIDTH;
         final vertOffset = NODE_VERT_WIRE_OFFSET +

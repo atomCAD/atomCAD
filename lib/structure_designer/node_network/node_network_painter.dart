@@ -174,6 +174,11 @@ class NodeNetworkPainter extends CustomPainter {
   /// Wires at body depth are painted using `pinScreenPosition` against the
   /// body's `scopeChain` so cross-frame positions resolve through the
   /// layout cache. See `doc/design_zones_ui.md` §"Wire rendering across scopes".
+  ///
+  /// Bodies that are collapsed (rendered too small to be readable per the
+  /// U6 zoom-level rule) skip their content's wires; the HOF's chrome and
+  /// any wires crossing into the body still render — capture wire endpoints
+  /// land on the (still-positioned) zone-input/output pins on the HOF.
   void _drawWiresForNetwork(
     ScopeResolver resolver,
     NodeNetworkView network,
@@ -186,6 +191,7 @@ class NodeNetworkPainter extends CustomPainter {
       final zone = node.zone;
       if (zone == null) continue;
       final innerChain = [...scopeChain, node.id];
+      if (resolver.isBodyCollapsed(innerChain)) continue;
       _drawWiresInZone(resolver, zone, innerChain, canvas, paint);
     }
   }
@@ -202,6 +208,7 @@ class NodeNetworkPainter extends CustomPainter {
       final inner = node.zone;
       if (inner == null) continue;
       final innerChain = [...scopeChain, node.id];
+      if (resolver.isBodyCollapsed(innerChain)) continue;
       _drawWiresInZone(resolver, inner, innerChain, canvas, paint);
     }
   }

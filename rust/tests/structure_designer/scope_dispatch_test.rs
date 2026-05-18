@@ -215,6 +215,139 @@ fn delete_selected_scoped_only_touches_the_body() {
 }
 
 #[test]
+fn add_node_scoped_routes_to_nested_body_at_depth_two() {
+    // U6 contract: scoped mutations walk an arbitrary-depth chain. Build
+    // top-level → outer map → inner map (inside the outer map's body), then
+    // add a node inside the inner body via the public API and confirm it
+    // lands in the right place (and doesn't leak into the outer body or
+    // top-level). See `doc/design_zones_ui.md` §"Phase U6".
+    let (mut designer, outer_map_id) = setup_two_level_network();
+
+    // Add an inner `map` HOF inside the outer map's body — depth-1 scope.
+    let inner_map_id = designer.add_node_scoped(
+        &[outer_map_id],
+        "map",
+        DVec2::new(20.0, 20.0),
+        None,
+    );
+    assert_ne!(inner_map_id, 0, "depth-1 add of inner HOF should succeed");
+
+    // The inner map's own body must exist after creation (zone init runs
+    // through the scoped add path the same as the top-level path).
+    let depth2_chain = [outer_map_id, inner_map_id];
+    let inner_body = designer
+        .get_scope_network(&depth2_chain)
+        .expect("get_scope_network should walk a depth-2 chain into the inner body");
+    assert!(
+        inner_body.nodes.is_empty(),
+        "freshly-created inner-map body should start empty"
+    );
+
+    // Add a leaf node inside the inner body via the public API.
+    let leaf_id = designer.add_node_scoped(
+        &depth2_chain,
+        "int",
+        DVec2::new(5.0, 5.0),
+        None,
+    );
+    assert_ne!(leaf_id, 0, "depth-2 add_node_scoped should succeed");
+
+    // Leaf lives in the inner body.
+    let inner_body = designer.get_scope_network(&depth2_chain).unwrap();
+    assert!(
+        inner_body.nodes.contains_key(&leaf_id),
+        "leaf should land in the inner-map body"
+    );
+
+    // Outer body still only holds the inner map (no leak from a misrouted
+    // depth-2 add). Per-body `next_node_id` is independent, so `leaf_id` may
+    // numerically equal `inner_map_id`; assert on count and type rather than
+    // on id membership.
+    let outer_body = designer.get_scope_network(&[outer_map_id]).unwrap();
+    assert_eq!(
+        outer_body.nodes.len(),
+        1,
+        "outer body must hold only the inner map after a depth-2 add"
+    );
+    assert!(outer_body.nodes.contains_key(&inner_map_id));
+    assert_eq!(
+        outer_body.nodes.get(&inner_map_id).unwrap().node_type_name,
+        "map",
+        "outer body's single node must still be the inner-map HOF, not a stray int leaf"
+    );
+
+    // Top-level only has the outer map.
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert_eq!(main.nodes.len(), 1, "top-level should only have the outer map");
+    assert_eq!(
+        main.nodes.get(&outer_map_id).unwrap().node_type_name,
+        "map"
+    );
+}
+
+#[test]
+fn move_and_select_at_depth_two_target_the_right_body() {
+    // U6: move_node_scoped and select_node_scoped at depth ≥ 2 land in the
+    // inner-most body identified by the chain, without disturbing outer
+    // bodies or the top-level network.
+    let (mut designer, outer_map_id) = setup_two_level_network();
+    let inner_map_id = designer.add_node_scoped(
+        &[outer_map_id],
+        "map",
+        DVec2::new(0.0, 0.0),
+        None,
+    );
+    let depth2_chain = [outer_map_id, inner_map_id];
+    let leaf_id = designer.add_node_scoped(
+        &depth2_chain,
+        "int",
+        DVec2::new(1.0, 1.0),
+        None,
+    );
+
+    // Move the leaf via depth-2 scope.
+    designer.move_node_scoped(&depth2_chain, leaf_id, DVec2::new(77.0, 99.0));
+    let inner_body = designer.get_scope_network(&depth2_chain).unwrap();
+    assert_eq!(
+        inner_body.nodes.get(&leaf_id).unwrap().position,
+        DVec2::new(77.0, 99.0),
+        "depth-2 move must update the leaf's position"
+    );
+
+    // Inner map's position-in-outer-body unchanged.
+    let outer_body = designer.get_scope_network(&[outer_map_id]).unwrap();
+    assert_eq!(
+        outer_body.nodes.get(&inner_map_id).unwrap().position,
+        DVec2::new(0.0, 0.0),
+        "outer-body position of inner map must not move when a leaf inside moves"
+    );
+
+    // Select the leaf via depth-2 scope; selection lands on the inner body's
+    // selection set, not the outer body's or top-level's.
+    let ok = designer.select_node_scoped(&depth2_chain, leaf_id);
+    assert!(ok, "depth-2 select must succeed");
+    let inner_body = designer.get_scope_network(&depth2_chain).unwrap();
+    assert!(
+        inner_body.selected_node_ids.contains(&leaf_id),
+        "inner body's selection set should carry the leaf"
+    );
+    let outer_body = designer.get_scope_network(&[outer_map_id]).unwrap();
+    assert!(
+        !outer_body.selected_node_ids.contains(&leaf_id),
+        "outer body's selection set must not contain the leaf"
+    );
+    let outer_body = designer.get_scope_network(&[outer_map_id]).unwrap();
+    assert!(
+        !outer_body.selected_node_ids.contains(&inner_map_id),
+        "selecting the leaf must not flip the inner map's selection in the outer body"
+    );
+}
+
+#[test]
 fn empty_scope_path_preserves_top_level_behavior() {
     // Regression guard for the U2 contract "Empty chain everywhere → no
     // behavioral change": the *_scoped variants with an empty path must

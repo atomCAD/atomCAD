@@ -716,13 +716,19 @@ class NodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final resolver = _resolver;
+
     // Choose rendering mode based on zoom level
     final Widget nodeContent = zoomLevel == ZoomLevel.normal
-        ? _buildNormalNodeContent(context)
+        ? _buildNormalNodeContent(context, resolver)
         : _buildZoomedOutNodeContent(context);
 
-    // Get node size for current zoom level
-    final nodeSize = getNodeSize(node, zoomLevel);
+    // For HOFs use the cache-aware effective size so the outer container
+    // grows when an inner body cascades past its stored size (U6). For
+    // non-HOFs the cache call falls through to `getNodeSize`.
+    final nodeSize = node.zone != null
+        ? resolver.effectiveNodeSizeScreen(node, scopeChain)
+        : getNodeSize(node, zoomLevel);
 
     // Create container with node appearance
     // For normal zoom, don't set explicit height - let content determine it (for subtitle)
@@ -742,7 +748,7 @@ class NodeWidget extends StatelessWidget {
     // Position the node via the scope resolver: node.position lives in
     // [scopeChain]'s body-local frame; the resolver maps it to screen.
     final screenPos =
-        _resolver.scopedToScreen(scopeChain, apiVec2ToOffset(node.position));
+        resolver.scopedToScreen(scopeChain, apiVec2ToOffset(node.position));
     return Positioned(
       left: screenPos.dx,
       top: screenPos.dy,
@@ -788,7 +794,11 @@ class NodeWidget extends StatelessWidget {
   /// region carries the zone-input/zone-output pins on its inner edges and a
   /// centered `[N nodes]` placeholder until U4 lands body-node rendering. See
   /// `doc/design_zones_ui.md` §"Phase U3".
-  Widget _buildNormalNodeContent(BuildContext context) {
+  ///
+  /// [resolver] is threaded down so the HOF body can read the cache-aware
+  /// effective size and collapse status (U6) without constructing a second
+  /// resolver mid-build.
+  Widget _buildNormalNodeContent(BuildContext context, ScopeResolver resolver) {
     final isHof = node.zone != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -847,7 +857,10 @@ class NodeWidget extends StatelessWidget {
         ),
         // Main Body — different layout for HOFs (body region between
         // input/output columns) vs. regular nodes (just input/output columns).
-        if (isHof) _buildHofMainBody(context) else _buildRegularMainBody(context),
+        if (isHof)
+          _buildHofMainBody(context, resolver)
+        else
+          _buildRegularMainBody(context),
         // Subtitle (if present)
         if (node.subtitle != null && node.subtitle!.isNotEmpty)
           Container(
@@ -920,11 +933,20 @@ class NodeWidget extends StatelessWidget {
   /// scope resolver's layout cache, which uses `max(stored, content_bbox +
   /// padding)`. Live drag of a body node grows the body live (the cache
   /// reads the model's live positions every frame).
-  Widget _buildHofMainBody(BuildContext context) {
+  ///
+  /// **U6 collapse.** When the resolver reports this body's chain as
+  /// collapsed (its rendered screen-space height is below the readability
+  /// threshold, typically because of deep nesting + far zoom), the body
+  /// region renders as a simple "[N nodes]" placeholder without the inner
+  /// zone-pin widgets or resize handle. Body nodes/wires are skipped
+  /// elsewhere in the recursive walks. See `doc/design_zones_ui.md`
+  /// §"Zoom levels".
+  Widget _buildHofMainBody(BuildContext context, ScopeResolver resolver) {
     final zone = node.zone!;
     final bodyChain = [...scopeChain, node.id];
-    final cachedSize = _resolver.layout.lookupSize(bodyChain);
+    final cachedSize = resolver.layout.lookupSize(bodyChain);
     final effectiveSize = cachedSize ?? Size(zone.storedWidth, zone.storedHeight);
+    final collapsed = resolver.isBodyCollapsed(bodyChain);
     return SizedBox(
       width: BASE_HOF_BODY_LEFT_OFFSET +
           effectiveSize.width +
@@ -957,18 +979,27 @@ class NodeWidget extends StatelessWidget {
               ),
             ),
           ),
-          // Translucent body region.
-          _ZoneBodyRegion(
-            nodeId: node.id,
-            scopeChain: scopeChain,
-            zone: zone,
-            effectiveSize: effectiveSize,
-            onResize: (newSize) {
-              final model =
-                  Provider.of<StructureDesignerModel>(context, listen: false);
-              model.setZoneSize(scopeChain, node.id, newSize.width, newSize.height);
-            },
-          ),
+          // Translucent body region. Falls back to a minimal placeholder
+          // when the body is collapsed — its content is hidden elsewhere by
+          // the recursive walks in node_network.dart / node_network_painter.
+          if (collapsed)
+            _ZoneCollapsedPlaceholder(
+              nodeCount: zone.nodes.length,
+              effectiveSize: effectiveSize,
+            )
+          else
+            _ZoneBodyRegion(
+              nodeId: node.id,
+              scopeChain: scopeChain,
+              zone: zone,
+              effectiveSize: effectiveSize,
+              onResize: (newSize) {
+                final model = Provider.of<StructureDesignerModel>(context,
+                    listen: false);
+                model.setZoneSize(
+                    scopeChain, node.id, newSize.width, newSize.height);
+              },
+            ),
           // External output column.
           SizedBox(
             width: BASE_HOF_BODY_RIGHT_GUTTER,
@@ -1623,6 +1654,52 @@ class _BodyResizeHandleState extends State<_BodyResizeHandle> {
               bottomRight: Radius.circular(4),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact stand-in for an HOF's body region when the body is collapsed by
+/// the zoom-level readability check (see `doc/design_zones_ui.md`
+/// §"Zoom levels"). Renders the same translucent rectangle as the live body
+/// region so the HOF's overall footprint doesn't shift, but replaces the
+/// inner pins and content with a centered "[N nodes]" label. Body nodes and
+/// intra-body wires are hidden by the recursive walks in
+/// `node_network.dart` / `node_network_painter.dart` when the same body
+/// chain is collapsed.
+class _ZoneCollapsedPlaceholder extends StatelessWidget {
+  final int nodeCount;
+  final Size effectiveSize;
+
+  const _ZoneCollapsedPlaceholder({
+    required this.nodeCount,
+    required this.effectiveSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: effectiveSize.width,
+      height: effectiveSize.height,
+      margin: const EdgeInsets.only(top: BASE_HOF_BODY_TOP_OFFSET - 30),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.25),
+          width: 1.0,
+        ),
+        borderRadius: BorderRadius.circular(6.0),
+      ),
+      child: Center(
+        child: Text(
+          '[$nodeCount nodes]',
+          style: const TextStyle(
+            color: Colors.white54,
+            fontSize: 11,
+            fontStyle: FontStyle.italic,
+          ),
+          textAlign: TextAlign.center,
         ),
       ),
     );

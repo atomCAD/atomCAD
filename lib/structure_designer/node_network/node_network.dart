@@ -1064,7 +1064,16 @@ class NodeNetworkState extends State<NodeNetwork> {
     children.add(NodeNetworkInteractionLayer(
         model: model, panOffset: _panOffset, zoomLevel: _zoomLevel));
 
-    _appendNodesRecursive(children, view, const <BigInt>[], view);
+    // Build a resolver once and reuse it so we don't pay the layout-pass
+    // cost twice during the same frame (the painter constructs its own;
+    // future work could share the cache via Provider).
+    final resolver = ScopeResolver(
+      root: view,
+      panOffset: _panOffset,
+      scale: getZoomScale(_zoomLevel),
+      zoomLevel: _zoomLevel,
+    );
+    _appendNodesRecursive(children, view, const <BigInt>[], view, resolver);
 
     children.add(_buildSelectionRectangle());
     return children;
@@ -1074,11 +1083,17 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// outer scope's nodes (HOFs included), then each HOF's body nodes
   /// recursively. Body nodes appear *above* their HOF in the Stack so they
   /// can receive pointer events first.
+  ///
+  /// [resolver] is consulted to decide whether to descend into each HOF's
+  /// body: a body that's collapsed (rendered too small to be readable —
+  /// see U6) is skipped, since the HOF widget itself already swaps in the
+  /// `[N nodes]` placeholder for that case.
   void _appendNodesRecursive(
     List<Widget> children,
     NodeNetworkView view,
     List<BigInt> scopeChain,
     NodeNetworkView rootView,
+    ScopeResolver resolver,
   ) {
     for (final entry in view.nodes.entries) {
       final node = entry.value;
@@ -1100,13 +1115,14 @@ class NodeNetworkState extends State<NodeNetwork> {
       }
     }
     // Then walk into each HOF's body — body nodes are drawn after their
-    // owner HOF so they layer on top.
+    // owner HOF so they layer on top. Skip if the body is collapsed.
     for (final entry in view.nodes.entries) {
       final node = entry.value;
       final zone = node.zone;
       if (zone == null) continue;
-      _appendZoneNodesRecursive(
-          children, zone, [...scopeChain, node.id], rootView);
+      final bodyChain = [...scopeChain, node.id];
+      if (resolver.isBodyCollapsed(bodyChain)) continue;
+      _appendZoneNodesRecursive(children, zone, bodyChain, rootView, resolver);
     }
   }
 
@@ -1115,6 +1131,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     ZoneView zone,
     List<BigInt> scopeChain,
     NodeNetworkView rootView,
+    ScopeResolver resolver,
   ) {
     for (final entry in zone.nodes.entries) {
       final node = entry.value;
@@ -1130,8 +1147,9 @@ class NodeNetworkState extends State<NodeNetwork> {
       final node = entry.value;
       final inner = node.zone;
       if (inner == null) continue;
-      _appendZoneNodesRecursive(
-          children, inner, [...scopeChain, node.id], rootView);
+      final innerChain = [...scopeChain, node.id];
+      if (resolver.isBodyCollapsed(innerChain)) continue;
+      _appendZoneNodesRecursive(children, inner, innerChain, rootView, resolver);
     }
   }
 
